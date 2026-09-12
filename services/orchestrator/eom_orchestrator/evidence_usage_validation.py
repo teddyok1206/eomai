@@ -291,7 +291,81 @@ def _validate_authoring_result(
         usage.citations,
         result.output.draft.model_dump(mode="json"),
     )
+    _validate_required_image_presentation(
+        plan,
+        materials.manifest,
+        usage.citations,
+        result.output.draft.model_dump(mode="json"),
+    )
     return canonical_citation_set_sha256(usage.citations)
+
+
+def _validate_required_image_presentation(
+    plan: ResolvedExecutionPlanV3,
+    manifest: EvidenceManifest,
+    citations: Sequence[EvidenceUsageCitationV1],
+    draft: Mapping[str, Any],
+) -> None:
+    """Bind an image-filtered RAG request to an authored and cited image presentation.
+
+    The immutable retrieval requirement is authoritative.  Maps and sets keep the validation
+    linear in the bounded manifest, citation, and visual collections.
+    """
+
+    if "image" not in plan.retrieval_requirement.required_item_elements:
+        return
+    visuals = draft.get("visuals")
+    if not isinstance(visuals, list | tuple):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REQUIRED_IMAGE_MISSING",
+            "image-filtered evidence requires typed authoring visuals",
+        )
+    image_ordinals = tuple(
+        index
+        for index, visual in enumerate(visuals)
+        if isinstance(visual, Mapping) and visual.get("kind") == "IMAGE"
+    )
+    if not image_ordinals:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REQUIRED_IMAGE_MISSING",
+            "image-filtered evidence requires at least one authored IMAGE slot",
+        )
+    labeled_blocks = draft.get("labeled_blocks")
+    if not isinstance(labeled_blocks, list | tuple):
+        data_ordinals: tuple[int, ...] = ()
+    else:
+        data_ordinals = tuple(
+            index
+            for index, block in enumerate(labeled_blocks)
+            if isinstance(block, Mapping) and block.get("kind") == "DATA"
+        )
+    if not data_ordinals:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING",
+            "image-filtered evidence requires a separate authored DATA material block",
+        )
+
+    entries_by_id = {entry.evidence_id: entry for entry in manifest.entries}
+    cited_structure_paths: set[str] = set()
+    for citation in citations:
+        entry = entries_by_id.get(citation.evidence_id)
+        if (
+            entry is not None
+            and entry.use == "REFERENCE_PATTERN"
+            and entry.source.source_class == "PAST_EXAM"
+            and citation.application == "STRUCTURE_PATTERN"
+        ):
+            cited_structure_paths.update(citation.draft_json_paths)
+    required_paths = {
+        "/stem",
+        *(f"/labeled_blocks/{ordinal}/content" for ordinal in data_ordinals),
+        *(f"/visuals/{ordinal}/kind" for ordinal in image_ordinals),
+    }
+    if not required_paths.issubset(cited_structure_paths):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REQUIRED_IMAGE_STRUCTURE_UNCITED",
+            "required image presentation is not bound to past-exam structure evidence",
+        )
 
 
 def _validate_review_result(

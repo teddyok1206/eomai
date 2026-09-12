@@ -19,6 +19,7 @@ from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
     _resolve_authoring_result,
     _validate_citations,
+    _validate_required_image_presentation,
     _validated_context_evidence_ids,
     canonical_citation_set_sha256,
     evidence_receipt_event_data,
@@ -490,6 +491,123 @@ def test_authoring_rejects_unknown_or_semantically_mismatched_citation(
             fixture,
             _authoring_result(fixture, citation_changes=citation_changes),
         )
+
+
+def _required_image_plan(*, required: bool = True) -> Any:
+    return SimpleNamespace(
+        retrieval_requirement=SimpleNamespace(
+            required_item_elements=("choice", "image", "paragraph")
+            if required
+            else ("choice", "paragraph")
+        )
+    )
+
+
+def _required_image_manifest(*, source_class: str = "PAST_EXAM") -> Any:
+    return SimpleNamespace(
+        entries=(
+            SimpleNamespace(
+                evidence_id=EVIDENCE_ID,
+                use="REFERENCE_PATTERN",
+                source=SimpleNamespace(source_class=source_class),
+            ),
+        )
+    )
+
+
+def _required_image_citation(*, paths: tuple[str, ...]) -> EvidenceUsageCitationV1:
+    return EvidenceUsageCitationV1(
+        evidence_id=EVIDENCE_ID,
+        anchor_ids=("anchor_item",),
+        application="STRUCTURE_PATTERN",
+        application_description="Past-exam presentation structure informed these exact leaves.",
+        draft_json_paths=paths,
+    )
+
+
+def test_required_image_presentation_binds_stem_and_image_slot_to_past_exam_structure() -> None:
+    _validate_required_image_presentation(
+        _required_image_plan(),
+        _required_image_manifest(),
+        (
+            _required_image_citation(
+                paths=("/labeled_blocks/0/content", "/stem", "/visuals/0/kind")
+            ),
+        ),
+        {
+            "stem": "그림은 포물선 운동을 나타낸다.",
+            "labeled_blocks": [{"kind": "DATA", "content": "측정값"}],
+            "visuals": [{"kind": "IMAGE"}],
+        },
+    )
+
+
+def test_required_image_presentation_rejects_missing_image_slot() -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_image_presentation(
+            _required_image_plan(),
+            _required_image_manifest(),
+            (_required_image_citation(paths=("/stem",)),),
+            {
+                "stem": "다음 자료를 보자.",
+                "labeled_blocks": [{"kind": "DATA", "content": "측정값"}],
+                "visuals": [],
+            },
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_IMAGE_MISSING"
+
+
+def test_required_image_presentation_rejects_condition_only_material() -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_image_presentation(
+            _required_image_plan(),
+            _required_image_manifest(),
+            (
+                _required_image_citation(
+                    paths=("/labeled_blocks/0/content", "/stem", "/visuals/0/kind")
+                ),
+            ),
+            {
+                "stem": "그림은 포물선 운동을 나타낸다.",
+                "labeled_blocks": [{"kind": "CONDITION", "content": "공기 저항은 없다."}],
+                "visuals": [{"kind": "IMAGE"}],
+            },
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING"
+
+
+@pytest.mark.parametrize(
+    ("source_class", "paths"),
+    [
+        ("PAST_EXAM", ("/stem",)),
+        ("APPROVED_ITEM", ("/stem", "/visuals/0/kind")),
+    ],
+)
+def test_required_image_presentation_rejects_unbound_or_non_past_exam_structure(
+    source_class: str,
+    paths: tuple[str, ...],
+) -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_image_presentation(
+            _required_image_plan(),
+            _required_image_manifest(source_class=source_class),
+            (_required_image_citation(paths=paths),),
+            {
+                "stem": "그림은 포물선 운동을 나타낸다.",
+                "labeled_blocks": [{"kind": "DATA", "content": "측정값"}],
+                "visuals": [{"kind": "IMAGE"}],
+            },
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_IMAGE_STRUCTURE_UNCITED"
+
+
+def test_non_image_retrieval_does_not_invent_an_image_requirement() -> None:
+    _validate_required_image_presentation(
+        _required_image_plan(required=False),
+        _required_image_manifest(),
+        (),
+        {"stem": "다음 글을 읽자.", "visuals": []},
+    )
 
 
 @pytest.mark.parametrize(

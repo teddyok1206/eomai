@@ -63,7 +63,7 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     assert "model" not in payload and "reasoning" not in payload and "slot" not in payload
 
 
-def test_grounded_content_team_request_does_not_add_visual_or_equation_requirements() -> None:
+def test_grounded_content_team_request_pins_required_image_structure() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="9" * 32
     )
@@ -85,7 +85,7 @@ def test_grounded_content_team_request_does_not_add_visual_or_equation_requireme
 
     retrieval = payload["educational_retrieval"]
     assert isinstance(retrieval, dict)
-    assert retrieval["required_item_elements"] == ["choice"]
+    assert retrieval["required_item_elements"] == ["choice", "image", "paragraph"]
     assert payload["image_mode"] == "required"
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
@@ -212,7 +212,7 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
         "query_kind": "ITEM_PREPARATION",
         "curriculum_root_key": None,
         "topic_keys": [],
-        "required_item_elements": ["choice"],
+        "required_item_elements": ["choice", "image", "paragraph"],
         "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
     }
     assert payload["execution_preset_key"] == "knowledge-grounded-item"

@@ -7,9 +7,15 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import resolve_integrated_science_curriculum_scope
+from eom_catalog_contracts.assessment_assembly import (
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
+)
+from eom_catalog_contracts.curriculum import load_integrated_science_editorial_outline
 from eom_catalog_contracts.mock_exam_production_plan import (
     CONTENT_TEAM_ITEM_GUIDANCE,
     CONTENT_TEAM_ITEM_GUIDANCE_SHA256,
+    build_integrated_science_mock_exam_production_plan,
 )
 from eom_catalog_service.artifacts import (
     CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION,
@@ -453,13 +459,19 @@ def _content_team_image_result_v8() -> dict[str, object]:
     }
 
 
-def _content_team_authoring_result_v10() -> dict[str, object]:
-    result = json.loads(json.dumps(_content_team_authoring_result_v8()))
+def _content_team_authoring_result_v10(
+    *, image_count: int = 2, include_data: bool = True
+) -> dict[str, object]:
+    result = json.loads(json.dumps(_content_team_authoring_result_v8(image_count=image_count)))
     result["protocol_version"] = "workflow-role/1.20.0"
     result["job_id"] = AUTHORING_V10.job_id
     result["artifact"]["logical_artifact_id"] = AUTHORING_V10.logical_artifact_id
     result["artifact"]["revision_id"] = AUTHORING_V10.revision_id
     result["output"]["draft"]["schema_version"] = "3.0"
+    if include_data:
+        result["output"]["draft"]["labeled_blocks"] = [
+            {"kind": "DATA", "content": "그림은 물체의 운동 경로와 처음 속도를 나타낸다."}
+        ]
     result["output"]["metadata"]["knowledge_source_mode"] = "graph_grounded"
     result["output"]["evidence_usage"] = {
         "schema_version": "evidence-usage/1.0",
@@ -569,10 +581,18 @@ def _service(
     return service, artifacts
 
 
-def _workflow(runtime_context: dict[str, object] | None = None) -> WorkflowInstanceRecord:
+def _workflow(
+    runtime_context: dict[str, object] | None = None,
+    *,
+    initial_request: dict[str, object] | None = None,
+) -> WorkflowInstanceRecord:
     return cast(
         WorkflowInstanceRecord,
-        SimpleNamespace(workflow_id=WORKFLOW_ID, runtime_context=runtime_context or {}),
+        SimpleNamespace(
+            workflow_id=WORKFLOW_ID,
+            runtime_context=runtime_context or {},
+            initial_request=initial_request or _request().model_dump(mode="json"),
+        ),
     )
 
 
@@ -772,6 +792,76 @@ def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
         Path(content_commit["files"]["assessment-item-content.json"]).read_text(encoding="utf-8")
     )
     assert content["schema_version"] == "3.0"
+
+
+def test_content_team_v10_standalone_required_image_cannot_take_zero_image_branch(
+    tmp_path: Path,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V10.revision_id] = _content_team_authoring_result_v10(image_count=0)
+    request = _grounded_content_team_request()
+
+    with pytest.raises(
+        ValueError,
+        match="standalone image-required content-team authoring has no IMAGE slot",
+    ):
+        service.content_team_image_slot_count(
+            workflow=_workflow(initial_request=request.model_dump(mode="json")),
+            authoring=AUTHORING_V10,
+        )
+
+
+def test_content_team_v10_standalone_required_image_requires_separate_data_material(
+    tmp_path: Path,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V10.revision_id] = _content_team_authoring_result_v10(
+        include_data=False
+    )
+    request = _grounded_content_team_request()
+
+    with pytest.raises(
+        ValueError,
+        match="standalone image-required authoring has no DATA material block",
+    ):
+        service.content_team_image_slot_count(
+            workflow=_workflow(initial_request=request.model_dump(mode="json")),
+            authoring=AUTHORING_V10,
+        )
+
+
+def test_content_team_v10_mock_exam_text_slot_remains_authoritative_over_image_mode(
+    tmp_path: Path,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    artifacts.values[AUTHORING_V10.revision_id] = _content_team_authoring_result_v10(
+        image_count=0, include_data=False
+    )
+    plan = build_integrated_science_mock_exam_production_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    planned_brief = plan.workflow_calls[0].item_brief
+    request_document = _grounded_content_team_request().model_dump(mode="json")
+    request_brief = planned_brief.model_dump(mode="json")
+    request_brief.pop("curriculum_selected_unit_key")
+    request_brief["curriculum_scope"] = resolve_integrated_science_curriculum_scope(
+        planned_brief.curriculum_selected_unit_key
+    ).model_dump(mode="json")
+    request_document["item_brief"] = request_brief
+    request = WorkflowRequest.model_validate(request_document)
+    assert request.item_brief is not None
+    assert request.item_brief.mock_exam_slot is not None
+    assert request.item_brief.mock_exam_slot.preferred_material_profiles[0] == "TEXT"
+
+    assert (
+        service.content_team_image_slot_count(
+            workflow=_workflow(initial_request=request.model_dump(mode="json")),
+            authoring=AUTHORING_V10,
+        )
+        == 0
+    )
 
 
 def test_content_team_v10_rejects_one_based_first_visual_ordinal(tmp_path: Path) -> None:

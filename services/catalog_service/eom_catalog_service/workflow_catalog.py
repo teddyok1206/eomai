@@ -914,7 +914,24 @@ class WorkflowCatalogService:
             | ContentTeamAuthoringRoleResultV10,
         ):
             raise ValueError("content-team image decision result type is invalid")
-        return sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
+        count = sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
+        if isinstance(parsed, ContentTeamAuthoringRoleResultV10):
+            request = WorkflowRequest.model_validate(workflow.initial_request)
+            brief = request.item_brief
+            if (
+                isinstance(brief, ContentTeamItemBrief)
+                and brief.mock_exam_slot is None
+                and request.image_mode == "required"
+            ):
+                if count == 0:
+                    raise ValueError(
+                        "standalone image-required content-team authoring has no IMAGE slot"
+                    )
+                if not any(block.kind == "DATA" for block in parsed.output.draft.labeled_blocks):
+                    raise ValueError(
+                        "standalone image-required authoring has no DATA material block"
+                    )
+        return count
 
     def materialize_content_team_stimuli(
         self,
@@ -1357,6 +1374,7 @@ class WorkflowCatalogService:
             "1.15.4",
             "1.15.5",
             "1.15.6",
+            "1.15.7",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1374,6 +1392,7 @@ class WorkflowCatalogService:
                 "1.15.4",
                 "1.15.5",
                 "1.15.6",
+                "1.15.7",
             } and (
                 request.image_mode != "required"
                 or request.profiles is None

@@ -154,7 +154,10 @@ def workflow_start_payload(
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
             "topic_keys": [],
-            "required_item_elements": ["choice"],
+            # Standalone EOM items promise one generated material figure.  Requiring the
+            # corresponding graph element makes that presentation source part of the pinned
+            # retrieval identity instead of leaving it to prompt interpretation.
+            "required_item_elements": ["choice", "image", "paragraph"],
             "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
         }
     return payload
