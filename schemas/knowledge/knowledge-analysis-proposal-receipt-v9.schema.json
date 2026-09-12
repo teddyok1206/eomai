@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0",
+  "title": "EOM Additive Past-Exam Solution Proposal Receipt V9",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "source",
+    "base_analysis",
+    "status",
+    "solution_report",
+    "solution_counts",
+    "general_knowledge_used",
+    "content_set_sha256",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-proposal-receipt/9.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/5.0#/$defs/pastExamItemSource"
+    },
+    "base_analysis": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/baseAnalysis"
+    },
+    "status": {
+      "const": "PROPOSED_VALIDATED"
+    },
+    "solution_report": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+    },
+    "solution_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "solution_steps",
+        "concept_assessment_links",
+        "choice_diagnostics",
+        "unresolved_issues"
+      ],
+      "properties": {
+        "solution_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "concept_assessment_links": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "choice_diagnostics": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "unresolved_issues": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        }
+      }
+    },
+    "general_knowledge_used": {
+      "type": "boolean"
+    },
+    "content_set_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    }
+  }
+}

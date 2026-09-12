@@ -1,0 +1,994 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0",
+  "title": "EOM Past-Exam Solution Analysis Shared Types V1",
+  "$defs": {
+    "typedReferenceNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "node_type"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+        },
+        "node_type": {
+          "enum": [
+            "CONCEPT",
+            "CLAIM",
+            "PROCESS",
+            "OBSERVABLE_PROPERTY",
+            "FORMULA",
+            "ITEM_ELEMENT",
+            "ASSESSMENT_PATTERN"
+          ]
+        }
+      }
+    },
+    "referenceIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anchor_ids",
+        "nodes",
+        "index_sha256"
+      ],
+      "properties": {
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "node_id",
+              "node_type"
+            ],
+            "properties": {
+              "node_id": {
+                "type": "string",
+                "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+              },
+              "node_type": {
+                "enum": [
+                  "CONCEPT",
+                  "CLAIM",
+                  "PROCESS",
+                  "OBSERVABLE_PROPERTY",
+                  "FORMULA",
+                  "ITEM_ELEMENT",
+                  "ASSESSMENT_PATTERN"
+                ]
+              }
+            }
+          }
+        },
+        "index_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "baseAnalysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "analysis_result_id",
+        "analysis_request_id",
+        "accepted_result_sha256",
+        "accepted_result_artifact",
+        "proposal_receipt",
+        "proposal_content_set_sha256",
+        "base_members",
+        "base_counts",
+        "reference_index"
+      ],
+      "properties": {
+        "analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "analysis_result_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+        },
+        "analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "accepted_result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "accepted_result_artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "sha256",
+            "bytes",
+            "schema_ref",
+            "media_type",
+            "logical_name"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "const": "evidence/accepted-result.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "logical_name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            }
+          }
+        },
+        "proposal_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "sha256",
+            "bytes",
+            "schema_ref",
+            "media_type",
+            "logical_name"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "const": "normalized/proposal-receipt.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/8.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "logical_name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            }
+          }
+        },
+        "proposal_content_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "base_members": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normalized_markdown",
+            "anchors",
+            "nodes",
+            "edges",
+            "claims",
+            "component_observations",
+            "page_image_observations",
+            "unresolved_ambiguities"
+          ],
+          "properties": {
+            "normalized_markdown": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "anchors": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "nodes": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "edges": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "claims": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "component_observations": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "page_image_observations": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "unresolved_ambiguities": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            }
+          }
+        },
+        "base_counts": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/4.0#/$defs/proposalCountsV2"
+        },
+        "reference_index": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "anchor_ids",
+            "nodes",
+            "index_sha256"
+          ],
+          "properties": {
+            "anchor_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1024,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+              }
+            },
+            "nodes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 512,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "node_id",
+                  "node_type"
+                ],
+                "properties": {
+                  "node_id": {
+                    "type": "string",
+                    "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+                  },
+                  "node_type": {
+                    "enum": [
+                      "CONCEPT",
+                      "CLAIM",
+                      "PROCESS",
+                      "OBSERVABLE_PROPERTY",
+                      "FORMULA",
+                      "ITEM_ELEMENT",
+                      "ASSESSMENT_PATTERN"
+                    ]
+                  }
+                }
+              }
+            },
+            "index_sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "solutionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_id",
+        "ordinal",
+        "operation",
+        "rationale",
+        "outcome",
+        "depends_on_step_ids",
+        "node_ids",
+        "item_element_node_ids",
+        "anchor_ids"
+      ],
+      "properties": {
+        "step_id": {
+          "type": "string",
+          "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "operation": {
+          "enum": [
+            "INTERPRET_GIVEN",
+            "APPLY_CONCEPT",
+            "TRANSFORM_RELATION",
+            "CALCULATE",
+            "EVALUATE_STATEMENT",
+            "EVALUATE_CHOICE",
+            "CONCLUDE"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "depends_on_step_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+          }
+        },
+        "node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+          }
+        },
+        "item_element_node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+          }
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "conceptAssessmentLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept_node_id",
+        "role",
+        "reasoning_step_ids",
+        "assessment_pattern_node_ids",
+        "item_element_node_ids",
+        "summary"
+      ],
+      "properties": {
+        "concept_node_id": {
+          "type": "string",
+          "pattern": "^knode_(?:concept|process|observable_property|formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+        },
+        "role": {
+          "enum": [
+            "GIVEN_INTERPRETATION",
+            "REQUIRED_KNOWLEDGE",
+            "INFERENCE_OPERATION",
+            "ANSWER_CRITERION",
+            "DISTRACTOR_TARGET"
+          ]
+        },
+        "reasoning_step_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+          }
+        },
+        "assessment_pattern_node_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^knode_assessment_pattern_[a-z0-9][a-z0-9_-]{0,31}$"
+          }
+        },
+        "item_element_node_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "assessment_pattern_node_ids": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "item_element_node_ids": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "choiceDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "choice_key",
+        "verdict",
+        "rationale",
+        "targeted_misconception",
+        "reasoning_step_ids",
+        "node_ids",
+        "anchor_ids"
+      ],
+      "properties": {
+        "choice_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "verdict": {
+          "enum": [
+            "CORRECT",
+            "INCORRECT",
+            "NOT_APPLICABLE"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "targeted_misconception": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning_step_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+          }
+        },
+        "node_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+          }
+        },
+        "anchor_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "officialExplanationComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "summary",
+        "answer_explanation_anchor_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "CONSISTENT",
+            "PARTIAL",
+            "CONFLICT",
+            "UNAVAILABLE"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "answer_explanation_anchor_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "unresolvedIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "summary",
+        "anchor_ids"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "anchor_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "solutionReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "analysis_request_id",
+        "base_analysis_result_id",
+        "rationale_kind",
+        "solution_steps",
+        "concept_assessment_links",
+        "choice_diagnostics",
+        "official_explanation_comparison",
+        "final_answer_summary",
+        "solution_summary",
+        "assessment_design_summary",
+        "reusable_generation_guidance",
+        "unresolved_issues",
+        "general_knowledge_used"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "knowledge-analysis-solution-report/1.0"
+        },
+        "analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "base_analysis_result_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+        },
+        "rationale_kind": {
+          "const": "VERIFIABLE_SOLUTION_RATIONALE"
+        },
+        "solution_steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "step_id",
+              "ordinal",
+              "operation",
+              "rationale",
+              "outcome",
+              "depends_on_step_ids",
+              "node_ids",
+              "item_element_node_ids",
+              "anchor_ids"
+            ],
+            "properties": {
+              "step_id": {
+                "type": "string",
+                "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+              },
+              "ordinal": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64
+              },
+              "operation": {
+                "enum": [
+                  "INTERPRET_GIVEN",
+                  "APPLY_CONCEPT",
+                  "TRANSFORM_RELATION",
+                  "CALCULATE",
+                  "EVALUATE_STATEMENT",
+                  "EVALUATE_CHOICE",
+                  "CONCLUDE"
+                ]
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "outcome": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "depends_on_step_ids": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+                }
+              },
+              "node_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              },
+              "item_element_node_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              },
+              "anchor_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+                }
+              }
+            }
+          }
+        },
+        "concept_assessment_links": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "concept_node_id",
+              "role",
+              "reasoning_step_ids",
+              "assessment_pattern_node_ids",
+              "item_element_node_ids",
+              "summary"
+            ],
+            "properties": {
+              "concept_node_id": {
+                "type": "string",
+                "pattern": "^knode_(?:concept|process|observable_property|formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+              },
+              "role": {
+                "enum": [
+                  "GIVEN_INTERPRETATION",
+                  "REQUIRED_KNOWLEDGE",
+                  "INFERENCE_OPERATION",
+                  "ANSWER_CRITERION",
+                  "DISTRACTOR_TARGET"
+                ]
+              },
+              "reasoning_step_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+                }
+              },
+              "assessment_pattern_node_ids": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^knode_assessment_pattern_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              },
+              "item_element_node_ids": {
+                "type": "array",
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            },
+            "anyOf": [
+              {
+                "properties": {
+                  "assessment_pattern_node_ids": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "item_element_node_ids": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "choice_diagnostics": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "choice_key",
+              "verdict",
+              "rationale",
+              "targeted_misconception",
+              "reasoning_step_ids",
+              "node_ids",
+              "anchor_ids"
+            ],
+            "properties": {
+              "choice_key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "verdict": {
+                "enum": [
+                  "CORRECT",
+                  "INCORRECT",
+                  "NOT_APPLICABLE"
+                ]
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "targeted_misconception": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reasoning_step_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+                }
+              },
+              "node_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+                }
+              },
+              "anchor_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+                }
+              }
+            }
+          }
+        },
+        "official_explanation_comparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "summary",
+            "answer_explanation_anchor_ids"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "CONSISTENT",
+                "PARTIAL",
+                "CONFLICT",
+                "UNAVAILABLE"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "answer_explanation_anchor_ids": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+              }
+            }
+          }
+        },
+        "final_answer_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "solution_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "assessment_design_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "reusable_generation_guidance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "unresolved_issues": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "summary",
+              "anchor_ids"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "anchor_ids": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+                }
+              }
+            }
+          }
+        },
+        "general_knowledge_used": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,382 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "base_analysis_result_id",
+    "rationale_kind",
+    "solution_steps",
+    "concept_assessment_links",
+    "choice_diagnostics",
+    "official_explanation_comparison",
+    "final_answer_summary",
+    "solution_summary",
+    "assessment_design_summary",
+    "reusable_generation_guidance",
+    "unresolved_issues",
+    "general_knowledge_used"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-solution-report/1.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "base_analysis_result_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+    },
+    "rationale_kind": {
+      "const": "VERIFIABLE_SOLUTION_RATIONALE"
+    },
+    "solution_steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step_id",
+          "ordinal",
+          "operation",
+          "rationale",
+          "outcome",
+          "depends_on_step_ids",
+          "node_ids",
+          "item_element_node_ids",
+          "anchor_ids"
+        ],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "operation": {
+            "enum": [
+              "INTERPRET_GIVEN",
+              "APPLY_CONCEPT",
+              "TRANSFORM_RELATION",
+              "CALCULATE",
+              "EVALUATE_STATEMENT",
+              "EVALUATE_CHOICE",
+              "CONCLUDE"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "depends_on_step_ids": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+            }
+          },
+          "node_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+            }
+          },
+          "item_element_node_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+            }
+          },
+          "anchor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "concept_assessment_links": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "concept_node_id",
+          "role",
+          "reasoning_step_ids",
+          "assessment_pattern_node_ids",
+          "item_element_node_ids",
+          "summary"
+        ],
+        "properties": {
+          "concept_node_id": {
+            "type": "string",
+            "pattern": "^knode_(?:concept|process|observable_property|formula)_[a-z0-9][a-z0-9_-]{0,31}$"
+          },
+          "role": {
+            "enum": [
+              "GIVEN_INTERPRETATION",
+              "REQUIRED_KNOWLEDGE",
+              "INFERENCE_OPERATION",
+              "ANSWER_CRITERION",
+              "DISTRACTOR_TARGET"
+            ]
+          },
+          "reasoning_step_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+            }
+          },
+          "assessment_pattern_node_ids": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^knode_assessment_pattern_[a-z0-9][a-z0-9_-]{0,31}$"
+            }
+          },
+          "item_element_node_ids": {
+            "type": "array",
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^knode_item_element_[a-z0-9][a-z0-9_-]{0,31}$"
+            }
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "assessment_pattern_node_ids": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "item_element_node_ids": {
+                "minItems": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "choice_diagnostics": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "choice_key",
+          "verdict",
+          "rationale",
+          "targeted_misconception",
+          "reasoning_step_ids",
+          "node_ids",
+          "anchor_ids"
+        ],
+        "properties": {
+          "choice_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "verdict": {
+            "enum": [
+              "CORRECT",
+              "INCORRECT",
+              "NOT_APPLICABLE"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "targeted_misconception": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasoning_step_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^solutionstep_[a-z0-9][a-z0-9_-]{0,47}$"
+            }
+          },
+          "node_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^knode_(?:concept|claim|process|observable_property|formula|item_element|assessment_pattern)_[a-z0-9][a-z0-9_-]{0,31}$"
+            }
+          },
+          "anchor_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "official_explanation_comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "summary",
+        "answer_explanation_anchor_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "CONSISTENT",
+            "PARTIAL",
+            "CONFLICT",
+            "UNAVAILABLE"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "answer_explanation_anchor_ids": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+          }
+        }
+      }
+    },
+    "final_answer_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "solution_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "assessment_design_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "reusable_generation_guidance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "unresolved_issues": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "summary",
+          "anchor_ids"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "anchor_ids": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$"
+            }
+          }
+        }
+      }
+    },
+    "general_knowledge_used": {
+      "type": "boolean"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0",
+  "title": "EOM Verifiable Past-Exam Solution Report V1"
+}

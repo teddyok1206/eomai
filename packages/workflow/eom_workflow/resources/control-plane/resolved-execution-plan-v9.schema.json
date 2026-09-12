@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/9.0",
+  "title": "EOM Additive Past-Exam Solution Analysis Resolved Plan V9",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "analysis_request_id",
+    "analysis_request_sha256",
+    "item_source",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256",
+    "base_analysis"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "resolved-execution-plan/9.0"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^execplan_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "workload_class": {
+      "const": "KNOWLEDGE_ANALYSIS"
+    },
+    "preset_id": {
+      "type": "string",
+      "pattern": "^execpreset_[0-9a-f]{32}$"
+    },
+    "preset_revision_id": {
+      "type": "string",
+      "pattern": "^execpresetrev_[0-9a-f]{32}$"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_definition_key": {
+      "const": "knowledge-analysis"
+    },
+    "workflow_definition_version": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "analysis_request_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode"
+        ],
+        "properties": {
+          "step_key": {
+            "const": "analyze"
+          },
+          "role": {
+            "const": "support"
+          },
+          "model": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "reference_bundle": {
+            "anyOf": [
+              {
+                "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "worker_pool_key": {
+            "const": "support"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 7200
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "general_knowledge_mode": {
+            "type": "string",
+            "enum": [
+              "DENIED",
+              "ALLOWED_WITH_PROVENANCE"
+            ]
+          }
+        }
+      }
+    },
+    "resolver_version": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver",
+      "const": "9.0.0"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "item_source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/5.0#/$defs/pastExamItemSource"
+    },
+    "base_analysis": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/baseAnalysis"
+    }
+  }
+}

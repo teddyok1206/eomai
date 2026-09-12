@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-worker-proposal/8.0",
+  "title": "EOM Additive Past-Exam Solution Worker Proposal V8",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_request_id",
+    "base_analysis_result_id",
+    "solution_report",
+    "completed_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-worker-proposal/8.0"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "base_analysis_result_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+    },
+    "solution_report": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/solutionReport"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    }
+  }
+}
