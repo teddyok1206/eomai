@@ -639,6 +639,7 @@ def test_codex_control_plane_is_admin_only_and_never_accepts_credentials() -> No
         assert corpus.json()["source_pdf_count"] == 50
         assert corpus.json()["exam_count"] == 25
         assert corpus.json()["approved_item_count"] == 520
+        assert corpus.json()["solution_report_completed_count"] == 520
         assert "batch" not in repr(corpus.json())
         exams = client.get("/studio/api/v1/admin/assessment-learning-corpus/exams")
         assert exams.status_code == 200

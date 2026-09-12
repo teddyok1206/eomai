@@ -1403,7 +1403,7 @@ async def test_gateway_validates_batch_free_assessment_corpus_projection() -> No
                 200,
                 json=_single(
                     {
-                        "schema_version": "assessment-learning-corpus-view/1.0",
+                        "schema_version": "assessment-learning-corpus-view/2.0",
                         "corpus_id": "corpus_" + "1" * 32,
                         "corpus_revision_id": "corpusrev_" + "2" * 32,
                         "display_name": "통합과학 기출 자료",
@@ -1413,6 +1413,13 @@ async def test_gateway_validates_batch_free_assessment_corpus_projection() -> No
                         "source_pdf_count": 50,
                         "exam_count": 25,
                         "approved_item_count": 520,
+                        "solution_report_total_count": 520,
+                        "solution_report_completed_count": 12,
+                        "solution_report_active_count": 2,
+                        "solution_report_failed_count": 0,
+                        "solution_report_pending_count": 506,
+                        "solution_report_status": "RUNNING",
+                        "solution_report_updated_at": NOW.isoformat(),
                         "updated_at": NOW.isoformat(),
                     }
                 ),
@@ -1489,6 +1496,7 @@ async def test_gateway_validates_batch_free_assessment_corpus_projection() -> No
     )
     assert corpus.source_pdf_count == 50
     assert corpus.approved_item_count == 520
+    assert corpus.solution_report_completed_count == 12
     assert exams[0].approved_item_count == 20
     assert pages[0].artifact_revision_id == "rev_" + "9" * 32
     assert media.content == content

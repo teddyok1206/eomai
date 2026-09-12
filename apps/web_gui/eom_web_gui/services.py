@@ -9,7 +9,7 @@ from typing import Any
 
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
-    AssessmentLearningCorpusStatus,
+    AssessmentLearningCorpusStatusV2,
     AssessmentLearningExamStatus,
     AssessmentLearningExamStatusV2,
     AssessmentLearningItemStatus,
@@ -248,7 +248,7 @@ class WebServices:
 
     async def assessment_learning_corpus(
         self, session: WebSession
-    ) -> AssessmentLearningCorpusStatus:
+    ) -> AssessmentLearningCorpusStatusV2:
         _require_admin(session)
         return await self.gateway.assessment_learning_corpus(session)
 

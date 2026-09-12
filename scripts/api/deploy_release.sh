@@ -1112,6 +1112,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json",
         "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json",
         "eom_api_contracts/schemas/assessment-learning-corpus-v1.schema.json",
+        "eom_api_contracts/schemas/assessment-learning-corpus-v2.schema.json",
         "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json",
         "eom_api_contracts/schemas/assessment-learning-exam-v2.schema.json",
         "eom_api_contracts/schemas/assessment-learning-page-v1.schema.json",
@@ -1142,7 +1143,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 29 packaged API schemas including release identity, Workflow-start, "
+            "expected exactly 30 packaged API schemas including release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "

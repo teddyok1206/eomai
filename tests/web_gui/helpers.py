@@ -6,7 +6,7 @@ from typing import Any
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
-    AssessmentLearningCorpusStatus,
+    AssessmentLearningCorpusStatusV2,
     AssessmentLearningExamStatus,
     AssessmentLearningExamStatusV2,
     AssessmentLearningItemCounts,
@@ -826,10 +826,10 @@ class FakeGateway:
 
     async def assessment_learning_corpus(
         self, session: WebSession
-    ) -> AssessmentLearningCorpusStatus:
+    ) -> AssessmentLearningCorpusStatusV2:
         del session
-        return AssessmentLearningCorpusStatus(
-            schema_version="assessment-learning-corpus-view/1.0",
+        return AssessmentLearningCorpusStatusV2(
+            schema_version="assessment-learning-corpus-view/2.0",
             corpus_id="corpus_" + "d" * 32,
             corpus_revision_id="corpusrev_" + "e" * 32,
             display_name="통합과학 기출 자료",
@@ -839,6 +839,13 @@ class FakeGateway:
             source_pdf_count=50,
             exam_count=25,
             approved_item_count=520,
+            solution_report_total_count=520,
+            solution_report_completed_count=520,
+            solution_report_active_count=0,
+            solution_report_failed_count=0,
+            solution_report_pending_count=0,
+            solution_report_status="COMPLETED",
+            solution_report_updated_at=NOW,
             updated_at=NOW,
         )
 

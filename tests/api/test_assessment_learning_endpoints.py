@@ -10,7 +10,7 @@ from eom_api.dependencies import get_authentication
 from eom_api.services.query_adapter import PageResult
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
-    AssessmentLearningCorpusView,
+    AssessmentLearningCorpusViewV2,
     AssessmentLearningExamView,
     AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
@@ -133,8 +133,8 @@ def _exam() -> AssessmentLearningExamView:
     )
 
 
-def _corpus() -> AssessmentLearningCorpusView:
-    return AssessmentLearningCorpusView(
+def _corpus() -> AssessmentLearningCorpusViewV2:
+    return AssessmentLearningCorpusViewV2(
         corpus_id="corpus_" + "d" * 32,
         corpus_revision_id="corpusrev_" + "e" * 32,
         display_name="통합과학 기출 자료",
@@ -144,6 +144,13 @@ def _corpus() -> AssessmentLearningCorpusView:
         source_pdf_count=50,
         exam_count=25,
         approved_item_count=520,
+        solution_report_total_count=520,
+        solution_report_completed_count=0,
+        solution_report_active_count=0,
+        solution_report_failed_count=0,
+        solution_report_pending_count=520,
+        solution_report_status="NOT_STARTED",
+        solution_report_updated_at=None,
         updated_at=NOW,
     )
 
@@ -180,7 +187,7 @@ class FakeQueries:
         self.exam_values = (batch_id, values)
         return PageResult((_exam(),), None, False)
 
-    def assessment_learning_corpus(self) -> AssessmentLearningCorpusView:
+    def assessment_learning_corpus(self) -> AssessmentLearningCorpusViewV2:
         return _corpus()
 
     def assessment_learning_corpus_exams(
@@ -339,6 +346,7 @@ def test_user_projection_is_batch_free_while_admin_batch_routes_remain_available
         assert corpus.status_code == exams.status_code == pages.status_code == 200
         assert image.status_code == admin_batches.status_code == 200
         assert corpus.json()["data"]["approved_item_count"] == 520
+        assert corpus.json()["data"]["solution_report_pending_count"] == 520
         assert exams.json()["data"][0]["approved_item_count"] == 20
         assert pages.json()["data"][0]["page_input_id"] == page_input_id
         assert image.content == b"\x89PNG\r\n\x1a\nEXAM_PAGE"

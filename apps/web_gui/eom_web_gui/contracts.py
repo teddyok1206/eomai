@@ -200,6 +200,68 @@ class AssessmentLearningCorpusStatus(WebModel):
         return self
 
 
+class AssessmentLearningCorpusStatusV2(WebModel):
+    schema_version: Literal["assessment-learning-corpus-view/2.0"]
+    corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
+    corpus_revision_id: str = Field(pattern=r"^corpusrev_[0-9a-f]{32}$")
+    display_name: str = Field(min_length=1, max_length=128)
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    graph_revision_number: int = Field(ge=1)
+    source_pdf_count: int = Field(ge=2, le=20_000)
+    exam_count: int = Field(ge=1, le=10_000)
+    approved_item_count: int = Field(ge=1, le=100_000)
+    solution_report_total_count: int = Field(ge=1, le=100_000)
+    solution_report_completed_count: int = Field(ge=0, le=100_000)
+    solution_report_active_count: int = Field(ge=0, le=100_000)
+    solution_report_failed_count: int = Field(ge=0, le=100_000)
+    solution_report_pending_count: int = Field(ge=0, le=100_000)
+    solution_report_status: Literal["NOT_STARTED", "RUNNING", "COMPLETED", "BLOCKED"]
+    solution_report_updated_at: UtcDatetime | None
+    updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_corpus(self) -> AssessmentLearningCorpusStatusV2:
+        if self.source_pdf_count != self.exam_count * 2:
+            raise ValueError("assessment learning source PDF count differs from exam corpus")
+        if self.approved_item_count < self.exam_count:
+            raise ValueError("assessment learning Item count is smaller than exam count")
+        return self
+
+    @model_validator(mode="after")
+    def coherent_solution_reports(self) -> AssessmentLearningCorpusStatusV2:
+        if self.solution_report_total_count != self.approved_item_count:
+            raise ValueError("solution report denominator differs from Graph Item count")
+        if (
+            self.solution_report_completed_count
+            + self.solution_report_active_count
+            + self.solution_report_failed_count
+            + self.solution_report_pending_count
+            != self.solution_report_total_count
+        ):
+            raise ValueError("solution report state counts differ from total")
+        expected = (
+            "BLOCKED"
+            if self.solution_report_failed_count
+            else (
+                "COMPLETED"
+                if self.solution_report_completed_count == self.solution_report_total_count
+                else (
+                    "NOT_STARTED"
+                    if self.solution_report_pending_count == self.solution_report_total_count
+                    else "RUNNING"
+                )
+            )
+        )
+        if self.solution_report_status != expected:
+            raise ValueError("solution report status differs from state counts")
+        if (self.solution_report_updated_at is None) != (
+            self.solution_report_pending_count == self.solution_report_total_count
+        ):
+            raise ValueError("solution report update timestamp differs from progress")
+        return self
+
+
 class AssessmentLearningExamStatusV2(WebModel):
     schema_version: Literal["assessment-learning-exam-view/2.0"]
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")

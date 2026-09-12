@@ -188,6 +188,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'data-view-target="learning"' in html
     assert 'id="learning-exam-list"' in html
     assert 'api("/admin/assessment-learning-corpus")' in javascript
+    assert 'id="learning-solution-report-count"' in html
+    assert "corpus.solution_report_completed_count" in javascript
     assert "/admin/assessment-learning-batches" not in javascript
     assert "selectedAssessmentLearningBatchId" not in javascript
     assert "학습 배치" not in html

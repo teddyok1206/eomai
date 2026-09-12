@@ -96,6 +96,15 @@ indexed predecessor relation, then resolves exact result, receipt, and report me
 The lookup and in-memory merge are O(candidates + accepted successors); there is no per-candidate
 query. PostgreSQL stores only bounded pointer metadata and never the report body.
 
+The batch-free corpus view uses the current Graph snapshot's Item-analysis set as its canonical
+denominator. One indexed query loads those immutable V9 run IDs and one indexed successor query
+loads V10 states. A map keyed by predecessor run and sets for duplicate detection classify each
+Item exactly once as pending, active, completed, or failed in O(items + successors) time and
+O(items) memory. The product response contains only aggregate domain progress; batch, work-unit,
+claim, lease, and retry identities remain restricted to the existing administrator operations
+surface. A terminal V10 leaf is reported as blocked and stops automatic scheduling instead of
+being skipped.
+
 The detailed report is answer-bearing canonical evidence and is not copied into an item worker's
 workspace. The immutable Evidence Bundle V5 manifest pins it for audit and reproducibility, while
 the bounded generated context includes only the explicitly reusable `assessment_design_summary`

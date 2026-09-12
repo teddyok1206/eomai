@@ -1552,7 +1552,7 @@ async function loadAssessmentLearning() {
     renderAssessmentLearningSummary(corpus);
     showMessage(
       message,
-      `원본 PDF ${corpus.source_pdf_count}개 · 시험 회차 ${corpus.exam_count}개 · 승인 문항 ${corpus.approved_item_count}개`,
+      `원본 PDF ${corpus.source_pdf_count}개 · 시험 회차 ${corpus.exam_count}개 · 승인 문항 ${corpus.approved_item_count}개 · 상세 풀이보고서 ${corpus.solution_report_completed_count}/${corpus.solution_report_total_count}개`,
       "success",
     );
   } catch (failure) {
@@ -1563,7 +1563,7 @@ async function loadAssessmentLearning() {
 
 function renderAssessmentLearningSummary(corpus) {
   if (!corpus) {
-    for (const id of ["#learning-source-pdf-count", "#learning-exam-count", "#learning-accepted-count", "#learning-graph-count", "#learning-graph-revision", "#learning-updated-at"]) {
+    for (const id of ["#learning-source-pdf-count", "#learning-exam-count", "#learning-accepted-count", "#learning-graph-count", "#learning-solution-report-count", "#learning-graph-revision", "#learning-updated-at"]) {
       $(id).textContent = "-";
     }
     setStatus($("#learning-badge"), "neutral", "■", "학습 자료 없음");
@@ -1573,9 +1573,18 @@ function renderAssessmentLearningSummary(corpus) {
   $("#learning-exam-count").textContent = `${corpus.exam_count}`;
   $("#learning-accepted-count").textContent = `${corpus.approved_item_count}`;
   $("#learning-graph-count").textContent = `${corpus.approved_item_count}`;
+  $("#learning-solution-report-count").textContent = `${corpus.solution_report_completed_count} / ${corpus.solution_report_total_count}`;
   $("#learning-graph-revision").textContent = `${corpus.graph_revision_number}`;
   $("#learning-updated-at").textContent = formatSeoulDateTime(corpus.updated_at);
-  setStatus($("#learning-badge"), "success", "✓", "학습 완료");
+  if (corpus.solution_report_status === "BLOCKED") {
+    setStatus($("#learning-badge"), "danger", "!", "풀이보고서 생성 차단");
+  } else if (corpus.solution_report_status === "COMPLETED") {
+    setStatus($("#learning-badge"), "success", "✓", "전체 학습 완료");
+  } else if (corpus.solution_report_status === "RUNNING") {
+    setStatus($("#learning-badge"), "warning", "↻", "풀이보고서 생성 중");
+  } else {
+    setStatus($("#learning-badge"), "neutral", "■", "풀이보고서 대기");
+  }
 }
 
 function renderAssessmentLearningExams(exams) {

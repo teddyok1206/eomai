@@ -626,7 +626,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 29 packaged API schemas" in deployment
+    assert "expected exactly 30 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -638,6 +638,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-corpus-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/assessment-learning-corpus-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-exam-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment

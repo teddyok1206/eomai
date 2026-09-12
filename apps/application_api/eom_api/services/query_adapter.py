@@ -24,7 +24,7 @@ from eom_api_contracts.assessment_assemblies import (
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
-    AssessmentLearningCorpusView,
+    AssessmentLearningCorpusViewV2,
     AssessmentLearningExamView,
     AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
@@ -186,6 +186,9 @@ _CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS = frozenset(
 )
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 _SHA256_RE = re.compile(_SHA256_PATTERN)
+_ACTIVE_KNOWLEDGE_ANALYSIS_STATES = frozenset(
+    {"REQUESTED", "RESOLVED", "QUEUED", "RUNNING", "VALIDATING", "NEEDS_REVIEW"}
+)
 
 
 def _production_content_profile(media_type: str, schema_ref: str) -> ProductionContentProfileV2:
@@ -232,6 +235,17 @@ class _AssessmentLearningCorpusProjection:
     snapshot: KnowledgeGraphSnapshotRecord
     placements: tuple[AssessmentItemOccurrenceReferenceRecord, ...]
     source_members_by_bundle: dict[str, tuple[AssessmentSourceBundleMemberRecord, ...]]
+
+
+@dataclass(frozen=True)
+class _SolutionReportProgress:
+    total: int
+    completed: int
+    active: int
+    failed: int
+    pending: int
+    status: Literal["NOT_STARTED", "RUNNING", "COMPLETED", "BLOCKED"]
+    updated_at: datetime | None
 
 
 class CursorCodec:
@@ -1689,7 +1703,7 @@ class QueryAdapter:
             )
             return PageResult(values, next_cursor, more)
 
-    def assessment_learning_corpus(self) -> AssessmentLearningCorpusView:
+    def assessment_learning_corpus(self) -> AssessmentLearningCorpusViewV2:
         """Project the deduplicated PDF corpus from the current immutable Graph revision."""
 
         with self.sessions() as session:
@@ -1698,12 +1712,17 @@ class QueryAdapter:
                 row.assessment_occurrence_revision_id for row in projection.placements
             }
             item_revision_ids = {row.item_revision_id for row in projection.placements}
+            reports = self._assessment_learning_solution_report_progress(
+                session,
+                graph_snapshot_revision_id=projection.snapshot.graph_snapshot_revision_id,
+                item_revision_ids=item_revision_ids,
+            )
             source_pointers = {
                 (member.source_artifact_revision_id, member.source_member_path)
                 for members in projection.source_members_by_bundle.values()
                 for member in members
             }
-            return AssessmentLearningCorpusView(
+            return AssessmentLearningCorpusViewV2(
                 corpus_id=projection.corpus.corpus_id,
                 corpus_revision_id=projection.snapshot.corpus_revision_id,
                 display_name=projection.corpus.display_name,
@@ -1713,8 +1732,133 @@ class QueryAdapter:
                 source_pdf_count=len(source_pointers),
                 exam_count=len(occurrence_ids),
                 approved_item_count=len(item_revision_ids),
+                solution_report_total_count=reports.total,
+                solution_report_completed_count=reports.completed,
+                solution_report_active_count=reports.active,
+                solution_report_failed_count=reports.failed,
+                solution_report_pending_count=reports.pending,
+                solution_report_status=reports.status,
+                solution_report_updated_at=reports.updated_at,
                 updated_at=projection.snapshot.created_at,
             )
+
+    def _assessment_learning_solution_report_progress(
+        self,
+        session: Session,
+        *,
+        graph_snapshot_revision_id: str,
+        item_revision_ids: set[str],
+    ) -> _SolutionReportProgress:
+        """Classify one additive successor per current-Graph V9 analysis in two queries."""
+
+        base_rows = tuple(
+            session.execute(
+                select(
+                    KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                    KnowledgeSnapshotAnalysisRecord.source_revision_id,
+                )
+                .join(
+                    KnowledgeAnalysisRunRecord,
+                    KnowledgeAnalysisRunRecord.analysis_run_id
+                    == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                )
+                .where(
+                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+                    == graph_snapshot_revision_id,
+                    KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeSnapshotAnalysisRecord.source_revision_id.in_(item_revision_ids),
+                    KnowledgeAnalysisRunRecord.state == "ACCEPTED",
+                    KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                    == "knowledge-analysis-request/9.0",
+                )
+            )
+        )
+        base_by_item: dict[str, str] = {}
+        for row in base_rows:
+            item_revision_id = str(row.source_revision_id)
+            if item_revision_id in base_by_item:
+                self._assessment_learning_projection_invalid()
+            base_by_item[item_revision_id] = str(row.analysis_run_id)
+        if set(base_by_item) != item_revision_ids:
+            self._assessment_learning_projection_invalid()
+
+        base_run_ids = set(base_by_item.values())
+        if len(base_run_ids) != len(item_revision_ids):
+            self._assessment_learning_projection_invalid()
+        successor_rows = tuple(
+            session.execute(
+                select(
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id,
+                    KnowledgeAnalysisRunRecord.state,
+                    KnowledgeAnalysisRunRecord.created_at,
+                    KnowledgeAnalysisRunRecord.started_at,
+                    KnowledgeAnalysisRunRecord.completed_at,
+                ).where(
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_run_ids),
+                    KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
+                    == "knowledge-analysis-request/10.0",
+                )
+            )
+        )
+        return self._classify_solution_report_progress(base_run_ids, successor_rows)
+
+    @staticmethod
+    def _classify_solution_report_progress(
+        base_run_ids: set[str], successor_rows: tuple[Any, ...]
+    ) -> _SolutionReportProgress:
+        """Reduce bounded successor history by predecessor without repeated scans."""
+
+        by_base: dict[str, list[Any]] = {}
+        updated_at: datetime | None = None
+        for row in successor_rows:
+            predecessor = str(row.predecessor_analysis_run_id)
+            if predecessor not in base_run_ids:
+                QueryAdapter._assessment_learning_projection_invalid()
+            by_base.setdefault(predecessor, []).append(row)
+            observed_at = row.completed_at or row.started_at or row.created_at
+            if updated_at is None or observed_at > updated_at:
+                updated_at = observed_at
+
+        completed = 0
+        active = 0
+        failed = 0
+        pending = 0
+        active_states = _ACTIVE_KNOWLEDGE_ANALYSIS_STATES
+        terminal_states = frozenset({"FAILED", "REJECTED", "CANCELLED"})
+        for base_run_id in base_run_ids:
+            rows = by_base.get(base_run_id, [])
+            states = [str(row.state) for row in rows]
+            if states.count("ACCEPTED") > 1 or sum(state in active_states for state in states) > 1:
+                QueryAdapter._assessment_learning_projection_invalid()
+            if "ACCEPTED" in states:
+                completed += 1
+            elif any(state in active_states for state in states):
+                active += 1
+            elif any(state in terminal_states for state in states):
+                failed += 1
+            elif states:
+                QueryAdapter._assessment_learning_projection_invalid()
+            else:
+                pending += 1
+
+        status: Literal["NOT_STARTED", "RUNNING", "COMPLETED", "BLOCKED"]
+        if failed:
+            status = "BLOCKED"
+        elif completed == len(base_run_ids):
+            status = "COMPLETED"
+        elif pending == len(base_run_ids):
+            status = "NOT_STARTED"
+        else:
+            status = "RUNNING"
+        return _SolutionReportProgress(
+            total=len(base_run_ids),
+            completed=completed,
+            active=active,
+            failed=failed,
+            pending=pending,
+            status=status,
+            updated_at=updated_at,
+        )
 
     def assessment_learning_corpus_exams(
         self,

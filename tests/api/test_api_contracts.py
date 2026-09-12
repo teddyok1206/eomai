@@ -12,7 +12,7 @@ from eom_api_contracts.assessment_assemblies import (
 )
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
-    AssessmentLearningCorpusView,
+    AssessmentLearningCorpusViewV2,
     AssessmentLearningExamView,
     AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
@@ -474,6 +474,7 @@ def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() ->
     )
     for name in (
         "assessment-learning-corpus-v1.schema.json",
+        "assessment-learning-corpus-v2.schema.json",
         "assessment-learning-exam-v2.schema.json",
         "assessment-learning-page-v2.schema.json",
     ):
@@ -483,7 +484,7 @@ def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() ->
         Draft202012Validator.check_schema(json.loads(canonical.read_text(encoding="utf-8")))
 
     now = datetime(2026, 9, 11, 15, 0, tzinfo=UTC)
-    corpus = AssessmentLearningCorpusView(
+    corpus = AssessmentLearningCorpusViewV2(
         corpus_id="corpus_" + "1" * 32,
         corpus_revision_id="corpusrev_" + "2" * 32,
         display_name="통합과학 기출 자료",
@@ -493,6 +494,13 @@ def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() ->
         source_pdf_count=50,
         exam_count=25,
         approved_item_count=520,
+        solution_report_total_count=520,
+        solution_report_completed_count=12,
+        solution_report_active_count=2,
+        solution_report_failed_count=0,
+        solution_report_pending_count=506,
+        solution_report_status="RUNNING",
+        solution_report_updated_at=now,
         updated_at=now,
     ).model_dump(mode="json")
     exam = AssessmentLearningExamViewV2(
@@ -523,7 +531,7 @@ def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() ->
         height_px=1754,
     ).model_dump(mode="json")
     for name, value in (
-        ("assessment-learning-corpus-v1.schema.json", corpus),
+        ("assessment-learning-corpus-v2.schema.json", corpus),
         ("assessment-learning-exam-v2.schema.json", exam),
         ("assessment-learning-page-v2.schema.json", page),
     ):
@@ -533,7 +541,17 @@ def test_assessment_learning_user_projection_is_batch_free_and_schema_exact() ->
         assert tuple(Draft202012Validator(schema).iter_errors(value | {"extraction_batch_id": "x"}))
 
     with pytest.raises(ValidationError, match="source PDF count differs"):
-        AssessmentLearningCorpusView.model_validate(corpus | {"source_pdf_count": 48})
+        AssessmentLearningCorpusViewV2.model_validate(corpus | {"source_pdf_count": 48})
+
+    with pytest.raises(ValidationError, match="state counts differ"):
+        AssessmentLearningCorpusViewV2.model_validate(
+            corpus | {"solution_report_pending_count": 505}
+        )
+
+    with pytest.raises(ValidationError, match="status differs"):
+        AssessmentLearningCorpusViewV2.model_validate(
+            corpus | {"solution_report_status": "COMPLETED"}
+        )
 
 
 def test_request_contracts_forbid_unknown_fields_and_redact_secrets() -> None:

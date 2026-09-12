@@ -15,6 +15,7 @@ from eom_api_contracts.assessment_assemblies import (
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
     AssessmentLearningCorpusView,
+    AssessmentLearningCorpusViewV2,
     AssessmentLearningExamView,
     AssessmentLearningExamViewV2,
     AssessmentLearningItemCounts,
@@ -121,6 +122,7 @@ __all__ = [
     "AssessmentItemOccurrenceViewV2",
     "AssessmentLearningBatchView",
     "AssessmentLearningCorpusView",
+    "AssessmentLearningCorpusViewV2",
     "AssessmentLearningExamView",
     "AssessmentLearningExamViewV2",
     "AssessmentLearningItemCounts",

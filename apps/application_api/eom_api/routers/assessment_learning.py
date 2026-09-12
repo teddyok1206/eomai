@@ -7,7 +7,7 @@ from typing import Literal
 from eom_api_contracts import ListResponse, SingleResponse
 from eom_api_contracts.assessment_learning import (
     AssessmentLearningBatchView,
-    AssessmentLearningCorpusView,
+    AssessmentLearningCorpusViewV2,
     AssessmentLearningExamView,
     AssessmentLearningExamViewV2,
     AssessmentLearningPageView,
@@ -27,14 +27,14 @@ corpus_router = APIRouter(prefix="/assessment-learning-corpus", tags=["assessmen
 @corpus_router.get(
     "",
     operation_id="assessment_learning_corpus_get",
-    response_model=SingleResponse[AssessmentLearningCorpusView],
+    response_model=SingleResponse[AssessmentLearningCorpusViewV2],
     dependencies=[
         Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
     ],
 )
 def get_assessment_learning_corpus(
     request: Request,
-) -> SingleResponse[AssessmentLearningCorpusView]:
+) -> SingleResponse[AssessmentLearningCorpusViewV2]:
     return one(request, request.app.state.services.queries.assessment_learning_corpus())
 
 

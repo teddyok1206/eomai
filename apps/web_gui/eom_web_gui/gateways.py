@@ -13,7 +13,7 @@ import httpx
 
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
-    AssessmentLearningCorpusStatus,
+    AssessmentLearningCorpusStatusV2,
     AssessmentLearningExamStatus,
     AssessmentLearningExamStatusV2,
     AssessmentLearningItemStatus,
@@ -422,7 +422,7 @@ class ApplicationGateway(Protocol):
 
     async def assessment_learning_corpus(
         self, session: WebSession
-    ) -> AssessmentLearningCorpusStatus: ...
+    ) -> AssessmentLearningCorpusStatusV2: ...
 
     async def assessment_learning_corpus_exams(
         self, session: WebSession
@@ -853,14 +853,14 @@ class HttpApplicationGateway:
 
     async def assessment_learning_corpus(
         self, session: WebSession
-    ) -> AssessmentLearningCorpusStatus:
+    ) -> AssessmentLearningCorpusStatusV2:
         response = await self._authorized(
             session,
             "GET",
             "/api/v1/assessment-learning-corpus",
         )
         try:
-            return AssessmentLearningCorpusStatus.model_validate(self._data(response))
+            return AssessmentLearningCorpusStatusV2.model_validate(self._data(response))
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
