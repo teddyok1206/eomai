@@ -13,11 +13,15 @@ from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES_V1_4,
     RESULT_SCHEMA_FILES,
     WorkflowSchemaError,
+    load_content_team_editorial_material_schema,
+    load_content_team_image_route_schema,
+    load_content_team_material_requirement_schema,
     load_definition_schema,
     load_json_schema,
     load_knowledge_item_brief_schema,
     load_knowledge_item_brief_v2_schema,
     load_knowledge_item_brief_v3_schema,
+    load_knowledge_item_brief_v4_schema,
     load_role_input_schema,
     load_role_result_schema,
 )
@@ -43,6 +47,10 @@ def test_workflow_schema_resources_match_canonical_sources() -> None:
         "knowledge-item-brief-v1.schema.json",
         "knowledge-item-brief-v2.schema.json",
         "knowledge-item-brief-v3.schema.json",
+        "knowledge-item-brief-v4.schema.json",
+        "content-team-material-requirement-v1.schema.json",
+        "roles/content-team-editorial-material-v1.schema.json",
+        "roles/content-team-image-route-v1.schema.json",
         *(f"roles/{name}" for name in mapped_names),
     } <= EXPECTED_RESOURCES
     actual = {
@@ -62,6 +70,14 @@ def test_workflow_schemas_load_from_package_resources() -> None:
     assert load_knowledge_item_brief_schema()["$id"].endswith("knowledge-item-brief-v1")
     assert load_knowledge_item_brief_v2_schema()["$id"].endswith("knowledge-item-brief-v2")
     assert load_knowledge_item_brief_v3_schema()["$id"].endswith("knowledge-item-brief-v3")
+    assert load_knowledge_item_brief_v4_schema()["$id"].endswith("knowledge-item-brief-v4")
+    assert load_content_team_material_requirement_schema()["$id"].endswith(
+        "content-team-material-requirement/1.0"
+    )
+    assert load_content_team_editorial_material_schema()["$id"].endswith(
+        "content-team-editorial-material/1.0"
+    )
+    assert load_content_team_image_route_schema()["$id"].endswith("content-team-image-route/1.0")
     for role in INPUT_SCHEMA_FILES:
         assert load_role_input_schema(role)["$id"].endswith("-input.schema.json")
     for role in INPUT_SCHEMA_FILES_V1_4:

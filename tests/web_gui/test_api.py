@@ -53,7 +53,8 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         )
         assert draft.status_code == 201
         value = draft.json()
-        assert value["schema_version"] == "3.0"
+        assert value["schema_version"] == "4.0"
+        assert value["material_requirement"]["form"] == "AUTO"
         assert value["topic"] == "2차원 포물선 운동"
         assert value["source_intake_batch_id"] is None
         assert value["authoring_guidance_sha256"].startswith("sha256:")
@@ -70,7 +71,11 @@ def test_request_draft_workflow_submission_and_replay() -> None:
                 "difficulty": "hard",
                 "choice_count": 5,
                 "equation_required": True,
-                "image_required": True,
+                "material_requirement": {
+                    "schema_version": "content-team-material-requirement/1.0",
+                    "form": "IMAGE",
+                    "panel_count": 1,
+                },
                 "quality_profile": "deep",
                 "source_intake_batch_id": INTAKE_ID,
                 "authoring_guidance": "포물체 운동의 두 성분을 함께 해석하는 계산 문항을 출제한다.",
@@ -125,7 +130,7 @@ def test_request_draft_replay_fails_closed_after_spec_change() -> None:
                 "difficulty": draft["difficulty"],
                 "choice_count": draft["choice_count"],
                 "equation_required": draft["equation_required"],
-                "image_required": draft["image_required"],
+                "material_requirement": draft["material_requirement"],
                 "quality_profile": draft["quality_profile"],
                 "source_intake_batch_id": None,
                 "authoring_guidance": "변경된 주제를 반영한 통합과학 개념 문항을 출제한다.",
@@ -187,7 +192,11 @@ def test_request_draft_submission_can_opt_in_to_bounded_graph_grounding() -> Non
                 "difficulty": "hard",
                 "choice_count": 5,
                 "equation_required": True,
-                "image_required": True,
+                "material_requirement": {
+                    "schema_version": "content-team-material-requirement/1.0",
+                    "form": "TABLE",
+                    "panel_count": 1,
+                },
                 "quality_profile": "deep",
                 "source_intake_batch_id": None,
                 "authoring_guidance": (
@@ -234,7 +243,11 @@ def test_grounded_submission_rechecks_capability_before_any_workflow_call() -> N
                 "difficulty": "hard",
                 "choice_count": 5,
                 "equation_required": True,
-                "image_required": True,
+                "material_requirement": {
+                    "schema_version": "content-team-material-requirement/1.0",
+                    "form": "TABLE",
+                    "panel_count": 1,
+                },
                 "quality_profile": "deep",
                 "source_intake_batch_id": None,
                 "authoring_guidance": "판 경계 자료를 해석하고 지각 변동을 추론한다.",

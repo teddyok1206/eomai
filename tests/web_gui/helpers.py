@@ -279,7 +279,14 @@ class FakeGateway:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
         assert payload["definition_version"] == "1.10.0"
-        assert payload["image_mode"] == "required"
+        brief = payload["item_brief"]
+        assert isinstance(brief, dict)
+        material = brief["material_requirement"]
+        assert isinstance(material, dict)
+        expected_image_mode = (
+            "required" if material["form"] in {"AUTO", "IMAGE", "MIXED"} else "skip"
+        )
+        assert payload["image_mode"] == expected_image_mode
         assert payload["pack_key"] == "generated-knowledge-item"
         expected_preset = (
             "knowledge-grounded-item" if "educational_retrieval" in payload else "standard-item"

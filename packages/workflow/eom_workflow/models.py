@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
+    ContentTeamMaterialRequirementV1,
     EducationalRetrievalRequirement,
     EquationBlock,
     IntegratedScienceCurriculumScope,
@@ -266,6 +267,13 @@ class ContentTeamItemBrief(FrozenModel):
         return self
 
 
+class ContentTeamItemBriefV4(ContentTeamItemBrief):
+    """Reviewed content-team intent with an explicit student-visible material form."""
+
+    schema_version: Literal["4.0"] = "4.0"  # type: ignore[assignment]
+    material_requirement: ContentTeamMaterialRequirementV1
+
+
 class StimulusAssetSelection(FrozenModel):
     asset_key: Literal["eom-question-template-reference-v1"]
 
@@ -349,7 +357,9 @@ class WorkflowRequest(FrozenModel):
     profiles: WorkflowProfiles | None = None
     source_intake: SourceIntakeSelection | None = None
     registry_intent: RegistryIntent | None = None
-    item_brief: ItemBrief | ItemBriefV2 | ContentTeamItemBrief | None = None
+    item_brief: ItemBrief | ItemBriefV2 | ContentTeamItemBriefV4 | ContentTeamItemBrief | None = (
+        None
+    )
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     educational_retrieval: EducationalRetrievalRequirement | None = None

@@ -15,6 +15,7 @@ from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContent
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
 from eom_api_contracts.workflows import (
     ContentTeamItemBriefRequestV3,
+    ContentTeamItemBriefRequestV4,
     KnowledgeItemBriefRequestV2,
     WorkflowActionRequest,
     WorkflowStartRequest,
@@ -95,7 +96,11 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
         item_brief_data = request.item_brief.model_dump(mode="json")
         if isinstance(
             request.item_brief,
-            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
+            (
+                KnowledgeItemBriefRequestV2,
+                ContentTeamItemBriefRequestV3,
+                ContentTeamItemBriefRequestV4,
+            ),
         ):
             item_brief_data.pop("curriculum_selected_unit_key")
             selected_unit_key = request.item_brief.curriculum_selected_unit_key
@@ -122,7 +127,11 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
     if (
         isinstance(
             request.item_brief,
-            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
+            (
+                KnowledgeItemBriefRequestV2,
+                ContentTeamItemBriefRequestV3,
+                ContentTeamItemBriefRequestV4,
+            ),
         )
         and retrieval_data is not None
     ):

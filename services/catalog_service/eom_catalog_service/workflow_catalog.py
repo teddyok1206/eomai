@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     ImageBlock,
     MediaArtifactPointer,
     candidate_visible_image_instruction_paths,
+    validate_content_team_material_requirement,
     validate_contract,
     validate_eom_question_template_content,
 )
@@ -42,7 +43,13 @@ from eom_image_contracts import (
 )
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
-from eom_workflow import ArtifactPointer, ContentTeamItemBrief, ItemBriefV2, WorkflowRequest
+from eom_workflow import (
+    ArtifactPointer,
+    ContentTeamItemBrief,
+    ContentTeamItemBriefV4,
+    ItemBriefV2,
+    WorkflowRequest,
+)
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
@@ -920,7 +927,20 @@ class WorkflowCatalogService:
         if isinstance(parsed, ContentTeamAuthoringRoleResultV10):
             request = WorkflowRequest.model_validate(workflow.initial_request)
             brief = request.item_brief
-            if (
+            if isinstance(brief, ContentTeamItemBriefV4):
+                validate_content_team_material_requirement(
+                    brief.material_requirement,
+                    parsed.output.draft,
+                )
+                instruction_paths = candidate_visible_image_instruction_paths(
+                    parsed.output.draft.model_dump(mode="json")
+                )
+                if instruction_paths:
+                    raise ValueError(
+                        "content-team authoring leaked an internal image-production instruction "
+                        "into candidate text"
+                    )
+            elif (
                 isinstance(brief, ContentTeamItemBrief)
                 and brief.mock_exam_slot is None
                 and request.image_mode == "required"
@@ -1241,6 +1261,10 @@ class WorkflowCatalogService:
                         ),
                     }
                 )
+                if isinstance(brief, ContentTeamItemBriefV4):
+                    metadata["material_requirement"] = brief.material_requirement.model_dump(
+                        mode="json"
+                    )
             elif isinstance(brief, ItemBriefV2):
                 metadata_schema = "eom://metadata/general-knowledge-item@2.0"
                 metadata.update(
@@ -1373,6 +1397,7 @@ class WorkflowCatalogService:
         if request.item_brief is None:
             return
         is_content_team = isinstance(request.item_brief, ContentTeamItemBrief)
+        is_material_v4 = isinstance(request.item_brief, ContentTeamItemBriefV4)
         expects_content_team = pack_key == "generated-knowledge-item" and release_version in {
             "1.12.0",
             "1.13.0",
@@ -1387,13 +1412,35 @@ class WorkflowCatalogService:
             "1.15.7",
             "1.15.8",
             "1.15.9",
+            "1.16.0",
         }
         if expects_content_team:
             if not is_content_team:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                    "content-team pack requires the V3 item brief",
+                    "content-team pack requires a typed content-team item brief",
                 )
+            if (release_version == "1.16.0") != is_material_v4:
+                raise ContentPackError(
+                    ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                    "Content Pack release and material-aware item brief differ",
+                )
+            if release_version == "1.16.0":
+                assert isinstance(request.item_brief, ContentTeamItemBriefV4)
+                expected_image_mode = request.item_brief.material_requirement.image_mode
+                expected_image_profile = (
+                    "generated-stimulus-drawing" if expected_image_mode == "required" else None
+                )
+                if (
+                    request.image_mode != expected_image_mode
+                    or request.profiles is None
+                    or request.profiles.image != expected_image_profile
+                ):
+                    raise ContentPackError(
+                        ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                        "material requirement differs from the image execution capability",
+                    )
+                return
             if release_version in {
                 "1.13.0",
                 "1.14.0",
@@ -1808,6 +1855,8 @@ class WorkflowCatalogService:
                 "content-team V3 authoring provenance differs from the authoritative request"
             )
         brief = request.item_brief
+        if isinstance(brief, ContentTeamItemBriefV4):
+            validate_content_team_material_requirement(brief.material_requirement, content)
         if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
             if isinstance(content, AssessmentItemContentV3):
                 validate_content_team_mock_exam_slot_output_v2(
@@ -2042,6 +2091,8 @@ class WorkflowCatalogService:
             )
         if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
             metadata["mock_exam_slot"] = brief.mock_exam_slot.model_dump(mode="json")
+        if isinstance(brief, ContentTeamItemBriefV4):
+            metadata["material_requirement"] = brief.material_requirement.model_dump(mode="json")
         return metadata
 
     @staticmethod

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+    ContentTeamMaterialRequirementV1,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
     validate_reviewed_authoring_guidance,
@@ -84,6 +85,13 @@ class ContentTeamItemBriefRequestV3(ApiModel):
         ):
             raise ValueError("content-team brief differs from its typed mock-exam slot")
         return self
+
+
+class ContentTeamItemBriefRequestV4(ContentTeamItemBriefRequestV3):
+    """Additive reviewed material form without changing the V3 wire contract."""
+
+    schema_version: Literal["4.0"] = "4.0"  # type: ignore[assignment]
+    material_requirement: ContentTeamMaterialRequirementV1
 
 
 class EducationalRetrievalIntentRequest(ApiModel):
@@ -171,6 +179,7 @@ class WorkflowStartRequest(ApiModel):
     item_brief: (
         KnowledgeItemBriefRequest
         | KnowledgeItemBriefRequestV2
+        | ContentTeamItemBriefRequestV4
         | ContentTeamItemBriefRequestV3
         | None
     ) = None
@@ -210,7 +219,11 @@ class WorkflowStartRequest(ApiModel):
             )
         if self.educational_retrieval is not None and isinstance(
             self.item_brief,
-            (KnowledgeItemBriefRequestV2, ContentTeamItemBriefRequestV3),
+            (
+                KnowledgeItemBriefRequestV2,
+                ContentTeamItemBriefRequestV3,
+                ContentTeamItemBriefRequestV4,
+            ),
         ):
             if (
                 self.item_brief.curriculum_selected_unit_key is None
@@ -253,11 +266,16 @@ class WorkflowStartRequest(ApiModel):
             ):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
-                expected_image_mode = (
-                    "required"
-                    if self.definition_version in {"1.8.0", "1.9.0", "1.10.0"}
-                    else "skip"
-                )
+                if isinstance(self.item_brief, ContentTeamItemBriefRequestV4):
+                    if self.definition_version != "1.10.0":
+                        raise ValueError("V4 material requests require workflow definition 1.10")
+                    expected_image_mode = self.item_brief.material_requirement.image_mode
+                else:
+                    expected_image_mode = (
+                        "required"
+                        if self.definition_version in {"1.8.0", "1.9.0", "1.10.0"}
+                        else "skip"
+                    )
                 if self.definition_version not in {"1.7.0", "1.8.0", "1.9.0", "1.10.0"}:
                     raise ValueError("content-team workflow definition is unsupported")
                 if self.image_mode != expected_image_mode:

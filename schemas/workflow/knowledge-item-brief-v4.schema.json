@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-item-brief-v4",
+  "title": "Content-team Item Brief V4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "subject",
+    "topic",
+    "task_type",
+    "difficulty",
+    "authoring_guidance",
+    "authoring_guidance_sha256",
+    "curriculum_scope",
+    "mock_exam_slot",
+    "material_requirement",
+    "original_request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "4.0"
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "task_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "difficulty": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "authoring_guidance": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 2000,
+      "pattern": "^(?!.*[\\u0000-\\u001f\\u007f])(?!\\s)(?!.*\\s$)(?!.*\\s{2}).+$"
+    },
+    "authoring_guidance_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "curriculum_scope": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "eom://schemas/workflow/knowledge-item-brief-v3#/$defs/integrated_science_curriculum_scope"
+        }
+      ]
+    },
+    "mock_exam_slot": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "eom://schemas/workflow/knowledge-item-brief-v3#/$defs/mock_exam_slot"
+        }
+      ]
+    },
+    "material_requirement": {
+      "$ref": "eom://schemas/workflow/content-team-material-requirement/1.0"
+    },
+    "original_request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

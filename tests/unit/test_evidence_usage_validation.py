@@ -20,6 +20,7 @@ from eom_orchestrator.evidence_usage_validation import (
     _resolve_authoring_result,
     _validate_citations,
     _validate_required_image_presentation,
+    _validate_required_table_presentation,
     _validated_context_evidence_ids,
     canonical_citation_set_sha256,
     evidence_receipt_event_data,
@@ -70,11 +71,21 @@ REVIEW_REVISION_ID = "rev_" + "8" * 32
 
 
 def _knowledge_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    return _base_knowledge_fixture(
+    fixture = _base_knowledge_fixture(
         tmp_path,
         monkeypatch,
         workflow_definition_version="1.10.0",
     )
+    record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    document = deepcopy(record.canonical_document)
+    document["retrieval_requirement"]["required_item_elements"] = ["statement_set"]
+    document["retrieval_requirement_sha256"] = content_sha256(document["retrieval_requirement"])
+    document["plan_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "plan_sha256"}
+    )
+    record.canonical_document = document
+    record.plan_sha256 = document["plan_sha256"]
+    return fixture
 
 
 def _usage(
@@ -650,6 +661,80 @@ def test_required_image_presentation_rejects_unbound_or_non_past_exam_structure(
 def test_non_image_retrieval_does_not_invent_an_image_requirement() -> None:
     _validate_required_image_presentation(
         _required_image_plan(required=False),
+        _required_image_manifest(),
+        (),
+        {"stem": "다음 글을 읽자.", "visuals": []},
+    )
+
+
+def _required_table_plan(*, required: bool = True) -> Any:
+    return SimpleNamespace(
+        retrieval_requirement=SimpleNamespace(
+            required_item_elements=("choice", "paragraph", "table")
+            if required
+            else ("choice", "paragraph")
+        )
+    )
+
+
+def _table_draft() -> dict[str, object]:
+    return {
+        "stem": "다음 표를 해석하자.",
+        "visuals": [
+            {
+                "kind": "TABLE",
+                "label": "",
+                "headers": ["구분", "측정값"],
+                "rows": [["A", "3"], ["B", "5"]],
+            }
+        ],
+    }
+
+
+def test_required_table_presentation_accepts_one_native_table_without_image() -> None:
+    _validate_required_table_presentation(
+        _required_table_plan(),
+        _required_image_manifest(),
+        (_required_image_citation(paths=("/stem", "/visuals/0/headers/0", "/visuals/0/kind")),),
+        _table_draft(),
+    )
+
+
+def test_required_table_presentation_rejects_missing_table() -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_table_presentation(
+            _required_table_plan(),
+            _required_image_manifest(),
+            (_required_image_citation(paths=("/stem",)),),
+            {"stem": "다음 자료를 해석하자.", "visuals": []},
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_TABLE_MISSING"
+
+
+@pytest.mark.parametrize(
+    ("source_class", "paths"),
+    [
+        ("PAST_EXAM", ("/stem", "/visuals/0/kind")),
+        ("APPROVED_ITEM", ("/stem", "/visuals/0/headers/0", "/visuals/0/kind")),
+    ],
+)
+def test_required_table_presentation_rejects_uncited_cells_or_non_exam_structure(
+    source_class: str,
+    paths: tuple[str, ...],
+) -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_table_presentation(
+            _required_table_plan(),
+            _required_image_manifest(source_class=source_class),
+            (_required_image_citation(paths=paths),),
+            _table_draft(),
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_TABLE_STRUCTURE_UNCITED"
+
+
+def test_non_table_retrieval_does_not_invent_a_table_requirement() -> None:
+    _validate_required_table_presentation(
+        _required_table_plan(required=False),
         _required_image_manifest(),
         (),
         {"stem": "다음 글을 읽자.", "visuals": []},

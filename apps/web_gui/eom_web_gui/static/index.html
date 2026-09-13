@@ -129,7 +129,9 @@
                   <label>선택지 수<input name="choice_count" type="number" value="5" readonly></label>
                   <input name="source_intake_batch_id" type="hidden" value="">
                   <fieldset class="wide admin-only"><legend>승인된 교육 지식 근거 · 관리자</legend><label class="check"><input name="knowledge_grounding" type="checkbox" disabled> 선택한 교육과정 범위의 검증된 근거 자료 묶음을 사용</label><p id="graph-grounding-status">지식 연결 준비 중 · 교육과정 분류는 지금 사용할 수 있습니다.</p></fieldset>
-                  <fieldset class="wide"><legend>EOM 템플릿 필수 요소</legend><label class="check"><input name="equation_required" type="checkbox" checked disabled> 수식</label><label class="check"><input name="image_required" type="checkbox" checked disabled> eom-cdx가 문항에 맞춰 생성하는 자료 그림</label></fieldset>
+                  <label>자료 구성<select name="material_form"><option value="AUTO" selected>내용에 맞게 자동 선택</option><option value="TEXT">글만 사용</option><option value="DATA">자료 글상자</option><option value="TABLE">편집 가능한 표</option><option value="IMAGE">자료 그림</option><option value="MIXED">그림과 표</option><option value="INQUIRY">탐구·실험 상자</option></select></label>
+                  <label id="material-panel-count-field" hidden>자료 칸 수<select name="material_panel_count"><option value="1">1개</option><option value="2">2개</option></select></label>
+                  <fieldset class="wide"><legend>EOM 템플릿 필수 요소</legend><label class="check"><input name="equation_required" type="checkbox" checked disabled> 수식</label></fieldset>
                   <label class="wide">검증된 실행 설정<select name="quality_profile"><option value="balanced" selected>표준 문항 제작</option></select></label>
                   <details class="wide technical-details inline-technical-details"><summary>요청 기술 정보</summary><div class="draft-meta"><span>요청 초안 ID</span><code id="draft-id">-</code><span>요청 내용 검증값</span><code id="draft-sha">-</code></div></details>
                   <p id="draft-message" class="form-message wide" aria-live="polite"></p>

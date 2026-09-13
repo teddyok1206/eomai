@@ -47,6 +47,28 @@ class QualityProfile(StrEnum):
     DEEP = "deep"
 
 
+class ContentTeamMaterialRequirement(WebModel):
+    """Presentation DTO mirroring the canonical reviewed material requirement."""
+
+    schema_version: Literal["content-team-material-requirement/1.0"] = (
+        "content-team-material-requirement/1.0"
+    )
+    form: Literal["AUTO", "TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]
+    panel_count: int | None
+
+    @model_validator(mode="after")
+    def coherent_panel_count(self) -> ContentTeamMaterialRequirement:
+        if self.form in {"AUTO", "TEXT", "DATA", "INQUIRY"}:
+            if self.panel_count is not None:
+                raise ValueError(f"{self.form} material cannot declare a panel count")
+        elif self.form in {"TABLE", "IMAGE"}:
+            if self.panel_count not in {1, 2}:
+                raise ValueError(f"{self.form} material requires one or two panels")
+        elif self.panel_count != 2:
+            raise ValueError("MIXED material requires exactly two panels")
+        return self
+
+
 class ContentIntakeOption(WebModel):
     intake_batch_id: str = Field(pattern=r"^intake_[0-9a-f]{32}$")
     batch_name: str = Field(min_length=1, max_length=256)
@@ -765,7 +787,7 @@ class RequestDraftEditable(WebModel):
     difficulty: Literal["easy", "medium", "hard"]
     choice_count: Literal[5] = 5
     equation_required: Literal[True] = True
-    image_required: Literal[True] = True
+    material_requirement: ContentTeamMaterialRequirement
     quality_profile: QualityProfile
     source_intake_batch_id: str | None = Field(default=None, pattern=r"^intake_[0-9a-f]{32}$")
     authoring_guidance: str = Field(min_length=10, max_length=2000)
@@ -774,6 +796,24 @@ class RequestDraftEditable(WebModel):
         default=None,
         pattern=r"^eom\.is\.(large\.[1-6]|middle\.[1-6]-[1-7])$",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_legacy_image_request(cls, value: object) -> object:
+        """Keep the former boolean write API while storing only the typed V4 contract."""
+
+        if not isinstance(value, dict) or "material_requirement" in value:
+            return value
+        if value.get("image_required") is not True:
+            return value
+        migrated = dict(value)
+        migrated.pop("image_required")
+        migrated["material_requirement"] = {
+            "schema_version": "content-team-material-requirement/1.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+        }
+        return migrated
 
     @field_validator("authoring_guidance")
     @classmethod
@@ -793,7 +833,7 @@ class RequestDraftUpdate(RequestDraftEditable):
 
 
 class RequestDraft(RequestDraftEditable):
-    schema_version: Literal["3.0"] = "3.0"
+    schema_version: Literal["4.0"] = "4.0"
     request_draft_id: str = Field(pattern=r"^requestdraft_[0-9a-f]{32}$")
     status: Literal["DRAFT"] = "DRAFT"
     language: Literal["ko"] = "ko"
@@ -811,7 +851,8 @@ class RequestDraft(RequestDraftEditable):
         actual = authoring_guidance_sha256(self.authoring_guidance)
         if actual != self.authoring_guidance_sha256:
             raise ValueError("authoring guidance SHA-256 does not match normalized text")
-        editable = {name: getattr(self, name) for name in REQUEST_DRAFT_EDITABLE_FIELDS}
+        wire = self.model_dump(mode="json")
+        editable = {name: wire[name] for name in REQUEST_DRAFT_EDITABLE_FIELDS}
         expected_spec = draft_spec_sha256(
             editable=editable,
             original_request_sha256=self.original_request_sha256,

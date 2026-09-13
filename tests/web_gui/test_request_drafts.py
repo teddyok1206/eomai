@@ -28,7 +28,8 @@ def test_demo_request_normalization_is_deterministic_and_structured() -> None:
     assert first.topic == second.topic == "2차원 포물선 운동"
     assert first.task_type == "calculation"
     assert first.equation_required is True
-    assert first.image_required is True
+    assert first.material_requirement.form == "AUTO"
+    assert first.material_requirement.panel_count is None
     assert first.choice_count == 5
     assert first.knowledge_grounding is False
     assert first.curriculum_selected_unit_key is None
@@ -51,7 +52,12 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     assert payload["source_intake_batch_ids"] == []
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
-    assert brief["schema_version"] == "3.0"
+    assert brief["schema_version"] == "4.0"
+    assert brief["material_requirement"] == {
+        "schema_version": "content-team-material-requirement/1.0",
+        "form": "AUTO",
+        "panel_count": None,
+    }
     assert brief["authoring_guidance"] == DEMO_REQUEST
     assert brief["authoring_guidance_sha256"] == draft.authoring_guidance_sha256
     assert {
@@ -63,7 +69,7 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     assert "model" not in payload and "reasoning" not in payload and "slot" not in payload
 
 
-def test_grounded_content_team_request_pins_required_image_structure() -> None:
+def test_grounded_auto_content_team_request_does_not_invent_required_material() -> None:
     draft = normalize_request(
         RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="9" * 32
     )
@@ -85,7 +91,7 @@ def test_grounded_content_team_request_pins_required_image_structure() -> None:
 
     retrieval = payload["educational_retrieval"]
     assert isinstance(retrieval, dict)
-    assert retrieval["required_item_elements"] == ["choice", "image", "paragraph"]
+    assert retrieval["required_item_elements"] == ["choice", "paragraph"]
     assert payload["image_mode"] == "required"
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
@@ -95,6 +101,23 @@ def test_grounded_content_team_request_pins_required_image_structure() -> None:
         "image_required",
         "quality_profile",
     }.isdisjoint(brief)
+
+
+def test_legacy_image_required_update_is_migrated_to_exact_image_material() -> None:
+    draft = normalize_request(
+        RequestDraftInput(original_request_text=DEMO_REQUEST), now=NOW, token="a" * 32
+    )
+    value = {
+        name: getattr(draft, name)
+        for name in RequestDraftUpdate.model_fields
+        if name != "material_requirement"
+    }
+    value["image_required"] = True
+
+    migrated = RequestDraftUpdate.model_validate(value)
+
+    assert migrated.material_requirement.form == "IMAGE"
+    assert migrated.material_requirement.panel_count == 1
 
 
 def test_quality_profile_is_closed_policy_mapping() -> None:
@@ -118,7 +141,11 @@ def test_draft_update_preserves_identity_and_source_hash() -> None:
             difficulty="hard",
             choice_count=5,
             equation_required=True,
-            image_required=True,
+            material_requirement={
+                "schema_version": "content-team-material-requirement/1.0",
+                "form": "TABLE",
+                "panel_count": 1,
+            },
             quality_profile="deep",
             source_intake_batch_id=INTAKE_ID,
             authoring_guidance="포물체의 수평·수직 운동을 함께 해석하도록 출제한다.",
@@ -151,6 +178,7 @@ def test_curriculum_selection_changes_composite_spec_hash() -> None:
         "topic": draft.topic,
         "task_type": draft.task_type,
         "difficulty": draft.difficulty,
+        "material_requirement": draft.material_requirement,
         "quality_profile": draft.quality_profile,
         "authoring_guidance": draft.authoring_guidance,
         "knowledge_grounding": False,
@@ -198,6 +226,11 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
             topic="판구조론과 지각 변동",
             task_type="data_interpretation",
             difficulty="hard",
+            material_requirement={
+                "schema_version": "content-team-material-requirement/1.0",
+                "form": "TABLE",
+                "panel_count": 1,
+            },
             quality_profile="deep",
             authoring_guidance="판 경계 자료를 해석하고 지각 변동을 추론하는 문항을 출제한다.",
             knowledge_grounding=True,
@@ -212,7 +245,7 @@ def test_workflow_payload_exposes_only_bounded_educational_requirement() -> None
         "query_kind": "ITEM_PREPARATION",
         "curriculum_root_key": None,
         "topic_keys": [],
-        "required_item_elements": ["choice", "image", "paragraph"],
+        "required_item_elements": ["choice", "paragraph", "table"],
         "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
     }
     assert payload["execution_preset_key"] == "knowledge-grounded-item"
@@ -233,7 +266,11 @@ def test_draft_grounding_requires_one_reviewed_curriculum_selection() -> None:
         "difficulty": "medium",
         "choice_count": 5,
         "equation_required": True,
-        "image_required": True,
+        "material_requirement": {
+            "schema_version": "content-team-material-requirement/1.0",
+            "form": "AUTO",
+            "panel_count": None,
+        },
         "quality_profile": "balanced",
         "authoring_guidance": "운동을 해석하는 계산 문항을 출제한다.",
     }
@@ -258,7 +295,11 @@ def test_draft_validation_rejects_unbounded_choice_count() -> None:
             difficulty="medium",
             choice_count=20,
             equation_required=True,
-            image_required=False,
+            material_requirement={
+                "schema_version": "content-team-material-requirement/1.0",
+                "form": "TEXT",
+                "panel_count": None,
+            },
             quality_profile="balanced",
             authoring_guidance="운동을 해석하는 계산 문항을 출제한다.",
         )

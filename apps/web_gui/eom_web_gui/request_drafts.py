@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from eom_web_gui.contracts import (
+    ContentTeamMaterialRequirement,
     QualityProfile,
     RequestDraft,
     RequestDraftInput,
@@ -56,7 +57,10 @@ def normalize_request(
         "difficulty": "medium",
         "choice_count": 5,
         "equation_required": True,
-        "image_required": True,
+        "material_requirement": ContentTeamMaterialRequirement(
+            form="AUTO",
+            panel_count=None,
+        ).model_dump(mode="json"),
         "quality_profile": QualityProfile.BALANCED,
         "source_intake_batch_id": None,
         "authoring_guidance": text,
@@ -116,7 +120,9 @@ def workflow_start_payload(
         "definition_key": "generic-item-development",
         "definition_version": "1.10.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
-        "image_mode": "required",
+        "image_mode": (
+            "required" if draft.material_requirement.form in {"AUTO", "IMAGE", "MIXED"} else "skip"
+        ),
         "pack_key": "generated-knowledge-item",
         "execution_preset_key": (
             KNOWLEDGE_EXECUTION_PRESET_KEY
@@ -129,7 +135,7 @@ def workflow_start_payload(
         "item_id": None,
         "base_revision_id": None,
         "item_brief": {
-            "schema_version": "3.0",
+            "schema_version": "4.0",
             "subject": draft.subject,
             "topic": draft.topic,
             "task_type": draft.task_type,
@@ -138,6 +144,7 @@ def workflow_start_payload(
             "authoring_guidance": draft.authoring_guidance,
             "authoring_guidance_sha256": draft.authoring_guidance_sha256,
             "curriculum_selected_unit_key": draft.curriculum_selected_unit_key,
+            "material_requirement": draft.material_requirement.model_dump(mode="json"),
         },
         "stimulus_asset_key": None,
     }
@@ -154,10 +161,14 @@ def workflow_start_payload(
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
             "topic_keys": [],
-            # Standalone EOM items promise one generated material figure.  Requiring the
-            # corresponding graph element makes that presentation source part of the pinned
-            # retrieval identity instead of leaving it to prompt interpretation.
-            "required_item_elements": ["choice", "image", "paragraph"],
+            "required_item_elements": sorted(
+                {
+                    "choice",
+                    "paragraph",
+                    *(("image",) if draft.material_requirement.form in {"IMAGE", "MIXED"} else ()),
+                    *(("table",) if draft.material_requirement.form in {"TABLE", "MIXED"} else ()),
+                }
+            ),
             "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
         }
     return payload

@@ -433,6 +433,26 @@ def load_knowledge_item_brief_v3_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
+def load_content_team_material_requirement_schema() -> dict[str, Any]:
+    logical_name = "content-team-material-requirement-v1.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
+def load_knowledge_item_brief_v4_schema() -> dict[str, Any]:
+    logical_name = "knowledge-item-brief-v4.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
+def load_content_team_editorial_material_schema() -> dict[str, Any]:
+    file_name = "content-team-editorial-material-v1.schema.json"
+    return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), f"roles/{file_name}")
+
+
+def load_content_team_image_route_schema() -> dict[str, Any]:
+    file_name = "content-team-image-route-v1.schema.json"
+    return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), f"roles/{file_name}")
+
+
 def load_role_input_schema(
     role: str, protocol_version: str = "workflow-role/1.0.1"
 ) -> dict[str, Any]:
@@ -738,6 +758,22 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
+    if schema_id == "authoring-result@10.0" and role == "authoring":
+        if not isinstance(canonical_value, dict):
+            raise WorkflowSchemaError("content-team authoring result is not an object")
+        output = canonical_value.get("output")
+        draft = output.get("draft") if isinstance(output, dict) else None
+        validate_schema_message(
+            load_content_team_editorial_material_schema(),
+            draft,
+            "content-team-editorial-material/1.0",
+        )
+    elif schema_id == "image-result@10.0" and role == "image":
+        validate_schema_message(
+            load_content_team_image_route_schema(),
+            canonical_value,
+            "content-team-image-route/1.0",
+        )
     validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
     if schema_id == "knowledge-analysis-proposal-result@9.0" and role == "support":
         canonical_value = _filter_invalid_knowledge_analysis_v9_edges(canonical_value)

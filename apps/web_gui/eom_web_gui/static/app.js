@@ -453,6 +453,7 @@ function installRequestDraft() {
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
   const form = $("#draft-form");
+  form.elements.material_form.addEventListener("change", syncMaterialPanelCount);
   form.elements.curriculum_large_unit_key.addEventListener("change", (event) => {
     changeCurriculumSelection("LARGE", event.target.value);
   });
@@ -462,6 +463,19 @@ function installRequestDraft() {
   form.elements.curriculum_small_unit_key.addEventListener("change", (event) => {
     changeCurriculumSelection("SMALL", event.target.value);
   });
+}
+
+function syncMaterialPanelCount() {
+  const form = $("#draft-form");
+  const materialForm = form.elements.material_form.value;
+  const field = $("#material-panel-count-field");
+  const usesPanelCount = ["TABLE", "IMAGE", "MIXED"].includes(materialForm);
+  field.hidden = !usesPanelCount;
+  form.elements.material_panel_count.disabled = !usesPanelCount;
+  if (materialForm === "MIXED") {
+    form.elements.material_panel_count.value = "2";
+    form.elements.material_panel_count.disabled = true;
+  }
 }
 
 async function analyzeDraft() {
@@ -491,7 +505,9 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
     form.elements[key].value = draft[key];
   }
   form.elements.equation_required.checked = draft.equation_required;
-  form.elements.image_required.checked = draft.image_required;
+  form.elements.material_form.value = draft.material_requirement.form;
+  form.elements.material_panel_count.value = String(draft.material_requirement.panel_count || 1);
+  syncMaterialPanelCount();
   form.elements.quality_profile.value = draft.quality_profile;
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
   form.elements.authoring_guidance.value = draft.authoring_guidance;
@@ -519,6 +535,10 @@ function draftUpdateBody() {
   if (form.elements.knowledge_grounding.checked && selectedUnitKey === null) {
     throw new Error("교육 지식 근거를 사용하려면 대단원 또는 중단원을 선택하세요.");
   }
+  const materialForm = form.elements.material_form.value;
+  const materialPanelCount = ["TABLE", "IMAGE", "MIXED"].includes(materialForm)
+    ? Number(form.elements.material_panel_count.value)
+    : null;
   return {
     subject: form.elements.subject.value.trim(),
     topic: form.elements.topic.value.trim(),
@@ -527,7 +547,11 @@ function draftUpdateBody() {
     difficulty: form.elements.difficulty.value,
     choice_count: Number(form.elements.choice_count.value),
     equation_required: form.elements.equation_required.checked,
-    image_required: form.elements.image_required.checked,
+    material_requirement: {
+      schema_version: "content-team-material-requirement/1.0",
+      form: materialForm,
+      panel_count: materialForm === "MIXED" ? 2 : materialPanelCount,
+    },
     quality_profile: form.elements.quality_profile.value,
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
     authoring_guidance: normalizeAuthoringGuidance(form.elements.authoring_guidance.value),

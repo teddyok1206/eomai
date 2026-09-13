@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/content-team-image-route/1.0",
+  "title": "Content-team image route semantic guard V1",
+  "type": "object",
+  "required": [
+    "output"
+  ],
+  "properties": {
+    "output": {
+      "type": "object",
+      "required": [
+        "drawings"
+      ],
+      "properties": {
+        "drawings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "required": [
+              "drawing"
+            ],
+            "properties": {
+              "drawing": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "production_route",
+                  "route_reason"
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "production_route": {
+                          "const": "DETERMINISTIC_SVG"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "route_reason": {
+                          "enum": [
+                            "DATA_VISUALIZATION",
+                            "SCIENTIFIC_SCHEMATIC",
+                            "GEOMETRIC_DIAGRAM",
+                            "MAP_OR_SPATIAL_DIAGRAM"
+                          ]
+                        },
+                        "generation_prompt": {
+                          "type": "null"
+                        },
+                        "negative_prompt": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "production_route": {
+                          "const": "HYBRID_LOCAL_GENERATIVE"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "natural_scene",
+                            "composite"
+                          ]
+                        },
+                        "route_reason": {
+                          "enum": [
+                            "HUMAN_OR_ANIMAL_REQUIRED",
+                            "ORGANIC_OBJECT_REQUIRED",
+                            "REALISTIC_NATURAL_SCENE_REQUIRED",
+                            "COMPLEX_NATURAL_TEXTURE_REQUIRED"
+                          ]
+                        },
+                        "generation_prompt": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "generation_prompt"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

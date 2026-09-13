@@ -20,7 +20,7 @@ REQUEST_DRAFT_EDITABLE_FIELDS = (
     "difficulty",
     "choice_count",
     "equation_required",
-    "image_required",
+    "material_requirement",
     "quality_profile",
     "source_intake_batch_id",
     "authoring_guidance",

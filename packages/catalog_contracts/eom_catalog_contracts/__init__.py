@@ -129,6 +129,11 @@ from eom_catalog_contracts.authoring_guidance import (
     normalize_reviewed_authoring_guidance,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.content_team_material import (
+    ContentTeamMaterialForm,
+    ContentTeamMaterialRequirementV1,
+    validate_content_team_material_requirement,
+)
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY,
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_REVISION,
@@ -791,6 +796,8 @@ __all__ = [
     "ContentPackManifest",
     "ContentPackProfile",
     "ContentTeamItemBriefV3Input",
+    "ContentTeamMaterialForm",
+    "ContentTeamMaterialRequirementV1",
     "ContentTeamMockExamSlotV1",
     "ContentTeamTrustedRagItemBriefV3Input",
     "ContentTeamTrustedRagMockExamSlotV3",
@@ -1229,6 +1236,7 @@ __all__ = [
     "parse_guidance_markdown",
     "resolve_integrated_science_curriculum_scope",
     "validate_assessment_page_observation_anchors",
+    "validate_content_team_material_requirement",
     "validate_content_team_mock_exam_slot_output",
     "validate_content_team_mock_exam_slot_output_v2",
     "validate_contract",

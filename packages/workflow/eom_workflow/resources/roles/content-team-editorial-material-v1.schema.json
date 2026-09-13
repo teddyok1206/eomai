@@ -1,0 +1,526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/content-team-editorial-material/1.0",
+  "title": "Content-team editorial material semantic guard V1",
+  "type": "object",
+  "required": [
+    "visual_layout",
+    "visuals",
+    "inquiry"
+  ],
+  "properties": {
+    "visual_layout": {
+      "enum": [
+        "NONE",
+        "IMAGE_ONLY",
+        "TABLE_ONLY",
+        "IMAGE_TABLE",
+        "TABLE_IMAGE",
+        "IMAGE_IMAGE",
+        "TABLE_TABLE",
+        "INQUIRY_BOX"
+      ]
+    },
+    "visuals": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/visual"
+      }
+    },
+    "inquiry": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "NONE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "maxItems": 0
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "IMAGE_ONLY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/unlabeledImage"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "TABLE_ONLY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/unlabeledTable"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "IMAGE_TABLE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/unlabeledImage"
+              },
+              {
+                "$ref": "#/$defs/unlabeledTable"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "TABLE_IMAGE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/unlabeledTable"
+              },
+              {
+                "$ref": "#/$defs/unlabeledImage"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "IMAGE_IMAGE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/firstImage"
+              },
+              {
+                "$ref": "#/$defs/secondImage"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "TABLE_TABLE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/firstTable"
+              },
+              {
+                "$ref": "#/$defs/secondTable"
+              }
+            ]
+          },
+          "inquiry": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "visual_layout": {
+            "const": "INQUIRY_BOX"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "visuals": {
+            "maxItems": 0
+          },
+          "inquiry": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "image": {
+      "type": "object",
+      "required": [
+        "kind",
+        "label"
+      ],
+      "properties": {
+        "kind": {
+          "const": "IMAGE"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(\uac00)",
+            "(\ub098)"
+          ]
+        }
+      }
+    },
+    "unlabeledImage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": ""
+            }
+          }
+        }
+      ]
+    },
+    "firstImage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": "(\uac00)"
+            }
+          }
+        }
+      ]
+    },
+    "secondImage": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": "(\ub098)"
+            }
+          }
+        }
+      ]
+    },
+    "tableBase": {
+      "type": "object",
+      "required": [
+        "kind",
+        "label",
+        "headers",
+        "rows",
+        "alignments"
+      ],
+      "properties": {
+        "kind": {
+          "const": "TABLE"
+        },
+        "label": {
+          "enum": [
+            "",
+            "(\uac00)",
+            "(\ub098)"
+          ]
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "alignments": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "default",
+              "left",
+              "center",
+              "right"
+            ]
+          }
+        }
+      }
+    },
+    "table2": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/tableBase"
+        },
+        {
+          "properties": {
+            "headers": {
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "rows": {
+              "items": {
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "alignments": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      ]
+    },
+    "table3": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/tableBase"
+        },
+        {
+          "properties": {
+            "headers": {
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "rows": {
+              "items": {
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "alignments": {
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      ]
+    },
+    "table4": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/tableBase"
+        },
+        {
+          "properties": {
+            "headers": {
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "rows": {
+              "items": {
+                "minItems": 4,
+                "maxItems": 4
+              }
+            },
+            "alignments": {
+              "minItems": 4,
+              "maxItems": 4
+            }
+          }
+        }
+      ]
+    },
+    "table5": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/tableBase"
+        },
+        {
+          "properties": {
+            "headers": {
+              "minItems": 5,
+              "maxItems": 5
+            },
+            "rows": {
+              "items": {
+                "minItems": 5,
+                "maxItems": 5
+              }
+            },
+            "alignments": {
+              "minItems": 5,
+              "maxItems": 5
+            }
+          }
+        }
+      ]
+    },
+    "table": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/table2"
+        },
+        {
+          "$ref": "#/$defs/table3"
+        },
+        {
+          "$ref": "#/$defs/table4"
+        },
+        {
+          "$ref": "#/$defs/table5"
+        }
+      ]
+    },
+    "unlabeledTable": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/table"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": ""
+            }
+          }
+        }
+      ]
+    },
+    "firstTable": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/table"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": "(\uac00)"
+            }
+          }
+        }
+      ]
+    },
+    "secondTable": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/table"
+        },
+        {
+          "properties": {
+            "label": {
+              "const": "(\ub098)"
+            }
+          }
+        }
+      ]
+    },
+    "visual": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/image"
+        },
+        {
+          "$ref": "#/$defs/table"
+        }
+      ]
+    }
+  }
+}
