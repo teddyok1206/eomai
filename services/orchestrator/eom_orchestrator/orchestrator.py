@@ -21,7 +21,7 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
-from eom_workflow.control_plane import EvidenceResultArtifactPointer
+from eom_workflow.control_plane import EvidenceResultArtifactPointer, ResolvedExecutionPlanV3
 from eom_workflow.models import (
     ArtifactPointer,
     KnowledgeAnalysisProposalRoleResult,
@@ -117,6 +117,28 @@ WorkflowRoleRequest = (
     | LegacyItemExtractionWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
 )
+
+
+def _resolved_evidence_plan_for_response(
+    plan_document: dict[str, object] | None,
+    *,
+    result_schema: str,
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None,
+) -> ResolvedExecutionPlanV3 | None:
+    """Validate the canonical evidence plan before projecting worker-owned output."""
+
+    if (
+        result_schema not in {"authoring-result@10.0", "review-result@10.0"}
+        or evidence_access != "EVIDENCE_CONTEXT"
+    ):
+        return None
+    try:
+        return ResolvedExecutionPlanV3.model_validate(plan_document)
+    except ValidationError as exc:
+        raise ControlPlaneError(
+            "CONTROL_EVIDENCE_PLAN_INVALID",
+            "evidence-enabled workflow result requires an exact V3 plan",
+        ) from exc
 
 
 def _validated_workflow_role_replay(
@@ -480,6 +502,7 @@ class Orchestrator:
             if recovered_run is None:
                 assert slot is not None
                 evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
+                resolved_evidence_plan: ResolvedExecutionPlanV3 | None = None
                 if plan_step is not None:
                     raw_evidence_access = plan_step.get("evidence_access")
                     if raw_evidence_access not in {"NONE", "EVIDENCE_CONTEXT"}:
@@ -491,10 +514,16 @@ class Orchestrator:
                         Literal["NONE", "EVIDENCE_CONTEXT"],
                         raw_evidence_access,
                     )
+                    resolved_evidence_plan = _resolved_evidence_plan_for_response(
+                        plan_document,
+                        result_schema=result_schema,
+                        evidence_access=evidence_access,
+                    )
                 output_schema = constrained_result_schema(
                     result_schema,
                     worker_input,
                     evidence_access=evidence_access,
+                    resolved_evidence_plan=resolved_evidence_plan,
                 )
                 with transaction(self.sessions) as session:
                     claimed = session.get(JobRecord, job_id)

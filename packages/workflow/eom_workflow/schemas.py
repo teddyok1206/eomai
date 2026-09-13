@@ -39,6 +39,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError
 from pydantic import ValidationError
 
+from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -1340,6 +1341,7 @@ def constrained_result_schema(
     worker_input: RoleWorkerInput,
     *,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None,
+    resolved_evidence_plan: ResolvedExecutionPlanV3 | None = None,
 ) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
@@ -1362,6 +1364,7 @@ def constrained_result_schema(
         schema,
         schema_id=schema_id,
         evidence_access=evidence_access,
+        resolved_evidence_plan=resolved_evidence_plan,
     )
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
@@ -1649,6 +1652,7 @@ def _bind_evidence_result_branch(
     *,
     schema_id: str,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None,
+    resolved_evidence_plan: ResolvedExecutionPlanV3 | None,
 ) -> None:
     """Bind the @10 nullable evidence branch to the immutable resolved-plan step.
 
@@ -1667,6 +1671,10 @@ def _bind_evidence_result_branch(
 
     definitions = _mapping(schema, "$defs")
     grounded = evidence_access == "EVIDENCE_CONTEXT"
+    if grounded and resolved_evidence_plan is None:
+        raise WorkflowSchemaError("evidence result requires its typed resolved plan")
+    if not grounded and resolved_evidence_plan is not None:
+        raise WorkflowSchemaError("non-evidence result cannot receive an evidence plan")
     if schema_id == "authoring-result@10.0":
         output_properties = _mapping(
             _mapping(definitions, "ContentTeamAuthoringOutputV10"),
@@ -1681,6 +1689,35 @@ def _bind_evidence_result_branch(
         )
         knowledge_source_mode = _mapping(metadata_properties, "knowledge_source_mode")
         knowledge_source_mode["const"] = "graph_grounded" if grounded else "general_model_knowledge"
+        if grounded:
+            assert resolved_evidence_plan is not None
+            usage_properties = _mapping(_mapping(definitions, "EvidenceUsageV1"), "properties")
+            for field_name, field_value in (
+                ("evidence_bundle_id", resolved_evidence_plan.evidence_bundle_id),
+                (
+                    "evidence_bundle_revision_id",
+                    resolved_evidence_plan.evidence_bundle_revision_id,
+                ),
+                ("retrieval_request_id", resolved_evidence_plan.retrieval_request_id),
+                (
+                    "graph_snapshot_revision_id",
+                    resolved_evidence_plan.graph_snapshot.graph_snapshot_revision_id,
+                ),
+                ("evidence_manifest_sha256", resolved_evidence_plan.evidence_manifest_sha256),
+                (
+                    "evidence_context_sha256",
+                    resolved_evidence_plan.evidence_context_artifact.sha256,
+                ),
+            ):
+                _bind_result_string_const(
+                    schema,
+                    _mapping(usage_properties, field_name),
+                    field_value,
+                )
+            _bind_required_material_result_branch(
+                schema,
+                resolved_evidence_plan=resolved_evidence_plan,
+            )
         return
 
     output_properties = _mapping(
@@ -1692,6 +1729,72 @@ def _bind_evidence_result_branch(
     attestation.update(
         {"$ref": "#/$defs/EvidenceUsageReviewAttestationV1"} if grounded else {"type": "null"}
     )
+
+
+def _bind_required_material_result_branch(
+    schema: dict[str, Any],
+    *,
+    resolved_evidence_plan: ResolvedExecutionPlanV3,
+) -> None:
+    """Project plan-required TABLE/IMAGE presence into the authoring response schema.
+
+    A V3 plan does not carry the reviewed panel count, so this projection narrows only facts that
+    the retrieval requirement owns. The application-level material validator remains responsible
+    for the exact panel count, order, labels, DATA blocks, and inquiry relationship.
+    """
+
+    required = set(resolved_evidence_plan.retrieval_requirement.required_item_elements)
+    image_required = "image" in required
+    table_required = "table" in required
+    if not image_required and not table_required:
+        return
+
+    definitions = _mapping(schema, "$defs")
+    draft_properties = _mapping(_mapping(definitions, "AssessmentItemContentV3"), "properties")
+    visuals = _mapping(draft_properties, "visuals")
+    usage_properties = _mapping(_mapping(definitions, "EvidenceUsageV1"), "properties")
+    citations = _mapping(usage_properties, "citations")
+
+    if image_required and table_required:
+        visuals["minItems"] = 2
+        _append_projection_instruction(
+            visuals,
+            "Return exactly two visuals containing one IMAGE and one TABLE in presentation order.",
+        )
+        _append_projection_instruction(
+            citations,
+            "Cite /stem and, for each material, its /visuals/{index}/kind plus the required "
+            "DATA content or one concrete table header/cell scalar leaf.",
+        )
+        return
+
+    visual_kind = "IMAGE" if image_required else "TABLE"
+    definition_name = "ContentTeamImageSlot" if image_required else "ContentTeamTable"
+    visuals["minItems"] = 1
+    visuals["items"] = {"$ref": f"#/$defs/{definition_name}"}
+    _append_projection_instruction(
+        visuals,
+        f"Return one or two {visual_kind} visuals; an empty visual list is invalid for this plan.",
+    )
+    if image_required:
+        labeled_blocks = _mapping(draft_properties, "labeled_blocks")
+        labeled_blocks["minItems"] = 1
+        _append_projection_instruction(
+            labeled_blocks,
+            "Include exactly one DATA block containing the student-visible image material facts.",
+        )
+        _append_projection_instruction(
+            citations,
+            "A PAST_EXAM STRUCTURE_PATTERN citation must include /stem, every IMAGE "
+            "/visuals/{index}/kind, and the actual DATA /labeled_blocks/{index}/content leaf.",
+        )
+    else:
+        _append_projection_instruction(
+            citations,
+            "A PAST_EXAM STRUCTURE_PATTERN citation must include /stem, every TABLE "
+            "/visuals/{index}/kind, and at least one concrete header or cell scalar leaf "
+            "per table.",
+        )
 
 
 def _local_definition_properties(

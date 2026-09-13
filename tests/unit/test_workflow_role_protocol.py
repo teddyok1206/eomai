@@ -8,10 +8,14 @@ from eom_catalog_contracts import (
     AssessmentArtifactMemberPointer,
     AssessmentPageImageInput,
     AssessmentSourceMaterialization,
+    EducationalRetrievalRequirement,
+    KnowledgeArtifactMemberPointer,
+    KnowledgeGraphSnapshotPointer,
     LegacyItemExtractionRequest,
 )
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
+from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.models import (
     ArtifactPointer,
     ArtifactSpec,
@@ -80,6 +84,47 @@ def _v10_input(role: str) -> RoleWorkerInput:
     if role == "review":
         document["upstream_artifacts"][0]["result_schema"] = "authoring-result@10.0"
     return RoleWorkerInput.model_validate(document)
+
+
+def _projectable_evidence_plan(
+    *,
+    required_item_elements: tuple[str, ...] = ("choice", "paragraph"),
+) -> ResolvedExecutionPlanV3:
+    manifest_artifact = KnowledgeArtifactMemberPointer.model_construct(
+        artifact_id="artifact_" + "b" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+        sha256="sha256:" + "b" * 64,
+        schema_ref="eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+        media_type="application/json",
+        logical_name="manifest.json",
+        member_path="evidence/manifest.json",
+    )
+    context_artifact = KnowledgeArtifactMemberPointer.model_construct(
+        artifact_id="artifact_" + "c" * 32,
+        artifact_revision_id="rev_" + "c" * 32,
+        sha256="sha256:" + "c" * 64,
+        schema_ref="eom://schemas/knowledge/evidence-bundle-context/1.0",
+        media_type="text/markdown",
+        logical_name="context.md",
+        member_path="evidence/context.md",
+    )
+    graph_snapshot = KnowledgeGraphSnapshotPointer.model_construct(
+        graph_id="graph_" + "d" * 32,
+        graph_snapshot_revision_id="graphrev_" + "d" * 32,
+        manifest_artifact=manifest_artifact,
+        manifest_sha256="sha256:" + "d" * 64,
+    )
+    return ResolvedExecutionPlanV3.model_construct(
+        retrieval_requirement=EducationalRetrievalRequirement.model_construct(
+            required_item_elements=required_item_elements
+        ),
+        evidence_bundle_id="evidence_" + "e" * 32,
+        evidence_bundle_revision_id="evidencerev_" + "e" * 32,
+        retrieval_request_id="retrieval_" + "f" * 32,
+        graph_snapshot=graph_snapshot,
+        evidence_manifest_sha256="sha256:" + "e" * 64,
+        evidence_context_artifact=context_artifact,
+    )
 
 
 def _result(role: str) -> dict[str, object]:
@@ -305,12 +350,93 @@ def test_constrained_v10_authoring_schema_binds_resolved_evidence_branch(
         "authoring-result@10.0",
         _v10_input("authoring"),
         evidence_access=evidence_access,  # type: ignore[arg-type]
+        resolved_evidence_plan=(
+            _projectable_evidence_plan() if evidence_access == "EVIDENCE_CONTEXT" else None
+        ),
     )
 
     output = schema["$defs"]["ContentTeamAuthoringOutputV10"]["properties"]
     metadata = schema["$defs"]["KnowledgeAuthoringMetadataV2"]["properties"]
     assert output["evidence_usage"] == expected_usage
     assert metadata["knowledge_source_mode"]["const"] == expected_mode
+    if evidence_access == "EVIDENCE_CONTEXT":
+        usage = schema["$defs"]["EvidenceUsageV1"]["properties"]
+        assert {
+            field_name: field_schema["const"]
+            for field_name, field_schema in usage.items()
+            if field_name
+            in {
+                "evidence_bundle_id",
+                "evidence_bundle_revision_id",
+                "retrieval_request_id",
+                "graph_snapshot_revision_id",
+                "evidence_manifest_sha256",
+                "evidence_context_sha256",
+            }
+        } == {
+            "evidence_bundle_id": "evidence_" + "e" * 32,
+            "evidence_bundle_revision_id": "evidencerev_" + "e" * 32,
+            "retrieval_request_id": "retrieval_" + "f" * 32,
+            "graph_snapshot_revision_id": "graphrev_" + "d" * 32,
+            "evidence_manifest_sha256": "sha256:" + "e" * 64,
+            "evidence_context_sha256": "sha256:" + "c" * 64,
+        }
+
+
+def test_constrained_grounded_v10_schema_rejects_missing_typed_plan() -> None:
+    with pytest.raises(WorkflowSchemaError, match="requires its typed resolved plan"):
+        constrained_result_schema(
+            "authoring-result@10.0",
+            _v10_input("authoring"),
+            evidence_access="EVIDENCE_CONTEXT",
+        )
+
+
+@pytest.mark.parametrize(
+    ("required_elements", "expected_items", "expected_minimum"),
+    [
+        (
+            ("choice", "image", "paragraph"),
+            {"$ref": "#/$defs/ContentTeamImageSlot"},
+            1,
+        ),
+        (
+            ("choice", "paragraph", "table"),
+            {"$ref": "#/$defs/ContentTeamTable"},
+            1,
+        ),
+    ],
+)
+def test_constrained_grounded_v10_schema_requires_single_material_family(
+    required_elements: tuple[str, ...],
+    expected_items: dict[str, str],
+    expected_minimum: int,
+) -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access="EVIDENCE_CONTEXT",
+        resolved_evidence_plan=_projectable_evidence_plan(required_item_elements=required_elements),
+    )
+
+    draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
+    assert draft["visuals"]["items"] == expected_items
+    assert draft["visuals"]["minItems"] == expected_minimum
+
+
+def test_constrained_grounded_v10_schema_requires_two_mixed_materials() -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access="EVIDENCE_CONTEXT",
+        resolved_evidence_plan=_projectable_evidence_plan(
+            required_item_elements=("choice", "image", "paragraph", "table")
+        ),
+    )
+
+    draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
+    assert draft["visuals"]["minItems"] == 2
+    assert draft["visuals"]["maxItems"] == 2
 
 
 @pytest.mark.parametrize(
@@ -331,6 +457,9 @@ def test_constrained_v10_review_schema_binds_resolved_evidence_branch(
         "review-result@10.0",
         _v10_input("review"),
         evidence_access=evidence_access,  # type: ignore[arg-type]
+        resolved_evidence_plan=(
+            _projectable_evidence_plan() if evidence_access == "EVIDENCE_CONTEXT" else None
+        ),
     )
 
     output = schema["$defs"]["KnowledgeReviewOutputV10"]["properties"]

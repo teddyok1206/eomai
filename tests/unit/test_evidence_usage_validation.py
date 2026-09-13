@@ -15,6 +15,7 @@ from eom_orchestrator.control_models import (
     ExecutionBundleRevisionRecord,
     ResolvedExecutionPlanRecord,
 )
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
     _resolve_authoring_result,
@@ -28,7 +29,7 @@ from eom_orchestrator.evidence_usage_validation import (
     validate_evidence_usage_for_commit,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_orchestrator.orchestrator import Orchestrator
+from eom_orchestrator.orchestrator import Orchestrator, _resolved_evidence_plan_for_response
 from eom_workflow import (
     ControlSchemaError,
     EvidenceResultArtifactPointer,
@@ -86,6 +87,45 @@ def _knowledge_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[
     record.canonical_document = document
     record.plan_sha256 = document["plan_sha256"]
     return fixture
+
+
+def test_response_schema_plan_binding_validates_exact_v3_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+
+    resolved = _resolved_evidence_plan_for_response(
+        record.canonical_document,
+        result_schema="authoring-result@10.0",
+        evidence_access="EVIDENCE_CONTEXT",
+    )
+
+    assert resolved is not None
+    assert resolved.plan_sha256 == record.plan_sha256
+    assert (
+        resolved.evidence_bundle_revision_id == fixture["manifest"]["evidence_bundle_revision_id"]
+    )
+
+
+def test_response_schema_plan_binding_rejects_drifted_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    drifted = deepcopy(record.canonical_document)
+    drifted["plan_sha256"] = "sha256:" + "9" * 64
+
+    with pytest.raises(ControlPlaneError) as caught:
+        _resolved_evidence_plan_for_response(
+            drifted,
+            result_schema="authoring-result@10.0",
+            evidence_access="EVIDENCE_CONTEXT",
+        )
+
+    assert caught.value.code == "CONTROL_EVIDENCE_PLAN_INVALID"
 
 
 def _usage(
