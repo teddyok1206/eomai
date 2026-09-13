@@ -23,6 +23,7 @@ from eom_catalog_contracts.assessment_assembly import (
 )
 from eom_catalog_contracts.assessment_item import AssessmentItemContentV2, AssessmentItemContentV3
 from eom_catalog_contracts.authoring_guidance import validate_reviewed_authoring_guidance
+from eom_catalog_contracts.content_team_material import ContentTeamMaterialRequirementV1
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     IntegratedScienceCurriculumResolver,
@@ -60,6 +61,12 @@ CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3: Literal[
 CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V3: Literal[
     "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
 ] = "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
+CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V4: Literal[
+    "sha256:02b4ea7987abb25d5a34a939961a518ad54987f44792532e6b824f7419518a00"
+] = "sha256:02b4ea7987abb25d5a34a939961a518ad54987f44792532e6b824f7419518a00"
+CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V4: Literal[
+    "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
+] = "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
 _AUTHORING_DIFFICULTY_BY_SLOT = {"LOW": "easy", "MEDIUM": "medium", "HIGH": "hard"}
 
 __all__ = [
@@ -68,29 +75,37 @@ __all__ = [
     "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256",
     "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V2",
     "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V3",
+    "CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V4",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V2",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V3",
+    "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V4",
     "CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3",
     "ContentTeamItemBriefV3Input",
     "ContentTeamMockExamSlotV1",
     "ContentTeamTrustedRagItemBriefV3Input",
+    "ContentTeamTrustedRagItemBriefV4Input",
     "ContentTeamTrustedRagMockExamSlotV3",
     "MockExamOneItemGenerationBlockV1",
     "MockExamOneItemGenerationBlockV2",
     "MockExamOneItemGenerationBlockV3",
+    "MockExamOneItemGenerationBlockV4",
     "MockExamPlannedWorkflowCallV1",
     "MockExamPlannedWorkflowCallV2",
     "MockExamPlannedWorkflowCallV3",
+    "MockExamPlannedWorkflowCallV4",
     "MockExamProductionPlanContract",
     "MockExamProductionPlanError",
     "MockExamProductionPlanV1",
     "MockExamProductionPlanV2",
     "MockExamProductionPlanV3",
+    "MockExamProductionPlanV4",
     "build_integrated_science_mock_exam_production_plan",
     "build_integrated_science_mock_exam_production_plan_v2",
     "build_integrated_science_mock_exam_production_plan_v3",
+    "build_integrated_science_mock_exam_production_plan_v4",
     "classify_content_team_mock_exam_material_profile",
+    "content_team_material_requirement_for_mock_exam_profile",
     "validate_content_team_mock_exam_slot_output",
     "validate_content_team_mock_exam_slot_output_v2",
 ]
@@ -205,6 +220,26 @@ class ContentTeamTrustedRagItemBriefV3Input(ContentTeamItemBriefV3Input):
     mock_exam_slot: ContentTeamTrustedRagMockExamSlotV3
 
 
+class ContentTeamTrustedRagItemBriefV4Input(ContentTeamTrustedRagItemBriefV3Input):
+    """Material-first production input with one exact student-visible form."""
+
+    schema_version: Literal["4.0"]  # type: ignore[assignment]
+    material_requirement: ContentTeamMaterialRequirementV1
+
+    @model_validator(mode="after")
+    def material_matches_primary_slot_profile(self) -> Self:
+        primary = self.mock_exam_slot.preferred_material_profiles[0]
+        expected_panel_count = (
+            2 if primary == "MIXED" else 1 if primary in {"TABLE", "IMAGE"} else None
+        )
+        if (
+            self.material_requirement.form != primary
+            or self.material_requirement.panel_count != expected_panel_count
+        ):
+            raise ValueError("material requirement differs from the exact primary slot profile")
+        return self
+
+
 class MockExamOneItemGenerationBlockV1(FrozenModel):
     """Pinned source-level identity of the existing one-Item workflow block."""
 
@@ -268,6 +303,22 @@ class MockExamOneItemGenerationBlockV3(MockExamOneItemGenerationBlockV1):
     ]
 
 
+class MockExamOneItemGenerationBlockV4(MockExamOneItemGenerationBlockV3):
+    """Material-first successor deriving image execution from each immutable Brief."""
+
+    block_revision: Literal["4.0"]  # type: ignore[assignment]
+    image_mode: Literal["from_material_requirement"]  # type: ignore[assignment]
+    content_pack_version: Literal["1.16.0"]  # type: ignore[assignment]
+    content_pack_source_tree_sha256: Literal[  # type: ignore[assignment]
+        "sha256:02b4ea7987abb25d5a34a939961a518ad54987f44792532e6b824f7419518a00"
+    ]
+    item_brief_schema_version: Literal["4.0"]
+    material_requirement_schema_version: Literal["content-team-material-requirement/1.0"]
+    block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
+    ]
+
+
 class MockExamPlannedWorkflowCallV1(FrozenModel):
     """One independent CREATE_ITEM invocation assigned to one exam position."""
 
@@ -305,6 +356,14 @@ class MockExamPlannedWorkflowCallV3(MockExamPlannedWorkflowCallV1):
         "sha256:c98e12d67026923a4b1d1eb5470d33512702a8758e9477baed7bb2997956056f"
     ]
     item_brief: ContentTeamTrustedRagItemBriefV3Input
+
+
+class MockExamPlannedWorkflowCallV4(MockExamPlannedWorkflowCallV1):
+    generation_block_revision: Literal["4.0"]  # type: ignore[assignment]
+    generation_block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
+    ]
+    item_brief: ContentTeamTrustedRagItemBriefV4Input
 
 
 class MockExamProductionPlanV1(FrozenModel):
@@ -406,8 +465,22 @@ class MockExamProductionPlanV3(MockExamProductionPlanV1):
     )
 
 
+class MockExamProductionPlanV4(MockExamProductionPlanV1):
+    """Material-first 25-Item plan pinning Brief V4 and Content Pack 1.16."""
+
+    schema_version: Literal["mock-exam-production-plan/4.0"]  # type: ignore[assignment]
+    one_item_generation_block: MockExamOneItemGenerationBlockV4
+    workflow_calls: tuple[MockExamPlannedWorkflowCallV4, ...] = Field(
+        min_length=25,
+        max_length=25,
+    )
+
+
 MockExamProductionPlanContract = (
-    MockExamProductionPlanV1 | MockExamProductionPlanV2 | MockExamProductionPlanV3
+    MockExamProductionPlanV1
+    | MockExamProductionPlanV2
+    | MockExamProductionPlanV3
+    | MockExamProductionPlanV4
 )
 
 
@@ -582,6 +655,45 @@ def build_integrated_science_mock_exam_production_plan_v3(
     )
     plan_sha256 = content_sha256(plan_body)
     return MockExamProductionPlanV3.model_validate(
+        {
+            **plan_body,
+            "production_plan_id": "productionplan_" + plan_sha256.removeprefix("sha256:")[:32],
+            "plan_sha256": plan_sha256,
+        }
+    )
+
+
+def build_integrated_science_mock_exam_production_plan_v4(
+    *,
+    policy: MockExamAssemblyPolicyV1,
+    layout_policy: MockExamLayoutPolicyV1,
+    outline: IntegratedScienceEditorialOutline,
+) -> MockExamProductionPlanV4:
+    """Build the material-first immutable 25-call production intent."""
+
+    predecessor = build_integrated_science_mock_exam_production_plan_v3(
+        policy=policy,
+        layout_policy=layout_policy,
+        outline=outline,
+    )
+    block = _one_item_generation_block_v4()
+    calls = tuple(_upgrade_workflow_call_v4(call, block) for call in predecessor.workflow_calls)
+    plan_body = predecessor.model_dump(
+        mode="json",
+        exclude={
+            "production_plan_id",
+            "plan_sha256",
+            "one_item_generation_block",
+            "workflow_calls",
+        },
+    )
+    plan_body.update(
+        schema_version="mock-exam-production-plan/4.0",
+        one_item_generation_block=block.model_dump(mode="json"),
+        workflow_calls=[call.model_dump(mode="json") for call in calls],
+    )
+    plan_sha256 = content_sha256(plan_body)
+    return MockExamProductionPlanV4.model_validate(
         {
             **plan_body,
             "production_plan_id": "productionplan_" + plan_sha256.removeprefix("sha256:")[:32],
@@ -825,6 +937,32 @@ def _one_item_generation_block_v3() -> MockExamOneItemGenerationBlockV3:
     )
 
 
+def _one_item_generation_block_v4() -> MockExamOneItemGenerationBlockV4:
+    return MockExamOneItemGenerationBlockV4(
+        block_key="content-team-one-item-generation",
+        block_revision="4.0",
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.10.0",
+        request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        image_mode="from_material_requirement",
+        content_pack_key="generated-knowledge-item",
+        content_pack_version="1.16.0",
+        content_pack_source_tree_sha256=CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V4,
+        execution_preset_key="knowledge-grounded-item",
+        registry_mode="CREATE_ITEM",
+        role_protocol_version="workflow-role/1.20.0",
+        role_schema_bundle_sha256=CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3,
+        knowledge_source_mode="graph_grounded",
+        authoring_result_schema="authoring-result@10.0",
+        review_result_schema="review-result@10.0",
+        evidence_usage_receipt_schema_version="evidence-usage-validation-receipt/1.0",
+        trusted_evidence_usage_receipts_required=True,
+        item_brief_schema_version="4.0",
+        material_requirement_schema_version="content-team-material-requirement/1.0",
+        block_sha256=CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V4,
+    )
+
+
 def _upgrade_workflow_call_v2(
     call: MockExamPlannedWorkflowCallV1,
     block: MockExamOneItemGenerationBlockV2,
@@ -853,6 +991,38 @@ def _upgrade_workflow_call_v3(
     return MockExamPlannedWorkflowCallV3.model_validate(
         {**call_body, "workflow_call_id": _workflow_call_id(call_body)}
     )
+
+
+def _upgrade_workflow_call_v4(
+    call: MockExamPlannedWorkflowCallV3,
+    block: MockExamOneItemGenerationBlockV4,
+) -> MockExamPlannedWorkflowCallV4:
+    brief_values = call.item_brief.model_dump(mode="json", exclude={"original_request_sha256"})
+    brief_values.update(
+        schema_version="4.0",
+        material_requirement=content_team_material_requirement_for_mock_exam_profile(
+            call.item_brief.mock_exam_slot.preferred_material_profiles[0]
+        ).model_dump(mode="json"),
+    )
+    brief_values["original_request_sha256"] = _original_request_sha256_from_values(brief_values)
+    call_body: dict[str, object] = {
+        "generation_block_key": block.block_key,
+        "generation_block_revision": block.block_revision,
+        "generation_block_sha256": block.block_sha256,
+        "item_brief": brief_values,
+    }
+    return MockExamPlannedWorkflowCallV4.model_validate(
+        {**call_body, "workflow_call_id": _workflow_call_id(call_body)}
+    )
+
+
+def content_team_material_requirement_for_mock_exam_profile(
+    profile: MockExamMaterialProfile,
+) -> ContentTeamMaterialRequirementV1:
+    """Map one released primary layout profile to one exact material requirement in O(1)."""
+
+    panel_count = 2 if profile == "MIXED" else 1 if profile in {"TABLE", "IMAGE"} else None
+    return ContentTeamMaterialRequirementV1(form=profile, panel_count=panel_count)
 
 
 def _build_workflow_call(

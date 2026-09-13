@@ -157,6 +157,22 @@ class MockExamGenerationBlockResolutionV3(MockExamGenerationBlockResolutionV1):
         return self
 
 
+class MockExamGenerationBlockResolutionV4(MockExamGenerationBlockResolutionV3):
+    """Exact material-first runtime family resolved before fresh Item production."""
+
+    generation_block_revision: Literal["4.0"]  # type: ignore[assignment]
+    generation_block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
+    ]
+    content_pack_version: Literal["1.16.0"]  # type: ignore[assignment]
+    content_pack_source_tree_sha256: Literal[  # type: ignore[assignment]
+        "sha256:02b4ea7987abb25d5a34a939961a518ad54987f44792532e6b824f7419518a00"
+    ]
+    image_mode: Literal["from_material_requirement"]
+    item_brief_schema_version: Literal["4.0"]
+    material_requirement_schema_version: Literal["content-team-material-requirement/1.0"]
+
+
 class MockExamReviewPointerV1(ApiModel):
     """Exact validated review artifact with a zero-blocking quality gate."""
 
@@ -1365,8 +1381,18 @@ class MockExamProductionExecutionV3(MockExamProductionExecutionV1):
         return self
 
 
+class MockExamProductionExecutionV4(MockExamProductionExecutionV3):
+    """Material-first checkpoint retaining the trusted-RAG pointer chain."""
+
+    schema_version: Literal["mock-exam-production-execution/4.0"]  # type: ignore[assignment]
+    generation_block_resolution: MockExamGenerationBlockResolutionV4 | None
+
+
 MockExamProductionExecution = Annotated[
-    MockExamProductionExecutionV1 | MockExamProductionExecutionV2 | MockExamProductionExecutionV3,
+    MockExamProductionExecutionV1
+    | MockExamProductionExecutionV2
+    | MockExamProductionExecutionV3
+    | MockExamProductionExecutionV4,
     Field(discriminator="schema_version"),
 ]
 

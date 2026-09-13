@@ -121,6 +121,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "3.0",
             "sha256:687b663f099310209301d1931eb27368cfd8873a38c77b3ee5d3c05b2106523f",
         ),
+        "mock-exam-production-plan-v4": CatalogSchemaResource(
+            "schemas/assessment-assembly/mock-exam-production-plan-v4.schema.json",
+            "resources/assessment-assembly/mock-exam-production-plan-v4.schema.json",
+            "4.0",
+            "sha256:45d60126e2faaa91f4cd923d4d5230ba53c7bd8f1b4d35c3805728c9ca860094",
+        ),
         "mock-exam-assembly-manifest": CatalogSchemaResource(
             "schemas/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",
             "resources/assessment-assembly/mock-exam-assembly-manifest-v1.schema.json",

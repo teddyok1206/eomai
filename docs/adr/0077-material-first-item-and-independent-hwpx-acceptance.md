@@ -84,6 +84,21 @@ local developer tests may remain explicitly skippable. Authenticated post-deploy
 the GUI-critical typed list/detail endpoints, not only login. The latest single-Item material
 contract reaches 25-Item production through an additive production-plan successor.
 
+The successor is `mock-exam-production-plan/4.0` with checkpoint
+`mock-exam-production-execution/4.0`. It preserves the ordered 25-slot tuple and maps the primary
+released slot profile to one immutable material requirement with a constant-time lookup. `TABLE`
+maps to one native table, `IMAGE` to one image, `MIXED` to exactly one image plus one table, and the
+remaining forms carry no panel count. The per-Item requirement, rather than one exam-wide flag,
+derives both the image-step capability and the sorted retrieval element set. Existing V1–V3 plans
+and checkpoints remain immutable and readable.
+
+No database migration or new index is needed. Plan construction remains `O(Items)` time and space;
+checkpoint compare-and-swap, idempotency, recovery, and transaction boundaries are inherited from
+V3. A V4 plan cannot be resumed with a V3 checkpoint because the application compares the exact
+schema family as well as the immutable plan ID and hash. The simpler option of changing the V3 pack
+pin or retaining exam-wide `image_mode=required` was rejected because it would rewrite historical
+identity and still schedule image work for table-only Items.
+
 Required acceptance cases are `TEXT`, `DATA`, `TABLE`, deterministic `IMAGE`, hybrid `IMAGE`,
 `IMAGE_TABLE`, `TABLE_IMAGE`, `IMAGE_IMAGE`, `TABLE_TABLE`, and `INQUIRY`. In particular:
 
