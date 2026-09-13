@@ -28,7 +28,6 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
-    from eom_api_contracts.mock_exam_execution import MockExamProductionExecution
     from eom_api_contracts.mock_exam_retirement import MockExamProductionRetirementReceiptV1
 
 _CHECKPOINT_ROOT = Path("/var/lib/eom-api/mock-exam-production")
@@ -119,7 +118,8 @@ class FileOwner:
 @dataclass
 class _CheckpointReadLease:
     current: bytes
-    immutable: bytes
+    current_immutable: bytes
+    retired_immutable: bytes
     lock_descriptor: int
 
     def close(self) -> None:
@@ -185,29 +185,29 @@ def _validated_release_receipt_lock(
     checkpoint_lease = _read_checkpoint_pair(
         checkpoint_root,
         expected.execution_id,
+        retired_revision_id=expected.execution_revision_id,
         owner=checkpoint_owner,
     )
     try:
-        if checkpoint_lease.current != checkpoint_lease.immutable:
+        if checkpoint_lease.current != checkpoint_lease.current_immutable:
             _fail("current checkpoint differs from its immutable revision")
-        checkpoint_data = _load_json_object(checkpoint_lease.current)
-        schema_version = checkpoint_data.get("schema_version")
-        if (
-            not isinstance(schema_version, str)
-            or schema_version not in _CHECKPOINT_SCHEMA_BY_VERSION
-        ):
-            _fail("production checkpoint schema version is invalid")
-        _validate_json_schema(checkpoint_data, _CHECKPOINT_SCHEMA_BY_VERSION[schema_version])
-        try:
-            checkpoint: MockExamProductionExecution = TypeAdapter(
-                MockExamProductionExecution
-            ).validate_python(checkpoint_data)
-        except ValidationError as exc:
-            raise HoldReleaseReceiptError("production checkpoint contract is invalid") from exc
+        current_checkpoint = _parse_checkpoint(
+            checkpoint_lease.current,
+            adapter=TypeAdapter(MockExamProductionExecution),
+        )
+        retired_checkpoint = _parse_checkpoint(
+            checkpoint_lease.retired_immutable,
+            adapter=TypeAdapter(MockExamProductionExecution),
+        )
 
-        _require_exact_pins(receipt, checkpoint, expected)
-        _require_exact_outcomes(receipt, checkpoint)
-        _require_exact_command_hash(receipt, checkpoint)
+        _require_exact_pins(receipt, retired_checkpoint, expected)
+        _require_exact_outcomes(receipt, retired_checkpoint)
+        _require_exact_command_hash(receipt, retired_checkpoint)
+        _require_current_release_checkpoint(
+            receipt=receipt,
+            retired=retired_checkpoint,
+            current=current_checkpoint,
+        )
         yield receipt
     finally:
         checkpoint_lease.close()
@@ -239,6 +239,7 @@ def _read_checkpoint_pair(
     checkpoint_root: Path,
     execution_id: str,
     *,
+    retired_revision_id: str,
     owner: FileOwner,
 ) -> _CheckpointReadLease:
     root_descriptor = _open_directory(
@@ -274,9 +275,16 @@ def _read_checkpoint_pair(
             or _EXECUTION_REVISION_ID.fullmatch(revision_id) is None
         ):
             _fail("production checkpoint revision pointer is invalid")
-        immutable = _read_directory_file(
+        current_immutable = _read_directory_file(
             execution_descriptor,
             f"{revision_id}.json",
+            owner=owner,
+            allowed_modes=frozenset({0o600, 0o640}),
+            maximum_bytes=_MAX_CHECKPOINT_BYTES,
+        )
+        retired_immutable = _read_directory_file(
+            execution_descriptor,
+            f"{retired_revision_id}.json",
             owner=owner,
             allowed_modes=frozenset({0o600, 0o640}),
             maximum_bytes=_MAX_CHECKPOINT_BYTES,
@@ -294,7 +302,8 @@ def _read_checkpoint_pair(
             _fail("current checkpoint changed during release validation")
         lease = _CheckpointReadLease(
             current=current,
-            immutable=immutable,
+            current_immutable=current_immutable,
+            retired_immutable=retired_immutable,
             lock_descriptor=lock_descriptor,
         )
         lock_descriptor = None
@@ -338,6 +347,131 @@ def _open_checkpoint_lock(
             raise
         raise HoldReleaseReceiptError("checkpoint lock is unavailable") from exc
     return descriptor
+
+
+def _parse_checkpoint(payload: bytes, *, adapter: Any) -> Any:
+    checkpoint_data = _load_json_object(payload)
+    schema_version = checkpoint_data.get("schema_version")
+    if not isinstance(schema_version, str) or schema_version not in _CHECKPOINT_SCHEMA_BY_VERSION:
+        _fail("production checkpoint schema version is invalid")
+    _validate_json_schema(checkpoint_data, _CHECKPOINT_SCHEMA_BY_VERSION[schema_version])
+    try:
+        return adapter.validate_python(checkpoint_data)
+    except ValidationError as exc:
+        raise HoldReleaseReceiptError("production checkpoint contract is invalid") from exc
+
+
+_TERMINAL_SUCCESSOR_STABLE_FIELDS = (
+    "schema_version",
+    "execution_id",
+    "production_request_id",
+    "production_plan_id",
+    "production_plan_sha256",
+    "operator_id",
+    "generation_block_resolution",
+    "analysis_policy",
+    "analysis_general_knowledge_mode",
+    "analysis_review_authorizations",
+    "graph_publication_authorization",
+    "graph_publications",
+    "rating_authorization",
+    "assembly_intent",
+    "assembly_plan",
+    "assembly",
+    "hwpx_build",
+    "failure",
+    "created_at",
+)
+_TERMINALIZED_ROW_MUTABLE_FIELDS = frozenset({"state", "workflow_resource_version", "failure"})
+
+
+def _require_current_release_checkpoint(*, receipt: Any, retired: Any, current: Any) -> None:
+    """Accept the retired snapshot or its exact one-step terminal observation.
+
+    Retirement intentionally pins the pre-cancellation checkpoint. Deployment admission,
+    however, requires the current checkpoint to observe the queued cancellations as terminal.
+    The execution lock makes this comparison atomic with hold release.
+    """
+
+    from eom_api_contracts.mock_exam_execution import mock_exam_production_is_terminal
+
+    if current.execution_revision_id == retired.execution_revision_id:
+        if current != retired:
+            _fail("current checkpoint reuses the retired revision with different content")
+        return
+    if (
+        current.predecessor_execution_revision_id != retired.execution_revision_id
+        or current.predecessor_checkpoint_sha256 != retired.checkpoint_sha256
+        or current.checkpoint_sequence != retired.checkpoint_sequence + 1
+    ):
+        _fail("current checkpoint is not the immediate retired-checkpoint successor")
+    if not mock_exam_production_is_terminal(current):
+        _fail("current retirement successor is not terminal")
+    if any(
+        getattr(current, field) != getattr(retired, field)
+        for field in _TERMINAL_SUCCESSOR_STABLE_FIELDS
+    ):
+        _fail("current terminal successor changed a pinned production field")
+    if current.checkpointed_at < max(retired.checkpointed_at, receipt.retired_at):
+        _fail("current terminal successor predates retirement")
+
+    retired_rows = {row.position: row for row in retired.item_runs}
+    current_rows = {row.position: row for row in current.item_runs}
+    outcomes = {row.position: row for row in receipt.outcomes}
+    if (
+        len(retired_rows) != 25
+        or len(current_rows) != 25
+        or len(outcomes) != 25
+        or retired_rows.keys() != current_rows.keys()
+        or retired_rows.keys() != outcomes.keys()
+    ):
+        _fail("current terminal successor cohort differs")
+    for position, retired_row in retired_rows.items():
+        current_row = current_rows[position]
+        outcome = outcomes[position]
+        retired_identity = (
+            retired_row.position,
+            retired_row.workflow_call_id,
+            retired_row.start_command_id,
+            retired_row.workflow_id,
+        )
+        current_identity = (
+            current_row.position,
+            current_row.workflow_call_id,
+            current_row.start_command_id,
+            current_row.workflow_id,
+        )
+        if retired_identity != current_identity:
+            _fail("current terminal successor changed a Workflow cohort pointer")
+        if retired_row.state == "FAILED":
+            if current_row != retired_row or outcome.disposition != (
+                "UNSUCCESSFUL_TERMINAL_PRESERVED"
+            ):
+                _fail("current terminal successor changed a preserved failure")
+            continue
+        if outcome.disposition not in {
+            "CANCEL_QUEUED",
+            "UNSUCCESSFUL_TERMINAL_PRESERVED",
+        }:
+            _fail("current terminal successor lacks a retirement disposition")
+        if (
+            current_row.state != "FAILED"
+            or current_row.failure is None
+            or current_row.failure.retryable
+            or current_row.failure.stage != "WORKFLOW_EXECUTION"
+            or current_row.failure.category != "WORKFLOW_EXECUTION_FAILED"
+            or current_row.failure.observed_at < receipt.retired_at
+        ):
+            _fail("current successor did not terminalize a retired Workflow")
+        retired_body = retired_row.model_dump(mode="json", exclude=_TERMINALIZED_ROW_MUTABLE_FIELDS)
+        current_body = current_row.model_dump(mode="json", exclude=_TERMINALIZED_ROW_MUTABLE_FIELDS)
+        if retired_body != current_body:
+            _fail("current terminal successor changed a pinned item-run field")
+        if retired_row.workflow_resource_version is not None and (
+            current_row.workflow_resource_version is None
+            or current_row.workflow_resource_version < retired_row.workflow_resource_version
+        ):
+            _fail("current terminal successor regressed a Workflow resource version")
 
 
 def _require_exact_pins(

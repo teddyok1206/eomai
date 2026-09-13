@@ -17,6 +17,7 @@ from eom_api.services.mock_exam_production_coordinator import (
 from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamProductionExecutionV2,
+    MockExamProductionFailureV1,
 )
 from eom_api_contracts.mock_exam_retirement import (
     MockExamProductionRetirementCommandV1,
@@ -196,6 +197,8 @@ def _materialize(
     tmp_path: Path,
     checkpoint: MockExamProductionExecutionV2,
     receipt_document: dict[str, Any],
+    *,
+    current: MockExamProductionExecutionV2 | None = None,
 ) -> tuple[Path, Path]:
     checkpoint_root = tmp_path / "checkpoints"
     checkpoint_root.mkdir(mode=0o700)
@@ -204,10 +207,17 @@ def _materialize(
     lock.chmod(0o600)
     execution_root = checkpoint_root / checkpoint.execution_id
     execution_root.mkdir(mode=0o700)
+    current = current or checkpoint
     checkpoint_payload = checkpoint.model_dump_json(indent=2).encode() + b"\n"
-    for name in ("current.json", f"{checkpoint.execution_revision_id}.json"):
+    current_payload = current.model_dump_json(indent=2).encode() + b"\n"
+    payloads = {
+        f"{checkpoint.execution_revision_id}.json": checkpoint_payload,
+        f"{current.execution_revision_id}.json": current_payload,
+        "current.json": current_payload,
+    }
+    for name, payload in payloads.items():
         path = execution_root / name
-        path.write_bytes(checkpoint_payload)
+        path.write_bytes(payload)
         path.chmod(0o600)
     receipt_root = tmp_path / "receipts"
     receipt_root.mkdir(mode=0o700)
@@ -218,6 +228,26 @@ def _materialize(
     )
     receipt_path.chmod(0o600)
     return checkpoint_root, receipt_path
+
+
+def _terminal_successor(
+    checkpoint: MockExamProductionExecutionV2,
+    *,
+    at: datetime = NOW + timedelta(minutes=2),
+) -> MockExamProductionExecutionV2:
+    failure = MockExamProductionFailureV1(
+        stage="WORKFLOW_EXECUTION",
+        category="WORKFLOW_EXECUTION_FAILED",
+        code="WORKFLOW_EXECUTION_FAILED",
+        retryable=False,
+        observed_at=at,
+    )
+    item_runs = tuple(
+        row.model_copy(update={"state": "FAILED", "failure": failure})
+        for row in checkpoint.item_runs
+    )
+    successor = _advance_checkpoint(checkpoint, at=at, item_runs=item_runs)
+    return MockExamProductionExecutionV2.model_validate(successor.model_dump(mode="json"))
 
 
 def _expected(
@@ -310,6 +340,123 @@ def test_release_verifier_accepts_exact_envelope_checkpoint_and_24_to_1_fence(
     )
 
     assert verified == receipt
+
+
+def test_release_verifier_accepts_exact_one_step_terminal_retirement_successor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    current = _terminal_successor(checkpoint)
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+        current=current,
+    )
+
+    verified = _validate(
+        monkeypatch,
+        checkpoint_root,
+        receipt_path,
+        _expected(checkpoint, receipt),
+    )
+
+    assert verified == receipt
+    assert current.state == "BLOCKED"
+    assert all(row.state == "FAILED" for row in current.item_runs)
+
+
+def test_release_verifier_rejects_nonterminal_retirement_successor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    current = MockExamProductionExecutionV2.model_validate(
+        _advance_checkpoint(
+            checkpoint,
+            at=NOW + timedelta(minutes=2),
+        ).model_dump(mode="json")
+    )
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+        current=current,
+    )
+
+    with pytest.raises(verifier.HoldReleaseReceiptError, match="successor is not terminal"):
+        _validate(
+            monkeypatch,
+            checkpoint_root,
+            receipt_path,
+            _expected(checkpoint, receipt),
+        )
+
+
+def test_release_verifier_rejects_terminal_successor_cohort_pointer_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    current = _terminal_successor(checkpoint)
+    changed_rows = (
+        current.item_runs[0].model_copy(update={"workflow_id": "workflow_" + "f" * 32}),
+        *current.item_runs[1:],
+    )
+    current = MockExamProductionExecutionV2.model_validate(
+        _advance_checkpoint(
+            checkpoint,
+            at=NOW + timedelta(minutes=2),
+            item_runs=changed_rows,
+        ).model_dump(mode="json")
+    )
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+        current=current,
+    )
+
+    with pytest.raises(verifier.HoldReleaseReceiptError, match="cohort pointer"):
+        _validate(
+            monkeypatch,
+            checkpoint_root,
+            receipt_path,
+            _expected(checkpoint, receipt),
+        )
+
+
+def test_release_verifier_rejects_terminal_successor_beyond_one_checkpoint_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint = _checkpoint()
+    receipt = _receipt(checkpoint)
+    first = _terminal_successor(checkpoint)
+    second = MockExamProductionExecutionV2.model_validate(
+        _advance_checkpoint(
+            first,
+            at=NOW + timedelta(minutes=3),
+        ).model_dump(mode="json")
+    )
+    checkpoint_root, receipt_path = _materialize(
+        tmp_path,
+        checkpoint,
+        {"status": "SUCCEEDED", "data": receipt.model_dump(mode="json")},
+        current=second,
+    )
+
+    with pytest.raises(verifier.HoldReleaseReceiptError, match="immediate"):
+        _validate(
+            monkeypatch,
+            checkpoint_root,
+            receipt_path,
+            _expected(checkpoint, receipt),
+        )
 
 
 def test_release_verifier_accepts_exact_all_active_fence_on_replay(
