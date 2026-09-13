@@ -779,6 +779,7 @@ class MockExamProductionCoordinator:
             changed = changed or current != row
 
         observed: list[MockExamProductionItemRunV1] = []
+        approval_ready_workflow_calls: set[str] = set()
         for row in rows:
             current = self._observe_workflow(
                 row,
@@ -786,10 +787,32 @@ class MockExamProductionCoordinator:
                 resolution,
                 checkpoint.operator_id,
                 actor,
+                submit_approval=False,
+                approval_ready_workflow_calls=approval_ready_workflow_calls,
                 at=at,
             )
             observed.append(current)
             changed = changed or current != row
+        if all(
+            row.workflow_call_id in approval_ready_workflow_calls
+            or (row.review is not None and row.failure is None)
+            for row in observed
+        ):
+            approval_observed: list[MockExamProductionItemRunV1] = []
+            for row in observed:
+                current = self._observe_workflow(
+                    row,
+                    calls[row.workflow_call_id],
+                    resolution,
+                    checkpoint.operator_id,
+                    actor,
+                    submit_approval=True,
+                    approval_ready_workflow_calls=None,
+                    at=at,
+                )
+                approval_observed.append(current)
+                changed = changed or current != row
+            observed = approval_observed
         if not changed:
             return checkpoint
         return _advance_checkpoint(
@@ -896,6 +919,8 @@ class MockExamProductionCoordinator:
         operator_id: str,
         actor: ActorContext,
         *,
+        submit_approval: bool,
+        approval_ready_workflow_calls: set[str] | None,
         at: datetime,
     ) -> MockExamProductionItemRunV1:
         if row.state == "FAILED" or row.workflow_id is None or row.registration is not None:
@@ -961,7 +986,14 @@ class MockExamProductionCoordinator:
                         at,
                     ),
                 )
-            return self._approve_zero_blocking(base, workflow, actor, at=at)
+            return self._approve_zero_blocking(
+                base,
+                workflow,
+                actor,
+                submit_approval=submit_approval,
+                approval_ready_workflow_calls=approval_ready_workflow_calls,
+                at=at,
+            )
         if workflow.state in {"APPROVED", "REGISTERING", "COMPLETED"}:
             try:
                 if base.knowledge_provenance is None:
@@ -1072,6 +1104,8 @@ class MockExamProductionCoordinator:
         workflow: WorkflowView,
         actor: ActorContext,
         *,
+        submit_approval: bool,
+        approval_ready_workflow_calls: set[str] | None,
         at: datetime,
     ) -> MockExamProductionItemRunV1:
         assert row.knowledge_provenance is not None
@@ -1136,6 +1170,10 @@ class MockExamProductionCoordinator:
                 ),
             )
         review = observation.approved_pointer()
+        if not submit_approval:
+            assert approval_ready_workflow_calls is not None
+            approval_ready_workflow_calls.add(row.workflow_call_id)
+            return row
         try:
             receipt = self.workflows.approve(
                 workflow.workflow_id,

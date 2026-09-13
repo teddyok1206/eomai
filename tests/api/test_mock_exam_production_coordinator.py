@@ -239,6 +239,7 @@ class FakeWorkflowOperations:
         accepted_resolution_drift_positions: frozenset[int] = frozenset(),
         legacy_null_provenance_roots: bool = False,
         workflow_failed_positions: frozenset[int] = frozenset(),
+        workflow_running_positions: frozenset[int] = frozenset(),
     ) -> None:
         self.blocking_positions = blocking_positions
         self.lose_first_start_response = lose_first_start_response
@@ -248,6 +249,7 @@ class FakeWorkflowOperations:
         self.accepted_resolution_drift_positions = accepted_resolution_drift_positions
         self.legacy_null_provenance_roots = legacy_null_provenance_roots
         self.workflow_failed_positions = workflow_failed_positions
+        self.workflow_running_positions = workflow_running_positions
         self.provenance_drift_positions: set[int] = set()
         self.provenance_root_drift_positions: set[int] = set()
         self.start_requests: list[WorkflowStartRequest] = []
@@ -392,9 +394,29 @@ class FakeWorkflowOperations:
             workflow_id=workflow_id,
             definition_key="generic-item-development",
             definition_version=request.definition_version,
-            state=("FAILED" if failed else "COMPLETED" if completed else "AWAITING_HUMAN_APPROVAL"),
-            stage="registration" if completed else "review",
-            current_step_key="register" if completed else "review",
+            state=(
+                "FAILED"
+                if failed
+                else "COMPLETED"
+                if completed
+                else "RUNNING"
+                if position in self.workflow_running_positions
+                else "AWAITING_HUMAN_APPROVAL"
+            ),
+            stage=(
+                "registration"
+                if completed
+                else "authoring"
+                if position in self.workflow_running_positions
+                else "review"
+            ),
+            current_step_key=(
+                "register"
+                if completed
+                else "author"
+                if position in self.workflow_running_positions
+                else "review"
+            ),
             resource_version=2 if completed else 1,
             rework_cycle_count=0,
             created_at=NOW,
@@ -1549,7 +1571,55 @@ def test_blocking_review_is_never_approved_or_registered() -> None:
     assert checkpoint.state == "BLOCKED"
     assert blocked.state == "REVIEW_BLOCKED"
     assert blocked.review is None and blocked.registration is None
-    assert len(workflows.approval_keys) == 24
+    assert workflows.approval_keys == []
+
+
+def test_cohort_approval_waits_until_all_25_reviews_are_ready() -> None:
+    workflows = FakeWorkflowOperations(workflow_running_positions=frozenset({25}))
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+
+    assert workflows.approval_keys == []
+    assert all(row.review is None for row in checkpoint.item_runs)
+
+    workflows.workflow_running_positions = frozenset()
+    checkpoint = coordinator.advance_items(
+        plan,
+        checkpoint,
+        _actor(),
+        at=NOW + timedelta(seconds=1),
+    )
+
+    assert len(workflows.approval_keys) == 25
+    assert all(row.state == "APPROVAL_SUBMITTED" for row in checkpoint.item_runs)
+
+
+def test_one_terminal_workflow_failure_prevents_all_cohort_approvals() -> None:
+    workflows = FakeWorkflowOperations(workflow_failed_positions=frozenset({25}))
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+
+    assert workflows.approval_keys == []
+    assert checkpoint.item_runs[24].state == "FAILED"
+    assert all(row.registration is None for row in checkpoint.item_runs)
 
 
 def test_postapproval_evidence_requires_the_same_operator() -> None:
