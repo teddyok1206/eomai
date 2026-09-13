@@ -110,6 +110,7 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
         "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
     }
 )
+_EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset({"resolved-execution-plan/3.0"})
 
 
 WorkflowRoleRequest = (
@@ -118,6 +119,31 @@ WorkflowRoleRequest = (
     | LegacyItemExtractionWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
 )
+
+
+def _plan_step_evidence_access(
+    plan_document: dict[str, object] | None,
+    plan_step: dict[str, object] | None,
+) -> Literal["NONE", "EVIDENCE_CONTEXT"] | None:
+    """Read evidence access only from plan families that define the field."""
+
+    if plan_step is None:
+        return None
+    schema_version = plan_document.get("schema_version") if plan_document is not None else None
+    if schema_version not in _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS:
+        if "evidence_access" in plan_step:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_EVIDENCE_ACCESS_INVALID",
+                "workflow execution plan has evidence access outside its contract family",
+            )
+        return None
+    raw_evidence_access = plan_step.get("evidence_access")
+    if raw_evidence_access not in {"NONE", "EVIDENCE_CONTEXT"}:
+        raise ControlPlaneError(
+            "CONTROL_PLAN_EVIDENCE_ACCESS_INVALID",
+            "workflow execution plan evidence access is invalid",
+        )
+    return cast(Literal["NONE", "EVIDENCE_CONTEXT"], raw_evidence_access)
 
 
 def _resolved_evidence_plan_for_response(
@@ -506,15 +532,9 @@ class Orchestrator:
                 evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
                 resolved_evidence_plan: ResolvedExecutionPlanV3 | None = None
                 if plan_step is not None:
-                    raw_evidence_access = plan_step.get("evidence_access")
-                    if raw_evidence_access not in {"NONE", "EVIDENCE_CONTEXT"}:
-                        raise ControlPlaneError(
-                            "CONTROL_PLAN_EVIDENCE_ACCESS_INVALID",
-                            "workflow execution plan evidence access is invalid",
-                        )
-                    evidence_access = cast(
-                        Literal["NONE", "EVIDENCE_CONTEXT"],
-                        raw_evidence_access,
+                    evidence_access = _plan_step_evidence_access(
+                        plan_document,
+                        plan_step,
                     )
                     resolved_evidence_plan = _resolved_evidence_plan_for_response(
                         plan_document,
