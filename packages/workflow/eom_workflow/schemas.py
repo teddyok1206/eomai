@@ -1791,9 +1791,8 @@ def _bind_required_material_result_branch(
     else:
         _append_projection_instruction(
             citations,
-            "A PAST_EXAM STRUCTURE_PATTERN citation must include /stem, every TABLE "
-            "/visuals/{index}/kind, and at least one concrete header or cell scalar leaf "
-            "per table.",
+            "A PAST_EXAM STRUCTURE_PATTERN citation must include every TABLE "
+            "/visuals/{index}/kind and at least one concrete header or cell scalar leaf per table.",
         )
 
 

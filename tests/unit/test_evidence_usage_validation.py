@@ -778,7 +778,7 @@ def test_required_table_presentation_accepts_one_native_table_without_image() ->
     _validate_required_table_presentation(
         _required_table_plan(),
         _required_image_manifest(),
-        (_required_image_citation(paths=("/stem", "/visuals/0/headers/0", "/visuals/0/kind")),),
+        (_required_image_citation(paths=("/visuals/0/headers/0", "/visuals/0/kind")),),
         _table_draft(),
     )
 

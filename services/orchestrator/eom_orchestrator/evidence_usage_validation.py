@@ -426,11 +426,6 @@ def _validate_required_table_presentation(
         ):
             cited_structure_paths.update(citation.draft_json_paths)
 
-    if "/stem" not in cited_structure_paths:
-        raise EvidenceUsageValidationError(
-            "EVIDENCE_REQUIRED_TABLE_STRUCTURE_UNCITED",
-            "required table presentation is not bound to the authored stem",
-        )
     for ordinal in table_ordinals:
         visual = visuals[ordinal]
         assert isinstance(visual, Mapping)
