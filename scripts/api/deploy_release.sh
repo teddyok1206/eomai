@@ -35,10 +35,10 @@ WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-workflow-runner-hold-release"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED="/usr/local/libexec/eom-api/.verify-workflow-runner-hold-release.staged"
 # The current and immediately preceding reviewed verifier bytes are immutable migration states.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:b05e0dbc3d1266218913cb8ca12cdaa69b9dd5e6d0df743fef2d5dc0579dc1b2"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:e96645de007d435510a765fbade0769ed67273d697cae6db41aa68f3ed782500"
 # Exact verifier installed by the immediately preceding reviewed release. Replacing any other
 # root-owned bytes is not an upgrade; it is unexplained privileged-state drift.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:eab615174a71202732a94f8692234302cd588b0930ba41d7f33b9afe079ec40d"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:b05e0dbc3d1266218913cb8ca12cdaa69b9dd5e6d0df743fef2d5dc0579dc1b2"
 WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-receipts"
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
@@ -535,7 +535,7 @@ release_workflow_runner_deployment_hold() {
   local target_present=false backup_present=false release_pre_state="UNSET"
   local base_sha256_before base_sha256_after
   local activation_identity_before activation_identity_after journal_cursor
-  local retired_at="$1" retired_at_unix_us="$2"
+  local journal_not_before="$1" journal_not_before_unix_us="$2"
   workflow_runner_require_source_hold_file \
     "${WORKFLOW_RUNNER_HOLD_SOURCE}" "${WORKFLOW_RUNNER_HOLD_SHA256}" || \
     fail "canonical workflow runner deployment hold source mismatch"
@@ -566,7 +566,8 @@ release_workflow_runner_deployment_hold() {
   fi
   journal_cursor="$(
     workflow_runner_journal_cursor_at_or_before \
-      /usr/bin/journalctl --system "${retired_at}" "${retired_at_unix_us}"
+      /usr/bin/journalctl --system \
+      "${journal_not_before}" "${journal_not_before_unix_us}"
   )" || fail "workflow runner release journal lower bound is unavailable"
 
   if [[ "${target_present}" == true ]]; then
@@ -683,25 +684,25 @@ release_workflow_runner_deployment_hold() {
 
 release_workflow_runner_deployment_hold_after_verified_receipt() {
   local verifier_pid verifier_read_fd verifier_write_fd verifier_status verifier_confirmation
-  local verifier_prefix release_retired_at release_retired_at_unix_us
+  local verifier_prefix journal_not_before journal_not_before_unix_us
   coproc WORKFLOW_RUNNER_RECEIPT_VERIFIER {
     verify_workflow_runner_hold_release_receipt --hold-lock-until-release-signal
   }
   verifier_pid="${WORKFLOW_RUNNER_RECEIPT_VERIFIER_PID}"
   verifier_read_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[0]}"
   verifier_write_fd="${WORKFLOW_RUNNER_RECEIPT_VERIFIER[1]}"
-  verifier_prefix="workflow_runner_hold_release_receipt=VERIFIED_LOCKED retired_at="
+  verifier_prefix="workflow_runner_hold_release_receipt=VERIFIED_LOCKED journal_not_before="
   if ! IFS= read -r verifier_status <&"${verifier_read_fd}" || \
     [[ "${verifier_status}" != "${verifier_prefix}"* ]]; then
     exec {verifier_write_fd}>&-
     wait "${verifier_pid}" || true
     return 1
   fi
-  release_retired_at="${verifier_status#"${verifier_prefix}"}"
-  release_retired_at_unix_us="${release_retired_at##* retired_at_unix_us=}"
-  release_retired_at="${release_retired_at%% retired_at_unix_us=*}"
-  if [[ ! "${release_retired_at}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ || \
-    ! "${release_retired_at_unix_us}" =~ ^[0-9]{1,18}$ ]]; then
+  journal_not_before="${verifier_status#"${verifier_prefix}"}"
+  journal_not_before_unix_us="${journal_not_before##* journal_not_before_unix_us=}"
+  journal_not_before="${journal_not_before%% journal_not_before_unix_us=*}"
+  if [[ ! "${journal_not_before}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$ || \
+    ! "${journal_not_before_unix_us}" =~ ^[0-9]{1,18}$ ]]; then
     exec {verifier_write_fd}>&-
     wait "${verifier_pid}" || true
     return 1
@@ -710,7 +711,7 @@ release_workflow_runner_deployment_hold_after_verified_receipt() {
   # The verifier keeps an exclusive flock on the exact checkpoint until this mutation has either
   # completed or failed. No official checkpoint writer can advance between validation and release.
   if ! release_workflow_runner_deployment_hold \
-    "${release_retired_at}" "${release_retired_at_unix_us}"; then
+    "${journal_not_before}" "${journal_not_before_unix_us}"; then
     exec {verifier_write_fd}>&-
     wait "${verifier_pid}" || true
     return 1

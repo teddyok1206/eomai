@@ -66,13 +66,15 @@ not merely retain the same hash across release.
    helper rather than owning a second path implementation. Once that boundary is reached,
    interruption is fail-closed across both process death and reboot. Release is a separate
    privileged action. Before any systemd/file mutation, the installed root-owned helper safely
-   reads an explicit mode-0600 receipt file and the canonical current plus immutable-revision
-   checkpoints for the expected execution. It takes the
+   reads an explicit mode-0600 receipt file, the retired immutable revision, and the canonical
+   current plus current-immutable checkpoints for the expected execution. It takes the
    checkpoint store's nonblocking exclusive flock and re-reads `current.json` while holding it. It
    validates installed JSON Schema 2020-12 and Pydantic contracts, self-hashes, and exact execution,
-   revision, request, plan, operator, and checkpoint pointers. The validated receipt's UTC
-   `retired_at` supplies a retry-stable journal lower bound. Release derives and cross-checks the last
-   journal cursor at or before that bound, proves the returned cursor value remains byte-exact around
+   revision, request, plan, operator, and checkpoint pointers. Current may be the retired revision
+   or its exact one-step terminal observation; arbitrary later, nonterminal, or pointer-changing
+   revisions are rejected. After this proof, the verifier emits a fresh UTC journal lower bound
+   while retaining the checkpoint lock. Release derives and cross-checks the last journal cursor at
+   or before that bound, proves the returned cursor value remains byte-exact around
    each query, then requires zero subsequent entries for the exact runner unit after reload and again
    before backup cleanup. Missing permission, malformed output, cursor rotation, or any unit activity
    fails closed. It admits only an ordered unique 25-outcome receipt and derives the one valid

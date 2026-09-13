@@ -66,21 +66,21 @@ class HoldReleaseReceiptError(RuntimeError):
     """Stable failure before any deployment-hold mutation."""
 
 
-def _release_journal_lower_bound(
+def _journal_release_lower_bound(
     retired_at: datetime,
     *,
     observed_at: datetime | None = None,
 ) -> tuple[str, int]:
-    """Return a stable retry lower bound only for an already-observed retirement."""
+    """Return a fresh journal fence only after proving retirement is not from the future."""
 
     observed_at = observed_at or datetime.now(UTC)
     if retired_at.utcoffset() != UTC.utcoffset(retired_at) or retired_at > observed_at:
         _fail("retirement timestamp is not an observed UTC journal lower bound")
-    retired_delta = retired_at - datetime(1970, 1, 1, tzinfo=UTC)
-    retired_at_unix_us = (
-        retired_delta.days * 86_400 + retired_delta.seconds
-    ) * 1_000_000 + retired_delta.microseconds
-    return retired_at.isoformat().replace("+00:00", "Z"), retired_at_unix_us
+    observed_delta = observed_at - datetime(1970, 1, 1, tzinfo=UTC)
+    observed_at_unix_us = (
+        observed_delta.days * 86_400 + observed_delta.seconds
+    ) * 1_000_000 + observed_delta.microseconds
+    return observed_at.isoformat().replace("+00:00", "Z"), observed_at_unix_us
 
 
 @dataclass(frozen=True)
@@ -839,10 +839,13 @@ def main() -> int:
                 receipt_path=arguments.receipt_file,
                 expected=expected,
             ) as receipt:
-                retired_at, retired_at_unix_us = _release_journal_lower_bound(receipt.retired_at)
+                journal_not_before, journal_not_before_unix_us = _journal_release_lower_bound(
+                    receipt.retired_at
+                )
                 print(
                     "workflow_runner_hold_release_receipt=VERIFIED_LOCKED "
-                    f"retired_at={retired_at} retired_at_unix_us={retired_at_unix_us}",
+                    f"journal_not_before={journal_not_before} "
+                    f"journal_not_before_unix_us={journal_not_before_unix_us}",
                     flush=True,
                 )
                 signal = sys.stdin.buffer.readline(64)

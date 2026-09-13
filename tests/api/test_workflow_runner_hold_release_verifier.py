@@ -521,20 +521,21 @@ def test_release_verifier_accepts_every_source_state_disposition_mapping(
     assert verified.outcomes[0].disposition == expected_disposition
 
 
-def test_release_journal_lower_bound_is_exact_and_rejects_future_retirement() -> None:
+def test_release_journal_lower_bound_is_fresh_and_rejects_future_retirement() -> None:
     retired_at = NOW + timedelta(minutes=1, microseconds=234567)
+    observed_at = retired_at + timedelta(seconds=1)
 
-    rendered, unix_us = verifier._release_journal_lower_bound(
+    rendered, unix_us = verifier._journal_release_lower_bound(
         retired_at,
-        observed_at=retired_at + timedelta(seconds=1),
+        observed_at=observed_at,
     )
 
-    assert rendered == "2026-09-08T10:01:00.234567Z"
+    assert rendered == "2026-09-08T10:01:01.234567Z"
     epoch = datetime(1970, 1, 1, tzinfo=UTC)
-    delta = retired_at - epoch
+    delta = observed_at - epoch
     assert unix_us == (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
     with pytest.raises(verifier.HoldReleaseReceiptError, match="journal lower bound"):
-        verifier._release_journal_lower_bound(
+        verifier._journal_release_lower_bound(
             retired_at,
             observed_at=retired_at - timedelta(microseconds=1),
         )

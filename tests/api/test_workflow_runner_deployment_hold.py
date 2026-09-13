@@ -794,7 +794,7 @@ def test_release_receipt_verifier_is_installed_unprivileged_and_precedes_mutatio
     mutation = gate.index("if ! release_workflow_runner_deployment_hold \\")
     assert verifier < mutation
     assert "workflow_runner_hold_release_receipt=VERIFIED_LOCKED" in gate
-    assert "release_retired_at_unix_us" in gate
+    assert "journal_not_before_unix_us" in gate
     assert "printf '%s\\n' \"RELEASE_COMPLETE\"" in gate
     assert "workflow_runner_hold_release_receipt=RELEASE_CONFIRMED" in gate
     assert "sudo -n systemd-run --quiet --wait --pipe --collect" in operations
@@ -1017,7 +1017,7 @@ def test_hold_release_boundary_rechecks_source_and_protected_paths_around_instal
     )
     assert (
         'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:'
-        'eab615174a71202732a94f8692234302cd588b0930ba41d7f33b9afe079ec40d"' in source
+        'b05e0dbc3d1266218913cb8ca12cdaa69b9dd5e6d0df743fef2d5dc0579dc1b2"' in source
     )
 
 
@@ -1410,7 +1410,8 @@ def test_successful_receipt_gate_holds_handshake_across_release(tmp_path: Path) 
         "verify_workflow_runner_hold_release_receipt() { "
         "printf '%s\\n' locked >>\"${events}\"; "
         "printf '%s\\n' 'workflow_runner_hold_release_receipt=VERIFIED_LOCKED "
-        "retired_at=2026-09-08T12:00:00Z retired_at_unix_us=1788868800000000'; "
+        "journal_not_before=2026-09-08T12:00:00Z "
+        "journal_not_before_unix_us=1788868800000000'; "
         'IFS= read -r signal; [[ "${signal}" == RELEASE_COMPLETE ]]; '
         "printf '%s\\n' confirmed >>\"${events}\"; "
         "printf '%s\\n' workflow_runner_hold_release_receipt=RELEASE_CONFIRMED; }\n"

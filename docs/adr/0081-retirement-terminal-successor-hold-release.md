@@ -44,7 +44,12 @@ O(n + bytes) with constant cohort size. No derived value is persisted.
 The existing flock on the execution checkpoint lock spans all reads, validation, and the privileged
 hold mutation handshake. Any missing revision, unsafe file metadata, hash/schema mismatch,
 nonterminal successor, skipped revision, pointer drift, or retryable row fails closed before the
-hold changes. Release remains idempotent through the existing exact receipt and systemd checks.
+hold changes. After the receipt and current checkpoint pass, the verifier emits a fresh UTC journal
+lower bound while it still owns that lock. The systemd adapter proves the stopped hold identity and
+rejects any unit journal event after that cursor. Historical runner activity needed to consume the
+retirement cancellations is therefore accounted for by the terminal successor instead of making
+release impossible. Release remains idempotent through the existing exact receipt and systemd
+checks.
 
 ## Dependency direction and alternatives
 

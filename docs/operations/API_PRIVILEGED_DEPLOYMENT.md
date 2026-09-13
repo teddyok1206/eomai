@@ -135,14 +135,16 @@ scripts/api/deploy_release.sh --release-workflow-runner-hold \
 ```
 
 Release first runs the installed root-owned verifier as unprivileged `eom-api`. It safely reads the
-fixed receipt and current plus immutable checkpoint, validates installed JSON Schema and Pydantic
-contracts, all explicit pins and hashes, and the exact ordered 25-member cohort. It derives every
+fixed receipt, its retired immutable checkpoint, and the current/current-immutable checkpoint,
+validates installed JSON Schema and Pydantic contracts, all explicit pins and hashes, and the exact
+ordered 25-member cohort. Current may be the retired revision or its exact one-step terminal
+observation; a skipped, nonterminal, or pointer-changing successor fails closed. It derives every
 allowed disposition from the command-hashed prior Workflow state: active states must queue
 cancellation, while `FAILED` or `CANCELLED` states must be preserved. It accepts the derived
 25-cancel/all-active or 24-cancel/one-preserved aggregates (and any other exact service-valid mix),
 never a caller-provided count; completed, unknown, cross-mapped, or duplicate-cancellation evidence
-fails closed. Only then
-does it derive a retry-stable journal cursor from the immutable receipt retirement time, disable the
+fails closed. Only then does it emit a fresh UTC journal lower bound while holding the execution
+checkpoint lock and derive a retry-stable cursor from that bound. It disables the
 runner without reload under the still-loaded hold, atomically move the verified drop-in to a
 non-`.conf` recovery name, reload systemd, and prove the base unit matches its canonical pinned hash.
 The stopped unit's invocation identity must either remain exact or become systemd's empty baseline
@@ -150,9 +152,9 @@ after garbage collection; the latter is accepted only when the exact runner unit
 entry after the receipt cursor. Missing journal access, malformed output, or a rotated cursor fails
 closed. Release then proves the runner remains disabled and inactive with no drop-ins or Job,
 repeats the state and journal fence, removes the exact backup, and completes the verifier handshake
-while its checkpoint lock is still held. It does not start the runner. A retry with the backup uses
-the same receipt-time cursor; a retry after completed backup removal is an exact disabled-state
-no-op.
+while its checkpoint lock is still held. It does not start the runner. A retry with the backup
+revalidates the same receipt/current pair and obtains a new protected lower bound; a retry after
+completed backup removal is an exact disabled-state no-op.
 Enable and start it in a separate explicit step with
 `sudo -n systemctl enable --now eom-workflow-runner.service`. If release is interrupted, rerun the
 same fully pinned command; do not delete or edit files under the unit drop-in directory manually.
