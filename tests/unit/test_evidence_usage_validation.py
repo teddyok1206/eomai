@@ -565,12 +565,14 @@ def test_authoring_rejects_unknown_or_semantically_mismatched_citation(
         )
 
 
-def _required_image_plan(*, required: bool = True) -> Any:
+def _required_image_plan(*, required: bool = True, mixed: bool = False) -> Any:
     return SimpleNamespace(
         retrieval_requirement=SimpleNamespace(
-            required_item_elements=("choice", "image", "paragraph")
-            if required
-            else ("choice", "paragraph")
+            required_item_elements=(
+                ("choice", "image", "paragraph", "table")
+                if mixed
+                else (("choice", "image", "paragraph") if required else ("choice", "paragraph"))
+            )
         )
     )
 
@@ -692,6 +694,26 @@ def test_required_image_presentation_rejects_condition_only_material() -> None:
             },
         )
     assert captured.value.code == "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING"
+
+
+def test_required_image_presentation_accepts_mixed_material_without_data_block() -> None:
+    _validate_required_image_presentation(
+        _required_image_plan(mixed=True),
+        _required_image_manifest(),
+        (_required_image_citation(paths=("/stem", "/visuals/0/kind")),),
+        {
+            "stem": "그림과 표를 함께 해석하자.",
+            "labeled_blocks": [],
+            "visuals": [
+                {"kind": "IMAGE"},
+                {
+                    "kind": "TABLE",
+                    "headers": ["구분", "측정값"],
+                    "rows": [["A", "3"]],
+                },
+            ],
+        },
+    )
 
 
 @pytest.mark.parametrize(

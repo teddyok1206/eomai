@@ -353,7 +353,8 @@ def _validate_required_image_presentation(
             for index, block in enumerate(labeled_blocks)
             if isinstance(block, Mapping) and block.get("kind") == "DATA"
         )
-    if not data_ordinals:
+    mixed_material = "table" in plan.retrieval_requirement.required_item_elements
+    if not mixed_material and not data_ordinals:
         raise EvidenceUsageValidationError(
             "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING",
             "image-filtered evidence requires a separate authored DATA material block",
