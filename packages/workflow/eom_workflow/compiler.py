@@ -85,7 +85,11 @@ def compile_definition_data(
     except (ValidationError, ValueError) as exc:
         raise WorkflowDefinitionError("workflow definition failed schema validation") from exc
     _validate_semantics(definition, available_worker_roles)
-    canonical = canonical_json_bytes(definition)
+    # Optional fields forbidden by a discriminated schema branch must remain
+    # absent in the persisted canonical snapshot.  Pydantic's default dump
+    # would otherwise materialize them as ``null`` and make the snapshot fail
+    # its own JSON Schema when the runner reloads it.
+    canonical = canonical_json_bytes(definition.model_dump(mode="python", exclude_none=True))
     return CompiledWorkflowDefinition(
         definition=definition,
         canonical_bytes=canonical,

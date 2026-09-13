@@ -28,6 +28,18 @@ def test_generic_definition_compiles_with_stable_hash() -> None:
     assert first.sha256.startswith("sha256:")
 
 
+def test_compiled_input_decision_snapshot_round_trips_through_its_schema() -> None:
+    compiled = compile_definition(DEFINITION_PATH, ROLES)
+    snapshot = compiled.as_dict()
+    decision = snapshot["steps"][1]
+
+    assert isinstance(decision, dict)
+    assert decision["operator"] == "input_equals"
+    assert "source_step" not in decision
+    reloaded = compile_definition_data(snapshot, compiled.source_path, ROLES)
+    assert reloaded.sha256 == compiled.sha256
+
+
 def test_legacy_editorial_compatibility_definition_is_one_shot_support() -> None:
     compiled = compile_definition(
         Path("config/workflows/legacy-item-editorial-compatibility.v1.yaml"),
