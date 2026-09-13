@@ -47,6 +47,10 @@ from sqlalchemy import Engine, select
 
 from eom_hwpx_manager.adapter import BuilderRun, hash_stable_regular_file
 from eom_hwpx_manager.application_adapter import FixedContentTeamBuilderAdapter
+from eom_hwpx_manager.content_team_output_acceptance import (
+    ContentTeamOutputExpectation,
+    verify_content_team_output,
+)
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import (
     HWPX_CONTENT_TEAM_PROTOCOL_VERSION_V2,
@@ -302,6 +306,23 @@ class ContentTeamHwpxService:
             )
             output = workspace / "output/content-team-item.hwpx"
             output_sha256 = self._verify_output(output, workspace)
+            output_acceptance = verify_content_team_output(
+                output,
+                expected_sha256=output_sha256,
+                expectations=(
+                    ContentTeamOutputExpectation(
+                        position=1,
+                        item_revision_id=item_revision_id,
+                        draft=content,
+                        images=tuple(image for image, _path in image_inputs),
+                    ),
+                ),
+            )
+            output_acceptance_raw = output_acceptance.model_dump(mode="json")
+            validate_hwpx_contract(
+                "content-team-output-acceptance-v1",
+                output_acceptance_raw,
+            )
             package_manifest = self.adapter.load_json(
                 workspace / "output/package-manifest.json",
                 workspace,
@@ -323,6 +344,14 @@ class ContentTeamHwpxService:
                 != content_sha256([image.model_dump(mode="json") for image, _path in image_inputs])
                 or result.embedded_image_count != len(image_inputs)
                 or result.output_sha256 != output_sha256
+                or output_acceptance.items[0].equation_count != result.equation_count
+                or len(output_acceptance.items[0].tables) != result.table_count
+                or (
+                    len(output_acceptance.items[0].tables) + len(output_acceptance.items[0].images)
+                    != result.visual_count
+                )
+                or len(output_acceptance.items[0].images) != result.embedded_image_count
+                or output_acceptance.items[0].labeled_block_count != result.labeled_block_count
                 or package_manifest.get("package_sha256") != result.output_sha256
                 or renderer_report.get("status") != "PASS"
             ):
@@ -361,6 +390,7 @@ class ContentTeamHwpxService:
                 "native_equation_count": result.equation_count,
                 "native_table_count": result.table_count,
                 "handoff": handoff_snapshot.model_dump(mode="json"),
+                "output_acceptance": output_acceptance_raw,
             }
             with transaction(self.sessions) as session:
                 job = session.execute(

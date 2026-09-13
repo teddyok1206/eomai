@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import importlib
 import json
 import os
@@ -564,6 +565,169 @@ def _install_labeled_image_slots(output: Path, visual_module: Any, layout: str) 
     return slot_count
 
 
+def _direct_children(element: Any, name: str) -> tuple[Any, ...]:
+    return tuple(child for child in element if local_name(child.tag) == name)
+
+
+def _set_table_column_alignments(
+    output: Path,
+    draft: ContentTeamEditorialDraftContract,
+    table_ids: tuple[str, ...],
+) -> None:
+    """Materialize the typed column alignment instead of inheriting the prototype default.
+
+    The external Handoff renderer owns table creation but historically left every generated cell
+    centered. We patch only the exact table IDs returned by that renderer, clone its reviewed cell
+    paragraph property, and keep the output inside the same bounded package boundary.
+    """
+
+    tables = tuple(visual for visual in draft.visuals if visual.kind == "TABLE")
+    if len(tables) != len(table_ids):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team rendered table identities differ from the typed draft",
+        )
+    if not tables:
+        return
+    package = read_package(output)
+    by_name = package.by_name()
+    section_entry = by_name.get(SECTION_MEMBER)
+    header_entry = by_name.get("Contents/header.xml")
+    if section_entry is None or header_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team table alignment package members are missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    header = parse_xml(header_entry.data, "Contents/header.xml")
+    table_by_id = {
+        str(element.get("id")): element
+        for element in section.root.iter()
+        if local_name(element.tag) == "tbl" and element.get("id") is not None
+    }
+    para_by_id = {
+        str(element.get("id")): element
+        for element in header.root.iter()
+        if local_name(element.tag) == "paraPr" and element.get("id") is not None
+    }
+    para_containers = [
+        element for element in header.root.iter() if local_name(element.tag) == "paraProperties"
+    ]
+    if len(para_containers) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team paragraph property catalog is ambiguous",
+        )
+    para_container = para_containers[0]
+    try:
+        next_para_id = max(int(identifier) for identifier in para_by_id) + 1
+    except ValueError as exc:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team paragraph property identity is invalid",
+        ) from exc
+    horizontal = {"default": "CENTER", "center": "CENTER", "left": "LEFT", "right": "RIGHT"}
+    cloned_by_base_and_alignment: dict[tuple[str, str], str] = {}
+    changed = False
+    for source, table_id in zip(tables, table_ids, strict=True):
+        rendered = table_by_id.get(table_id)
+        if rendered is None:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team rendered table identity is missing",
+            )
+        rows = _direct_children(rendered, "tr")
+        if len(rows) != 1 + len(source.rows):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team rendered table row count differs",
+            )
+        for row in rows:
+            cells = _direct_children(row, "tc")
+            if len(cells) != len(source.headers):
+                raise HwpxError(
+                    HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                    "content-team rendered table column count differs",
+                )
+            for column, cell in enumerate(cells):
+                paragraphs = tuple(
+                    element for element in cell.iter() if local_name(element.tag) == "p"
+                )
+                if not paragraphs:
+                    raise HwpxError(
+                        HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                        "content-team rendered table cell has no paragraph",
+                    )
+                desired = horizontal[source.alignments[column]]
+                for paragraph in paragraphs:
+                    base_id = paragraph.get("paraPrIDRef")
+                    base = para_by_id.get(str(base_id))
+                    if base is None:
+                        raise HwpxError(
+                            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                            "content-team table paragraph property is missing",
+                        )
+                    alignment = next(
+                        (child for child in base if local_name(child.tag) == "align"),
+                        None,
+                    )
+                    if alignment is None:
+                        raise HwpxError(
+                            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                            "content-team table paragraph alignment is missing",
+                        )
+                    if str(alignment.get("horizontal", "")).upper() == desired:
+                        continue
+                    clone_key = (str(base_id), desired)
+                    replacement_id = cloned_by_base_and_alignment.get(clone_key)
+                    if replacement_id is None:
+                        clone = copy.deepcopy(base)
+                        replacement_id = str(next_para_id)
+                        next_para_id += 1
+                        clone.set("id", replacement_id)
+                        clone_alignment = next(
+                            child for child in clone if local_name(child.tag) == "align"
+                        )
+                        clone_alignment.set("horizontal", desired)
+                        para_container.append(clone)
+                        para_by_id[replacement_id] = clone
+                        cloned_by_base_and_alignment[clone_key] = replacement_id
+                    paragraph.set("paraPrIDRef", replacement_id)
+                    changed = True
+    if not changed:
+        return
+    para_container.set("itemCnt", str(len(_direct_children(para_container, "paraPr"))))
+    replacements = {
+        SECTION_MEMBER: serialize_xml(section),
+        "Contents/header.xml": serialize_xml(header),
+    }
+    temporary = output.with_name(".content-team-table-alignments.hwpx")
+    if temporary.exists() or temporary.is_symlink():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "HWPX output is not fresh")
+    try:
+        with zipfile.ZipFile(temporary, "x", allowZip64=False) as archive:
+            for entry in package.entries:
+                info = zipfile.ZipInfo(entry.info.filename, FIXED_ZIP_TIMESTAMP)
+                info.compress_type = entry.info.compress_type
+                info.comment = entry.info.comment
+                info.extra = entry.info.extra
+                info.internal_attr = entry.info.internal_attr
+                info.external_attr = entry.info.external_attr
+                info.create_system = entry.info.create_system
+                archive.writestr(info, replacements.get(entry.info.filename, entry.data))
+        temporary.chmod(0o600)
+        analysis = analyze_package(temporary)
+        if analysis.active_content or analysis.external_links or not analysis.sections:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team table alignment rewrite failed package validation",
+            )
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -648,6 +812,11 @@ def _external_render(
             engine.create_document(template, output, question)
         finally:
             dynamic_validator_module.HwpxValidator = original_validator
+        _set_table_column_alignments(
+            output,
+            draft,
+            tuple(report.table_id for report in engine.last_table_render_reports.values()),
+        )
         projected_image_slot_count = 0
         if labeled_image_layout is not None:
             projected_image_slot_count = _install_labeled_image_slots(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from datetime import datetime
 from enum import StrEnum
@@ -761,6 +763,139 @@ def content_team_exam_render_plan_projection(
         }
         for item in request.items
     )
+
+
+def _small_contract_sha256(value: object) -> str:
+    """Hash a JSON-only validation receipt without adding a package dependency."""
+
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
+class ContentTeamAcceptedTableV1(StrictModel):
+    """Content hash of one independently observed native table."""
+
+    visual_ordinal: int = Field(ge=0, le=1)
+    label: Literal["", "(가)", "(나)"]
+    column_count: int = Field(ge=2, le=5)
+    row_count: int = Field(ge=2, le=101)
+    table_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+class ContentTeamAcceptedImageV1(StrictModel):
+    """Exact generated PNG observed inside one accepted HWPX section."""
+
+    visual_ordinal: int = Field(ge=0, le=1)
+    label: Literal["", "(가)", "(나)"]
+    sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+
+class ContentTeamAcceptedItemV1(StrictModel):
+    """Per-Item structural fingerprint, keyed by immutable revision and position."""
+
+    position: int = Field(ge=1, le=200)
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    visual_layout: Literal[
+        "NONE",
+        "IMAGE_ONLY",
+        "TABLE_ONLY",
+        "IMAGE_TABLE",
+        "TABLE_IMAGE",
+        "IMAGE_IMAGE",
+        "TABLE_TABLE",
+        "INQUIRY_BOX",
+    ]
+    tables: tuple[ContentTeamAcceptedTableV1, ...] = Field(max_length=2)
+    images: tuple[ContentTeamAcceptedImageV1, ...] = Field(max_length=2)
+    equation_count: int = Field(ge=0, le=128)
+    labeled_block_count: int = Field(ge=0, le=2)
+    semantic_text_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    structure_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+    @model_validator(mode="after")
+    def canonical_structure(self) -> ContentTeamAcceptedItemV1:
+        visual_members = sorted(
+            ((value.visual_ordinal, "TABLE", value.label) for value in self.tables),
+            key=lambda value: value[0],
+        ) + sorted(
+            ((value.visual_ordinal, "IMAGE", value.label) for value in self.images),
+            key=lambda value: value[0],
+        )
+        visual_members.sort(key=lambda value: value[0])
+        if tuple(value[0] for value in visual_members) != tuple(range(len(visual_members))):
+            raise ValueError("accepted content-team visual ordinals must be contiguous")
+        expected_layout = {
+            (): ("NONE", ()),
+            (("IMAGE", ""),): ("IMAGE_ONLY", (("IMAGE", ""),)),
+            (("TABLE", ""),): ("TABLE_ONLY", (("TABLE", ""),)),
+            (("IMAGE", ""), ("TABLE", "")): (
+                "IMAGE_TABLE",
+                (("IMAGE", ""), ("TABLE", "")),
+            ),
+            (("TABLE", ""), ("IMAGE", "")): (
+                "TABLE_IMAGE",
+                (("TABLE", ""), ("IMAGE", "")),
+            ),
+            (("IMAGE", "(가)"), ("IMAGE", "(나)")): (
+                "IMAGE_IMAGE",
+                (("IMAGE", "(가)"), ("IMAGE", "(나)")),
+            ),
+            (("TABLE", "(가)"), ("TABLE", "(나)")): (
+                "TABLE_TABLE",
+                (("TABLE", "(가)"), ("TABLE", "(나)")),
+            ),
+        }
+        kinds_and_labels = tuple((value[1], value[2]) for value in visual_members)
+        if self.visual_layout == "INQUIRY_BOX":
+            if visual_members:
+                raise ValueError("accepted inquiry output cannot expose general visuals")
+        elif expected_layout.get(kinds_and_labels, (None, ()))[0] != self.visual_layout:
+            raise ValueError("accepted content-team visuals differ from their layout")
+        projection = self.model_dump(mode="json", exclude={"structure_sha256"})
+        if self.structure_sha256 != _small_contract_sha256(projection):
+            raise ValueError("accepted content-team Item structure hash differs")
+        return self
+
+
+class ContentTeamOutputAcceptanceV1(StrictModel):
+    """Manager-authored proof that HWPX bytes match the approved typed Item structure."""
+
+    schema_version: Literal["content-team-output-acceptance/1.0"] = (
+        "content-team-output-acceptance/1.0"
+    )
+    output_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    package_entry_count: int = Field(ge=6, le=2000)
+    uncompressed_bytes: int = Field(ge=1, le=200 * 1024 * 1024)
+    section_names: tuple[str, ...] = Field(min_length=1, max_length=200)
+    items: tuple[ContentTeamAcceptedItemV1, ...] = Field(min_length=1, max_length=200)
+    acceptance_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+
+    @field_validator("section_names")
+    @classmethod
+    def safe_section_names(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if values != tuple(f"Contents/section{index}.xml" for index in range(len(values))):
+            raise ValueError("accepted HWPX sections must be contiguous and ordered")
+        return values
+
+    @model_validator(mode="after")
+    def canonical_acceptance(self) -> ContentTeamOutputAcceptanceV1:
+        if tuple(item.position for item in self.items) != tuple(range(1, len(self.items) + 1)):
+            raise ValueError("accepted content-team Items must be contiguous and ordered")
+        revision_ids = tuple(item.item_revision_id for item in self.items)
+        if len(revision_ids) != len(set(revision_ids)):
+            raise ValueError("accepted content-team Item revisions must be unique")
+        if len(self.section_names) != len(self.items):
+            raise ValueError("accepted HWPX section and Item cardinalities differ")
+        projection = self.model_dump(mode="json", exclude={"acceptance_sha256"})
+        if self.acceptance_sha256 != _small_contract_sha256(projection):
+            raise ValueError("content-team output acceptance hash differs")
+        return self
 
 
 class ContentTeamBuildResult(StrictModel):

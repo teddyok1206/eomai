@@ -8,6 +8,7 @@ from typing import Any
 
 from eom_catalog_contracts import MockExamAssemblyManifestContract, MockExamAssemblyManifestV3
 from eom_hwpx_contracts import (
+    ContentTeamEditorialDraftContract,
     ContentTeamExamAssemblyPointer,
     ContentTeamExamAssemblyPointerV2,
     ContentTeamExamAssemblyPointerV3,
@@ -51,6 +52,10 @@ from eom_orchestrator.state_machine import JobState, transition_job
 from sqlalchemy import select
 
 from eom_hwpx_manager.assembly_render_projection import project_assembly_for_render
+from eom_hwpx_manager.content_team_output_acceptance import (
+    ContentTeamOutputExpectation,
+    verify_content_team_output,
+)
 from eom_hwpx_manager.content_team_service import (
     HANDOFF_MEDIA_TYPE,
     HANDOFF_MEMBER,
@@ -319,6 +324,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 Path,
                 Path,
                 tuple[tuple[ContentTeamImageSource, Path], ...],
+                ContentTeamEditorialDraftContract,
             ]
         ] = []
         for item in items:
@@ -379,6 +385,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                     canonical,
                     markdown,
                     image_inputs,
+                    content,
                 )
             )
         request: ContentTeamExamRenderRequestContract
@@ -494,7 +501,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 handoff_path,
                 expected_sha256=handoff_snapshot.archive_sha256,
             )
-            for staged_item, source_path, markdown_path, images in staged_items:
+            for staged_item, source_path, markdown_path, images, _content in staged_items:
                 self.adapter.stage_file(
                     workspace,
                     staged_item.json_file,
@@ -552,6 +559,29 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 result = ContentTeamExamBuildResult.model_validate(result_raw)
             output = workspace / "output/content-team-exam.hwpx"
             output_sha256 = self._verify_output(output, workspace)
+            output_acceptance = verify_content_team_output(
+                output,
+                expected_sha256=output_sha256,
+                expectations=tuple(
+                    ContentTeamOutputExpectation(
+                        position=staged_item.position,
+                        item_revision_id=staged_item.item_revision_id,
+                        draft=content,
+                        images=tuple(image for image, _path in images),
+                    )
+                    for staged_item, _source, _markdown, images, content in staged_items
+                ),
+            )
+            output_acceptance_raw = output_acceptance.model_dump(mode="json")
+            validate_hwpx_contract(
+                "content-team-output-acceptance-v1",
+                output_acceptance_raw,
+            )
+            accepted_equation_count = sum(item.equation_count for item in output_acceptance.items)
+            accepted_table_count = sum(len(item.tables) for item in output_acceptance.items)
+            accepted_visual_count = sum(
+                len(item.tables) + len(item.images) for item in output_acceptance.items
+            )
             package_manifest = self.adapter.load_json(
                 workspace / "output/package-manifest.json", workspace
             )
@@ -571,6 +601,9 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 )
                 or result.item_count != len(items)
                 or result.section_count != len(items)
+                or accepted_equation_count != result.equation_count
+                or accepted_table_count != result.table_count
+                or accepted_visual_count != result.visual_count
                 or result.output_sha256 != output_sha256
                 or package_manifest.get("package_sha256") != result.output_sha256
                 or package_manifest.get("item_set_sha256") != item_set_sha256
@@ -621,6 +654,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 "builder_result": result.model_dump(mode="json"),
                 "assembly": request.assembly.model_dump(mode="json"),
                 "handoff": handoff_snapshot.model_dump(mode="json"),
+                "output_acceptance": output_acceptance_raw,
             }
             with transaction(self.sessions) as session:
                 job = session.execute(

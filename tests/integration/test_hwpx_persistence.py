@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -284,7 +285,32 @@ class _FakeContentTeamBuilderAdapter(_FakeBuilderAdapter):
         output_root = workspace / "output"
         output_root.mkdir()
         output = output_root / "content-team-item.hwpx"
-        output.write_bytes(b"SYNTHETIC_CONTENT_TEAM_HWPX")
+        with zipfile.ZipFile(output, "x", allowZip64=False) as archive:
+            archive.writestr(
+                "mimetype",
+                b"application/hwp+zip",
+                compress_type=zipfile.ZIP_STORED,
+            )
+            for name, payload in (
+                ("version.xml", b"<version/>"),
+                ("settings.xml", b"<settings/>"),
+                (
+                    "META-INF/container.xml",
+                    b'<container><rootfiles><rootfile full-path="Contents/content.hpf"/>'
+                    b"</rootfiles></container>",
+                ),
+                ("Contents/header.xml", b"<head/>"),
+                (
+                    "Contents/content.hpf",
+                    b'<package><manifest><item id="section0" href="section0.xml"/>'
+                    b'</manifest><spine><itemref idref="section0"/></spine></package>',
+                ),
+                (
+                    "Contents/section0.xml",
+                    b"<sec><p><run><t>validated integration fixture</t></run></p></sec>",
+                ),
+            ):
+                archive.writestr(name, payload, compress_type=zipfile.ZIP_DEFLATED)
         output_sha = sha256_file(output)
         (output_root / "package-manifest.json").write_text(
             json.dumps({"manifest_version": "content-team-hwpx/1.0", "package_sha256": output_sha}),
@@ -310,9 +336,9 @@ class _FakeContentTeamBuilderAdapter(_FakeBuilderAdapter):
             "output_sha256": output_sha,
             "package_manifest_file": "output/package-manifest.json",
             "renderer_report_file": "output/content-team-validation.json",
-            "equation_count": 5,
-            "table_count": 1,
-            "visual_count": 2,
+            "equation_count": 0,
+            "table_count": 0,
+            "visual_count": 0,
             "labeled_block_count": 0,
             "image_set_sha256": content_sha256(request["images"]),
             "embedded_image_count": len(request["images"]),
@@ -743,10 +769,16 @@ def test_content_team_service_pins_both_item_members_and_handoff_then_commits(
 
     assert replay == receipt
     assert adapter.run_count == 1
-    assert receipt.native_equation_count == 5
-    assert receipt.native_table_count == 1
+    assert receipt.native_equation_count == 0
+    assert receipt.native_table_count == 0
     final = settings.nas_artifact_root / receipt.artifact_id / receipt.artifact_revision_id
-    assert (final / "content-team-item.hwpx").read_bytes() == b"SYNTHETIC_CONTENT_TEAM_HWPX"
+    assert zipfile.is_zipfile(final / "content-team-item.hwpx")
+    revision = db_session.get(ArtifactRevisionRecord, receipt.artifact_revision_id)
+    assert revision is not None
+    output_acceptance = revision.result.get("output_acceptance")
+    assert isinstance(output_acceptance, dict)
+    assert output_acceptance["output_sha256"] == receipt.output_sha256
+    assert output_acceptance["items"][0]["visual_layout"] == "NONE"
 
 
 def test_question_template_service_resolves_canonical_content_and_commits_output(
