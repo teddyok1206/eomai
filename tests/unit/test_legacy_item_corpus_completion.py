@@ -17,7 +17,8 @@ from jsonschema import Draft202012Validator
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from referencing import Registry, Resource
-from test_legacy_extraction_recovery_contracts import recovery_document
+
+from tests.unit.test_legacy_extraction_recovery_contracts import recovery_document
 
 
 def _schema(name: str) -> dict[str, object]:

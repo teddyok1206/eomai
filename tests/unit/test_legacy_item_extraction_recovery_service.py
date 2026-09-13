@@ -20,8 +20,9 @@ from eom_catalog_service.legacy_item_extraction_recovery_service import (
     LegacyItemExtractionRecoveryService,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
-from test_legacy_extraction_recovery_contracts import recovery_document
-from test_legacy_item_extraction_service import _request
+
+from tests.unit.test_legacy_extraction_recovery_contracts import recovery_document
+from tests.unit.test_legacy_item_extraction_service import _request
 
 
 def _rehash_request(document: dict[str, Any]) -> LegacyItemExtractionRequest:

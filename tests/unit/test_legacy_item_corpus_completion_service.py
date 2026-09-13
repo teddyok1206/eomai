@@ -42,7 +42,8 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.models import JobRecord
 from eom_workflow import WorkflowRequest
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
-from test_legacy_extraction_recovery_contracts import recovery_document
+
+from tests.unit.test_legacy_extraction_recovery_contracts import recovery_document
 
 
 def _id(prefix: str, value: int) -> str:

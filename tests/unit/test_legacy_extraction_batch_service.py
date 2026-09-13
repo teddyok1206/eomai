@@ -27,9 +27,10 @@ from eom_catalog_service.legacy_item_extraction_batch_service import (
 from eom_orchestrator.models import Base
 from eomctl.cli import app
 from sqlalchemy import LargeBinary
-from test_legacy_extraction_batch_contracts import _manifest_v2
-from test_legacy_extraction_recovery_contracts import recovery_document
 from typer.testing import CliRunner
+
+from tests.unit.test_legacy_extraction_batch_contracts import _manifest_v2
+from tests.unit.test_legacy_extraction_recovery_contracts import recovery_document
 
 
 class _MemberSession:

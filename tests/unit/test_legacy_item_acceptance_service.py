@@ -21,7 +21,8 @@ from eom_catalog_service.legacy_item_acceptance_service import (
     LegacyItemAcceptanceService,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
-from test_legacy_assessment_contracts import _result
+
+from tests.unit.test_legacy_assessment_contracts import _result
 
 
 def _acceptance() -> LegacyItemExtractionAcceptance:

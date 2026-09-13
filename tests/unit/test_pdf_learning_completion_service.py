@@ -31,7 +31,8 @@ from eom_catalog_service.pdf_learning_completion_service import (
     ResolvedPdfLearningCompletionSnapshot,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from test_pdf_learning_completion import (
+
+from tests.unit.test_pdf_learning_completion import (
     ReceiptFixture,
     _completion_items,
     _receipt,

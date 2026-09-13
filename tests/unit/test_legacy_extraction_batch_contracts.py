@@ -12,7 +12,8 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_identifiers import content_sha256
-from test_legacy_item_extraction_service import _request
+
+from tests.unit.test_legacy_item_extraction_service import _request
 
 
 def _work_unit(*, seed: str = "a", ordinal: int = 0) -> LegacyExtractionBatchWorkUnit:

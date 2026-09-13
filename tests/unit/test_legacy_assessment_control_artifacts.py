@@ -16,7 +16,8 @@ from eom_orchestrator.legacy_assessment_control_artifacts import (
     LegacyAssessmentControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
-from test_pdf_learning_completion import _receipt, _v12_receipt, validate_payload
+
+from tests.unit.test_pdf_learning_completion import _receipt, _v12_receipt, validate_payload
 
 
 class _RecordingPublisher:

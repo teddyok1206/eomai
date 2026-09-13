@@ -22,11 +22,12 @@ from eom_identifiers import content_sha256
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy.orm import Session
-from test_knowledge_analysis_artifact import _request as _historical_v2_request
-from test_past_exam_visual_analysis_contracts import (
+
+from tests.unit.test_knowledge_analysis_artifact import _request as _historical_v2_request
+from tests.unit.test_past_exam_visual_analysis_contracts import (
     _request as _v9_request,
 )
-from test_past_exam_visual_analysis_contracts import (
+from tests.unit.test_past_exam_visual_analysis_contracts import (
     _source as _v9_source,
 )
 
