@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+from contextlib import suppress
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
@@ -21,11 +22,14 @@ from eom_catalog_contracts import (
     validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_hwpx_contracts import (
+    ContentTeamLabeledBlock,
     ContentTeamMarkdownError,
     derive_content_team_equation_sources,
+    normalize_content_team_answer_line,
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
     normalize_content_team_labeled_block_content,
+    normalize_content_team_labeled_block_projection,
     normalize_content_team_statement_marker,
     normalize_content_team_stem,
     serialize_content_team_markdown,
@@ -961,10 +965,15 @@ def _canonicalize_content_team_authoring_result(
         if key != "equation_sources":
             canonical_draft[key] = _normalize_content_team_math_values(item)
     labeled_blocks = canonical_draft.get("labeled_blocks")
+    typed_labeled_blocks: tuple[ContentTeamLabeledBlock, ...] = ()
     if isinstance(labeled_blocks, list):
         for block in labeled_blocks:
             if isinstance(block, dict) and isinstance(block.get("content"), str):
                 block["content"] = normalize_content_team_labeled_block_content(block["content"])
+        with suppress(ValidationError):
+            typed_labeled_blocks = tuple(
+                ContentTeamLabeledBlock.model_validate(block) for block in labeled_blocks
+            )
     item_number = canonical_draft.get("item_number")
     stem = canonical_draft.get("stem")
     if isinstance(item_number, int) and isinstance(stem, str):
@@ -975,6 +984,10 @@ def _canonicalize_content_team_authoring_result(
                 normalized_stem,
                 has_statements=bool(statements),
             )
+        normalized_stem = normalize_content_team_labeled_block_projection(
+            normalized_stem,
+            labeled_blocks=typed_labeled_blocks,
+        )
         canonical_draft["stem"] = normalized_stem
     score_display = canonical_draft.get("score_display")
     bottom_stem = canonical_draft.get("bottom_stem")
@@ -982,6 +995,22 @@ def _canonicalize_content_team_authoring_result(
         canonical_draft["bottom_stem"] = normalize_content_team_bottom_stem(
             score_display, bottom_stem
         )
+    answer = canonical_draft.get("answer")
+    if isinstance(answer, dict):
+        number = answer.get("number")
+        answer_content = answer.get("answer_content")
+        raw_line = answer.get("raw_line")
+        if (
+            isinstance(number, str)
+            and isinstance(answer_content, str)
+            and isinstance(raw_line, str)
+        ):
+            answer["raw_line"] = normalize_content_team_answer_line(
+                number,
+                answer_content,
+                raw_line,
+            )
+    _normalize_evidence_usage_order(canonical_output)
     if projected:
         canonical_draft["visual_layout"] = derived_layout
     canonical_draft["equation_sources"] = []
@@ -1025,6 +1054,36 @@ def _canonicalize_content_team_authoring_result(
             f"{schema_id} cannot be materialized by the content-team profile"
         ) from exc
     return canonical
+
+
+def _normalize_evidence_usage_order(output: dict[str, Any]) -> None:
+    """Sort semantically unordered evidence members without hiding duplicates or bad values."""
+
+    usage = output.get("evidence_usage")
+    if not isinstance(usage, dict):
+        return
+    citations = usage.get("citations")
+    if not isinstance(citations, list):
+        return
+    for citation in citations:
+        if not isinstance(citation, dict):
+            continue
+        for field_name in ("anchor_ids", "draft_json_paths"):
+            values = citation.get(field_name)
+            if (
+                isinstance(values, list)
+                and all(isinstance(value, str) for value in values)
+                and len(values) == len(set(values))
+            ):
+                values.sort()
+    evidence_ids = tuple(
+        citation.get("evidence_id") if isinstance(citation, dict) else None
+        for citation in citations
+    )
+    if all(isinstance(evidence_id, str) for evidence_id in evidence_ids) and len(
+        evidence_ids
+    ) == len(set(evidence_ids)):
+        citations.sort(key=lambda citation: citation["evidence_id"])
 
 
 def _normalize_content_team_math_values(value: object) -> object:

@@ -27,9 +27,11 @@ from eom_hwpx_contracts import (
     ContentTeamTable,
     content_team_image_slot_projection,
     derive_content_team_equation_sources,
+    normalize_content_team_answer_line,
     normalize_content_team_bottom_stem,
     normalize_content_team_inline_math,
     normalize_content_team_labeled_block_content,
+    normalize_content_team_labeled_block_projection,
     normalize_content_team_statement_marker,
     normalize_content_team_stem,
     validate_content_team_image_bindings,
@@ -45,6 +47,7 @@ from eom_workflow.models import (
     ArtifactSpec,
     ContentTeamAuthoringRoleResultV7,
     ContentTeamAuthoringRoleResultV8,
+    ContentTeamAuthoringRoleResultV10,
     ContentTeamImageRoleResultV8,
     ContentTeamItemBrief,
     GeneratedVectorDrawingV6,
@@ -511,6 +514,14 @@ def test_content_team_bottom_stem_separates_matching_source_score_markers() -> N
         normalize_content_team_bottom_stem("2.5", "옳은 것을 고른 것은? [3점]")
 
 
+def test_content_team_answer_line_rebuilds_only_a_well_formed_redundant_projection() -> None:
+    assert normalize_content_team_answer_line("③", "ㄱ, ㄷ", "정답 : ② (다른 답)") == (
+        "정답 : ③ (ㄱ, ㄷ)"
+    )
+    malformed = "정답: ② (다른 답)"
+    assert normalize_content_team_answer_line("③", "ㄱ, ㄷ", malformed) == malformed
+
+
 def test_content_team_statement_marker_normalizes_only_exact_trailing_source_format() -> None:
     stem = "제시된 자료를 해석하시오.\n\n<보기>"
 
@@ -524,6 +535,59 @@ def test_content_team_statement_marker_normalizes_only_exact_trailing_source_for
     assert (
         normalize_content_team_statement_marker("표시가 없는 발문", has_statements=True)
         == "표시가 없는 발문"
+    )
+
+
+@pytest.mark.parametrize(
+    ("opening", "closing", "kind"),
+    (("<자료>", "</자료>", "DATA"), ("[조건]", "[/조건]", "CONDITION")),
+)
+def test_content_team_labeled_block_projection_normalizes_exact_typed_source_format(
+    opening: str,
+    closing: str,
+    kind: str,
+) -> None:
+    block = ContentTeamLabeledBlock(kind=kind, content="측정한 값을 비교한 자료이다.")  # type: ignore[arg-type]
+    stem = f"제시된 정보를 해석하시오.\n\n{opening}\n{block.content}\n{closing}"
+
+    normalized = normalize_content_team_labeled_block_projection(
+        stem,
+        labeled_blocks=(block,),
+    )
+
+    assert normalized == "제시된 정보를 해석하시오."
+    assert (
+        normalize_content_team_labeled_block_projection(
+            normalized,
+            labeled_blocks=(block,),
+        )
+        == normalized
+    )
+
+
+@pytest.mark.parametrize(
+    ("stem", "block_kind"),
+    (
+        ("제시된 정보를 해석하시오.\n<자료>\n동일한 자료", None),
+        ("제시된 정보를 해석하시오.\n<자료>\n다른 자료", "DATA"),
+        ("제시된 정보를 해석하시오.\n<자료> \n동일한 자료", "DATA"),
+        ("제시된 정보를 해석하시오.\n< 자료 >\n동일한 자료", "DATA"),
+        ("제시된 정보를 해석하시오.\n<조건>\n동일한 자료", "DATA"),
+        ("제시된 정보를 해석하시오.\n<자료>\n동일한 자료\n</조건>", "DATA"),
+        ("제시된 정보를 해석하시오.\n\n\n<자료>\n동일한 자료", "DATA"),
+    ),
+)
+def test_content_team_labeled_block_projection_leaves_ambiguous_cases_for_serializer(
+    stem: str,
+    block_kind: str | None,
+) -> None:
+    typed_blocks = (
+        (ContentTeamLabeledBlock(kind=block_kind, content="동일한 자료"),)  # type: ignore[arg-type]
+        if block_kind is not None
+        else ()
+    )
+    assert (
+        normalize_content_team_labeled_block_projection(stem, labeled_blocks=typed_blocks) == stem
     )
 
 
@@ -624,6 +688,57 @@ def test_authoring_v7_v8_v9_remove_one_projected_statement_marker_and_round_trip
     )
     assert reparsed.stem == original_stem
     assert validate_role_result(result, "authoring", schema_id) == parsed
+
+
+def test_authoring_v10_removes_one_projected_data_marker_and_round_trips() -> None:
+    result = ContentTeamAuthoringRoleResultV7.model_validate(
+        {
+            "job_id": "job_" + "1" * 32,
+            "workflow_id": "workflow_" + "2" * 32,
+            "step_run_id": "steprun_" + "3" * 32,
+            "role": "authoring",
+            "artifact": {
+                "logical_artifact_id": "artifact_" + "4" * 32,
+                "revision_id": "rev_" + "5" * 32,
+            },
+            "completed_at": datetime(2026, 9, 3, tzinfo=UTC),
+            "output": {
+                "draft": _content(),
+                "metadata": {
+                    "subject": "통합과학",
+                    "topic": "요청으로 정해지는 주제",
+                    "difficulty": "medium",
+                    "knowledge_source_mode": "general_model_knowledge",
+                },
+            },
+        }
+    ).model_dump(mode="json")
+    result["protocol_version"] = "workflow-role/1.20.0"
+    output = result["output"]
+    assert isinstance(output, dict)
+    output["evidence_usage"] = None
+    draft = output["draft"]
+    assert isinstance(draft, dict)
+    draft["schema_version"] = "3.0"
+    draft.pop("visual_layout")
+    original_stem = draft["stem"]
+    assert isinstance(original_stem, str)
+    draft["stem"] = original_stem + "\n\n<자료>\n측정한 값을 비교한 자료이다.\n</자료>\n\n<보기>"
+    draft["labeled_blocks"] = [{"kind": "DATA", "content": "측정한 값을 비교한 자료이다."}]
+    unchanged = json.loads(json.dumps(result, ensure_ascii=False))
+
+    Draft202012Validator(load_codex_result_schema("authoring-result@10.0")).validate(result)
+    parsed = validate_role_result(result, "authoring", "authoring-result@10.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV10)
+    assert result == unchanged
+    assert parsed.output.draft.stem == original_stem
+    rendered = serialize_content_team_markdown(parsed.output.draft)
+    assert rendered.decode("utf-8").splitlines().count("<자료>") == 1
+    reparsed = parse_content_team_markdown_v2(rendered)
+    assert reparsed.stem == original_stem
+    assert tuple(block.kind for block in reparsed.labeled_blocks) == ("DATA",)
+    assert validate_role_result(result, "authoring", "authoring-result@10.0") == parsed
 
 
 @pytest.mark.parametrize(

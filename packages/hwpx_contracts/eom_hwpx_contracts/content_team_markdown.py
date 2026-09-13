@@ -117,6 +117,19 @@ def normalize_content_team_bottom_stem(score_display: str, bottom_stem: str) -> 
     return normalized
 
 
+def normalize_content_team_answer_line(number: str, answer_content: str, raw_line: str) -> str:
+    """Rebuild a grammatically valid redundant answer line from its typed values.
+
+    ``number`` and ``answer_content`` are the semantic fields; ``raw_line`` is their deterministic
+    source projection. Malformed source text remains invalid, while a well-formed but inconsistent
+    projection is safely rebuilt and later checked against the choices and statement contract.
+    """
+
+    if ANSWER.fullmatch(raw_line) is None:
+        return raw_line
+    return f"정답 : {number} ({answer_content})"
+
+
 def normalize_content_team_statement_marker(stem: str, *, has_statements: bool) -> str:
     """Remove one exact source-format line represented by typed statements.
 
@@ -138,6 +151,76 @@ def normalize_content_team_statement_marker(stem: str, *, has_statements: bool) 
     separator = prefix[len(content) :]
     if not content or separator not in {"\n", "\n\n", "\r", "\r\r", "\r\n", "\r\n\r\n"}:
         return stem
+    return content
+
+
+def normalize_content_team_labeled_block_projection(
+    stem: str,
+    *,
+    labeled_blocks: tuple[ContentTeamLabeledBlock, ...],
+) -> str:
+    """Remove an exact source-format suffix already represented by typed blocks.
+
+    A worker may project the reviewed Markdown spelling into ``stem`` while also filling the typed
+    ``labeled_blocks`` collection. Remove that projection only when every ordered marker and its
+    normalized body exactly equals the typed value. Optional closing markers are accepted solely as
+    redundant source syntax. Ambiguous, mismatched, repeated, or nonterminal material remains for
+    the authoritative serializer to reject.
+    """
+
+    if not labeled_blocks:
+        return stem
+    marker_contracts = {
+        "<자료>": ("DATA", "</자료>"),
+        "[자료]": ("DATA", "[/자료]"),
+        "<조건>": ("CONDITION", "</조건>"),
+        "[조건]": ("CONDITION", "[/조건]"),
+    }
+    lines = stem.splitlines(keepends=True)
+    marker_lines = tuple(
+        (index, line.rstrip("\r\n"))
+        for index, line in enumerate(lines)
+        if line.rstrip("\r\n") in marker_contracts
+    )
+    if len(marker_lines) != len(labeled_blocks):
+        return stem
+    if any(
+        marker_contracts[marker][0] != block.kind
+        for (_, marker), block in zip(marker_lines, labeled_blocks, strict=True)
+    ):
+        return stem
+    prefix = "".join(lines[: marker_lines[0][0]])
+    content = prefix.rstrip("\r\n")
+    separator = prefix[len(content) :]
+    if not content or separator not in {"\n", "\n\n", "\r", "\r\r", "\r\n", "\r\n\r\n"}:
+        return stem
+    all_closing_markers = frozenset(contract[1] for contract in marker_contracts.values())
+    for ordinal, ((marker_index, marker), block) in enumerate(
+        zip(marker_lines, labeled_blocks, strict=True)
+    ):
+        segment_end = (
+            marker_lines[ordinal + 1][0] if ordinal + 1 < len(marker_lines) else len(lines)
+        )
+        segment = list(lines[marker_index + 1 : segment_end])
+        nonblank_indexes = tuple(index for index, line in enumerate(segment) if line.strip())
+        closing_indexes = tuple(
+            index
+            for index, line in enumerate(segment)
+            if line.rstrip("\r\n") in all_closing_markers
+        )
+        if closing_indexes:
+            expected_closing = marker_contracts[marker][1]
+            if (
+                len(closing_indexes) != 1
+                or not nonblank_indexes
+                or closing_indexes[0] != nonblank_indexes[-1]
+                or segment[closing_indexes[0]].rstrip("\r\n") != expected_closing
+            ):
+                return stem
+            segment.pop(closing_indexes[0])
+        embedded_content = normalize_content_team_labeled_block_content("".join(segment))
+        if embedded_content != block.content:
+            return stem
     return content
 
 

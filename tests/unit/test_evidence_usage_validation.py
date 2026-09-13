@@ -203,6 +203,27 @@ def _validate_authoring(
     return receipt
 
 
+def test_authoring_role_normalizes_unique_evidence_member_order_without_mutating_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _knowledge_fixture(tmp_path, monkeypatch)
+    raw = _authoring_result(fixture).model_dump(mode="json")
+    citation = raw["output"]["evidence_usage"]["citations"][0]
+    citation["anchor_ids"] = ["anchor_z", "anchor_a"]
+    citation["draft_json_paths"] = ["/stem", "/choices/0/text"]
+    unchanged = deepcopy(raw)
+
+    parsed = validate_role_result(raw, "authoring", "authoring-result@10.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV10)
+    assert raw == unchanged
+    usage = parsed.output.evidence_usage
+    assert usage is not None
+    assert usage.citations[0].anchor_ids == ("anchor_a", "anchor_z")
+    assert usage.citations[0].draft_json_paths == ("/choices/0/text", "/stem")
+
+
 def test_authoring_receipt_is_exact_self_hashed_and_idempotent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
