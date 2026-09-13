@@ -38,17 +38,19 @@ readiness가 정본입니다.
 | --- | --- |
 | 단일 문항 Workflow | `generic-item-development@1.10.0` |
 | 역할 protocol / 결과 | `workflow-role/1.20.0` / `authoring·image·review·registration-result@10.0` |
-| Content Pack | `generated-knowledge-item@1.15.9` |
+| Content Pack | `generated-knowledge-item@1.16.0` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/13.0` / `knowledge-item-control-bootstrap/10.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
-| 25문항 생산 | `mock-exam-production-plan/3.0` |
+| 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
+| 25문항 생산 | `mock-exam-production-plan/4.0`, execution `4.0` |
 
-`mock-exam-production-plan/3.0`은 재현성을 위해 Workflow 1.10, role 1.20, Pack 1.15.1을
-고정합니다. 따라서 Pack 1.15.9의 최신 이미지/HWPX handoff를 25문항 생산에도 적용하려면 기존
-V3를 수정하지 않고 새 생산 계약을 추가해야 합니다.
+`mock-exam-production-plan/4.0`은 Workflow 1.10, role 1.20, Pack 1.16.0, Item Brief 4.0과
+자료 형식 1.0을 함께 고정합니다. 각 문항이 요구하는 `TEXT`, `DATA`, `TABLE`, `IMAGE`, `MIXED`,
+`INQUIRY`를 먼저 정하고 그 값에서 이미지 step과 RAG 검색 요소를 파생합니다. V1–V3 계획과
+checkpoint는 기존 실행 재현을 위해 그대로 읽을 수 있으며 의미를 바꾸지 않습니다.
 
 ## RAG 학습의 의미와 현재 기준선
 
@@ -72,9 +74,9 @@ Graph snapshot 및 Artifact bytes에 대해 이를 재검증한 영수증을 남
 flowchart LR
   R[Request] --> P[Pinned Workflow<br/>Pack · Policy · Graph]
   P --> A[Authoring]
-  A --> I{IMAGE slot?}
-  I -->|0| V[Review]
-  I -->|1 or 2| G[Local GPU + SVG]
+  A --> I{Required material}
+  I -->|TEXT · DATA · TABLE · INQUIRY| V[Review]
+  I -->|IMAGE · MIXED| G[Local GPU + SVG]
   G --> V
   V --> H{Human approval}
   H -->|rework| A
@@ -99,18 +101,29 @@ flowchart LR
 worker는 세 파일을 순서대로 모두 읽고 authoring 결과의 실제 `visuals` 배열에서 IMAGE slot만
 투영합니다.
 
-| 문항 구조 | PNG | HWPX 배치 |
+| 학생에게 보이는 자료 구조 | PNG | HWPX 배치 |
 | --- | --- | --- |
-| IMAGE 0개 | 생성하지 않음 | 이미지 영역 없음 |
+| TEXT / DATA / INQUIRY | 생성하지 않음 | 각 native 본문·자료·탐구 구조만 배치 |
+| TABLE 1개 | 생성하지 않음 | 편집 가능한 native 표 1개, panel label·빈 이미지 칸 없음 |
+| TABLE 2개 | 생성하지 않음 | 서로 다른 표 칸에 native 표 2개, `(가)/(나)`는 편집 가능한 텍스트 |
 | IMAGE 1개 | PNG 1개 | `(가)/(나)` 없이 단일 영역 |
 | IMAGE 2개 | 서로 다른 PNG 2개 | 서로 다른 표 칸에 배치하고 `(가)/(나)`는 편집 가능한 텍스트 행 |
-| IMAGE + TABLE | IMAGE의 실제 배열 ordinal만 사용 | 두 요소 모두 panel label 없음 |
+| IMAGE + TABLE | IMAGE slot에만 PNG 1개 | 실제 요소 순서를 유지하고 두 요소 모두 panel label 없음 |
+
+즉 `<자료>`가 그림 없이 표 하나인 문항은 정상적인 독립 형식입니다. `TABLE_ONLY`는 정확히
+`PNG 0개 + native 표 1개 + panel label 0개 + 이미지 placeholder 0개`이며 Image worker를
+실행하지 않습니다. 표를 이미지로 바꾸거나 빈 1행 2열 이미지 틀을 만드는 것은 계약 위반입니다.
 
 `A`, `B`, `P`, `Q`, 축, 수치 같은 과학적 표시는 panel label과 다릅니다. 이 값은 GPU 픽셀이
 아니라 sanitizer를 통과한 결정론적 SVG overlay가 담당합니다. 로컬 GPU에는 worker가 작성한 짧은
 의미 설명과 흑백·흰 배경·장식 금지 정책만 전달하고, 전체 팀장 원문과 정확한 기하·label은
 Artifact provenance와 검증 단계에 남깁니다. HWPX staging은 symlink를 따르지 않는 file descriptor,
 bounded read, SHA-256, identity 재확인과 fresh-target copy를 사용합니다.
+
+서로 다른 자료 형식을 한 시험지로 합칠 때 per-Item HWPX header가 완전히 같은 bytes가 아닐 수
+있습니다. Whole-exam renderer는 기존 정의가 정확한 prefix인 append-only header superset만
+선택하고, 같은 ID의 의미가 바뀌거나 두 header가 비교 불가능하면 실패합니다. 일반적인 XML 합성이나
+style ID 재번호 매기기는 하지 않습니다.
 
 자세한 경계와 실패 규칙은
 [Content-team prompt to HWPX preflight](docs/adr/0076-content-team-prompt-to-hwpx-preflight.md)에
@@ -164,19 +177,21 @@ Revision, 관계, 상태, pointer와 hash만 저장합니다.
 
 ## 현재 검증 상태
 
-2026-09-12 저장소 후보에서 다음을 통과했습니다.
+2026-09-13 저장소 후보는 runtime별 명시적 환경에서 non-live 테스트 2,916개를 통과했고, 158개
+live·DB·privileged opt-in 테스트는 조건 미설정으로 skip했습니다.
 
-- 전체 source 단위 테스트 2,016개
-- HWPX renderer 26개, HWPX manager/application 54개
-- 이미지 0개·1개·2개 HWPX canary
-- API 배포 인벤토리 39개
-- Ruff format/check 전체 1,286개 파일
-- mypy 전체 412개 source 파일
-- 두 control schema의 canonical/package byte parity와 `deploy_release.sh` syntax
+- API·domain·Catalog·Orchestrator·GUI: 2,755 passed / 35 skipped
+- HWPX 전체 + local image adapter: 160 passed / 1 skipped
+- PostgreSQL integration collection: 1 passed / 122 skipped
+- Ruff format/check 전체 1,301개 파일, strict mypy 414개 source 파일
+- V4 schema 재생성, JSON Schema 2020-12, canonical/package byte parity, shell syntax와 Git whitespace
 
-실제 PostgreSQL을 사용하는 HWPX persistence 6개는 운영 DB 보호 원칙에 따라 이번 검증에서
-실행하지 않았습니다. 새 Pack 1.15.9와 control bootstrap 13/10은 검증된 저장소 후보이며, 운영
-활성화는 별도의 bootstrap → release → activation → single-item canary를 거쳐야 합니다.
+세 release wheel을 실제로 만들고 V4 plan/execution schema와 HWPX renderer가 저장소 원본과
+byte-for-byte 같은지도 확인했습니다. 실제 PostgreSQL을 쓰는 HWPX persistence 6개는 운영 DB가
+아니라 명시적으로 만든 disposable DB에서만 실행합니다.
+
+Pack 1.16.0과 production plan/execution 4.0은 검증된 **저장소 후보**입니다. 운영 활성화는 별도의
+build → release → activation → single-Item material matrix → fresh-25 canary를 거쳐야 합니다.
 
 더 자세한 구현/운영 구분과 남은 경계는
 [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)를 참고하십시오.
@@ -207,13 +222,15 @@ cd eomai
 /srv/eom/conda/envs/eom-api/bin/ruff format --check .
 /srv/eom/conda/envs/eom-api/bin/ruff check .
 /srv/eom/conda/envs/eom-api/bin/python -m mypy --cache-dir=/tmp/eom-mypy-cache
+scripts/infra/test_repository_non_live.sh
 scripts/infra/check_repository_boundaries.sh
 git diff --check
 ```
 
 각 runtime은 `infra/conda/`의 명시적 환경을 사용합니다. HWPX test는 `eom-hwpx`, API·Catalog·
-Orchestrator test는 `eom-api`, 실제 GPU runtime은 `eom-image` 환경에서 실행합니다. PostgreSQL
-integration은 배포 DB가 아니라
+Orchestrator test는 `eom-api`, 실제 GPU runtime은 `eom-image` 환경에서 실행합니다. 위 스크립트는
+서로 다른 Pydantic runtime을 한 Python process에 섞지 않고 non-live suite를 분리하며, live·DB·
+privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. PostgreSQL integration은 배포 DB가 아니라
 [API Integration Test Database](docs/operations/API_INTEGRATION_TEST_DATABASE.md)의 disposable DB를
 사용해야 합니다.
 
@@ -224,6 +241,8 @@ integration은 배포 DB가 아니라
 - [Knowledge-backed Item Execution V3](docs/architecture/KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md)
 - [Trusted Evidence Registration Gate](docs/architecture/TRUSTED_EVIDENCE_REGISTRATION_GATE.md)
 - [Mock-exam Trusted RAG Production V3](docs/architecture/MOCK_EXAM_TRUSTED_RAG_PRODUCTION_V3.md)
+- [Material-first Item and independent HWPX acceptance](docs/adr/0077-material-first-item-and-independent-hwpx-acceptance.md)
+- [HWPX whole-exam append-only header merge](docs/adr/0078-hwpx-exam-header-superset-merge.md)
 - [Education Knowledge and Assessment Item GraphRAG](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [Additive Past-exam Solution Reports](docs/adr/0073-additive-past-exam-solution-reports.md)
 - [Batch-independent Solution Scheduling](docs/adr/0074-batch-independent-additive-solution-scheduling.md)

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for implementation.
+Accepted.
 
 ## Responsibility and boundary
 
