@@ -12,6 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / "scripts/api/workflow_runner_deployment_hold.sh"
 DEPLOY_SCRIPT = ROOT / "scripts/api/deploy_release.sh"
+HOLD_RELEASE_VERIFIER_SOURCE = ROOT / "scripts/api/verify_workflow_runner_hold_release.py"
 HOLD_SOURCE = ROOT / "infra/systemd/zzzz-eom-workflow-runner-deployment-hold.conf"
 BASE_UNIT_SOURCE = ROOT / "infra/systemd/eom-workflow-runner.service"
 HOLD_BYTES = b"[Unit]\nRefuseManualStart=yes\nConditionPathExists=!/\n"
@@ -1010,13 +1011,13 @@ def test_hold_release_boundary_rechecks_source_and_protected_paths_around_instal
     assert "install_workflow_runner_hold_release_verifier" in boundary
     assert "sudo -n -u eom-api /usr/bin/install -d -m 0700" in boundary
     source = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    current_verifier_sha256 = hashlib.sha256(HOLD_RELEASE_VERIFIER_SOURCE.read_bytes()).hexdigest()
     assert (
-        'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:'
-        '6c1fc516e8353d9a16201e8828080dcdf81dd6c57bda50523cbb74baeb1ee41c"' in source
+        f'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:{current_verifier_sha256}"' in source
     )
     assert (
         'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:'
-        '2eef5744d9d33d1ddb6edc766737d930d50eaa5a44c44dbd3431e2228e0b1f89"' in source
+        '6c1fc516e8353d9a16201e8828080dcdf81dd6c57bda50523cbb74baeb1ee41c"' in source
     )
 
 
