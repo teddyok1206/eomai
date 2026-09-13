@@ -14,12 +14,14 @@ from eom_api.services.mock_exam_production_coordinator import _workflow_request
 from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV3,
+    MockExamGenerationBlockResolutionV4,
 )
 from eom_catalog_contracts.approved_item_graph_publication import (
     ApprovedItemGraphPublicationResult,
     PublishApprovedItemAnalysesCommand,
 )
 from eom_catalog_contracts.assessment_assembly import (
+    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
 )
@@ -44,6 +46,7 @@ from eom_catalog_contracts.knowledge import (
 from eom_catalog_contracts.mock_exam_production_plan import (
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v3,
+    build_integrated_science_mock_exam_production_plan_v4,
 )
 from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
@@ -200,15 +203,23 @@ def _origin_rows(
     *,
     stale_position: int | None = None,
     workflow_version: str = "1.8.0",
+    material_v4: bool = False,
 ) -> tuple[tuple[Any, ...], ...]:
+    if material_v4 and workflow_version != "1.10.0":
+        raise ValueError("material V4 requires Workflow 1.10")
     plan_builder = (
-        build_integrated_science_mock_exam_production_plan_v3
+        build_integrated_science_mock_exam_production_plan_v4
+        if material_v4
+        else build_integrated_science_mock_exam_production_plan_v3
         if workflow_version == "1.10.0"
         else build_integrated_science_mock_exam_production_plan
     )
+    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
+    if material_v4:
+        layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
     plan = plan_builder(
         policy=load_integrated_science_mock_exam_policy(),
-        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        layout_policy=MockExamLayoutPolicyV1.model_validate(layout_value),
         outline=load_integrated_science_editorial_outline(),
     )
     definition_document = {"schema_version": "1.0", "test": "atomic-25"}
@@ -222,7 +233,9 @@ def _origin_rows(
         "workflow_definition_sha256": definition_sha256,
         "content_pack_release_id": "packrel_" + "a" * 32,
         "content_pack_key": "generated-knowledge-item",
-        "content_pack_version": "1.15.1" if workflow_version == "1.10.0" else "1.13.0",
+        "content_pack_version": (
+            "1.16.0" if material_v4 else "1.15.1" if workflow_version == "1.10.0" else "1.13.0"
+        ),
         "content_pack_release_sha256": "sha256:" + "b" * 64,
         "content_pack_source_tree_sha256": (
             plan.one_item_generation_block.content_pack_source_tree_sha256
@@ -246,8 +259,16 @@ def _origin_rows(
                 block.trusted_evidence_usage_receipts_required
             ),
         )
+        if material_v4:
+            resolution_fields.update(
+                image_mode=block.image_mode,
+                item_brief_schema_version=block.item_brief_schema_version,
+                material_requirement_schema_version=block.material_requirement_schema_version,
+            )
     resolution_type = (
-        MockExamGenerationBlockResolutionV3
+        MockExamGenerationBlockResolutionV4
+        if material_v4
+        else MockExamGenerationBlockResolutionV3
         if workflow_version == "1.10.0"
         else MockExamGenerationBlockResolutionV1
     )
@@ -826,6 +847,52 @@ def test_current_validator_accepts_v3_only_with_past_exam_and_trusted_receipts()
     )
 
     assert len(unit_keys) == 25
+
+
+def test_current_validator_accepts_material_v4_table_without_image_retrieval() -> None:
+    session = Mock(spec=Session)
+    rows = _origin_rows(workflow_version="1.10.0", material_v4=True)
+    session.execute.return_value = rows
+
+    unit_keys = ApprovedItemGraphPublicationService._validate_current_v2_item_analyses(
+        session,
+        tuple(_accepted_analysis(value, content_v3=True) for value in range(25)),
+        WORKFLOW_IDS,
+        official_reviews=_official_reviews_v3(),
+    )
+
+    first_request = load_persisted_workflow_request(rows[0][3].initial_request)
+    assert first_request.image_mode == "skip"
+    assert first_request.educational_retrieval is not None
+    assert first_request.educational_retrieval.required_item_elements == (
+        "choice",
+        "paragraph",
+        "table",
+    )
+    assert len(unit_keys) == 25
+
+
+def test_current_validator_rejects_material_v4_table_without_table_retrieval() -> None:
+    rows = list(_origin_rows(workflow_version="1.10.0", material_v4=True))
+    workflow = rows[0][3]
+    changed = deepcopy(workflow.initial_request)
+    changed["educational_retrieval"]["required_item_elements"] = ["choice", "paragraph"]
+    workflow.initial_request = changed
+    workflow.request_payload = changed
+    workflow.request_hash = workflow_business_fingerprint(
+        cast(Any, rows[0][4]),
+        load_persisted_workflow_request(changed),
+    )
+    session = Mock(spec=Session)
+    session.execute.return_value = tuple(rows)
+
+    with pytest.raises(ValueError, match="fresh completed"):
+        ApprovedItemGraphPublicationService._validate_current_v2_item_analyses(
+            session,
+            tuple(_accepted_analysis(value, content_v3=True) for value in range(25)),
+            WORKFLOW_IDS,
+            official_reviews=_official_reviews_v3(),
+        )
 
 
 def test_current_validator_rejects_v3_without_official_trusted_receipts() -> None:

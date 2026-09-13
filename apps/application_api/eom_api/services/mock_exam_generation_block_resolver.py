@@ -9,11 +9,13 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
+    MockExamGenerationBlockResolutionV4,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
+    MockExamOneItemGenerationBlockV4,
 )
 from eom_catalog_service.models import (
     ContentPackActivationRecord,
@@ -58,6 +60,7 @@ class DatabaseGenerationBlockResolver:
             MockExamOneItemGenerationBlockV1
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
+            | MockExamOneItemGenerationBlockV4
         ),
     ) -> MockExamGenerationBlockResolutionV1:
         statement = (
@@ -208,6 +211,15 @@ class DatabaseGenerationBlockResolver:
             if isinstance(block, MockExamOneItemGenerationBlockV3)
             else {}
         )
+        material_fields = (
+            {
+                "image_mode": block.image_mode,
+                "item_brief_schema_version": block.item_brief_schema_version,
+                "material_requirement_schema_version": (block.material_requirement_schema_version),
+            }
+            if isinstance(block, MockExamOneItemGenerationBlockV4)
+            else {}
+        )
         resolution_payload = {
             "generation_block_key": block.block_key,
             "generation_block_revision": block.block_revision,
@@ -226,7 +238,10 @@ class DatabaseGenerationBlockResolver:
             "execution_preset_sha256": preset.content_sha256,
             "resolved_at": datetime.now(UTC),
             **trusted_rag_fields,
+            **material_fields,
         }
+        if isinstance(block, MockExamOneItemGenerationBlockV4):
+            return MockExamGenerationBlockResolutionV4.model_validate(resolution_payload)
         if isinstance(block, MockExamOneItemGenerationBlockV3):
             return MockExamGenerationBlockResolutionV3.model_validate(resolution_payload)
         if isinstance(block, MockExamOneItemGenerationBlockV2):

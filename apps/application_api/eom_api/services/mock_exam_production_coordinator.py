@@ -32,6 +32,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamExplicitRatingSetV1,
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV3,
+    MockExamGenerationBlockResolutionV4,
     MockExamGraphPublicationAuthorizationPointerV1,
     MockExamGraphPublicationInputV1,
     MockExamGraphPublicationPointerV1,
@@ -43,6 +44,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
+    MockExamProductionExecutionV4,
     MockExamProductionFailureV1,
     MockExamProductionItemRunV1,
     MockExamProductionItemRunV2,
@@ -62,6 +64,7 @@ from eom_api_contracts.mock_exam_execution import (
 )
 from eom_api_contracts.workflows import (
     ContentTeamItemBriefRequestV3,
+    ContentTeamItemBriefRequestV4,
     EducationalRetrievalIntentRequest,
     WorkflowActionRequest,
     WorkflowApprovalExpectationV1,
@@ -86,6 +89,9 @@ from eom_catalog_contracts.assessment_assembly import (
     mock_exam_item_set_sha256,
     mock_exam_planned_placement_id,
 )
+from eom_catalog_contracts.content_team_material import (
+    content_team_material_required_retrieval_elements,
+)
 from eom_catalog_contracts.curriculum import resolve_integrated_science_curriculum_scope
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
@@ -101,10 +107,12 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
+    MockExamOneItemGenerationBlockV4,
     MockExamPlannedWorkflowCallV1,
     MockExamProductionPlanV1,
     MockExamProductionPlanV2,
     MockExamProductionPlanV3,
+    MockExamProductionPlanV4,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
@@ -139,6 +147,7 @@ class GenerationBlockResolver(Protocol):
             MockExamOneItemGenerationBlockV1
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
+            | MockExamOneItemGenerationBlockV4
         ),
     ) -> MockExamGenerationBlockResolutionV1: ...
 
@@ -286,6 +295,7 @@ class OneItemWorkflowOperations(Protocol):
             MockExamOneItemGenerationBlockV1
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
+            | MockExamOneItemGenerationBlockV4
         ),
     ) -> MockExamGenerationBlockResolutionV1: ...
 
@@ -338,6 +348,7 @@ class ExistingOneItemWorkflowOperations:
             MockExamOneItemGenerationBlockV1
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
+            | MockExamOneItemGenerationBlockV4
         ),
     ) -> MockExamGenerationBlockResolutionV1:
         return self._generation_blocks.resolve_generation_block(block)
@@ -632,6 +643,7 @@ class MockExamProductionCoordinator:
         if len(plan.workflow_calls) != 25:
             _raise("PRODUCTION_PLAN_ITEM_COUNT_INVALID", "production plan must have 25 calls")
         use_v3 = isinstance(plan, MockExamProductionPlanV3)
+        use_v4 = isinstance(plan, MockExamProductionPlanV4)
         row_type = MockExamProductionItemRunV3 if use_v3 else MockExamProductionItemRunV2
         rows = tuple(
             row_type(
@@ -669,6 +681,7 @@ class MockExamProductionCoordinator:
             item_runs=rows,
             use_v2=True,
             use_v3=use_v3,
+            use_v4=use_v4,
             at=at,
         )
 
@@ -2056,7 +2069,22 @@ def _workflow_request(
 ) -> WorkflowStartRequest:
     if call.item_brief.mock_exam_slot is None:
         _raise("PRODUCTION_SLOT_INTENT_MISSING", "production brief requires mock_exam_slot")
-    brief = ContentTeamItemBriefRequestV3.model_validate(call.item_brief.model_dump(mode="json"))
+    brief: ContentTeamItemBriefRequestV3
+    if isinstance(block, MockExamOneItemGenerationBlockV4):
+        material_brief = ContentTeamItemBriefRequestV4.model_validate(
+            call.item_brief.model_dump(mode="json")
+        )
+        brief = material_brief
+        image_mode = material_brief.material_requirement.image_mode
+        required_item_elements = content_team_material_required_retrieval_elements(
+            material_brief.material_requirement
+        )
+    else:
+        brief = ContentTeamItemBriefRequestV3.model_validate(
+            call.item_brief.model_dump(mode="json")
+        )
+        image_mode = block.image_mode
+        required_item_elements = ("choice", "paragraph")
     source_classes = (
         (KnowledgeSourceClass.PAST_EXAM,)
         if isinstance(block, MockExamOneItemGenerationBlockV3)
@@ -2070,7 +2098,7 @@ def _workflow_request(
         definition_key=block.workflow_definition_key,
         definition_version=block.workflow_definition_version,
         request_name=block.request_name,
-        image_mode=block.image_mode,
+        image_mode=image_mode,
         pack_key=block.content_pack_key,
         environment="development",
         source_intake_batch_ids=(),
@@ -2090,7 +2118,7 @@ def _workflow_request(
             query_kind="ITEM_PREPARATION",
             curriculum_root_key=None,
             topic_keys=(),
-            required_item_elements=("choice", "paragraph"),
+            required_item_elements=required_item_elements,
             source_classes=source_classes,
         ),
     )
@@ -2157,12 +2185,21 @@ def _workflow_knowledge_provenance(
         if isinstance(resolution, MockExamGenerationBlockResolutionV3)
         else ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK")
     )
+    expected_elements = (
+        content_team_material_required_retrieval_elements(
+            ContentTeamItemBriefRequestV4.model_validate(
+                call.item_brief.model_dump(mode="json")
+            ).material_requirement
+        )
+        if isinstance(resolution, MockExamGenerationBlockResolutionV4)
+        else ("choice", "paragraph")
+    )
     if (
         pointer.preset_revision_id != resolution.execution_preset_revision_id
         or pointer.corpus_key != "integrated-science-textbooks"
         or pointer.query_kind != "ITEM_PREPARATION"
         or pointer.curriculum_root_key != expected_curriculum_root
-        or pointer.required_item_elements != ("choice", "paragraph")
+        or pointer.required_item_elements != expected_elements
         or pointer.source_classes != expected_source_classes
     ):
         _raise(
@@ -2382,11 +2419,14 @@ def _new_checkpoint(
     item_runs: tuple[MockExamProductionItemRunV1, ...],
     use_v2: bool,
     use_v3: bool,
+    use_v4: bool,
     at: datetime,
 ) -> MockExamProductionExecutionV1:
     value: dict[str, Any] = {
         "schema_version": (
-            "mock-exam-production-execution/3.0"
+            "mock-exam-production-execution/4.0"
+            if use_v4
+            else "mock-exam-production-execution/3.0"
             if use_v3
             else "mock-exam-production-execution/2.0"
             if use_v2
@@ -2419,7 +2459,9 @@ def _new_checkpoint(
     }
     sha256 = content_sha256(value)
     checkpoint_type = (
-        MockExamProductionExecutionV3
+        MockExamProductionExecutionV4
+        if use_v4
+        else MockExamProductionExecutionV3
         if use_v3
         else MockExamProductionExecutionV2
         if use_v2
@@ -2604,7 +2646,9 @@ def _advance_checkpoint(
     }
     sha256 = content_sha256(value)
     checkpoint_type = (
-        MockExamProductionExecutionV3
+        MockExamProductionExecutionV4
+        if isinstance(checkpoint, MockExamProductionExecutionV4)
+        else MockExamProductionExecutionV3
         if isinstance(checkpoint, MockExamProductionExecutionV3)
         else MockExamProductionExecutionV2
         if isinstance(checkpoint, MockExamProductionExecutionV2)
@@ -2763,6 +2807,13 @@ def _require_context(
     checkpoint: MockExamProductionExecutionV1,
     actor: ActorContext,
 ) -> None:
+    if isinstance(plan, MockExamProductionPlanV4) != isinstance(
+        checkpoint, MockExamProductionExecutionV4
+    ):
+        _raise(
+            "PRODUCTION_PROTOCOL_FAMILY_MISMATCH",
+            "material-first production plan and checkpoint use different protocol families",
+        )
     if isinstance(plan, MockExamProductionPlanV3) != isinstance(
         checkpoint, MockExamProductionExecutionV3
     ):
@@ -2838,6 +2889,23 @@ def _require_generation_resolution(
         _raise(
             "PRODUCTION_GENERATION_BLOCK_STALE",
             "runtime trusted-RAG contracts differ from the plan",
+        )
+    if isinstance(block, MockExamOneItemGenerationBlockV4) and (
+        not isinstance(resolution, MockExamGenerationBlockResolutionV4)
+        or (
+            resolution.image_mode,
+            resolution.item_brief_schema_version,
+            resolution.material_requirement_schema_version,
+        )
+        != (
+            block.image_mode,
+            block.item_brief_schema_version,
+            block.material_requirement_schema_version,
+        )
+    ):
+        _raise(
+            "PRODUCTION_GENERATION_BLOCK_STALE",
+            "runtime material contracts differ from the plan",
         )
 
 

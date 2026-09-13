@@ -1131,6 +1131,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json",
+        "eom_api_contracts/schemas/mock-exam-production-execution-v4.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json",
@@ -1143,7 +1144,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 30 packaged API schemas including release identity, Workflow-start, "
+            "expected exactly 31 packaged API schemas including release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1468,6 +1469,7 @@ catalog_resources = {
     "assessment-assembly/mock-exam-production-plan-v1.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
     "assessment-assembly/mock-exam-production-plan-v2.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v2.schema.json",
     "assessment-assembly/mock-exam-production-plan-v3.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v3.schema.json",
+    "assessment-assembly/mock-exam-production-plan-v4.schema.json": "schemas/assessment-assembly/mock-exam-production-plan-v4.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-query-v1.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v1.schema.json",
     "assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json": "schemas/assessment-assembly/mock-exam-review-eligibility-result-v2.schema.json",
@@ -1853,6 +1855,7 @@ from eom_api_contracts import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
+    MockExamProductionExecutionV4,
     MockExamProductionRetirementCommandV1,
     MockExamProductionRetirementReceiptV1,
     mock_exam_production_is_terminal,
@@ -1935,6 +1938,7 @@ if any(
         MockExamProductionExecutionV1,
         MockExamProductionExecutionV2,
         MockExamProductionExecutionV3,
+        MockExamProductionExecutionV4,
     )
 ):
     raise SystemExit("mock-exam contract package exports are incomplete")
@@ -1956,6 +1960,7 @@ if set(execution_discriminator.get("mapping", {})) != {
     "mock-exam-production-execution/1.0",
     "mock-exam-production-execution/2.0",
     "mock-exam-production-execution/3.0",
+    "mock-exam-production-execution/4.0",
 }:
     raise SystemExit("mock-exam execution successor dispatch export is incomplete")
 if any(

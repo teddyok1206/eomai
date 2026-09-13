@@ -18,6 +18,7 @@ ContentTeamMaterialForm = Literal[
     "MIXED",
     "INQUIRY",
 ]
+ContentTeamRetrievalElement = Literal["choice", "image", "paragraph", "table"]
 
 
 class ContentTeamMaterialRequirementV1(FrozenModel):
@@ -50,6 +51,19 @@ class ContentTeamMaterialRequirementV1(FrozenModel):
         """Return whether the workflow must make the image role available."""
 
         return "required" if self.form in {"AUTO", "IMAGE", "MIXED"} else "skip"
+
+
+def content_team_material_required_retrieval_elements(
+    requirement: ContentTeamMaterialRequirementV1,
+) -> tuple[ContentTeamRetrievalElement, ...]:
+    """Return the canonical sorted RAG filter for one reviewed material requirement."""
+
+    elements: set[ContentTeamRetrievalElement] = {"choice", "paragraph"}
+    if requirement.form in {"IMAGE", "MIXED"}:
+        elements.add("image")
+    if requirement.form in {"TABLE", "MIXED"}:
+        elements.add("table")
+    return tuple(sorted(elements))
 
 
 def validate_content_team_material_requirement(

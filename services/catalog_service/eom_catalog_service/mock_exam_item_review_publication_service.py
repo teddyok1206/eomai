@@ -21,6 +21,9 @@ from eom_catalog_contracts.assessment_item import (
     AssessmentItemContentV2,
     AssessmentItemContentV3,
 )
+from eom_catalog_contracts.content_team_material import (
+    content_team_material_required_retrieval_elements,
+)
 from eom_catalog_contracts.item_review import (
     MOCK_EXAM_ITEM_REVIEW_DECISION_FILE_NAME,
     MOCK_EXAM_ITEM_REVIEW_DECISION_SCHEMA,
@@ -80,6 +83,7 @@ from eom_workflow.models import (
     ContentTeamImageRoleResultV9,
     ContentTeamImageRoleResultV10,
     ContentTeamItemBrief,
+    ContentTeamItemBriefV4,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
     ContentTeamReviewRoleResultV9,
@@ -766,18 +770,26 @@ class MockExamItemReviewPublicationService:
             )
         if workflow.definition_version == "1.10.0":
             expected = source_request.expected_resolution
+            brief = source_request.item_brief
+            if isinstance(brief, ContentTeamItemBriefV4):
+                expected_pack_version = "1.16.0"
+                expected_elements = content_team_material_required_retrieval_elements(
+                    brief.material_requirement
+                )
+            else:
+                expected_pack_version = "1.15.1"
+                expected_elements = ("choice", "paragraph")
             if (
                 expected is None
                 or expected.workflow_definition_key != workflow.definition_key
                 or expected.workflow_definition_version != workflow.definition_version
                 or expected.workflow_definition_sha256 != workflow.definition_hash
                 or expected.content_pack_key != "generated-knowledge-item"
-                or expected.content_pack_version != "1.15.1"
+                or expected.content_pack_version != expected_pack_version
                 or expected.execution_preset_key != "knowledge-grounded-item"
                 or source_request.educational_retrieval is None
                 or source_request.educational_retrieval.query_kind != "ITEM_PREPARATION"
-                or source_request.educational_retrieval.required_item_elements
-                != ("choice", "paragraph")
+                or source_request.educational_retrieval.required_item_elements != expected_elements
                 or source_request.educational_retrieval.source_classes
                 != (KnowledgeSourceClass.PAST_EXAM,)
             ):

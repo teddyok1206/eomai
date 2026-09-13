@@ -21,6 +21,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
+    MockExamProductionExecutionV4,
     is_mock_exam_provenance_validation_recovery_candidate,
     is_mock_exam_provenance_validation_recovery_successor,
 )
@@ -654,6 +655,8 @@ def _parse_checkpoint(payload: bytes) -> MockExamProductionExecutionV1:
     try:
         value = json.loads(payload.decode("utf-8"))
         if isinstance(value, dict):
+            if value.get("schema_version") == "mock-exam-production-execution/4.0":
+                return MockExamProductionExecutionV4.model_validate(value)
             if value.get("schema_version") == "mock-exam-production-execution/3.0":
                 return MockExamProductionExecutionV3.model_validate(value)
             if value.get("schema_version") == "mock-exam-production-execution/2.0":

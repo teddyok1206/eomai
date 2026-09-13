@@ -132,6 +132,8 @@ from eom_catalog_contracts.authoring_guidance import (
 from eom_catalog_contracts.content_team_material import (
     ContentTeamMaterialForm,
     ContentTeamMaterialRequirementV1,
+    ContentTeamRetrievalElement,
+    content_team_material_required_retrieval_elements,
     validate_content_team_material_requirement,
 )
 from eom_catalog_contracts.curriculum import (
@@ -809,6 +811,7 @@ __all__ = [
     "ContentTeamMaterialForm",
     "ContentTeamMaterialRequirementV1",
     "ContentTeamMockExamSlotV1",
+    "ContentTeamRetrievalElement",
     "ContentTeamTrustedRagItemBriefV3Input",
     "ContentTeamTrustedRagItemBriefV4Input",
     "ContentTeamTrustedRagMockExamSlotV3",
@@ -1231,6 +1234,7 @@ __all__ = [
     "catalog_schema_inventory",
     "classify_content_team_mock_exam_material_profile",
     "completion_identity_sha256",
+    "content_team_material_required_retrieval_elements",
     "content_team_material_requirement_for_mock_exam_profile",
     "derive_legacy_extraction_result_identity_collisions",
     "derive_legacy_item_extraction_recovery_successor",

@@ -19,6 +19,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
+    MockExamProductionExecutionV4,
     MockExamRatingPolicyPointerV1,
 )
 from eom_api_contracts.mock_exam_retirement import MockExamProductionRetirementReceiptV1
@@ -602,7 +603,9 @@ class MockExamProductionApplicationService:
             # through values so every checkpoint identity, revision, and content-hash invariant is
             # rechecked at this authorization boundary as well as by the durable checkpoint store.
             checkpoint_type = (
-                MockExamProductionExecutionV3
+                MockExamProductionExecutionV4
+                if isinstance(checkpoint, MockExamProductionExecutionV4)
+                else MockExamProductionExecutionV3
                 if isinstance(checkpoint, MockExamProductionExecutionV3)
                 else MockExamProductionExecutionV2
                 if isinstance(checkpoint, MockExamProductionExecutionV2)

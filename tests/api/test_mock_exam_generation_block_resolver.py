@@ -12,6 +12,7 @@ from eom_api.services.mock_exam_generation_block_resolver import (
 from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
+    MockExamGenerationBlockResolutionV4,
 )
 from eom_catalog_contracts import (
     load_integrated_science_editorial_outline,
@@ -22,9 +23,11 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
+    MockExamOneItemGenerationBlockV4,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v3,
+    build_integrated_science_mock_exam_production_plan_v4,
 )
 from eom_workflow import AgentStep, compile_definition
 from eom_workflow.schemas import result_schema_protocol
@@ -86,6 +89,15 @@ def _block_v3() -> MockExamOneItemGenerationBlockV3:
     return plan.one_item_generation_block
 
 
+def _block_v4() -> MockExamOneItemGenerationBlockV4:
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    return plan.one_item_generation_block
+
+
 def _row(
     *,
     source_tree_sha256: str | None = None,
@@ -93,6 +105,7 @@ def _row(
         MockExamOneItemGenerationBlockV1
         | MockExamOneItemGenerationBlockV2
         | MockExamOneItemGenerationBlockV3
+        | MockExamOneItemGenerationBlockV4
         | None
     ) = None,
 ) -> tuple[object, ...]:
@@ -273,3 +286,30 @@ def test_generation_block_v3_rejects_role_contract_drift() -> None:
         _resolver(_Session(tuple(row))).resolve_generation_block(block)
 
     assert drift.value.code == "PRODUCTION_WORKFLOW_DEFINITION_INVALID"
+
+
+def test_generation_block_v4_pins_material_first_contracts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    block = _block_v4()
+    row = _row(block=block)
+    revision = row[-1]
+    preset = SimpleNamespace(
+        preset_id=revision.preset_id,
+        preset_revision_id=revision.preset_revision_id,
+        content_sha256=revision.content_sha256,
+        compatible_workflow_protocols=(block.role_protocol_version,),
+    )
+    monkeypatch.setattr(
+        "eom_api.services.mock_exam_generation_block_resolver.ExecutionPresetRevisionV2.model_validate",
+        staticmethod(lambda _value: preset),
+    )
+
+    result = _resolver(_Session(row)).resolve_generation_block(block)
+
+    assert isinstance(result, MockExamGenerationBlockResolutionV4)
+    assert result.generation_block_revision == "4.0"
+    assert result.content_pack_version == "1.16.0"
+    assert result.image_mode == "from_material_requirement"
+    assert result.item_brief_schema_version == "4.0"
+    assert result.material_requirement_schema_version == "content-team-material-requirement/1.0"

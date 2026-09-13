@@ -31,10 +31,12 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
+    MockExamGenerationBlockResolutionV4,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
+    MockExamProductionExecutionV4,
     MockExamRatingPolicyPointerV1,
     MockExamReviewEligibilityObservationV1,
     MockExamReviewEligibilityObservationV3,
@@ -47,6 +49,7 @@ from eom_api_contracts.mock_exam_execution import (
 )
 from eom_api_contracts.workflows import (
     ContentTeamItemBriefRequestV3,
+    ContentTeamItemBriefRequestV4,
     WorkflowAcceptedResolutionView,
     WorkflowItemRegistrationView,
     WorkflowKnowledgeProvenanceView,
@@ -54,6 +57,7 @@ from eom_api_contracts.workflows import (
     WorkflowView,
 )
 from eom_catalog_contracts.assessment_assembly import (
+    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
     mock_exam_item_set_sha256,
@@ -75,10 +79,12 @@ from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV3,
+    MockExamOneItemGenerationBlockV4,
     MockExamProductionPlanV1,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v3,
+    build_integrated_science_mock_exam_production_plan_v4,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -259,7 +265,25 @@ class FakeWorkflowOperations:
         self, block: MockExamOneItemGenerationBlockV1
     ) -> MockExamGenerationBlockResolutionV1:
         trusted_rag_fields: dict[str, object] = {}
-        if isinstance(block, MockExamOneItemGenerationBlockV3):
+        if isinstance(block, MockExamOneItemGenerationBlockV4):
+            resolution_type = MockExamGenerationBlockResolutionV4
+            trusted_rag_fields = {
+                "role_protocol_version": block.role_protocol_version,
+                "role_schema_bundle_sha256": block.role_schema_bundle_sha256,
+                "knowledge_source_mode": block.knowledge_source_mode,
+                "authoring_result_schema": block.authoring_result_schema,
+                "review_result_schema": block.review_result_schema,
+                "evidence_usage_receipt_schema_version": (
+                    block.evidence_usage_receipt_schema_version
+                ),
+                "trusted_evidence_usage_receipts_required": (
+                    block.trusted_evidence_usage_receipts_required
+                ),
+                "image_mode": block.image_mode,
+                "item_brief_schema_version": block.item_brief_schema_version,
+                "material_requirement_schema_version": (block.material_requirement_schema_version),
+            }
+        elif isinstance(block, MockExamOneItemGenerationBlockV3):
             resolution_type = MockExamGenerationBlockResolutionV3
             trusted_rag_fields = {
                 "role_protocol_version": block.role_protocol_version,
@@ -390,7 +414,7 @@ class FakeWorkflowOperations:
                 corpus_key="integrated-science-textbooks",
                 query_kind="ITEM_PREPARATION",
                 curriculum_root_key=curriculum_root_key,
-                required_item_elements=("choice", "paragraph"),
+                required_item_elements=request.educational_retrieval.required_item_elements,
                 source_classes=request.educational_retrieval.source_classes,
                 graph_snapshot_revision_id=_hex_id("graphrev_", 50 + position),
                 evidence_bundle_revision_id=_hex_id("evidencerev_", 50 + position),
@@ -2165,6 +2189,91 @@ def test_plan_v3_starts_all_calls_with_past_exam_only_retrieval() -> None:
         and request.educational_retrieval.source_classes == ("PAST_EXAM",)
         for request in workflows.start_requests
     )
+
+
+def test_plan_v4_write_ahead_pins_material_first_generation() -> None:
+    coordinator, workflows, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+
+    assert isinstance(initial, MockExamProductionExecutionV4)
+    assert isinstance(pinned, MockExamProductionExecutionV4)
+    assert isinstance(pinned.generation_block_resolution, MockExamGenerationBlockResolutionV4)
+    assert pinned.generation_block_resolution.content_pack_version == "1.16.0"
+    assert pinned.generation_block_resolution.image_mode == "from_material_requirement"
+    assert workflows.occurrence_count == 0
+
+
+def test_plan_v4_table_slot_starts_without_image_and_requests_table_evidence() -> None:
+    class UnobservableWorkflows(FakeWorkflowOperations):
+        def get(self, workflow_id: str) -> WorkflowView:
+            raise RuntimeError(f"observation intentionally unavailable for {workflow_id}")
+
+    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
+    layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
+    layout = MockExamLayoutPolicyV1.model_validate(layout_value)
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=layout,
+        outline=load_integrated_science_editorial_outline(),
+    )
+    workflows = UnobservableWorkflows()
+    coordinator, *_ = _coordinator(workflows=workflows)
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+    started = coordinator.advance_items(plan, pinned, _actor(), at=NOW)
+
+    assert isinstance(started, MockExamProductionExecutionV4)
+    first = workflows.start_requests[0]
+    assert isinstance(first.item_brief, ContentTeamItemBriefRequestV4)
+    assert first.item_brief.material_requirement.form == "TABLE"
+    assert first.item_brief.material_requirement.panel_count == 1
+    assert first.image_mode == "skip"
+    assert first.educational_retrieval is not None
+    assert first.educational_retrieval.required_item_elements == (
+        "choice",
+        "paragraph",
+        "table",
+    )
+
+
+def test_checkpoint_store_round_trips_material_first_execution_v4(tmp_path: Path) -> None:
+    coordinator, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    store = AtomicJsonMockExamProductionCheckpointStore(tmp_path / "material-first-checkpoints")
+
+    created = store.create(initial)
+    loaded = store.load(initial.execution_id)
+
+    assert isinstance(created, MockExamProductionExecutionV4)
+    assert isinstance(loaded, MockExamProductionExecutionV4)
+    assert loaded == created
 
 
 def test_plan_v3_rejects_workflow_provenance_that_broadens_past_exam_sources() -> None:

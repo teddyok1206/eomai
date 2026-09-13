@@ -553,6 +553,7 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
         "mock-exam-assembly-plan-v2.schema.json",
         "mock-exam-production-plan-v2.schema.json",
         "mock-exam-production-plan-v3.schema.json",
+        "mock-exam-production-plan-v4.schema.json",
         "mock-exam-assembly-policy-v1.schema.json",
         "mock-exam-layout-policy-v1.schema.json",
         "mock-exam-rating-policy-v1.schema.json",
@@ -599,6 +600,7 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "mock-exam-item-review-publication-result-v3.schema.json",
         "mock-exam-production-plan-v1.schema.json",
         "mock-exam-production-plan-v3.schema.json",
+        "mock-exam-production-plan-v4.schema.json",
         "mock-exam-review-eligibility-query-v1.schema.json",
         "mock-exam-review-eligibility-result-v1.schema.json",
         "mock-exam-review-eligibility-result-v2.schema.json",
@@ -632,7 +634,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 30 packaged API schemas" in deployment
+    assert "expected exactly 31 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -652,6 +654,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v4.schema.json"' in deployment
     assert (
         '"eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json"' in deployment
     )
@@ -727,7 +730,9 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
     assert "definition_v1_8, definition_v1_9, definition_v1_10" in deployment
     assert '"1.8.0", "1.9.0", "1.10.0"}' in deployment
     assert "MockExamProductionExecutionV3" in deployment
+    assert "MockExamProductionExecutionV4" in deployment
     assert '"mock-exam-production-execution/3.0",' in deployment
+    assert '"mock-exam-production-execution/4.0",' in deployment
     for role in ("authoring", "image", "review", "item_management"):
         assert f'load_role_input_schema("{role}", "workflow-role/1.19.0")' in deployment
         assert f'load_role_input_schema("{role}", "workflow-role/1.20.0")' in deployment

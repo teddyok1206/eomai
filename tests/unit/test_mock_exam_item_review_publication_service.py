@@ -9,8 +9,12 @@ from unittest.mock import Mock
 import pytest
 from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api.services.mock_exam_production_coordinator import _workflow_request
-from eom_api_contracts.mock_exam_execution import MockExamGenerationBlockResolutionV1
+from eom_api_contracts.mock_exam_execution import (
+    MockExamGenerationBlockResolutionV1,
+    MockExamGenerationBlockResolutionV4,
+)
 from eom_catalog_contracts.assessment_assembly import (
+    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
     load_integrated_science_mock_exam_rating_policy,
@@ -31,6 +35,7 @@ from eom_catalog_contracts.item_review import (
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     build_integrated_science_mock_exam_production_plan,
+    build_integrated_science_mock_exam_production_plan_v4,
 )
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
@@ -51,6 +56,7 @@ from eom_workflow.models import (
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.repository import (
+    load_persisted_workflow_request,
     workflow_business_fingerprint,
     workflow_request_storage_document,
 )
@@ -718,3 +724,130 @@ def test_real_production_workflow_uses_business_fingerprint_for_review_eligibili
     assert resolved is workflow
     assert source_request.production_occurrence is not None
     assert workflow.request_hash != content_sha256(request_document)
+
+
+def _material_v4_table_review_workflow() -> tuple[Any, Any, Any]:
+    definition_document = {"schema_version": "1.0", "test": "material-v4-review"}
+    definition_sha256 = content_sha256(definition_document)
+    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
+    layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=MockExamLayoutPolicyV1.model_validate(layout_value),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    block = plan.one_item_generation_block
+    resolution = MockExamGenerationBlockResolutionV4(
+        generation_block_key=block.block_key,
+        generation_block_revision=block.block_revision,
+        generation_block_sha256=block.block_sha256,
+        workflow_definition_key=block.workflow_definition_key,
+        workflow_definition_version=block.workflow_definition_version,
+        workflow_definition_sha256=definition_sha256,
+        content_pack_release_id=_id("packrel_", "3"),
+        content_pack_key=block.content_pack_key,
+        content_pack_version=block.content_pack_version,
+        content_pack_release_sha256="sha256:" + "4" * 64,
+        content_pack_source_tree_sha256=block.content_pack_source_tree_sha256,
+        execution_preset_id=_id("execpreset_", "5"),
+        execution_preset_revision_id=_id("execpresetrev_", "6"),
+        execution_preset_key=block.execution_preset_key,
+        execution_preset_sha256="sha256:" + "7" * 64,
+        role_protocol_version=block.role_protocol_version,
+        role_schema_bundle_sha256=block.role_schema_bundle_sha256,
+        knowledge_source_mode=block.knowledge_source_mode,
+        authoring_result_schema=block.authoring_result_schema,
+        review_result_schema=block.review_result_schema,
+        evidence_usage_receipt_schema_version=block.evidence_usage_receipt_schema_version,
+        trusted_evidence_usage_receipts_required=(block.trusted_evidence_usage_receipts_required),
+        image_mode=block.image_mode,
+        item_brief_schema_version=block.item_brief_schema_version,
+        material_requirement_schema_version=block.material_requirement_schema_version,
+        resolved_at=NOW,
+    )
+    source_request = _workflow_request_from_api(
+        _workflow_request(
+            plan.workflow_calls[0],
+            block,
+            resolution,
+            _id("productionreq_", "8"),
+        )
+    )
+    request_document = workflow_request_storage_document(source_request)
+    definition = SimpleNamespace(
+        definition_id=_id("workflowdef_", "2"),
+        definition_key=block.workflow_definition_key,
+        definition_version=block.workflow_definition_version,
+        definition_hash=definition_sha256,
+        canonical_definition=definition_document,
+        active=False,
+    )
+    workflow = SimpleNamespace(
+        workflow_id=_id("workflow_", "1"),
+        definition_id=definition.definition_id,
+        definition_key=definition.definition_key,
+        definition_version=definition.definition_version,
+        definition_hash=definition.definition_hash,
+        role_schema_version=block.role_protocol_version,
+        state="COMPLETED",
+        stage="COMPLETED",
+        current_step_key="complete",
+        completed_at=NOW,
+        initial_request=request_document,
+        request_payload=request_document,
+        request_hash=workflow_business_fingerprint(cast(Any, definition), source_request),
+    )
+    return workflow, definition, source_request
+
+
+def test_material_v4_table_workflow_is_supported_without_image_retrieval() -> None:
+    workflow, definition, source_request = _material_v4_table_review_workflow()
+    session = Mock()
+    session.get.return_value = definition
+    service = MockExamItemReviewPublicationService.__new__(MockExamItemReviewPublicationService)
+
+    resolved, contracts = service._require_supported_workflow(
+        session,
+        workflow,
+        expected_state="COMPLETED",
+    )
+
+    assert resolved is workflow
+    assert contracts[4] == "workflow-role/1.20.0"
+    assert source_request.content_pack is not None
+    assert source_request.expected_resolution is not None
+    assert source_request.expected_resolution.content_pack_version == "1.16.0"
+    assert source_request.image_mode == "skip"
+    assert source_request.educational_retrieval is not None
+    assert source_request.educational_retrieval.required_item_elements == (
+        "choice",
+        "paragraph",
+        "table",
+    )
+
+
+def test_material_v4_table_workflow_rejects_missing_table_retrieval() -> None:
+    workflow, definition, _source_request = _material_v4_table_review_workflow()
+    changed = dict(workflow.initial_request)
+    changed["educational_retrieval"] = {
+        **changed["educational_retrieval"],
+        "required_item_elements": ["choice", "paragraph"],
+    }
+    workflow.initial_request = changed
+    workflow.request_payload = changed
+    workflow.request_hash = workflow_business_fingerprint(
+        cast(Any, definition),
+        load_persisted_workflow_request(changed),
+    )
+    session = Mock()
+    session.get.return_value = definition
+    service = MockExamItemReviewPublicationService.__new__(MockExamItemReviewPublicationService)
+
+    with pytest.raises(MockExamItemReviewPublicationError) as raised:
+        service._require_supported_workflow(
+            session,
+            workflow,
+            expected_state="COMPLETED",
+        )
+
+    assert raised.value.code == "ITEM_REVIEW_WORKFLOW_INVALID"

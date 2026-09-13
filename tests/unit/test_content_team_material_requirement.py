@@ -8,6 +8,7 @@ from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
+    content_team_material_required_retrieval_elements,
     validate_content_team_material_requirement,
 )
 from eom_catalog_service.content_pack_files import build_pack, compile_pack
@@ -99,6 +100,29 @@ def test_material_requirement_derives_image_capability(
     Draft202012Validator(load_content_team_material_requirement_schema()).validate(
         requirement.model_dump(mode="json")
     )
+
+
+@pytest.mark.parametrize(
+    ("form", "expected"),
+    [
+        ("TEXT", ("choice", "paragraph")),
+        ("TABLE", ("choice", "paragraph", "table")),
+        ("IMAGE", ("choice", "image", "paragraph")),
+        ("MIXED", ("choice", "image", "paragraph", "table")),
+    ],
+)
+def test_material_requirement_has_one_canonical_sorted_retrieval_filter(
+    form: str,
+    expected: tuple[str, ...],
+) -> None:
+    requirement = ContentTeamMaterialRequirementV1.model_validate(
+        {
+            "form": form,
+            "panel_count": 2 if form == "MIXED" else 1 if form in {"TABLE", "IMAGE"} else None,
+        }
+    )
+
+    assert content_team_material_required_retrieval_elements(requirement) == expected
 
 
 @pytest.mark.parametrize(

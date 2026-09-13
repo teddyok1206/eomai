@@ -10,6 +10,9 @@ from eom_catalog_contracts.approved_item_graph_publication import (
     ApprovedItemGraphPublicationResult,
     PublishApprovedItemAnalysesCommand,
 )
+from eom_catalog_contracts.content_team_material import (
+    content_team_material_required_retrieval_elements,
+)
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
     MockExamReviewEligibilityResult,
@@ -25,7 +28,7 @@ from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_workflow import ContentTeamItemBrief
+from eom_workflow import ContentTeamItemBrief, ContentTeamItemBriefV4
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import (
     load_persisted_workflow_request,
@@ -64,7 +67,7 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 
 _PRODUCTION_WORKFLOW_FAMILIES = {
-    "1.8.0": (
+    ("1.8.0", "3.0"): (
         "workflow-role/1.17.0",
         "1.13.0",
         frozenset(
@@ -74,7 +77,7 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
             }
         ),
     ),
-    "1.9.0": (
+    ("1.9.0", "3.0"): (
         "workflow-role/1.19.0",
         "1.14.0",
         frozenset(
@@ -84,9 +87,19 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
             }
         ),
     ),
-    "1.10.0": (
+    ("1.10.0", "3.0"): (
         "workflow-role/1.20.0",
         "1.15.1",
+        frozenset(
+            {
+                "eom.assessment.item-content/3.0",
+                "eom://schemas/item-registry/assessment-item-content-v3",
+            }
+        ),
+    ),
+    ("1.10.0", "4.0"): (
+        "workflow-role/1.20.0",
+        "1.16.0",
         frozenset(
             {
                 "eom.assessment.item-content/3.0",
@@ -500,13 +513,26 @@ class ApprovedItemGraphPublicationService:
             expected_resolution = workflow_request.expected_resolution
             registration = workflow.runtime_context.get("item_registration")
             accepted_resolution = workflow.runtime_context.get("accepted_resolution")
-            family = _PRODUCTION_WORKFLOW_FAMILIES.get(revision.workflow_definition_version or "")
+            item_brief = workflow_request.item_brief
+            family = _PRODUCTION_WORKFLOW_FAMILIES.get(
+                (
+                    revision.workflow_definition_version or "",
+                    item_brief.schema_version
+                    if isinstance(item_brief, ContentTeamItemBrief)
+                    else "",
+                )
+            )
             if family is None:
                 raise ValueError("generated Item Workflow version is unsupported")
             role_protocol, pack_version, content_schema_refs = family
             family_version = revision.workflow_definition_version
             official_review = (
                 official_reviews.get(expected_workflow_id) if official_reviews is not None else None
+            )
+            expected_elements = (
+                content_team_material_required_retrieval_elements(item_brief.material_requirement)
+                if isinstance(item_brief, ContentTeamItemBriefV4)
+                else ("choice", "paragraph")
             )
             if (
                 not isinstance(source, ApprovedItemKnowledgeSourceV2)
@@ -558,7 +584,7 @@ class ApprovedItemGraphPublicationService:
                         workflow_request.educational_retrieval is None
                         or workflow_request.educational_retrieval.query_kind != "ITEM_PREPARATION"
                         or workflow_request.educational_retrieval.required_item_elements
-                        != ("choice", "paragraph")
+                        != expected_elements
                         or workflow_request.educational_retrieval.source_classes
                         != (KnowledgeSourceClass.PAST_EXAM,)
                         or not isinstance(official_review, MockExamReviewEligibilityResultV3)

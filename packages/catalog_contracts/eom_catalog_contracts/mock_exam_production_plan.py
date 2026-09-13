@@ -358,7 +358,7 @@ class MockExamPlannedWorkflowCallV3(MockExamPlannedWorkflowCallV1):
     item_brief: ContentTeamTrustedRagItemBriefV3Input
 
 
-class MockExamPlannedWorkflowCallV4(MockExamPlannedWorkflowCallV1):
+class MockExamPlannedWorkflowCallV4(MockExamPlannedWorkflowCallV3):
     generation_block_revision: Literal["4.0"]  # type: ignore[assignment]
     generation_block_sha256: Literal[  # type: ignore[assignment]
         "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
@@ -465,7 +465,7 @@ class MockExamProductionPlanV3(MockExamProductionPlanV1):
     )
 
 
-class MockExamProductionPlanV4(MockExamProductionPlanV1):
+class MockExamProductionPlanV4(MockExamProductionPlanV3):
     """Material-first 25-Item plan pinning Brief V4 and Content Pack 1.16."""
 
     schema_version: Literal["mock-exam-production-plan/4.0"]  # type: ignore[assignment]
