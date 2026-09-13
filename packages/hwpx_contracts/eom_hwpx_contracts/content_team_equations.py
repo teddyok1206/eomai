@@ -27,6 +27,7 @@ ALLOWED_SOURCE = re.compile(r"^[A-Za-z0-9\s.+'_:<>=+\-*/(){}\\^]+$")
 NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
 VARIABLE = re.compile(r"^[A-Za-z]$")
 SIGNED_ATOM = re.compile(r"^[+-](?:\d+(?:\.\d+)?|[A-Za-z])$")
+SIGNED_NUMBER = re.compile(r"^[+-]\d+(?:\.\d+)?$")
 COEFFICIENT_VARIABLE = re.compile(r"^\d+(?:\.\d+)?[A-Za-z]$")
 PRIME = re.compile(r"^[A-Za-z](?:'|\^\{\\prime(?:\\prime)?\})$")
 INDEX = r"(?:[A-Za-z0-9]+|\\max)"
@@ -137,6 +138,27 @@ def _top_level_parts(value: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return tuple(parts), tuple(operators)
 
 
+def _top_level_equality_parts(value: str) -> tuple[str, ...]:
+    parts: list[str] = []
+    start = 0
+    brace_depth = 0
+    parenthesis_depth = 0
+    for index, character in enumerate(value):
+        if character == "{":
+            brace_depth += 1
+        elif character == "}":
+            brace_depth -= 1
+        elif character == "(":
+            parenthesis_depth += 1
+        elif character == ")":
+            parenthesis_depth -= 1
+        elif character == "=" and brace_depth == 0 and parenthesis_depth == 0:
+            parts.append(value[start:index])
+            start = index + 1
+    parts.append(value[start:])
+    return tuple(parts)
+
+
 def _decorated_family(value: str) -> ContentTeamEquationFamily | None:
     match = DECORATED.fullmatch(value)
     if match is None or (match.group("sub") is None and match.group("sup") is None):
@@ -203,6 +225,23 @@ def _expression_family(value: str) -> ContentTeamEquationFamily | None:
     fraction = _fraction(compact)
     if fraction is not None and _term_supported(compact):
         return "FRACTION"
+
+    equality_parts = _top_level_equality_parts(compact)
+    if len(equality_parts) == 3:
+        left, calculation, result = equality_parts
+        calculation_family = _expression_family(calculation)
+        if (
+            (VARIABLE.fullmatch(left) is not None or _decorated_family(left) is not None)
+            and calculation_family
+            in {"FRACTION", "ADD_SUB_EXPRESSION", "MULTIPLICATIVE_EXPRESSION"}
+            and (
+                NUMBER.fullmatch(result) is not None or SIGNED_NUMBER.fullmatch(result) is not None
+            )
+        ):
+            # One evaluated calculation chain is common in science explanations.
+            # Requiring a symbolic lhs, an actual calculation in the middle, and a
+            # numeric result keeps ambiguous chains such as x=y=z fail-closed.
+            return "COMPARISON"
 
     parts, operators = _top_level_parts(compact)
     if not operators or any(not _term_supported(part) for part in parts):

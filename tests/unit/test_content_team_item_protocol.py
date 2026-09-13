@@ -337,6 +337,18 @@ def test_multiple_equations_round_trip_without_a_fixed_count() -> None:
     assert reparsed.equation_sources == equations
 
 
+def test_content_team_materialization_accepts_a_bounded_calculation_chain() -> None:
+    equation = r"v=\frac{l}{t}=0.30"
+    content = _content(
+        stem=f"속력은 ${equation}$으로 계산한다.",
+        equations=(equation,),
+    )
+
+    reparsed = parse_content_team_markdown(serialize_content_team_markdown(content))
+
+    assert reparsed.equation_sources == (equation,)
+
+
 def test_content_v2_rejects_explanations_that_do_not_partition_answer_labels() -> None:
     value = _content().model_dump(mode="json")
     value["explanations"]["correct_answer"] = "ㄱ. 제시된 정보와 일치한다."
