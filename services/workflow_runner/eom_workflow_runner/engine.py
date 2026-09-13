@@ -25,6 +25,7 @@ from eom_orchestrator.models import (
     JobRecord,
 )
 from eom_orchestrator.orchestrator import Orchestrator
+from eom_protocol import ErrorCode
 from eom_workflow import (
     AgentStep,
     ArtifactPointer,
@@ -127,6 +128,15 @@ TERMINAL_WORKFLOW_STATES = {
 }
 CONTENT_TEAM_IMAGE_RESULT_SCHEMAS = frozenset(
     {"image-result@8.0", "image-result@9.0", "image-result@10.0"}
+)
+_RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES = frozenset(
+    {
+        ErrorCode.WORKER_UNAVAILABLE.value,
+        ErrorCode.WORKER_TIMEOUT.value,
+        ErrorCode.WORKER_EXEC_FAILED.value,
+        ErrorCode.WORKER_RESULT_MISSING.value,
+        ErrorCode.WORKER_RESULT_INVALID.value,
+    }
 )
 
 
@@ -884,6 +894,7 @@ class WorkflowRunner:
             return False
 
         execution_failed = execution.status != "SUCCEEDED" or execution.content_hash is None
+        retry_scheduled = False
         with self._fenced_transaction() as session:
             step = session.execute(
                 select(WorkflowStepRunRecord)
@@ -896,16 +907,27 @@ class WorkflowRunner:
                     execution.error_code or WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
                 )
                 step.error_summary = "platform role job failed"
-                if step.state == StepState.RUNNING.value:
-                    transition_step(step, StepState.FAILED)
-                self._fail_workflow(
-                    session,
-                    workflow.workflow_id,
-                    command_id,
-                    actor_type,
-                    actor_id,
-                    step.error_code,
+                retry_scheduled = self._schedule_precommit_agent_retry(
+                    session=session,
+                    workflow=workflow,
+                    compiled=compiled,
+                    definition=definition,
+                    step=step,
+                    execution=execution,
+                    upstream=upstream,
+                    command_id=command_id,
                 )
+                if not retry_scheduled:
+                    if step.state == StepState.RUNNING.value:
+                        transition_step(step, StepState.FAILED)
+                    self._fail_workflow(
+                        session,
+                        workflow.workflow_id,
+                        command_id,
+                        actor_type,
+                        actor_id,
+                        step.error_code,
+                    )
             else:
                 assert result_pointer is not None
                 step.output_pointer_manifest = result_pointer.model_dump(mode="json")
@@ -962,10 +984,123 @@ class WorkflowRunner:
                     actor_id,
                 )
         if execution_failed:
+            if retry_scheduled:
+                return False
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_STEP_FAILED,
                 "platform role job failed",
             )
+        return True
+
+    def _schedule_precommit_agent_retry(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        definition: AgentStep,
+        step: WorkflowStepRunRecord,
+        execution: RoleExecutionResult,
+        upstream: tuple[ArtifactPointer, ...],
+        command_id: str | None,
+    ) -> bool:
+        """Schedule one successor attempt only for a proven pre-commit worker failure."""
+
+        error_code = execution.error_code
+        if (
+            error_code not in _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES
+            or step.attempt >= compiled.definition.limits.max_step_attempts
+            or step.state != StepState.RUNNING.value
+            or step.platform_job_id != execution.job_id
+        ):
+            return False
+        job = session.execute(
+            select(JobRecord).where(JobRecord.job_id == execution.job_id).with_for_update()
+        ).scalar_one_or_none()
+        if (
+            job is None
+            or job.status != "FAILED"
+            or job.error_code != error_code
+            or job.logical_artifact_id != execution.logical_artifact_id
+            or job.revision_id != execution.revision_id
+            or session.scalar(
+                select(ArtifactRecord.logical_artifact_id)
+                .where(ArtifactRecord.job_id == execution.job_id)
+                .limit(1)
+            )
+            is not None
+            or session.scalar(
+                select(JobEventRecord.job_id)
+                .where(
+                    JobEventRecord.job_id == execution.job_id,
+                    JobEventRecord.to_state.in_(("COMMITTING", "SUCCEEDED")),
+                )
+                .limit(1)
+            )
+            is not None
+            or session.scalar(
+                select(WorkerLeaseRecord.lease_id)
+                .where(
+                    WorkerLeaseRecord.job_id == execution.job_id,
+                    WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+                )
+                .limit(1)
+            )
+            is not None
+        ):
+            return False
+
+        transition_step(step, StepState.FAILED)
+        successor = create_step_run(
+            session,
+            workflow_id=workflow.workflow_id,
+            step_key=definition.key,
+            step_type=definition.type,
+            worker_role=definition.worker_role,
+            result_schema=definition.result_schema,
+            input_pointer_manifest={
+                "upstream_artifacts": [pointer.model_dump(mode="json") for pointer in upstream]
+            },
+            max_attempts=compiled.definition.limits.max_step_attempts,
+        )
+        step.superseded_by_step_run_id = successor.step_run_id
+        retry, _ = enqueue_command(
+            session,
+            workflow_id=workflow.workflow_id,
+            command_type=CommandType.ADVANCE_WORKFLOW,
+            payload={
+                "reason": "PRECOMMIT_AGENT_ATTEMPT_RETRY",
+                "failed_job_id": execution.job_id,
+                "prior_attempt": step.attempt,
+                "next_attempt": successor.attempt,
+                "error_code": error_code,
+            },
+            actor_type="system",
+            actor_id=self.runner_id,
+            source="workflow_runner_retry",
+            idempotency_key=(
+                f"step-retry:{workflow.workflow_id}:{definition.key}:"
+                f"{execution.job_id}:{successor.attempt}"
+            ),
+        )
+        record_workflow_event(
+            session,
+            workflow.workflow_id,
+            "STEP_RETRY_SCHEDULED",
+            actor_type="system",
+            actor_id=self.runner_id,
+            command_id=command_id,
+            step_key=definition.key,
+            payload={
+                "failed_step_run_id": step.step_run_id,
+                "failed_job_id": execution.job_id,
+                "prior_attempt": step.attempt,
+                "next_step_run_id": successor.step_run_id,
+                "next_attempt": successor.attempt,
+                "error_code": error_code,
+                "retry_command_id": retry.command_id,
+            },
+        )
         return True
 
     def _move_after_agent(

@@ -340,6 +340,7 @@ class CapacityQueuedThenSuccessExecutor(FakeRoleExecutor):
                 enabled=True,
                 gpu=step.worker_role == "image",
             )
+            session.flush()
             job.worker_slot_id = slot_id
             transition_job(session, job.job_id, JobState.CLAIMED, "WORKER_CLAIMED")
             transition_job(session, job.job_id, JobState.RUNNING, "WORKER_STARTED")
@@ -466,8 +467,18 @@ class FakeWorkflowCatalog:
 
 
 class FailedRoleExecutor:
-    def __init__(self, sessions: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        sessions: sessionmaker[Session],
+        *,
+        error_code: str = "WORKER_EXEC_FAILED",
+        commit_artifact_evidence: bool = False,
+        cross_commit_boundary: bool = False,
+    ) -> None:
         self.sessions = sessions
+        self.error_code = error_code
+        self.commit_artifact_evidence = commit_artifact_evidence
+        self.cross_commit_boundary = cross_commit_boundary
 
     def execute(
         self,
@@ -507,8 +518,30 @@ class FailedRoleExecutor:
                 revision_id=revision_id,
             )
             assert created
-            job.error_code = "WORKER_EXEC_FAILED"
+            if self.cross_commit_boundary:
+                for target, event in (
+                    (JobState.VALIDATED, "REQUEST_VALIDATED"),
+                    (JobState.QUEUED, "JOB_QUEUED"),
+                    (JobState.CLAIMED, "WORKER_CLAIMED"),
+                    (JobState.RUNNING, "WORKER_STARTED"),
+                    (JobState.VALIDATING_RESULT, "WORKER_RESULT_RECEIVED"),
+                    (JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED"),
+                ):
+                    transition_job(session, job.job_id, target, event)
+            job.error_code = self.error_code
             transition_job(session, job.job_id, JobState.FAILED, "JOB_FAILED")
+            if self.commit_artifact_evidence:
+                content_hash = content_sha256({"job_id": job.job_id, "status": "ambiguous"})
+                create_artifact_records(
+                    session,
+                    job=job,
+                    content_hash=content_hash,
+                    manifest_hash=content_sha256({"content_hash": content_hash}),
+                    content_bytes=1,
+                    nas_path=f"/tmp/{logical_artifact_id}/{revision_id}",
+                    manifest={"content_hash": content_hash},
+                    result={"status": "ambiguous"},
+                )
         return RoleExecutionResult(
             job_id=job_id,
             status="FAILED",
@@ -516,7 +549,53 @@ class FailedRoleExecutor:
             logical_artifact_id=logical_artifact_id,
             revision_id=revision_id,
             content_hash=None,
-            error_code="WORKER_EXEC_FAILED",
+            error_code=self.error_code,
+        )
+
+
+class FailOnceThenSuccessRoleExecutor(FakeRoleExecutor):
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        super().__init__(sessions)
+        self.failed_once = False
+
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
+        upstream: tuple[ArtifactPointer, ...],
+        idempotency_key: str,
+        prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
+    ) -> RoleExecutionResult:
+        if not self.failed_once:
+            self.failed_once = True
+            return FailedRoleExecutor(
+                self.sessions,
+                error_code="WORKER_RESULT_INVALID",
+            ).execute(
+                workflow=workflow,
+                step=step,
+                request=request,
+                upstream=upstream,
+                idempotency_key=idempotency_key,
+                prompt_text=prompt_text,
+                material_requirement=material_requirement,
+            )
+        return super().execute(
+            workflow=workflow,
+            step=step,
+            request=request,
+            upstream=upstream,
+            idempotency_key=idempotency_key,
+            prompt_text=prompt_text,
+            material_requirement=material_requirement,
         )
 
 
@@ -878,7 +957,10 @@ def test_admin_reconcile_does_not_retry_a_terminal_platform_job(
         "skip",
         "workflow-terminal-job-reconcile-denied",
     )
-    runner.executor = FailedRoleExecutor(sessions)
+    runner.executor = FailedRoleExecutor(
+        sessions,
+        error_code="ARTIFACT_HASH_MISMATCH",
+    )
     try:
         runner.run_until_idle(workflow_id)
         with transaction(sessions) as session:
@@ -1360,7 +1442,7 @@ def test_image_required_rework_preserves_attempt_history(integration_engine: Eng
         _close(resources)
 
 
-def test_failed_platform_job_is_persisted_as_terminal_workflow_failure(
+def test_retryable_precommit_failure_uses_all_bounded_attempts_before_terminal_failure(
     integration_engine: Engine,
 ) -> None:
     runner, _executor, sessions, workflow_id, resources = _environment(
@@ -1371,24 +1453,146 @@ def test_failed_platform_job_is_persisted_as_terminal_workflow_failure(
         runner.run_until_idle(workflow_id)
         with sessions() as session:
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
-            command = session.scalar(
-                select(WorkflowCommandRecord).where(
-                    WorkflowCommandRecord.workflow_id == workflow_id
+            commands = list(
+                session.scalars(
+                    select(WorkflowCommandRecord)
+                    .where(WorkflowCommandRecord.workflow_id == workflow_id)
+                    .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
                 )
             )
-            authoring = session.scalar(
-                select(WorkflowStepRunRecord).where(
-                    WorkflowStepRunRecord.workflow_id == workflow_id,
-                    WorkflowStepRunRecord.step_key == "authoring",
+            authoring = list(
+                session.scalars(
+                    select(WorkflowStepRunRecord)
+                    .where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == "authoring",
+                    )
+                    .order_by(WorkflowStepRunRecord.attempt)
                 )
             )
-            assert workflow is not None and command is not None and authoring is not None
+            retry_events = [
+                event
+                for event in list_workflow_events(session, workflow_id)
+                if event.event_type == "STEP_RETRY_SCHEDULED"
+            ]
+            assert workflow is not None
             assert workflow.state == WorkflowState.FAILED.value
             assert workflow.failure_code == "WORKER_EXEC_FAILED"
-            assert authoring.state == StepState.FAILED.value
-            assert authoring.error_code == "WORKER_EXEC_FAILED"
-            assert command.state == CommandState.FAILED.value
-            assert command.error_code == WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            assert [step.attempt for step in authoring] == [1, 2, 3, 4]
+            assert [step.state for step in authoring] == [StepState.FAILED.value] * 4
+            assert [step.error_code for step in authoring] == ["WORKER_EXEC_FAILED"] * 4
+            assert [step.superseded_by_step_run_id for step in authoring[:-1]] == [
+                step.step_run_id for step in authoring[1:]
+            ]
+            assert authoring[-1].superseded_by_step_run_id is None
+            assert Counter(command.state for command in commands) == {
+                CommandState.SUCCEEDED.value: 3,
+                CommandState.FAILED.value: 1,
+            }
+            assert [event.payload["prior_attempt"] for event in retry_events] == [1, 2, 3]
+            assert [event.payload["next_attempt"] for event in retry_events] == [2, 3, 4]
+    finally:
+        _close(resources)
+
+
+def test_retryable_precommit_failure_preserves_history_then_succeeds(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine, "skip", "workflow-integration-retry-once"
+    )
+    runner.executor = FailOnceThenSuccessRoleExecutor(sessions)
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            authoring = list(
+                session.scalars(
+                    select(WorkflowStepRunRecord)
+                    .where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == "authoring",
+                    )
+                    .order_by(WorkflowStepRunRecord.attempt)
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert [step.attempt for step in authoring] == [1, 2]
+            assert [step.state for step in authoring] == [
+                StepState.FAILED.value,
+                StepState.SUCCEEDED.value,
+            ]
+            assert authoring[0].error_code == "WORKER_RESULT_INVALID"
+            assert authoring[0].superseded_by_step_run_id == authoring[1].step_run_id
+            assert authoring[1].output_pointer_manifest is not None
+            retry_events = [
+                event
+                for event in list_workflow_events(session, workflow_id)
+                if event.event_type == "STEP_RETRY_SCHEDULED"
+            ]
+            assert len(retry_events) == 1
+            assert retry_events[0].payload["error_code"] == "WORKER_RESULT_INVALID"
+    finally:
+        _close(resources)
+
+
+@pytest.mark.parametrize(
+    ("error_code", "commit_artifact_evidence", "cross_commit_boundary"),
+    [
+        ("ARTIFACT_HASH_MISMATCH", False, False),
+        ("WORKER_RESULT_INVALID", True, False),
+        ("WORKER_EXEC_FAILED", False, True),
+    ],
+)
+def test_nonretryable_or_artifact_backed_failure_remains_terminal_on_first_attempt(
+    integration_engine: Engine,
+    error_code: str,
+    commit_artifact_evidence: bool,
+    cross_commit_boundary: bool,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        f"workflow-integration-no-retry-{error_code.lower()}-{commit_artifact_evidence}",
+    )
+    runner.executor = FailedRoleExecutor(
+        sessions,
+        error_code=error_code,
+        commit_artifact_evidence=commit_artifact_evidence,
+        cross_commit_boundary=cross_commit_boundary,
+    )
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            commands = list(
+                session.scalars(
+                    select(WorkflowCommandRecord).where(
+                        WorkflowCommandRecord.workflow_id == workflow_id
+                    )
+                )
+            )
+            authoring = list(
+                session.scalars(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == "authoring",
+                    )
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            assert workflow.failure_code == error_code
+            assert len(authoring) == 1
+            assert authoring[0].state == StepState.FAILED.value
+            assert authoring[0].superseded_by_step_run_id is None
+            assert len(commands) == 1
+            assert commands[0].state == CommandState.FAILED.value
+            assert not any(
+                event.event_type == "STEP_RETRY_SCHEDULED"
+                for event in list_workflow_events(session, workflow_id)
+            )
     finally:
         _close(resources)
 
@@ -1404,18 +1608,18 @@ def test_platform_adapter_exception_is_sanitized_as_terminal_failure(
         runner.run_until_idle(workflow_id)
         with sessions() as session:
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
-            authoring = session.scalar(
+            failed_step = session.scalar(
                 select(WorkflowStepRunRecord).where(
                     WorkflowStepRunRecord.workflow_id == workflow_id,
                     WorkflowStepRunRecord.step_key == "authoring",
                 )
             )
-            assert workflow is not None and authoring is not None
+            assert workflow is not None and failed_step is not None
             assert workflow.state == WorkflowState.FAILED.value
             assert workflow.failure_code == WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
-            assert authoring.state == StepState.FAILED.value
-            assert authoring.error_summary == "platform role execution raised an exception"
-            assert "untrusted" not in authoring.error_summary
+            assert failed_step.state == StepState.FAILED.value
+            assert failed_step.error_summary == "platform role execution raised an exception"
+            assert "untrusted" not in failed_step.error_summary
     finally:
         _close(resources)
 
