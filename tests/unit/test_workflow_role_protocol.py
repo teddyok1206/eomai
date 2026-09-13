@@ -8,6 +8,7 @@ from eom_catalog_contracts import (
     AssessmentArtifactMemberPointer,
     AssessmentPageImageInput,
     AssessmentSourceMaterialization,
+    ContentTeamMaterialRequirementV1,
     EducationalRetrievalRequirement,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
@@ -116,7 +117,8 @@ def _projectable_evidence_plan(
     )
     return ResolvedExecutionPlanV3.model_construct(
         retrieval_requirement=EducationalRetrievalRequirement.model_construct(
-            required_item_elements=required_item_elements
+            required_item_elements=required_item_elements,
+            source_classes=("PAST_EXAM",),
         ),
         evidence_bundle_id="evidence_" + "e" * 32,
         evidence_bundle_revision_id="evidencerev_" + "e" * 32,
@@ -437,6 +439,116 @@ def test_constrained_grounded_v10_schema_requires_two_mixed_materials() -> None:
     draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
     assert draft["visuals"]["minItems"] == 2
     assert draft["visuals"]["maxItems"] == 2
+
+
+@pytest.mark.parametrize(
+    ("form", "panel_count", "required_elements", "expected_paths"),
+    [
+        (
+            "IMAGE",
+            1,
+            ("choice", "image", "paragraph"),
+            (
+                "/labeled_blocks/0/content",
+                "/stem",
+                "/visuals/0/kind",
+            ),
+        ),
+        (
+            "IMAGE",
+            2,
+            ("choice", "image", "paragraph"),
+            (
+                "/labeled_blocks/0/content",
+                "/stem",
+                "/visuals/0/kind",
+                "/visuals/1/kind",
+            ),
+        ),
+        (
+            "TABLE",
+            1,
+            ("choice", "paragraph", "table"),
+            (
+                "/visuals/0/headers/0",
+                "/visuals/0/kind",
+            ),
+        ),
+        (
+            "TABLE",
+            2,
+            ("choice", "paragraph", "table"),
+            (
+                "/visuals/0/headers/0",
+                "/visuals/0/kind",
+                "/visuals/1/headers/0",
+                "/visuals/1/kind",
+            ),
+        ),
+    ],
+)
+def test_constrained_grounded_v10_schema_binds_exact_v4_material_and_citations(
+    form: str,
+    panel_count: int,
+    required_elements: tuple[str, ...],
+    expected_paths: tuple[str, ...],
+) -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access="EVIDENCE_CONTEXT",
+        resolved_evidence_plan=_projectable_evidence_plan(required_item_elements=required_elements),
+        material_requirement=ContentTeamMaterialRequirementV1(
+            form=form,  # type: ignore[arg-type]
+            panel_count=panel_count,
+        ),
+    )
+    validate_codex_structured_output_schema(schema)
+
+    draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
+    assert draft["visuals"]["minItems"] == panel_count
+    assert draft["visuals"]["maxItems"] == panel_count
+    citation = schema["$defs"]["EvidenceUsageCitationV1"]["properties"]
+    assert citation["application"]["const"] == "STRUCTURE_PATTERN"
+    paths = citation["draft_json_paths"]
+    assert all(path in paths["description"] for path in expected_paths)
+    assert "Across all citations" in paths["description"]
+    assert paths["items"]["pattern"] == r"^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$"
+    assert "enum" not in paths["items"]
+
+
+def test_constrained_grounded_v10_schema_binds_mixed_table_position_alternatives() -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access="EVIDENCE_CONTEXT",
+        resolved_evidence_plan=_projectable_evidence_plan(
+            required_item_elements=("choice", "image", "paragraph", "table")
+        ),
+        material_requirement=ContentTeamMaterialRequirementV1(form="MIXED", panel_count=2),
+    )
+    validate_codex_structured_output_schema(schema)
+
+    draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
+    assert draft["visuals"]["minItems"] == draft["visuals"]["maxItems"] == 2
+    paths = schema["$defs"]["EvidenceUsageCitationV1"]["properties"]["draft_json_paths"]
+    assert "when visual 0 is TABLE" in paths["description"]
+    assert "when visual 1 is TABLE" in paths["description"]
+    assert "/visuals/0/headers/0" in paths["description"]
+    assert "/visuals/1/headers/0" in paths["description"]
+
+
+def test_constrained_grounded_v10_schema_rejects_material_retrieval_drift() -> None:
+    with pytest.raises(WorkflowSchemaError, match="material requirement differs"):
+        constrained_result_schema(
+            "authoring-result@10.0",
+            _v10_input("authoring"),
+            evidence_access="EVIDENCE_CONTEXT",
+            resolved_evidence_plan=_projectable_evidence_plan(
+                required_item_elements=("choice", "paragraph", "table")
+            ),
+            material_requirement=ContentTeamMaterialRequirementV1(form="IMAGE", panel_count=1),
+        )
 
 
 @pytest.mark.parametrize(

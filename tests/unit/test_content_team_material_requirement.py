@@ -28,6 +28,7 @@ from eom_workflow.schemas import (
     load_knowledge_item_brief_v3_schema,
     load_knowledge_item_brief_v4_schema,
 )
+from eom_workflow_runner.engine import _authoring_material_requirement
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from referencing import Registry, Resource
@@ -244,6 +245,11 @@ def test_v4_api_request_maps_to_internal_brief_and_skips_image_profile_for_table
     WorkflowCatalogService._require_item_brief_release(
         "generated-knowledge-item", "1.16.0", internal
     )
+
+    assert _authoring_material_requirement(internal, worker_role="authoring") == (
+        internal.item_brief.material_requirement
+    )
+    assert _authoring_material_requirement(internal, worker_role="review") is None
 
 
 def test_v4_api_request_rejects_image_capability_drift() -> None:

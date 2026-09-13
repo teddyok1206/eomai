@@ -11,6 +11,7 @@ from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
+    ContentTeamMaterialRequirementV1,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
@@ -19,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    content_team_material_required_retrieval_elements,
     validate_worker_knowledge_edge_endpoint_types,
 )
 from eom_hwpx_contracts import (
@@ -1342,6 +1344,7 @@ def constrained_result_schema(
     *,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None,
     resolved_evidence_plan: ResolvedExecutionPlanV3 | None = None,
+    material_requirement: ContentTeamMaterialRequirementV1 | None = None,
 ) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
@@ -1365,6 +1368,7 @@ def constrained_result_schema(
         schema_id=schema_id,
         evidence_access=evidence_access,
         resolved_evidence_plan=resolved_evidence_plan,
+        material_requirement=material_requirement,
     )
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
@@ -1653,6 +1657,7 @@ def _bind_evidence_result_branch(
     schema_id: str,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None,
     resolved_evidence_plan: ResolvedExecutionPlanV3 | None,
+    material_requirement: ContentTeamMaterialRequirementV1 | None,
 ) -> None:
     """Bind the @10 nullable evidence branch to the immutable resolved-plan step.
 
@@ -1717,6 +1722,7 @@ def _bind_evidence_result_branch(
             _bind_required_material_result_branch(
                 schema,
                 resolved_evidence_plan=resolved_evidence_plan,
+                material_requirement=material_requirement,
             )
         return
 
@@ -1735,12 +1741,13 @@ def _bind_required_material_result_branch(
     schema: dict[str, Any],
     *,
     resolved_evidence_plan: ResolvedExecutionPlanV3,
+    material_requirement: ContentTeamMaterialRequirementV1 | None,
 ) -> None:
     """Project plan-required TABLE/IMAGE presence into the authoring response schema.
 
-    A V3 plan does not carry the reviewed panel count, so this projection narrows only facts that
-    the retrieval requirement owns. The application-level material validator remains responsible
-    for the exact panel count, order, labels, DATA blocks, and inquiry relationship.
+    The V3 plan owns retrieval requirements and a V4 worker request owns the reviewed material
+    form and panel count. The application-level material validator remains independently
+    responsible for exact order, labels, DATA blocks, and inquiry relationships.
     """
 
     required = set(resolved_evidence_plan.retrieval_requirement.required_item_elements)
@@ -1754,6 +1761,23 @@ def _bind_required_material_result_branch(
     visuals = _mapping(draft_properties, "visuals")
     usage_properties = _mapping(_mapping(definitions, "EvidenceUsageV1"), "properties")
     citations = _mapping(usage_properties, "citations")
+
+    requirement = material_requirement
+    if requirement is not None:
+        projected_elements = content_team_material_required_retrieval_elements(requirement)
+        if projected_elements != (
+            resolved_evidence_plan.retrieval_requirement.required_item_elements
+        ):
+            raise WorkflowSchemaError(
+                "reviewed material requirement differs from resolved evidence retrieval"
+            )
+        _bind_exact_material_shape(draft_properties, requirement)
+        source_classes = tuple(
+            getattr(resolved_evidence_plan.retrieval_requirement, "source_classes", ())
+        )
+        if source_classes == ("PAST_EXAM",):
+            _bind_exact_past_exam_material_citations(definitions, requirement)
+        return
 
     if image_required and table_required:
         visuals["minItems"] = 2
@@ -1794,6 +1818,93 @@ def _bind_required_material_result_branch(
             "A PAST_EXAM STRUCTURE_PATTERN citation must include every TABLE "
             "/visuals/{index}/kind and at least one concrete header or cell scalar leaf per table.",
         )
+
+
+def _bind_exact_material_shape(
+    draft_properties: dict[str, Any],
+    requirement: ContentTeamMaterialRequirementV1,
+) -> None:
+    """Project the reviewed V4 material form into one bounded worker response schema."""
+
+    if requirement.form not in {"TABLE", "IMAGE", "MIXED"}:
+        return
+    visuals = _mapping(draft_properties, "visuals")
+    assert requirement.panel_count is not None
+    visuals["minItems"] = requirement.panel_count
+    visuals["maxItems"] = requirement.panel_count
+    if requirement.form in {"TABLE", "IMAGE"}:
+        definition_name = (
+            "ContentTeamTable" if requirement.form == "TABLE" else "ContentTeamImageSlot"
+        )
+        visuals["items"] = {"$ref": f"#/$defs/{definition_name}"}
+
+    if requirement.form == "IMAGE":
+        labeled_blocks = _mapping(draft_properties, "labeled_blocks")
+        labeled_blocks["minItems"] = 1
+        _append_projection_instruction(
+            labeled_blocks,
+            "The first block must be the one required DATA block; an optional CONDITION may "
+            "follow it.",
+        )
+
+
+def _bind_exact_past_exam_material_citations(
+    definitions: dict[str, Any],
+    requirement: ContentTeamMaterialRequirementV1,
+) -> None:
+    """State the exact cross-citation paths checked after V4 PAST_EXAM generation.
+
+    Codex Structured Outputs cannot express this existential union across sibling citation
+    records. The projected description guides generation without corrupting the semantic mapping
+    of each individual citation. The orchestrator remains the authoritative machine gate: it
+    unions eligible citation paths and resolves every path and Evidence entry independently.
+    """
+
+    if requirement.form not in {"TABLE", "IMAGE", "MIXED"}:
+        return
+    usage_properties = _mapping(_mapping(definitions, "EvidenceUsageV1"), "properties")
+    citations = _mapping(usage_properties, "citations")
+    citation_properties = _mapping(_mapping(definitions, "EvidenceUsageCitationV1"), "properties")
+    _bind_result_string_const(
+        {"$defs": definitions},
+        _mapping(citation_properties, "application"),
+        "STRUCTURE_PATTERN",
+    )
+    path_schema = _mapping(citation_properties, "draft_json_paths")
+
+    if requirement.form == "TABLE":
+        assert requirement.panel_count is not None
+        required_paths = tuple(
+            path
+            for ordinal in range(requirement.panel_count)
+            for path in (
+                f"/visuals/{ordinal}/headers/0",
+                f"/visuals/{ordinal}/kind",
+            )
+        )
+        requirement_text = f"Across all citations include {', '.join(required_paths)}."
+    elif requirement.form == "IMAGE":
+        assert requirement.panel_count is not None
+        required_paths = (
+            "/labeled_blocks/0/content",
+            "/stem",
+            *(f"/visuals/{ordinal}/kind" for ordinal in range(requirement.panel_count)),
+        )
+        requirement_text = f"Across all citations include {', '.join(required_paths)}."
+    else:
+        first = "/stem, /visuals/0/headers/0, /visuals/0/kind, /visuals/1/kind"
+        second = "/stem, /visuals/0/kind, /visuals/1/headers/0, /visuals/1/kind"
+        requirement_text = (
+            f"Across all citations include exactly one position-aware structural alternative: "
+            f"[{first}] when visual 0 is TABLE, or [{second}] when visual 1 is TABLE."
+        )
+    instruction = (
+        f"The union of draft_json_paths from the PAST_EXAM STRUCTURE_PATTERN citations must bind "
+        f"the reviewed {requirement.form} material. {requirement_text} Keep other genuinely "
+        "grounded citations and scalar paths; do not repeat unrelated paths on every citation."
+    )
+    _append_projection_instruction(citations, instruction)
+    _append_projection_instruction(path_schema, instruction)
 
 
 def _local_definition_properties(

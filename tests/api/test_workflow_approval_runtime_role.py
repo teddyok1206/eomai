@@ -11,6 +11,7 @@ import yaml
 from eom_api.app import create_app
 from eom_api.lifespan import build_services
 from eom_api.settings import ApiSecrets, ApiSettings
+from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -33,7 +34,15 @@ from eom_orchestrator.repository import (
     upsert_worker_slot,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
-from eom_workflow import ArtifactPointer, WorkerRequest, WorkflowRequest, compile_definition_data
+from eom_workflow import (
+    ArtifactPointer,
+    KnowledgeAnalysisWorkerRequest,
+    LegacyItemEditorialCompatibilityWorkerRequest,
+    LegacyItemExtractionWorkerRequest,
+    WorkerRequest,
+    WorkflowRequest,
+    compile_definition_data,
+)
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.actor_authorization import (
     CompositeWorkflowActorAuthorizer,
@@ -110,12 +119,18 @@ class PlaceholderRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult:
-        del request, upstream, prompt_text
+        del request, upstream, prompt_text, material_requirement
         assert step.worker_role is not None
         with transaction(self.sessions) as session:
             job_id = new_job_id()

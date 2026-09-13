@@ -13,6 +13,7 @@ from threading import Event, Thread
 from typing import Protocol
 from uuid import uuid4
 
+from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import WorkerLeaseRecord
@@ -28,6 +29,7 @@ from eom_workflow import (
     AgentStep,
     ArtifactPointer,
     CompiledWorkflowDefinition,
+    ContentTeamItemBriefV4,
     DecisionStep,
     HumanGateStep,
     KnowledgeAnalysisWorkerRequest,
@@ -35,6 +37,7 @@ from eom_workflow import (
     LegacyItemExtractionWorkerRequest,
     TerminalStep,
     WorkerRequest,
+    WorkflowRequest,
     compile_definition_data,
     evaluate_decision,
 )
@@ -154,6 +157,18 @@ def _prompt_name_for_request(
     return worker_role
 
 
+def _authoring_material_requirement(
+    request: WorkflowRequest,
+    *,
+    worker_role: str | None,
+) -> ContentTeamMaterialRequirementV1 | None:
+    """Return only the small reviewed material value needed by the authoring schema boundary."""
+
+    if worker_role != "authoring" or not isinstance(request.item_brief, ContentTeamItemBriefV4):
+        return None
+    return request.item_brief.material_requirement
+
+
 @dataclass(frozen=True)
 class RoleExecutionResult:
     job_id: str
@@ -180,6 +195,7 @@ class RoleJobExecutor(Protocol):
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult: ...
 
 
@@ -218,6 +234,7 @@ class PlatformRoleJobExecutor:
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None = None,
     ) -> RoleExecutionResult:
         if step.worker_role is None or step.result_schema is None:
             raise WorkflowError(
@@ -264,6 +281,7 @@ class PlatformRoleJobExecutor:
             idempotency_key=idempotency_key,
             prompt_path=prompt_path,
             prompt_text=prompt_text,
+            material_requirement=material_requirement,
             before_execute=bind_platform_job,
         )
         content_hash: str | None = None
@@ -761,6 +779,10 @@ class WorkflowRunner:
                 upstream=upstream,
                 idempotency_key=idempotency_key,
                 prompt_text=prompt_text,
+                material_requirement=_authoring_material_requirement(
+                    full_request,
+                    worker_role=definition.worker_role,
+                ),
             )
             if execution.status == "SUCCEEDED" and execution.content_hash is not None:
                 result_pointer = ArtifactPointer(

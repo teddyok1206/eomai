@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
 
+from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_protocol import (
     ArtifactSpec,
@@ -336,6 +337,7 @@ class Orchestrator:
         idempotency_key: str,
         prompt_path: Path | None = None,
         prompt_text: str | None = None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None = None,
         before_execute: Callable[[str], None] | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
@@ -524,6 +526,7 @@ class Orchestrator:
                     worker_input,
                     evidence_access=evidence_access,
                     resolved_evidence_plan=resolved_evidence_plan,
+                    material_requirement=material_requirement,
                 )
                 with transaction(self.sessions) as session:
                     claimed = session.get(JobRecord, job_id)

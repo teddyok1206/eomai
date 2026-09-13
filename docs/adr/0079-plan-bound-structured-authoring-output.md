@@ -27,21 +27,22 @@ the six worker-visible evidence identity strings as JSON Schema `const` values. 
 validation and the existing pre-commit evidence receipt validator still independently resolve and
 verify the manifest, context member, citations, anchors, media types, lifecycle states, and hashes.
 
-The same plan owns the sorted `required_item_elements` retrieval filter. If it requires only an
-image or only a table, the temporary authoring schema requires at least one visual and restricts
-its item type to that family. If both are required, it requires both available visual positions and
-states the one-image/one-table rule. The V3 plan does not own the reviewed panel count, so the
-projection does not invent it: the existing material-requirement validator remains authoritative
-for exact count, order, labels, DATA blocks, inquiry presence, and derived layout. The projected
-citation instructions repeat the exact paths checked by the trusted evidence validator.
+The same plan owns the sorted `required_item_elements` retrieval filter. The persisted V4 Workflow
+request separately owns the small immutable `ContentTeamMaterialRequirementV1` value: form and
+reviewed panel count. The runner passes that value only for the authoring attempt, and the
+orchestrator first verifies that its derived retrieval elements equal the plan filter. It then
+projects the exact TABLE, IMAGE, or MIXED visual cardinality and a bounded set of scalar material
+paths into the temporary response schema. The existing material-requirement validator remains
+authoritative for exact order, labels, DATA blocks, inquiry presence, and derived layout. The
+trusted evidence validator still resolves every declared path and Evidence anchor before commit.
 
 ## Access patterns and structures
 
 Plan lookup is an indexed lookup by workflow ID. Step selection is an ordered scan over at most 64
 immutable steps. The projection performs keyed dictionary lookups, a set conversion over at most
-eight required element names, and bounded schema mutations, so its time and extra-space complexity
-are `O(steps + required elements)` and `O(required elements)` respectively. No large payload is
-copied or persisted.
+eight required element names, and bounded iteration over at most two reviewed panels. Its time is
+`O(steps + required elements + panels)` and extra space is `O(required elements + panels)`. No large
+payload is copied or persisted.
 
 ## Transactions, concurrency, retry, and idempotency
 

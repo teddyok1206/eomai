@@ -9,6 +9,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -24,7 +25,15 @@ from eom_orchestrator.repository import (
     upsert_worker_slot,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
-from eom_workflow import ArtifactPointer, WorkerRequest, WorkflowRequest, compile_definition
+from eom_workflow import (
+    ArtifactPointer,
+    KnowledgeAnalysisWorkerRequest,
+    LegacyItemEditorialCompatibilityWorkerRequest,
+    LegacyItemExtractionWorkerRequest,
+    WorkerRequest,
+    WorkflowRequest,
+    compile_definition,
+)
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
@@ -164,12 +173,18 @@ class FakeRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult:
-        del upstream
+        del upstream, material_requirement
         assert step.worker_role is not None
         self.calls.append((step.step_key, step.attempt, step.worker_role))
         self.worker_requests.append(request.model_dump(mode="json"))
@@ -255,12 +270,18 @@ class CapacityQueuedThenSuccessExecutor(FakeRoleExecutor):
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult:
-        del upstream
+        del upstream, material_requirement
         assert step.worker_role is not None
         self.calls.append((step.step_key, step.attempt, step.worker_role))
         self.worker_requests.append(request.model_dump(mode="json"))
@@ -453,12 +474,18 @@ class FailedRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult:
-        del request, upstream, prompt_text
+        del request, upstream, prompt_text, material_requirement
         job_id = new_job_id()
         logical_artifact_id = new_logical_artifact_id()
         revision_id = new_revision_id()
@@ -499,12 +526,18 @@ class RaisingRoleExecutor:
         *,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: WorkerRequest,
+        request: (
+            WorkerRequest
+            | KnowledgeAnalysisWorkerRequest
+            | LegacyItemExtractionWorkerRequest
+            | LegacyItemEditorialCompatibilityWorkerRequest
+        ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
+        material_requirement: ContentTeamMaterialRequirementV1 | None,
     ) -> RoleExecutionResult:
-        del workflow, step, request, upstream, idempotency_key, prompt_text
+        del workflow, step, request, upstream, idempotency_key, prompt_text, material_requirement
         raise OSError("untrusted adapter detail")
 
 
