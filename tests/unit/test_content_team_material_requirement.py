@@ -37,6 +37,7 @@ from tests.unit.test_content_team_v3_protocol import _content_v3
 
 ROOT = Path(__file__).resolve().parents[2]
 PACK = ROOT / "content/packs/generated-knowledge-item/1.16.0"
+PACK_SUCCESSOR = ROOT / "content/packs/generated-knowledge-item/1.16.1"
 
 
 def _table(label: str = "") -> ContentTeamTable:
@@ -245,6 +246,9 @@ def test_v4_api_request_maps_to_internal_brief_and_skips_image_profile_for_table
     WorkflowCatalogService._require_item_brief_release(
         "generated-knowledge-item", "1.16.0", internal
     )
+    WorkflowCatalogService._require_item_brief_release(
+        "generated-knowledge-item", "1.16.1", internal
+    )
 
     assert _authoring_material_requirement(internal, worker_role="authoring") == (
         internal.item_brief.material_requirement
@@ -325,3 +329,46 @@ def test_pack_116_is_additive_material_aware_and_deterministic(tmp_path: Path) -
     ):
         assert required in prompt
     assert "MATERIAL_REQUIREMENT_MISMATCH" in review
+
+
+def test_pack_1161_makes_selected_material_authoritative_and_preserves_predecessor(
+    tmp_path: Path,
+) -> None:
+    predecessor = compile_pack(PACK)
+    compiled = compile_pack(PACK_SUCCESSOR)
+    built = build_pack(PACK_SUCCESSOR, tmp_path)
+
+    assert predecessor.source_tree_sha256 == (
+        "sha256:02b4ea7987abb25d5a34a939961a518ad54987f44792532e6b824f7419518a00"
+    )
+    assert compiled.manifest.pack.version == "1.16.1"
+    assert compiled.source_tree_sha256 == (
+        "sha256:3d08737dbfcd34f16e0b2ea03b05ab802844639721de4b7187098148c11310d8"
+    )
+    assert built.bundle_sha256 == (
+        "sha256:bc8059c2084afdd587636554a5db62c0827a460057ce027b4a4e4f1fab0bf3c8"
+    )
+    assert built.manifest_sha256 == (
+        "sha256:e0ae9672617caf77734474254da6576017bfd8069231cba1511d6763cd2942f8"
+    )
+    authoring = (PACK_SUCCESSOR / "prompt-templates/authoring.md").read_text(encoding="utf-8")
+    review = (PACK_SUCCESSOR / "prompt-templates/review.md").read_text(encoding="utf-8")
+    for document in (authoring, review):
+        assert "material_requirement.form" in document
+        assert "preferred_material_profiles[0]" in document
+        assert "schema `4.0`" in document
+    assert "첫\n값을 선택값으로 강제하지 마라" in authoring
+    assert "첫 값과 다르다는 이유로 finding을\n만들지 마라" in review
+    for relative in (
+        "fixtures/smoke-request.json",
+        "item-types/eom-template-multiple-choice.yaml",
+        "metadata-schemas/item-metadata.schema.json",
+        "profiles/generated-stimulus-drawing.yaml",
+        "profiles/generated-structured-registration.yaml",
+        "prompt-templates/image.md",
+        "prompt-templates/registration.md",
+        "rubrics/review-rubric.yaml",
+        "taxonomies/curriculum.yaml",
+        "taxonomies/tags.yaml",
+    ):
+        assert (PACK_SUCCESSOR / relative).read_bytes() == (PACK / relative).read_bytes()

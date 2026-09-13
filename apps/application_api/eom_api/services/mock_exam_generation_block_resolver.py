@@ -10,12 +10,14 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
     MockExamGenerationBlockResolutionV4,
+    MockExamGenerationBlockResolutionV5,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
     MockExamOneItemGenerationBlockV4,
+    MockExamOneItemGenerationBlockV5,
 )
 from eom_catalog_service.models import (
     ContentPackActivationRecord,
@@ -61,6 +63,7 @@ class DatabaseGenerationBlockResolver:
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
             | MockExamOneItemGenerationBlockV4
+            | MockExamOneItemGenerationBlockV5
         ),
     ) -> MockExamGenerationBlockResolutionV1:
         statement = (
@@ -240,6 +243,8 @@ class DatabaseGenerationBlockResolver:
             **trusted_rag_fields,
             **material_fields,
         }
+        if isinstance(block, MockExamOneItemGenerationBlockV5):
+            return MockExamGenerationBlockResolutionV5.model_validate(resolution_payload)
         if isinstance(block, MockExamOneItemGenerationBlockV4):
             return MockExamGenerationBlockResolutionV4.model_validate(resolution_payload)
         if isinstance(block, MockExamOneItemGenerationBlockV3):

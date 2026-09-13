@@ -46,6 +46,7 @@ _CHECKPOINT_SCHEMA_BY_VERSION = MappingProxyType(
         "mock-exam-production-execution/2.0": "mock-exam-production-execution-v2.schema.json",
         "mock-exam-production-execution/3.0": "mock-exam-production-execution-v3.schema.json",
         "mock-exam-production-execution/4.0": "mock-exam-production-execution-v4.schema.json",
+        "mock-exam-production-execution/5.0": "mock-exam-production-execution-v5.schema.json",
     }
 )
 _RETIREMENT_DISPOSITION_BY_WORKFLOW_STATE = MappingProxyType(

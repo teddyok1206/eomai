@@ -173,6 +173,19 @@ class MockExamGenerationBlockResolutionV4(MockExamGenerationBlockResolutionV3):
     material_requirement_schema_version: Literal["content-team-material-requirement/1.0"]
 
 
+class MockExamGenerationBlockResolutionV5(MockExamGenerationBlockResolutionV4):
+    """Selected-material authority successor with the immutable Pack 1.16.1 pin."""
+
+    generation_block_revision: Literal["5.0"]  # type: ignore[assignment]
+    generation_block_sha256: Literal[  # type: ignore[assignment]
+        "sha256:53e715eb7c070b8f558e91f7764bd50f6cdac56d8666c51410cc9b018da296ec"
+    ]
+    content_pack_version: Literal["1.16.1"]  # type: ignore[assignment]
+    content_pack_source_tree_sha256: Literal[  # type: ignore[assignment]
+        "sha256:3d08737dbfcd34f16e0b2ea03b05ab802844639721de4b7187098148c11310d8"
+    ]
+
+
 class MockExamReviewPointerV1(ApiModel):
     """Exact validated review artifact with a zero-blocking quality gate."""
 
@@ -1388,11 +1401,19 @@ class MockExamProductionExecutionV4(MockExamProductionExecutionV3):
     generation_block_resolution: MockExamGenerationBlockResolutionV4 | None
 
 
+class MockExamProductionExecutionV5(MockExamProductionExecutionV4):
+    """Selected-material authority checkpoint retaining the V4 pointer chain."""
+
+    schema_version: Literal["mock-exam-production-execution/5.0"]  # type: ignore[assignment]
+    generation_block_resolution: MockExamGenerationBlockResolutionV5 | None
+
+
 MockExamProductionExecution = Annotated[
     MockExamProductionExecutionV1
     | MockExamProductionExecutionV2
     | MockExamProductionExecutionV3
-    | MockExamProductionExecutionV4,
+    | MockExamProductionExecutionV4
+    | MockExamProductionExecutionV5,
     Field(discriminator="schema_version"),
 ]
 

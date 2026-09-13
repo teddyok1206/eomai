@@ -19,6 +19,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV4,
+    MockExamProductionExecutionV5,
     MockExamProductionFailureV1,
     MockExamReviewPointerV2,
     MockExamWorkflowKnowledgeProvenancePointerV1,
@@ -27,6 +28,7 @@ from eom_api_contracts.mock_exam_execution import (
 from eom_catalog_contracts import (
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v4,
+    build_integrated_science_mock_exam_production_plan_v5,
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
@@ -165,6 +167,22 @@ def _initial_execution_v4() -> MockExamProductionExecutionV4:
         at=NOW,
     )
     assert isinstance(initial, MockExamProductionExecutionV4)
+    return initial
+
+
+def _initial_execution_v5() -> MockExamProductionExecutionV5:
+    plan = build_integrated_science_mock_exam_production_plan_v5(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    initial = MockExamProductionCoordinator.initialize(
+        plan,
+        production_request_id="productionreq_" + "f" * 32,
+        operator_id="operator_" + "e" * 32,
+        at=NOW,
+    )
+    assert isinstance(initial, MockExamProductionExecutionV5)
     return initial
 
 
@@ -308,6 +326,18 @@ def test_installed_contract_validator_dispatches_nonterminal_execution_v4() -> N
 
     assert execution_id == checkpoint.execution_id
     assert checkpoint.schema_version == "mock-exam-production-execution/4.0"
+    assert terminal is False
+
+
+def test_installed_contract_validator_dispatches_nonterminal_execution_v5() -> None:
+    checkpoint = _initial_execution_v5()
+
+    execution_id, terminal = _installed_contract_validator(
+        checkpoint.model_dump_json().encode("utf-8")
+    )
+
+    assert execution_id == checkpoint.execution_id
+    assert checkpoint.schema_version == "mock-exam-production-execution/5.0"
     assert terminal is False
 
 

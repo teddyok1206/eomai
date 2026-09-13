@@ -53,6 +53,13 @@ def test_hold_release_verifier_admits_exact_v4_checkpoint_schema() -> None:
     )
 
 
+def test_hold_release_verifier_admits_exact_v5_checkpoint_schema() -> None:
+    assert (
+        verifier._CHECKPOINT_SCHEMA_BY_VERSION["mock-exam-production-execution/5.0"]
+        == "mock-exam-production-execution-v5.schema.json"
+    )
+
+
 def _checkpoint() -> MockExamProductionExecutionV2:
     plan = build_integrated_science_mock_exam_production_plan(
         policy=load_integrated_science_mock_exam_policy(),

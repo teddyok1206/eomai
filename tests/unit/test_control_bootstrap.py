@@ -24,6 +24,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V11_REFERENCE_KEYS,
     EXPECTED_STANDARD_V12_REFERENCE_KEYS,
     EXPECTED_STANDARD_V13_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V14_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -52,6 +53,7 @@ CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
 CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
+CONFIG_V14 = ROOT / "config/control-plane/standard-item-v14"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -606,6 +608,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/11.0": 11,
         "standard-control-bootstrap/12.0": 12,
         "standard-control-bootstrap/13.0": 13,
+        "standard-control-bootstrap/14.0": 14,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -647,6 +650,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/11.0": 4,
         "standard-control-bootstrap/12.0": 4,
         "standard-control-bootstrap/13.0": 5,
+        "standard-control-bootstrap/14.0": 5,
     }
 
 
@@ -952,6 +956,38 @@ def test_standard_bootstrap_v13_rejects_image_role_without_handoff_reference() -
 
     with pytest.raises(ValidationError, match="role reference map differs"):
         StandardBootstrapManifest.model_validate(forged)
+
+
+def test_standard_bootstrap_v14_selects_material_requirement_without_first_preference() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V14)
+
+    assert manifest.schema_version == "standard-control-bootstrap/14.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.20.0",)
+    assert manifest.created_at.isoformat() == "2026-09-13T00:00:00+00:00"
+    assert load_standard_bootstrap_manifest(CONFIG_V13).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 14
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 5
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V14_REFERENCE_KEYS
+    )
+    authoring = (CONFIG_V14 / "instructions/authoring.md").read_text(encoding="utf-8")
+    review = (CONFIG_V14 / "instructions/review.md").read_text(encoding="utf-8")
+    for document in (authoring, review):
+        assert "material_requirement.form" in document
+        assert "preferred_material_profiles[0]" in document
+        assert "schema `4.0`" in document
+    assert "first element has no\n  special authority" in authoring
+    assert "need not equal its first element" in review
+    assert hashlib.sha256(authoring.encode()).hexdigest() == (
+        "a638fc707723770b85222c8eae8321f0a65373613b0a2c1f9b0250235a7ed913"
+    )
+    assert hashlib.sha256(review.encode()).hexdigest() == (
+        "9b7f5d27d5f08b82e39572bd3f42e30b38b0513294e619859ba4026042941682"
+    )
+    for unchanged in ("platform.md", "image.md", "item-management.md"):
+        assert (CONFIG_V14 / "instructions" / unchanged).read_bytes() == (
+            CONFIG_V13 / "instructions" / unchanged
+        ).read_bytes()
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

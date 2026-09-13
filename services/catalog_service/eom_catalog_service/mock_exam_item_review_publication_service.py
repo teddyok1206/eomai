@@ -773,12 +773,12 @@ class MockExamItemReviewPublicationService:
             expected = source_request.expected_resolution
             brief = source_request.item_brief
             if isinstance(brief, ContentTeamItemBriefV4):
-                expected_pack_version = "1.16.0"
+                expected_pack_versions = frozenset({"1.16.0", "1.16.1"})
                 expected_elements = content_team_material_required_retrieval_elements(
                     brief.material_requirement
                 )
             else:
-                expected_pack_version = "1.15.1"
+                expected_pack_versions = frozenset({"1.15.1"})
                 expected_elements = ("choice", "paragraph")
             if (
                 expected is None
@@ -786,7 +786,7 @@ class MockExamItemReviewPublicationService:
                 or expected.workflow_definition_version != workflow.definition_version
                 or expected.workflow_definition_sha256 != workflow.definition_hash
                 or expected.content_pack_key != "generated-knowledge-item"
-                or expected.content_pack_version != expected_pack_version
+                or expected.content_pack_version not in expected_pack_versions
                 or expected.execution_preset_key != "knowledge-grounded-item"
                 or source_request.educational_retrieval is None
                 or source_request.educational_retrieval.query_kind != "ITEM_PREPARATION"

@@ -33,6 +33,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV1,
     MockExamGenerationBlockResolutionV3,
     MockExamGenerationBlockResolutionV4,
+    MockExamGenerationBlockResolutionV5,
     MockExamGraphPublicationAuthorizationPointerV1,
     MockExamGraphPublicationInputV1,
     MockExamGraphPublicationPointerV1,
@@ -45,6 +46,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
     MockExamProductionExecutionV4,
+    MockExamProductionExecutionV5,
     MockExamProductionFailureV1,
     MockExamProductionItemRunV1,
     MockExamProductionItemRunV2,
@@ -108,11 +110,13 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
     MockExamOneItemGenerationBlockV4,
+    MockExamOneItemGenerationBlockV5,
     MockExamPlannedWorkflowCallV1,
     MockExamProductionPlanV1,
     MockExamProductionPlanV2,
     MockExamProductionPlanV3,
     MockExamProductionPlanV4,
+    MockExamProductionPlanV5,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
@@ -148,6 +152,7 @@ class GenerationBlockResolver(Protocol):
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
             | MockExamOneItemGenerationBlockV4
+            | MockExamOneItemGenerationBlockV5
         ),
     ) -> MockExamGenerationBlockResolutionV1: ...
 
@@ -296,6 +301,7 @@ class OneItemWorkflowOperations(Protocol):
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
             | MockExamOneItemGenerationBlockV4
+            | MockExamOneItemGenerationBlockV5
         ),
     ) -> MockExamGenerationBlockResolutionV1: ...
 
@@ -349,6 +355,7 @@ class ExistingOneItemWorkflowOperations:
             | MockExamOneItemGenerationBlockV2
             | MockExamOneItemGenerationBlockV3
             | MockExamOneItemGenerationBlockV4
+            | MockExamOneItemGenerationBlockV5
         ),
     ) -> MockExamGenerationBlockResolutionV1:
         return self._generation_blocks.resolve_generation_block(block)
@@ -644,6 +651,7 @@ class MockExamProductionCoordinator:
             _raise("PRODUCTION_PLAN_ITEM_COUNT_INVALID", "production plan must have 25 calls")
         use_v3 = isinstance(plan, MockExamProductionPlanV3)
         use_v4 = isinstance(plan, MockExamProductionPlanV4)
+        use_v5 = isinstance(plan, MockExamProductionPlanV5)
         row_type = MockExamProductionItemRunV3 if use_v3 else MockExamProductionItemRunV2
         rows = tuple(
             row_type(
@@ -682,6 +690,7 @@ class MockExamProductionCoordinator:
             use_v2=True,
             use_v3=use_v3,
             use_v4=use_v4,
+            use_v5=use_v5,
             at=at,
         )
 
@@ -2458,11 +2467,14 @@ def _new_checkpoint(
     use_v2: bool,
     use_v3: bool,
     use_v4: bool,
+    use_v5: bool,
     at: datetime,
 ) -> MockExamProductionExecutionV1:
     value: dict[str, Any] = {
         "schema_version": (
-            "mock-exam-production-execution/4.0"
+            "mock-exam-production-execution/5.0"
+            if use_v5
+            else "mock-exam-production-execution/4.0"
             if use_v4
             else "mock-exam-production-execution/3.0"
             if use_v3
@@ -2497,7 +2509,9 @@ def _new_checkpoint(
     }
     sha256 = content_sha256(value)
     checkpoint_type = (
-        MockExamProductionExecutionV4
+        MockExamProductionExecutionV5
+        if use_v5
+        else MockExamProductionExecutionV4
         if use_v4
         else MockExamProductionExecutionV3
         if use_v3
@@ -2684,7 +2698,9 @@ def _advance_checkpoint(
     }
     sha256 = content_sha256(value)
     checkpoint_type = (
-        MockExamProductionExecutionV4
+        MockExamProductionExecutionV5
+        if isinstance(checkpoint, MockExamProductionExecutionV5)
+        else MockExamProductionExecutionV4
         if isinstance(checkpoint, MockExamProductionExecutionV4)
         else MockExamProductionExecutionV3
         if isinstance(checkpoint, MockExamProductionExecutionV3)
@@ -2845,6 +2861,13 @@ def _require_context(
     checkpoint: MockExamProductionExecutionV1,
     actor: ActorContext,
 ) -> None:
+    if isinstance(plan, MockExamProductionPlanV5) != isinstance(
+        checkpoint, MockExamProductionExecutionV5
+    ):
+        _raise(
+            "PRODUCTION_PROTOCOL_FAMILY_MISMATCH",
+            "selected-material production plan and checkpoint use different protocol families",
+        )
     if isinstance(plan, MockExamProductionPlanV4) != isinstance(
         checkpoint, MockExamProductionExecutionV4
     ):
@@ -2944,6 +2967,13 @@ def _require_generation_resolution(
         _raise(
             "PRODUCTION_GENERATION_BLOCK_STALE",
             "runtime material contracts differ from the plan",
+        )
+    if isinstance(block, MockExamOneItemGenerationBlockV5) and not isinstance(
+        resolution, MockExamGenerationBlockResolutionV5
+    ):
+        _raise(
+            "PRODUCTION_GENERATION_BLOCK_STALE",
+            "runtime selected-material authority contract differs from the plan",
         )
 
 

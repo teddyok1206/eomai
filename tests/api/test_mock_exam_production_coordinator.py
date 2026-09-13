@@ -32,11 +32,13 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
     MockExamGenerationBlockResolutionV4,
+    MockExamGenerationBlockResolutionV5,
     MockExamGraphPublicationInputV1,
     MockExamProductionExecutionV1,
     MockExamProductionExecutionV2,
     MockExamProductionExecutionV3,
     MockExamProductionExecutionV4,
+    MockExamProductionExecutionV5,
     MockExamRatingPolicyPointerV1,
     MockExamReviewEligibilityObservationV1,
     MockExamReviewEligibilityObservationV3,
@@ -79,11 +81,13 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV1,
     MockExamOneItemGenerationBlockV3,
     MockExamOneItemGenerationBlockV4,
+    MockExamOneItemGenerationBlockV5,
     MockExamProductionPlanV1,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v3,
     build_integrated_science_mock_exam_production_plan_v4,
+    build_integrated_science_mock_exam_production_plan_v5,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -266,7 +270,25 @@ class FakeWorkflowOperations:
         self, block: MockExamOneItemGenerationBlockV1
     ) -> MockExamGenerationBlockResolutionV1:
         trusted_rag_fields: dict[str, object] = {}
-        if isinstance(block, MockExamOneItemGenerationBlockV4):
+        if isinstance(block, MockExamOneItemGenerationBlockV5):
+            resolution_type = MockExamGenerationBlockResolutionV5
+            trusted_rag_fields = {
+                "role_protocol_version": block.role_protocol_version,
+                "role_schema_bundle_sha256": block.role_schema_bundle_sha256,
+                "knowledge_source_mode": block.knowledge_source_mode,
+                "authoring_result_schema": block.authoring_result_schema,
+                "review_result_schema": block.review_result_schema,
+                "evidence_usage_receipt_schema_version": (
+                    block.evidence_usage_receipt_schema_version
+                ),
+                "trusted_evidence_usage_receipts_required": (
+                    block.trusted_evidence_usage_receipts_required
+                ),
+                "image_mode": block.image_mode,
+                "item_brief_schema_version": block.item_brief_schema_version,
+                "material_requirement_schema_version": (block.material_requirement_schema_version),
+            }
+        elif isinstance(block, MockExamOneItemGenerationBlockV4):
             resolution_type = MockExamGenerationBlockResolutionV4
             trusted_rag_fields = {
                 "role_protocol_version": block.role_protocol_version,
@@ -2340,6 +2362,38 @@ def test_checkpoint_store_round_trips_material_first_execution_v4(tmp_path: Path
     assert isinstance(created, MockExamProductionExecutionV4)
     assert isinstance(loaded, MockExamProductionExecutionV4)
     assert loaded == created
+
+
+def test_plan_v5_write_ahead_and_checkpoint_round_trip_pin_corrected_pack(
+    tmp_path: Path,
+) -> None:
+    coordinator, workflows, *_ = _coordinator()
+    plan = build_integrated_science_mock_exam_production_plan_v5(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+    store = AtomicJsonMockExamProductionCheckpointStore(tmp_path / "selected-material-checkpoints")
+    created = store.create(initial)
+    stored = store.compare_and_swap(created.execution_revision_id, pinned)
+    loaded = store.load(pinned.execution_id)
+
+    assert isinstance(initial, MockExamProductionExecutionV5)
+    assert isinstance(pinned, MockExamProductionExecutionV5)
+    assert isinstance(pinned.generation_block_resolution, MockExamGenerationBlockResolutionV5)
+    assert pinned.generation_block_resolution.content_pack_version == "1.16.1"
+    assert workflows.occurrence_count == 0
+    assert isinstance(stored, MockExamProductionExecutionV5)
+    assert isinstance(loaded, MockExamProductionExecutionV5)
+    assert loaded == stored
 
 
 def test_plan_v3_rejects_workflow_provenance_that_broadens_past_exam_sources() -> None:

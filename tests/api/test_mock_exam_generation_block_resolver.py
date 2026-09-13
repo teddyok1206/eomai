@@ -13,6 +13,7 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV2,
     MockExamGenerationBlockResolutionV3,
     MockExamGenerationBlockResolutionV4,
+    MockExamGenerationBlockResolutionV5,
 )
 from eom_catalog_contracts import (
     load_integrated_science_editorial_outline,
@@ -24,10 +25,12 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV2,
     MockExamOneItemGenerationBlockV3,
     MockExamOneItemGenerationBlockV4,
+    MockExamOneItemGenerationBlockV5,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v3,
     build_integrated_science_mock_exam_production_plan_v4,
+    build_integrated_science_mock_exam_production_plan_v5,
 )
 from eom_workflow import AgentStep, compile_definition
 from eom_workflow.schemas import result_schema_protocol
@@ -98,6 +101,15 @@ def _block_v4() -> MockExamOneItemGenerationBlockV4:
     return plan.one_item_generation_block
 
 
+def _block_v5() -> MockExamOneItemGenerationBlockV5:
+    plan = build_integrated_science_mock_exam_production_plan_v5(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    return plan.one_item_generation_block
+
+
 def _row(
     *,
     source_tree_sha256: str | None = None,
@@ -106,6 +118,7 @@ def _row(
         | MockExamOneItemGenerationBlockV2
         | MockExamOneItemGenerationBlockV3
         | MockExamOneItemGenerationBlockV4
+        | MockExamOneItemGenerationBlockV5
         | None
     ) = None,
 ) -> tuple[object, ...]:
@@ -313,3 +326,29 @@ def test_generation_block_v4_pins_material_first_contracts(
     assert result.image_mode == "from_material_requirement"
     assert result.item_brief_schema_version == "4.0"
     assert result.material_requirement_schema_version == "content-team-material-requirement/1.0"
+
+
+def test_generation_block_v5_pins_selected_material_authority_successor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    block = _block_v5()
+    row = _row(block=block)
+    revision = row[-1]
+    preset = SimpleNamespace(
+        preset_id=revision.preset_id,
+        preset_revision_id=revision.preset_revision_id,
+        content_sha256=revision.content_sha256,
+        compatible_workflow_protocols=(block.role_protocol_version,),
+    )
+    monkeypatch.setattr(
+        "eom_api.services.mock_exam_generation_block_resolver.ExecutionPresetRevisionV2.model_validate",
+        staticmethod(lambda _value: preset),
+    )
+
+    result = _resolver(_Session(row)).resolve_generation_block(block)
+
+    assert isinstance(result, MockExamGenerationBlockResolutionV5)
+    assert result.generation_block_revision == "5.0"
+    assert result.content_pack_version == "1.16.1"
+    assert result.content_pack_source_tree_sha256 == block.content_pack_source_tree_sha256
+    assert result.image_mode == "from_material_requirement"

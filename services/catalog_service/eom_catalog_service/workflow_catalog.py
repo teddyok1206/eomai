@@ -1414,6 +1414,7 @@ class WorkflowCatalogService:
             "1.15.8",
             "1.15.9",
             "1.16.0",
+            "1.16.1",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1421,12 +1422,12 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            if (release_version == "1.16.0") != is_material_v4:
+            if (release_version in {"1.16.0", "1.16.1"}) != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "Content Pack release and material-aware item brief differ",
                 )
-            if release_version == "1.16.0":
+            if release_version in {"1.16.0", "1.16.1"}:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
                 expected_image_profile = (

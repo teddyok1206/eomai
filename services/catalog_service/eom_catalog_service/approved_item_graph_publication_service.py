@@ -69,7 +69,7 @@ from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 _PRODUCTION_WORKFLOW_FAMILIES = {
     ("1.8.0", "3.0"): (
         "workflow-role/1.17.0",
-        "1.13.0",
+        frozenset({"1.13.0"}),
         frozenset(
             {
                 "eom.assessment.item-content/2.0",
@@ -79,7 +79,7 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
     ),
     ("1.9.0", "3.0"): (
         "workflow-role/1.19.0",
-        "1.14.0",
+        frozenset({"1.14.0"}),
         frozenset(
             {
                 "eom.assessment.item-content/3.0",
@@ -89,7 +89,7 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
     ),
     ("1.10.0", "3.0"): (
         "workflow-role/1.20.0",
-        "1.15.1",
+        frozenset({"1.15.1"}),
         frozenset(
             {
                 "eom.assessment.item-content/3.0",
@@ -99,7 +99,7 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
     ),
     ("1.10.0", "4.0"): (
         "workflow-role/1.20.0",
-        "1.16.0",
+        frozenset({"1.16.0", "1.16.1"}),
         frozenset(
             {
                 "eom.assessment.item-content/3.0",
@@ -524,7 +524,7 @@ class ApprovedItemGraphPublicationService:
             )
             if family is None:
                 raise ValueError("generated Item Workflow version is unsupported")
-            role_protocol, pack_version, content_schema_refs = family
+            role_protocol, pack_versions, content_schema_refs = family
             family_version = revision.workflow_definition_version
             official_review = (
                 official_reviews.get(expected_workflow_id) if official_reviews is not None else None
@@ -604,7 +604,7 @@ class ApprovedItemGraphPublicationService:
                 or expected_resolution.workflow_definition_version != family_version
                 or expected_resolution.workflow_definition_sha256 != workflow.definition_hash
                 or expected_resolution.content_pack_release_id != revision.content_pack_release_id
-                or expected_resolution.content_pack_version != pack_version
+                or expected_resolution.content_pack_version not in pack_versions
                 or accepted_resolution != expected_resolution.model_dump(mode="json")
                 or not isinstance(registration, dict)
                 or registration.get("item_id") != source.item_id

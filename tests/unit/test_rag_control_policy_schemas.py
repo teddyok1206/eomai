@@ -37,6 +37,16 @@ ROOT = Path(__file__).resolve().parents[2]
             "eom://schemas/workflow/knowledge-item-control-bootstrap/10.0",
             "workflow-role/1.20.0",
         ),
+        (
+            "standard-control-bootstrap-v14",
+            "eom://schemas/workflow/standard-control-bootstrap/14.0",
+            "workflow-role/1.20.0",
+        ),
+        (
+            "knowledge-item-control-bootstrap-v11",
+            "eom://schemas/workflow/knowledge-item-control-bootstrap/11.0",
+            "workflow-role/1.20.0",
+        ),
     ],
 )
 def test_v120_control_schema_is_202012_packaged_and_hash_pinned(
@@ -64,6 +74,8 @@ def test_v120_control_schemas_reject_historical_protocol_substitution() -> None:
         "knowledge-item-control-bootstrap-v9",
         "standard-control-bootstrap-v13",
         "knowledge-item-control-bootstrap-v10",
+        "standard-control-bootstrap-v14",
+        "knowledge-item-control-bootstrap-v11",
     ):
         schema = load_control_schema(name)
         protocol_schema = schema["properties"]["compatible_workflow_protocols"]

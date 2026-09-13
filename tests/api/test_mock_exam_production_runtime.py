@@ -50,6 +50,7 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamProductionPlanV1,
     MockExamProductionPlanV3,
     MockExamProductionPlanV4,
+    MockExamProductionPlanV5,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
@@ -168,10 +169,11 @@ def test_released_resolver_builds_static_25_plan_and_exact_policy_pointers() -> 
     )
 
     plan = resolver.production_plan()
+    assert isinstance(plan, MockExamProductionPlanV5)
     assert isinstance(plan, MockExamProductionPlanV4)
     assert isinstance(plan, MockExamProductionPlanV3)
     assert plan.one_item_generation_block.workflow_definition_version == "1.10.0"
-    assert plan.one_item_generation_block.content_pack_version == "1.16.0"
+    assert plan.one_item_generation_block.content_pack_version == "1.16.1"
     assert plan.one_item_generation_block.image_mode == "from_material_requirement"
     assert plan.one_item_generation_block.trusted_evidence_usage_receipts_required is True
     assert len(plan.workflow_calls) == 25

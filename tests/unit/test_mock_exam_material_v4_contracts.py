@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 from eom_catalog_contracts import (
     MockExamProductionPlanV4,
+    MockExamProductionPlanV5,
     build_integrated_science_mock_exam_production_plan_v4,
+    build_integrated_science_mock_exam_production_plan_v5,
     content_team_material_requirement_for_mock_exam_profile,
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
@@ -22,6 +24,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _plan() -> MockExamProductionPlanV4:
     return build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+
+
+def _plan_v5() -> MockExamProductionPlanV5:
+    return build_integrated_science_mock_exam_production_plan_v5(
         policy=load_integrated_science_mock_exam_policy(),
         layout_policy=load_integrated_science_mock_exam_layout_policy(),
         outline=load_integrated_science_editorial_outline(),
@@ -148,6 +158,50 @@ def test_v4_schemas_are_draft_2020_12_and_packaged_verbatim() -> None:
             ROOT / "schemas/api/v1/mock-exam-production-execution-v4.schema.json",
             ROOT / "packages/api_contracts/eom_api_contracts/schemas/"
             "mock-exam-production-execution-v4.schema.json",
+        ),
+    )
+    for canonical, packaged in pairs:
+        payload = canonical.read_bytes()
+        assert payload == packaged.read_bytes()
+        schema = json.loads(payload)
+        assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+        Draft202012Validator.check_schema(schema)
+
+
+def test_v5_plan_pins_selected_material_authority_successor_without_matrix_drift() -> None:
+    predecessor = _plan()
+    plan = _plan_v5()
+
+    assert plan.schema_version == "mock-exam-production-plan/5.0"
+    assert plan.one_item_generation_block.block_revision == "5.0"
+    assert plan.one_item_generation_block.content_pack_version == "1.16.1"
+    assert plan.one_item_generation_block.content_pack_source_tree_sha256 == (
+        "sha256:3d08737dbfcd34f16e0b2ea03b05ab802844639721de4b7187098148c11310d8"
+    )
+    assert tuple(call.item_brief.material_requirement for call in plan.workflow_calls) == tuple(
+        call.item_brief.material_requirement for call in predecessor.workflow_calls
+    )
+    non_primary = tuple(
+        call.item_brief.mock_exam_slot.position
+        for call in plan.workflow_calls
+        if call.item_brief.task_type
+        != call.item_brief.mock_exam_slot.preferred_material_profiles[0]
+    )
+    assert non_primary == (5, 8, 9, 11, 12, 13, 14, 17, 18, 19, 20, 23, 24)
+    validate_contract("mock-exam-production-plan-v5", plan.model_dump(mode="json"))
+
+
+def test_v5_schemas_are_draft_2020_12_and_packaged_verbatim() -> None:
+    pairs = (
+        (
+            ROOT / "schemas/assessment-assembly/mock-exam-production-plan-v5.schema.json",
+            ROOT / "packages/catalog_contracts/eom_catalog_contracts/resources/assessment-assembly/"
+            "mock-exam-production-plan-v5.schema.json",
+        ),
+        (
+            ROOT / "schemas/api/v1/mock-exam-production-execution-v5.schema.json",
+            ROOT / "packages/api_contracts/eom_api_contracts/schemas/"
+            "mock-exam-production-execution-v5.schema.json",
         ),
     )
     for canonical, packaged in pairs:
