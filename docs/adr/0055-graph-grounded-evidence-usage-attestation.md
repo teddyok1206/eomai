@@ -78,6 +78,14 @@ IDs, citations, and draft pointers are
 nonempty, sorted, and unique. Missing, unknown, duplicate, unordered, stale, unresolved, or
 mismatched values fail closed. An ungrounded plan/output must carry no evidence usage.
 
+The worker-facing strict Structured Output projection cannot express that cross-field nullable
+conditional. For `authoring-result@10.0` and `review-result@10.0`, the orchestrator therefore binds
+the generated schema's evidence value and authoring `knowledge_source_mode` to the immutable
+resolved step's `evidence_access` before execution. `EVIDENCE_CONTEXT` requires the typed evidence
+object/attestation and `NONE` requires `null`; canonical JSON Schema, Pydantic, and plan-aware
+validation still run after the worker returns. This is a constant-time lookup on the already loaded
+plan step and introduces no new persisted value or alternate source of truth.
+
 Before review Artifact commit, the orchestrator resolves the exact authoring upstream Artifact,
 repeats the plan/manifest checks, and requires the review attestation to pin its logical Artifact ID,
 Artifact revision ID, content hash, and exact citations. It rejects a missing or different citation

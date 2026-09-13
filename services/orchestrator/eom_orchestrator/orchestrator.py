@@ -479,6 +479,23 @@ class Orchestrator:
                 slot = self.registry.select(role)
             if recovered_run is None:
                 assert slot is not None
+                evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None
+                if plan_step is not None:
+                    raw_evidence_access = plan_step.get("evidence_access")
+                    if raw_evidence_access not in {"NONE", "EVIDENCE_CONTEXT"}:
+                        raise ControlPlaneError(
+                            "CONTROL_PLAN_EVIDENCE_ACCESS_INVALID",
+                            "workflow execution plan evidence access is invalid",
+                        )
+                    evidence_access = cast(
+                        Literal["NONE", "EVIDENCE_CONTEXT"],
+                        raw_evidence_access,
+                    )
+                output_schema = constrained_result_schema(
+                    result_schema,
+                    worker_input,
+                    evidence_access=evidence_access,
+                )
                 with transaction(self.sessions) as session:
                     claimed = session.get(JobRecord, job_id)
                     if claimed is None:
@@ -497,7 +514,7 @@ class Orchestrator:
                     run = self.worker_adapter.run_structured(
                         job_id=job_id,
                         input_document=input_document,
-                        output_schema=constrained_result_schema(result_schema, worker_input),
+                        output_schema=output_schema,
                         prompt_text=prompt_text,
                         slot=slot,
                         staging=staging,
@@ -534,7 +551,7 @@ class Orchestrator:
                     resolved_run = self.worker_adapter.run_resolved_structured(
                         job_id=job_id,
                         input_document=input_document,
-                        output_schema=constrained_result_schema(result_schema, worker_input),
+                        output_schema=output_schema,
                         prompt_text=prompt_text,
                         slot=slot,
                         staging=staging,

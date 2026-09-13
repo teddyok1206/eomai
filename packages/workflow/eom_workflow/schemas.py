@@ -1276,7 +1276,12 @@ def _bind_solution_reference_index(
     )
 
 
-def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> dict[str, Any]:
+def constrained_result_schema(
+    schema_id: str,
+    worker_input: RoleWorkerInput,
+    *,
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None,
+) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
     for key, value in (
@@ -1294,6 +1299,11 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
         worker_input.artifact.logical_artifact_id
     )
     _mapping(artifact_properties, "revision_id")["const"] = worker_input.artifact.revision_id
+    _bind_evidence_result_branch(
+        schema,
+        schema_id=schema_id,
+        evidence_access=evidence_access,
+    )
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
         "knowledge-analysis-proposal-result@2.0",
@@ -1573,6 +1583,56 @@ def constrained_result_schema(schema_id: str, worker_input: RoleWorkerInput) -> 
             )
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _bind_evidence_result_branch(
+    schema: dict[str, Any],
+    *,
+    schema_id: str,
+    evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None,
+) -> None:
+    """Bind the @10 nullable evidence branch to the immutable resolved-plan step.
+
+    Codex Structured Outputs cannot retain the canonical cross-field conditional. The resolved
+    plan already owns whether this step receives evidence, so this O(1) projection prevents a
+    worker from selecting the contradictory nullable branch while canonical validation remains
+    authoritative.
+    """
+
+    if schema_id not in {"authoring-result@10.0", "review-result@10.0"}:
+        return
+    if evidence_access is None:
+        return
+    if evidence_access not in {"NONE", "EVIDENCE_CONTEXT"}:  # pragma: no cover - typed guard
+        raise WorkflowSchemaError("result evidence access is invalid")
+
+    definitions = _mapping(schema, "$defs")
+    grounded = evidence_access == "EVIDENCE_CONTEXT"
+    if schema_id == "authoring-result@10.0":
+        output_properties = _mapping(
+            _mapping(definitions, "ContentTeamAuthoringOutputV10"),
+            "properties",
+        )
+        evidence_usage = _mapping(output_properties, "evidence_usage")
+        evidence_usage.clear()
+        evidence_usage.update({"$ref": "#/$defs/EvidenceUsageV1"} if grounded else {"type": "null"})
+        metadata_properties = _mapping(
+            _mapping(definitions, "KnowledgeAuthoringMetadataV2"),
+            "properties",
+        )
+        knowledge_source_mode = _mapping(metadata_properties, "knowledge_source_mode")
+        knowledge_source_mode["const"] = "graph_grounded" if grounded else "general_model_knowledge"
+        return
+
+    output_properties = _mapping(
+        _mapping(definitions, "KnowledgeReviewOutputV10"),
+        "properties",
+    )
+    attestation = _mapping(output_properties, "evidence_usage_attestation")
+    attestation.clear()
+    attestation.update(
+        {"$ref": "#/$defs/EvidenceUsageReviewAttestationV1"} if grounded else {"type": "null"}
+    )
 
 
 def _local_definition_properties(

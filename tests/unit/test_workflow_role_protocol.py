@@ -18,6 +18,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisWorkerRequest,
     LegacyItemExtractionWorkerRequest,
     RoleWorkerInput,
+    WorkerRequest,
     WorkflowRequest,
 )
 from eom_workflow.schemas import (
@@ -64,13 +65,21 @@ def _input(role: str) -> RoleWorkerInput:
         step_run_id=STEP_RUN_ID,
         attempt=1,
         role=role,  # type: ignore[arg-type]
-        request=WorkflowRequest(request_name="PLACEHOLDER_REQUEST", image_mode="required"),
+        request=WorkerRequest(request_name="PLACEHOLDER_REQUEST", image_mode="required"),
         upstream_artifacts=upstream,
         artifact=ArtifactSpec(
             logical_artifact_id=ARTIFACT_ID,
             revision_id=REVISION_ID,
         ),
     )
+
+
+def _v10_input(role: str) -> RoleWorkerInput:
+    document = _input(role).model_dump(mode="json")
+    document["protocol_version"] = "workflow-role/1.20.0"
+    if role == "review":
+        document["upstream_artifacts"][0]["result_schema"] = "authoring-result@10.0"
+    return RoleWorkerInput.model_validate(document)
 
 
 def _result(role: str) -> dict[str, object]:
@@ -274,6 +283,58 @@ def test_constrained_result_schema_fixes_all_execution_identifiers() -> None:
     assert properties["job_id"]["const"] == JOB_ID
     assert properties["workflow_id"]["const"] == WORKFLOW_ID
     assert properties["step_run_id"]["const"] == STEP_RUN_ID
+
+
+@pytest.mark.parametrize(
+    ("evidence_access", "expected_mode", "expected_usage"),
+    [
+        (
+            "EVIDENCE_CONTEXT",
+            "graph_grounded",
+            {"$ref": "#/$defs/EvidenceUsageV1"},
+        ),
+        ("NONE", "general_model_knowledge", {"type": "null"}),
+    ],
+)
+def test_constrained_v10_authoring_schema_binds_resolved_evidence_branch(
+    evidence_access: str,
+    expected_mode: str,
+    expected_usage: dict[str, str],
+) -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access=evidence_access,  # type: ignore[arg-type]
+    )
+
+    output = schema["$defs"]["ContentTeamAuthoringOutputV10"]["properties"]
+    metadata = schema["$defs"]["KnowledgeAuthoringMetadataV2"]["properties"]
+    assert output["evidence_usage"] == expected_usage
+    assert metadata["knowledge_source_mode"]["const"] == expected_mode
+
+
+@pytest.mark.parametrize(
+    ("evidence_access", "expected_attestation"),
+    [
+        (
+            "EVIDENCE_CONTEXT",
+            {"$ref": "#/$defs/EvidenceUsageReviewAttestationV1"},
+        ),
+        ("NONE", {"type": "null"}),
+    ],
+)
+def test_constrained_v10_review_schema_binds_resolved_evidence_branch(
+    evidence_access: str,
+    expected_attestation: dict[str, str],
+) -> None:
+    schema = constrained_result_schema(
+        "review-result@10.0",
+        _v10_input("review"),
+        evidence_access=evidence_access,  # type: ignore[arg-type]
+    )
+
+    output = schema["$defs"]["KnowledgeReviewOutputV10"]["properties"]
+    assert output["evidence_usage_attestation"] == expected_attestation
 
 
 def test_constrained_legacy_extraction_schema_resolves_nested_string_references() -> None:
