@@ -291,6 +291,54 @@ def test_exam_merger_rejects_unpinned_shared_template_drift(tmp_path: Path) -> N
         _merge_item_packages((first, second), tmp_path / "output/exam.hwpx")
 
 
+def _synthetic_parts_with_header(header: bytes) -> list[tuple[str, bytes, int]]:
+    return [
+        (name, header if name == "Contents/header.xml" else data, compression)
+        for name, data, compression in synthetic_parts()
+    ]
+
+
+def test_exam_merger_selects_existing_append_only_header_superset(tmp_path: Path) -> None:
+    base_header = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<header xmlns="urn:synthetic:header" secCnt="1">'
+        b'<paraProperties itemCnt="1"><paraPr id="0" align="LEFT"/></paraProperties>'
+        b"</header>"
+    )
+    superset_header = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<header xmlns="urn:synthetic:header" secCnt="1">'
+        b'<paraProperties itemCnt="2">'
+        b'<paraPr id="0" align="LEFT"/><paraPr id="1" align="RIGHT"/>'
+        b"</paraProperties></header>"
+    )
+    first = write_hwpx(tmp_path / "first.hwpx", _synthetic_parts_with_header(base_header))
+    second = write_hwpx(tmp_path / "second.hwpx", _synthetic_parts_with_header(superset_header))
+    output = tmp_path / "output/content-team-exam.hwpx"
+
+    _merge_item_packages((first, second), output)
+
+    with zipfile.ZipFile(output) as archive:
+        header = archive.read("Contents/header.xml")
+    assert b'secCnt="2"' in header
+    assert b'<paraPr id="1" align="RIGHT"/>' in header
+
+
+def test_exam_merger_rejects_incomparable_header_definitions(tmp_path: Path) -> None:
+    first_header = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<header xmlns="urn:synthetic:header" secCnt="1">'
+        b'<paraProperties itemCnt="1"><paraPr id="0" align="LEFT"/></paraProperties>'
+        b"</header>"
+    )
+    changed_header = first_header.replace(b'align="LEFT"', b'align="RIGHT"')
+    first = write_hwpx(tmp_path / "first.hwpx", _synthetic_parts_with_header(first_header))
+    second = write_hwpx(tmp_path / "second.hwpx", _synthetic_parts_with_header(changed_header))
+
+    with pytest.raises(HwpxError, match="append-only runtime"):
+        _merge_item_packages((first, second), tmp_path / "output/exam.hwpx")
+
+
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
 def test_reviewed_handoff_builds_two_item_exam_and_applies_assembly_numbering(
     tmp_path: Path,

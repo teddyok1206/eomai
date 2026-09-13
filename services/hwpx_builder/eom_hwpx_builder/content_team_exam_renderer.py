@@ -220,6 +220,52 @@ def _binary_manifest_items(
     return tuple(result)
 
 
+def _attributes_without(element: etree._Element, *ignored: str) -> dict[str, str]:
+    ignored_names = frozenset(ignored)
+    return {
+        str(key): str(value)
+        for key, value in element.attrib.items()
+        if local_name(key) not in ignored_names
+    }
+
+
+def _header_node_covers(
+    candidate: etree._Element,
+    required: etree._Element,
+    *,
+    root: bool = False,
+) -> bool:
+    """Return whether one reviewed header is an append-only superset of another."""
+
+    ignored = ("secCnt",) if root else ()
+    if (
+        candidate.tag != required.tag
+        or candidate.text != required.text
+        or candidate.tail != required.tail
+        or _attributes_without(candidate, "itemCnt", *ignored)
+        != _attributes_without(required, "itemCnt", *ignored)
+    ):
+        return False
+    candidate_count = _attribute(candidate, "itemCnt")
+    required_count = _attribute(required, "itemCnt")
+    if (candidate_count is None) != (required_count is None):
+        return False
+    if candidate_count is not None and required_count is not None:
+        try:
+            if int(candidate_count) != len(candidate) or int(required_count) != len(required):
+                return False
+        except ValueError:
+            return False
+        if len(candidate) < len(required):
+            return False
+    elif len(candidate) != len(required):
+        return False
+    return all(
+        _header_node_covers(candidate_child, required_child)
+        for candidate_child, required_child in zip(candidate, required, strict=False)
+    )
+
+
 def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any]:
     if not items or len(items) > 200:
         raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "exam item set is invalid")
@@ -227,11 +273,30 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
     first = packages[0]
     first_entries = first.by_name()
     first_content, first_manifest, first_spine, first_section_item = _manifest_parts(first)
-    first_header = first_entries.get("Contents/header.xml")
-    if first_header is None:
+    selected_header = first_entries.get("Contents/header.xml")
+    if selected_header is None:
         raise HwpxError(
             HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
             "content-team item has no shared header",
+        )
+    selected_header_root = parse_xml(selected_header.data, "Contents/header.xml").root
+    for package in packages[1:]:
+        header = package.by_name().get("Contents/header.xml")
+        if header is None:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team item has no shared header",
+            )
+        header_root = parse_xml(header.data, "Contents/header.xml").root
+        if _header_node_covers(selected_header_root, header_root, root=True):
+            continue
+        if _header_node_covers(header_root, selected_header_root, root=True):
+            selected_header = header
+            selected_header_root = header_root
+            continue
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "exam item headers do not form one reviewed append-only runtime",
         )
 
     for child in tuple(first_spine):
@@ -250,6 +315,7 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
         name = entry.info.filename
         if (
             name == "Contents/content.hpf"
+            or name == "Contents/header.xml"
             or name.startswith("Contents/section")
             or name.startswith("BinData/")
             or name.startswith("Preview/")
@@ -264,6 +330,7 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             entry.info.filename: (entry.data, entry.info.compress_type)
             for entry in package.entries
             if entry.info.filename != "Contents/content.hpf"
+            and entry.info.filename != "Contents/header.xml"
             and not entry.info.filename.startswith("Contents/section")
             and not entry.info.filename.startswith("BinData/")
             and not entry.info.filename.startswith("Preview/")
@@ -276,10 +343,14 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
         _content, manifest, _spine, section_item = _manifest_parts(package)
         entries = package.by_name()
         header = entries.get("Contents/header.xml")
-        if header is None or header.data != first_header.data:
+        if header is None or not _header_node_covers(
+            selected_header_root,
+            parse_xml(header.data, "Contents/header.xml").root,
+            root=True,
+        ):
             raise HwpxError(
                 HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
-                "exam item headers do not share the reviewed template identity",
+                "exam item header is outside the reviewed append-only runtime",
             )
         section_href = _attribute(section_item, "href")
         section_id = _attribute(section_item, "id")
@@ -352,11 +423,11 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             }
         )
 
-    header = parse_xml(first_header.data, "Contents/header.xml").root
+    header = copy.deepcopy(selected_header_root)
     _set_attribute(header, "secCnt", str(len(items)))
     payloads["Contents/header.xml"] = (
-        _serialize_like(first_header.data, "Contents/header.xml", header),
-        first_header.info.compress_type,
+        _serialize_like(selected_header.data, "Contents/header.xml", header),
+        selected_header.info.compress_type,
     )
     content_entry = first_entries["Contents/content.hpf"]
     payloads["Contents/content.hpf"] = (
@@ -585,7 +656,7 @@ def render_content_team_exam_workspace(
     item_set_sha256 = _item_set_sha256(request)
     render_plan_sha256 = (
         _render_plan_sha256(request)
-        if isinstance(request, (ContentTeamExamRenderRequestV2, ContentTeamExamRenderRequestV3))
+        if isinstance(request, ContentTeamExamRenderRequestV2 | ContentTeamExamRenderRequestV3)
         else None
     )
     renderer_version = (
