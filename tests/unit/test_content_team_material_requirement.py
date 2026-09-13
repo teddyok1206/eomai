@@ -9,6 +9,7 @@ from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
     build_integrated_science_mock_exam_production_plan_v4,
+    classify_content_team_mock_exam_material_profile,
     content_team_material_required_retrieval_elements,
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
@@ -208,6 +209,60 @@ def test_v4_slot_accepts_an_exact_non_first_released_material_choice() -> None:
             slot=brief.mock_exam_slot,
             content=content,
             authoring_difficulty="medium",
+        )
+
+
+def test_v4_image_requirement_owns_its_required_data_shell() -> None:
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    brief = plan.workflow_calls[22].item_brief
+    values = _content_v3(
+        "2",
+        visuals=(ContentTeamImageSlot(),),
+        visual_layout="IMAGE_ONLY",
+    ).model_dump(mode="json")
+    values["labeled_blocks"] = [{"kind": "DATA", "content": "그림을 해석하기 위한 자료"}]
+    content = type(_content_v3()).model_validate(values)
+
+    # The legacy classifier deliberately reports both visible signals.  The reviewed V4
+    # requirement is authoritative because IMAGE requires this DATA shell by contract.
+    assert classify_content_team_mock_exam_material_profile(content) == "MIXED"
+    assert brief.material_requirement.form == "IMAGE"
+    assert (
+        validate_content_team_mock_exam_slot_output_v4(
+            slot=brief.mock_exam_slot,
+            content=content,
+            authoring_difficulty="medium",
+            material_requirement=brief.material_requirement,
+        )
+        == "IMAGE"
+    )
+
+
+def test_v4_image_requirement_must_remain_inside_the_released_slot_policy() -> None:
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    slot = plan.workflow_calls[13].item_brief.mock_exam_slot
+    values = _content_v3(
+        "2.5",
+        visuals=(ContentTeamImageSlot(),),
+        visual_layout="IMAGE_ONLY",
+    ).model_dump(mode="json")
+    values["labeled_blocks"] = [{"kind": "DATA", "content": "그림을 해석하기 위한 자료"}]
+    content = type(_content_v3()).model_validate(values)
+
+    with pytest.raises(ValueError, match="outside the slot's allowed profiles"):
+        validate_content_team_mock_exam_slot_output_v4(
+            slot=slot,
+            content=content,
+            authoring_difficulty="hard",
+            material_requirement=ContentTeamMaterialRequirementV1(form="IMAGE", panel_count=1),
         )
 
 

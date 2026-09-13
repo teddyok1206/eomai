@@ -851,17 +851,11 @@ def validate_content_team_mock_exam_slot_output(
     assembly-assignment value and the whole-exam renderer owns its final display.
     """
 
-    expected_difficulty = _AUTHORING_DIFFICULTY_BY_SLOT[slot.preferred_difficulty]
-    if authoring_difficulty != expected_difficulty:
-        _fail(
-            "PRODUCTION_AUTHORING_DIFFICULTY_MISMATCH",
-            "authoring metadata difficulty differs from the mock-exam slot",
-        )
-    if (content.inquiry is not None) != slot.inquiry_required:
-        _fail(
-            "PRODUCTION_AUTHORING_INQUIRY_MISMATCH",
-            "authored inquiry presence differs from the mock-exam slot",
-        )
+    _validate_content_team_mock_exam_slot_intent(
+        slot=slot,
+        content=content,
+        authoring_difficulty=authoring_difficulty,
+    )
     material_profile = classify_content_team_mock_exam_material_profile(content)
     if material_profile not in slot.preferred_material_profiles:
         _fail(
@@ -902,19 +896,49 @@ def validate_content_team_mock_exam_slot_output_v4(
 ) -> MockExamMaterialProfile:
     """Validate V4 content against its exact selected material and assigned score."""
 
-    material_profile = validate_content_team_mock_exam_slot_output(
+    _validate_content_team_mock_exam_slot_intent(
         slot=slot,
         content=content,
         authoring_difficulty=authoring_difficulty,
     )
+    if material_requirement.form == "AUTO":
+        material_profile = classify_content_team_mock_exam_material_profile(content)
+        if material_profile not in slot.preferred_material_profiles:
+            _fail(
+                "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
+                "authored material profile is outside the slot's allowed profiles",
+            )
+    else:
+        if material_requirement.form not in slot.preferred_material_profiles:
+            _fail(
+                "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
+                "selected material form is outside the slot's allowed profiles",
+            )
+        material_profile = material_requirement.form
     validate_content_team_material_requirement(material_requirement, content)
-    if material_profile != material_requirement.form:
-        _fail(
-            "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
-            "authored material profile differs from the exact V4 material requirement",
-        )
     _validate_mock_exam_slot_score(slot=slot, content=content)
     return material_profile
+
+
+def _validate_content_team_mock_exam_slot_intent(
+    *,
+    slot: ContentTeamMockExamSlotV1,
+    content: AssessmentItemContentV2 | AssessmentItemContentV3,
+    authoring_difficulty: str,
+) -> None:
+    """Validate slot properties that are independent of the selected material representation."""
+
+    expected_difficulty = _AUTHORING_DIFFICULTY_BY_SLOT[slot.preferred_difficulty]
+    if authoring_difficulty != expected_difficulty:
+        _fail(
+            "PRODUCTION_AUTHORING_DIFFICULTY_MISMATCH",
+            "authoring metadata difficulty differs from the mock-exam slot",
+        )
+    if (content.inquiry is not None) != slot.inquiry_required:
+        _fail(
+            "PRODUCTION_AUTHORING_INQUIRY_MISMATCH",
+            "authored inquiry presence differs from the mock-exam slot",
+        )
 
 
 def _validate_mock_exam_slot_score(
