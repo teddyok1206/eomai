@@ -21,7 +21,6 @@ from eom_catalog_contracts.approved_item_graph_publication import (
     PublishApprovedItemAnalysesCommand,
 )
 from eom_catalog_contracts.assessment_assembly import (
-    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
 )
@@ -214,12 +213,9 @@ def _origin_rows(
         if workflow_version == "1.10.0"
         else build_integrated_science_mock_exam_production_plan
     )
-    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
-    if material_v4:
-        layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
     plan = plan_builder(
         policy=load_integrated_science_mock_exam_policy(),
-        layout_policy=MockExamLayoutPolicyV1.model_validate(layout_value),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
         outline=load_integrated_science_editorial_outline(),
     )
     definition_document = {"schema_version": "1.0", "test": "atomic-25"}
@@ -861,10 +857,10 @@ def test_current_validator_accepts_material_v4_table_without_image_retrieval() -
         official_reviews=_official_reviews_v3(),
     )
 
-    first_request = load_persisted_workflow_request(rows[0][3].initial_request)
-    assert first_request.image_mode == "skip"
-    assert first_request.educational_retrieval is not None
-    assert first_request.educational_retrieval.required_item_elements == (
+    table_request = load_persisted_workflow_request(rows[7][3].initial_request)
+    assert table_request.image_mode == "skip"
+    assert table_request.educational_retrieval is not None
+    assert table_request.educational_retrieval.required_item_elements == (
         "choice",
         "paragraph",
         "table",
@@ -874,13 +870,13 @@ def test_current_validator_accepts_material_v4_table_without_image_retrieval() -
 
 def test_current_validator_rejects_material_v4_table_without_table_retrieval() -> None:
     rows = list(_origin_rows(workflow_version="1.10.0", material_v4=True))
-    workflow = rows[0][3]
+    workflow = rows[7][3]
     changed = deepcopy(workflow.initial_request)
     changed["educational_retrieval"]["required_item_elements"] = ["choice", "paragraph"]
     workflow.initial_request = changed
     workflow.request_payload = changed
     workflow.request_hash = workflow_business_fingerprint(
-        cast(Any, rows[0][4]),
+        cast(Any, rows[7][4]),
         load_persisted_workflow_request(changed),
     )
     session = Mock(spec=Session)

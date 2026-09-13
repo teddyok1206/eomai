@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
+    validate_content_team_material_selection,
     validate_reviewed_authoring_guidance,
 )
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
@@ -92,6 +93,27 @@ class ContentTeamItemBriefRequestV4(ContentTeamItemBriefRequestV3):
 
     schema_version: Literal["4.0"] = "4.0"  # type: ignore[assignment]
     material_requirement: ContentTeamMaterialRequirementV1
+
+    @model_validator(mode="after")
+    def validate_authoring_guidance_hash(self) -> ContentTeamItemBriefRequestV4:
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance,
+            self.authoring_guidance_sha256,
+        )
+        if self.mock_exam_slot is not None:
+            if (
+                self.curriculum_selected_unit_key
+                != self.mock_exam_slot.curriculum_selected_unit_key
+                or self.difficulty != self.mock_exam_slot.preferred_difficulty
+            ):
+                raise ValueError("content-team V4 brief differs from its typed mock-exam slot")
+            validate_content_team_material_selection(
+                self.material_requirement,
+                task_type=self.task_type,
+                allowed_forms=self.mock_exam_slot.preferred_material_profiles,
+                inquiry_required=self.mock_exam_slot.inquiry_required,
+            )
+        return self
 
 
 class EducationalRetrievalIntentRequest(ApiModel):

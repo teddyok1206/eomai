@@ -135,6 +135,7 @@ from eom_catalog_contracts.content_team_material import (
     ContentTeamRetrievalElement,
     content_team_material_required_retrieval_elements,
     validate_content_team_material_requirement,
+    validate_content_team_material_selection,
 )
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY,
@@ -596,6 +597,7 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     content_team_material_requirement_for_mock_exam_profile,
     validate_content_team_mock_exam_slot_output,
     validate_content_team_mock_exam_slot_output_v2,
+    validate_content_team_mock_exam_slot_output_v4,
 )
 from eom_catalog_contracts.models import (
     ActivateContentPack,
@@ -1257,8 +1259,10 @@ __all__ = [
     "resolve_integrated_science_curriculum_scope",
     "validate_assessment_page_observation_anchors",
     "validate_content_team_material_requirement",
+    "validate_content_team_material_selection",
     "validate_content_team_mock_exam_slot_output",
     "validate_content_team_mock_exam_slot_output_v2",
+    "validate_content_team_mock_exam_slot_output_v4",
     "validate_contract",
     "validate_eom_question_template_content",
     "validate_integrated_science_curriculum_scope",

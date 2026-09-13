@@ -66,6 +66,28 @@ def content_team_material_required_retrieval_elements(
     return tuple(sorted(elements))
 
 
+def validate_content_team_material_selection(
+    requirement: ContentTeamMaterialRequirementV1,
+    *,
+    task_type: str,
+    allowed_forms: tuple[str, ...],
+    inquiry_required: bool,
+) -> None:
+    """Validate one mock-exam material choice against its released allowed set.
+
+    The allowed tuple is ordered policy data with at most six members.  Selection is a single
+    bounded membership check; the tuple remains intact so choosing a non-first allowed form does
+    not rewrite the released policy pointer or its preference order.
+    """
+
+    if requirement.form != task_type:
+        raise ValueError("material requirement differs from the selected task type")
+    if requirement.form not in allowed_forms:
+        raise ValueError("selected material form is outside the released slot policy")
+    if (requirement.form == "INQUIRY") != inquiry_required:
+        raise ValueError("selected material form differs from the slot inquiry requirement")
+
+
 def validate_content_team_material_requirement(
     requirement: ContentTeamMaterialRequirementV1,
     draft: ContentTeamEditorialDraftContract,

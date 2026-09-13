@@ -26,6 +26,7 @@ from eom_catalog_contracts import (
 from eom_catalog_contracts.mock_exam_production_plan import (
     validate_content_team_mock_exam_slot_output,
     validate_content_team_mock_exam_slot_output_v2,
+    validate_content_team_mock_exam_slot_output_v4,
 )
 from eom_content_pack import ContentPackError, ContentPackErrorCode, render_prompt
 from eom_hwpx_contracts import (
@@ -1855,10 +1856,17 @@ class WorkflowCatalogService:
                 "content-team V3 authoring provenance differs from the authoritative request"
             )
         brief = request.item_brief
-        if isinstance(brief, ContentTeamItemBriefV4):
-            validate_content_team_material_requirement(brief.material_requirement, content)
         if isinstance(brief, ContentTeamItemBrief) and brief.mock_exam_slot is not None:
-            if isinstance(content, AssessmentItemContentV3):
+            if isinstance(brief, ContentTeamItemBriefV4):
+                if not isinstance(content, AssessmentItemContentV3):
+                    raise ValueError("content-team V4 brief requires V3 Item content")
+                validate_content_team_mock_exam_slot_output_v4(
+                    slot=brief.mock_exam_slot,
+                    content=content,
+                    authoring_difficulty=parsed.output.metadata.difficulty,
+                    material_requirement=brief.material_requirement,
+                )
+            elif isinstance(content, AssessmentItemContentV3):
                 validate_content_team_mock_exam_slot_output_v2(
                     slot=brief.mock_exam_slot,
                     content=content,

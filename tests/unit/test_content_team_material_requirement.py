@@ -8,8 +8,14 @@ from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
+    build_integrated_science_mock_exam_production_plan_v4,
     content_team_material_required_retrieval_elements,
+    load_integrated_science_editorial_outline,
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
     validate_content_team_material_requirement,
+    validate_content_team_mock_exam_slot_output_v2,
+    validate_content_team_mock_exam_slot_output_v4,
 )
 from eom_catalog_service.content_pack_files import build_pack, compile_pack
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
@@ -169,6 +175,38 @@ def test_two_tables_require_text_panel_labels_inside_the_layout() -> None:
     )
 
     assert tuple(visual.label for visual in content.visuals) == ("(가)", "(나)")
+
+
+def test_v4_slot_accepts_an_exact_non_first_released_material_choice() -> None:
+    plan = build_integrated_science_mock_exam_production_plan_v4(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+    brief = plan.workflow_calls[7].item_brief
+    content = _content_v3(
+        "2",
+        visuals=(_table(),),
+        visual_layout="TABLE_ONLY",
+    )
+
+    assert brief.mock_exam_slot.preferred_material_profiles[0] == "DATA"
+    assert brief.material_requirement.form == "TABLE"
+    assert (
+        validate_content_team_mock_exam_slot_output_v4(
+            slot=brief.mock_exam_slot,
+            content=content,
+            authoring_difficulty="medium",
+            material_requirement=brief.material_requirement,
+        )
+        == "TABLE"
+    )
+    with pytest.raises(ValueError, match="exact primary"):
+        validate_content_team_mock_exam_slot_output_v2(
+            slot=brief.mock_exam_slot,
+            content=content,
+            authoring_difficulty="medium",
+        )
 
 
 def test_table_requirement_rejects_image_or_data_placeholder_substitution() -> None:

@@ -57,7 +57,6 @@ from eom_api_contracts.workflows import (
     WorkflowView,
 )
 from eom_catalog_contracts.assessment_assembly import (
-    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
     mock_exam_item_set_sha256,
@@ -2220,12 +2219,9 @@ def test_plan_v4_table_slot_starts_without_image_and_requests_table_evidence() -
         def get(self, workflow_id: str) -> WorkflowView:
             raise RuntimeError(f"observation intentionally unavailable for {workflow_id}")
 
-    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
-    layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
-    layout = MockExamLayoutPolicyV1.model_validate(layout_value)
     plan = build_integrated_science_mock_exam_production_plan_v4(
         policy=load_integrated_science_mock_exam_policy(),
-        layout_policy=layout,
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
         outline=load_integrated_science_editorial_outline(),
     )
     workflows = UnobservableWorkflows()
@@ -2240,13 +2236,13 @@ def test_plan_v4_table_slot_starts_without_image_and_requests_table_evidence() -
     started = coordinator.advance_items(plan, pinned, _actor(), at=NOW)
 
     assert isinstance(started, MockExamProductionExecutionV4)
-    first = workflows.start_requests[0]
-    assert isinstance(first.item_brief, ContentTeamItemBriefRequestV4)
-    assert first.item_brief.material_requirement.form == "TABLE"
-    assert first.item_brief.material_requirement.panel_count == 1
-    assert first.image_mode == "skip"
-    assert first.educational_retrieval is not None
-    assert first.educational_retrieval.required_item_elements == (
+    table_request = workflows.start_requests[7]
+    assert isinstance(table_request.item_brief, ContentTeamItemBriefRequestV4)
+    assert table_request.item_brief.material_requirement.form == "TABLE"
+    assert table_request.item_brief.material_requirement.panel_count == 1
+    assert table_request.image_mode == "skip"
+    assert table_request.educational_retrieval is not None
+    assert table_request.educational_retrieval.required_item_elements == (
         "choice",
         "paragraph",
         "table",

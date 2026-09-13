@@ -14,7 +14,6 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGenerationBlockResolutionV4,
 )
 from eom_catalog_contracts.assessment_assembly import (
-    MockExamLayoutPolicyV1,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
     load_integrated_science_mock_exam_rating_policy,
@@ -729,11 +728,9 @@ def test_real_production_workflow_uses_business_fingerprint_for_review_eligibili
 def _material_v4_table_review_workflow() -> tuple[Any, Any, Any]:
     definition_document = {"schema_version": "1.0", "test": "material-v4-review"}
     definition_sha256 = content_sha256(definition_document)
-    layout_value = load_integrated_science_mock_exam_layout_policy().model_dump(mode="json")
-    layout_value["slots"][0]["preferred_material_profiles"] = ["TABLE"]
     plan = build_integrated_science_mock_exam_production_plan_v4(
         policy=load_integrated_science_mock_exam_policy(),
-        layout_policy=MockExamLayoutPolicyV1.model_validate(layout_value),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
         outline=load_integrated_science_editorial_outline(),
     )
     block = plan.one_item_generation_block
@@ -767,7 +764,7 @@ def _material_v4_table_review_workflow() -> tuple[Any, Any, Any]:
     )
     source_request = _workflow_request_from_api(
         _workflow_request(
-            plan.workflow_calls[0],
+            plan.workflow_calls[7],
             block,
             resolution,
             _id("productionreq_", "8"),

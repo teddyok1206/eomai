@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,64 @@ def test_v4_plan_is_self_hashed_and_uses_material_briefs() -> None:
         assert brief.material_requirement.image_mode in {"skip", "required"}
 
     validate_contract("mock-exam-production-plan-v4", plan.model_dump(mode="json"))
+
+
+def test_v4_plan_covers_the_full_material_rendering_matrix() -> None:
+    plan = _plan()
+
+    requirements = tuple(
+        (
+            call.item_brief.material_requirement.form,
+            call.item_brief.material_requirement.panel_count,
+        )
+        for call in plan.workflow_calls
+    )
+    assert requirements == (
+        ("TEXT", None),
+        ("TEXT", None),
+        ("INQUIRY", None),
+        ("TEXT", None),
+        ("DATA", None),
+        ("INQUIRY", None),
+        ("TEXT", None),
+        ("TABLE", 1),
+        ("DATA", None),
+        ("TEXT", None),
+        ("IMAGE", 1),
+        ("DATA", None),
+        ("MIXED", 2),
+        ("TABLE", 2),
+        ("TEXT", None),
+        ("INQUIRY", None),
+        ("IMAGE", 2),
+        ("TABLE", 1),
+        ("DATA", None),
+        ("TABLE", 1),
+        ("INQUIRY", None),
+        ("TEXT", None),
+        ("IMAGE", 1),
+        ("MIXED", 2),
+        ("DATA", None),
+    )
+    assert Counter(form for form, _ in requirements) == {
+        "TEXT": 7,
+        "DATA": 5,
+        "TABLE": 4,
+        "IMAGE": 3,
+        "MIXED": 2,
+        "INQUIRY": 4,
+    }
+    assert (
+        sum(
+            call.item_brief.material_requirement.image_mode == "required"
+            for call in plan.workflow_calls
+        )
+        == 5
+    )
+    for call in plan.workflow_calls:
+        brief = call.item_brief
+        assert brief.task_type in brief.mock_exam_slot.preferred_material_profiles
+        assert brief.material_requirement.form == brief.task_type
 
 
 def test_v4_plan_rejects_material_drift_without_repairing_it() -> None:

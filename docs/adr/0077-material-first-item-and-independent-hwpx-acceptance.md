@@ -85,12 +85,23 @@ the GUI-critical typed list/detail endpoints, not only login. The latest single-
 contract reaches 25-Item production through an additive production-plan successor.
 
 The successor is `mock-exam-production-plan/4.0` with checkpoint
-`mock-exam-production-execution/4.0`. It preserves the ordered 25-slot tuple and maps the primary
-released slot profile to one immutable material requirement with a constant-time lookup. `TABLE`
-maps to one native table, `IMAGE` to one image, `MIXED` to exactly one image plus one table, and the
-remaining forms carry no panel count. The per-Item requirement, rather than one exam-wide flag,
-derives both the image-step capability and the sorted retrieval element set. Existing V1–V3 plans
-and checkpoints remain immutable and readable.
+`mock-exam-production-execution/4.0`. It preserves the ordered 25-slot tuple and chooses one exact
+material requirement from each released slot's ordered allowed set. A reviewed position-indexed
+tuple makes that choice in constant time and gives the production canary explicit coverage of
+`TEXT`, `DATA`, `TABLE`, `IMAGE`, `MIXED`, and `INQUIRY`. The tuple also distinguishes one-panel and
+two-panel `TABLE` and `IMAGE` cases; `MIXED` remains exactly one image plus one table. The selected
+form is copied to `task_type`, while the complete released allowed set and its policy pointer remain
+unchanged. The per-Item requirement, rather than one exam-wide flag, derives both the image-step
+capability and the sorted retrieval element set. Existing V1–V3 plans and checkpoints remain
+immutable and readable.
+
+The fixed 25-slot matrix contains seven `TEXT`, five `DATA`, four `TABLE`, three `IMAGE`, two
+`MIXED`, and four `INQUIRY` requirements. Five Items therefore schedule the image role. At least one
+`TABLE` and one `IMAGE` case uses two panels, so a whole-exam canary exercises native one-table,
+native two-table, one-image, two-image, and image-plus-table projection instead of merely proving
+that those shapes compile in unit tests. Every selected form must be a member of its released slot's
+allowed set, and inquiry presence remains exact. Plan construction rejects a missing position,
+disallowed form, or incoherent panel count before producing a self-hashed plan.
 
 No database migration or new index is needed. Plan construction remains `O(Items)` time and space;
 checkpoint compare-and-swap, idempotency, recovery, and transaction boundaries are inherited from

@@ -66,6 +66,7 @@ from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_catalog_contracts.mock_exam_production_plan import (
     validate_content_team_mock_exam_slot_output,
     validate_content_team_mock_exam_slot_output_v2,
+    validate_content_team_mock_exam_slot_output_v4,
 )
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -854,7 +855,16 @@ class MockExamItemReviewPublicationService:
         assert isinstance(request.item_brief, ContentTeamItemBrief)
         assert request.item_brief.mock_exam_slot is not None
         try:
-            if isinstance(
+            if isinstance(request.item_brief, ContentTeamItemBriefV4):
+                if not isinstance(authoring_result, ContentTeamAuthoringRoleResultV10):
+                    raise ValueError("content-team V4 brief requires V10 authoring evidence")
+                validate_content_team_mock_exam_slot_output_v4(
+                    slot=request.item_brief.mock_exam_slot,
+                    content=authoring_result.output.draft,
+                    authoring_difficulty=authoring_result.output.metadata.difficulty,
+                    material_requirement=request.item_brief.material_requirement,
+                )
+            elif isinstance(
                 authoring_result,
                 ContentTeamAuthoringRoleResultV9 | ContentTeamAuthoringRoleResultV10,
             ):

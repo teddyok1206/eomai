@@ -23,7 +23,11 @@ from eom_catalog_contracts.assessment_assembly import (
 )
 from eom_catalog_contracts.assessment_item import AssessmentItemContentV2, AssessmentItemContentV3
 from eom_catalog_contracts.authoring_guidance import validate_reviewed_authoring_guidance
-from eom_catalog_contracts.content_team_material import ContentTeamMaterialRequirementV1
+from eom_catalog_contracts.content_team_material import (
+    ContentTeamMaterialRequirementV1,
+    validate_content_team_material_requirement,
+    validate_content_team_material_selection,
+)
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     IntegratedScienceCurriculumResolver,
@@ -69,6 +73,36 @@ CONTENT_TEAM_ONE_ITEM_BLOCK_SHA256_V4: Literal[
 ] = "sha256:a609990f0d3de0989337b2df42a92718c71021a2f6e610ee3a51ec8a2269c16e"
 _AUTHORING_DIFFICULTY_BY_SLOT = {"LOW": "easy", "MEDIUM": "medium", "HIGH": "hard"}
 
+# One immutable position-indexed production matrix.  Index lookup is O(1); the tuple is kept
+# private because it is part of plan construction, not a mutable runtime registry.
+_V4_MATERIAL_REQUIREMENTS: tuple[tuple[MockExamMaterialProfile, int | None], ...] = (
+    ("TEXT", None),
+    ("TEXT", None),
+    ("INQUIRY", None),
+    ("TEXT", None),
+    ("DATA", None),
+    ("INQUIRY", None),
+    ("TEXT", None),
+    ("TABLE", 1),
+    ("DATA", None),
+    ("TEXT", None),
+    ("IMAGE", 1),
+    ("DATA", None),
+    ("MIXED", 2),
+    ("TABLE", 2),
+    ("TEXT", None),
+    ("INQUIRY", None),
+    ("IMAGE", 2),
+    ("TABLE", 1),
+    ("DATA", None),
+    ("TABLE", 1),
+    ("INQUIRY", None),
+    ("TEXT", None),
+    ("IMAGE", 1),
+    ("MIXED", 2),
+    ("DATA", None),
+)
+
 __all__ = [
     "CONTENT_TEAM_ITEM_GUIDANCE",
     "CONTENT_TEAM_ITEM_GUIDANCE_SHA256",
@@ -108,6 +142,7 @@ __all__ = [
     "content_team_material_requirement_for_mock_exam_profile",
     "validate_content_team_mock_exam_slot_output",
     "validate_content_team_mock_exam_slot_output_v2",
+    "validate_content_team_mock_exam_slot_output_v4",
 ]
 
 
@@ -227,16 +262,24 @@ class ContentTeamTrustedRagItemBriefV4Input(ContentTeamTrustedRagItemBriefV3Inpu
     material_requirement: ContentTeamMaterialRequirementV1
 
     @model_validator(mode="after")
-    def material_matches_primary_slot_profile(self) -> Self:
-        primary = self.mock_exam_slot.preferred_material_profiles[0]
-        expected_panel_count = (
-            2 if primary == "MIXED" else 1 if primary in {"TABLE", "IMAGE"} else None
+    def canonical_guidance(self) -> Self:
+        """Override V3's first-preference rule with one explicit allowed V4 selection."""
+
+        validate_reviewed_authoring_guidance(
+            self.authoring_guidance,
+            self.authoring_guidance_sha256,
         )
         if (
-            self.material_requirement.form != primary
-            or self.material_requirement.panel_count != expected_panel_count
+            self.curriculum_selected_unit_key != self.mock_exam_slot.curriculum_selected_unit_key
+            or self.difficulty != self.mock_exam_slot.preferred_difficulty
         ):
-            raise ValueError("material requirement differs from the exact primary slot profile")
+            raise ValueError("content-team V4 brief differs from its typed mock-exam slot")
+        validate_content_team_material_selection(
+            self.material_requirement,
+            task_type=self.task_type,
+            allowed_forms=self.mock_exam_slot.preferred_material_profiles,
+            inquiry_required=self.mock_exam_slot.inquiry_required,
+        )
         return self
 
 
@@ -474,6 +517,17 @@ class MockExamProductionPlanV4(MockExamProductionPlanV3):
         min_length=25,
         max_length=25,
     )
+
+    @model_validator(mode="after")
+    def coherent_v4_material_matrix(self) -> Self:
+        expected = tuple(
+            ContentTeamMaterialRequirementV1(form=form, panel_count=panel_count)
+            for form, panel_count in _V4_MATERIAL_REQUIREMENTS
+        )
+        observed = tuple(call.item_brief.material_requirement for call in self.workflow_calls)
+        if observed != expected:
+            raise ValueError("production V4 material matrix differs from its reviewed positions")
+        return self
 
 
 MockExamProductionPlanContract = (
@@ -752,6 +806,39 @@ def validate_content_team_mock_exam_slot_output_v2(
             "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
             "authored material profile differs from the exact primary mock-exam slot profile",
         )
+    _validate_mock_exam_slot_score(slot=slot, content=content)
+    return material_profile
+
+
+def validate_content_team_mock_exam_slot_output_v4(
+    *,
+    slot: ContentTeamMockExamSlotV1,
+    content: AssessmentItemContentV3,
+    authoring_difficulty: str,
+    material_requirement: ContentTeamMaterialRequirementV1,
+) -> MockExamMaterialProfile:
+    """Validate V4 content against its exact selected material and assigned score."""
+
+    material_profile = validate_content_team_mock_exam_slot_output(
+        slot=slot,
+        content=content,
+        authoring_difficulty=authoring_difficulty,
+    )
+    validate_content_team_material_requirement(material_requirement, content)
+    if material_profile != material_requirement.form:
+        _fail(
+            "PRODUCTION_AUTHORING_MATERIAL_PROFILE_MISMATCH",
+            "authored material profile differs from the exact V4 material requirement",
+        )
+    _validate_mock_exam_slot_score(slot=slot, content=content)
+    return material_profile
+
+
+def _validate_mock_exam_slot_score(
+    *,
+    slot: ContentTeamMockExamSlotV1,
+    content: AssessmentItemContentV3,
+) -> None:
     expected_score = {
         1500: "1.5",
         2000: "2",
@@ -768,7 +855,6 @@ def validate_content_team_mock_exam_slot_output_v2(
             "PRODUCTION_AUTHORING_SCORE_MISMATCH",
             "authored score differs from the exact mock-exam slot score",
         )
-    return material_profile
 
 
 def _validate_released_inputs(
@@ -997,12 +1083,24 @@ def _upgrade_workflow_call_v4(
     call: MockExamPlannedWorkflowCallV3,
     block: MockExamOneItemGenerationBlockV4,
 ) -> MockExamPlannedWorkflowCallV4:
+    position = call.item_brief.mock_exam_slot.position
+    if not 1 <= position <= len(_V4_MATERIAL_REQUIREMENTS):
+        _fail(
+            "PRODUCTION_V4_MATERIAL_POSITION_INVALID",
+            "production V4 material selection has no reviewed slot position",
+        )
+    form, panel_count = _V4_MATERIAL_REQUIREMENTS[position - 1]
+    if form not in call.item_brief.mock_exam_slot.preferred_material_profiles:
+        _fail(
+            "PRODUCTION_V4_MATERIAL_FORM_INVALID",
+            "production V4 material selection is outside the released slot policy",
+        )
+    requirement = ContentTeamMaterialRequirementV1(form=form, panel_count=panel_count)
     brief_values = call.item_brief.model_dump(mode="json", exclude={"original_request_sha256"})
     brief_values.update(
         schema_version="4.0",
-        material_requirement=content_team_material_requirement_for_mock_exam_profile(
-            call.item_brief.mock_exam_slot.preferred_material_profiles[0]
-        ).model_dump(mode="json"),
+        task_type=form,
+        material_requirement=requirement.model_dump(mode="json"),
     )
     brief_values["original_request_sha256"] = _original_request_sha256_from_values(brief_values)
     call_body: dict[str, object] = {
