@@ -35,10 +35,10 @@ WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_ROOT="/usr/local/libexec/eom-api"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-workflow-runner-hold-release"
 WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_STAGED="/usr/local/libexec/eom-api/.verify-workflow-runner-hold-release.staged"
 # The current and immediately preceding reviewed verifier bytes are immutable migration states.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:e96645de007d435510a765fbade0769ed67273d697cae6db41aa68f3ed782500"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_SHA256="sha256:b2549defa8c9c41638d4e5fba66056545dc2bf89a2413c8dc5602fab6083dcbb"
 # Exact verifier installed by the immediately preceding reviewed release. Replacing any other
 # root-owned bytes is not an upgrade; it is unexplained privileged-state drift.
-WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:b05e0dbc3d1266218913cb8ca12cdaa69b9dd5e6d0df743fef2d5dc0579dc1b2"
+WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:e96645de007d435510a765fbade0769ed67273d697cae6db41aa68f3ed782500"
 WORKFLOW_RUNNER_RETIREMENT_RECEIPT_ROOT="/var/lib/eom-api/mock-exam-retirement-receipts"
 ACTION="verify"
 PRESERVE_WORKFLOW_RUNNER_INACTIVE=false
