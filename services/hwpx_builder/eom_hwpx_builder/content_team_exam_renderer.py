@@ -8,7 +8,7 @@ import os
 import stat
 import zipfile
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 from eom_hwpx_contracts import (
@@ -593,9 +593,59 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
         tuple(header_roots)
     )
 
+    header_manifest_items = tuple(
+        child
+        for child in first_manifest
+        if local_name(child.tag) == "item"
+        and (href := _attribute(child, "href")) is not None
+        and resolve_part("Contents/content.hpf", href) == "Contents/header.xml"
+    )
+    if len(header_manifest_items) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team item manifest has no unique shared header",
+        )
+    header_manifest_id = _attribute(header_manifest_items[0], "id")
+    if header_manifest_id is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team item header identity is missing",
+        )
+    # Reviewed Hancom-authored packages and compatibility readers use archive-root
+    # HPF hrefs. Keep renderer-owned entries root-qualified even though our bounded
+    # reader also accepts OPF-relative spelling.
+    _set_attribute(header_manifest_items[0], "href", "Contents/header.xml")
+
+    section_manifest_ids = {
+        identifier
+        for child in first_manifest
+        if local_name(child.tag) == "item"
+        and (href := _attribute(child, "href")) is not None
+        and PurePosixPath(resolve_part("Contents/content.hpf", href)).name.startswith("section")
+        and (identifier := _attribute(child, "id")) is not None
+    }
     for child in tuple(first_spine):
-        if local_name(child.tag) == "itemref":
+        if (
+            local_name(child.tag) == "itemref"
+            and _attribute(child, "idref") in section_manifest_ids
+        ):
             first_spine.remove(child)
+    header_spine_items = tuple(
+        child
+        for child in first_spine
+        if local_name(child.tag) == "itemref" and _attribute(child, "idref") == header_manifest_id
+    )
+    if len(header_spine_items) > 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team item spine has duplicate shared header references",
+        )
+    if not header_spine_items:
+        namespace = etree.QName(first_spine).namespace
+        header_ref = etree.Element(f"{{{namespace}}}itemref" if namespace else "itemref")
+        _set_attribute(header_ref, "idref", header_manifest_id)
+        _set_attribute(header_ref, "linear", "yes")
+        first_spine.insert(0, header_ref)
     for child in tuple(first_manifest):
         href = _attribute(child, "href") if local_name(child.tag) == "item" else None
         if href is not None and (
@@ -671,7 +721,7 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             binary_id_map[old_id] = new_id
             cloned_binary = copy.deepcopy(binary_item)
             _set_attribute(cloned_binary, "id", new_id)
-            _set_attribute(cloned_binary, "href", f"../{new_name}")
+            _set_attribute(cloned_binary, "href", new_name)
             first_manifest.append(cloned_binary)
             payloads[new_name] = (
                 entries[binary_name].data,
@@ -691,7 +741,7 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
         new_section_name = f"Contents/section{index}.xml"
         cloned_section = copy.deepcopy(first_section_item if index == 0 else section_item)
         _set_attribute(cloned_section, "id", new_section_id)
-        _set_attribute(cloned_section, "href", f"section{index}.xml")
+        _set_attribute(cloned_section, "href", new_section_name)
         first_manifest.append(cloned_section)
         itemref = etree.Element(first_spine[0].tag if len(first_spine) else cloned_section.tag)
         if local_name(itemref.tag) != "itemref":
@@ -755,11 +805,33 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
         temporary.unlink(missing_ok=True)
         raise
     analysis = analyze_package(output)
+    manifest_by_id = {item["id"]: item for item in analysis.manifest_items if "id" in item}
+    expected_section_ids = tuple(f"section{i}" for i in range(len(items)))
+    owned_manifest_ids = (header_manifest_id, *expected_section_ids)
+    owned_manifest_paths = (
+        "Contents/header.xml",
+        *(f"Contents/section{i}.xml" for i in range(len(items))),
+    )
+    manifest_is_hancom_compatible = (
+        len(manifest_by_id) == len(analysis.manifest_items)
+        and analysis.spine == owned_manifest_ids
+        and all(
+            manifest_by_id.get(identifier, {}).get("href") == path
+            and manifest_by_id.get(identifier, {}).get("part") == path
+            for identifier, path in zip(owned_manifest_ids, owned_manifest_paths, strict=True)
+        )
+        and all(
+            item.get("href") == item.get("part")
+            for item in analysis.manifest_items
+            if item.get("part", "").startswith("BinData/")
+        )
+    )
     if (
         analysis.mimetype != "application/hwp+zip"
         or analysis.active_content
         or analysis.external_links
         or analysis.sections != tuple(f"Contents/section{i}.xml" for i in range(len(items)))
+        or not manifest_is_hancom_compatible
     ):
         raise HwpxError(
             HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,

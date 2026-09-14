@@ -106,8 +106,9 @@ def _manifest(
         identifier = _attribute(element, "idref")
         if identifier:
             spine.append(identifier)
-            if identifier in by_id:
-                sections.append(by_id[identifier])
+            target = by_id.get(identifier)
+            if target is not None and PurePosixPath(target).name.startswith("section"):
+                sections.append(target)
     return items, spine, sections, references
 
 

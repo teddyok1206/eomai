@@ -157,7 +157,7 @@ def test_content_team_reference_profile_prepares_and_binds_nested_table(tmp_path
 
     assert result["status"] == "PASS"
     assert analysis.active_content == ()
-    assert analysis.sections == ("Contents/header.xml", "Contents/section0.xml")
+    assert analysis.sections == ("Contents/section0.xml",)
     assert len({location["marker"] for location in analysis.marker_locations}) == 26
     assert len(analysis.equation_candidates) == 1
     assert validate_structure(output, bindings=bindings).status == "PASS"

@@ -13,10 +13,12 @@ import eom_hwpx_builder.cli as hwpx_cli
 import pytest
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.content_team_exam_renderer import (
+    _attribute,
     _merge_item_packages,
     render_content_team_exam_workspace,
 )
 from eom_hwpx_builder.errors import HwpxError
+from eom_hwpx_builder.xmlsafe import local_name, parse_xml
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamExamAssemblyPointer,
@@ -275,8 +277,26 @@ def test_exam_merger_is_deterministic_and_remaps_each_item_binary_pointer(tmp_pa
     with zipfile.ZipFile(output_a) as archive:
         first_section = archive.read("Contents/section0.xml")
         second_section = archive.read("Contents/section1.xml")
+        content = parse_xml(archive.read("Contents/content.hpf"), "Contents/content.hpf").root
     assert b"eomExam001Binary000" in first_section
     assert b"eomExam002Binary000" in second_section
+    manifest = next(element for element in content.iter() if local_name(element.tag) == "manifest")
+    manifest_entries = {
+        _attribute(element, "id"): _attribute(element, "href")
+        for element in manifest
+        if local_name(element.tag) == "item"
+    }
+    assert manifest_entries == {
+        "header": "Contents/header.xml",
+        "section0": "Contents/section0.xml",
+        "eomExam001Binary000": "BinData/item-001-000.png",
+        "section1": "Contents/section1.xml",
+        "eomExam002Binary000": "BinData/item-002-000.png",
+    }
+    spine = next(element for element in content.iter() if local_name(element.tag) == "spine")
+    assert tuple(
+        _attribute(element, "idref") for element in spine if local_name(element.tag) == "itemref"
+    ) == ("header", "section0", "section1")
 
 
 def test_exam_merger_rejects_unpinned_shared_template_drift(tmp_path: Path) -> None:
