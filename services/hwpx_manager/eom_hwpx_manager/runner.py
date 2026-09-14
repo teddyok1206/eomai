@@ -168,7 +168,10 @@ def serve(interval_seconds: float) -> int:
             if result == 2:
                 time.sleep(interval_seconds)
             elif result != 0:
-                return result
+                # `process_next` has already terminalized a claimed build before surfacing its
+                # sanitized failure. Keep the independent FIFO service alive for later builds;
+                # the bounded poll interval also prevents a tight loop on an unavailable adapter.
+                time.sleep(interval_seconds)
         return 0
     except Exception:
         print(

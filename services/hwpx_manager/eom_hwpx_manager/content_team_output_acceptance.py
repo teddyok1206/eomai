@@ -29,6 +29,7 @@ from eom_hwpx_contracts import (
     ContentTeamImageSource,
     ContentTeamOutputAcceptanceV1,
     ContentTeamTable,
+    project_content_team_equation_script,
     validate_content_team_image_bindings,
 )
 from eom_identifiers import content_sha256
@@ -451,13 +452,15 @@ def _source_cell_tokens(value: str) -> tuple[tuple[str, str], ...]:
     tokens: list[tuple[str, str]] = []
     cursor = 0
     for match in INLINE_EQUATION.finditer(value):
-        text = _normalized_text(value[cursor : match.start()])
+        text = _compact_visible_text(value[cursor : match.start()])
         if text:
             tokens.append(("TEXT", text))
         equation = match.group("display") or match.group("inline") or ""
-        tokens.append(("EQUATION", _normalized_equation(equation)))
+        tokens.append(
+            ("EQUATION", _normalized_equation(project_content_team_equation_script(equation)))
+        )
         cursor = match.end()
-    text = _normalized_text(value[cursor:])
+    text = _compact_visible_text(value[cursor:])
     if text:
         tokens.append(("TEXT", text))
     return tuple(tokens)
@@ -479,10 +482,10 @@ def _output_cell_tokens(cell: ElementTree.Element) -> tuple[tuple[str, str], ...
             # mixed XML content: text after ``hp:tab`` lives in the child tail,
             # not in ``hp:t.text``.  ``itertext`` is the XML-defined visible-text
             # order and keeps this verifier independent from Builder internals.
-            text = _normalized_text("".join(element.itertext()))
+            text = _compact_visible_text("".join(element.itertext()))
             if text:
                 if values and values[-1][0] == "TEXT":
-                    values[-1] = ("TEXT", _normalized_text(values[-1][1] + text))
+                    values[-1] = ("TEXT", values[-1][1] + text)
                 else:
                     values.append(("TEXT", text))
         elif local == "script" and "equation" in ancestors:
@@ -589,6 +592,27 @@ def _source_table_projection(table: ContentTeamTable) -> _TableProjection:
     )
 
 
+def _labeled_block_projection(
+    table: ElementTree.Element,
+) -> tuple[str, _CellTokens] | None:
+    attributes = {_local_name(key).casefold(): value for key, value in table.attrib.items()}
+    if attributes.get("rowcnt") != "2" or attributes.get("colcnt") != "1":
+        return None
+    rows = _direct_children(table, "tr")
+    if len(rows) != 2:
+        return None
+    cells = tuple(_direct_children(row, "tc") for row in rows)
+    if any(len(row_cells) != 1 for row_cells in cells):
+        return None
+    label_tokens = _output_cell_tokens(cells[0][0])
+    if label_tokens not in (
+        (("TEXT", "<자료>"),),
+        (("TEXT", "<조건>"),),
+    ):
+        return None
+    return label_tokens[0][1], _output_cell_tokens(cells[1][0])
+
+
 def _binary_references(
     section: ElementTree.Element,
     manifest_by_id: dict[str, str],
@@ -643,7 +667,7 @@ def _binary_references(
     if len(set(image_tables)) != 1:
         _fail("content-team HWPX generated images are split across visual tables")
     visual_table = image_tables[0]
-    expected_addresses = tuple((0, ordinal) for ordinal in range(len(image_nodes)))
+    expected_addresses = tuple((0, image.visual_ordinal) for image in expected_images)
     if tuple(address(cell) for cell in image_cells) != expected_addresses:
         _fail("content-team HWPX generated image placement differs")
     rows = _direct_children(visual_table, "tr")
@@ -791,6 +815,21 @@ def _accept_item(
         )
         for image in expectation.images
     )
+    observed_labeled_blocks = tuple(
+        labeled_projection
+        for table in section.iter()
+        if _local_name(table.tag).casefold() == "tbl"
+        and (labeled_projection := _labeled_block_projection(table)) is not None
+    )
+    expected_labeled_blocks = tuple(
+        (
+            "<자료>" if block.kind == "DATA" else "<조건>",
+            _source_cell_tokens(block.content),
+        )
+        for block in draft.labeled_blocks
+    )
+    if observed_labeled_blocks != expected_labeled_blocks:
+        _fail("content-team HWPX labeled material differs from the approved Item")
     section_text = _normalized_text(
         " ".join(
             "".join(element.itertext())
@@ -800,9 +839,6 @@ def _accept_item(
     )
     if "그림 삽입" in section_text:
         _fail("content-team HWPX still contains an image placeholder")
-    for block in draft.labeled_blocks:
-        if _normalized_text(block.content) not in section_text:
-            _fail("content-team HWPX labeled material differs from the approved Item")
     compact_section_text = _compact_visible_text(section_text)
     if any(
         fragment not in compact_section_text
@@ -821,7 +857,10 @@ def _accept_item(
     )
     if len(observed_equations) != len(equation_nodes):
         _fail("content-team HWPX equation script cardinality is invalid")
-    expected_equations = tuple(_normalized_equation(value) for value in draft.equation_sources)
+    expected_equations = tuple(
+        _normalized_equation(project_content_team_equation_script(value))
+        for value in draft.equation_sources
+    )
     equation_count = len(equation_nodes)
     if equation_count != len(draft.equation_sources):
         _fail("content-team HWPX equation count differs from the approved Item")
@@ -829,7 +868,7 @@ def _accept_item(
         _fail("content-team HWPX equations differ from the approved Item")
     tables = tuple(accepted_tables)
     semantic_text_sha256 = content_sha256(_semantic_source_projection(draft))
-    projection = {
+    structure_projection = {
         "position": expectation.position,
         "item_revision_id": expectation.item_revision_id,
         "visual_layout": draft.visual_layout,
@@ -848,7 +887,7 @@ def _accept_item(
         equation_count=equation_count,
         labeled_block_count=len(draft.labeled_blocks),
         semantic_text_sha256=semantic_text_sha256,
-        structure_sha256=content_sha256(projection),
+        structure_sha256=content_sha256(structure_projection),
     )
 
 

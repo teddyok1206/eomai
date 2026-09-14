@@ -4,6 +4,7 @@ from eom_hwpx_contracts.content_team_equations import (
     ContentTeamEquationError,
     assert_content_team_equations_supported,
     classify_content_team_equation,
+    project_content_team_equation_script,
 )
 from eom_hwpx_contracts.content_team_markdown import (
     ContentTeamMarkdownError,
@@ -175,6 +176,7 @@ __all__ = [
     "normalize_content_team_stem",
     "parse_content_team_markdown",
     "parse_content_team_markdown_v2",
+    "project_content_team_equation_script",
     "serialize_content_team_markdown",
     "statement_texts",
     "validate_content_team_image_bindings",

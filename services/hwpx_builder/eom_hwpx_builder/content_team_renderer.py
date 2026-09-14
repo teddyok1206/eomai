@@ -9,6 +9,9 @@ import os
 import stat
 import sys
 import zipfile
+from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -23,9 +26,11 @@ from eom_hwpx_contracts import (
     ContentTeamRenderRequest,
     ContentTeamRenderRequestV2,
     ContentTeamRenderRequestV3,
+    classify_content_team_equation,
     normalize_content_team_labeled_block_content,
     parse_content_team_markdown,
     parse_content_team_markdown_v2,
+    project_content_team_equation_script,
     serialize_content_team_markdown,
     validate_content_team_image_bindings,
     validate_contract,
@@ -289,7 +294,12 @@ def _content_team_engine(engine_module: Any) -> Any:
     return CompatibleEngine()
 
 
-def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
+def _content_team_validator_class(
+    validator_module: Any,
+    question: Any,
+    *,
+    allow_labeled_equations: bool,
+) -> Any:
     """Disambiguate authored ``[풀이] 참조`` from removed template samples."""
 
     wrong_answer_lines = frozenset(
@@ -312,11 +322,20 @@ def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
                 issue
                 for issue in result.issues
                 if not (
-                    issue.code == "SAMPLE_CONTENT_REMAINING"
-                    and issue.member == validator_module.SECTION_MEMBER
-                    and any(
-                        issue.message == f"table 7 sample explanation paragraph remains: {text!r}"
-                        for text in intentional_references
+                    (
+                        issue.code == "SAMPLE_CONTENT_REMAINING"
+                        and issue.member == validator_module.SECTION_MEMBER
+                        and any(
+                            issue.message
+                            == f"table 7 sample explanation paragraph remains: {text!r}"
+                            for text in intentional_references
+                        )
+                    )
+                    or (
+                        allow_labeled_equations
+                        and issue.code == "LABELED_BLOCK_CELL_STYLE_INVALID"
+                        and issue.message == "labeled block cell run must remain text-only"
+                        and "/row[1]/cell[0]/p[" in issue.location
                     )
                 )
             )
@@ -731,6 +750,236 @@ def _set_table_column_alignments(
         raise
 
 
+def _external_equation_kind(equation_engine_module: Any, source: str, script: str) -> Any:
+    family = classify_content_team_equation(source)
+    kinds = equation_engine_module.EquationKind
+    if family == "FRACTION":
+        compact = source.replace(" ", "")
+        return (
+            kinds.FRACTION_SIMPLE
+            if compact in {"1/2", "3/4", r"\frac{1}{2}", r"\frac{3}{4}"}
+            else kinds.FRACTION_EXPRESSION
+        )
+    if family == "RATIO":
+        return kinds.RATIO
+    if family == "CHEMICAL_OR_ION":
+        if "_{" in script and "^{" in script:
+            return kinds.SUBSCRIPT_SUPERSCRIPT
+        if "^{" in script:
+            if "2+}" in script:
+                return kinds.CHARGED_ION
+            if "+}" in script:
+                return kinds.POSITIVE_ION
+            if "-}" in script:
+                return kinds.NEGATIVE_ION
+            return kinds.SUPERSCRIPT
+        return kinds.CHEMICAL
+    return {
+        "SUBSCRIPT": kinds.SUBSCRIPT,
+        "SUPERSCRIPT": kinds.SUPERSCRIPT,
+        "SUBSCRIPT_SUPERSCRIPT": kinds.SUBSCRIPT_SUPERSCRIPT,
+        "COMPARISON": kinds.EQUATION,
+        "ADD_SUB_EXPRESSION": kinds.EQUATION,
+    }.get(
+        family,
+        kinds.EQUATION
+        if any(token in script for token in ("=", "+", "-", "times", " over "))
+        else kinds.VARIABLE,
+    )
+
+
+@contextmanager
+def _explicit_equation_adapter(
+    inline_module: Any,
+    equation_engine_module: Any,
+    equation_preflight_module: Any,
+) -> Iterator[None]:
+    """Bind the untrusted handoff to the approved explicit-equation contract only."""
+
+    original_parse = inline_module.InlineContentParser.parse
+    original_engine_identify = equation_engine_module.identify_equation
+    original_preflight_identify = equation_preflight_module.identify_equation
+
+    def explicit_parse(parser: Any, text: str) -> tuple[Any, ...]:
+        value = text or ""
+        segments = parser._markdown_segments(value)
+        return segments if segments is not None else (inline_module.TextSpan(value),)
+
+    def identify(source: str) -> Any:
+        script = project_content_team_equation_script(source)
+        return equation_engine_module.EquationBuildSpec(
+            _external_equation_kind(equation_engine_module, source, script),
+            script,
+        )
+
+    inline_module.InlineContentParser.parse = explicit_parse
+    equation_engine_module.identify_equation = identify
+    equation_preflight_module.identify_equation = identify
+    try:
+        yield
+    finally:
+        inline_module.InlineContentParser.parse = original_parse
+        equation_engine_module.identify_equation = original_engine_identify
+        equation_preflight_module.identify_equation = original_preflight_identify
+
+
+def _rewrite_section_member(output: Path, section_bytes: bytes, temporary_name: str) -> None:
+    package = read_package(output)
+    temporary = output.with_name(temporary_name)
+    if temporary.exists() or temporary.is_symlink():
+        raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "HWPX output is not fresh")
+    try:
+        with zipfile.ZipFile(temporary, "x", allowZip64=False) as archive:
+            for entry in package.entries:
+                info = zipfile.ZipInfo(entry.info.filename, FIXED_ZIP_TIMESTAMP)
+                info.compress_type = entry.info.compress_type
+                info.comment = entry.info.comment
+                info.extra = entry.info.extra
+                info.internal_attr = entry.info.internal_attr
+                info.external_attr = entry.info.external_attr
+                info.create_system = entry.info.create_system
+                archive.writestr(
+                    info,
+                    section_bytes if entry.info.filename == SECTION_MEMBER else entry.data,
+                )
+        temporary.chmod(0o600)
+        analysis = analyze_package(temporary)
+        if analysis.active_content or analysis.external_links or not analysis.sections:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team equation projection failed package validation",
+            )
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _render_labeled_block_equations(
+    output: Path,
+    draft: ContentTeamEditorialDraftContract,
+    reports: tuple[Any, ...],
+    *,
+    inline_module: Any,
+    equation_engine_module: Any,
+    mixed_renderer_module: Any,
+    equation_prototype: Path,
+) -> int:
+    if not any("$" in block.content for block in draft.labeled_blocks):
+        return 0
+    if len(reports) != len(draft.labeled_blocks):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team labeled block report cardinality differs",
+        )
+    package = read_package(output)
+    section_entry = package.by_name().get(SECTION_MEMBER)
+    if section_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team HWPX section is missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    tables_by_id: dict[str, list[Any]] = {}
+    for element in section.root.iter():
+        if local_name(element.tag) == "tbl" and element.get("id") is not None:
+            tables_by_id.setdefault(str(element.get("id")), []).append(element)
+    renderer = mixed_renderer_module.MixedContentRenderer(
+        equation_engine_module.EquationEngine(equation_prototype)
+    )
+    rendered_count = 0
+    for block, report in zip(draft.labeled_blocks, reports, strict=True):
+        tables = tables_by_id.get(str(report.table_id), [])
+        if len(tables) != 1 or str(report.kind).upper() != block.kind:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team labeled block table identity differs",
+            )
+        rows = _direct_children(tables[0], "tr")
+        if len(rows) != 2:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team labeled block row topology differs",
+            )
+        body_cells = _direct_children(rows[1], "tc")
+        if len(body_cells) != 1:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team labeled block body topology differs",
+            )
+        paragraphs = tuple(
+            element for element in body_cells[0].iter() if local_name(element.tag) == "p"
+        )
+        lines = tuple(block.content.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
+        if len(paragraphs) != len(lines):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team labeled block paragraph cardinality differs",
+            )
+        for paragraph, line in zip(paragraphs, lines, strict=True):
+            runs = _direct_children(paragraph, "run")
+            text_nodes = tuple(child for run in runs for child in _direct_children(run, "t"))
+            if len(runs) != 1 or len(text_nodes) != 1 or "".join(text_nodes[0].itertext()) != line:
+                raise HwpxError(
+                    HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                    "content-team labeled block text identity differs",
+                )
+            spans = inline_module.InlineContentParser().parse(line)
+            equation_count = sum(isinstance(span, inline_module.EquationSpan) for span in spans)
+            if not equation_count:
+                continue
+            renderer.render_run(
+                section_root=section.root,
+                run=runs[0],
+                text_template=text_nodes[0],
+                spans=spans,
+            )
+            rendered_count += equation_count
+    if rendered_count:
+        _rewrite_section_member(
+            output,
+            serialize_xml(section),
+            ".content-team-labeled-equations.hwpx",
+        )
+    return rendered_count
+
+
+def _assert_exact_content_team_equations(
+    output: Path,
+    draft: ContentTeamEditorialDraftContract,
+) -> int:
+    package = read_package(output)
+    section_entry = package.by_name().get(SECTION_MEMBER)
+    if section_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team HWPX section is missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    observed: list[str] = []
+    for equation in (
+        element for element in section.root.iter() if local_name(element.tag) == "equation"
+    ):
+        scripts = tuple(
+            element for element in equation.iter() if local_name(element.tag) == "script"
+        )
+        if len(scripts) != 1 or scripts[0].text is None:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team equation script cardinality differs",
+            )
+        observed.append(scripts[0].text)
+    expected = tuple(
+        project_content_team_equation_script(source) for source in draft.equation_sources
+    )
+    if len(observed) != len(expected) or Counter(observed) != Counter(expected):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team equations differ from the approved explicit sources",
+        )
+    return len(observed)
+
+
 def _external_render(
     runtime: Path,
     template: Path,
@@ -793,29 +1042,60 @@ def _external_render(
     try:
         parser_module = importlib.import_module("hwp_question_editor.services.question_parser")
         equation_module = importlib.import_module("hwp_question_editor.services.equation_preflight")
+        equation_engine_module = importlib.import_module(
+            "hwp_question_editor.services.equation_engine"
+        )
         engine_module = importlib.import_module("hwp_question_editor.services.hwpx_template_engine")
+        inline_module = importlib.import_module(
+            "hwp_question_editor.services.inline_content_parser"
+        )
+        mixed_renderer_module = importlib.import_module(
+            "hwp_question_editor.services.mixed_content_renderer"
+        )
         validator_module = importlib.import_module("hwp_question_editor.services.hwpx_validator")
         visual_module = importlib.import_module("hwp_question_editor.services.visual_slot_renderer")
-        question = parser_module.QuestionParser().parse(
-            handoff_markdown.decode("utf-8"),
-            question_name=f"item-{rendered_item_number}",
-            is_inquiry_experiment=handoff_draft.inquiry is not None,
-        )
-        bottom_stem_projection_applied = _bind_typed_bottom_stem_for_handoff(
-            question,
-            handoff_draft,
-            score_display=rendered_score_display,
-        )
-        equation_report = equation_module.EquationPreflight().assert_supported(question)
-        dynamic_validator_module: Any = validator_module
-        validator_class = _content_team_validator_class(dynamic_validator_module, question)
-        engine = _content_team_engine(engine_module)
-        original_validator = dynamic_validator_module.HwpxValidator
-        dynamic_validator_module.HwpxValidator = validator_class
-        try:
-            engine.create_document(template, output, question)
-        finally:
-            dynamic_validator_module.HwpxValidator = original_validator
+        with _explicit_equation_adapter(
+            inline_module,
+            equation_engine_module,
+            equation_module,
+        ):
+            for source in handoff_draft.equation_sources:
+                equation_engine_module.identify_equation(source)
+            question = parser_module.QuestionParser().parse(
+                handoff_markdown.decode("utf-8"),
+                question_name=f"item-{rendered_item_number}",
+                is_inquiry_experiment=handoff_draft.inquiry is not None,
+            )
+            bottom_stem_projection_applied = _bind_typed_bottom_stem_for_handoff(
+                question,
+                handoff_draft,
+                score_display=rendered_score_display,
+            )
+            equation_report = equation_module.EquationPreflight().assert_supported(question)
+            dynamic_validator_module: Any = validator_module
+            validator_class = _content_team_validator_class(
+                dynamic_validator_module,
+                question,
+                allow_labeled_equations=any(
+                    "$" in block.content for block in handoff_draft.labeled_blocks
+                ),
+            )
+            engine = _content_team_engine(engine_module)
+            original_validator = dynamic_validator_module.HwpxValidator
+            dynamic_validator_module.HwpxValidator = validator_class
+            try:
+                engine.create_document(template, output, question)
+            finally:
+                dynamic_validator_module.HwpxValidator = original_validator
+            labeled_equation_count = _render_labeled_block_equations(
+                output,
+                handoff_draft,
+                tuple(engine.last_labeled_block_reports),
+                inline_module=inline_module,
+                equation_engine_module=equation_engine_module,
+                mixed_renderer_module=mixed_renderer_module,
+                equation_prototype=runtime / PROTOTYPE_TARGETS["equation-prototypes"],
+            )
         _set_table_column_alignments(
             output,
             draft,
@@ -836,9 +1116,12 @@ def _external_render(
             expected_labeled_blocks=tuple(block.kind for block in draft.labeled_blocks),
             expected_answer_combination=question.answer_combination,
         )
+        equation_count = _assert_exact_content_team_equations(output, handoff_draft)
         report: dict[str, Any] = {
             "status": "PASS",
-            "equation_count": equation_report.total_equation_count,
+            "equation_count": equation_count,
+            "adapter_preflight_equation_count": equation_report.total_equation_count,
+            "labeled_equation_count": labeled_equation_count,
             "table_count": len(engine.last_table_render_reports),
             "visual_count": len(draft.visuals),
             "labeled_block_count": len(draft.labeled_blocks),

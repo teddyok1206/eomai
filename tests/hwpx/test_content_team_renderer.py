@@ -170,6 +170,28 @@ def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
         ),
         pytest.param(
             LABELED_BLOCK_ITEM.replace(
+                "대상 X에서 특성 P가 관측되었다.",
+                "대상 $X^{2+}$에서 특성 P가 관측되었다.",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="explicit-equation-inside-labeled-block",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
+                "다음은 관측 대상 X에 대한 자료이다.",
+                "다음은 일반 텍스트 v=3+4=7을 포함한 관측 대상 X의 자료이다.",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="plain-equation-like-text-is-not-inferred",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
                 "ㄱ. 자료에 특성 P가 명시되어 있으므로 옳다.",
                 "전체 풀이에서 자료의 판단 근거를 설명하였다.\n\nㄱ. [풀이] 참조",
                 1,
@@ -284,6 +306,9 @@ def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
     )
     assert report["labeled_image_projection_applied"] is False
     assert report["projected_image_slot_count"] == 0
+    assert report["labeled_equation_count"] == sum(
+        block.content.count("$") // 2 for block in draft.labeled_blocks
+    )
     assert stat.S_IMODE(output.stat().st_mode) == 0o640
     assert stat.S_IMODE(result_path.stat().st_mode) == 0o640
 

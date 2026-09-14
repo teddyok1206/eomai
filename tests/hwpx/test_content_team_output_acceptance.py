@@ -74,8 +74,11 @@ def _table_only_acceptance_value() -> dict[str, object]:
     return receipt
 
 
-def _render_table_only(tmp_path: Path) -> tuple[Path, str, ContentTeamOutputExpectation]:
-    draft = parse_content_team_markdown_v2(TABLE_ONLY_ITEM.encode("utf-8"))
+def _render_table_only(
+    tmp_path: Path,
+    source: str = TABLE_ONLY_ITEM,
+) -> tuple[Path, str, ContentTeamOutputExpectation]:
+    draft = parse_content_team_markdown_v2(source.encode("utf-8"))
     assert draft.visual_layout == "TABLE_ONLY"
     assert tuple(visual.kind for visual in draft.visuals) == ("TABLE",)
     assert draft.visuals[0].label == ""
@@ -277,6 +280,78 @@ def _render_paired_tables(tmp_path: Path) -> tuple[Path, str, ContentTeamOutputE
     )
 
 
+def _render_table_image(tmp_path: Path) -> tuple[Path, str, ContentTeamOutputExpectation]:
+    base = parse_content_team_markdown_v2(TABLE_ONLY_ITEM.encode("utf-8"))
+    draft_value = base.model_dump(mode="json")
+    draft_value["visual_layout"] = "TABLE_IMAGE"
+    draft_value["visuals"] = [
+        base.visuals[0].model_dump(mode="json"),
+        {"kind": "IMAGE", "label": ""},
+    ]
+    draft = type(base).model_validate(draft_value)
+    markdown = serialize_content_team_markdown(draft)
+    item_value = {
+        "schema_version": "3.0",
+        **draft.model_dump(mode="json", exclude={"schema_version", "source_sha256"}),
+    }
+    item_bytes = json.dumps(
+        item_value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    (input_root / "item-content.json").write_bytes(item_bytes)
+    (input_root / "content-team-item.md").write_bytes(markdown)
+    (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
+    image_bytes = png_bytes(output=True)
+    (input_root / "visual-1.png").write_bytes(image_bytes)
+    image = ContentTeamImageSource(
+        visual_ordinal=1,
+        label="",
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "2" * 32,
+        sha256=_sha256(image_bytes),
+        alt_text="표 오른쪽의 검증 그림",
+        file_name="input/visual-1.png",
+    )
+    request = ContentTeamRenderRequestV3(
+        build_id="hwpxbuild_" + "3" * 32,
+        item_revision_id="itemrev_" + "4" * 32,
+        source=ContentTeamItemSourceV2(
+            artifact_id="artifact_" + "5" * 32,
+            artifact_revision_id="rev_" + "6" * 32,
+            json_sha256=_sha256(item_bytes),
+            markdown_sha256=_sha256(markdown),
+        ),
+        handoff=ContentTeamHandoffSnapshot(
+            artifact_id="artifact_" + "7" * 32,
+            artifact_revision_id="rev_" + "8" * 32,
+            members=tuple(
+                ContentTeamHandoffMember(purpose=purpose, sha256=sha256, size=size)
+                for purpose, sha256, size in CONTENT_TEAM_HANDOFF_MEMBERS
+            ),
+        ),
+        images=(image,),
+    )
+    request_path = tmp_path / "request.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+    result = render_content_team_workspace(request_path, tmp_path / "result.json")
+    assert result.status == "SUCCEEDED"
+    assert result.output_sha256 is not None
+    return (
+        tmp_path / "output/content-team-item.hwpx",
+        result.output_sha256,
+        ContentTeamOutputExpectation(
+            position=1,
+            item_revision_id=request.item_revision_id,
+            draft=draft,
+            images=(image,),
+        ),
+    )
+
+
 def _rewrite_member(
     source: Path,
     target: Path,
@@ -345,6 +420,72 @@ def test_manager_rejects_a_changed_native_table_cell(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_accepts_a_table_text_split_across_formatting_runs(tmp_path: Path) -> None:
+    output, _output_sha256, expectation = _render_table_only(
+        tmp_path,
+        TABLE_ONLY_ITEM.replace("| 구간 |", "| 운동 구간 |", 1),
+    )
+    changed = tmp_path / "split-cell-run.hwpx"
+
+    def split_text_run(payload: bytes) -> bytes:
+        marker = "운동 구간".encode()
+        replacement = "운동</hp:t><hp:t>구간".encode()
+        assert payload.count(marker) == 1
+        return payload.replace(marker, replacement, 1)
+
+    _rewrite_member(output, changed, "Contents/section0.xml", split_text_run)
+
+    receipt = verify_content_team_output(
+        changed,
+        expected_sha256=_sha256(changed.read_bytes()),
+        expectations=(expectation,),
+    )
+
+    assert receipt.items[0].tables[0].column_count == 3
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_accepts_contract_projected_hancom_equation_scripts(tmp_path: Path) -> None:
+    output, output_sha256, expectation = _render_table_only(
+        tmp_path,
+        TABLE_ONLY_ITEM.replace("$3$", "$x^{2}$"),
+    )
+
+    receipt = verify_content_team_output(
+        output,
+        expected_sha256=output_sha256,
+        expectations=(expectation,),
+    )
+
+    assert receipt.items[0].equation_count == len(expectation.draft.equation_sources)
+    with zipfile.ZipFile(output) as archive:
+        assert b"x ^{2}" in archive.read("Contents/section0.xml")
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_rejects_a_changed_projected_equation_script(tmp_path: Path) -> None:
+    output, _output_sha256, expectation = _render_table_only(
+        tmp_path,
+        TABLE_ONLY_ITEM.replace("$5>3$", "$x^{2}$", 1),
+    )
+    changed = tmp_path / "changed-equation.hwpx"
+
+    def change_equation(payload: bytes) -> bytes:
+        marker = b"x ^{2}"
+        assert payload.count(marker) == 1
+        return payload.replace(marker, b"x ^{3}", 1)
+
+    _rewrite_member(output, changed, "Contents/section0.xml", change_equation)
+
+    with pytest.raises(HwpxManagerError, match="equations differ"):
+        verify_content_team_output(
+            changed,
+            expected_sha256=_sha256(changed.read_bytes()),
+            expectations=(expectation,),
+        )
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
 def test_manager_rejects_an_external_reference_before_acceptance(tmp_path: Path) -> None:
     output, _output_sha256, expectation = _render_table_only(tmp_path)
     changed = tmp_path / "external-reference.hwpx"
@@ -383,6 +524,22 @@ def test_manager_accepts_two_exact_images_with_editable_panel_labels(tmp_path: P
     assert tuple(image.sha256 for image in receipt.items[0].images) == tuple(
         image.sha256 for image in expectation.images
     )
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_accepts_an_image_in_its_authored_column_after_a_table(tmp_path: Path) -> None:
+    output, output_sha256, expectation = _render_table_image(tmp_path)
+
+    receipt = verify_content_team_output(
+        output,
+        expected_sha256=output_sha256,
+        expectations=(expectation,),
+    )
+
+    accepted = receipt.items[0]
+    assert accepted.visual_layout == "TABLE_IMAGE"
+    assert tuple(table.visual_ordinal for table in accepted.tables) == (0,)
+    assert tuple(image.visual_ordinal for image in accepted.images) == (1,)
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")

@@ -51,6 +51,17 @@ CHEMICAL = re.compile(
     rf"^(?:[A-Z][a-z]?(?:_(?:\{{{INDEX}\}}|[0-9]))?)+"
     rf"(?:\^(?:\{{{EXPONENT}\}}|[A-Za-z0-9+\-]))?$"
 )
+SCRIPT_SUB_SUP = re.compile(
+    r"\b(?P<base>[A-Za-z]+)_(?:\{(?P<braced_sub>[^{}]+)\}|(?P<plain_sub>[A-Za-z0-9]+))"
+    r"\^(?:\{(?P<braced_sup>[^{}]+)\}|(?P<plain_sup>[A-Za-z0-9+\-]+))"
+)
+SCRIPT_SUB = re.compile(
+    r"\b(?P<base>[A-Za-z]+)_(?:\{(?P<braced_sub>[^{}]+)\}|(?P<plain_sub>[A-Za-z0-9]+))"
+)
+SCRIPT_SUP = re.compile(
+    r"\b(?P<base>[A-Za-z]+|\d+(?:\.\d+)?)"
+    r"\^(?:\{(?P<braced_sup>[^{}]+)\}|(?P<plain_sup>[A-Za-z0-9+\-]+))"
+)
 
 
 class ContentTeamEquationError(ValueError):
@@ -275,6 +286,82 @@ def classify_content_team_equation(source: str) -> ContentTeamEquationFamily:
     if family is None:
         raise ContentTeamEquationError("content-team equation is outside the prototype grammar")
     return family
+
+
+def _hwp_base(base: str) -> str:
+    return f"rm{base}" if base and base[0].isupper() else base
+
+
+def _project_fraction_group(value: str) -> str:
+    return _project_hwp_syntax(value).replace("+", "`+`").replace(":", "`:`").replace("=", "`=`")
+
+
+def _project_fractions(value: str) -> str:
+    cursor = 0
+    result: list[str] = []
+    while True:
+        start = value.find(r"\frac", cursor)
+        if start < 0:
+            result.append(value[cursor:])
+            return "".join(result)
+        result.append(value[cursor:start])
+        numerator = _braced(value, start + len(r"\frac"))
+        if numerator is None:
+            raise ContentTeamEquationError("content-team fraction numerator is malformed")
+        denominator = _braced(value, numerator[1])
+        if denominator is None:
+            raise ContentTeamEquationError("content-team fraction denominator is malformed")
+        result.append(
+            f"{{{_project_fraction_group(numerator[0])}}} "
+            f"over {{{_project_fraction_group(denominator[0])}}}"
+        )
+        cursor = denominator[1]
+
+
+def _project_hwp_syntax(value: str) -> str:
+    script = _project_fractions(value)
+    script = re.sub(r"(over \{[^}]+\})(?=[A-Za-z])", r"\1 ", script)
+    script = script.replace(r"\times", "times")
+
+    def sub_sup(match: re.Match[str]) -> str:
+        sub = match.group("braced_sub") or match.group("plain_sub")
+        sup = match.group("braced_sup") or match.group("plain_sup")
+        return f"{_hwp_base(match.group('base'))} _{{{sub}}}^{{{sup}}}"
+
+    def sub(match: re.Match[str]) -> str:
+        payload = match.group("braced_sub") or match.group("plain_sub")
+        return f"{_hwp_base(match.group('base'))} _{{{payload}}}"
+
+    def sup(match: re.Match[str]) -> str:
+        payload = match.group("braced_sup") or match.group("plain_sup")
+        base = match.group("base")
+        if payload in {r"\prime", r"\prime\prime"} and len(base) == 1:
+            return f"{base} {' '.join('prime' for _ in range(payload.count(r'\prime')))}"
+        return f"{_hwp_base(base)} ^{{{payload}}}"
+
+    script = SCRIPT_SUB_SUP.sub(sub_sup, script)
+    script = SCRIPT_SUB.sub(sub, script)
+    script = SCRIPT_SUP.sub(sup, script)
+    script = re.sub(r"(?<='|[A-Za-z])'", " prime", script)
+    script = re.sub(r"(\})(?=[A-Z])", r"\1 ", script)
+    return re.sub(r"\s+", " ", script).strip()
+
+
+def project_content_team_equation_script(source: str) -> str:
+    """Project one reviewed equation source to a canonical Hancom script.
+
+    The source grammar is the authority. This projection is pure and is shared by the isolated
+    Builder adapter and independent Manager acceptance; it never imports the external renderer.
+    """
+
+    family = classify_content_team_equation(source)
+    compact = re.sub(r"\s+", "", source)
+    script = _project_hwp_syntax(compact)
+    if family == "RATIO":
+        script = script.replace(":", "`:`").replace("=", "`=`")
+    if not script:
+        raise ContentTeamEquationError("content-team equation script is empty")
+    return script
 
 
 def assert_content_team_equations_supported(sources: tuple[str, ...]) -> None:

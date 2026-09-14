@@ -628,6 +628,70 @@ def test_runner_returns_sanitized_failure_without_traceback(
     assert "Traceback" not in captured.err
 
 
+def test_runner_service_continues_after_one_terminal_build_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    class FakeService:
+        def __init__(self, _engine: object, **_kwargs: object) -> None:
+            pass
+
+        @staticmethod
+        def secure_download(_build_id: str) -> None:
+            return None
+
+    class FakeExamService(FakeService):
+        @staticmethod
+        def recover_interrupted() -> ExamRecoveryResult:
+            return ExamRecoveryResult(ExamRecoveryState.NONE)
+
+    class FakeDownloadServer:
+        def __init__(self, _resolver: object) -> None:
+            pass
+
+        @staticmethod
+        def serve_forever() -> None:
+            pass
+
+        @staticmethod
+        def shutdown() -> None:
+            pass
+
+        @staticmethod
+        def server_close() -> None:
+            pass
+
+    handlers: dict[int, Any] = {}
+    calls: list[bool] = []
+
+    def remember_handler(number: int, handler: Any) -> None:
+        handlers[number] = handler
+
+    def cycle(*, verify_privileges: bool, prefer_exam: bool) -> int:
+        assert verify_privileges is False
+        calls.append(prefer_exam)
+        if len(calls) == 1:
+            return 1
+        handlers[runner.signal.SIGTERM](runner.signal.SIGTERM, None)
+        return 2
+
+    monkeypatch.setattr(runner, "build_engine", FakeEngine)
+    monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
+    monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
+    monkeypatch.setattr(runner, "HwpxApplicationService", FakeService)
+    monkeypatch.setattr(runner, "ExamHwpxApplicationService", FakeExamService)
+    monkeypatch.setattr(runner, "HwpxDownloadServer", FakeDownloadServer)
+    monkeypatch.setattr(runner, "run_once", cycle)
+    monkeypatch.setattr(runner.signal, "signal", remember_handler)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    assert runner.serve(0.25) == 0
+    assert calls == [False, True]
+
+
 def test_runner_processes_assessment_queue_after_item_queue_is_idle(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
