@@ -67,6 +67,21 @@ def _id(prefix: str, digit: str) -> str:
     return prefix + digit * 32
 
 
+def test_existing_review_lookup_uses_select_only_under_the_item_row_lock() -> None:
+    """Immutable review rows stay queryable by the least-privilege Catalog runtime role."""
+
+    service = object.__new__(MockExamItemReviewPublicationService)
+    session = Mock()
+    session.scalars.return_value = ()
+
+    assert service._single_existing_review(session, _id("itemrev_", "1")) is None
+
+    statement = session.scalars.call_args.args[0]
+    sql = str(statement)
+    assert "item_review_records.item_revision_id" in sql
+    assert "FOR UPDATE" not in sql
+
+
 def _trusted_receipts(
     *,
     workflow_id: str,

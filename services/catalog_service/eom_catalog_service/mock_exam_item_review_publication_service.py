@@ -2012,11 +2012,14 @@ class MockExamItemReviewPublicationService:
         session: Session,
         item_revision_id: str,
     ) -> ItemReviewRecord | None:
+        # `_resolve_evidence` already holds the mutable Item row lock for this transaction.
+        # Review decisions are append-only and the Catalog runtime intentionally has no UPDATE
+        # privilege on them, so a second `FOR UPDATE` would reject every first publication.
         rows = tuple(
             session.scalars(
-                select(ItemReviewRecord)
-                .where(ItemReviewRecord.item_revision_id == item_revision_id)
-                .with_for_update()
+                select(ItemReviewRecord).where(
+                    ItemReviewRecord.item_revision_id == item_revision_id
+                )
             )
         )
         if len(rows) > 1:
