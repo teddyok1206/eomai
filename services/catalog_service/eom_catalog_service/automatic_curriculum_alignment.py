@@ -6,6 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from eom_catalog_contracts import CurriculumRetrievalScope
 from eom_identifiers import content_sha256
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -40,6 +41,7 @@ class AutomaticCurriculumAlignmentPolicy:
     maximum_units: int
     maximum_associations: int
     maximum_support_only: bool
+    origin_scoped: bool
     document: dict[str, object]
     sha256: str
 
@@ -50,6 +52,7 @@ def _alignment_policy(
     maximum_units: int,
     maximum_associations: int,
     maximum_support_only: bool,
+    origin_scoped: bool = False,
 ) -> AutomaticCurriculumAlignmentPolicy:
     document: dict[str, object] = {
         "schema_version": version,
@@ -73,11 +76,28 @@ def _alignment_policy(
     }
     if maximum_support_only:
         document["selection_threshold"] = "MAXIMUM_EVIDENCE_SUPPORT_ONLY"
+    if origin_scoped:
+        document.update(
+            {
+                "graph_walk": "DIRECT_EVIDENCE_NODE_MEMBERSHIP",
+                "maximum_depth": 0,
+                "ranking": ["SCOPED_ROOT_ONLY"],
+                "selection_threshold": "SCOPED_ROOT_DIRECT_EVIDENCE_REQUIRED",
+                "target_unit_source": "RETRIEVAL_CURRICULUM_SCOPE_ROOT",
+            }
+        )
+        retrieval = document["retrieval"]
+        assert isinstance(retrieval, dict)
+        retrieval["curriculum_scope"] = {
+            "include_descendants": False,
+            "unit_level": "MINOR",
+        }
     return AutomaticCurriculumAlignmentPolicy(
         version=version,
         maximum_units=maximum_units,
         maximum_associations=maximum_associations,
         maximum_support_only=maximum_support_only,
+        origin_scoped=origin_scoped,
         document=document,
         sha256=content_sha256(document),
     )
@@ -104,6 +124,13 @@ _AUTOMATIC_ITEM_ALIGNMENT_POLICIES = {
             maximum_associations=AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
             maximum_support_only=True,
         ),
+        _alignment_policy(
+            "integrated-science-auto-alignment/1.3",
+            maximum_units=1,
+            maximum_associations=64,
+            maximum_support_only=False,
+            origin_scoped=True,
+        ),
     )
 }
 AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.2"
@@ -112,6 +139,10 @@ AUTOMATIC_ITEM_ALIGNMENT_POLICY = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
 ].document
 AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+].sha256
+ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION = "integrated-science-auto-alignment/1.3"
+ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256 = _AUTOMATIC_ITEM_ALIGNMENT_POLICIES[
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
 ].sha256
 _ITEM_NODE_TYPES = frozenset({"ITEM_REVISION", "ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
 _FALLBACK_TOPIC_NODE_TYPES = frozenset({"ITEM_ELEMENT", "ASSESSMENT_PATTERN"})
@@ -172,6 +203,7 @@ def derive_automatic_item_curriculum_unit_ids(
     graph_snapshot_revision_id: str,
     evidence_node_ids: tuple[str, ...],
     alignment_policy_version: str = AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+    curriculum_scope: CurriculumRetrievalScope | None = None,
 ) -> tuple[str, ...]:
     """Rank MINOR units over one bounded multi-source, three-hop graph traversal."""
 
@@ -194,6 +226,33 @@ def derive_automatic_item_curriculum_unit_ids(
         raise AutomaticCurriculumAlignmentError(
             "AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID",
             "automatic alignment evidence nodes do not resolve in the pinned snapshot",
+        )
+
+    if policy.origin_scoped:
+        if curriculum_scope is None or curriculum_scope.include_descendants:
+            raise AutomaticCurriculumAlignmentError(
+                "AUTOMATIC_ALIGNMENT_SCOPE_INVALID",
+                "origin-scoped alignment requires one exact non-descendant curriculum scope",
+            )
+        root = session.scalar(
+            select(CurriculumUnitRecord).where(
+                CurriculumUnitRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
+                CurriculumUnitRecord.framework_revision_id
+                == curriculum_scope.framework_revision_id,
+                CurriculumUnitRecord.curriculum_unit_id == curriculum_scope.root_unit_id,
+                CurriculumUnitRecord.unit_level == "MINOR",
+            )
+        )
+        if root is None or root.node_id not in existing_nodes:
+            raise AutomaticCurriculumAlignmentError(
+                "AUTOMATIC_ALIGNMENT_SCOPED_TARGET_UNSUPPORTED",
+                "origin-scoped MINOR unit must be a direct pinned Evidence Bundle node",
+            )
+        return (root.curriculum_unit_id,)
+    if curriculum_scope is not None:
+        raise AutomaticCurriculumAlignmentError(
+            "AUTOMATIC_ALIGNMENT_SCOPE_INVALID",
+            "legacy automatic alignment policies do not admit a curriculum scope",
         )
 
     reached_by: dict[str, set[str]] = {node_id: {node_id} for node_id in seeds}

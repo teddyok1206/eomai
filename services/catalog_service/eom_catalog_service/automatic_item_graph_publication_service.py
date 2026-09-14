@@ -11,10 +11,12 @@ from typing import Literal
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     AssessmentOccurrenceItemBinding,
-    AutomaticItemCurriculumAlignmentBinding,
+    AutomaticItemCurriculumAlignmentBindingV2,
     CreateEvidenceBundleCommand,
+    CurriculumRetrievalScope,
     KnowledgeGraphPublicationResult,
     PublishKnowledgeGraphSnapshotCommandV5,
+    PublishKnowledgeGraphSnapshotCommandV6,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
@@ -27,6 +29,8 @@ from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     AUTOMATIC_ITEM_ALIGNMENT_SOURCE_CLASSES,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     automatic_item_alignment_topic_keys,
     derive_automatic_item_curriculum_unit_ids,
 )
@@ -54,14 +58,18 @@ AnalysisValidator = Callable[
     None,
 ]
 AlignmentValidator = Callable[
-    [tuple[AutomaticItemCurriculumAlignmentBinding, ...]],
+    [tuple[AutomaticItemCurriculumAlignmentBindingV2, ...]],
     None,
+]
+AlignmentScopeResolver = Callable[
+    [Session, CurrentKnowledgeGraphStructure, tuple[AcceptedAnalysisProposal, ...]],
+    tuple[CurriculumRetrievalScope | None, ...],
 ]
 OccurrenceBindingResolver = Callable[
     [
         Session,
         tuple[AcceptedAnalysisProposal, ...],
-        tuple[AutomaticItemCurriculumAlignmentBinding, ...],
+        tuple[AutomaticItemCurriculumAlignmentBindingV2, ...],
     ],
     tuple[AssessmentOccurrenceItemBinding, ...],
 ]
@@ -77,7 +85,7 @@ class AutomaticItemGraphCandidate:
 @dataclass(frozen=True)
 class AutomaticItemGraphPublicationReceipt:
     graph_publication: KnowledgeGraphPublicationResult
-    alignments: tuple[AutomaticItemCurriculumAlignmentBinding, ...]
+    alignments: tuple[AutomaticItemCurriculumAlignmentBindingV2, ...]
 
 
 def build_automatic_item_alignment_retrieval_command(
@@ -87,6 +95,7 @@ def build_automatic_item_alignment_retrieval_command(
     topic_keys: tuple[str, ...],
     access_policy_revision_id: str,
     idempotency_namespace: str,
+    curriculum_scope: CurriculumRetrievalScope | None = None,
 ) -> CreateEvidenceBundleCommand:
     """Build the deterministic Graph-RAG retrieval request shared by both publishers."""
 
@@ -100,7 +109,9 @@ def build_automatic_item_alignment_retrieval_command(
         "operation": "CREATE_EVIDENCE_BUNDLE",
         "graph_snapshot_revision_id": context.graph_snapshot_revision_id,
         "query_kind": "ITEM_PREPARATION",
-        "curriculum_scope": None,
+        "curriculum_scope": (
+            curriculum_scope.model_dump(mode="json") if curriculum_scope is not None else None
+        ),
         "topic_keys": list(topic_keys),
         "target_item_revision_id": None,
         "required_item_elements": [],
@@ -155,6 +166,7 @@ class AutomaticItemGraphPublicationService:
         publication_idempotency_key: str | None = None,
         publication_authorized_at: datetime | None = None,
         analysis_validator: AnalysisValidator | None = None,
+        alignment_scope_resolver: AlignmentScopeResolver | None = None,
         alignment_validator: AlignmentValidator | None = None,
         occurrence_binding_resolver: OccurrenceBindingResolver | None = None,
     ) -> AutomaticItemGraphPublicationReceipt:
@@ -222,12 +234,20 @@ class AutomaticItemGraphPublicationService:
             raise ValueError("PAST_EXAM Graph publication requires occurrence bindings")
         if required_source_class == "APPROVED_ITEM" and occurrence_binding_resolver is not None:
             raise ValueError("APPROVED_ITEM Graph publication cannot add exam occurrences")
-        if analysis_validator is not None:
+        alignment_scopes: tuple[CurriculumRetrievalScope | None, ...] = (None,) * len(candidates)
+        if analysis_validator is not None or alignment_scope_resolver is not None:
             with self.sessions() as session:
-                analysis_validator(session, analyses)
+                if analysis_validator is not None:
+                    analysis_validator(session, analyses)
+                if alignment_scope_resolver is not None:
+                    alignment_scopes = alignment_scope_resolver(session, context, analyses)
+                    if len(alignment_scopes) != len(candidates):
+                        raise ValueError(
+                            "automatic Graph publication alignment scopes are not exact"
+                        )
 
-        additions: list[AutomaticItemCurriculumAlignmentBinding] = []
-        for candidate in candidates:
+        additions: list[AutomaticItemCurriculumAlignmentBindingV2] = []
+        for candidate, curriculum_scope in zip(candidates, alignment_scopes, strict=True):
             analysis = analyses_by_id[candidate.analysis_run_id]
             topics = automatic_item_alignment_topic_keys(
                 (str(node.node_type), node.stable_key) for node in analysis.proposal.nodes
@@ -239,6 +259,7 @@ class AutomaticItemGraphPublicationService:
                     topic_keys=topics,
                     access_policy_revision_id=self.access_policy_revision_id,
                     idempotency_namespace=retrieval_idempotency_namespace,
+                    curriculum_scope=curriculum_scope,
                 )
             )
             with self.sessions() as session:
@@ -259,6 +280,12 @@ class AutomaticItemGraphPublicationService:
                     session,
                     graph_snapshot_revision_id=context.graph_snapshot_revision_id,
                     evidence_node_ids=evidence_node_ids,
+                    alignment_policy_version=(
+                        ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+                        if curriculum_scope is not None
+                        else AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+                    ),
+                    curriculum_scope=curriculum_scope,
                 )
             source = analysis.source
             if not isinstance(source, ApprovedItemKnowledgeSourceV2):  # pragma: no cover
@@ -277,8 +304,16 @@ class AutomaticItemGraphPublicationService:
                 "evidence_manifest": evidence.manifest_artifact.model_dump(mode="json"),
                 "evidence_node_ids": list(evidence_node_ids),
                 "curriculum_unit_ids": list(curriculum_unit_ids),
-                "alignment_policy_version": AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
-                "alignment_policy_sha256": AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+                "alignment_policy_version": (
+                    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+                    if curriculum_scope is not None
+                    else AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+                ),
+                "alignment_policy_sha256": (
+                    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+                    if curriculum_scope is not None
+                    else AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+                ),
                 "requested_by_operator_id": candidate.requested_by_operator_id,
                 "aligned_at": evidence.published_at.isoformat().replace("+00:00", "Z"),
                 "alignment_sha256": "sha256:" + "0" * 64,
@@ -286,7 +321,7 @@ class AutomaticItemGraphPublicationService:
             value["alignment_sha256"] = content_sha256(
                 {key: item for key, item in value.items() if key != "alignment_sha256"}
             )
-            additions.append(AutomaticItemCurriculumAlignmentBinding.model_validate(value))
+            additions.append(AutomaticItemCurriculumAlignmentBindingV2.model_validate(value))
 
         ordered_additions = tuple(additions)
         if alignment_validator is not None:
@@ -310,8 +345,13 @@ class AutomaticItemGraphPublicationService:
         )
         structure_pointer = self.publication.commit_structure_manifest(structure)
         all_run_ids = tuple(sorted({*context.accepted_analysis_run_ids, *candidate_ids}))
+        origin_scoped = any(scope is not None for scope in alignment_scopes)
         request_value: dict[str, object] = {
-            "schema_version": "knowledge-graph-publication/5.0",
+            "schema_version": (
+                "knowledge-graph-publication/6.0"
+                if origin_scoped
+                else "knowledge-graph-publication/5.0"
+            ),
             "corpus_key": context.corpus_key,
             "display_name": context.display_name,
             "accepted_analysis_run_ids": list(all_run_ids),
@@ -335,8 +375,13 @@ class AutomaticItemGraphPublicationService:
         request_value["request_sha256"] = content_sha256(
             {key: item for key, item in request_value.items() if key != "request_sha256"}
         )
+        graph_command = (
+            PublishKnowledgeGraphSnapshotCommandV6.model_validate(request_value)
+            if origin_scoped
+            else PublishKnowledgeGraphSnapshotCommandV5.model_validate(request_value)
+        )
         graph_publication = self.publication.publish(
-            PublishKnowledgeGraphSnapshotCommandV5.model_validate(request_value),
+            graph_command,
             authorized_at=publication_authorized_at,
         )
         return AutomaticItemGraphPublicationReceipt(

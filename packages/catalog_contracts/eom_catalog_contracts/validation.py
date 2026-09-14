@@ -1188,6 +1188,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "5.0",
             "sha256:c87350c2f40fc225962bd86e4a2172c03c4c5b726437735ffe0e7d6e4a30f8ab",
         ),
+        "knowledge-graph-publication-v6": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-publication-v6.schema.json",
+            "resources/knowledge/knowledge-graph-publication-v6.schema.json",
+            "6.0",
+            "sha256:42664c7dae7c5d22169fff4a86b7f7c225556e751da7f702c8e862a6d88762f8",
+        ),
         "approved-item-graph-publication-command": CatalogSchemaResource(
             "schemas/knowledge/approved-item-graph-publication-command-v1.schema.json",
             "resources/knowledge/approved-item-graph-publication-command-v1.schema.json",
@@ -1260,6 +1266,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "5.0",
             "sha256:1ba3811bb993aef736f7d31cd79a311f2168e076844866299e3952e2d19df911",
         ),
+        "knowledge-graph-structure-manifest-v6": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-structure-manifest-v6.schema.json",
+            "resources/knowledge/knowledge-graph-structure-manifest-v6.schema.json",
+            "6.0",
+            "sha256:ffa269d11d5997e4d4649a0435b32ee5f53281dee85a06d5f77a7fdf215edd88",
+        ),
         "knowledge-graph-snapshot-manifest-v2": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
             "resources/knowledge/knowledge-graph-snapshot-manifest-v2.schema.json",
@@ -1301,6 +1313,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/knowledge-graph-snapshot-manifest-v8.schema.json",
             "8.0",
             "sha256:1e19e4ff2b15e60a36bbd1c4206c7a77278460506df5eb3a74e3f5f0491f131c",
+        ),
+        "knowledge-graph-snapshot-manifest-v9": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v9.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v9.schema.json",
+            "9.0",
+            "sha256:7bbc5958d6b5a490979b9a73914f22e53eed4e292f744f1fc4dd7b9454255377",
+        ),
+        "automatic-item-curriculum-alignment-v2": CatalogSchemaResource(
+            "schemas/knowledge/automatic-item-curriculum-alignment-v2.schema.json",
+            "resources/knowledge/automatic-item-curriculum-alignment-v2.schema.json",
+            "2.0",
+            "sha256:07e5f5f8a46aa555a989614e650c19f89dc83bf39b2b78c171a83648a3f4dd08",
         ),
         "education-retrieval-access-policy": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-access-policy-v1.schema.json",

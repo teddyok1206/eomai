@@ -1017,7 +1017,7 @@ def test_hold_release_boundary_rechecks_source_and_protected_paths_around_instal
     )
     assert (
         'WORKFLOW_RUNNER_HOLD_RELEASE_VERIFIER_PREDECESSOR_SHA256="sha256:'
-        'b05e0dbc3d1266218913cb8ca12cdaa69b9dd5e6d0df743fef2d5dc0579dc1b2"' in source
+        'e96645de007d435510a765fbade0769ed67273d697cae6db41aa68f3ed782500"' in source
     )
 
 

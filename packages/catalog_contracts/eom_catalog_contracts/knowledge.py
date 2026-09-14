@@ -2868,6 +2868,26 @@ class AutomaticItemCurriculumAlignmentBinding(FrozenModel):
         return self
 
 
+class AutomaticItemCurriculumAlignmentBindingV2(AutomaticItemCurriculumAlignmentBinding):
+    """Automatic alignment admitting the immutable origin-scoped policy revision."""
+
+    alignment_policy_version: Literal[  # type: ignore[assignment]
+        "integrated-science-auto-alignment/1.0",
+        "integrated-science-auto-alignment/1.1",
+        "integrated-science-auto-alignment/1.2",
+        "integrated-science-auto-alignment/1.3",
+    ]
+
+    @model_validator(mode="after")
+    def origin_scoped_policy_has_one_target(self) -> AutomaticItemCurriculumAlignmentBindingV2:
+        if (
+            self.alignment_policy_version == "integrated-science-auto-alignment/1.3"
+            and len(self.curriculum_unit_ids) != 1
+        ):
+            raise ValueError("origin-scoped automatic alignment requires exactly one unit")
+        return self
+
+
 class AssessmentOccurrenceItemBinding(FrozenModel):
     """Immutable placement of one learned Item Revision in one reviewed examination."""
 
@@ -3206,6 +3226,26 @@ class KnowledgeGraphStructureManifestV5(KnowledgeGraphStructureManifestV4):
         return self
 
 
+class KnowledgeGraphStructureManifestV6(KnowledgeGraphStructureManifestV5):
+    """Assessment placements plus origin-scoped automatic Item alignments."""
+
+    schema_version: Literal["knowledge-graph-structure-manifest/6.0"] = (
+        "knowledge-graph-structure-manifest/6.0"  # type: ignore[assignment]
+    )
+    automatic_item_curriculum_bindings: tuple[AutomaticItemCurriculumAlignmentBindingV2, ...] = (
+        Field(min_length=1, max_length=10000)
+    )
+
+    @model_validator(mode="after")
+    def includes_origin_scoped_alignment(self) -> KnowledgeGraphStructureManifestV6:
+        if not any(
+            binding.alignment_policy_version == "integrated-science-auto-alignment/1.3"
+            for binding in self.automatic_item_curriculum_bindings
+        ):
+            raise ValueError("structure V6 requires at least one origin-scoped alignment")
+        return self
+
+
 class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
     """Pointer-only command for publishing one immutable graph snapshot."""
 
@@ -3246,6 +3286,9 @@ class PublishKnowledgeGraphSnapshotCommand(FrozenModel):
             ),
             "knowledge-graph-publication/5.0": (
                 "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+            ),
+            "knowledge-graph-publication/6.0": (
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
             ),
         }[str(self.schema_version)]
         if self.structure_manifest is not None and (
@@ -3357,6 +3400,31 @@ class PublishKnowledgeGraphSnapshotCommandV5(PublishKnowledgeGraphSnapshotComman
             != "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
         ):
             raise ValueError("graph publication V5 requires the exact structure manifest V5")
+        return self
+
+
+class PublishKnowledgeGraphSnapshotCommandV6(PublishKnowledgeGraphSnapshotCommand):
+    """Publication command requiring origin-scoped structure manifest V6."""
+
+    schema_version: Literal["knowledge-graph-publication/6.0"] = "knowledge-graph-publication/6.0"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
+
+    @field_validator("display_name")
+    @classmethod
+    def display_name_is_single_line_safe_text(cls, value: str) -> str:
+        if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value):
+            raise ValueError("graph display name contains a control character")
+        return value
+
+    @model_validator(mode="after")
+    def exact_v6_structure_pointer(self) -> PublishKnowledgeGraphSnapshotCommandV6:
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+        ):
+            raise ValueError("graph publication V6 requires the exact structure manifest V6")
         return self
 
 
@@ -3565,6 +3633,7 @@ class KnowledgeGraphSnapshotManifestV4(FrozenModel):
                 "knowledge-graph-snapshot-manifest/6.0",
                 "knowledge-graph-snapshot-manifest/7.0",
                 "knowledge-graph-snapshot-manifest/8.0",
+                "knowledge-graph-snapshot-manifest/9.0",
             } and isinstance(source, EducationalDocumentKnowledgeSourceV4):
                 base_key = (
                     *base_key,
@@ -3659,15 +3728,38 @@ class KnowledgeGraphSnapshotManifestV8(KnowledgeGraphSnapshotManifestV4):
 
     @model_validator(mode="after")
     def exact_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV8:
+        expected_structure_schema = (
+            "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+            if str(self.schema_version) == "knowledge-graph-snapshot-manifest/9.0"
+            else "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+        )
+        if (
+            self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
+            or self.structure_manifest.media_type != "application/json"
+            or self.structure_manifest.schema_ref != expected_structure_schema
+        ):
+            raise ValueError("graph snapshot requires its exact structure manifest revision")
+        if self.projections.curriculum_closure is None:
+            raise ValueError("graph snapshot V8 requires a curriculum closure projection")
+        return self
+
+
+class KnowledgeGraphSnapshotManifestV9(KnowledgeGraphSnapshotManifestV8):
+    """Snapshot pinning origin-scoped automatic Item structure V6."""
+
+    schema_version: Literal["knowledge-graph-snapshot-manifest/9.0"] = (
+        "knowledge-graph-snapshot-manifest/9.0"  # type: ignore[assignment]
+    )
+
+    @model_validator(mode="after")
+    def exact_origin_scoped_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV9:
         if (
             self.structure_manifest.member_path != "evidence/graph-structure-manifest.json"
             or self.structure_manifest.media_type != "application/json"
             or self.structure_manifest.schema_ref
-            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+            != "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
         ):
-            raise ValueError("graph snapshot V8 requires the exact structure manifest V5")
-        if self.projections.curriculum_closure is None:
-            raise ValueError("graph snapshot V8 requires a curriculum closure projection")
+            raise ValueError("graph snapshot V9 requires the exact structure manifest V6")
         return self
 
 

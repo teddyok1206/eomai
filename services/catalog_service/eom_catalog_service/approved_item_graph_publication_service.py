@@ -20,7 +20,8 @@ from eom_catalog_contracts.item_review import (
 )
 from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
-    AutomaticItemCurriculumAlignmentBinding,
+    AutomaticItemCurriculumAlignmentBindingV2,
+    CurriculumRetrievalScope,
     KnowledgeGraphPublicationResult,
     KnowledgeSourceClass,
 )
@@ -45,15 +46,18 @@ from eom_catalog_service.automatic_item_graph_publication_service import (
 )
 from eom_catalog_service.curriculum_graph_structure import integrated_science_curriculum_units
 from eom_catalog_service.knowledge_graph_models import (
+    CurriculumUnitRecord,
     EducationRetrievalAccessPolicyRevisionRecord,
     EducationRetrievalRequestRecord,
     KnowledgeCorpusRecord,
     KnowledgeGraphPublicationRecord,
     KnowledgeGraphSnapshotRecord,
+    KnowledgeNodeRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
 from eom_catalog_service.knowledge_graph_publication_service import (
+    CurrentKnowledgeGraphStructure,
     KnowledgeGraphPublicationError,
     KnowledgeGraphPublicationService,
 )
@@ -108,7 +112,8 @@ _PRODUCTION_WORKFLOW_FAMILIES = {
         ),
     ),
 }
-_RETRIEVAL_NAMESPACE = "approved-item-auto-alignment"
+_LEGACY_RETRIEVAL_NAMESPACE = "approved-item-auto-alignment"
+_ORIGIN_SCOPED_RETRIEVAL_NAMESPACE = "approved-item-origin-align"
 _PUBLICATION_NAMESPACE = "approved-item-auto-graph"
 
 
@@ -195,12 +200,20 @@ class ApprovedItemGraphPublicationService:
             receipt = common.publish(
                 candidates,
                 required_source_class="APPROVED_ITEM",
-                retrieval_idempotency_namespace=_RETRIEVAL_NAMESPACE,
+                retrieval_idempotency_namespace=_ORIGIN_SCOPED_RETRIEVAL_NAMESPACE,
                 publication_idempotency_namespace=_PUBLICATION_NAMESPACE,
-                publisher_version="1.7.0",
+                publisher_version="1.8.0",
                 publication_idempotency_key=publication_key,
                 publication_authorized_at=command.authorized_at,
                 analysis_validator=validate_origins,
+                alignment_scope_resolver=lambda session, context, analyses: (
+                    self._resolve_originating_slot_scopes(
+                        session,
+                        context,
+                        analyses,
+                        expected_slot_unit_keys,
+                    )
+                ),
                 alignment_validator=lambda alignments: self._validate_slot_unit_alignments(
                     command.accepted_analysis_run_ids,
                     expected_slot_unit_keys,
@@ -358,7 +371,16 @@ class ApprovedItemGraphPublicationService:
                     "Graph publication idempotency identity has different input"
                 )
             item_revision_ids = self._replay_item_revision_ids(session, command)
-            self._validate_replay_retrievals(session, command)
+            retrieval_namespace = (
+                _ORIGIN_SCOPED_RETRIEVAL_NAMESPACE
+                if snapshot.publisher_version == "1.8.0"
+                else _LEGACY_RETRIEVAL_NAMESPACE
+            )
+            self._validate_replay_retrievals(
+                session,
+                command,
+                retrieval_namespace=retrieval_namespace,
+            )
             try:
                 graph_result = KnowledgeGraphPublicationService._result(session, publication)
             except KnowledgeGraphPublicationError as exc:
@@ -417,10 +439,12 @@ class ApprovedItemGraphPublicationService:
     def _validate_replay_retrievals(
         session: Session,
         command: PublishApprovedItemAnalysesCommand,
+        *,
+        retrieval_namespace: str,
     ) -> None:
         keys = {
             run_id: (
-                f"{_RETRIEVAL_NAMESPACE}:{run_id}:"
+                f"{retrieval_namespace}:{run_id}:"
                 f"{command.expected_current_graph_snapshot_revision_id}"
             )
             for run_id in command.accepted_analysis_run_ids
@@ -448,6 +472,58 @@ class ApprovedItemGraphPublicationService:
             ApprovedItemGraphPublicationService._raise_replay_conflict(
                 "replayed automatic alignment evidence has different input"
             )
+
+    @staticmethod
+    def _resolve_originating_slot_scopes(
+        session: Session,
+        context: CurrentKnowledgeGraphStructure,
+        analyses: tuple[AcceptedAnalysisProposal, ...],
+        expected_unit_keys: tuple[str, ...],
+    ) -> tuple[CurriculumRetrievalScope, ...]:
+        """Resolve exact production-slot MINOR units in the pinned predecessor Graph."""
+
+        if len(analyses) != 25 or len(expected_unit_keys) != len(analyses):
+            raise ValueError("generated Item slot scope set is not exact")
+        units_by_key = {unit.unit_key: unit for unit in context.structure.curriculum_units}
+        scopes: list[CurriculumRetrievalScope] = []
+        for unit_key in expected_unit_keys:
+            unit = units_by_key.get(unit_key)
+            if unit is None or unit.unit_level != "MINOR":
+                raise ValueError("originating mock-exam slot does not resolve to a MINOR unit")
+            graph_unit = session.scalar(
+                select(CurriculumUnitRecord).where(
+                    CurriculumUnitRecord.graph_snapshot_revision_id
+                    == context.graph_snapshot_revision_id,
+                    CurriculumUnitRecord.framework_revision_id == unit.framework_revision_id,
+                    CurriculumUnitRecord.curriculum_unit_id == unit.curriculum_unit_id,
+                    CurriculumUnitRecord.unit_level == "MINOR",
+                )
+            )
+            graph_node = (
+                session.scalar(
+                    select(KnowledgeNodeRecord).where(
+                        KnowledgeNodeRecord.graph_snapshot_revision_id
+                        == context.graph_snapshot_revision_id,
+                        KnowledgeNodeRecord.node_id == graph_unit.node_id,
+                    )
+                )
+                if graph_unit is not None
+                else None
+            )
+            if (
+                graph_unit is None
+                or graph_node is None
+                or graph_node.stable_key != unit.node_stable_key
+            ):
+                raise ValueError("originating mock-exam slot unit is absent from the pinned Graph")
+            scopes.append(
+                CurriculumRetrievalScope(
+                    framework_revision_id=unit.framework_revision_id,
+                    root_unit_id=unit.curriculum_unit_id,
+                    include_descendants=False,
+                )
+            )
+        return tuple(scopes)
 
     @staticmethod
     def _validate_current_v2_item_analyses(
@@ -639,7 +715,7 @@ class ApprovedItemGraphPublicationService:
     def _validate_slot_unit_alignments(
         analysis_run_ids: tuple[str, ...],
         expected_unit_keys: tuple[str, ...],
-        alignments: tuple[AutomaticItemCurriculumAlignmentBinding, ...],
+        alignments: tuple[AutomaticItemCurriculumAlignmentBindingV2, ...],
     ) -> None:
         unit_id_by_key = {
             row.unit_key: row.curriculum_unit_id for row in integrated_science_curriculum_units()

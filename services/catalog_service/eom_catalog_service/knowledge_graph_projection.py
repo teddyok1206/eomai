@@ -32,6 +32,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
     KnowledgeGraphStructureManifestV5,
+    KnowledgeGraphStructureManifestV6,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
     validate_knowledge_edge_endpoint_types,
@@ -440,6 +441,7 @@ def _add_reviewed_curriculum_structure(
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
         | KnowledgeGraphStructureManifestV5
+        | KnowledgeGraphStructureManifestV6
     ),
     node_accumulators: dict[str, _NodeAccumulator],
     local_node_ids: dict[tuple[str, str], str],
@@ -818,6 +820,7 @@ def build_education_graph_projection(
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
         | KnowledgeGraphStructureManifestV5
+        | KnowledgeGraphStructureManifestV6
         | None
     ),
 ) -> EducationGraphProjection:

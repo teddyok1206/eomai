@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import (
@@ -10,24 +11,30 @@ from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
+    AutomaticItemCurriculumAlignmentBindingV2,
     EducationalDocumentKnowledgeSourceV4,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotManifestV5,
     KnowledgeGraphSnapshotManifestV6,
     KnowledgeGraphSnapshotManifestV7,
+    KnowledgeGraphSnapshotManifestV9,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
     KnowledgeGraphStructureManifestV5,
+    KnowledgeGraphStructureManifestV6,
     PublishKnowledgeGraphSnapshotCommandV2,
     PublishKnowledgeGraphSnapshotCommandV3,
     PublishKnowledgeGraphSnapshotCommandV4,
+    PublishKnowledgeGraphSnapshotCommandV6,
     validate_contract,
 )
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
 )
 from eom_catalog_service.curriculum_graph_structure import (
     CurriculumGraphStructureError,
@@ -49,15 +56,54 @@ from eom_catalog_service.knowledge_graph_publication_service import (
     _curriculum_unit_layers,
 )
 from eom_identifiers import content_sha256
+from jsonschema import Draft202012Validator
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 NOW = datetime(2026, 8, 31, 3, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _hex(value: str) -> str:
     return sha256(value.encode()).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_sha256"),
+    (
+        (
+            "automatic-item-curriculum-alignment-v2.schema.json",
+            "07e5f5f8a46aa555a989614e650c19f89dc83bf39b2b78c171a83648a3f4dd08",
+        ),
+        (
+            "knowledge-graph-structure-manifest-v6.schema.json",
+            "ffa269d11d5997e4d4649a0435b32ee5f53281dee85a06d5f77a7fdf215edd88",
+        ),
+        (
+            "knowledge-graph-publication-v6.schema.json",
+            "42664c7dae7c5d22169fff4a86b7f7c225556e751da7f702c8e862a6d88762f8",
+        ),
+        (
+            "knowledge-graph-snapshot-manifest-v9.schema.json",
+            "7bbc5958d6b5a490979b9a73914f22e53eed4e292f744f1fc4dd7b9454255377",
+        ),
+    ),
+)
+def test_origin_scoped_graph_protocol_schemas_are_frozen_and_package_exact(
+    name: str,
+    expected_sha256: str,
+) -> None:
+    canonical = REPOSITORY_ROOT / "schemas/knowledge" / name
+    packaged = (
+        REPOSITORY_ROOT
+        / "packages/catalog_contracts/eom_catalog_contracts/resources/knowledge"
+        / name
+    )
+
+    assert canonical.read_bytes() == packaged.read_bytes()
+    assert sha256(canonical.read_bytes()).hexdigest() == expected_sha256
+    Draft202012Validator.check_schema(json.loads(canonical.read_bytes()))
 
 
 def _analysis(code: str, ordinal: int) -> AcceptedAnalysisProposal:
@@ -347,6 +393,18 @@ def _automatic_item_alignment(
         {key: item for key, item in reviewed.items() if key != "alignment_sha256"}
     )
     return AutomaticItemCurriculumAlignmentBinding.model_validate(reviewed)
+
+
+def _origin_scoped_item_alignment(
+    analysis: AcceptedAnalysisProposal, unit_id: str
+) -> AutomaticItemCurriculumAlignmentBindingV2:
+    value = _automatic_item_alignment(analysis, unit_id).model_dump(mode="json")
+    value["alignment_policy_version"] = ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION
+    value["alignment_policy_sha256"] = ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+    value["alignment_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "alignment_sha256"}
+    )
+    return AutomaticItemCurriculumAlignmentBindingV2.model_validate(value)
 
 
 def _assessment_placement(
@@ -646,6 +704,102 @@ def test_v5_exam_ontology_reaches_exam_and_item_from_curriculum_in_two_hops() ->
     assert any("2025학년도" in nodes_by_id[node_id].label for node_id in second_hop)
 
 
+def test_v6_origin_scoped_structure_is_closed_and_projects_the_exact_slot_unit() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    assert isinstance(item_analysis.source, ApprovedItemKnowledgeSourceV2)
+    item_analysis = item_analysis.__class__(
+        analysis_run_id=item_analysis.analysis_run_id,
+        source=item_analysis.source.model_copy(update={"source_class": "PAST_EXAM"}),
+        accepted_result=item_analysis.accepted_result,
+        proposal=item_analysis.proposal,
+    )
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    alignment = _origin_scoped_item_alignment(item_analysis, unit_id)
+    placement = _assessment_placement(item_analysis, unit_id)
+
+    structure = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base,
+        (alignment,),
+        created_at=NOW,
+        assessment_item_occurrences=(placement,),
+    )
+
+    assert isinstance(structure, KnowledgeGraphStructureManifestV6)
+    assert structure.automatic_item_curriculum_bindings == (alignment,)
+    validate_contract("knowledge-graph-structure-manifest-v6", structure.model_dump(mode="json"))
+    projection = build_education_graph_projection(
+        tuple(sorted((*documents, item_analysis), key=lambda item: item.analysis_run_id)),
+        structure,
+    )
+    assert projection.projection_schema_version == "4.0"
+    assert any(
+        edge.edge_type == "ALIGNS_WITH_CURRICULUM"
+        and edge.to_node_id
+        == next(
+            node.node_id
+            for node in projection.nodes
+            if node.stable_key
+            == next(
+                unit.node_stable_key
+                for unit in structure.curriculum_units
+                if unit.curriculum_unit_id == unit_id
+            )
+        )
+        for edge in projection.edges
+    )
+
+
+def test_origin_scoped_alignment_schema_and_model_require_exactly_one_unit() -> None:
+    item_analysis = _approved_item_analysis()
+    unit_ids = tuple(
+        unit.curriculum_unit_id
+        for unit in integrated_science_curriculum_units()
+        if unit.unit_level == "MINOR"
+    )[:2]
+    value = _origin_scoped_item_alignment(item_analysis, unit_ids[0]).model_dump(mode="json")
+    value["curriculum_unit_ids"] = sorted(unit_ids)
+    value["alignment_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "alignment_sha256"}
+    )
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("automatic-item-curriculum-alignment-v2", value)
+    with pytest.raises(ValidationError, match="exactly one unit"):
+        AutomaticItemCurriculumAlignmentBindingV2.model_validate(value)
+
+
+def test_v6_structure_schema_and_model_require_an_origin_scoped_binding() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    item_analysis = _approved_item_analysis()
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    legacy = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base,
+        (_automatic_item_alignment(item_analysis, unit_id),),
+        created_at=NOW,
+        assessment_item_occurrences=(_assessment_placement(item_analysis, unit_id),),
+    ).model_dump(mode="json")
+    legacy["schema_version"] = "knowledge-graph-structure-manifest/6.0"
+    legacy["manifest_sha256"] = content_sha256(
+        {key: item for key, item in legacy.items() if key != "manifest_sha256"}
+    )
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-graph-structure-manifest-v6", legacy)
+    with pytest.raises(ValidationError, match="at least one origin-scoped"):
+        KnowledgeGraphStructureManifestV6.model_validate(legacy)
+
+
 def test_v4_approved_item_alignment_creates_canonical_item_bank_node() -> None:
     documents = _complete_analyses()
     base = build_integrated_science_structure_manifest(
@@ -758,6 +912,66 @@ def test_human_alignment_extension_preserves_existing_automatic_bindings() -> No
     assert isinstance(combined, KnowledgeGraphStructureManifestV4)
     assert combined.automatic_item_curriculum_bindings == (automatic,)
     assert combined.approved_item_curriculum_bindings == (reviewed,)
+
+
+def test_human_alignment_extension_preserves_origin_scoped_v6_identity() -> None:
+    documents = _complete_analyses()
+    base = build_integrated_science_structure_manifest(
+        documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
+    )
+    first_item = _approved_item_analysis()
+    assert isinstance(first_item.source, ApprovedItemKnowledgeSourceV2)
+    first_item = first_item.__class__(
+        analysis_run_id=first_item.analysis_run_id,
+        source=first_item.source.model_copy(update={"source_class": "PAST_EXAM"}),
+        accepted_result=first_item.accepted_result,
+        proposal=first_item.proposal,
+    )
+    unit_id = next(
+        unit.curriculum_unit_id for unit in base.curriculum_units if unit.unit_level == "MINOR"
+    )
+    automatic = _origin_scoped_item_alignment(first_item, unit_id)
+    placement = _assessment_placement(first_item, unit_id)
+    automatic_structure = (
+        extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+            base,
+            (automatic,),
+            created_at=NOW,
+            assessment_item_occurrences=(placement,),
+        )
+    )
+    second_base = _approved_item_analysis()
+    assert isinstance(second_base.source, ApprovedItemKnowledgeSourceV2)
+    second_item = second_base.__class__(
+        analysis_run_id="analysisrun_" + "7" * 32,
+        source=second_base.source.model_copy(
+            update={
+                "item_id": "item_" + "8" * 32,
+                "item_revision_id": "itemrev_" + "9" * 32,
+            }
+        ),
+        accepted_result=second_base.accepted_result.model_copy(
+            update={
+                "artifact_id": "artifact_" + "a" * 32,
+                "artifact_revision_id": "rev_" + "b" * 32,
+            }
+        ),
+        proposal=second_base.proposal,
+    )
+    reviewed = _item_alignment(second_item, unit_id)
+
+    combined = extend_integrated_science_structure_manifest_with_item_alignments(
+        automatic_structure,
+        (reviewed,),
+        reviewed_by_operator_id=OPERATOR_ID,
+        created_at=NOW,
+    )
+
+    assert isinstance(combined, KnowledgeGraphStructureManifestV6)
+    assert combined.automatic_item_curriculum_bindings == (automatic,)
+    assert combined.assessment_item_occurrences == (placement,)
+    assert combined.approved_item_curriculum_bindings == (reviewed,)
+    validate_contract("knowledge-graph-structure-manifest-v6", combined.model_dump(mode="json"))
 
 
 def test_item_alignment_rejects_hash_and_nonminor_target() -> None:
@@ -1222,6 +1436,115 @@ def test_v5_snapshot_allows_distinct_ranges_of_one_document_revision() -> None:
         "created_at": NOW.isoformat().replace("+00:00", "Z"),
     }
     assert len(KnowledgeGraphSnapshotManifestV5.model_validate(value).source_revisions) == 2
+
+    v9_value = json.loads(json.dumps(value))
+    v9_value["schema_version"] = "knowledge-graph-snapshot-manifest/9.0"
+    v9_value["ontology_version"] = "education-knowledge-graph/1.1"
+    v9_structure = v9_value["structure_manifest"]
+    assert isinstance(v9_structure, dict)
+    v9_structure["schema_ref"] = "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+    assert len(KnowledgeGraphSnapshotManifestV9.model_validate(v9_value).source_revisions) == 2
+
     value["source_revisions"][1] = analyses[0].source.model_dump(mode="json")
     with pytest.raises(ValueError, match="source selections"):
         KnowledgeGraphSnapshotManifestV5.model_validate(value)
+
+    v9_sources = v9_value["source_revisions"]
+    assert isinstance(v9_sources, list)
+    v9_sources[1] = analyses[0].source.model_dump(mode="json")
+    with pytest.raises(ValueError, match="source selections"):
+        KnowledgeGraphSnapshotManifestV9.model_validate(v9_value)
+
+
+def test_v6_publication_and_v9_snapshot_pin_the_exact_v6_structure() -> None:
+    analysis = _approved_item_analysis()
+    structure_pointer = KnowledgeArtifactMemberPointer(
+        artifact_id="artifact_" + "6" * 32,
+        artifact_revision_id="rev_" + "6" * 32,
+        sha256="sha256:" + "6" * 64,
+        schema_ref="eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0",
+        media_type="application/json",
+        logical_name="graph-structure-manifest.json",
+        member_path="evidence/graph-structure-manifest.json",
+    )
+    command_value: dict[str, object] = {
+        "schema_version": "knowledge-graph-publication/6.0",
+        "corpus_key": "integrated-science-textbooks",
+        "display_name": "통합과학 출처 단원 정렬 그래프",
+        "accepted_analysis_run_ids": [analysis.analysis_run_id],
+        "structure_manifest": structure_pointer.model_dump(mode="json"),
+        "expected_current_snapshot_revision_id": "graphrev_" + "7" * 32,
+        "publisher_version": "1.8.0",
+        "published_by_operator_id": OPERATOR_ID,
+        "idempotency_key": "origin-scoped-item-graph-publication-v6-test",
+        "requested_at": NOW.isoformat().replace("+00:00", "Z"),
+        "request_sha256": "sha256:" + "0" * 64,
+    }
+    command_value["request_sha256"] = content_sha256(
+        {key: item for key, item in command_value.items() if key != "request_sha256"}
+    )
+    validate_contract("knowledge-graph-publication-v6", command_value)
+    command = PublishKnowledgeGraphSnapshotCommandV6.model_validate(command_value)
+    assert command.structure_manifest == structure_pointer
+
+    def projection_pointer(path: str, logical_name: str, media_type: str) -> dict[str, object]:
+        return {
+            "artifact_id": "artifact_" + "8" * 32,
+            "artifact_revision_id": "rev_" + "8" * 32,
+            "sha256": "sha256:" + "8" * 64,
+            "schema_ref": "eom://schemas/knowledge/knowledge-graph-projection/4.0",
+            "media_type": media_type,
+            "logical_name": logical_name,
+            "member_path": path,
+        }
+
+    snapshot_value: dict[str, object] = {
+        "schema_version": "knowledge-graph-snapshot-manifest/9.0",
+        "graph_id": "graph_" + "7" * 32,
+        "graph_snapshot_revision_id": "graphrev_" + "8" * 32,
+        "revision_number": 9,
+        "previous_graph_snapshot_revision_id": "graphrev_" + "7" * 32,
+        "state": "PUBLISHED",
+        "ontology_version": "education-knowledge-graph/1.1",
+        "publisher_version": "1.8.0",
+        "source_revisions": [analysis.source.model_dump(mode="json")],
+        "analysis_results": [analysis.accepted_result.model_dump(mode="json")],
+        "structure_manifest": structure_pointer.model_dump(mode="json"),
+        "projections": {
+            "nodes": projection_pointer(
+                "projections/nodes.jsonl", "nodes.jsonl", "application/x-ndjson"
+            ),
+            "edges": projection_pointer(
+                "projections/edges.jsonl", "edges.jsonl", "application/x-ndjson"
+            ),
+            "curriculum_closure": projection_pointer(
+                "projections/curriculum-closure.jsonl",
+                "curriculum-closure.jsonl",
+                "application/x-ndjson",
+            ),
+            "markdown": projection_pointer("projections/graph.md", "graph.md", "text/markdown"),
+            "lexical_index": projection_pointer(
+                "projections/lexical-index.json",
+                "lexical-index.json",
+                "application/json",
+            ),
+        },
+        "counts": {"source_revisions": 1, "nodes": 3, "edges": 2, "anchors": 1},
+        "snapshot_sha256": "sha256:" + "9" * 64,
+        "created_at": NOW.isoformat().replace("+00:00", "Z"),
+    }
+    validate_contract("knowledge-graph-snapshot-manifest-v9", snapshot_value)
+    snapshot = KnowledgeGraphSnapshotManifestV9.model_validate(snapshot_value)
+    assert snapshot.structure_manifest == structure_pointer
+
+    wrong_pointer = structure_pointer.model_copy(
+        update={"schema_ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"}
+    )
+    wrong_command = {**command_value, "structure_manifest": wrong_pointer.model_dump(mode="json")}
+    wrong_command["request_sha256"] = content_sha256(
+        {key: item for key, item in wrong_command.items() if key != "request_sha256"}
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("knowledge-graph-publication-v6", wrong_command)
+    with pytest.raises(ValidationError, match="structure manifest pointer"):
+        PublishKnowledgeGraphSnapshotCommandV6.model_validate(wrong_command)

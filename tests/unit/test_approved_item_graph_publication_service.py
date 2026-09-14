@@ -36,11 +36,13 @@ from eom_catalog_contracts.item_review import (
 from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
+    CurriculumRetrievalScope,
     KnowledgeAnalysisRequestV9,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphCounts,
     KnowledgeGraphPublicationResult,
     KnowledgeGraphSnapshotPointer,
+    PublishKnowledgeGraphSnapshotCommandV6,
 )
 from eom_catalog_contracts.mock_exam_production_plan import (
     build_integrated_science_mock_exam_production_plan,
@@ -648,6 +650,132 @@ def test_shared_analysis_validator_fails_before_retrieval_create() -> None:
     publication.publish.assert_not_called()
 
 
+def test_shared_publisher_emits_origin_scoped_v2_binding_and_v6_graph_command() -> None:
+    base_analysis = _accepted_analysis()
+    analysis = AcceptedAnalysisProposal(
+        analysis_run_id=base_analysis.analysis_run_id,
+        source=base_analysis.source,
+        accepted_result=KnowledgeArtifactMemberPointer(
+            artifact_id="artifact_" + "9" * 32,
+            artifact_revision_id="rev_" + "9" * 32,
+            sha256="sha256:" + "9" * 64,
+            schema_ref="eom://schemas/knowledge/knowledge-analysis-result/2.0",
+            media_type="application/json",
+            logical_name="accepted-result.json",
+            member_path="evidence/accepted-result.json",
+        ),
+        proposal=base_analysis.proposal,
+    )
+    candidate = AutomaticItemGraphCandidate(
+        analysis_run_id=ANALYSIS_RUN_ID,
+        requested_by_operator_id=OPERATOR_ID,
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+    )
+    unit = next(
+        unit for unit in integrated_science_curriculum_units() if unit.unit_level == "MINOR"
+    )
+    scope = CurriculumRetrievalScope(
+        framework_revision_id=unit.framework_revision_id,
+        root_unit_id=unit.curriculum_unit_id,
+        include_descendants=False,
+    )
+    context_value = CurrentKnowledgeGraphStructure(
+        corpus_key="integrated-science-textbooks",
+        display_name="통합과학 지식 그래프",
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+        accepted_analysis_run_ids=(),
+        structure=cast(Any, object()),
+    )
+    publication = Mock()
+    publication.current_structure_context.return_value = context_value
+    load_session = MagicMock(spec=Session)
+    load_context = MagicMock()
+    load_context.__enter__.return_value = load_session
+    load_context.__exit__.return_value = False
+    publication.sessions.return_value = load_context
+    publication._load_accepted_analysis.return_value = analysis
+    structure_pointer = KnowledgeArtifactMemberPointer(
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "a" * 32,
+        sha256="sha256:" + "a" * 64,
+        schema_ref="eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0",
+        media_type="application/json",
+        logical_name="graph-structure-manifest.json",
+        member_path="evidence/graph-structure-manifest.json",
+    )
+    publication.commit_structure_manifest.return_value = structure_pointer
+    publication.publish.return_value = _graph_publication_result()
+    working_session = MagicMock(spec=Session)
+    working_session.scalars.return_value = (SimpleNamespace(graph_node_ids=("knode_" + "b" * 32,)),)
+    working_context = MagicMock()
+    working_context.__enter__.return_value = working_session
+    working_context.__exit__.return_value = False
+    evidence_manifest = KnowledgeArtifactMemberPointer(
+        artifact_id="artifact_" + "c" * 32,
+        artifact_revision_id="rev_" + "c" * 32,
+        sha256="sha256:" + "c" * 64,
+        schema_ref="eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+        media_type="application/json",
+        logical_name="manifest.json",
+        member_path="evidence/manifest.json",
+    )
+    retrieval = Mock()
+    retrieval.create.return_value = SimpleNamespace(
+        evidence_bundle_id="evidence_" + "d" * 32,
+        evidence_bundle_revision_id="evidencerev_" + "d" * 32,
+        retrieval_request_id="retrieval_" + "e" * 32,
+        retrieval_request_sha256="sha256:" + "e" * 64,
+        manifest_artifact=evidence_manifest,
+        published_at=PUBLISHED_AT,
+    )
+    service = object.__new__(AutomaticItemGraphPublicationService)
+    service.access_policy_revision_id = ACCESS_POLICY_REVISION_ID
+    service.publication = publication
+    service.retrieval = retrieval
+    service.sessions = Mock(return_value=working_context)
+
+    with (
+        patch(
+            "eom_catalog_service.automatic_item_graph_publication_service."
+            "automatic_item_alignment_topic_keys",
+            return_value=("concept.motion",),
+        ),
+        patch(
+            "eom_catalog_service.automatic_item_graph_publication_service."
+            "derive_automatic_item_curriculum_unit_ids",
+            return_value=(unit.curriculum_unit_id,),
+        ) as derive,
+        patch(
+            "eom_catalog_service.automatic_item_graph_publication_service."
+            "extend_integrated_science_structure_manifest_with_automatic_item_alignments",
+            return_value=cast(Any, object()),
+        ),
+    ):
+        receipt = service.publish(
+            (candidate,),
+            required_source_class="APPROVED_ITEM",
+            retrieval_idempotency_namespace="approved-item-origin-align",
+            publication_idempotency_namespace="approved-item-auto-graph",
+            publisher_version="1.8.0",
+            alignment_scope_resolver=lambda *_args: (scope,),
+        )
+
+    retrieval_command = retrieval.create.call_args.args[0]
+    graph_command = publication.publish.call_args.args[0]
+    assert retrieval_command.curriculum_scope == scope
+    derive.assert_called_once_with(
+        working_session,
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+        evidence_node_ids=("knode_" + "b" * 32,),
+        alignment_policy_version="integrated-science-auto-alignment/1.3",
+        curriculum_scope=scope,
+    )
+    assert receipt.alignments[0].curriculum_unit_ids == (unit.curriculum_unit_id,)
+    assert receipt.alignments[0].alignment_policy_version.endswith("/1.3")
+    assert isinstance(graph_command, PublishKnowledgeGraphSnapshotCommandV6)
+    assert graph_command.structure_manifest == structure_pointer
+
+
 @pytest.mark.parametrize("field", ("source_revision_id", "item_id", "item_revision_id"))
 def test_load_accepted_analysis_rejects_persisted_item_source_identity_drift(
     field: str,
@@ -1037,6 +1165,78 @@ def test_graph_authorization_cannot_predate_human_approval() -> None:
     automatic.assert_not_called()
 
 
+def test_originating_slot_scopes_resolve_exact_minor_units_in_the_pinned_graph() -> None:
+    units = tuple(
+        unit for unit in integrated_science_curriculum_units() if unit.unit_level == "MINOR"
+    )
+    selected = tuple(units[index % len(units)] for index in range(25))
+    context = CurrentKnowledgeGraphStructure(
+        corpus_key="integrated-science-textbooks",
+        display_name="통합과학 지식 그래프",
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+        accepted_analysis_run_ids=(),
+        structure=cast(
+            Any, SimpleNamespace(curriculum_units=integrated_science_curriculum_units())
+        ),
+    )
+    session = Mock(spec=Session)
+    rows: list[SimpleNamespace] = []
+    for index, unit in enumerate(selected):
+        node_id = "knode_" + f"{index + 1:032x}"
+        rows.extend(
+            (
+                SimpleNamespace(node_id=node_id),
+                SimpleNamespace(node_id=node_id, stable_key=unit.node_stable_key),
+            )
+        )
+    session.scalar.side_effect = rows
+
+    scopes = ApprovedItemGraphPublicationService._resolve_originating_slot_scopes(
+        session,
+        context,
+        tuple(_accepted_analysis(value) for value in range(25)),
+        tuple(unit.unit_key for unit in selected),
+    )
+
+    assert tuple(scope.root_unit_id for scope in scopes) == tuple(
+        unit.curriculum_unit_id for unit in selected
+    )
+    assert tuple(scope.framework_revision_id for scope in scopes) == tuple(
+        unit.framework_revision_id for unit in selected
+    )
+    assert all(scope.include_descendants is False for scope in scopes)
+    assert session.scalar.call_count == 50
+
+
+def test_originating_slot_scope_rejects_a_graph_node_identity_mismatch() -> None:
+    units = tuple(
+        unit for unit in integrated_science_curriculum_units() if unit.unit_level == "MINOR"
+    )
+    selected = tuple(units[index % len(units)] for index in range(25))
+    context = CurrentKnowledgeGraphStructure(
+        corpus_key="integrated-science-textbooks",
+        display_name="통합과학 지식 그래프",
+        graph_snapshot_revision_id=GRAPH_REVISION_ID,
+        accepted_analysis_run_ids=(),
+        structure=cast(
+            Any, SimpleNamespace(curriculum_units=integrated_science_curriculum_units())
+        ),
+    )
+    session = Mock(spec=Session)
+    session.scalar.side_effect = (
+        SimpleNamespace(node_id="knode_" + "1" * 32),
+        SimpleNamespace(node_id="knode_" + "1" * 32, stable_key="wrong.unit"),
+    )
+
+    with pytest.raises(ValueError, match="absent from the pinned Graph"):
+        ApprovedItemGraphPublicationService._resolve_originating_slot_scopes(
+            session,
+            context,
+            tuple(_accepted_analysis(value) for value in range(25)),
+            tuple(unit.unit_key for unit in selected),
+        )
+
+
 def test_alignment_must_include_each_originating_mock_exam_slot_unit() -> None:
     session = Mock(spec=Session)
     session.execute.return_value = _origin_rows()
@@ -1126,7 +1326,17 @@ def test_current_v2_validator_requires_one_production_request_and_unique_calls()
         )
 
 
-def test_exact_replay_returns_original_snapshot_without_republication() -> None:
+@pytest.mark.parametrize(
+    ("publisher_version", "retrieval_namespace"),
+    (
+        ("1.7.0", "approved-item-auto-alignment"),
+        ("1.8.0", "approved-item-origin-align"),
+    ),
+)
+def test_exact_replay_returns_original_snapshot_without_republication(
+    publisher_version: str,
+    retrieval_namespace: str,
+) -> None:
     command = _command()
     publication_row = SimpleNamespace(
         graph_snapshot_revision_id=NEW_GRAPH_REVISION_ID,
@@ -1137,10 +1347,11 @@ def test_exact_replay_returns_original_snapshot_without_republication() -> None:
         graph_snapshot_revision_id=NEW_GRAPH_REVISION_ID,
         previous_graph_snapshot_revision_id=GRAPH_REVISION_ID,
         snapshot_sha256=SNAPSHOT_SHA256,
+        publisher_version=publisher_version,
     )
     retrievals = tuple(
         SimpleNamespace(
-            idempotency_key=(f"approved-item-auto-alignment:{analysis_run_id}:{GRAPH_REVISION_ID}"),
+            idempotency_key=(f"{retrieval_namespace}:{analysis_run_id}:{GRAPH_REVISION_ID}"),
             access_policy_revision_id=ACCESS_POLICY_REVISION_ID,
             graph_snapshot_revision_id=GRAPH_REVISION_ID,
             requester_operator_id=OPERATOR_ID,

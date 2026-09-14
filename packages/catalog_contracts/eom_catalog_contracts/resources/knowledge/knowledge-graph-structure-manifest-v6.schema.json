@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0",
+  "title": "Origin-scoped automatic Item Graph structure manifest V6",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-structure-manifest/6.0"},
+    "structure_manifest_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/structure_manifest_id"
+    },
+    "framework_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/framework_key"
+    },
+    "framework_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/framework_revision_id"
+    },
+    "outline_key": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/outline_key"
+    },
+    "outline_revision": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/outline_revision"
+    },
+    "outline_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/outline_sha256"
+    },
+    "source_analysis_run_ids": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/source_analysis_run_ids"
+    },
+    "curriculum_units": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/curriculum_units"
+    },
+    "analysis_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/analysis_curriculum_bindings"
+    },
+    "approved_item_curriculum_bindings": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/approved_item_curriculum_bindings"
+    },
+    "automatic_item_curriculum_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "eom://schemas/knowledge/automatic-item-curriculum-alignment/2.0"
+      }
+    },
+    "assessment_item_occurrences": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/assessment_item_occurrences"
+    },
+    "item_elements": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/item_elements"
+    },
+    "reviewed_by_operator_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/reviewed_by_operator_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/created_at"
+    },
+    "manifest_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0#/properties/manifest_sha256"
+    }
+  },
+  "required": [
+    "schema_version",
+    "structure_manifest_id",
+    "framework_key",
+    "framework_revision_id",
+    "outline_key",
+    "outline_revision",
+    "outline_sha256",
+    "source_analysis_run_ids",
+    "curriculum_units",
+    "analysis_curriculum_bindings",
+    "approved_item_curriculum_bindings",
+    "automatic_item_curriculum_bindings",
+    "assessment_item_occurrences",
+    "item_elements",
+    "reviewed_by_operator_id",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "allOf": [
+    {
+      "properties": {
+        "automatic_item_curriculum_bindings": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "alignment_policy_version": {
+                "const": "integrated-science-auto-alignment/1.3"
+              }
+            },
+            "required": ["alignment_policy_version"]
+          },
+          "minContains": 1
+        }
+      }
+    }
+  ]
+}

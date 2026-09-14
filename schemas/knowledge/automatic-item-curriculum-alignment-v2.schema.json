@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/automatic-item-curriculum-alignment/2.0",
+  "title": "Origin-scoped automatic Item curriculum alignment V2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "alignment_mode": {"const": "AUTO_POLICY"},
+    "analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+    "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+    "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+    "accepted_result": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "logical_name": {"const": "accepted-result.json"},
+            "media_type": {"const": "application/json"},
+            "member_path": {"const": "evidence/accepted-result.json"},
+            "schema_ref": {
+              "enum": [
+                "eom://schemas/knowledge/knowledge-analysis-result/2.0",
+                "eom://schemas/knowledge/knowledge-analysis-result/9.0"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "prior_graph_snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "evidence_bundle_id": {"type": "string", "pattern": "^evidence_[0-9a-f]{32}$"},
+    "evidence_bundle_revision_id": {
+      "type": "string",
+      "pattern": "^evidencerev_[0-9a-f]{32}$"
+    },
+    "retrieval_request_id": {"type": "string", "pattern": "^retrieval_[0-9a-f]{32}$"},
+    "retrieval_request_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    },
+    "evidence_manifest": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "logical_name": {"const": "manifest.json"},
+            "media_type": {"const": "application/json"},
+            "member_path": {"const": "evidence/manifest.json"},
+            "schema_ref": {
+              "enum": [
+                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "evidence_node_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^knode_[0-9a-f]{32}$"}
+    },
+    "curriculum_unit_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^currunit_[0-9a-f]{32}$"}
+    },
+    "alignment_policy_version": {
+      "enum": [
+        "integrated-science-auto-alignment/1.0",
+        "integrated-science-auto-alignment/1.1",
+        "integrated-science-auto-alignment/1.2",
+        "integrated-science-auto-alignment/1.3"
+      ]
+    },
+    "alignment_policy_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "aligned_at": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"},
+    "alignment_sha256": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"}
+  },
+  "required": [
+    "alignment_mode",
+    "analysis_run_id",
+    "item_id",
+    "item_revision_id",
+    "accepted_result",
+    "prior_graph_snapshot_revision_id",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "retrieval_request_id",
+    "retrieval_request_sha256",
+    "evidence_manifest",
+    "evidence_node_ids",
+    "curriculum_unit_ids",
+    "alignment_policy_version",
+    "alignment_policy_sha256",
+    "requested_by_operator_id",
+    "aligned_at",
+    "alignment_sha256"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "alignment_policy_version": {
+            "const": "integrated-science-auto-alignment/1.3"
+          }
+        },
+        "required": ["alignment_policy_version"]
+      },
+      "then": {
+        "properties": {
+          "curriculum_unit_ids": {"minItems": 1, "maxItems": 1}
+        }
+      }
+    }
+  ]
+}

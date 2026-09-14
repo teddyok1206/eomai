@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/9.0",
+  "title": "Origin-scoped automatic Item Graph snapshot manifest V9",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "knowledge-graph-snapshot-manifest/9.0"},
+    "graph_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/graph_id"
+    },
+    "graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/graph_snapshot_revision_id"
+    },
+    "revision_number": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/revision_number"
+    },
+    "previous_graph_snapshot_revision_id": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/previous_graph_snapshot_revision_id"
+    },
+    "state": {"const": "PUBLISHED"},
+    "ontology_version": {"const": "education-knowledge-graph/1.1"},
+    "publisher_version": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/publisher_version"
+    },
+    "source_revisions": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/source_revisions"
+    },
+    "analysis_results": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/analysis_results"
+    },
+    "structure_manifest": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer"},
+        {
+          "properties": {
+            "logical_name": {"const": "graph-structure-manifest.json"},
+            "media_type": {"const": "application/json"},
+            "member_path": {"const": "evidence/graph-structure-manifest.json"},
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+            }
+          }
+        }
+      ]
+    },
+    "projections": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/projections"
+    },
+    "counts": {
+      "$ref": "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0#/properties/counts"
+    },
+    "snapshot_sha256": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/utcTimestamp"
+    }
+  },
+  "required": [
+    "schema_version",
+    "graph_id",
+    "graph_snapshot_revision_id",
+    "revision_number",
+    "previous_graph_snapshot_revision_id",
+    "state",
+    "ontology_version",
+    "publisher_version",
+    "source_revisions",
+    "analysis_results",
+    "structure_manifest",
+    "projections",
+    "counts",
+    "snapshot_sha256",
+    "created_at"
+  ]
+}

@@ -64,17 +64,20 @@ from eom_catalog_contracts import (
     KnowledgeGraphSnapshotManifestV6,
     KnowledgeGraphSnapshotManifestV7,
     KnowledgeGraphSnapshotManifestV8,
+    KnowledgeGraphSnapshotManifestV9,
     KnowledgeGraphSnapshotPointer,
     KnowledgeGraphStructureManifest,
     KnowledgeGraphStructureManifestV2,
     KnowledgeGraphStructureManifestV3,
     KnowledgeGraphStructureManifestV4,
     KnowledgeGraphStructureManifestV5,
+    KnowledgeGraphStructureManifestV6,
     PublishKnowledgeGraphSnapshotCommand,
     PublishKnowledgeGraphSnapshotCommandV2,
     PublishKnowledgeGraphSnapshotCommandV3,
     PublishKnowledgeGraphSnapshotCommandV4,
     PublishKnowledgeGraphSnapshotCommandV5,
+    PublishKnowledgeGraphSnapshotCommandV6,
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -248,6 +251,20 @@ KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL = "catalog-knowledge-graph/1.7"
+KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL,
+        "contracts": [
+            "automatic-item-curriculum-alignment/2.0",
+            "knowledge-graph-publication/6.0",
+            "knowledge-graph-structure-manifest/6.0",
+            "knowledge-graph-snapshot-manifest/9.0",
+            "knowledge-graph-publication-result/1.0",
+            "knowledge-graph-projection/4.0",
+        ],
+    }
+)
 type KnowledgeAnalysisRequestContract = (
     KnowledgeAnalysisRequestV2
     | KnowledgeAnalysisRequestV3
@@ -276,6 +293,7 @@ type KnowledgeGraphSnapshotContract = (
     | KnowledgeGraphSnapshotManifestV6
     | KnowledgeGraphSnapshotManifestV7
     | KnowledgeGraphSnapshotManifestV8
+    | KnowledgeGraphSnapshotManifestV9
 )
 type KnowledgeGraphPublicationCommand = (
     PublishKnowledgeGraphSnapshotCommand
@@ -283,6 +301,7 @@ type KnowledgeGraphPublicationCommand = (
     | PublishKnowledgeGraphSnapshotCommandV3
     | PublishKnowledgeGraphSnapshotCommandV4
     | PublishKnowledgeGraphSnapshotCommandV5
+    | PublishKnowledgeGraphSnapshotCommandV6
 )
 type KnowledgeGraphStructureContract = (
     KnowledgeGraphStructureManifest
@@ -290,6 +309,7 @@ type KnowledgeGraphStructureContract = (
     | KnowledgeGraphStructureManifestV3
     | KnowledgeGraphStructureManifestV4
     | KnowledgeGraphStructureManifestV5
+    | KnowledgeGraphStructureManifestV6
 )
 
 
@@ -310,6 +330,7 @@ class CurrentKnowledgeGraphStructure:
         | KnowledgeGraphStructureManifestV3
         | KnowledgeGraphStructureManifestV4
         | KnowledgeGraphStructureManifestV5
+        | KnowledgeGraphStructureManifestV6
     )
 
 
@@ -383,6 +404,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/6.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/9.0",
     }
     if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
         raise KnowledgeGraphPublicationError(
@@ -542,8 +564,12 @@ class KnowledgeGraphPublicationService:
                     | KnowledgeGraphSnapshotManifestV6
                     | KnowledgeGraphSnapshotManifestV7
                     | KnowledgeGraphSnapshotManifestV8
+                    | KnowledgeGraphSnapshotManifestV9
                 )
-                if schema_ref.endswith("/8.0"):
+                if schema_ref.endswith("/9.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v9", value)
+                    manifest = KnowledgeGraphSnapshotManifestV9.model_validate(value)
+                elif schema_ref.endswith("/8.0"):
                     validate_contract("knowledge-graph-snapshot-manifest-v8", value)
                     manifest = KnowledgeGraphSnapshotManifestV8.model_validate(value)
                 elif schema_ref.endswith("/7.0"):
@@ -581,6 +607,7 @@ class KnowledgeGraphPublicationService:
                         KnowledgeGraphStructureManifestV3,
                         KnowledgeGraphStructureManifestV4,
                         KnowledgeGraphStructureManifestV5,
+                        KnowledgeGraphStructureManifestV6,
                     ),
                 )
                 or run_ids != structure.source_analysis_run_ids
@@ -605,6 +632,7 @@ class KnowledgeGraphPublicationService:
             | KnowledgeGraphStructureManifestV3
             | KnowledgeGraphStructureManifestV4
             | KnowledgeGraphStructureManifestV5
+            | KnowledgeGraphStructureManifestV6
         ),
     ) -> KnowledgeArtifactMemberPointer:
         """Commit one reviewed structure manifest through the Catalog Artifact boundary."""
@@ -612,15 +640,19 @@ class KnowledgeGraphPublicationService:
         try:
             validate_integrated_science_structure_manifest(structure)
             schema_key = (
-                "knowledge-graph-structure-manifest-v5"
-                if isinstance(structure, KnowledgeGraphStructureManifestV5)
+                "knowledge-graph-structure-manifest-v6"
+                if isinstance(structure, KnowledgeGraphStructureManifestV6)
                 else (
-                    "knowledge-graph-structure-manifest-v4"
-                    if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                    "knowledge-graph-structure-manifest-v5"
+                    if isinstance(structure, KnowledgeGraphStructureManifestV5)
                     else (
-                        "knowledge-graph-structure-manifest-v3"
-                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                        else "knowledge-graph-structure-manifest-v2"
+                        "knowledge-graph-structure-manifest-v4"
+                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                        else (
+                            "knowledge-graph-structure-manifest-v3"
+                            if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                            else "knowledge-graph-structure-manifest-v2"
+                        )
                     )
                 )
             )
@@ -666,15 +698,21 @@ class KnowledgeGraphPublicationService:
                     file_metadata={
                         "evidence/graph-structure-manifest.json": {
                             "schema_ref": (
-                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
-                                if isinstance(structure, KnowledgeGraphStructureManifestV5)
+                                "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+                                if isinstance(structure, KnowledgeGraphStructureManifestV6)
                                 else (
-                                    "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
-                                    if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                    "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
+                                    if isinstance(structure, KnowledgeGraphStructureManifestV5)
                                     else (
-                                        "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
-                                        if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                                        else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                        "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0"
+                                        if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                        else (
+                                            "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0"
+                                            if isinstance(
+                                                structure, KnowledgeGraphStructureManifestV3
+                                            )
+                                            else "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0"
+                                        )
                                     )
                                 )
                             ),
@@ -683,28 +721,36 @@ class KnowledgeGraphPublicationService:
                     },
                     manifest_version="knowledge-graph-structure-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
-                        if isinstance(structure, KnowledgeGraphStructureManifestV5)
+                        KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL
+                        if isinstance(structure, KnowledgeGraphStructureManifestV6)
                         else (
-                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
-                            if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                            KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
+                            if isinstance(structure, KnowledgeGraphStructureManifestV5)
                             else (
-                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
-                                if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                                else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                                KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                else (
+                                    KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                    else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                                )
                             )
                         )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
-                        if isinstance(structure, KnowledgeGraphStructureManifestV5)
+                        KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_SCHEMA_HASH
+                        if isinstance(structure, KnowledgeGraphStructureManifestV6)
                         else (
-                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
-                            if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                            KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
+                            if isinstance(structure, KnowledgeGraphStructureManifestV5)
                             else (
-                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
-                                if isinstance(structure, KnowledgeGraphStructureManifestV3)
-                                else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                                KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                                if isinstance(structure, KnowledgeGraphStructureManifestV4)
+                                else (
+                                    KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                                    if isinstance(structure, KnowledgeGraphStructureManifestV3)
+                                    else KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                                )
                             )
                         )
                     ),
@@ -883,7 +929,15 @@ class KnowledgeGraphPublicationService:
             "created_at": command.requested_at,
         }
         manifest: KnowledgeGraphSnapshotContract
-        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5):
+        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV6):
+            manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
+                mode="json"
+            )
+            manifest = KnowledgeGraphSnapshotManifestV9.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v9", manifest.model_dump(mode="json")
+            )
+        elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV5):
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
             )
@@ -1507,6 +1561,9 @@ class KnowledgeGraphPublicationService:
             return None
         value = self._read_json_member(pointer, max_bytes=8 * 1024 * 1024)
         try:
+            if pointer.schema_ref.endswith("/6.0"):
+                validate_contract("knowledge-graph-structure-manifest-v6", value)
+                return KnowledgeGraphStructureManifestV6.model_validate(value)
             if pointer.schema_ref.endswith("/5.0"):
                 validate_contract("knowledge-graph-structure-manifest-v5", value)
                 return KnowledgeGraphStructureManifestV5.model_validate(value)
@@ -1878,7 +1935,11 @@ class KnowledgeGraphPublicationService:
     def _validate_automatic_item_curriculum_bindings(
         self,
         session: Session,
-        structure: KnowledgeGraphStructureManifestV4 | KnowledgeGraphStructureManifestV5,
+        structure: (
+            KnowledgeGraphStructureManifestV4
+            | KnowledgeGraphStructureManifestV5
+            | KnowledgeGraphStructureManifestV6
+        ),
         analyses: tuple[AcceptedAnalysisProposal, ...],
         *,
         expected_snapshot_revision_id: str | None,
@@ -2018,7 +2079,17 @@ class KnowledgeGraphPublicationService:
                 or request_model.graph_snapshot.graph_snapshot_revision_id
                 != binding.prior_graph_snapshot_revision_id
                 or request_model.query_kind != "ITEM_PREPARATION"
-                or request_model.curriculum_scope is not None
+                or (
+                    alignment_policy.origin_scoped
+                    and (
+                        request_model.curriculum_scope is None
+                        or request_model.curriculum_scope.include_descendants
+                    )
+                )
+                or (
+                    not alignment_policy.origin_scoped
+                    and request_model.curriculum_scope is not None
+                )
                 or request_model.topic_keys != expected_topics
                 or request_model.target_item_revision_id is not None
                 or request_model.required_item_elements
@@ -2148,6 +2219,7 @@ class KnowledgeGraphPublicationService:
                     graph_snapshot_revision_id=binding.prior_graph_snapshot_revision_id,
                     evidence_node_ids=evidence_node_ids,
                     alignment_policy_version=binding.alignment_policy_version,
+                    curriculum_scope=request_model.curriculum_scope,
                 )
             except AutomaticCurriculumAlignmentError as exc:
                 raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc
@@ -2297,42 +2369,54 @@ class KnowledgeGraphPublicationService:
                     file_metadata=files.metadata,
                     manifest_version="knowledge-graph-projection-file-set/1.0",
                     protocol_version=(
-                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
+                        KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV6)
                         else (
-                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
-                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
+                            KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
                             else (
-                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
-                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                                KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_PROTOCOL
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                                 else (
-                                    KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
-                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                    KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_PROTOCOL
+                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
                                     else (
-                                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
-                                        if document_projection
-                                        else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                                        KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_PROTOCOL
+                                        if isinstance(
+                                            command, PublishKnowledgeGraphSnapshotCommandV2
+                                        )
+                                        else (
+                                            KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_PROTOCOL
+                                            if document_projection
+                                            else KNOWLEDGE_GRAPH_CATALOG_PROTOCOL
+                                        )
                                     )
                                 )
                             )
                         )
                     ),
                     protocol_schema_hash=(
-                        KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
-                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
+                        KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_SCHEMA_HASH
+                        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV6)
                         else (
-                            KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
-                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
+                            KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH
+                            if isinstance(command, PublishKnowledgeGraphSnapshotCommandV5)
                             else (
-                                KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
-                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
+                                KNOWLEDGE_GRAPH_AUTOMATIC_ITEM_CATALOG_SCHEMA_HASH
+                                if isinstance(command, PublishKnowledgeGraphSnapshotCommandV4)
                                 else (
-                                    KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
-                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV2)
+                                    KNOWLEDGE_GRAPH_APPROVED_ITEM_CATALOG_SCHEMA_HASH
+                                    if isinstance(command, PublishKnowledgeGraphSnapshotCommandV3)
                                     else (
-                                        KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
-                                        if document_projection
-                                        else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                                        KNOWLEDGE_GRAPH_REVIEWED_CURRICULUM_CATALOG_SCHEMA_HASH
+                                        if isinstance(
+                                            command, PublishKnowledgeGraphSnapshotCommandV2
+                                        )
+                                        else (
+                                            KNOWLEDGE_GRAPH_DOCUMENT_CATALOG_SCHEMA_HASH
+                                            if document_projection
+                                            else KNOWLEDGE_GRAPH_CATALOG_SCHEMA_HASH
+                                        )
                                     )
                                 )
                             )
@@ -2399,7 +2483,11 @@ class KnowledgeGraphPublicationService:
                 source = Path(raw_directory) / "manifest.json"
                 source.write_bytes(canonical_json_bytes(manifest))
                 source.chmod(0o640)
-                if isinstance(manifest, KnowledgeGraphSnapshotManifestV8):
+                if isinstance(manifest, KnowledgeGraphSnapshotManifestV9):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/9.0"
+                    protocol_version = KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL
+                    protocol_schema_hash = KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_SCHEMA_HASH
+                elif isinstance(manifest, KnowledgeGraphSnapshotManifestV8):
                     schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0"
                     protocol_version = KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_PROTOCOL
                     protocol_schema_hash = KNOWLEDGE_GRAPH_ASSESSMENT_PLACEMENT_CATALOG_SCHEMA_HASH

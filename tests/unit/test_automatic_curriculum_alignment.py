@@ -5,16 +5,22 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_contracts import KnowledgeGraphStructureManifestV4
+from eom_catalog_contracts import CurriculumRetrievalScope, KnowledgeGraphStructureManifestV4
 from eom_catalog_service.automatic_curriculum_alignment import (
     AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET,
     AUTOMATIC_ITEM_ALIGNMENT_MAX_ASSOCIATIONS,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
     AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256,
+    ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
     AutomaticCurriculumAlignmentError,
     automatic_item_alignment_policy,
     automatic_item_alignment_topic_keys,
     derive_automatic_item_curriculum_unit_ids,
+)
+from eom_catalog_service.automatic_item_graph_publication_service import (
+    AutomaticItemGraphCandidate,
+    build_automatic_item_alignment_retrieval_command,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
@@ -178,6 +184,141 @@ def test_policy_replay_preserves_v1_and_current_selects_only_maximum_support() -
     assert (
         current_policy.sha256
         == "sha256:64710dd475b958cf0357f8926d1b96c323f23d7bb72582ee840713ef8bb02ac8"
+    )
+
+
+def test_origin_scoped_policy_is_an_immutable_direct_membership_successor() -> None:
+    policy = automatic_item_alignment_policy(ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION)
+
+    assert policy.version == "integrated-science-auto-alignment/1.3"
+    assert policy.origin_scoped is True
+    assert policy.maximum_units == 1
+    assert policy.maximum_associations == 64
+    assert policy.sha256 == ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_SHA256
+    assert policy.sha256 == (
+        "sha256:98306bb694c3c3c925dced4db28b7a9f039fe0d7a29e141e5ed1ceb42567ea73"
+    )
+    assert policy.document["graph_walk"] == "DIRECT_EVIDENCE_NODE_MEMBERSHIP"
+
+
+def test_origin_scoped_alignment_requires_the_exact_minor_root_in_evidence() -> None:
+    node_id = "knode_" + "1" * 32
+    unit_id = "currunit_" + "2" * 32
+    framework_id = "curriculumrev_" + "3" * 32
+    scope = CurriculumRetrievalScope(
+        framework_revision_id=framework_id,
+        root_unit_id=unit_id,
+        include_descendants=False,
+    )
+    session = Mock()
+    session.scalars.return_value = (node_id,)
+    session.scalar.return_value = SimpleNamespace(curriculum_unit_id=unit_id, node_id=node_id)
+
+    assert derive_automatic_item_curriculum_unit_ids(
+        session,
+        graph_snapshot_revision_id="graphrev_" + "9" * 32,
+        evidence_node_ids=(node_id,),
+        alignment_policy_version=ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+        curriculum_scope=scope,
+    ) == (unit_id,)
+    session.execute.assert_not_called()
+
+
+@pytest.mark.parametrize("scope_mode", ("missing", "descendants", "indirect"))
+def test_origin_scoped_alignment_fails_closed_on_invalid_scope_or_indirect_evidence(
+    scope_mode: str,
+) -> None:
+    node_id = "knode_" + "1" * 32
+    unit_id = "currunit_" + "2" * 32
+    scope = CurriculumRetrievalScope(
+        framework_revision_id="curriculumrev_" + "3" * 32,
+        root_unit_id=unit_id,
+        include_descendants=scope_mode == "descendants",
+    )
+    session = Mock()
+    session.scalars.return_value = (node_id,)
+    session.scalar.return_value = SimpleNamespace(
+        curriculum_unit_id=unit_id,
+        node_id="knode_" + "4" * 32,
+    )
+
+    with pytest.raises(AutomaticCurriculumAlignmentError) as caught:
+        derive_automatic_item_curriculum_unit_ids(
+            session,
+            graph_snapshot_revision_id="graphrev_" + "9" * 32,
+            evidence_node_ids=(node_id,),
+            alignment_policy_version=ORIGIN_SCOPED_AUTOMATIC_ITEM_ALIGNMENT_POLICY_VERSION,
+            curriculum_scope=None if scope_mode == "missing" else scope,
+        )
+
+    assert caught.value.code == (
+        "AUTOMATIC_ALIGNMENT_SCOPED_TARGET_UNSUPPORTED"
+        if scope_mode == "indirect"
+        else "AUTOMATIC_ALIGNMENT_SCOPE_INVALID"
+    )
+
+
+def test_legacy_alignment_rejects_a_curriculum_scope() -> None:
+    node_id = "knode_" + "1" * 32
+    session = Mock()
+    session.scalars.return_value = (node_id,)
+
+    with pytest.raises(AutomaticCurriculumAlignmentError) as caught:
+        derive_automatic_item_curriculum_unit_ids(
+            session,
+            graph_snapshot_revision_id="graphrev_" + "9" * 32,
+            evidence_node_ids=(node_id,),
+            curriculum_scope=CurriculumRetrievalScope(
+                framework_revision_id="curriculumrev_" + "3" * 32,
+                root_unit_id="currunit_" + "2" * 32,
+                include_descendants=False,
+            ),
+        )
+
+    assert caught.value.code == "AUTOMATIC_ALIGNMENT_SCOPE_INVALID"
+
+
+def test_origin_scoped_retrieval_command_pins_the_exact_scope_and_replays() -> None:
+    context = CurrentKnowledgeGraphStructure(
+        corpus_key="integrated-science-textbooks",
+        display_name="통합과학 지식 그래프",
+        graph_snapshot_revision_id="graphrev_" + "b" * 32,
+        accepted_analysis_run_ids=(),
+        structure=cast(Any, object()),
+    )
+    candidate = AutomaticItemGraphCandidate(
+        analysis_run_id="analysisrun_" + "c" * 32,
+        requested_by_operator_id="operator_" + "d" * 32,
+        graph_snapshot_revision_id=context.graph_snapshot_revision_id,
+    )
+    scope = CurriculumRetrievalScope(
+        framework_revision_id="curriculumrev_" + "e" * 32,
+        root_unit_id="currunit_" + "f" * 32,
+        include_descendants=False,
+    )
+
+    command = build_automatic_item_alignment_retrieval_command(
+        context=context,
+        candidate=candidate,
+        topic_keys=("concept.motion",),
+        access_policy_revision_id="accessrev_" + "a" * 32,
+        idempotency_namespace="approved-item-origin-align",
+        curriculum_scope=scope,
+    )
+    replay = build_automatic_item_alignment_retrieval_command(
+        context=context,
+        candidate=candidate,
+        topic_keys=("concept.motion",),
+        access_policy_revision_id="accessrev_" + "a" * 32,
+        idempotency_namespace="approved-item-origin-align",
+        curriculum_scope=scope,
+    )
+
+    assert command == replay
+    assert command.curriculum_scope == scope
+    assert command.idempotency_key == (
+        f"approved-item-origin-align:{candidate.analysis_run_id}:"
+        f"{context.graph_snapshot_revision_id}"
     )
 
 
