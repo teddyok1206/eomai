@@ -203,3 +203,22 @@ The following repository documents are sufficient to reconstruct the major desig
 - `docs/adr/0073-additive-past-exam-solution-reports.md` and ADR 0074 for solution-report lineage;
 - `docs/architecture/LOCAL_GPU_IMAGE_ORCHESTRATION_V1.md` for local raster/compositor ownership;
 - `docs/operations/API_INTEGRATION_TEST_DATABASE.md` for safe persistence testing.
+
+## 9. Recommended next plan
+
+The current documents and verified runtime evidence support this order:
+
+1. Finish the additive solution-report enrichment with support slots 5 and 6, preserving every
+   accepted V9 analysis and requiring exactly one accepted V10 successor per base.
+2. Keep a small release-blocking material matrix with one independently checked example for TEXT,
+   DATA, one/two TABLE, one/two IMAGE, MIXED, and INQUIRY. Validate the registered Item manifest and
+   rendered HWPX for each branch before relying on a whole-exam aggregate.
+3. Measure product quality with a reviewer scorecard: scientific correctness, evidence relevance,
+   novelty, answer uniqueness, visual accuracy, explanation quality, and minutes of HWPX editing.
+   Use the measurements to revise the next additive Content Pack rather than changing a released
+   prompt or interpreting transport success as Item quality.
+4. Complete administrator observability for immutable IDs, revisions, hashes, retry history, and
+   failure receipts while keeping batch, lease, and internal keys out of the default user view.
+5. Introduce a successor production contract only when a changed Pack or acceptance rule requires
+   it. Preserve V5 reproducibility and reuse the existing pointer, idempotency, approval, and
+   disposable-database gates.
