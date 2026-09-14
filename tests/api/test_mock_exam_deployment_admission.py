@@ -5,6 +5,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_api.services.mock_exam_production_coordinator import (
@@ -40,6 +41,7 @@ from scripts.api.verify_mock_exam_deployment_admission import (
     ExactRetryableBlockedAdmission,
     RecoveryCheckpointObservation,
     _installed_contract_validator,
+    _retryable_recovery_failure,
     inspect_checkpoint_root,
 )
 
@@ -168,6 +170,52 @@ def test_exact_retryable_blocked_checkpoint_admits_explicit_recovery_deployment(
 
     assert result.terminal_execution_count == 0
     assert result.recovery_execution_id == execution_id
+
+
+def test_recovery_failure_accepts_only_homogeneous_retryable_rating_rows() -> None:
+    retryable = SimpleNamespace(code="CATALOG_APPLICATION_INTERNAL_ERROR", retryable=True)
+    rated = SimpleNamespace(state="RATED", rating=object(), failure=None)
+    unconfirmed = SimpleNamespace(
+        state="RATING_UNCONFIRMED",
+        rating=None,
+        failure=retryable,
+    )
+
+    assert _retryable_recovery_failure(
+        SimpleNamespace(failure=None, item_runs=(rated, unconfirmed))
+    ) == (True, "CATALOG_APPLICATION_INTERNAL_ERROR")
+
+    for invalid in (
+        SimpleNamespace(
+            failure=None,
+            item_runs=(
+                unconfirmed,
+                SimpleNamespace(
+                    state="RATING_UNCONFIRMED",
+                    rating=None,
+                    failure=SimpleNamespace(code="DIFFERENT_FAILURE", retryable=True),
+                ),
+            ),
+        ),
+        SimpleNamespace(
+            failure=None,
+            item_runs=(
+                SimpleNamespace(
+                    state="RATING_UNCONFIRMED",
+                    rating=None,
+                    failure=SimpleNamespace(
+                        code="CATALOG_APPLICATION_INTERNAL_ERROR",
+                        retryable=False,
+                    ),
+                ),
+            ),
+        ),
+        SimpleNamespace(
+            failure=None,
+            item_runs=(SimpleNamespace(state="RATED", rating=None, failure=None),),
+        ),
+    ):
+        assert _retryable_recovery_failure(invalid) == (None, None)
 
 
 @pytest.mark.parametrize(

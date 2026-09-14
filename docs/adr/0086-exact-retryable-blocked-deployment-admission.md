@@ -16,11 +16,13 @@ classifying it as terminal or weakening admission for any other execution.
 
 The immutable checkpoint revision is canonical; `current.json` is its validated materialization.
 Recovery authorization consists only of the logical execution ID, immutable execution revision ID,
-SHA-256 of the exact current checkpoint bytes, and its stable top-level failure code. The installed
-API contract still validates the complete checkpoint before these pointers are compared. The
-checkpoint must be `BLOCKED`, its top-level failure must be retryable, and every supplied pointer
-must match. A terminal checkpoint, a different failure, byte drift, a missing execution, or a second
-nonterminal execution fails closed.
+SHA-256 of the exact current checkpoint bytes, and its stable failure code. The installed API
+contract still validates the complete checkpoint before these pointers are compared. The checkpoint
+must be `BLOCKED` and either carry that retryable top-level failure or consist only of already-rated
+rows plus `RATING_UNCONFIRMED` rows carrying the same retryable failure. This second bounded shape
+represents a partial per-Item rating saga; it does not authorize another workflow phase. Every
+supplied pointer must match. A terminal checkpoint, mixed row failures, an unrated row without the
+exact failure, byte drift, a missing execution, or a second nonterminal execution fails closed.
 
 ## Access patterns, data structures, and scale
 

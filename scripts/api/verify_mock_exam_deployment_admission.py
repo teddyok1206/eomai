@@ -72,6 +72,38 @@ class RecoveryCheckpointObservation:
     failure_code: str | None
 
 
+def _retryable_recovery_failure(checkpoint: object) -> tuple[bool | None, str | None]:
+    """Resolve the one failure pointer that an exact recovery deployment may authorize."""
+
+    failure = getattr(checkpoint, "failure", None)
+    if failure is not None:
+        return getattr(failure, "retryable", None), getattr(failure, "code", None)
+
+    item_runs = getattr(checkpoint, "item_runs", None)
+    if not isinstance(item_runs, tuple) or not item_runs:
+        return None, None
+    row_failures: list[object] = []
+    for row in item_runs:
+        rating = getattr(row, "rating", None)
+        row_failure = getattr(row, "failure", None)
+        if rating is not None:
+            if row_failure is not None:
+                return None, None
+            continue
+        if getattr(row, "state", None) != "RATING_UNCONFIRMED" or row_failure is None:
+            return None, None
+        row_failures.append(row_failure)
+    failure_codes = {getattr(row, "code", None) for row in row_failures}
+    if (
+        not row_failures
+        or any(getattr(row, "retryable", None) is not True for row in row_failures)
+        or len(failure_codes) != 1
+    ):
+        return None, None
+    failure_code = next(iter(failure_codes))
+    return (True, failure_code) if isinstance(failure_code, str) else (None, None)
+
+
 def inspect_checkpoint_root(
     root: Path,
     *,
@@ -279,13 +311,13 @@ def _installed_recovery_validator(payload: bytes) -> RecoveryCheckpointObservati
     checkpoint: MockExamProductionExecution = TypeAdapter(
         MockExamProductionExecution
     ).validate_json(payload)
-    failure = checkpoint.failure
+    retryable, failure_code = _retryable_recovery_failure(checkpoint)
     return RecoveryCheckpointObservation(
         execution_id=checkpoint.execution_id,
         execution_revision_id=checkpoint.execution_revision_id,
         state=checkpoint.state,
-        retryable=failure.retryable if failure is not None else None,
-        failure_code=failure.code if failure is not None else None,
+        retryable=retryable,
+        failure_code=failure_code,
     )
 
 
