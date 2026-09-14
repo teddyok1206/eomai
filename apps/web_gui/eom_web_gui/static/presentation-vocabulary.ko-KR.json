@@ -8,26 +8,36 @@
         "UNKNOWN": {"label": "알 수 없는 상태", "audience": "USER", "tone": "neutral", "icon": "■"},
         "REQUESTED": {"label": "요청 접수", "audience": "USER", "tone": "primary", "icon": "●"},
         "PENDING": {"label": "대기 중", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "PROCESSING": {"label": "처리 중", "audience": "USER", "tone": "primary", "icon": "●"},
         "QUEUED": {"label": "실행 대기", "audience": "USER", "tone": "primary", "icon": "●"},
         "CLAIMED": {"label": "작업 준비 중", "audience": "ADMIN", "tone": "primary", "icon": "●"},
         "SUBMITTED": {"label": "분석 요청됨", "audience": "ADMIN", "tone": "primary", "icon": "●"},
         "RUNNING": {"label": "처리 중", "audience": "USER", "tone": "primary", "icon": "●"},
         "VALIDATING": {"label": "결과 검증 중", "audience": "USER", "tone": "primary", "icon": "●"},
+        "READY_FOR_LOGIN": {"label": "로그인 준비 완료", "audience": "ADMIN", "tone": "primary", "icon": "●"},
+        "WAITING_FOR_USER": {"label": "사용자 로그인 대기", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
+        "VERIFYING": {"label": "로그인 확인 중", "audience": "ADMIN", "tone": "primary", "icon": "●"},
         "AWAITING_HUMAN_APPROVAL": {"label": "검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
         "AWAITING_APPROVAL": {"label": "검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "AWAITING_REVIEW": {"label": "검토 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
         "NEEDS_REVIEW": {"label": "검토 필요", "audience": "USER", "tone": "warning", "icon": "◆"},
         "APPROVED": {"label": "승인됨", "audience": "USER", "tone": "success", "icon": "✓"},
         "ACCEPTED": {"label": "분석 완료", "audience": "USER", "tone": "success", "icon": "✓"},
         "COMPLETED": {"label": "완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "COMPLETED_WITH_GAPS": {"label": "일부 누락과 함께 완료", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
         "SUCCEEDED": {"label": "완료", "audience": "USER", "tone": "success", "icon": "✓"},
+        "NOT_STARTED": {"label": "시작 전", "audience": "USER", "tone": "neutral", "icon": "■"},
         "PASS": {"label": "검증 통과", "audience": "USER", "tone": "success", "icon": "✓"},
+        "WARN": {"label": "주의 필요", "audience": "USER", "tone": "warning", "icon": "◆"},
         "FAIL": {"label": "검증 실패", "audience": "USER", "tone": "danger", "icon": "!"},
         "FAILED": {"label": "처리 실패", "audience": "USER", "tone": "danger", "icon": "!"},
         "BLOCKED": {"label": "진행 중단", "audience": "USER", "tone": "danger", "icon": "!"},
         "CANCELLED": {"label": "취소됨", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "EXPIRED": {"label": "만료됨", "audience": "ADMIN", "tone": "neutral", "icon": "■"},
         "READY": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
         "ACTIVE": {"label": "정상", "audience": "USER", "tone": "success", "icon": "✓"},
         "AVAILABLE": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
+        "UNSUPPORTED": {"label": "지원하지 않는 형식", "audience": "USER", "tone": "neutral", "icon": "■"},
         "NOT_AVAILABLE": {"label": "아직 사용할 수 없음", "audience": "USER", "tone": "neutral", "icon": "■"},
         "UNAVAILABLE": {"label": "사용 불가", "audience": "USER", "tone": "danger", "icon": "!"},
         "DEGRADED": {"label": "일부 기능 제한", "audience": "USER", "tone": "warning", "icon": "◆"},
@@ -46,9 +56,13 @@
         "RUNNING": {"label": "문항 제작 중", "audience": "USER", "tone": "primary", "icon": "●"},
         "AWAITING_HUMAN_APPROVAL": {"label": "문항 검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
         "AWAITING_APPROVAL": {"label": "문항 검토 승인 대기", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "REWORK_REQUESTED": {"label": "문항 수정 요청", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "APPROVED": {"label": "최종 승인 완료", "audience": "USER", "tone": "primary", "icon": "●"},
+        "REGISTERING": {"label": "완성 문항 등록 중", "audience": "USER", "tone": "primary", "icon": "●"},
         "COMPLETED": {"label": "문항 등록 완료", "audience": "USER", "tone": "success", "icon": "✓"},
         "FAILED": {"label": "문항 제작 실패", "audience": "USER", "tone": "danger", "icon": "!"},
-        "BLOCKED": {"label": "문항 제작 중단", "audience": "USER", "tone": "danger", "icon": "!"}
+        "BLOCKED": {"label": "문항 제작 중단", "audience": "USER", "tone": "danger", "icon": "!"},
+        "CANCELLED": {"label": "문항 제작 취소", "audience": "USER", "tone": "neutral", "icon": "■"}
       }
     },
     "knowledge_analysis": {
@@ -56,8 +70,10 @@
         "QUEUED": {"label": "분석 대기", "audience": "ADMIN", "tone": "primary", "icon": "●"},
         "RUNNING": {"label": "자료 분석 중", "audience": "ADMIN", "tone": "primary", "icon": "●"},
         "ACCEPTED": {"label": "분석 완료", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "SUCCEEDED": {"label": "분석 완료", "audience": "ADMIN", "tone": "success", "icon": "✓"},
         "FAILED": {"label": "분석 실패", "audience": "ADMIN", "tone": "danger", "icon": "!"},
-        "BLOCKED": {"label": "분석 중단", "audience": "ADMIN", "tone": "danger", "icon": "!"}
+        "BLOCKED": {"label": "분석 중단", "audience": "ADMIN", "tone": "danger", "icon": "!"},
+        "CANCELLED": {"label": "분석 취소", "audience": "ADMIN", "tone": "neutral", "icon": "■"}
       }
     },
     "hwpx_build": {
@@ -81,11 +97,15 @@
       "states": {
         "APPROVED": {"label": "사용 가능", "audience": "USER", "tone": "success", "icon": "✓"},
         "DRAFT": {"label": "편집 중", "audience": "USER", "tone": "neutral", "icon": "■"},
-        "SUPERSEDED": {"label": "이전 버전", "audience": "USER", "tone": "neutral", "icon": "■"}
+        "IN_REVIEW": {"label": "검토 중", "audience": "USER", "tone": "warning", "icon": "◆"},
+        "REJECTED": {"label": "검토 반려", "audience": "USER", "tone": "danger", "icon": "!"},
+        "SUPERSEDED": {"label": "이전 버전", "audience": "USER", "tone": "neutral", "icon": "■"},
+        "RETIRED": {"label": "사용 종료", "audience": "USER", "tone": "neutral", "icon": "■"}
       }
     },
     "codex_account": {
       "states": {
+        "READY": {"label": "사용 가능", "audience": "ADMIN", "tone": "success", "icon": "✓"},
         "ACTIVE": {"label": "정상", "audience": "ADMIN", "tone": "success", "icon": "✓"},
         "DRAINING": {"label": "새 작업 중지 중", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
         "DISABLED": {"label": "비활성", "audience": "ADMIN", "tone": "danger", "icon": "!"},

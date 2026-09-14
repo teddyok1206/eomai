@@ -70,27 +70,17 @@ chmod 0755 "${WEB_ENTRY}"
 (
 cd /tmp
 runuser -u eom-web -- env EXPECTED_COMMIT="${EXPECTED_COMMIT}" "${WEB_PYTHON}" - <<'PY'
-import importlib.metadata
-import json
 import os
-from importlib.resources import files
 from pathlib import Path
 
 import eom_web_gui
+from eom_web_gui.release_integrity import verify_installed_web_gui
 
 module = Path(eom_web_gui.__file__).resolve()
 if "/home/eom/EOM" in str(module):
     raise SystemExit("installed package depends on the source checkout")
-distribution = importlib.metadata.distribution("eom-web-gui")
-if distribution.metadata["Name"] != "eom-web-gui" or distribution.version != "0.1.0":
-    raise SystemExit("installed distribution metadata mismatch")
-direct_url = distribution.read_text("direct_url.json")
-if direct_url and json.loads(direct_url).get("dir_info", {}).get("editable") is True:
-    raise SystemExit("installed package is editable")
-build = json.loads(files("eom_web_gui").joinpath("build-info.json").read_text(encoding="ascii"))
-if build["source_commit"] != os.environ["EXPECTED_COMMIT"]:
-    raise SystemExit("installed source commit mismatch")
-print("web_gui_service_identity_metadata=PASS")
+result = verify_installed_web_gui(expected_commit=os.environ["EXPECTED_COMMIT"])
+print(f"web_gui_service_identity_metadata=PASS verified_files={result.verified_file_count}")
 PY
 )
 

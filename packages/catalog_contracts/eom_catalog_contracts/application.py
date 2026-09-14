@@ -123,6 +123,15 @@ class ItemMediaQuery(FrozenModel):
     block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
 
 
+class ItemComponentMediaQuery(FrozenModel):
+    """Resolve one registered media component without exposing its Artifact pointer."""
+
+    operation: Literal["GET_ITEM_COMPONENT_MEDIA"] = "GET_ITEM_COMPONENT_MEDIA"
+    item_revision_id: ItemRevisionId
+    component_type: Literal["IMAGE"] = "IMAGE"
+    ordinal: int = Field(ge=0, le=1)
+
+
 class CatalogItemMediaResponse(FrozenModel):
     status: Literal["OK", "ERROR"]
     operation: Literal["GET_ITEM_MEDIA"] = "GET_ITEM_MEDIA"
@@ -143,6 +152,28 @@ class CatalogItemMediaResponse(FrozenModel):
                 raise ValueError("Catalog media error cannot contain success metadata")
             return self
         raise ValueError("Catalog media response variant is incomplete")
+
+
+class CatalogItemComponentMediaResponse(FrozenModel):
+    status: Literal["OK", "ERROR"]
+    operation: Literal["GET_ITEM_COMPONENT_MEDIA"] = "GET_ITEM_COMPONENT_MEDIA"
+    media_type: Literal["image/png"] | None = None
+    content_length: int | None = Field(default=None, ge=1, le=CATALOG_ITEM_MEDIA_MAX_BYTES)
+    sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exact_variant(self) -> CatalogItemComponentMediaResponse:
+        success_values = (self.media_type, self.content_length, self.sha256)
+        if self.status == "OK" and all(value is not None for value in success_values):
+            if self.error_code is not None:
+                raise ValueError("Catalog component media success cannot contain an error code")
+            return self
+        if self.status == "ERROR" and self.error_code is not None:
+            if any(value is not None for value in success_values):
+                raise ValueError("Catalog component media error cannot contain success metadata")
+            return self
+        raise ValueError("Catalog component media response variant is incomplete")
 
 
 class AssessmentPageListQuery(FrozenModel):

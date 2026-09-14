@@ -11,7 +11,7 @@ import stat
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     CatalogApplicationResponse,
     CatalogAssessmentPageListResponse,
     CatalogAssessmentPageMediaResponse,
+    CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -43,6 +44,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV4,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
+    ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
@@ -146,8 +148,40 @@ class CatalogApplicationClient:
 
     def download_item_media(self, item_revision_id: str, block_id: str) -> ProxiedItemMedia:
         command = ItemMediaQuery(item_revision_id=item_revision_id, block_id=block_id)
+        return self._download_item_media(command)
+
+    def download_item_component_media(
+        self,
+        item_revision_id: str,
+        component_type: Literal["IMAGE"],
+        ordinal: int,
+    ) -> ProxiedItemMedia:
+        command = ItemComponentMediaQuery.model_validate(
+            {
+                "item_revision_id": item_revision_id,
+                "component_type": component_type,
+                "ordinal": ordinal,
+            }
+        )
+        return self._download_item_media(command)
+
+    def _download_item_media(
+        self,
+        command: ItemMediaQuery | ItemComponentMediaQuery,
+    ) -> ProxiedItemMedia:
+        component_request = isinstance(command, ItemComponentMediaQuery)
+        request_contract = (
+            "catalog-item-component-media-request"
+            if component_request
+            else "catalog-item-media-request"
+        )
+        response_contract = (
+            "catalog-item-component-media-response"
+            if component_request
+            else "catalog-item-media-response"
+        )
         payload = command.model_dump(mode="json")
-        validate_contract("catalog-item-media-request", payload)
+        validate_contract(request_contract, payload)
         self._validate_socket()
         connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
@@ -160,8 +194,14 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("catalog-item-media-response", value)
-            response = CatalogItemMediaResponse.model_validate(value)
+            validate_contract(response_contract, value)
+            response = (
+                CatalogItemComponentMediaResponse.model_validate(value)
+                if component_request
+                else CatalogItemMediaResponse.model_validate(value)
+            )
+            if response.operation != command.operation:
+                raise ValueError("Catalog media response operation differs")
             if response.status == "ERROR":
                 self._raise_remote_error(response.error_code)
             assert response.media_type is not None

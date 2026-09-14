@@ -14,6 +14,7 @@ import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js"
 
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
+const ITEM_REVISION_PATTERN = /^itemrev_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
 const state = {
   csrf: "",
@@ -30,6 +31,7 @@ const state = {
   hwpxPollTimer: null,
   hwpxRecentBuilds: [],
   recentItems: [],
+  itemPreviewRequestSequence: 0,
   itemBankEntries: [],
   itemBankCursor: null,
   itemBankQuery: "",
@@ -1237,12 +1239,48 @@ async function loadSelectedRecentItem() {
 async function loadItemPreview() {
   const itemId = $("#item-id").value.trim();
   const revisionId = $("#revision-id").value.trim();
+  const requestSequence = ++state.itemPreviewRequestSequence;
+  resetItemPreviewSelection(
+    "문항 확인 중",
+    "선택한 문항의 승인 버전과 미리보기 구성을 확인하고 있습니다.",
+  );
   try {
     const preview = await api(`/items/${encodeURIComponent(itemId)}/revisions/${encodeURIComponent(revisionId)}/preview`);
+    if (requestSequence !== state.itemPreviewRequestSequence) return;
     renderItemPreview(preview);
   } catch (failure) {
+    if (requestSequence !== state.itemPreviewRequestSequence) return;
+    resetItemPreviewSelection(
+      "문항 조회 실패",
+      "현재 선택한 문항을 불러오지 못했습니다. 문항을 다시 선택해 주세요.",
+    );
     toast(`완성 문항 조회 실패: ${failure.message}`);
   }
+}
+
+function resetItemPreviewSelection(title, detail) {
+  $("#structured-base-revision").value = "";
+  $("#structured-revision-etag").value = "";
+  $("#hwpx-revision-id").value = "";
+  syncHwpxBuildAvailability();
+  updateHwpxDeliveryGuide();
+  setStatus($("#revision-state"), "neutral", "■", "선택 안 됨");
+  delete $("#revision-state").dataset.rawState;
+  delete $("#revision-state").dataset.presentationKnown;
+  $("#revision-state").title = "";
+  renderDefinitionList($("#item-inspector"), {
+    "문항 ID": "-",
+    "문항 버전 ID": "-",
+    "문항 제작 진행 ID": "-",
+    "제작 기준 버전": "-",
+    "EOM 문항 템플릿": "-",
+  });
+  $("#preview-page-state").textContent = title;
+  $("#preview-content").hidden = true;
+  $("#preview-empty").hidden = false;
+  $("#preview-empty strong").textContent = title;
+  const message = $("#preview-empty p");
+  if (message) message.textContent = detail;
 }
 
 function renderItemPreview(preview) {
@@ -1250,23 +1288,29 @@ function renderItemPreview(preview) {
   renderDefinitionList($("#item-inspector"), {"문항 ID": preview.item_id, "문항 버전 ID": preview.item_revision_id, "문항 제작 진행 ID": preview.workflow_id, "제작 기준 버전": preview.content_pack_release_id, "EOM 문항 템플릿": preview.template_delivery_available ? "사용 가능" : "구조화 문항 필요"});
   $("#structured-base-revision").value = preview.item_revision_id;
   $("#structured-revision-etag").value = preview.revision_etag;
-  if (preview.template_delivery_available) $("#hwpx-revision-id").value = preview.item_revision_id;
+  $("#hwpx-revision-id").value = preview.template_delivery_available
+    ? preview.item_revision_id
+    : "";
+  syncHwpxBuildAvailability();
   updateHwpxDeliveryGuide();
   $("#preview-page-state").textContent = statePresentation("generic", preview.preview_state).label;
   if (preview.preview_state !== "AVAILABLE") {
     $("#preview-content").hidden = true;
     $("#preview-empty").hidden = false;
-    $("#preview-empty strong").textContent = "미리보기 준비 중";
-    $("#preview-empty p").textContent = "이 문항은 아직 미리보기 본문이 준비되지 않았습니다.";
+    $("#preview-empty strong").textContent = "지원하지 않는 문항 형식";
+    const detail = $("#preview-empty p");
+    if (detail) detail.textContent = "등록된 본문 형식은 현재 미리보기에서 표시할 수 없습니다.";
     return;
   }
   $("#preview-empty").hidden = true;
   $("#preview-content").hidden = false;
+  $("#preview-item-number").textContent = Number.isInteger(preview.item_number) ? `${preview.item_number}.` : "";
   $("#preview-title").textContent = preview.title || "";
-  $("#preview-score").textContent = Number.isInteger(preview.score_points) ? `${preview.score_points}점` : "";
+  $("#preview-score").textContent = preview.score_display ? `${preview.score_display}점` : "";
   $("#preview-answer").textContent = preview.answer || "";
   $("#preview-explanation").textContent = preview.explanation || "";
   $("#preview-authoring-intent").textContent = preview.authoring_intent || "";
+  $("#preview-concept-source").textContent = preview.concept_source || "";
   const blocks = $("#preview-blocks");
   blocks.replaceChildren();
   const orderedBlocks = orderedItemPreviewBlocks(preview);
@@ -1308,6 +1352,32 @@ function renderPreviewBlock(block) {
     paragraph.textContent = block.text;
     return paragraph;
   }
+  if (block.type === "labeled_text") {
+    const section = document.createElement("section");
+    section.className = `preview-labeled preview-labeled-${block.kind.toLowerCase()}`;
+    const heading = document.createElement("h3");
+    heading.textContent = block.label;
+    const text = document.createElement("p");
+    text.textContent = block.text;
+    section.append(heading, text);
+    return section;
+  }
+  if (block.type === "inquiry") {
+    const section = document.createElement("section");
+    section.className = "preview-inquiry";
+    const addPart = (label, value) => {
+      if (!value) return;
+      const heading = document.createElement("h3");
+      heading.textContent = `[${block.kind} ${label}]`;
+      const text = document.createElement("p");
+      text.textContent = value;
+      section.append(heading, text);
+    };
+    addPart("목표", block.goal);
+    addPart("과정", block.procedure);
+    addPart("결과", block.result);
+    return section;
+  }
   if (block.type === "table") {
     const section = document.createElement("section");
     section.className = "document-tables";
@@ -1325,7 +1395,13 @@ function renderPreviewBlock(block) {
     image.loading = "eager";
     image.decoding = "async";
     const caption = document.createElement("figcaption");
-    caption.textContent = block.alt_text;
+    if (block.label) {
+      const label = document.createElement("strong");
+      label.textContent = block.label;
+      caption.append(label, document.createTextNode(` ${block.alt_text}`));
+    } else {
+      caption.textContent = block.alt_text;
+    }
     figure.append(image, caption);
     return figure;
   }
@@ -1467,12 +1543,19 @@ async function loadHwpx() {
     setStateStatus($("#hwpx-inspector-badge"), "hwpx_capability", value.state);
     $("#hwpx-step-state").textContent = statePresentation("hwpx_capability", value.state).label;
     $("#metric-hwpx").textContent = statePresentation("hwpx_capability", value.state).label;
-    $("#hwpx-build-submit").disabled = !value.build_available;
+    syncHwpxBuildAvailability();
   } catch (failure) {
+    state.hwpxCapability = null;
     setStatus($("#hwpx-state-badge"), "danger", "!", "HWPX 상태 확인 실패");
     $("#hwpx-message").textContent = failure.message;
-    $("#hwpx-build-submit").disabled = true;
+    syncHwpxBuildAvailability();
   }
+}
+
+function syncHwpxBuildAvailability() {
+  const capabilityReady = state.hwpxCapability?.build_available === true;
+  const revisionReady = ITEM_REVISION_PATTERN.test($("#hwpx-revision-id").value.trim());
+  $("#hwpx-build-submit").disabled = !(capabilityReady && revisionReady);
 }
 
 function installHwpx() {
@@ -1486,8 +1569,10 @@ function installHwpx() {
   $("#hwpx-recent-refresh").addEventListener("click", loadRecentHwpxBuilds);
   $("#hwpx-revision-id").addEventListener("input", () => {
     renderRecentHwpxBuilds();
+    syncHwpxBuildAvailability();
     updateHwpxDeliveryGuide();
   });
+  syncHwpxBuildAvailability();
   updateHwpxDeliveryGuide();
 }
 
@@ -1533,7 +1618,7 @@ function restoreHwpxBuild() {
 
 async function createHwpxBuild() {
   const revision = $("#hwpx-revision-id").value.trim();
-  if (!revision.startsWith("itemrev_")) return toast("승인된 문항 버전 ID를 입력하세요.");
+  if (!ITEM_REVISION_PATTERN.test(revision)) return toast("승인된 문항 버전 ID를 입력하세요.");
   const itemNumber = Number.parseInt($("#hwpx-item-number").value, 10);
   if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > 999) return toast("문항 번호는 1~999 범위여야 합니다.");
   const idempotency = `studio:hwpx:${revision}:${crypto.randomUUID()}`;
@@ -1571,6 +1656,7 @@ async function loadHwpxBuild() {
     $("#hwpx-artifact-revision").textContent = value.output_artifact_revision_id || "-";
     $("#hwpx-completed-at").textContent = value.completed_at || "-";
     $("#hwpx-revision-id").value = value.item_revision_id;
+    syncHwpxBuildAvailability();
     const download = $("#hwpx-download-link");
     download.hidden = !value.download_available;
     download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";

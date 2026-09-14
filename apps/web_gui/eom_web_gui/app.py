@@ -26,6 +26,7 @@ from eom_web_gui.contracts import (
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
     HwpxBuildRequest,
+    ItemPreview,
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     PlannedMockExamAssemblySubmission,
@@ -386,9 +387,8 @@ def create_app(
         item_id: str,
         item_revision_id: str,
         session: Annotated[WebSession, Depends(require_session)],
-    ) -> dict[str, Any]:
-        value = await actual.preview(session, item_id, item_revision_id)
-        return value.model_dump(mode="json")
+    ) -> ItemPreview:
+        return await actual.preview(session, item_id, item_revision_id)
 
     @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/media/{{block_id}}")
     async def item_media(
@@ -402,6 +402,29 @@ def create_app(
             item_id,
             item_revision_id,
             block_id,
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/visuals/{{ordinal}}")
+    async def item_visual(
+        item_id: str,
+        item_revision_id: str,
+        ordinal: int,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.gateway.item_visual(
+            session,
+            item_id,
+            item_revision_id,
+            ordinal,
         )
         return Response(
             content=value.content,

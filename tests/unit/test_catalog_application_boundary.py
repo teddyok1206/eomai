@@ -26,6 +26,7 @@ from eom_catalog_contracts import (
     CatalogApplicationErrorCode,
     CatalogApplicationRequest,
     CatalogApplicationResponse,
+    CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -38,6 +39,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV2,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
+    ItemComponentMediaQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
@@ -89,6 +91,23 @@ class FakeRegistry:
     def load_item_media(self, _revision_id: str, block_id: str) -> SimpleNamespace:
         assert block_id == "block_image"
         content = b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
+
+        def iter_chunks() -> object:
+            yield content
+
+        return SimpleNamespace(
+            media_type="image/png",
+            content_length=len(content),
+            sha256="sha256:" + hashlib.sha256(content).hexdigest(),
+            iter_chunks=iter_chunks,
+        )
+
+    def load_item_component_media(
+        self, _revision_id: str, component_type: str, ordinal: int
+    ) -> SimpleNamespace:
+        assert component_type == "IMAGE"
+        assert ordinal == 1
+        content = b"\x89PNG\r\n\x1a\nCATALOG_COMPONENT_MEDIA"
 
         def iter_chunks() -> object:
             yield content
@@ -789,6 +808,18 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         sha256="sha256:" + "a" * 64,
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-item-media-response", media_response)
+    component_media_request = ItemComponentMediaQuery(
+        item_revision_id="itemrev_" + "2" * 32,
+        ordinal=1,
+    ).model_dump(mode="json")
+    validate_contract("catalog-item-component-media-request", component_media_request)
+    component_media_response = CatalogItemComponentMediaResponse(
+        status="OK",
+        media_type="image/png",
+        content_length=12,
+        sha256="sha256:" + "b" * 64,
+    ).model_dump(mode="json", exclude_none=True)
+    validate_contract("catalog-item-component-media-response", component_media_response)
     page_list_request = {
         "operation": "GET_ASSESSMENT_PAGE_IMAGES",
         "extraction_batch_id": "legacybatch_" + "1" * 32,
@@ -862,6 +893,15 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         media_bytes = b"".join(media.iter_chunks())
         assert media_bytes == b"\x89PNG\r\n\x1a\nCATALOG_MEDIA"
         assert media.media_type == "image/png"
+        component_media = client.download_item_component_media(
+            "itemrev_" + "2" * 32,
+            "IMAGE",
+            1,
+        )
+        assert b"".join(component_media.iter_chunks()) == (
+            b"\x89PNG\r\n\x1a\nCATALOG_COMPONENT_MEDIA"
+        )
+        assert component_media.media_type == "image/png"
         pages = client.assessment_pages(
             "legacybatch_" + "1" * 32,
             "occurrev_" + "2" * 32,

@@ -810,6 +810,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:e40e2f407ca6a124ed091dbc8e7b06e4eee78783d5855b6e8c17e24294f9928f",
         ),
+        "catalog-item-component-media-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-item-component-media-request-v1.schema.json",
+            "resources/catalog-application/catalog-item-component-media-request-v1.schema.json",
+            "1.0",
+            "sha256:7f9e937b19ef14231094d57d984bea2f8a33cf7eef6010e69598b64638752ca4",
+        ),
+        "catalog-item-component-media-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-item-component-media-response-v1.schema.json",
+            "resources/catalog-application/catalog-item-component-media-response-v1.schema.json",
+            "1.0",
+            "sha256:5d350c7808c93066c361193c9bf1badbbc798b8e3401a5087c4f400d5f4751b8",
+        ),
         "catalog-assessment-page-list-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-assessment-page-list-request-v1.schema.json",
             "resources/catalog-application/catalog-assessment-page-list-request-v1.schema.json",

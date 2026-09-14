@@ -32,12 +32,12 @@ from eom_web_gui.contracts import (
     MockExamHwpxBuildView,
     PreviewChoice,
     PreviewEquationBlock,
-    PreviewImageBlock,
-    PreviewParagraphBlock,
+    PreviewImageBlockV3,
+    PreviewParagraphBlockV3,
     PreviewStatement,
     PreviewStatementExplanation,
     PreviewStatementSetBlock,
-    PreviewTableBlock,
+    PreviewTableBlockV3,
     RecentItemOption,
     StructuredItemImportRequest,
 )
@@ -141,6 +141,46 @@ def structured_item_content() -> dict[str, object]:
             ],
         },
         "score": {"points": 3},
+    }
+
+
+def content_team_item_content(
+    *, visuals: list[dict[str, object]], layout: str
+) -> dict[str, object]:
+    """Return a current content-team boundary fixture without a runtime package dependency."""
+
+    return {
+        "schema_version": "3.0",
+        "renderer_profile": "content-team-hwp-question-editor-v1",
+        "authoring_prompt_sha256": "sha256:" + "a" * 64,
+        "handoff_archive_sha256": "sha256:" + "b" * 64,
+        "item_number": 7,
+        "score_display": "2.5",
+        "stem": "다음 자료를 해석하시오.",
+        "bottom_stem": "옳은 것을 고르시오.",
+        "inquiry": None,
+        "labeled_blocks": [{"kind": "DATA", "content": "관측 자료이다."}],
+        "visuals": visuals,
+        "visual_layout": layout,
+        "statements": [],
+        "choices": [
+            {"number": label, "text": f"선택지 {index}"}
+            for index, label in enumerate(("①", "②", "③", "④", "⑤"), start=1)
+        ],
+        "answer": {
+            "answer_kind": "DIRECT_CHOICE",
+            "number": "①",
+            "answer_content": "선택지 1",
+            "raw_line": "정답 : ① (선택지 1)",
+            "statement_labels": [],
+        },
+        "explanations": {
+            "authoring_intent": "자료 해석 능력을 평가한다.",
+            "concept_source": "통합과학 자료 해석",
+            "correct_answer": "자료에서 A의 값은 1이다.",
+            "wrong_answer": "나머지는 자료와 다르다.",
+        },
+        "equation_sources": [],
     }
 
 
@@ -408,25 +448,27 @@ class FakeGateway:
             item_revision_id=item_revision_id,
             revision_etag='"v1"',
             revision_state="APPROVED",
-            content_pack_release_id="packrel_test_physics",
+            content_pack_release_id="packrel_" + "a" * 32,
+            content_schema_ref="eom.assessment.item-content/1.0",
+            content_profile="BLOCKS_V1",
             template_delivery_available=True,
             locale="ko-KR",
             title="포물선 운동",
-            score_points=3,
+            score_display="3",
             blocks=(
-                PreviewParagraphBlock(
+                PreviewParagraphBlockV3(
                     block_id="block_stem",
                     purpose="stem",
                     text="공기 저항을 무시하고 다음 자료를 보시오.",
                 ),
-                PreviewTableBlock(
+                PreviewTableBlockV3(
                     block_id="block_data",
                     purpose="data",
                     caption="운동 조건",
                     headers=("물리량", "값"),
                     rows=(("시간", "2 s"), ("수평 속도", "10 m/s")),
                 ),
-                PreviewImageBlock(
+                PreviewImageBlockV3(
                     block_id="block_image",
                     purpose="stimulus",
                     media_url=(
@@ -445,7 +487,7 @@ class FakeGateway:
                     notation="hancom-equation-script",
                     source="x=v_0 t",
                 ),
-                PreviewParagraphBlock(
+                PreviewParagraphBlockV3(
                     block_id="block_prompt",
                     purpose="prompt",
                     text="2초 후 수평 이동 거리를 고르시오.",
@@ -495,6 +537,16 @@ class FakeGateway:
 
         digest = "sha256:" + hashlib.sha256(content).hexdigest()
         return ItemMedia(content=content, content_type="image/png", etag=f'"{digest}"')
+
+    async def item_visual(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        ordinal: int,
+    ) -> ItemMedia:
+        assert ordinal == 0
+        return await self.item_media(session, item_id, item_revision_id, "block_image")
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
         del session

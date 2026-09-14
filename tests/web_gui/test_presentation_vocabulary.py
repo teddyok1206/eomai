@@ -2,8 +2,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, get_args
 
+from eom_api_contracts import HwpxBuildState, HwpxCapabilityState
+from eom_item_registry import ItemRevisionState
+from eom_web_gui.contracts import (
+    AssessmentLearningBatchStatus,
+    AssessmentLearningCorpusStatusV2,
+    CodexAuthEnrollmentStatusView,
+    KnowledgeAnalysisBatchStatus,
+    KnowledgeAnalysisQualityReport,
+)
+from eom_workflow_runner.state_machine import WorkflowState
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +50,41 @@ def test_domain_specific_states_are_human_readable() -> None:
         presentation = domains[domain]["states"][raw_state]
         assert presentation["label"] == label
         assert presentation["label"] != raw_state
+
+
+def test_backend_state_machines_are_fully_covered_by_presentation_domains() -> None:
+    domains = _vocabulary()["domains"]
+    expected = {
+        "workflow": {value.value for value in WorkflowState},
+        "hwpx_build": {value.value for value in HwpxBuildState},
+        "hwpx_capability": {value.value for value in HwpxCapabilityState},
+        "item_revision": {value.value for value in ItemRevisionState},
+        "knowledge_analysis": set(
+            get_args(KnowledgeAnalysisBatchStatus.model_fields["state"].annotation)
+        ),
+    }
+    for domain, states in expected.items():
+        assert states <= set(domains[domain]["states"]), domain
+
+
+def test_generic_presentation_covers_typed_cross_surface_states() -> None:
+    generic_states = set(_vocabulary()["domains"]["generic"]["states"])
+    typed_fields = (
+        AssessmentLearningBatchStatus.model_fields["state"],
+        AssessmentLearningCorpusStatusV2.model_fields["solution_report_status"],
+        CodexAuthEnrollmentStatusView.model_fields["state"],
+        KnowledgeAnalysisQualityReport.model_fields["quality_state"],
+    )
+    expected = {
+        state
+        for field in typed_fields
+        for state in get_args(field.annotation)
+        if isinstance(state, str)
+    }
+    # Codex control commands use this shared presentation boundary while the API model
+    # remains open for forward-compatible command implementations.
+    expected.add("PROCESSING")
+    assert expected <= generic_states
 
 
 def test_vocabulary_preserves_distinct_pointer_identities() -> None:

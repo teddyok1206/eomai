@@ -40,15 +40,12 @@ from eom_web_gui.contracts import (
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
     PlannedMockExamAssemblySubmission,
-    PreviewChoice,
-    PreviewEquationBlock,
-    PreviewImageBlock,
-    PreviewParagraphBlock,
-    PreviewStatementExplanation,
-    PreviewStatementSetBlock,
-    PreviewTableBlock,
     RecentItemOption,
     StructuredItemImportRequest,
+)
+from eom_web_gui.item_preview_projection import (
+    project_item_content,
+    resolve_content_capability,
 )
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.sessions import ApiTokens, WebSession
@@ -212,65 +209,6 @@ def _verified_mock_exam_plan(
     return value
 
 
-def _ordered_preview_blocks(
-    content: dict[str, Any], item_id: str, item_revision_id: str
-) -> tuple[
-    PreviewParagraphBlock
-    | PreviewEquationBlock
-    | PreviewTableBlock
-    | PreviewImageBlock
-    | PreviewStatementSetBlock,
-    ...,
-]:
-    body = content.get("body")
-    if not isinstance(body, list):
-        raise ValueError("structured item body is not an ordered array")
-    blocks: list[
-        PreviewParagraphBlock
-        | PreviewEquationBlock
-        | PreviewTableBlock
-        | PreviewImageBlock
-        | PreviewStatementSetBlock
-    ] = []
-    for block in body:
-        if not isinstance(block, dict):
-            raise ValueError("structured item block is not an object")
-        block_type = block.get("type")
-        if block_type == "paragraph":
-            blocks.append(PreviewParagraphBlock.model_validate(block))
-        elif block_type == "equation":
-            blocks.append(PreviewEquationBlock.model_validate(block))
-        elif block_type == "table":
-            blocks.append(PreviewTableBlock.model_validate(block))
-        elif block_type == "statement_set":
-            blocks.append(PreviewStatementSetBlock.model_validate(block))
-        elif block_type == "image":
-            artifact = block.get("artifact")
-            if not isinstance(artifact, dict):
-                raise ValueError("structured item image pointer is absent")
-            blocks.append(
-                PreviewImageBlock.model_validate(
-                    {
-                        "block_id": block.get("block_id"),
-                        "type": "image",
-                        "purpose": block.get("purpose"),
-                        "media_url": (
-                            f"/studio/api/v1/items/{item_id}/revisions/"
-                            f"{item_revision_id}/media/{block.get('block_id')}"
-                        ),
-                        "media_type": artifact.get("media_type"),
-                        "sha256": artifact.get("sha256"),
-                        "alt_text": block.get("alt_text"),
-                        "width_px": block.get("width_px"),
-                        "height_px": block.get("height_px"),
-                    }
-                )
-            )
-        else:
-            raise ValueError("structured item block type is unsupported")
-    return tuple(blocks)
-
-
 class GatewayError(RuntimeError):
     def __init__(self, *, status: int, code: str) -> None:
         super().__init__(code)
@@ -357,6 +295,14 @@ class ApplicationGateway(Protocol):
         item_id: str,
         item_revision_id: str,
         block_id: str,
+    ) -> ItemMedia: ...
+
+    async def item_visual(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        ordinal: int,
     ) -> ItemMedia: ...
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]: ...
@@ -1304,116 +1250,80 @@ class HttpApplicationGateway:
         revision_response = await self._authorized(
             session, "GET", f"/api/v1/item-revisions/{item_revision_id}"
         )
-        components_response = await self._authorized(
-            session, "GET", f"/api/v1/item-revisions/{item_revision_id}/components"
-        )
         item = self._data(item_response)
         revision = self._data(revision_response)
         revision_etag = revision_response.headers.get("etag")
+        workflow_id = revision.get("workflow_id")
+        content_pack_release_id = revision.get("content_pack_release_id")
         if (
-            revision.get("item_id") != item_id
+            item.get("item_id") != item_id
+            or revision.get("item_revision_id") != item_revision_id
+            or revision.get("item_id") != item_id
             or item.get("current_revision_id") != item_revision_id
-            or revision_etag is None
+            or revision.get("revision_state") != "APPROVED"
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
+        if (
+            not isinstance(workflow_id, str)
+            or re.fullmatch(r"workflow_[a-z0-9]{8,55}", workflow_id) is None
+            or not isinstance(content_pack_release_id, str)
+            or re.fullmatch(r"packrel_[a-z0-9]{8,55}", content_pack_release_id) is None
+            or revision_etag is None
+            or re.fullmatch(r'"v[1-9][0-9]*"', revision_etag) is None
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        components_response = await self._authorized(
+            session, "GET", f"/api/v1/item-revisions/{item_revision_id}/components"
+        )
         components = self._list_data(components_response)
-        template_delivery_available = any(
-            component.get("item_revision_id") == item_revision_id
-            and component.get("component_type") == "ITEM_CONTENT"
-            and component.get("ordinal") == 0
-            and component.get("required") is True
-            and isinstance(component.get("artifact"), dict)
-            and component["artifact"].get("schema_ref")
-            in {
-                "eom.assessment.item-content/1.0",
-                "eom.assessment.item-content/2.0",
-                "eom.assessment.item-content/3.0",
-            }
-            for component in components
-        )
-        structured_preview_available = any(
-            component.get("item_revision_id") == item_revision_id
-            and component.get("component_type") == "ITEM_CONTENT"
-            and component.get("ordinal") == 0
-            and component.get("required") is True
-            and isinstance(component.get("artifact"), dict)
-            and component["artifact"].get("schema_ref") == "eom.assessment.item-content/1.0"
-            for component in components
-        )
-        content: dict[str, Any] | None = None
-        if structured_preview_available:
+        try:
+            capability = resolve_content_capability(components, item_revision_id)
+        except (TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        base = {
+            "workflow_id": workflow_id,
+            "item_id": item_id,
+            "item_revision_id": item_revision_id,
+            "revision_etag": revision_etag,
+            "revision_state": "APPROVED",
+            "content_pack_release_id": content_pack_release_id,
+            "content_schema_ref": capability.schema_ref,
+            "template_delivery_available": capability.template_delivery_available,
+        }
+        if capability.profile is None:
+            return ItemPreview(
+                preview_state="UNSUPPORTED",
+                unavailable_reason="UNSUPPORTED_CONTENT_SCHEMA",
+                **base,
+            )
+        try:
             content_response = await self._authorized(
                 session,
                 "GET",
                 f"/api/v1/item-revisions/{item_revision_id}/structured-content",
             )
-            content = self._data(content_response)
-        try:
-            blocks = _ordered_preview_blocks(content, item_id, item_revision_id) if content else ()
-        except (TypeError, ValueError) as exc:
-            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
-        interaction = (content or {}).get("interaction")
-        choices = interaction.get("choices", []) if isinstance(interaction, dict) else []
-        solution = (content or {}).get("solution")
-        correct_ids = solution.get("correct_choice_ids", []) if isinstance(solution, dict) else []
-        statement_explanations = (
-            solution.get("statement_explanations", []) if isinstance(solution, dict) else []
-        )
-        if content is not None and (
-            not isinstance(interaction, dict)
-            or not isinstance(choices, list)
-            or any(not isinstance(choice, dict) for choice in choices)
-            or not isinstance(solution, dict)
-            or not isinstance(correct_ids, list)
-            or not isinstance(statement_explanations, list)
-            or any(not isinstance(value, dict) for value in statement_explanations)
-        ):
-            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
-        answer = next(
-            (
-                str(choice.get("label"))
-                for choice in choices
-                if isinstance(choice, dict) and choice.get("choice_id") in correct_ids
-            ),
-            None,
-        )
-        try:
-            return ItemPreview(
-                preview_state="AVAILABLE" if content is not None else "METADATA_ONLY",
-                workflow_id=str(revision.get("workflow_id") or "unknown"),
+            projected = project_item_content(
+                content=self._data(content_response),
+                capability=capability,
+                components=components,
                 item_id=item_id,
                 item_revision_id=item_revision_id,
-                revision_etag=revision_etag,
-                revision_state=str(revision.get("revision_state") or "UNKNOWN"),
-                content_pack_release_id=str(revision.get("content_pack_release_id") or "unknown"),
-                template_delivery_available=template_delivery_available,
-                locale=(str(content.get("locale")) if content is not None else None),
-                title=(str(content.get("title")) if content is not None else None),
-                score_points=(
-                    int(content["score"]["points"])
-                    if content is not None and isinstance(content.get("score"), dict)
-                    else None
-                ),
-                blocks=tuple(blocks),
-                choices=tuple(
-                    PreviewChoice(
-                        choice_id=str(choice.get("choice_id")),
-                        label=str(choice.get("label")),
-                        text=str(choice.get("text")),
-                    )
-                    for choice in choices
-                ),
-                answer=answer,
-                explanation=(
-                    str(solution.get("explanation")) if isinstance(solution, dict) else None
-                ),
-                authoring_intent=(
-                    str(solution.get("authoring_intent")) if isinstance(solution, dict) else None
-                ),
-                statement_explanations=tuple(
-                    PreviewStatementExplanation.model_validate(value)
-                    for value in statement_explanations
-                ),
+            )
+            return ItemPreview(
+                preview_state="AVAILABLE",
+                content_profile=projected.profile,
+                locale=projected.locale,
+                title=projected.title,
+                item_number=projected.item_number,
+                score_display=projected.score_display,
+                blocks=projected.blocks,
+                choices=projected.choices,
+                answer=projected.answer,
+                explanation=projected.explanation,
+                concept_source=projected.concept_source,
+                authoring_intent=projected.authoring_intent,
+                statement_explanations=projected.statement_explanations,
+                **base,
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
@@ -1710,17 +1620,60 @@ class HttpApplicationGateway:
         _require_id(item_id, "item_")
         _require_id(item_revision_id, "itemrev_")
         _require_id(block_id, "block_")
+        return await self._item_media_response(
+            session,
+            item_id=item_id,
+            item_revision_id=item_revision_id,
+            media_path=f"/api/v1/item-revisions/{item_revision_id}/media/{block_id}",
+            allowed_types={"image/png", "image/jpeg"},
+        )
+
+    async def item_visual(
+        self,
+        session: WebSession,
+        item_id: str,
+        item_revision_id: str,
+        ordinal: int,
+    ) -> ItemMedia:
+        _require_id(item_id, "item_")
+        _require_id(item_revision_id, "itemrev_")
+        if isinstance(ordinal, bool) or ordinal not in {0, 1}:
+            raise GatewayError(status=422, code="WEB_REQUEST_INVALID")
+        return await self._item_media_response(
+            session,
+            item_id=item_id,
+            item_revision_id=item_revision_id,
+            media_path=(
+                f"/api/v1/item-revisions/{item_revision_id}/media-components/images/{ordinal}"
+            ),
+            allowed_types={"image/png"},
+        )
+
+    async def _item_media_response(
+        self,
+        session: WebSession,
+        *,
+        item_id: str,
+        item_revision_id: str,
+        media_path: str,
+        allowed_types: set[str],
+    ) -> ItemMedia:
         revision_response = await self._authorized(
             session,
             "GET",
             f"/api/v1/item-revisions/{item_revision_id}",
         )
-        if self._data(revision_response).get("item_id") != item_id:
+        revision = self._data(revision_response)
+        if (
+            revision.get("item_revision_id") != item_revision_id
+            or revision.get("item_id") != item_id
+            or revision.get("revision_state") != "APPROVED"
+        ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
         response = await self._authorized(
             session,
             "GET",
-            f"/api/v1/item-revisions/{item_revision_id}/media/{block_id}",
+            media_path,
             headers={"Accept": "image/png,image/jpeg"},
         )
         content_type = response.headers.get("content-type", "").split(";", 1)[0]
@@ -1728,7 +1681,7 @@ class HttpApplicationGateway:
         content_length = response.headers.get("content-length", "")
         actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
         if (
-            content_type not in {"image/png", "image/jpeg"}
+            content_type not in allowed_types
             or response.headers.get("content-disposition") is not None
             or not content_length.isascii()
             or not content_length.isdigit()

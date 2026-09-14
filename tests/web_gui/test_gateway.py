@@ -34,7 +34,7 @@ from tests.unit.test_mock_exam_assembly_contracts import (
     _planning_candidates_v2,
     _usage_snapshot,
 )
-from tests.web_gui.helpers import structured_item_content
+from tests.web_gui.helpers import content_team_item_content, structured_item_content
 
 NOW = datetime(2026, 8, 21, 9, 0, tzinfo=UTC)
 TEST_REFRESH = "eom_rt_TEST_ONLY_REFRESH_" + "0" * 48
@@ -55,6 +55,36 @@ def _list(data: list[dict[str, object]]) -> dict[str, object]:
         "data": data,
         "page": {"next_cursor": None, "has_more": False, "limit": 50},
         "meta": {"request_id": "req_test", "api_version": "1"},
+    }
+
+
+def _component_view(
+    *,
+    item_revision_id: str,
+    schema_ref: str,
+    component_type: str = "ITEM_CONTENT",
+    ordinal: int = 0,
+    logical_name: str = "assessment-item-content.json",
+) -> dict[str, object]:
+    artifact_id = "artifact_" + f"{ordinal + 1:x}" * 32
+    artifact_revision_id = "rev_" + f"{ordinal + 3:x}" * 32
+    media_type = "application/json" if component_type == "ITEM_CONTENT" else "image/png"
+    return {
+        "item_component_id": "itemcomponent_" + f"{ordinal + 5:x}" * 32,
+        "item_revision_id": item_revision_id,
+        "component_type": component_type,
+        "ordinal": ordinal,
+        "logical_name": logical_name,
+        "required": True,
+        "artifact": {
+            "artifact_id": artifact_id,
+            "artifact_revision_id": artifact_revision_id,
+            "artifact_member": None,
+            "sha256": "sha256:" + f"{ordinal + 7:x}" * 64,
+            "schema_ref": schema_ref,
+            "media_type": media_type,
+            "logical_uri": f"nas://artifacts/{artifact_id}/{artifact_revision_id}",
+        },
     }
 
 
@@ -1647,12 +1677,16 @@ async def test_gateway_rejects_incoherent_analysis_range_pagination() -> None:
 async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.startswith("/api/v1/items/"):
-            return httpx.Response(200, json=_single({"current_revision_id": "itemrev_other"}))
+            return httpx.Response(
+                200,
+                json=_single({"item_id": "item_test0001", "current_revision_id": "itemrev_other"}),
+            )
         if request.url.path.startswith("/api/v1/item-revisions/"):
             return httpx.Response(
                 200,
                 json=_single(
                     {
+                        "item_revision_id": "itemrev_test0001",
                         "item_id": "item_test0001",
                         "workflow_id": "workflow_test0001",
                         "revision_state": "APPROVED",
@@ -1675,19 +1709,106 @@ async def test_item_preview_fails_on_revision_pointer_mismatch() -> None:
 
 
 @pytest.mark.anyio
-async def test_item_preview_reports_exact_structured_template_component() -> None:
+@pytest.mark.parametrize("mismatch", ("item_response", "revision_response", "revision_item"))
+async def test_item_preview_rejects_cross_resource_response_identity(mismatch: str) -> None:
     item_id = "item_test0001"
     revision_id = "itemrev_test0001"
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == f"/api/v1/items/{item_id}":
-            return httpx.Response(200, json=_single({"current_revision_id": revision_id}))
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_id": "item_other001" if mismatch == "item_response" else item_id,
+                        "current_revision_id": revision_id,
+                    }
+                ),
+            )
         if request.url.path == f"/api/v1/item-revisions/{revision_id}":
             return httpx.Response(
                 200,
                 headers={"ETag": '"v1"'},
                 json=_single(
                     {
+                        "item_revision_id": (
+                            "itemrev_other001" if mismatch == "revision_response" else revision_id
+                        ),
+                        "item_id": "item_other001" if mismatch == "revision_item" else item_id,
+                        "workflow_id": "workflow_test0001",
+                        "revision_state": "APPROVED",
+                        "content_pack_release_id": "packrel_test0001",
+                    }
+                ),
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError, match="ITEM_REVISION_POINTER_MISMATCH") as failure:
+        await gateway.item_preview(_session(), item_id, revision_id)
+    assert failure.value.status == 409
+    await gateway.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("missing_field", ("workflow_id", "content_pack_release_id"))
+async def test_item_preview_rejects_missing_upstream_provenance(missing_field: str) -> None:
+    item_id = "item_test0001"
+    revision_id = "itemrev_test0001"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/items/{item_id}":
+            return httpx.Response(
+                200, json=_single({"item_id": item_id, "current_revision_id": revision_id})
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            value = {
+                "item_revision_id": revision_id,
+                "item_id": item_id,
+                "workflow_id": "workflow_test0001",
+                "revision_state": "APPROVED",
+                "content_pack_release_id": "packrel_test0001",
+            }
+            value.pop(missing_field)
+            return httpx.Response(200, headers={"ETag": '"v1"'}, json=_single(value))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError, match="APPLICATION_API_RESPONSE_INVALID") as failure:
+        await gateway.item_preview(_session(), item_id, revision_id)
+    assert failure.value.status == 502
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_item_preview_reports_exact_structured_template_component() -> None:
+    item_id = "item_test0001"
+    revision_id = "itemrev_test0001"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/items/{item_id}":
+            return httpx.Response(
+                200, json=_single({"item_id": item_id, "current_revision_id": revision_id})
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                headers={"ETag": '"v1"'},
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
                         "item_id": item_id,
                         "workflow_id": "workflow_test0001",
                         "revision_state": "APPROVED",
@@ -1700,15 +1821,10 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
                 200,
                 json=_list(
                     [
-                        {
-                            "item_revision_id": revision_id,
-                            "component_type": "ITEM_CONTENT",
-                            "ordinal": 0,
-                            "required": True,
-                            "artifact": {
-                                "schema_ref": "eom.assessment.item-content/1.0",
-                            },
-                        }
+                        _component_view(
+                            item_revision_id=revision_id,
+                            schema_ref="eom.assessment.item-content/1.0",
+                        )
                     ]
                 ),
             )
@@ -1743,7 +1859,7 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
 
 
 @pytest.mark.anyio
-async def test_content_team_item_preview_exposes_hwpx_delivery_without_v1_projection() -> None:
+async def test_unknown_item_preview_schema_is_not_reported_as_processing() -> None:
     item_id = "item_test0002"
     revision_id = "itemrev_test0002"
     paths: list[str] = []
@@ -1751,13 +1867,16 @@ async def test_content_team_item_preview_exposes_hwpx_delivery_without_v1_projec
     def handler(request: httpx.Request) -> httpx.Response:
         paths.append(request.url.path)
         if request.url.path == f"/api/v1/items/{item_id}":
-            return httpx.Response(200, json=_single({"current_revision_id": revision_id}))
+            return httpx.Response(
+                200, json=_single({"item_id": item_id, "current_revision_id": revision_id})
+            )
         if request.url.path == f"/api/v1/item-revisions/{revision_id}":
             return httpx.Response(
                 200,
                 headers={"ETag": '"v1"'},
                 json=_single(
                     {
+                        "item_revision_id": revision_id,
                         "item_id": item_id,
                         "workflow_id": "workflow_test0002",
                         "revision_state": "APPROVED",
@@ -1770,15 +1889,10 @@ async def test_content_team_item_preview_exposes_hwpx_delivery_without_v1_projec
                 200,
                 json=_list(
                     [
-                        {
-                            "item_revision_id": revision_id,
-                            "component_type": "ITEM_CONTENT",
-                            "ordinal": 0,
-                            "required": True,
-                            "artifact": {
-                                "schema_ref": "eom.assessment.item-content/2.0",
-                            },
-                        }
+                        _component_view(
+                            item_revision_id=revision_id,
+                            schema_ref="eom.assessment.item-content/99.0",
+                        )
                     ]
                 ),
             )
@@ -1794,9 +1908,209 @@ async def test_content_team_item_preview_exposes_hwpx_delivery_without_v1_projec
 
     preview = await gateway.item_preview(_session(), item_id, revision_id)
 
-    assert preview.preview_state == "METADATA_ONLY"
-    assert preview.template_delivery_available is True
+    assert preview.preview_state == "UNSUPPORTED"
+    assert preview.unavailable_reason == "UNSUPPORTED_CONTENT_SCHEMA"
+    assert preview.template_delivery_available is False
     assert f"/api/v1/item-revisions/{revision_id}/structured-content" not in paths
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_content_team_table_only_item_is_available_without_image_component() -> None:
+    item_id = "item_test0003"
+    revision_id = "itemrev_test0003"
+    content = content_team_item_content(
+        visuals=[
+            {
+                "kind": "TABLE",
+                "label": "",
+                "headers": ["구분", "값"],
+                "rows": [["A", "1"]],
+                "alignments": ["center", "right"],
+            }
+        ],
+        layout="TABLE_ONLY",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/items/{item_id}":
+            return httpx.Response(
+                200, json=_single({"item_id": item_id, "current_revision_id": revision_id})
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                headers={"ETag": '"v2"'},
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "item_id": item_id,
+                        "workflow_id": "workflow_test0003",
+                        "revision_state": "APPROVED",
+                        "content_pack_release_id": "packrel_test0003",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/components":
+            return httpx.Response(
+                200,
+                json=_list(
+                    [
+                        _component_view(
+                            item_revision_id=revision_id,
+                            schema_ref="eom.assessment.item-content/3.0",
+                        )
+                    ]
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+            return httpx.Response(200, json=_single(content))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    preview = await gateway.item_preview(_session(), item_id, revision_id)
+
+    assert preview.schema_version == "3.0"
+    assert preview.preview_state == "AVAILABLE"
+    assert preview.content_profile == "CONTENT_TEAM_V3"
+    assert preview.item_number == 7
+    assert [block.type for block in preview.blocks] == [
+        "paragraph",
+        "labeled_text",
+        "table",
+        "paragraph",
+    ]
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_content_team_visual_stream_is_revision_scoped_and_hash_verified() -> None:
+    item_id = "item_" + "1" * 32
+    revision_id = "itemrev_" + "2" * 32
+    payload = b"\x89PNG\r\n\x1a\npreview"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "item_id": item_id,
+                        "revision_state": "APPROVED",
+                    }
+                ),
+            )
+        if request.url.path == (f"/api/v1/item-revisions/{revision_id}/media-components/images/0"):
+            return httpx.Response(
+                200,
+                content=payload,
+                headers={
+                    "Content-Type": "image/png",
+                    "Content-Length": str(len(payload)),
+                    "ETag": f'"{digest}"',
+                },
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+
+    value = await gateway.item_visual(_session(), item_id, revision_id, 0)
+
+    assert value.content == payload
+    assert value.content_type == "image/png"
+    assert value.etag == f'"{digest}"'
+    assert paths == [
+        f"/api/v1/item-revisions/{revision_id}",
+        f"/api/v1/item-revisions/{revision_id}/media-components/images/0",
+    ]
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_content_team_visual_rejects_unverified_bytes() -> None:
+    item_id = "item_" + "1" * 32
+    revision_id = "itemrev_" + "2" * 32
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "item_id": item_id,
+                        "revision_state": "APPROVED",
+                    }
+                ),
+            )
+        return httpx.Response(
+            200,
+            content=b"not-the-pinned-image",
+            headers={
+                "Content-Type": "image/png",
+                "Content-Length": "20",
+                "ETag": '"sha256:' + "0" * 64 + '"',
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(GatewayError, match="ITEM_MEDIA_RESPONSE_INVALID"):
+        await gateway.item_visual(_session(), item_id, revision_id, 0)
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_content_team_visual_rejects_nonapproved_or_cross_revision_pointer() -> None:
+    item_id = "item_" + "1" * 32
+    revision_id = "itemrev_" + "2" * 32
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "item_revision_id": "itemrev_" + "3" * 32,
+                    "item_id": item_id,
+                    "revision_state": "DRAFT",
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError, match="ITEM_REVISION_POINTER_MISMATCH"):
+        await gateway.item_visual(_session(), item_id, revision_id, 0)
+    assert paths == [f"/api/v1/item-revisions/{revision_id}"]
     await gateway.close()
 
 

@@ -1,0 +1,221 @@
+{
+  "$id": "eom://schemas/web-gui/item-preview/3.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "block_id": {"pattern": "^block_[a-z][a-z0-9_]{0,63}$", "type": "string"},
+    "choice": {
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {"pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$", "type": "string"},
+        "label": {"maxLength": 16, "minLength": 1, "type": "string"},
+        "text": {"maxLength": 20000, "minLength": 1, "type": "string"}
+      },
+      "required": ["choice_id", "label", "text"],
+      "type": "object"
+    },
+    "paragraph": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "purpose": {"enum": ["stem", "prompt", "context"]},
+        "text": {"maxLength": 24000, "minLength": 1, "type": "string"},
+        "type": {"const": "paragraph"}
+      },
+      "required": ["block_id", "type", "purpose", "text"],
+      "type": "object"
+    },
+    "labeled_text": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "DATA"}}, "required": ["kind"]},
+          "then": {"properties": {"label": {"const": "<자료>"}}},
+          "else": {"properties": {"label": {"const": "<조건>"}}}
+        }
+      ],
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "kind": {"enum": ["DATA", "CONDITION"]},
+        "label": {"enum": ["<자료>", "<조건>"]},
+        "text": {"maxLength": 12000, "minLength": 1, "type": "string"},
+        "type": {"const": "labeled_text"}
+      },
+      "required": ["block_id", "type", "kind", "label", "text"],
+      "type": "object"
+    },
+    "inquiry": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "goal": {"maxLength": 4000, "minLength": 1, "type": ["string", "null"]},
+        "kind": {"enum": ["탐구", "실험"]},
+        "procedure": {"maxLength": 12000, "minLength": 1, "type": "string"},
+        "result": {"maxLength": 12000, "minLength": 1, "type": "string"},
+        "type": {"const": "inquiry"}
+      },
+      "required": ["block_id", "type", "kind", "goal", "procedure", "result"],
+      "type": "object"
+    },
+    "equation": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "notation": {"enum": ["latex", "hancom-equation-script"]},
+        "purpose": {"enum": ["stimulus", "stem"]},
+        "source": {"maxLength": 4000, "minLength": 1, "type": "string"},
+        "type": {"const": "equation"}
+      },
+      "required": ["block_id", "type", "purpose", "notation", "source"],
+      "type": "object"
+    },
+    "table": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "caption": {"maxLength": 500, "type": ["string", "null"]},
+        "headers": {"items": {"maxLength": 2000, "type": "string"}, "maxItems": 20, "minItems": 1, "type": "array"},
+        "purpose": {"enum": ["stimulus", "data", "reference"]},
+        "rows": {"items": {"items": {"maxLength": 2000, "type": "string"}, "maxItems": 20, "minItems": 1, "type": "array"}, "maxItems": 100, "minItems": 1, "type": "array"},
+        "type": {"const": "table"}
+      },
+      "required": ["block_id", "type", "purpose", "caption", "headers", "rows"],
+      "type": "object"
+    },
+    "image": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {"maxLength": 1000, "minLength": 1, "type": "string"},
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "height_px": {"maximum": 10000, "minimum": 1, "type": "integer"},
+        "label": {"enum": ["", "(가)", "(나)"]},
+        "media_type": {"enum": ["image/png", "image/jpeg"]},
+        "media_url": {"pattern": "^/studio/api/v1/items/item_[a-z0-9]{8,55}/revisions/itemrev_[a-z0-9]{8,55}/(?:media/block_[a-z][a-z0-9_]{0,63}|visuals/[01])$", "type": "string"},
+        "purpose": {"enum": ["stimulus", "reference"]},
+        "sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+        "type": {"const": "image"},
+        "width_px": {"maximum": 10000, "minimum": 1, "type": "integer"}
+      },
+      "required": ["block_id", "type", "purpose", "label", "media_url", "media_type", "sha256", "alt_text", "width_px", "height_px"],
+      "type": "object"
+    },
+    "statement": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {"maxLength": 16, "minLength": 1, "type": "string"},
+        "statement_id": {"pattern": "^statement_[a-z][a-z0-9_]{0,31}$", "type": "string"},
+        "text": {"maxLength": 20000, "minLength": 1, "type": "string"}
+      },
+      "required": ["statement_id", "label", "text"],
+      "type": "object"
+    },
+    "statement_set": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {"$ref": "#/$defs/block_id"},
+        "purpose": {"const": "claims"},
+        "statements": {"items": {"$ref": "#/$defs/statement"}, "maxItems": 10, "minItems": 2, "type": "array"},
+        "type": {"const": "statement_set"}
+      },
+      "required": ["block_id", "type", "purpose", "statements"],
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "answer": {"maxLength": 4000, "minLength": 1, "type": ["string", "null"]},
+    "authoring_intent": {"maxLength": 20000, "minLength": 1, "type": ["string", "null"]},
+    "blocks": {"items": {"oneOf": [{"$ref": "#/$defs/paragraph"}, {"$ref": "#/$defs/labeled_text"}, {"$ref": "#/$defs/inquiry"}, {"$ref": "#/$defs/equation"}, {"$ref": "#/$defs/table"}, {"$ref": "#/$defs/image"}, {"$ref": "#/$defs/statement_set"}]}, "maxItems": 100, "type": "array"},
+    "choices": {"items": {"$ref": "#/$defs/choice"}, "maxItems": 10, "type": "array"},
+    "concept_source": {"maxLength": 12000, "minLength": 1, "type": ["string", "null"]},
+    "content_pack_release_id": {"pattern": "^packrel_[a-z0-9]{8,55}$", "type": "string"},
+    "content_profile": {"enum": ["BLOCKS_V1", "CONTENT_TEAM_V2", "CONTENT_TEAM_V3", null]},
+    "content_schema_ref": {"maxLength": 256, "minLength": 1, "type": "string"},
+    "explanation": {"maxLength": 48000, "minLength": 1, "type": ["string", "null"]},
+    "item_id": {"pattern": "^item_[a-z0-9]{8,55}$", "type": "string"},
+    "item_number": {"maximum": 999, "minimum": 1, "type": ["integer", "null"]},
+    "item_revision_id": {"pattern": "^itemrev_[a-z0-9]{8,55}$", "type": "string"},
+    "locale": {"pattern": "^[a-z]{2}-[A-Z]{2}$", "type": ["string", "null"]},
+    "preview_state": {"enum": ["AVAILABLE", "UNSUPPORTED"]},
+    "revision_etag": {"pattern": "^\"v[1-9][0-9]*\"$", "type": "string"},
+    "revision_state": {"const": "APPROVED"},
+    "schema_version": {"const": "3.0"},
+    "score_display": {"pattern": "^(?:0|[1-9][0-9]?|100|[1-9][0-9]?\\.5)$", "type": ["string", "null"]},
+    "statement_explanations": {"items": {"additionalProperties": false, "properties": {"statement_id": {"pattern": "^statement_[a-z][a-z0-9_]{0,31}$", "type": "string"}, "text": {"maxLength": 20000, "minLength": 1, "type": "string"}}, "required": ["statement_id", "text"], "type": "object"}, "maxItems": 10, "type": "array"},
+    "template_delivery_available": {"type": "boolean"},
+    "title": {"maxLength": 20000, "minLength": 1, "type": ["string", "null"]},
+    "unavailable_reason": {"enum": ["UNSUPPORTED_CONTENT_SCHEMA", null]},
+    "workflow_id": {"pattern": "^workflow_[a-z0-9]{8,55}$", "type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"preview_state": {"const": "AVAILABLE"}}, "required": ["preview_state"]},
+      "then": {
+        "properties": {
+          "answer": {"maxLength": 4000, "minLength": 1, "type": "string"},
+          "blocks": {"minItems": 1},
+          "choices": {"minItems": 1},
+          "content_profile": {"enum": ["BLOCKS_V1", "CONTENT_TEAM_V2", "CONTENT_TEAM_V3"]},
+          "explanation": {"maxLength": 48000, "minLength": 1, "type": "string"},
+          "locale": {"pattern": "^[a-z]{2}-[A-Z]{2}$", "type": "string"},
+          "score_display": {"pattern": "^(?:0|[1-9][0-9]?|100|[1-9][0-9]?\\.5)$", "type": "string"},
+          "unavailable_reason": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"preview_state": {"const": "UNSUPPORTED"}}, "required": ["preview_state"]},
+      "then": {
+        "properties": {
+          "answer": {"type": "null"},
+          "authoring_intent": {"type": "null"},
+          "blocks": {"maxItems": 0},
+          "choices": {"maxItems": 0},
+          "concept_source": {"type": "null"},
+          "content_profile": {"type": "null"},
+          "explanation": {"type": "null"},
+          "item_number": {"type": "null"},
+          "locale": {"type": "null"},
+          "score_display": {"type": "null"},
+          "statement_explanations": {"maxItems": 0},
+          "title": {"type": "null"},
+          "unavailable_reason": {"const": "UNSUPPORTED_CONTENT_SCHEMA"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "content_profile": {"const": "BLOCKS_V1"},
+          "preview_state": {"const": "AVAILABLE"}
+        },
+        "required": ["content_profile", "preview_state"]
+      },
+      "then": {
+        "properties": {
+          "concept_source": {"type": "null"},
+          "item_number": {"type": "null"},
+          "title": {"maxLength": 20000, "minLength": 1, "type": "string"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "content_profile": {"enum": ["CONTENT_TEAM_V2", "CONTENT_TEAM_V3"]},
+          "preview_state": {"const": "AVAILABLE"}
+        },
+        "required": ["content_profile", "preview_state"]
+      },
+      "then": {
+        "properties": {
+          "concept_source": {"maxLength": 12000, "minLength": 1, "type": "string"},
+          "item_number": {"maximum": 999, "minimum": 1, "type": "integer"},
+          "title": {"type": "null"}
+        }
+      }
+    }
+  ],
+  "required": ["schema_version", "preview_state", "unavailable_reason", "workflow_id", "item_id", "item_revision_id", "revision_etag", "revision_state", "content_pack_release_id", "content_schema_ref", "content_profile", "template_delivery_available", "locale", "title", "item_number", "score_display", "blocks", "choices", "answer", "explanation", "concept_source", "authoring_intent", "statement_explanations"],
+  "title": "EOM Web GUI Item Preview V3",
+  "type": "object"
+}

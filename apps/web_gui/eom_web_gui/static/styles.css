@@ -232,13 +232,18 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .document-empty strong { font-size: 22px; color: #666d78; }
 .preview-title-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; margin: 34px 0 22px; }
 .preview-title-row h2 { margin: 0; font-size: 15px; font-weight: 700; }
-.preview-title-row small { color: #737983; font: var(--eom-type-caption) "JetBrains Mono", monospace; }
+.preview-title-row > div > span { color: #737983; font: var(--eom-type-caption) "JetBrains Mono", monospace; }
 .question-number { margin: 0; font-size: 18px; font-weight: 700; }
 .preview-blocks { display: grid; gap: 22px; }
 .preview-paragraph { margin: 0; white-space: pre-wrap; font-size: 16px; line-height: 1.85; }
+.preview-labeled, .preview-inquiry { padding: 15px 18px; border: 1px solid #69717b; background: #fff; }
+.preview-labeled h3, .preview-inquiry h3 { margin: 0 0 8px; font-size: 15px; }
+.preview-labeled p, .preview-inquiry p { margin: 0 0 12px; white-space: pre-wrap; font-size: 15px; line-height: 1.75; }
+.preview-labeled p:last-child, .preview-inquiry p:last-child { margin-bottom: 0; }
 .preview-image { margin: 4px auto; display: grid; justify-items: center; gap: 7px; }
 .preview-image img { display: block; width: min(100%, 620px); height: auto; max-height: 560px; object-fit: contain; border: 1px solid #d8e2ee; background: #fff; }
-.preview-image figcaption { color: #6d737d; font-size: var(--eom-type-caption); line-height: 1.5; }
+.preview-image figcaption { color: #414750; font-size: var(--eom-type-caption); line-height: 1.5; }
+.preview-image figcaption strong { color: #111820; font-size: var(--eom-type-body); }
 .preview-statements { margin: 2px 12px; padding: 14px 18px; border: 1px solid #94a8c1; background: #f8fbff; }
 .preview-statement { display: grid; grid-template-columns: 24px 1fr; gap: 8px; margin: 5px 0; line-height: 1.7; }
 .preview-statement strong { text-align: center; }

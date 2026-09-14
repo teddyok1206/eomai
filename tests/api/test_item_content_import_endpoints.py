@@ -63,6 +63,25 @@ class FakeCatalogApplication:
 
         return Media()
 
+    def download_item_component_media(
+        self, item_revision_id: str, component_type: str, ordinal: int
+    ) -> object:
+        assert item_revision_id == REVISION_ID
+        assert component_type == "IMAGE"
+        assert ordinal == 1
+        content = b"\x89PNG\r\n\x1a\nAPI_COMPONENT_MEDIA"
+
+        class Media:
+            media_type = "image/png"
+            content_length = len(content)
+            sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
+
+            @staticmethod
+            def iter_chunks() -> object:
+                yield content
+
+        return Media()
+
 
 def _client(*, admin: bool) -> tuple[TestClient, Any]:
     services = disconnected_services()
@@ -176,5 +195,32 @@ def test_item_media_stream_uses_catalog_boundary_and_security_headers() -> None:
         assert response.headers["x-content-type-options"] == "nosniff"
         assert response.headers["etag"].startswith('"sha256:')
         assert response.content == b"\x89PNG\r\n\x1a\nAPI_MEDIA"
+    finally:
+        services.engine.dispose()
+
+
+def test_item_component_media_stream_uses_catalog_boundary_and_security_headers() -> None:
+    client, services = _client(admin=True)
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/media-components/images/1")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["etag"].startswith('"sha256:')
+        assert response.content == b"\x89PNG\r\n\x1a\nAPI_COMPONENT_MEDIA"
+    finally:
+        services.engine.dispose()
+
+
+def test_item_media_paths_reject_invalid_revision_identity_before_catalog() -> None:
+    client, services = _client(admin=True)
+    try:
+        with client:
+            component = client.get("/api/v1/item-revisions/latest/media-components/images/0")
+            block = client.get("/api/v1/item-revisions/latest/media/block_image")
+        assert component.status_code == block.status_code == 422
+        assert component.json()["error_code"] == block.json()["error_code"] == "API_REQUEST_INVALID"
     finally:
         services.engine.dispose()

@@ -84,6 +84,16 @@ def test_committed_openapi_hash_matches() -> None:
     assert hashlib.sha256(payload).hexdigest() == recorded
 
 
+def test_committed_openapi_matches_current_application_contract() -> None:
+    services = disconnected_services()
+    try:
+        generated = create_app(services).openapi()
+    finally:
+        services.engine.dispose()
+
+    assert generated == json.loads(CONTRACT.read_text(encoding="utf-8"))
+
+
 def test_breaking_change_detector() -> None:
     module_path = ROOT / "scripts" / "api" / "check_openapi_breaking.py"
     spec = importlib.util.spec_from_file_location("check_openapi_breaking", module_path)

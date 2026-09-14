@@ -25,6 +25,7 @@ from eom_catalog_contracts import (
     CatalogApplicationResponse,
     CatalogAssessmentPageListResponse,
     CatalogAssessmentPageMediaResponse,
+    CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -35,6 +36,7 @@ from eom_catalog_contracts import (
     CreatePlannedMockExamAssemblyCommand,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
+    ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
     PreviewMockExamAssemblyPlanCommand,
@@ -122,6 +124,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._stream_item_media(media_request)
+                return
+            if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
+                try:
+                    validate_contract("catalog-item-component-media-request", value)
+                    component_media_request = ItemComponentMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_component_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_item_component_media(component_media_request)
                 return
             if raw_operation == "GET_ASSESSMENT_PAGE_IMAGES":
                 try:
@@ -377,6 +391,38 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             CatalogItemMediaResponse(
                 status="OK",
                 media_type=media.media_type,
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
+    def _stream_item_component_media(self, request: ItemComponentMediaQuery) -> None:
+        try:
+            media = self.server.registry.load_item_component_media(
+                request.item_revision_id,
+                request.component_type,
+                request.ordinal,
+            )
+        except RegistryError as exc:
+            self.server.write_component_media_error(self.wfile, exc.code.value)
+            return
+        except Exception:
+            self.server.write_component_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_component_media_header(
+            self.wfile,
+            CatalogItemComponentMediaResponse(
+                status="OK",
+                media_type="image/png",
                 content_length=media.content_length,
                 sha256=media.sha256,
             ),
@@ -647,6 +693,22 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls.write_media_header(
             stream,
             CatalogItemMediaResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_component_media_header(stream: Any, value: CatalogItemComponentMediaResponse) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-item-component-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog component media response header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_component_media_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_component_media_header(
+            stream,
+            CatalogItemComponentMediaResponse(status="ERROR", error_code=error_code),
         )
 
     def server_close(self) -> None:

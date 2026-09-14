@@ -1,7 +1,15 @@
-const PREVIEW_BLOCK_TYPES = new Set(["paragraph", "table", "image", "equation", "statement_set"]);
+const PREVIEW_BLOCK_TYPES = new Set([
+  "paragraph",
+  "labeled_text",
+  "inquiry",
+  "table",
+  "image",
+  "equation",
+  "statement_set",
+]);
 
 export function orderedItemPreviewBlocks(preview) {
-  if (!preview || preview.schema_version !== "2.0" || !Array.isArray(preview.blocks)) {
+  if (!preview || !new Set(["2.0", "3.0"]).has(preview.schema_version) || !Array.isArray(preview.blocks)) {
     throw new Error("ITEM_PREVIEW_CONTRACT_INVALID");
   }
   const identifiers = new Set();

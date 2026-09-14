@@ -9,8 +9,12 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     ExplorerQuery,
     ItemPreview,
+    ItemPreviewV2,
     PreviewChoice,
+    PreviewLabeledTextBlock,
     PreviewParagraphBlock,
+    PreviewParagraphBlockV3,
+    PreviewTableBlockV3,
     RequestDraftInput,
     RequestDraftUpdate,
     WorkflowApproval,
@@ -24,7 +28,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 12
+    assert len(schemas) == 13
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -64,7 +68,7 @@ def test_curriculum_outline_projection_matches_web_schema() -> None:
 
 
 def test_item_preview_v2_metadata_projection_matches_web_schema() -> None:
-    value = ItemPreview(
+    value = ItemPreviewV2(
         preview_state="METADATA_ONLY",
         workflow_id="workflow_test0001",
         item_id="item_test0001",
@@ -79,7 +83,7 @@ def test_item_preview_v2_metadata_projection_matches_web_schema() -> None:
 
 def test_item_preview_v2_fails_closed_on_dangling_answer() -> None:
     with pytest.raises(ValueError, match="answer must resolve"):
-        ItemPreview(
+        ItemPreviewV2(
             preview_state="AVAILABLE",
             workflow_id="workflow_test0001",
             item_id="item_test0001",
@@ -102,7 +106,7 @@ def test_item_preview_v2_fails_closed_on_dangling_answer() -> None:
 
 
 def test_item_preview_v2_schema_rejects_content_in_metadata_only_projection() -> None:
-    value = ItemPreview(
+    value = ItemPreviewV2(
         preview_state="METADATA_ONLY",
         workflow_id="workflow_test0001",
         item_id="item_test0001",
@@ -115,6 +119,104 @@ def test_item_preview_v2_schema_rejects_content_in_metadata_only_projection() ->
     schema = json.loads((SCHEMA_ROOT / "item-preview-v2.schema.json").read_text(encoding="utf-8"))
     with pytest.raises(ValidationError):
         Draft202012Validator(schema).validate(value)
+
+
+def _item_preview_v3_table_only() -> ItemPreview:
+    return ItemPreview(
+        preview_state="AVAILABLE",
+        workflow_id="workflow_test0001",
+        item_id="item_test0001",
+        item_revision_id="itemrev_test0001",
+        revision_etag='"v1"',
+        revision_state="APPROVED",
+        content_pack_release_id="packrel_test0001",
+        content_schema_ref="eom.assessment.item-content/3.0",
+        content_profile="CONTENT_TEAM_V3",
+        template_delivery_available=True,
+        locale="ko-KR",
+        item_number=1,
+        score_display="2.5",
+        blocks=(
+            PreviewParagraphBlockV3(
+                block_id="block_stem", purpose="stem", text="다음 자료를 보시오."
+            ),
+            PreviewLabeledTextBlock(
+                block_id="block_labeled_0",
+                kind="DATA",
+                label="<자료>",
+                text="측정 결과이다.",
+            ),
+            PreviewTableBlockV3(
+                block_id="block_visual_0",
+                purpose="data",
+                headers=("구분", "값"),
+                rows=(("A", "1"),),
+            ),
+            PreviewParagraphBlockV3(
+                block_id="block_bottom_stem", purpose="prompt", text="옳은 것을 고르시오."
+            ),
+        ),
+        choices=tuple(
+            PreviewChoice(choice_id=f"choice_{index}", label=label, text=f"선택지 {index}")
+            for index, label in enumerate(("①", "②", "③", "④", "⑤"), start=1)
+        ),
+        answer="①",
+        explanation="정답 해설",
+        concept_source="통합과학 개념",
+        authoring_intent="자료 해석 평가",
+    )
+
+
+def test_item_preview_v3_table_only_projection_matches_web_schema() -> None:
+    value = _item_preview_v3_table_only()
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+
+
+def test_item_preview_v3_schema_rejects_labeled_text_kind_label_drift() -> None:
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+    value = _item_preview_v3_table_only().model_dump(mode="json")
+    value["blocks"][1]["label"] = "<조건>"
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(value)
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    (
+        ("workflow_id", "unknown"),
+        ("item_id", "item"),
+        ("item_revision_id", "latest"),
+        ("content_pack_release_id", "unknown"),
+        ("revision_state", "DRAFT"),
+    ),
+)
+def test_item_preview_v3_rejects_invented_or_mutable_provenance(field: str, invalid: str) -> None:
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+    value = _item_preview_v3_table_only().model_dump(mode="json")
+    value[field] = invalid
+
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(value)
+    with pytest.raises(ValueError):
+        ItemPreview.model_validate(value)
+
+
+def test_item_preview_v3_unsupported_variant_is_not_processing_state() -> None:
+    value = ItemPreview(
+        preview_state="UNSUPPORTED",
+        unavailable_reason="UNSUPPORTED_CONTENT_SCHEMA",
+        workflow_id="workflow_test0001",
+        item_id="item_test0001",
+        item_revision_id="itemrev_test0001",
+        revision_etag='"v1"',
+        revision_state="APPROVED",
+        content_pack_release_id="packrel_test0001",
+        content_schema_ref="eom.assessment.item-content/99.0",
+    )
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 
 
 def test_curriculum_outline_ready_capability_pair_matches_web_schema() -> None:

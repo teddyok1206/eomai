@@ -158,7 +158,7 @@ def get_structured_content(
 )
 def get_item_media(
     request: Request,
-    item_revision_id: str,
+    item_revision_id: str = Path(pattern=r"^itemrev_[a-z0-9]{8,55}$"),
     block_id: str = Path(pattern=r"^block_[a-z][a-z0-9_]{0,63}$"),
 ) -> StreamingResponse:
     value = request.app.state.services.catalog_application.download_item_media(
@@ -169,6 +169,42 @@ def get_item_media(
         request.state.request_context,
         event_type="ITEM_MEDIA_READ_AUTHORIZED",
         operation_id="item_revision_media_get",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="item_revision",
+        target_id=item_revision_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type=value.media_type,
+        headers={
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
+
+
+@router.get(
+    "/item-revisions/{item_revision_id}/media-components/images/{ordinal}",
+    operation_id="item_revision_image_component_media_get",
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def get_item_component_media(
+    request: Request,
+    item_revision_id: str = Path(pattern=r"^itemrev_[a-z0-9]{8,55}$"),
+    ordinal: int = Path(ge=0, le=1),
+) -> StreamingResponse:
+    value = request.app.state.services.catalog_application.download_item_component_media(
+        item_revision_id,
+        "IMAGE",
+        ordinal,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="ITEM_COMPONENT_MEDIA_READ_AUTHORIZED",
+        operation_id="item_revision_image_component_media_get",
         outcome="SUCCEEDED",
         http_status=200,
         target_type="item_revision",

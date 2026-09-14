@@ -1175,7 +1175,9 @@ class PreviewStatementExplanation(WebModel):
     text: str = Field(min_length=1, max_length=20_000)
 
 
-class ItemPreview(WebModel):
+class ItemPreviewV2(WebModel):
+    """Historical block-oriented preview contract retained for byte-stable validation."""
+
     schema_version: Literal["2.0"] = "2.0"
     preview_state: Literal["AVAILABLE", "METADATA_ONLY"]
     workflow_id: str
@@ -1198,7 +1200,7 @@ class ItemPreview(WebModel):
     )
 
     @model_validator(mode="after")
-    def available_preview_is_complete(self) -> ItemPreview:
+    def available_preview_is_complete(self) -> ItemPreviewV2:
         if self.preview_state == "AVAILABLE" and (
             self.locale is None
             or self.title is None
@@ -1231,6 +1233,184 @@ class ItemPreview(WebModel):
         if len(choice_ids) != len(set(choice_ids)) or len(choice_labels) != len(set(choice_labels)):
             raise ValueError("Item Preview choice identifiers and labels must be unique")
         if self.preview_state == "AVAILABLE" and self.answer not in set(choice_labels):
+            raise ValueError("Item Preview answer must resolve to one choice label")
+        statement_ids = tuple(
+            statement.statement_id
+            for block in self.blocks
+            if isinstance(block, PreviewStatementSetBlock)
+            for statement in block.statements
+        )
+        explanation_ids = tuple(value.statement_id for value in self.statement_explanations)
+        if len(statement_ids) != len(set(statement_ids)) or len(explanation_ids) != len(
+            set(explanation_ids)
+        ):
+            raise ValueError("Item Preview statement identifiers must be unique")
+        if set(statement_ids) != set(explanation_ids):
+            raise ValueError("Item Preview statement explanations must cover the statement set")
+        return self
+
+
+class PreviewParagraphBlockV3(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["paragraph"] = "paragraph"
+    purpose: Literal["stem", "prompt", "context"]
+    text: str = Field(min_length=1, max_length=24_000)
+
+
+class PreviewLabeledTextBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["labeled_text"] = "labeled_text"
+    kind: Literal["DATA", "CONDITION"]
+    label: Literal["<자료>", "<조건>"]
+    text: str = Field(min_length=1, max_length=12_000)
+
+    @model_validator(mode="after")
+    def label_matches_kind(self) -> PreviewLabeledTextBlock:
+        if self.label != {"DATA": "<자료>", "CONDITION": "<조건>"}[self.kind]:
+            raise ValueError("preview labeled-text kind and label differ")
+        return self
+
+
+class PreviewInquiryBlock(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["inquiry"] = "inquiry"
+    kind: Literal["탐구", "실험"]
+    goal: str | None = Field(default=None, min_length=1, max_length=4000)
+    procedure: str = Field(min_length=1, max_length=12_000)
+    result: str = Field(min_length=1, max_length=12_000)
+
+
+class PreviewTableBlockV3(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["table"] = "table"
+    purpose: Literal["stimulus", "data", "reference"]
+    caption: str | None = Field(default=None, max_length=500)
+    headers: tuple[str, ...] = Field(min_length=1, max_length=20)
+    rows: tuple[tuple[str, ...], ...] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def rectangular(self) -> PreviewTableBlockV3:
+        width = len(self.headers)
+        if any(len(row) != width for row in self.rows):
+            raise ValueError("preview table rows must match header width")
+        if any(len(value) > 2000 for value in self.headers):
+            raise ValueError("preview table header is invalid")
+        if any(len(value) > 2000 for value in (cell for row in self.rows for cell in row)):
+            raise ValueError("preview table cell is invalid")
+        return self
+
+
+class PreviewImageBlockV3(WebModel):
+    block_id: str = Field(pattern=r"^block_[a-z][a-z0-9_]{0,63}$")
+    type: Literal["image"] = "image"
+    purpose: Literal["stimulus", "reference"]
+    label: Literal["", "(가)", "(나)"] = ""
+    media_url: str = Field(
+        pattern=(
+            r"^/studio/api/v1/items/item_[a-z0-9]{8,55}/revisions/"
+            r"itemrev_[a-z0-9]{8,55}/(?:media/block_[a-z][a-z0-9_]{0,63}|visuals/[01])$"
+        )
+    )
+    media_type: Literal["image/png", "image/jpeg"]
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    alt_text: str = Field(min_length=1, max_length=1000)
+    width_px: int = Field(ge=1, le=10_000)
+    height_px: int = Field(ge=1, le=10_000)
+
+
+PreviewBlockV3 = Annotated[
+    PreviewParagraphBlockV3
+    | PreviewLabeledTextBlock
+    | PreviewInquiryBlock
+    | PreviewEquationBlock
+    | PreviewTableBlockV3
+    | PreviewImageBlockV3
+    | PreviewStatementSetBlock,
+    Field(discriminator="type"),
+]
+
+
+class ItemPreview(WebModel):
+    """Current presentation contract for every supported immutable Item content revision."""
+
+    schema_version: Literal["3.0"] = "3.0"
+    preview_state: Literal["AVAILABLE", "UNSUPPORTED"]
+    unavailable_reason: Literal["UNSUPPORTED_CONTENT_SCHEMA"] | None = None
+    workflow_id: str = Field(pattern=r"^workflow_[a-z0-9]{8,55}$")
+    item_id: str = Field(pattern=r"^item_[a-z0-9]{8,55}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
+    revision_etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
+    revision_state: Literal["APPROVED"]
+    content_pack_release_id: str = Field(pattern=r"^packrel_[a-z0-9]{8,55}$")
+    content_schema_ref: str = Field(min_length=1, max_length=256)
+    content_profile: Literal["BLOCKS_V1", "CONTENT_TEAM_V2", "CONTENT_TEAM_V3"] | None = None
+    template_delivery_available: bool = False
+    locale: str | None = Field(default=None, pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    title: str | None = Field(default=None, min_length=1, max_length=20_000)
+    item_number: int | None = Field(default=None, ge=1, le=999)
+    score_display: str | None = Field(
+        default=None,
+        pattern=r"^(?:0|[1-9][0-9]?|100|[1-9][0-9]?\.5)$",
+    )
+    blocks: tuple[PreviewBlockV3, ...] = Field(default=(), max_length=100)
+    choices: tuple[PreviewChoice, ...] = Field(default=(), max_length=10)
+    answer: str | None = Field(default=None, min_length=1, max_length=4000)
+    explanation: str | None = Field(default=None, min_length=1, max_length=48_000)
+    concept_source: str | None = Field(default=None, min_length=1, max_length=12_000)
+    authoring_intent: str | None = Field(default=None, min_length=1, max_length=20_000)
+    statement_explanations: tuple[PreviewStatementExplanation, ...] = Field(
+        default=(), max_length=10
+    )
+
+    @model_validator(mode="after")
+    def exact_preview_variant(self) -> ItemPreview:
+        content_values = (
+            self.locale,
+            self.title,
+            self.item_number,
+            self.score_display,
+            self.blocks,
+            self.choices,
+            self.answer,
+            self.explanation,
+            self.concept_source,
+            self.authoring_intent,
+            self.statement_explanations,
+        )
+        if self.preview_state == "UNSUPPORTED":
+            if self.unavailable_reason != "UNSUPPORTED_CONTENT_SCHEMA":
+                raise ValueError("unsupported Item Preview requires an exact reason")
+            if self.content_profile is not None or any(bool(value) for value in content_values):
+                raise ValueError("unsupported Item Preview cannot contain rendered content")
+            return self
+        if self.unavailable_reason is not None or self.content_profile is None:
+            raise ValueError("available Item Preview has invalid capability metadata")
+        if (
+            self.locale is None
+            or self.score_display is None
+            or not self.blocks
+            or not self.choices
+            or self.answer is None
+            or self.explanation is None
+        ):
+            raise ValueError("available Item Preview is incomplete")
+        if self.content_profile == "BLOCKS_V1":
+            if (
+                self.title is None
+                or self.item_number is not None
+                or self.concept_source is not None
+            ):
+                raise ValueError("V1 Item Preview has invalid profile fields")
+        elif self.item_number is None or self.concept_source is None or self.title is not None:
+            raise ValueError("content-team Item Preview has invalid profile fields")
+        block_ids = tuple(block.block_id for block in self.blocks)
+        if len(block_ids) != len(set(block_ids)):
+            raise ValueError("Item Preview block identifiers must be unique")
+        choice_ids = tuple(choice.choice_id for choice in self.choices)
+        choice_labels = tuple(choice.label for choice in self.choices)
+        if len(choice_ids) != len(set(choice_ids)) or len(choice_labels) != len(set(choice_labels)):
+            raise ValueError("Item Preview choice identifiers and labels must be unique")
+        if self.answer not in set(choice_labels):
             raise ValueError("Item Preview answer must resolve to one choice label")
         statement_ids = tuple(
             statement.statement_id

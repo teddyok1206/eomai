@@ -107,8 +107,22 @@ def test_installer_normalizes_metadata_for_the_service_identity() -> None:
     assert "installed distribution metadata root is not unique" in installer
     assert 'runuser -u eom-web -- env EXPECTED_COMMIT="${EXPECTED_COMMIT}"' in installer
     assert "web_gui_service_identity_metadata=PASS" in installer
+    assert "verify_installed_web_gui" in installer
     assert "chmod -R" not in installer
     assert "chown -R" not in installer
+
+
+def test_release_build_requires_preview_assets_and_verifies_record_bytes() -> None:
+    builder = (ROOT / "scripts/web_gui/build_release.sh").read_text(encoding="utf-8")
+    integrity = (ROOT / "apps/web_gui/eom_web_gui/release_integrity.py").read_text(encoding="utf-8")
+
+    assert 'f"eom_web_gui/{name}" for name in integrity.REQUIRED_RUNTIME_FILES' in builder
+    assert 'spec_from_file_location("eom_web_release_integrity"' in builder
+    assert "Web GUI wheel package inventory mismatch" in builder
+    assert "Web GUI RECORD descriptor mismatch" in builder
+    assert "verify_installed_web_gui" in builder
+    assert "Web GUI package contains an unrecorded file" in integrity
+    assert "Web GUI installed file hash differs from RECORD" in integrity
 
 
 def test_smoke_waits_for_bounded_service_readiness() -> None:

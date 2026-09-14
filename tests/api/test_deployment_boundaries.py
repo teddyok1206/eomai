@@ -286,6 +286,8 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "item-registry/assessment-item-content-v3.schema.json",
         "catalog-application/catalog-item-media-request-v1.schema.json",
         "catalog-application/catalog-item-media-response-v1.schema.json",
+        "catalog-application/catalog-item-component-media-request-v1.schema.json",
+        "catalog-application/catalog-item-component-media-response-v1.schema.json",
         "catalog-application/catalog-assessment-page-list-request-v1.schema.json",
         "catalog-application/catalog-assessment-page-list-response-v1.schema.json",
         "catalog-application/catalog-assessment-page-media-request-v1.schema.json",

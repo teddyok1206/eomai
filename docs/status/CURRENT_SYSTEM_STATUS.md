@@ -119,6 +119,19 @@ settings live in the administrator area. Technical IDs and keys are retained for
 but disclosed only from an explicit detail view. Corpus learning is batch independent in the user
 interface.
 
+The repository now includes additive Item Preview 3.0 for canonical Item Content V1, content-team
+V2, and content-team V3. It preserves native tables and their ordered relationship with images;
+`TABLE_ONLY` renders one table with no image request or empty placeholder. Content-team PNGs are
+read through a new permission-checked Application API and private Catalog operation keyed only by
+the approved Item Revision and visual ordinal. Artifact IDs, NAS paths, and member names are not
+accepted from the browser.
+
+Frontend/backend alignment is release-blocking rather than a manual convention. Tests close the
+browser-to-BFF route inventory, BFF-to-OpenAPI operation inventory, Preview schema-to-renderer block
+set, DOM selector and ES-module graph, backend-state-to-Korean-vocabulary map, and the exact
+source/wheel/RECORD/installed file inventory. Preview requests clear stale edit/HWPX pointers on
+start or failure and ignore responses from superseded selections.
+
 ## 6. Validation and operational evidence
 
 The 2026-09-13 candidate passed 2,916 non-live tests in the explicit dependency environment for
@@ -158,6 +171,19 @@ The 2026-09-14 release and operational acceptance added the following evidence:
   `sha256:8eed5f6961a17df3f65ba62d42690659d9ad85bb9cc267ba6f58f5ecaf7983f8`; an authenticated
   [Studio download](https://eomai.duckdns.org/studio/api/v1/mock-exam-hwpx/builds/hwpxbuild_f3686d5ca87042e390537464a49f1878/download)
   resolves that exact Artifact Revision.
+
+The 2026-09-14 Preview V3 compatibility audit used one read-only production snapshot and projected
+all 558 current approved Item Revisions: four canonical V1, three content-team V2, 31 content-team
+V3, and 520 legacy V1 URI-alias Items. No content or database state was changed. The independent
+material matrix includes a table-only case with zero image components, so aggregate exam success
+cannot mask that branch.
+
+The final Preview V3 repository candidate passed the standard non-live gate: 2,924 API/domain/
+Catalog/Orchestrator/Studio tests, 197 HWPX/local-image tests, and one integration-collection pure
+test. The gate skipped 35 live or database API tests, one privileged HWPX test, and 126 explicit
+PostgreSQL/system tests instead of redirecting them to production. Full Ruff format/lint passed for
+1,331 files and strict mypy passed for 417 source files. The new component-media operation also
+passed its focused Catalog, API/OpenAPI, browser, pointer-negative, and release-integrity suites.
 
 The historical failed build/checkpoint remains preserved as audit evidence. The successful official
 build is a new immutable build resource; no failed record was rewritten.
@@ -202,6 +228,7 @@ The following repository documents are sufficient to reconstruct the major desig
 - `docs/architecture/MOCK_EXAM_TRUSTED_RAG_PRODUCTION_V3.md` for the 25-Item pinned family;
 - `docs/adr/0073-additive-past-exam-solution-reports.md` and ADR 0074 for solution-report lineage;
 - `docs/architecture/LOCAL_GPU_IMAGE_ORCHESTRATION_V1.md` for local raster/compositor ownership;
+- `docs/architecture/ITEM_PREVIEW_V3.md` for the native preview and frontend/backend alignment gates;
 - `docs/operations/API_INTEGRATION_TEST_DATABASE.md` for safe persistence testing.
 
 ## 9. Recommended next plan

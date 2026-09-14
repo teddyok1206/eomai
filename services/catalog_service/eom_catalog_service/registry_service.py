@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import stat
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -448,6 +449,80 @@ class RegistryService:
                     "item media block does not resolve",
                 )
             pointer = matches[0].artifact
+            path = self._resolve_media_file(session, pointer)
+            return self._open_validated_media(path, pointer)
+
+    def load_item_component_media(
+        self,
+        revision_id: str,
+        component_type: Literal["IMAGE"],
+        ordinal: int,
+    ) -> ResolvedItemMedia:
+        """Open one exact content-team image component through its immutable pointer."""
+
+        with self.sessions() as session:
+            revision = session.get(ItemRevisionRecord, revision_id)
+            if revision is None:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                    "item revision not found",
+                )
+            if revision.revision_state != ItemRevisionState.APPROVED.value:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
+                    "item revision is not approved",
+                )
+            component = session.scalar(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id == revision_id,
+                    ItemComponentRecord.component_type == component_type,
+                    ItemComponentRecord.ordinal == ordinal,
+                )
+            )
+            metadata = component.metadata_json if component is not None else None
+            if (
+                component is None
+                or component.required is not True
+                or component.schema_ref != "eom://schemas/generated-item/stimulus-png/3.0"
+                or component.media_type != "image/png"
+                or component.logical_name != f"content-team-visual-{ordinal}.png"
+                or not isinstance(metadata, dict)
+                or metadata.get("visual_ordinal") != ordinal
+                or metadata.get("label") not in {"", "(가)", "(나)"}
+                or metadata.get("artifact_member") != "generated-stimulus.png"
+                or metadata.get("width_px") != 800
+                or metadata.get("height_px") != 500
+                or not isinstance(metadata.get("alt_text"), str)
+                or not 0 < len(metadata["alt_text"]) <= 1000
+                or not isinstance(metadata.get("source_image_result_revision_id"), str)
+                or re.fullmatch(r"rev_[0-9a-f]{32}", metadata["source_image_result_revision_id"])
+                is None
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "item image component is missing or malformed",
+                )
+            artifact_revision = session.get(
+                ArtifactRevisionRecord,
+                component.artifact_revision_id,
+            )
+            if (
+                artifact_revision is None
+                or artifact_revision.logical_artifact_id != component.artifact_id
+                or artifact_revision.content_hash != component.sha256
+                or not artifact_revision.approved
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "item image component pointer does not resolve",
+                )
+            pointer = MediaArtifactPointer(
+                artifact_id=component.artifact_id,
+                artifact_revision_id=component.artifact_revision_id,
+                artifact_member=metadata["artifact_member"],
+                sha256=component.sha256,
+                media_type="image/png",
+            )
             path = self._resolve_media_file(session, pointer)
             return self._open_validated_media(path, pointer)
 

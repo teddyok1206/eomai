@@ -67,33 +67,37 @@ PY
   --no-deps --no-build-isolation --wheel-dir "${DIST}" "${STAGING}" >/dev/null
 [[ -f "${WHEEL}" ]] || fail "expected Web GUI wheel was not produced"
 
-WHEEL="${WHEEL}" COMMIT="${COMMIT}" VERSION="${VERSION}" "${BUILD_PYTHON}" - <<'PY'
+WHEEL="${WHEEL}" COMMIT="${COMMIT}" VERSION="${VERSION}" STAGING="${STAGING}" \
+  "${BUILD_PYTHON}" - <<'PY'
+import base64
 import csv
+import hashlib
 import io
+import importlib.util
 import json
 import os
+import sys
 import zipfile
+
+module_path = os.path.join(os.environ["STAGING"], "eom_web_gui", "release_integrity.py")
+spec = importlib.util.spec_from_file_location("eom_web_release_integrity", module_path)
+if spec is None or spec.loader is None:
+    raise SystemExit("Web GUI release-integrity module cannot be loaded")
+integrity = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = integrity
+spec.loader.exec_module(integrity)
 
 with zipfile.ZipFile(os.environ["WHEEL"]) as archive:
     names = set(archive.namelist())
-    required = {
-        "eom_web_gui/__init__.py",
-        "eom_web_gui/app.py",
-        "eom_web_gui/cli.py",
-        "eom_web_gui/gateways.py",
-        "eom_web_gui/build-info.json",
-        "eom_web_gui/static/index.html",
-        "eom_web_gui/static/login.html",
-        "eom_web_gui/static/app.js",
-        "eom_web_gui/static/curriculum-selector.js",
-        "eom_web_gui/static/execution-preset-editor.js",
-        "eom_web_gui/static/eom-mark.svg",
-        "eom_web_gui/static/login.js",
-        "eom_web_gui/static/presentation-vocabulary.ko-KR.json",
-        "eom_web_gui/static/styles.css",
+    required = {f"eom_web_gui/{name}" for name in integrity.REQUIRED_RUNTIME_FILES}
+    packaged = {
+        name for name in names if name.startswith("eom_web_gui/") and not name.endswith("/")
     }
-    if missing := required - names:
-        raise SystemExit(f"Web GUI wheel resources missing: {sorted(missing)}")
+    if packaged != required:
+        raise SystemExit(
+            "Web GUI wheel package inventory mismatch: "
+            f"missing={sorted(required - packaged)}, unknown={sorted(packaged - required)}"
+        )
     entry_points = next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
     if "eom-web-gui = eom_web_gui.cli:main" not in archive.read(entry_points).decode():
         raise SystemExit("Web GUI console entry point missing")
@@ -105,9 +109,16 @@ with zipfile.ZipFile(os.environ["WHEEL"]) as archive:
     }:
         raise SystemExit("Web GUI build metadata mismatch")
     record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
-    recorded = {row[0] for row in csv.reader(io.StringIO(archive.read(record_name).decode()))}
-    if missing := required - recorded:
+    recorded = {row[0]: row[1:] for row in csv.reader(io.StringIO(archive.read(record_name).decode()))}
+    if missing := required - set(recorded):
         raise SystemExit(f"Web GUI RECORD resources missing: {sorted(missing)}")
+    for name in required:
+        encoded_hash, encoded_size = recorded[name]
+        expected_hash = "sha256=" + base64.urlsafe_b64encode(
+            hashlib.sha256(archive.read(name)).digest()
+        ).decode().rstrip("=")
+        if encoded_hash != expected_hash or encoded_size != str(archive.getinfo(name).file_size):
+            raise SystemExit(f"Web GUI RECORD descriptor mismatch: {name}")
     forbidden = (b"__editable__", b"/home/eom/EOM", b"from kordoc", b"import kordoc")
     for name in names:
         if name.endswith((".py", ".js", ".html", ".json", ".pth")):
@@ -127,36 +138,15 @@ INSTALL_ROOT="${BUILD_ROOT}/installed"
 (
   cd /tmp
   EXPECTED_COMMIT="${COMMIT}" "${INSTALL_ROOT}/bin/python" - <<'PY'
-import importlib.metadata
-import json
-from importlib.resources import files
 from pathlib import Path
 
 import eom_web_gui
+from eom_web_gui.release_integrity import verify_installed_web_gui
 
 module_path = Path(eom_web_gui.__file__).resolve()
 if "/home/eom/EOM" in str(module_path):
     raise SystemExit("installed Web GUI imported from source checkout")
-distribution = importlib.metadata.distribution("eom-web-gui")
-direct_url = distribution.read_text("direct_url.json")
-if direct_url and json.loads(direct_url).get("dir_info", {}).get("editable") is True:
-    raise SystemExit("installed Web GUI is editable")
-build = json.loads(files("eom_web_gui").joinpath("build-info.json").read_text(encoding="ascii"))
-if build["source_commit"] != __import__("os").environ["EXPECTED_COMMIT"]:
-    raise SystemExit("installed Web GUI source commit mismatch")
-for name in (
-    "index.html",
-    "login.html",
-    "app.js",
-    "curriculum-selector.js",
-    "execution-preset-editor.js",
-    "eom-mark.svg",
-    "login.js",
-    "presentation-vocabulary.ko-KR.json",
-    "styles.css",
-):
-    if not files("eom_web_gui").joinpath("static", name).is_file():
-        raise SystemExit(f"installed Web GUI static resource missing: {name}")
-print("web_gui_installed_simulation=PASS")
+result = verify_installed_web_gui(expected_commit=__import__("os").environ["EXPECTED_COMMIT"])
+print(f"web_gui_installed_simulation=PASS verified_files={result.verified_file_count}")
 PY
 )

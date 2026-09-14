@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts import CATALOG_ITEM_MEDIA_MAX_BYTES, MediaArtifactPointer
+from eom_catalog_service.models import ItemRevisionRecord
 from eom_catalog_service.registry_service import RegistryService
 from eom_identifiers import sha256_file
 from eom_item_registry import ComponentPointer, RegistryError, RegistryErrorCode
@@ -20,6 +21,25 @@ class FakeSession:
 
     def get(self, model: type[object], key: str) -> object | None:
         return self.values.get((model, key))
+
+
+class ComponentMediaSession(FakeSession):
+    def __init__(
+        self,
+        values: dict[tuple[type[object], str], object],
+        component: object | None,
+    ) -> None:
+        super().__init__(values)
+        self.component = component
+
+    def __enter__(self) -> ComponentMediaSession:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        pass
+
+    def scalar(self, _statement: object) -> object | None:
+        return self.component
 
 
 def _revision(root: Path, artifact_id: str, revision_id: str, primary: str) -> SimpleNamespace:
@@ -287,3 +307,114 @@ def test_registry_media_descriptor_rechecks_hash_symlink_and_size(tmp_path: Path
     with pytest.raises(RegistryError) as oversized:
         RegistryService._open_validated_media(media, oversized_pointer)
     assert oversized.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
+
+
+def test_registry_streams_exact_approved_content_team_image_component(tmp_path: Path) -> None:
+    media_root = tmp_path / "component-media"
+    media_root.mkdir()
+    media = media_root / "generated-stimulus.png"
+    content = b"\x89PNG\r\n\x1a\nCONTENT_TEAM_PREVIEW"
+    media.write_bytes(content)
+    artifact_id = "artifact_" + "1" * 32
+    artifact_revision_id = "rev_" + "2" * 32
+    artifact_revision = _revision(
+        media_root,
+        artifact_id,
+        artifact_revision_id,
+        media.name,
+    )
+    component = SimpleNamespace(
+        required=True,
+        schema_ref="eom://schemas/generated-item/stimulus-png/3.0",
+        media_type="image/png",
+        logical_name="content-team-visual-0.png",
+        metadata_json={
+            "visual_ordinal": 0,
+            "label": "",
+            "artifact_member": media.name,
+            "width_px": 800,
+            "height_px": 500,
+            "alt_text": "문항 자료 그림",
+            "source_image_result_revision_id": "rev_" + "3" * 32,
+        },
+        artifact_id=artifact_id,
+        artifact_revision_id=artifact_revision_id,
+        sha256=sha256_file(media),
+    )
+    session = ComponentMediaSession(
+        {
+            (ItemRevisionRecord, "itemrev_" + "4" * 32): SimpleNamespace(revision_state="APPROVED"),
+            (ArtifactRecord, artifact_id): SimpleNamespace(approved=True),
+            (ArtifactRevisionRecord, artifact_revision_id): artifact_revision,
+        },
+        component,
+    )
+    service = object.__new__(RegistryService)
+    service.sessions = lambda: session  # type: ignore[assignment]
+
+    resolved = service.load_item_component_media("itemrev_" + "4" * 32, "IMAGE", 0)
+
+    assert resolved.media_type == "image/png"
+    assert resolved.sha256 == sha256_file(media)
+    assert b"".join(resolved.iter_chunks()) == content
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("required", False),
+        ("schema_ref", "eom://schemas/generated-item/stimulus-png/2.0"),
+        ("media_type", "image/jpeg"),
+        ("logical_name", "content-team-visual-1.png"),
+        ("sha256", "sha256:" + "0" * 64),
+    ),
+)
+def test_registry_rejects_malformed_or_stale_content_team_image_component(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    media_root = tmp_path / "invalid-component-media"
+    media_root.mkdir()
+    media = media_root / "generated-stimulus.png"
+    media.write_bytes(b"\x89PNG\r\n\x1a\nCONTENT_TEAM_PREVIEW")
+    artifact_id = "artifact_" + "1" * 32
+    artifact_revision_id = "rev_" + "2" * 32
+    component = SimpleNamespace(
+        required=True,
+        schema_ref="eom://schemas/generated-item/stimulus-png/3.0",
+        media_type="image/png",
+        logical_name="content-team-visual-0.png",
+        metadata_json={
+            "visual_ordinal": 0,
+            "label": "",
+            "artifact_member": media.name,
+            "width_px": 800,
+            "height_px": 500,
+            "alt_text": "문항 자료 그림",
+            "source_image_result_revision_id": "rev_" + "3" * 32,
+        },
+        artifact_id=artifact_id,
+        artifact_revision_id=artifact_revision_id,
+        sha256=sha256_file(media),
+    )
+    setattr(component, field, value)
+    session = ComponentMediaSession(
+        {
+            (ItemRevisionRecord, "itemrev_" + "4" * 32): SimpleNamespace(revision_state="APPROVED"),
+            (ArtifactRecord, artifact_id): SimpleNamespace(approved=True),
+            (ArtifactRevisionRecord, artifact_revision_id): _revision(
+                media_root,
+                artifact_id,
+                artifact_revision_id,
+                media.name,
+            ),
+        },
+        component,
+    )
+    service = object.__new__(RegistryService)
+    service.sessions = lambda: session  # type: ignore[assignment]
+
+    with pytest.raises(RegistryError) as raised:
+        service.load_item_component_media("itemrev_" + "4" * 32, "IMAGE", 0)
+    assert raised.value.code is RegistryErrorCode.ITEM_COMPONENT_INVALID
