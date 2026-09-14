@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v16",
+  "title": "EOM Catalog Mock Exam Assembly Response V16",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "assembly_plan"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN"},
+        "assembly_plan": {
+          "oneOf": [
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-plan/1.0"},
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-plan/2.0"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "assembly"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {
+          "enum": [
+            "CREATE_MOCK_EXAM_ASSEMBLY",
+            "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+            "INSPECT_MOCK_EXAM_ASSEMBLY"
+          ]
+        },
+        "assembly": {
+          "oneOf": [
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-manifest/1.0"},
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-manifest/2.0"},
+            {"$ref": "eom://schemas/assessment-assembly/mock-exam-assembly-manifest/3.0"}
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {
+          "enum": [
+            "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN",
+            "CREATE_MOCK_EXAM_ASSEMBLY",
+            "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+            "INSPECT_MOCK_EXAM_ASSEMBLY"
+          ]
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}

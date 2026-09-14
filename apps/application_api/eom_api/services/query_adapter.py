@@ -86,7 +86,8 @@ from eom_api_contracts.workflows import (
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
-    PreviewMockExamAssemblyPlan,
+    InspectMockExamAssemblyQuery,
+    PreviewMockExamAssemblyPlanCommand,
     load_integrated_science_mock_exam_policy,
 )
 from eom_catalog_service.curriculum_graph_structure import (
@@ -120,10 +121,6 @@ from eom_catalog_service.legacy_assessment_models import (
 from eom_catalog_service.legacy_item_extraction_batch_models import (
     LegacyItemExtractionBatchRecord,
     LegacyItemExtractionBatchWorkUnitRecord,
-)
-from eom_catalog_service.mock_exam_assembly_service import (
-    MockExamAssemblyError,
-    MockExamAssemblyService,
 )
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
@@ -164,6 +161,7 @@ from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
+from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.hwpx_projection import project_hwpx_build
 
 _LEGACY_ITEM_CONTENT_SCHEMA_REFS = frozenset(
@@ -324,10 +322,16 @@ class CursorCodec:
 
 
 class QueryAdapter:
-    def __init__(self, engine: Engine, cursor_key: bytes) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        cursor_key: bytes,
+        *,
+        catalog_application: CatalogApplicationClient | None = None,
+    ) -> None:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
-        self.mock_exam_assemblies = MockExamAssemblyService(engine)
+        self.catalog_application = catalog_application or CatalogApplicationClient()
 
     def integrated_science_graph_capability(self) -> CurriculumGraphCapabilityView:
         """Verify the current Graph contains the exact reviewed curriculum hierarchy."""
@@ -516,30 +520,23 @@ class QueryAdapter:
         )
 
     def mock_exam_assembly(self, assembly_revision_id: str) -> MockExamAssemblyViewContract:
-        with self.sessions() as session:
-            manifest = MockExamAssemblyService.inspect(session, assembly_revision_id)
-            if manifest is None:
-                self._not_found("ASSEMBLY_REVISION_NOT_FOUND")
-            if manifest.schema_version == "mock-exam-assembly-manifest/1.0":
-                return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
-            if manifest.schema_version == "mock-exam-assembly-manifest/2.0":
-                return MockExamAssemblyViewV2.model_validate(manifest.model_dump(mode="json"))
-            return MockExamAssemblyViewV3.model_validate(manifest.model_dump(mode="json"))
+        manifest = self.catalog_application.inspect_mock_exam_assembly(
+            InspectMockExamAssemblyQuery(
+                assessment_assembly_revision_id=assembly_revision_id,
+            )
+        )
+        if manifest.schema_version == "mock-exam-assembly-manifest/1.0":
+            return MockExamAssemblyView.model_validate(manifest.model_dump(mode="json"))
+        if manifest.schema_version == "mock-exam-assembly-manifest/2.0":
+            return MockExamAssemblyViewV2.model_validate(manifest.model_dump(mode="json"))
+        return MockExamAssemblyViewV3.model_validate(manifest.model_dump(mode="json"))
 
     def mock_exam_assembly_plan(
         self, request: PreviewMockExamAssemblyPlanRequest
     ) -> MockExamAssemblyPlanView:
-        try:
-            return self.mock_exam_assemblies.preview(
-                PreviewMockExamAssemblyPlan(**request.model_dump(mode="json"))
-            )
-        except MockExamAssemblyError as exc:
-            raise ApiError(
-                409,
-                exc.code,
-                "Mock exam planning failed",
-                "The current pinned Graph cannot be resolved into a planning snapshot.",
-            ) from exc
+        return self.catalog_application.preview_mock_exam_assembly_plan(
+            PreviewMockExamAssemblyPlanCommand(**request.model_dump(mode="json"))
+        )
 
     def assessment_items_by_exam(
         self,

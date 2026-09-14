@@ -14,6 +14,13 @@ from eom_catalog_contracts.approved_item_graph_publication import (
     ApprovedItemGraphPublicationResult,
     PublishApprovedItemAnalysesCommand,
 )
+from eom_catalog_contracts.assessment_assembly import (
+    CreateMockExamAssembly,
+    CreatePlannedMockExamAssembly,
+    MockExamAssemblyManifestContract,
+    MockExamAssemblyPlanContract,
+    PreviewMockExamAssemblyPlan,
+)
 from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
@@ -63,6 +70,10 @@ CatalogApplicationOperation = Literal[
     "PUBLISH_APPROVED_ITEM_ANALYSES",
     "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
     "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+    "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN",
+    "CREATE_MOCK_EXAM_ASSEMBLY",
+    "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+    "INSPECT_MOCK_EXAM_ASSEMBLY",
 ]
 
 
@@ -388,6 +399,31 @@ class CreateItemProductionEvidenceCommand(FrozenModel):
         return self
 
 
+class PreviewMockExamAssemblyPlanCommand(PreviewMockExamAssemblyPlan):
+    """Resolve a bounded assembly plan inside the Catalog trust boundary."""
+
+    operation: Literal["PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN"] = "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN"
+
+
+class CreateMockExamAssemblyCommand(CreateMockExamAssembly):
+    """Create one explicit assembly inside the Catalog trust boundary."""
+
+    operation: Literal["CREATE_MOCK_EXAM_ASSEMBLY"] = "CREATE_MOCK_EXAM_ASSEMBLY"
+
+
+class CreatePlannedMockExamAssemblyCommand(CreatePlannedMockExamAssembly):
+    """Create one plan-bound assembly inside the Catalog trust boundary."""
+
+    operation: Literal["CREATE_PLANNED_MOCK_EXAM_ASSEMBLY"] = "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY"
+
+
+class InspectMockExamAssemblyQuery(FrozenModel):
+    """Inspect one immutable assembly revision through its pinned revision ID."""
+
+    operation: Literal["INSPECT_MOCK_EXAM_ASSEMBLY"] = "INSPECT_MOCK_EXAM_ASSEMBLY"
+    assessment_assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+
+
 CatalogApplicationRequestValue = Annotated[
     ReviewedItemContentImportCommand
     | ItemContentQuery
@@ -400,7 +436,11 @@ CatalogApplicationRequestValue = Annotated[
     | CreateItemProductionEvidenceCommand
     | PublishApprovedItemAnalysesCommand
     | PublishMockExamItemReviewCommand
-    | InspectMockExamReviewEligibilityQuery,
+    | InspectMockExamReviewEligibilityQuery
+    | PreviewMockExamAssemblyPlanCommand
+    | CreateMockExamAssemblyCommand
+    | CreatePlannedMockExamAssemblyCommand
+    | InspectMockExamAssemblyQuery,
     Field(discriminator="operation"),
 ]
 
@@ -464,6 +504,8 @@ class CatalogApplicationResponse(FrozenModel):
     item_review: MockExamItemReviewPublicationResultContract | None = None
     review_eligibility: MockExamReviewEligibilityResultContract | None = None
     content: AssessmentItemContentContract | None = None
+    assembly_plan: MockExamAssemblyPlanContract | None = None
+    assembly: MockExamAssemblyManifestContract | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
     @model_validator(mode="after")
@@ -480,6 +522,8 @@ class CatalogApplicationResponse(FrozenModel):
                 self.item_review,
                 self.review_eligibility,
                 self.content,
+                self.assembly_plan,
+                self.assembly,
                 self.error_code,
             )
         )
@@ -524,6 +568,18 @@ class CatalogApplicationResponse(FrozenModel):
             and self.review_eligibility is None
         ):
             raise ValueError("mock-exam review eligibility response requires result")
+        if self.operation == "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN" and self.assembly_plan is None:
+            raise ValueError("mock-exam assembly preview requires a plan")
+        if (
+            self.operation
+            in {
+                "CREATE_MOCK_EXAM_ASSEMBLY",
+                "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+                "INSPECT_MOCK_EXAM_ASSEMBLY",
+            }
+            and self.assembly is None
+        ):
+            raise ValueError("mock-exam assembly operation requires a manifest")
         return self
 
 
@@ -576,6 +632,22 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY": CatalogApplicationSchemaRoute(
             "catalog-application-request-v11",
             "catalog-application-response-v11",
+        ),
+        "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v15",
+            "catalog-application-response-v16",
+        ),
+        "CREATE_MOCK_EXAM_ASSEMBLY": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v15",
+            "catalog-application-response-v16",
+        ),
+        "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v15",
+            "catalog-application-response-v16",
+        ),
+        "INSPECT_MOCK_EXAM_ASSEMBLY": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v15",
+            "catalog-application-response-v16",
         ),
     }
 )

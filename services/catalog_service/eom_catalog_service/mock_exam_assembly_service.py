@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     MockExamAssemblyPlanContract,
     MockExamAssemblyPlanV2,
     MockExamAssemblyPolicyV1,
+    MockExamPlanningError,
     PreviewMockExamAssemblyPlan,
     build_mock_exam_assembly_plan,
     load_integrated_science_mock_exam_layout_policy,
@@ -115,18 +116,33 @@ class MockExamAssemblyService:
                 )
         except MockExamCandidateResolutionError as exc:
             self._fail(exc.code, str(exc))
-        return build_mock_exam_assembly_plan(
-            policy=policy,
-            layout_policy=layout,
-            rating_policy=rating,
-            graph_snapshot_revision_id=query.graph_snapshot_revision_id,
-            graph_snapshot_sha256=query.graph_snapshot_sha256,
-            usage_snapshot=inputs.usage_snapshot,
-            resolved_candidate_count=inputs.resolved_candidate_count,
-            candidates=inputs.candidates,
-            planned_at=planned_at,
-            cohort=query.cohort,
-        )
+        try:
+            return build_mock_exam_assembly_plan(
+                policy=policy,
+                layout_policy=layout,
+                rating_policy=rating,
+                graph_snapshot_revision_id=query.graph_snapshot_revision_id,
+                graph_snapshot_sha256=query.graph_snapshot_sha256,
+                usage_snapshot=inputs.usage_snapshot,
+                resolved_candidate_count=inputs.resolved_candidate_count,
+                candidates=inputs.candidates,
+                planned_at=planned_at,
+                cohort=query.cohort,
+            )
+        except MockExamPlanningError as exc:
+            self._fail(exc.code, str(exc))
+
+    def inspect_revision(self, assembly_revision_id: str) -> MockExamAssemblyManifestContract:
+        """Resolve one immutable released assembly without exposing its storage boundary."""
+
+        with self.sessions() as session:
+            manifest = self.inspect(session, assembly_revision_id)
+        if manifest is None:
+            self._fail(
+                "ASSEMBLY_REVISION_NOT_FOUND",
+                "the requested assembly revision does not exist",
+            )
+        return manifest
 
     def create_planned(
         self, command: CreatePlannedMockExamAssembly
@@ -165,18 +181,21 @@ class MockExamAssemblyService:
                 )
             except MockExamCandidateResolutionError as exc:
                 self._fail(exc.code, str(exc))
-            plan = build_mock_exam_assembly_plan(
-                policy=policy,
-                layout_policy=layout,
-                rating_policy=rating,
-                graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
-                graph_snapshot_sha256=snapshot.snapshot_sha256,
-                usage_snapshot=inputs.usage_snapshot,
-                resolved_candidate_count=inputs.resolved_candidate_count,
-                candidates=inputs.candidates,
-                planned_at=command.planned_at,
-                cohort=command.cohort,
-            )
+            try:
+                plan = build_mock_exam_assembly_plan(
+                    policy=policy,
+                    layout_policy=layout,
+                    rating_policy=rating,
+                    graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+                    graph_snapshot_sha256=snapshot.snapshot_sha256,
+                    usage_snapshot=inputs.usage_snapshot,
+                    resolved_candidate_count=inputs.resolved_candidate_count,
+                    candidates=inputs.candidates,
+                    planned_at=command.planned_at,
+                    cohort=command.cohort,
+                )
+            except MockExamPlanningError as exc:
+                self._fail(exc.code, str(exc))
             if plan.plan_sha256 != command.expected_plan_sha256:
                 self._fail(
                     "ASSEMBLY_PLAN_CHANGED",

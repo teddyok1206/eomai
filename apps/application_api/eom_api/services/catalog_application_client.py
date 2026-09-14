@@ -35,17 +35,23 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     CreateKnowledgeSolutionAnalysisCommand,
+    CreateMockExamAssemblyCommand,
+    CreatePlannedMockExamAssemblyCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
+    InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemContentQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
+    MockExamAssemblyManifestContract,
+    MockExamAssemblyPlanContract,
     MockExamItemReviewPublicationResult,
     MockExamReviewEligibilityResult,
+    PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
     ReconcileKnowledgeAnalysisCommand,
@@ -66,6 +72,10 @@ RESPONSE_TIMEOUT_SECONDS = 30.0
 # larger bounded window. API idempotency ownership is independently CAS-protected against a stale
 # callback, and its default lease includes margin around this socket wait.
 EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 120.0
+# Exact-cohort planning validates 25 immutable Item, review, Graph, and Artifact pointer chains.
+# Keep this privileged Catalog/NAS work off the API process and give the bounded socket operation
+# the same reviewed idle-response window as evidence construction.
+ASSEMBLY_RESPONSE_TIMEOUT_SECONDS = 120.0
 
 
 @dataclass(frozen=True)
@@ -382,6 +392,52 @@ class CatalogApplicationClient:
             )
         return response.review_eligibility
 
+    def preview_mock_exam_assembly_plan(
+        self,
+        command: PreviewMockExamAssemblyPlanCommand,
+    ) -> MockExamAssemblyPlanContract:
+        response = self._request(command)
+        if response.operation != command.operation or response.assembly_plan is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog mock-exam assembly plan response is invalid",
+            )
+        return response.assembly_plan
+
+    def create_mock_exam_assembly(
+        self,
+        command: CreateMockExamAssemblyCommand,
+    ) -> MockExamAssemblyManifestContract:
+        return self._assembly_request(command)
+
+    def create_planned_mock_exam_assembly(
+        self,
+        command: CreatePlannedMockExamAssemblyCommand,
+    ) -> MockExamAssemblyManifestContract:
+        return self._assembly_request(command)
+
+    def inspect_mock_exam_assembly(
+        self,
+        query: InspectMockExamAssemblyQuery,
+    ) -> MockExamAssemblyManifestContract:
+        return self._assembly_request(query)
+
+    def _assembly_request(
+        self,
+        command: (
+            CreateMockExamAssemblyCommand
+            | CreatePlannedMockExamAssemblyCommand
+            | InspectMockExamAssemblyQuery
+        ),
+    ) -> MockExamAssemblyManifestContract:
+        response = self._request(command)
+        if response.operation != command.operation or response.assembly is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog mock-exam assembly response is invalid",
+            )
+        return response.assembly
+
     def _analysis_request(
         self,
         command: CreateKnowledgeAnalysisCommand
@@ -410,7 +466,11 @@ class CatalogApplicationClient:
         | CreateItemProductionEvidenceCommand
         | PublishApprovedItemAnalysesCommand
         | PublishMockExamItemReviewCommand
-        | InspectMockExamReviewEligibilityQuery,
+        | InspectMockExamReviewEligibilityQuery
+        | PreviewMockExamAssemblyPlanCommand
+        | CreateMockExamAssemblyCommand
+        | CreatePlannedMockExamAssemblyCommand
+        | InspectMockExamAssemblyQuery,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
         content_schema_version = (
@@ -496,10 +556,24 @@ class CatalogApplicationClient:
         | CreateItemProductionEvidenceCommand
         | PublishApprovedItemAnalysesCommand
         | PublishMockExamItemReviewCommand
-        | InspectMockExamReviewEligibilityQuery,
+        | InspectMockExamReviewEligibilityQuery
+        | PreviewMockExamAssemblyPlanCommand
+        | CreateMockExamAssemblyCommand
+        | CreatePlannedMockExamAssemblyCommand
+        | InspectMockExamAssemblyQuery,
     ) -> float:
         if isinstance(command, (CreateEvidenceBundleCommand, CreateItemProductionEvidenceCommand)):
             return EVIDENCE_RESPONSE_TIMEOUT_SECONDS
+        if isinstance(
+            command,
+            (
+                PreviewMockExamAssemblyPlanCommand,
+                CreateMockExamAssemblyCommand,
+                CreatePlannedMockExamAssemblyCommand,
+                InspectMockExamAssemblyQuery,
+            ),
+        ):
+            return ASSEMBLY_RESPONSE_TIMEOUT_SECONDS
         return RESPONSE_TIMEOUT_SECONDS
 
     def _validate_socket(self) -> None:
@@ -594,6 +668,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog mock-exam Item review publication failed",
+                    ) from None
+                if error_code.startswith("ASSEMBLY_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog mock-exam assembly operation failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

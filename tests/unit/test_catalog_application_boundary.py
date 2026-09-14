@@ -4,12 +4,14 @@ import hashlib
 import os
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import eom_api.services.catalog_application_client as catalog_application_client_module
 import pytest
 from eom_api.services.catalog_application_client import (
+    ASSEMBLY_RESPONSE_TIMEOUT_SECONDS,
     EVIDENCE_RESPONSE_TIMEOUT_SECONDS,
     RESPONSE_TIMEOUT_SECONDS,
     CatalogApplicationClient,
@@ -30,18 +32,29 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     CreateKnowledgeSolutionAnalysisCommand,
+    CreateMockExamAssemblyCommand,
+    CreatePlannedMockExamAssemblyCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemMediaQuery,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
+    MockExamAssemblyManifestV3,
+    MockExamAssemblyPlanV2,
+    MockExamAssemblySelection,
     MockExamEligibilityFindingCounts,
     MockExamItemReviewPublicationResultV2,
     MockExamReviewEligibilityResultV2,
     MockExamReviewFindingCounts,
+    PreviewMockExamAssemblyPlanCommand,
     PublishMockExamItemReviewCommand,
     ReviewedItemContentImportCommand,
+    build_mock_exam_assembly_plan,
+    load_integrated_science_mock_exam_layout_policy,
+    load_integrated_science_mock_exam_policy,
+    load_integrated_science_mock_exam_rating_policy,
     validate_contract,
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
@@ -50,6 +63,11 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_assessment_item_content import item_content
 from tests.unit.test_content_team_item_protocol import _content as content_team_item
+from tests.unit.test_mock_exam_assembly_contracts import (
+    _identifier,
+    _planning_candidates_v2,
+    _usage_snapshot,
+)
 
 
 class FakeImports:
@@ -302,6 +320,122 @@ class FakeItemReviews:
         )
 
 
+def _assembly_plan() -> MockExamAssemblyPlanV2:
+    planned_at = datetime(2026, 9, 14, 0, 0, tzinfo=UTC)
+    candidates = _planning_candidates_v2()
+    plan = build_mock_exam_assembly_plan(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        rating_policy=load_integrated_science_mock_exam_rating_policy(),
+        graph_snapshot_revision_id=_identifier("graphrev_", 1),
+        graph_snapshot_sha256="sha256:" + "1" * 64,
+        usage_snapshot=_usage_snapshot(
+            captured_at=planned_at,
+            candidate_revision_count=len(candidates),
+        ),
+        resolved_candidate_count=len(candidates),
+        candidates=candidates,
+        planned_at=planned_at,
+    )
+    assert isinstance(plan, MockExamAssemblyPlanV2)
+    return plan
+
+
+def _assembly_manifest() -> MockExamAssemblyManifestV3:
+    plan = _assembly_plan()
+    value = {
+        "schema_version": "mock-exam-assembly-manifest/3.0",
+        "assessment_assembly_revision_id": _identifier("assemblyrev_", 1),
+        "assessment_assembly_id": _identifier("assembly_", 2),
+        "assessment_form_id": _identifier("form_", 3),
+        "assessment_form_revision_id": _identifier("formrev_", 4),
+        "deliverable_id": _identifier("deliverable_", 5),
+        "deliverable_revision_id": _identifier("delivrev_", 6),
+        "form_key": "main",
+        "display_label": "본시험지",
+        "plan": plan.model_dump(mode="json"),
+        "revision_state": "RELEASED",
+        "created_at": "2026-09-14T00:00:00Z",
+        "created_by": _identifier("operator_", 7),
+    }
+    value["manifest_sha256"] = content_sha256(value)
+    return MockExamAssemblyManifestV3.model_validate(value)
+
+
+class FakeAssemblies:
+    def preview(self, _command: object) -> MockExamAssemblyPlanV2:
+        return _assembly_plan()
+
+    def create(self, _command: object) -> MockExamAssemblyManifestV3:
+        return _assembly_manifest()
+
+    def create_planned(self, _command: object) -> MockExamAssemblyManifestV3:
+        return _assembly_manifest()
+
+    def inspect_revision(self, revision_id: str) -> MockExamAssemblyManifestV3:
+        assert revision_id == _identifier("assemblyrev_", 1)
+        return _assembly_manifest()
+
+
+def _assembly_preview_command() -> PreviewMockExamAssemblyPlanCommand:
+    plan = _assembly_plan()
+    return PreviewMockExamAssemblyPlanCommand(
+        policy_revision_id=plan.policy_revision_id,
+        policy_sha256=plan.policy_sha256,
+        graph_snapshot_revision_id=plan.graph_snapshot_revision_id,
+        graph_snapshot_sha256=plan.graph_snapshot_sha256,
+    )
+
+
+def _assembly_create_command() -> CreateMockExamAssemblyCommand:
+    manifest = _assembly_manifest()
+    selections = tuple(
+        MockExamAssemblySelection(
+            position=row.position,
+            item_id=row.item_id,
+            item_revision_id=row.item_revision_id,
+            item_manifest_sha256=row.item_manifest_sha256,
+            graph_placement_node_id=row.graph_item_node_id,
+            curriculum_unit_keys=row.curriculum_unit_keys,
+            points_milli=row.points_milli,
+            coverage_role=row.coverage_role,
+            coverage_requirement_id=row.coverage_requirement_id,
+            is_inquiry=row.is_inquiry,
+            material_type=row.material_profile,
+        )
+        for row in manifest.plan.placements
+    )
+    return CreateMockExamAssemblyCommand(
+        deliverable_id=manifest.deliverable_id,
+        deliverable_revision_id=manifest.deliverable_revision_id,
+        form_key=manifest.form_key,
+        display_label=manifest.display_label,
+        policy_revision_id=manifest.plan.policy_revision_id,
+        policy_sha256=manifest.plan.policy_sha256,
+        graph_snapshot_revision_id=manifest.plan.graph_snapshot_revision_id,
+        graph_snapshot_sha256=manifest.plan.graph_snapshot_sha256,
+        placements=selections,
+        actor_id=manifest.created_by,
+    )
+
+
+def _assembly_create_planned_command() -> CreatePlannedMockExamAssemblyCommand:
+    manifest = _assembly_manifest()
+    return CreatePlannedMockExamAssemblyCommand(
+        deliverable_id=manifest.deliverable_id,
+        deliverable_revision_id=manifest.deliverable_revision_id,
+        form_key=manifest.form_key,
+        display_label=manifest.display_label,
+        policy_revision_id=manifest.plan.policy_revision_id,
+        policy_sha256=manifest.plan.policy_sha256,
+        graph_snapshot_revision_id=manifest.plan.graph_snapshot_revision_id,
+        graph_snapshot_sha256=manifest.plan.graph_snapshot_sha256,
+        expected_plan_sha256=manifest.plan.plan_sha256,
+        planned_at=manifest.plan.planned_at,
+        actor_id=manifest.created_by,
+    )
+
+
 def _retrieval_command() -> CreateEvidenceBundleCommand:
     value = {
         "operation": "CREATE_EVIDENCE_BUNDLE",
@@ -441,6 +575,7 @@ def _server(
     registry: FakeRegistry | None = None,
     item_reviews: FakeItemReviews | None = None,
     knowledge_retrieval: FakeKnowledgeRetrieval | None = None,
+    assemblies: FakeAssemblies | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -452,6 +587,7 @@ def _server(
         FakeKnowledgeAnalysisBatch(),
         knowledge_retrieval or FakeKnowledgeRetrieval(),
         mock_exam_item_reviews=item_reviews,  # type: ignore[arg-type]
+        mock_exam_assemblies=assemblies or FakeAssemblies(),  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -481,6 +617,15 @@ def test_catalog_evidence_generation_uses_its_bounded_response_window() -> None:
     assert (
         CatalogApplicationClient._response_timeout_seconds(_batch_command())
         == RESPONSE_TIMEOUT_SECONDS
+    )
+
+
+def test_catalog_assembly_uses_its_bounded_response_window() -> None:
+    command = _assembly_create_planned_command()
+    assert ASSEMBLY_RESPONSE_TIMEOUT_SECONDS == 120.0
+    assert (
+        CatalogApplicationClient._response_timeout_seconds(command)
+        == ASSEMBLY_RESPONSE_TIMEOUT_SECONDS
     )
 
 
@@ -657,6 +802,41 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     }
     validate_contract("catalog-assessment-page-media-request", page_media_request)
 
+    for assembly_command in (
+        _assembly_preview_command(),
+        _assembly_create_command(),
+        _assembly_create_planned_command(),
+        InspectMockExamAssemblyQuery(
+            assessment_assembly_revision_id=_identifier("assemblyrev_", 1)
+        ),
+    ):
+        assembly_request = CatalogApplicationRequest(root=assembly_command).model_dump(mode="json")
+        validate_contract("catalog-application-request-v15", assembly_request)
+    assembly_plan_response = {
+        key: value
+        for key, value in CatalogApplicationResponse(
+            status="OK",
+            operation="PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN",
+            assembly_plan=_assembly_plan(),
+        )
+        .model_dump(mode="json")
+        .items()
+        if value is not None
+    }
+    validate_contract("catalog-application-response-v16", assembly_plan_response)
+    assembly_response = {
+        key: value
+        for key, value in CatalogApplicationResponse(
+            status="OK",
+            operation="CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+            assembly=_assembly_manifest(),
+        )
+        .model_dump(mode="json")
+        .items()
+        if value is not None
+    }
+    validate_contract("catalog-application-response-v16", assembly_response)
+
 
 def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
     tmp_path: Path,
@@ -725,6 +905,18 @@ def test_catalog_socket_round_trip_preserves_typed_content_and_import_result(
         assert evidence.graph_snapshot.graph_snapshot_revision_id == "graphrev_" + "e" * 32
         item_evidence = client.create_item_production_evidence(_item_evidence_command())
         assert item_evidence.context_artifact.member_path == "evidence/context.md"
+        plan = client.preview_mock_exam_assembly_plan(_assembly_preview_command())
+        assert plan == _assembly_plan()
+        created = client.create_mock_exam_assembly(_assembly_create_command())
+        assert created == _assembly_manifest()
+        planned = client.create_planned_mock_exam_assembly(_assembly_create_planned_command())
+        assert planned == _assembly_manifest()
+        inspected = client.inspect_mock_exam_assembly(
+            InspectMockExamAssemblyQuery(
+                assessment_assembly_revision_id=_identifier("assemblyrev_", 1)
+            )
+        )
+        assert inspected == _assembly_manifest()
     finally:
         server.shutdown()
         server.server_close()
@@ -841,6 +1033,13 @@ def test_catalog_client_preserves_stable_graph_concurrency_error() -> None:
     assert raised.value.code == "KNOWLEDGE_GRAPH_STALE_CURRENT"
 
 
+def test_catalog_client_preserves_stable_assembly_error() -> None:
+    with pytest.raises(CatalogApplicationClientError) as raised:
+        CatalogApplicationClient._raise_remote_error("ASSEMBLY_CANDIDATE_SHORTAGE")
+
+    assert raised.value.code == "ASSEMBLY_CANDIDATE_SHORTAGE"
+
+
 def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     unit = Path("infra/systemd/eom-catalog-application-runner.service").read_text(encoding="utf-8")
     assert "User=eom-catalog-manager" in unit
@@ -889,7 +1088,17 @@ def test_application_api_catalog_client_depends_on_protocol_not_server_implement
     problem_source = Path("apps/application_api/eom_api/problem_details.py").read_text(
         encoding="utf-8"
     )
+    query_source = Path("apps/application_api/eom_api/services/query_adapter.py").read_text(
+        encoding="utf-8"
+    )
+    command_source = Path("apps/application_api/eom_api/services/command_adapter.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "eom_catalog_contracts" in client_source
     assert "eom_catalog_service" not in client_source
     assert "eom_catalog_service" not in problem_source
+    assert "MockExamAssemblyService" not in query_source
+    assert "MockExamAssemblyService" not in command_source
+    assert "mock_exam_assembly_service" not in query_source
+    assert "mock_exam_assembly_service" not in command_source

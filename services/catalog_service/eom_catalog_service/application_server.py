@@ -31,9 +31,13 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisBatchCommand,
     CreateKnowledgeAnalysisCommand,
     CreateKnowledgeSolutionAnalysisCommand,
+    CreateMockExamAssemblyCommand,
+    CreatePlannedMockExamAssemblyCommand,
+    InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemContentQuery,
     ItemMediaQuery,
+    PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
     ReconcileKnowledgeAnalysisCommand,
@@ -64,6 +68,10 @@ from eom_catalog_service.knowledge_analysis_service import (
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
+)
+from eom_catalog_service.mock_exam_assembly_service import (
+    MockExamAssemblyError,
+    MockExamAssemblyService,
 )
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
@@ -152,6 +160,10 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "PUBLISH_APPROVED_ITEM_ANALYSES",
                 "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
                 "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+                "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN",
+                "CREATE_MOCK_EXAM_ASSEMBLY",
+                "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+                "INSPECT_MOCK_EXAM_ASSEMBLY",
             }:
                 operation = raw_operation
             if raw_operation == "IMPORT_REVIEWED_ITEM_CONTENT":
@@ -277,6 +289,40 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         request
                     ),
                 )
+            elif isinstance(request, PreviewMockExamAssemblyPlanCommand):
+                if self.server.mock_exam_assemblies is None:
+                    raise RuntimeError("mock-exam assembly service is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    assembly_plan=self.server.mock_exam_assemblies.preview(request),
+                )
+            elif isinstance(request, CreateMockExamAssemblyCommand):
+                if self.server.mock_exam_assemblies is None:
+                    raise RuntimeError("mock-exam assembly service is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    assembly=self.server.mock_exam_assemblies.create(request),
+                )
+            elif isinstance(request, CreatePlannedMockExamAssemblyCommand):
+                if self.server.mock_exam_assemblies is None:
+                    raise RuntimeError("mock-exam assembly service is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    assembly=self.server.mock_exam_assemblies.create_planned(request),
+                )
+            elif isinstance(request, InspectMockExamAssemblyQuery):
+                if self.server.mock_exam_assemblies is None:
+                    raise RuntimeError("mock-exam assembly service is unavailable")
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    assembly=self.server.mock_exam_assemblies.inspect_revision(
+                        request.assessment_assembly_revision_id
+                    ),
+                )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
         except (
@@ -287,6 +333,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             KnowledgeRetrievalServiceError,
             ApprovedItemGraphPublicationError,
             MockExamItemReviewPublicationError,
+            MockExamAssemblyError,
         ) as exc:
             code = getattr(exc.code, "value", str(exc.code))
             self.server.write_error(
@@ -405,6 +452,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         *,
         approved_item_graph_publication: ApprovedItemGraphPublicationService | None = None,
         mock_exam_item_reviews: MockExamItemReviewPublicationService | None = None,
+        mock_exam_assemblies: MockExamAssemblyService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -417,6 +465,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.knowledge_retrieval = knowledge_retrieval
         self.approved_item_graph_publication = approved_item_graph_publication
         self.mock_exam_item_reviews = mock_exam_item_reviews
+        self.mock_exam_assemblies = mock_exam_assemblies
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -571,6 +620,10 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                         "PUBLISH_APPROVED_ITEM_ANALYSES",
                         "PUBLISH_MOCK_EXAM_ITEM_REVIEW",
                         "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY",
+                        "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN",
+                        "CREATE_MOCK_EXAM_ASSEMBLY",
+                        "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
+                        "INSPECT_MOCK_EXAM_ASSEMBLY",
                     ],
                     operation,
                 ),

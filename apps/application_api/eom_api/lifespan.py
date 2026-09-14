@@ -55,9 +55,13 @@ class AppServices:
             ),
         )
         self.operators = OperatorService(engine)
-        self.queries = QueryAdapter(engine, fingerprint_key)
-        self.registry = RegistryService(engine)
         self.catalog_application = CatalogApplicationClient()
+        self.queries = QueryAdapter(
+            engine,
+            fingerprint_key,
+            catalog_application=self.catalog_application,
+        )
+        self.registry = RegistryService(engine)
         self.commands = CommandAdapter(engine, catalog_application=self.catalog_application)
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)

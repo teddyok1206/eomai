@@ -412,6 +412,62 @@ def test_server_planner_reports_rating_shortage_without_partial_output() -> None
     assert {row.reason for row in plan.shortages} == {"NO_RATED_CANDIDATES"}
 
 
+def test_catalog_service_normalizes_planning_errors_at_its_application_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidates = (_planning_candidates()[0], *_planning_candidates_v2()[1:])
+    graph_revision_id = _identifier("graphrev_", 1)
+    graph_sha256 = "sha256:" + "1" * 64
+
+    class MixedCandidates:
+        def resolve(self, _session: Any, **kwargs: Any) -> MockExamPlanningInputs:
+            return MockExamPlanningInputs(
+                resolved_candidate_count=len(candidates),
+                candidates=candidates,
+                usage_snapshot=_usage_snapshot(
+                    captured_at=kwargs["planned_at"],
+                    candidate_revision_count=len(candidates),
+                ),
+            )
+
+    service = MockExamAssemblyService(
+        create_engine("sqlite+pysqlite:///:memory:"),
+        candidates=MixedCandidates(),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(
+        service,
+        "_resolve_snapshot",
+        lambda _session, _query: SimpleNamespace(
+            graph_snapshot_revision_id=graph_revision_id,
+            snapshot_sha256=graph_sha256,
+        ),
+    )
+    policy = load_integrated_science_mock_exam_policy()
+    with pytest.raises(MockExamAssemblyError) as raised:
+        service.preview(
+            PreviewMockExamAssemblyPlan(
+                policy_revision_id=policy.policy_revision_id,
+                policy_sha256=content_sha256(policy.model_dump(mode="json")),
+                graph_snapshot_revision_id=graph_revision_id,
+                graph_snapshot_sha256=graph_sha256,
+            )
+        )
+
+    assert raised.value.code == "ASSEMBLY_CONTENT_PROTOCOL_MIXED"
+
+
+def test_catalog_service_inspection_fails_closed_for_missing_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    monkeypatch.setattr(service, "inspect", lambda _session, _revision_id: None)
+
+    with pytest.raises(MockExamAssemblyError) as raised:
+        service.inspect_revision(_identifier("assemblyrev_", 999))
+
+    assert raised.value.code == "ASSEMBLY_REVISION_NOT_FOUND"
+
+
 def test_exact_cohort_is_self_hashed_schema_valid_and_embedded_in_plan() -> None:
     candidates = _planning_candidates()
     cohort = _cohort(candidates)

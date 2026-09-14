@@ -303,6 +303,10 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         "PUBLISH_APPROVED_ITEM_ANALYSES": (11, 11),
         "PUBLISH_MOCK_EXAM_ITEM_REVIEW": (11, 11),
         "INSPECT_MOCK_EXAM_REVIEW_ELIGIBILITY": (11, 11),
+        "PREVIEW_MOCK_EXAM_ASSEMBLY_PLAN": (15, 16),
+        "CREATE_MOCK_EXAM_ASSEMBLY": (15, 16),
+        "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY": (15, 16),
+        "INSPECT_MOCK_EXAM_ASSEMBLY": (15, 16),
     }
     assert set(CATALOG_APPLICATION_SCHEMA_ROUTES) == set(expected)
     for operation, (request_version, response_version) in expected.items():
