@@ -53,6 +53,11 @@ and reuses its deterministic operation key. A bounded assembly-specific socket t
 same immutable inputs. Schema errors, missing pointers, stale revisions, hash mismatches, permission
 errors, or ambiguous responses fail closed with stable Catalog/application errors.
 
+The pinned Deliverable and Deliverable Revision are validated with ordinary indexed reads. They are
+not mutable assembly aggregates, and the Catalog runtime role intentionally has no UPDATE privilege
+on them. Locking starts at the Form/Assembly aggregate owned by this use case; deterministic IDs,
+unique keys, foreign keys, and those aggregate locks protect concurrent creation and replay.
+
 ## Dependency direction and simpler alternative
 
 API interfaces call an application adapter implementing the private Catalog contract; the Catalog

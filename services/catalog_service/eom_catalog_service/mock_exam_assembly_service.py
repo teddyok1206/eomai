@@ -369,9 +369,9 @@ class MockExamAssemblyService:
         command: CreateMockExamAssembly | CreatePlannedMockExamAssembly,
     ) -> tuple[DeliverableRecord, DeliverableRevisionRecord]:
         deliverable = session.scalar(
-            select(DeliverableRecord)
-            .where(DeliverableRecord.deliverable_id == command.deliverable_id)
-            .with_for_update()
+            select(DeliverableRecord).where(
+                DeliverableRecord.deliverable_id == command.deliverable_id
+            )
         )
         deliverable_revision = session.get(
             DeliverableRevisionRecord, command.deliverable_revision_id

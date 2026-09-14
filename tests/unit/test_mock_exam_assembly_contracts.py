@@ -76,6 +76,39 @@ def _usage_snapshot(
     )
 
 
+def test_deliverable_pointer_resolution_does_not_require_update_privilege() -> None:
+    deliverable_id = _identifier("deliverable_", 1)
+    deliverable_revision_id = _identifier("delivrev_", 2)
+
+    class ReadOnlyDeliverableSession:
+        statement = ""
+
+        def scalar(self, statement: Any) -> Any:
+            self.statement = str(statement)
+            return SimpleNamespace(
+                deliverable_id=deliverable_id,
+                deliverable_type="MOCK_EXAM",
+            )
+
+        def get(self, _model: Any, revision_id: str) -> Any:
+            assert revision_id == deliverable_revision_id
+            return SimpleNamespace(deliverable_id=deliverable_id)
+
+    session = ReadOnlyDeliverableSession()
+    service = MockExamAssemblyService(create_engine("sqlite+pysqlite:///:memory:"))
+    resolved, revision = service._resolve_deliverable(
+        session,  # type: ignore[arg-type]
+        SimpleNamespace(
+            deliverable_id=deliverable_id,
+            deliverable_revision_id=deliverable_revision_id,
+        ),  # type: ignore[arg-type]
+    )
+
+    assert resolved.deliverable_id == deliverable_id
+    assert revision.deliverable_id == deliverable_id
+    assert "FOR UPDATE" not in session.statement.upper()
+
+
 def _planning_candidates() -> tuple[MockExamPlanningCandidateV1, ...]:
     layout = load_integrated_science_mock_exam_layout_policy()
     policy = load_integrated_science_mock_exam_policy()
