@@ -125,6 +125,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "workflow_events",
     "workflow_instances",
     "workflow_step_runs",
+    "usage_records",
     "usage_records_v1",
 )
 

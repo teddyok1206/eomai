@@ -166,6 +166,43 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert "educational_documents" in UPDATE_TABLES
     assert "educational_document_registrations" in UPDATE_TABLES
     assert "educational_document_revisions" not in UPDATE_TABLES
+    assembly_read_tables = {
+        "artifact_revisions",
+        "artifacts",
+        "assessment_assemblies",
+        "assessment_assembly_revisions",
+        "assessment_forms",
+        "assessment_form_revisions",
+        "assessment_item_occurrence_references",
+        "assessment_item_placements",
+        "curriculum_units",
+        "deliverables",
+        "deliverable_revisions",
+        "item_components",
+        "item_review_records",
+        "item_revisions",
+        "items",
+        "knowledge_corpora",
+        "knowledge_edges",
+        "knowledge_graph_snapshots",
+        "knowledge_node_source_pointers",
+        "knowledge_nodes",
+        "knowledge_snapshot_analyses",
+        "usage_records",
+        "usage_records_v1",
+    }
+    assembly_insert_tables = {
+        "assessment_assemblies",
+        "assessment_assembly_revisions",
+        "assessment_forms",
+        "assessment_form_revisions",
+        "assessment_item_placements",
+    }
+    assert assembly_read_tables <= set(READ_TABLES)
+    assert assembly_insert_tables <= set(INSERT_TABLES)
+    assert {"assessment_assemblies", "assessment_forms"} <= set(UPDATE_TABLES)
+    assert "usage_records" not in INSERT_TABLES
+    assert "usage_records" not in UPDATE_TABLES
     assert {privilege for privilege, _tables in TABLE_PRIVILEGES} == {
         "SELECT",
         "INSERT",

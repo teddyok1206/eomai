@@ -36,6 +36,13 @@ No binary or large result is stored in PostgreSQL or copied through the API. The
 message carries pointer-rich plan/manifest metadata only. Existing foreign keys, unique aggregate
 keys, and Item/review/Graph indexes remain authoritative; no new database structure is required.
 
+The dedicated Catalog runtime role must read the complete bounded assembly projection: the pinned
+Graph and curriculum rows, Item/review/Artifact pointers, immutable deliverable and assembly
+aggregates, and both the current `usage_records` history and its legacy `usage_records_v1`
+predecessor. The current usage table is read-only at this boundary. A focused privilege-contract
+test keeps this complete read set and the smaller Form/Assembly write set aligned with repository
+queries, so a new query cannot be fixed by widening Application API access or an ad hoc live grant.
+
 ## Transaction, concurrency, retry, and failure
 
 Preview is read-only. Creation stays inside the Catalog service's existing transaction and aggregate
