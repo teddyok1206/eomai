@@ -38,25 +38,27 @@ readiness가 정본입니다.
 | --- | --- |
 | 단일 문항 Workflow | `generic-item-development@1.10.0` |
 | 역할 protocol / 결과 | `workflow-role/1.20.0` / `authoring·image·review·registration-result@10.0` |
-| Content Pack | `generated-knowledge-item@1.16.0` |
+| Content Pack | `generated-knowledge-item@1.16.1` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/13.0` / `knowledge-item-control-bootstrap/10.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
-| 25문항 생산 | `mock-exam-production-plan/4.0`, execution `4.0` |
+| 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 
-`mock-exam-production-plan/4.0`은 Workflow 1.10, role 1.20, Pack 1.16.0, Item Brief 4.0과
-자료 형식 1.0을 함께 고정합니다. 각 문항이 요구하는 `TEXT`, `DATA`, `TABLE`, `IMAGE`, `MIXED`,
-`INQUIRY`를 먼저 정하고 그 값에서 이미지 step과 RAG 검색 요소를 파생합니다. V1–V3 계획과
-checkpoint는 기존 실행 재현을 위해 그대로 읽을 수 있으며 의미를 바꾸지 않습니다.
+`mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
+자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
+각 문항이 요구하는 `TEXT`, `DATA`, `TABLE`, `IMAGE`, `MIXED`, `INQUIRY`에서 이미지 step과 RAG
+검색 요소를 파생하며, V1–V4 계획과 checkpoint는 기존 실행 재현을 위해 그대로 읽을 수 있고
+의미를 바꾸지 않습니다.
 
 ## RAG 학습의 의미와 현재 기준선
 
 EOM에서 “기출 학습”은 모델 weight training이 아니라 PDF를 검증 가능한 문항·페이지·anchor와
-Graph evidence로 구조화하는 RAG ingestion입니다. 검증된 기준선은 기출 PDF 50개와 승인된 기출
-문항 분석 520개입니다. 생성 worker는 원 PDF 전체를 복사받지 않고, 권한·Revision·Schema·Hash를
+Graph evidence로 구조화하는 RAG ingestion입니다. 원래 검증된 기준선은 기출 PDF 50개와 승인된
+기출 문항 분석 520개이며, 이후 승인된 카나리 문항이 additive lineage에 합류해 현재 corpus에는
+521개가 있습니다. 생성 worker는 원 PDF 전체를 복사받지 않고, 권한·Revision·Schema·Hash를
 확인한 Evidence Bundle의 bounded context만 받습니다.
 
 근거를 실제로 사용했는지는 `graph_grounded=true` 같은 boolean 하나로 판정하지 않습니다.
@@ -187,11 +189,22 @@ live·DB·privileged opt-in 테스트는 조건 미설정으로 skip했습니다
 - V4 schema 재생성, JSON Schema 2020-12, canonical/package byte parity, shell syntax와 Git whitespace
 
 세 release wheel을 실제로 만들고 V4 plan/execution schema와 HWPX renderer가 저장소 원본과
-byte-for-byte 같은지도 확인했습니다. 실제 PostgreSQL을 쓰는 HWPX persistence 6개는 운영 DB가
-아니라 명시적으로 만든 disposable DB에서만 실행합니다.
+byte-for-byte 같은지도 확인했습니다.
 
-Pack 1.16.0과 production plan/execution 4.0은 검증된 **저장소 후보**입니다. 운영 활성화는 별도의
-build → release → activation → single-Item material matrix → fresh-25 canary를 거쳐야 합니다.
+이후 2026-09-14에는 현재 release 선에서 API suite 511개가 통과하고 14개 opt-in이 skip됐으며,
+HWPX 전체 및 관련 Application 경계 225개가 통과하고 privileged 1개가 skip됐습니다. HWPX
+persistence 6개는 운영 DB가 아닌 명시적 disposable PostgreSQL에서 실행됐고, migration·runtime
+role·release wheel 검증까지 통과한 뒤 그 DB를 제거했습니다.
+
+Pack 1.16.1과 production plan/execution 5.0은 운영에서 실제 25문항 생성·검토·승인·등록까지
+완료했습니다. 같은 immutable Item set을 공식 HWPX API로 빌드해 25개 section, native 수식 81개,
+native 표 7개, visual 13개와 PNG 6개를 검증했고, 출력의 SHA-256·ZIP entry·CRC·경로 안전성도
+재확인했습니다. 로그인한 Studio 사용자는
+[검증된 25문항 HWPX를 다운로드](https://eomai.duckdns.org/studio/api/v1/mock-exam-hwpx/builds/hwpxbuild_f3686d5ca87042e390537464a49f1878/download)할 수 있습니다.
+
+기출 풀이보고서 보강은 사용자 작업과 독립된 support slot 5·6에서 계속 진행됩니다. 2026-09-14
+13:06 UTC 스냅샷은 전체 521개 중 212개 완료, 309개 남음, 중복 승인 0개입니다. 이 수치는 진행
+중인 운영 상태이므로 최종 정본은 Studio의 batch-free corpus 집계입니다.
 
 더 자세한 구현/운영 구분과 남은 경계는
 [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)를 참고하십시오.
@@ -243,6 +256,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 - [Mock-exam Trusted RAG Production V3](docs/architecture/MOCK_EXAM_TRUSTED_RAG_PRODUCTION_V3.md)
 - [Material-first Item and independent HWPX acceptance](docs/adr/0077-material-first-item-and-independent-hwpx-acceptance.md)
 - [HWPX whole-exam append-only header merge](docs/adr/0078-hwpx-exam-header-superset-merge.md)
+- [HWPX explicit equation and output acceptance](docs/adr/0090-content-team-explicit-equation-and-output-acceptance.md)
 - [Education Knowledge and Assessment Item GraphRAG](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [Additive Past-exam Solution Reports](docs/adr/0073-additive-past-exam-solution-reports.md)
 - [Batch-independent Solution Scheduling](docs/adr/0074-batch-independent-additive-solution-scheduling.md)
