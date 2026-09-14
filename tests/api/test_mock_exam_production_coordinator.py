@@ -713,13 +713,16 @@ class FakeGraphOperations:
         *,
         lose_first_response: bool = False,
         stale_first_attempt: bool = False,
+        precommit_failure_code: str | None = None,
     ) -> None:
         self.commands: list[Any] = []
         self.lose_first_response = lose_first_response
         self.stale_first_attempt = stale_first_attempt
+        self.precommit_failure_code = precommit_failure_code
         self._result_by_key: dict[str, Any] = {}
         self._lost_keys: set[str] = set()
         self._stale_emitted = False
+        self._precommit_failure_emitted = False
 
     def publish(self, command: Any) -> Any:
         self.commands.append(command)
@@ -727,6 +730,11 @@ class FakeGraphOperations:
             self._stale_emitted = True
             error = RuntimeError("simulated concurrent Graph advance")
             error.code = "KNOWLEDGE_GRAPH_STALE_CURRENT"  # type: ignore[attr-defined]
+            raise error
+        if self.precommit_failure_code is not None and not self._precommit_failure_emitted:
+            self._precommit_failure_emitted = True
+            error = RuntimeError("simulated proven pre-commit Graph failure")
+            error.code = self.precommit_failure_code  # type: ignore[attr-defined]
             raise error
         existing = self._result_by_key.get(command.idempotency_key)
         if existing is not None:
@@ -1289,6 +1297,122 @@ def test_stale_graph_base_requires_explicit_write_ahead_supersession() -> None:
             }
         ),
     )
+
+
+def test_precommit_graph_failure_allows_fresh_same_base_authorization() -> None:
+    graph = FakeGraphOperations(precommit_failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE")
+    coordinator, workflows, _analyses, _, _, _, _ = _coordinator(graph=graph)
+    plan, checkpoint = _registered_checkpoint(coordinator, workflows)
+    checkpoint = coordinator.advance_analyses(
+        plan,
+        checkpoint,
+        _actor(),
+        ANALYSIS_POLICY,
+        at=NOW + timedelta(minutes=1),
+    )
+    checkpoint = coordinator.advance_analyses(
+        plan,
+        checkpoint,
+        _actor(),
+        ANALYSIS_POLICY,
+        at=NOW + timedelta(minutes=1),
+    )
+    pinned = coordinator.publish_next_graph_batch(
+        plan,
+        checkpoint,
+        _actor(),
+        GRAPH_INPUT,
+        at=NOW + timedelta(minutes=2),
+    )
+    failed = coordinator.publish_next_graph_batch(
+        plan,
+        pinned,
+        _actor(),
+        GRAPH_INPUT,
+        at=NOW + timedelta(minutes=3),
+    )
+    assert failed.failure is not None
+    assert failed.failure.code == "APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE"
+    assert failed.failure.retryable is True
+    assert failed.graph_publications == ()
+
+    replacement_value = {
+        **GRAPH_INPUT.model_dump(mode="json", exclude={"authorization_sha256", "authorized_at"}),
+        "authorized_at": (NOW + timedelta(minutes=4)).isoformat().replace("+00:00", "Z"),
+        "supersedes_authorization_sha256": GRAPH_INPUT.authorization_sha256,
+    }
+    replacement = MockExamGraphPublicationInputV1.model_validate(
+        {
+            **replacement_value,
+            "authorization_sha256": content_sha256(replacement_value),
+        }
+    )
+    changed_base_value = {
+        **replacement_value,
+        "current_graph_snapshot_revision_id": _hex_id("graphrev_", 778),
+        "current_graph_snapshot_sha256": _sha(778),
+    }
+    changed_base = MockExamGraphPublicationInputV1.model_validate(
+        {
+            **changed_base_value,
+            "authorization_sha256": content_sha256(changed_base_value),
+        }
+    )
+    with pytest.raises(
+        MockExamProductionCoordinatorError,
+        match="pinned Graph publication authorization",
+    ):
+        coordinator.publish_next_graph_batch(
+            plan,
+            failed,
+            _actor(),
+            changed_base,
+            at=NOW + timedelta(minutes=4),
+        )
+    unknown_outcome = failed.model_copy(
+        update={
+            "failure": failed.failure.model_copy(
+                update={"code": "GRAPH_PUBLICATION_OUTCOME_UNKNOWN"}
+            )
+        }
+    )
+    with pytest.raises(
+        MockExamProductionCoordinatorError,
+        match="pinned Graph publication authorization",
+    ):
+        coordinator.publish_next_graph_batch(
+            plan,
+            unknown_outcome,
+            _actor(),
+            replacement,
+            at=NOW + timedelta(minutes=4),
+        )
+
+    authorized = coordinator.publish_next_graph_batch(
+        plan,
+        failed,
+        _actor(),
+        replacement,
+        at=NOW + timedelta(minutes=4),
+    )
+    assert authorized.failure is None
+    assert authorized.graph_publication_authorization is not None
+    assert authorized.graph_publication_authorization.model_dump(
+        mode="json"
+    ) == replacement.model_dump(mode="json")
+    assert authorized.graph_publications == ()
+    assert _monotonic_successor(failed, authorized)
+
+    published = coordinator.publish_next_graph_batch(
+        plan,
+        authorized,
+        _actor(),
+        replacement,
+        at=NOW + timedelta(minutes=5),
+    )
+    assert len(published.graph_publications) == 1
+    assert len(graph.commands) == 2
+    assert graph.commands[0].idempotency_key != graph.commands[1].idempotency_key
 
 
 def test_graph_response_loss_replays_exact_authorized_atomic_25_command(

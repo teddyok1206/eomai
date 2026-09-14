@@ -28,6 +28,10 @@ from eom_api_contracts.mock_exam_execution import (
 )
 from pydantic import ValidationError
 
+from eom_api.services.mock_exam_graph_authorization_recovery import (
+    graph_authorization_supersession_is_valid,
+)
+
 _EXECUTION_ID = re.compile(r"^productionexec_[0-9a-f]{32}$")
 _REVISION_ID = re.compile(r"^productionexecrev_[0-9a-f]{32}$")
 _MAX_CHECKPOINT_BYTES = 2 * 1024 * 1024
@@ -757,18 +761,8 @@ def _monotonic_successor(
                 or successor.failure != current.failure
             ):
                 return False
-        elif (
-            current.graph_publications
-            or current.failure is None
-            or current.failure.stage != "GRAPH_PUBLICATION"
-            or current.failure.code != "KNOWLEDGE_GRAPH_STALE_CURRENT"
-            or after_graph_authorization.supersedes_authorization_sha256
-            != before_graph_authorization.authorization_sha256
-            or after_graph_authorization.access_policy_revision_id
-            != before_graph_authorization.access_policy_revision_id
-            or after_graph_authorization.access_policy_sha256
-            != before_graph_authorization.access_policy_sha256
-            or successor.failure is not None
+        elif successor.failure is not None or not graph_authorization_supersession_is_valid(
+            current, after_graph_authorization
         ):
             return False
     if (

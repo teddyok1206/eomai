@@ -122,6 +122,10 @@ from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_workflow_runner.repository import CommandType
 
+from eom_api.services.mock_exam_graph_authorization_recovery import (
+    graph_authorization_supersession_is_valid,
+)
+
 
 class MockExamProductionCoordinatorError(RuntimeError):
     """Stable local contract error; operational failures are recorded in checkpoints."""
@@ -1719,25 +1723,13 @@ class MockExamProductionCoordinator:
                 failure=None,
             )
         if checkpoint.graph_publication_authorization != authorization:
-            previous_authorization = checkpoint.graph_publication_authorization
-            stale_failure = checkpoint.failure
-            if (
-                checkpoint.graph_publications
-                or stale_failure is None
-                or stale_failure.stage != "GRAPH_PUBLICATION"
-                or stale_failure.code != "KNOWLEDGE_GRAPH_STALE_CURRENT"
-                or authorization.supersedes_authorization_sha256
-                != previous_authorization.authorization_sha256
-                or authorization.access_policy_revision_id
-                != previous_authorization.access_policy_revision_id
-                or authorization.access_policy_sha256 != previous_authorization.access_policy_sha256
-            ):
+            if not graph_authorization_supersession_is_valid(checkpoint, authorization):
                 _raise(
                     "PRODUCTION_GRAPH_AUTHORIZATION_MISMATCH",
                     "resume input differs from the pinned Graph publication authorization",
                 )
-            # KNOWLEDGE_GRAPH_STALE_CURRENT is the only Catalog outcome that proves no Graph
-            # publication committed. Persist the replacement authorization before retrying it.
+            # Persist the exact replacement before retrying so its new idempotency identity is
+            # durable independently of the subsequent Catalog outcome.
             return _advance_checkpoint(
                 checkpoint,
                 at=max(at, authorization.authorized_at),
