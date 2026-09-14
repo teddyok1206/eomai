@@ -1262,10 +1262,9 @@ class WorkflowCatalogService:
                         ),
                     }
                 )
-                if isinstance(brief, ContentTeamItemBriefV4):
-                    metadata["material_requirement"] = brief.material_requirement.model_dump(
-                        mode="json"
-                    )
+                # The material requirement is already pinned by the immutable Workflow request
+                # and ITEM_CONTENT provenance.  Do not duplicate it into this Pack-owned metadata
+                # object: released content-team metadata schemas deliberately reject extra keys.
             elif isinstance(brief, ItemBriefV2):
                 metadata_schema = "eom://metadata/general-knowledge-item@2.0"
                 metadata.update(

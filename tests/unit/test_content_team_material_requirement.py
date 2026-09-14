@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from eom_api.services.command_adapter import _workflow_request_from_api
@@ -21,6 +24,7 @@ from eom_catalog_contracts import (
 from eom_catalog_service.content_pack_files import build_pack, compile_pack
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_hwpx_contracts import ContentTeamImageSlot, ContentTeamTable
+from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_workflow import ContentTeamItemBriefV4
 from eom_workflow.schemas import (
     load_content_team_editorial_material_schema,
@@ -30,6 +34,7 @@ from eom_workflow.schemas import (
     load_knowledge_item_brief_v4_schema,
 )
 from eom_workflow_runner.engine import _authoring_material_requirement
+from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from referencing import Registry, Resource
@@ -39,6 +44,22 @@ from tests.unit.test_content_team_v3_protocol import _content_v3
 ROOT = Path(__file__).resolve().parents[2]
 PACK = ROOT / "content/packs/generated-knowledge-item/1.16.0"
 PACK_SUCCESSOR = ROOT / "content/packs/generated-knowledge-item/1.16.1"
+
+
+class _RegistrationCapture:
+    def __init__(self) -> None:
+        self.request: RegistrationRequest | None = None
+
+    def register(self, request: RegistrationRequest) -> Any:
+        self.request = request
+        return SimpleNamespace(
+            item_id="item_" + "1" * 32,
+            item_revision_id="itemrev_" + "2" * 32,
+            revision_number=1,
+            manifest_artifact_id="artifact_" + "3" * 32,
+            manifest_artifact_revision_id="rev_" + "4" * 32,
+            manifest_sha256="sha256:" + "5" * 64,
+        )
 
 
 def _table(label: str = "") -> ContentTeamTable:
@@ -314,6 +335,85 @@ def test_v4_api_request_maps_to_internal_brief_and_skips_image_profile_for_table
 def test_v4_api_request_rejects_image_capability_drift() -> None:
     with pytest.raises(ValueError, match="image capability"):
         _brief_request(form="TABLE", panel_count=1, image_mode="required")
+
+
+def test_v4_registration_metadata_matches_immutable_pack_schema_without_derived_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _workflow_request_from_api(
+        _brief_request(form="TABLE", panel_count=1, image_mode="skip")
+    )
+    capture = _RegistrationCapture()
+    service = object.__new__(WorkflowCatalogService)
+    service.registry = cast(Any, capture)
+
+    def no_receipts(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+
+    def item_content(*args: Any, **kwargs: Any) -> ComponentPointer:
+        del args, kwargs
+        return ComponentPointer(
+            component_type="ITEM_CONTENT",
+            ordinal=0,
+            schema_ref="eom://schemas/item-registry/assessment-item-content-v3",
+            media_type="application/json",
+            artifact_id="artifact_" + "6" * 32,
+            artifact_revision_id="rev_" + "7" * 32,
+            sha256="sha256:" + "8" * 64,
+            logical_name="assessment-item-content.json",
+        )
+
+    def no_images(*args: Any, **kwargs: Any) -> tuple[()]:
+        del args, kwargs
+        return ()
+
+    monkeypatch.setattr(
+        WorkflowCatalogService,
+        "_require_evidence_usage_receipts",
+        no_receipts,
+    )
+    monkeypatch.setattr(WorkflowCatalogService, "_knowledge_item_content", item_content)
+    monkeypatch.setattr(
+        WorkflowCatalogService,
+        "_content_team_image_components",
+        no_images,
+    )
+    workflow = cast(
+        WorkflowInstanceRecord,
+        SimpleNamespace(
+            workflow_id="workflow_" + "9" * 32,
+            definition_key="generic-item-development",
+            definition_version="1.10.0",
+            created_actor_id="operator_" + "a" * 32,
+            runtime_context={
+                "content_pack": {
+                    "release_id": "packrel_" + "b" * 32,
+                    "release_sha256": "sha256:" + "c" * 64,
+                },
+                "registry_intent": {"mode": "CREATE_ITEM"},
+                "source_intake": {"batch_ids": []},
+            },
+        ),
+    )
+    step = cast(
+        WorkflowStepRunRecord,
+        SimpleNamespace(step_key="registration", attempt=1, step_run_id="steprun_" + "d" * 32),
+    )
+
+    service.register_workflow(workflow=workflow, step=step, request=request, artifacts=())
+
+    assert capture.request is not None
+    schema = json.loads(
+        (PACK_SUCCESSOR / "metadata-schemas/item-metadata.schema.json").read_text(encoding="utf-8")
+    )
+    Draft202012Validator(schema).validate(capture.request.metadata)
+    assert capture.request.metadata_schema_ref == "eom://metadata/content-team-item@1.0"
+    assert "material_requirement" not in capture.request.metadata
+    assert service._brief_provenance_metadata(request)["material_requirement"] == (
+        request.item_brief.material_requirement.model_dump(mode="json")
+        if isinstance(request.item_brief, ContentTeamItemBriefV4)
+        else None
+    )
 
 
 def test_v4_brief_schema_resolves_only_pinned_local_resources() -> None:
