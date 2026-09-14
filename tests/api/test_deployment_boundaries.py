@@ -96,10 +96,14 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert source.index("verify_mock_exam_deployment_admission\n") < source.index(
         "prepare_runtime_dependencies\n"
     )
-    assert source.count("    verify_mock_exam_deployment_admission\n") == 2
-    assert source.rindex("    verify_mock_exam_deployment_admission\n") < source.index(
-        "    install_wheels\n"
+    assert source.count("    verify_mock_exam_deployment_admission\n") == 3
+    first_admission = source.index("    verify_mock_exam_deployment_admission\n")
+    second_admission = source.index(
+        "    verify_mock_exam_deployment_admission\n", first_admission + 1
     )
+    final_admission = source.rindex("    verify_mock_exam_deployment_admission\n")
+    assert first_admission < second_admission < source.index("    install_wheels\n")
+    assert source.index("    install_service\n") < final_admission
     assert source.index("require_clean_tree\n") < source.index(
         "verify_mock_exam_deployment_admission\n"
     )
@@ -122,6 +126,9 @@ def test_mock_exam_deployment_admission_uses_installed_unprivileged_contract_bou
     execute = "sudo -n -u eom-api /usr/bin/env -i"
     assert boundary.index(install) < boundary.index(execute)
     assert '"${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"' in boundary
+    assert 'if [[ -n "${RECOVERY_EXECUTION_ID}" ]]' in boundary
+    assert "--admit-exact-retryable-blocked" in boundary
+    assert '"${RECOVERY_CHECKPOINT_SHA256}"' in boundary
     assert "from eom_api_contracts.mock_exam_execution import (" in guard
     assert "MockExamProductionExecution," in guard
     assert "checkpoint: MockExamProductionExecution = TypeAdapter(" in guard

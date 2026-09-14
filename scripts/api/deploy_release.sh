@@ -58,13 +58,25 @@ RELEASE_PRODUCTION_PLAN_SHA256=""
 RELEASE_OPERATOR_ID=""
 RELEASE_RECEIPT_SHA256=""
 RELEASE_WHEEL_INSPECTION_IDENTITY=""
+RECOVERY_EXECUTION_ID=""
+RECOVERY_EXECUTION_REVISION_ID=""
+RECOVERY_CHECKPOINT_SHA256=""
+RECOVERY_FAILURE_CODE=""
 
 usage() {
   printf '%s\n' "usage: $0 [--build-only|--install|--install-preserve-workflow-runner-inactive|--verify]" \
+    "       $0 --install-recover-retryable-blocked EXECUTION_ID EXECUTION_REVISION_ID CHECKPOINT_SHA256 FAILURE_CODE" \
     "       $0 --release-workflow-runner-hold RECEIPT_FILE EXECUTION_ID EXECUTION_REVISION_ID CHECKPOINT_SHA256 PRODUCTION_REQUEST_ID PRODUCTION_PLAN_ID PRODUCTION_PLAN_SHA256 OPERATOR_ID RECEIPT_SHA256"
 }
 
-if (($# > 0)) && [[ "$1" == "--release-workflow-runner-hold" ]]; then
+if (($# > 0)) && [[ "$1" == "--install-recover-retryable-blocked" ]]; then
+  (($# == 5)) || { usage >&2; exit 2; }
+  ACTION="install"
+  RECOVERY_EXECUTION_ID="$2"
+  RECOVERY_EXECUTION_REVISION_ID="$3"
+  RECOVERY_CHECKPOINT_SHA256="$4"
+  RECOVERY_FAILURE_CODE="$5"
+elif (($# > 0)) && [[ "$1" == "--release-workflow-runner-hold" ]]; then
   (($# == 10)) || { usage >&2; exit 2; }
   ACTION="release-workflow-runner-hold"
   RELEASE_RECEIPT_FILE="$2"
@@ -732,6 +744,7 @@ release_workflow_runner_deployment_hold_after_verified_receipt() {
 }
 
 verify_mock_exam_deployment_admission() {
+  local -a admission_arguments=()
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   # Establish a root-owned code boundary, then drop privileges before the helper
   # reads eom-api-owned checkpoints. Mutable repository Python is never run as root.
@@ -743,11 +756,21 @@ verify_mock_exam_deployment_admission() {
     "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \
     "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}" || \
     fail "installed mock-exam deployment admission source drift"
+  if [[ -n "${RECOVERY_EXECUTION_ID}" ]]; then
+    admission_arguments=(
+      --admit-exact-retryable-blocked
+      "${RECOVERY_EXECUTION_ID}"
+      "${RECOVERY_EXECUTION_REVISION_ID}"
+      "${RECOVERY_CHECKPOINT_SHA256}"
+      "${RECOVERY_FAILURE_CODE}"
+    )
+  fi
   sudo -n -u eom-api /usr/bin/env -i \
     HOME=/var/lib/eom-api \
     PATH=/usr/bin:/bin \
     PYTHONSAFEPATH=1 \
-    "${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}"
+    "${API_PYTHON}" -I "${MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET}" \
+    "${admission_arguments[@]}"
 }
 
 prepare_runtime_dependencies() {
@@ -2548,6 +2571,13 @@ case "${ACTION}" in
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges
     install_service
+    if [[ -n "${RECOVERY_EXECUTION_ID}" ]]; then
+      # The mock-exam coordinator has no autonomous checkpoint writer. Recheck the exact
+      # operator-authorized pointer after service replacement before declaring recovery ready.
+      verify_mock_exam_deployment_admission
+      printf 'mock_exam_recovery_deployment=READY execution_id=%s\n' \
+        "${RECOVERY_EXECUTION_ID}"
+    fi
     if [[ "${PRESERVE_WORKFLOW_RUNNER_INACTIVE}" == true ]]; then
       printf '%s\n' "workflow_runner_deployment_hold=ACTIVE"
       printf '%s\n' \

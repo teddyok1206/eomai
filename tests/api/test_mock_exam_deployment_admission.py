@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import UTC, datetime, timedelta
@@ -36,6 +37,8 @@ from eom_catalog_contracts import (
 
 from scripts.api.verify_mock_exam_deployment_admission import (
     DeploymentAdmissionError,
+    ExactRetryableBlockedAdmission,
+    RecoveryCheckpointObservation,
     _installed_contract_validator,
     inspect_checkpoint_root,
 )
@@ -57,15 +60,20 @@ def _write_checkpoint(
     state: str,
     *,
     retryable: bool | None = None,
-) -> None:
+    execution_revision_id: str | None = None,
+    failure_code: str | None = None,
+) -> Path:
     directory = root / execution_id
     directory.mkdir(mode=0o750)
     current = directory / "current.json"
-    current.write_text(
-        json.dumps({"execution_id": execution_id, "state": state, "retryable": retryable}),
-        encoding="ascii",
-    )
+    value = {"execution_id": execution_id, "state": state, "retryable": retryable}
+    if execution_revision_id is not None:
+        value["execution_revision_id"] = execution_revision_id
+    if failure_code is not None:
+        value["failure_code"] = failure_code
+    current.write_text(json.dumps(value), encoding="ascii")
     current.chmod(0o640)
+    return current
 
 
 def _inspect(root: Path) -> int:
@@ -75,6 +83,17 @@ def _inspect(root: Path) -> int:
         expected_owner_uid=os.geteuid(),
         expected_owner_gid=os.getegid(),
     ).terminal_execution_count
+
+
+def _recovery_validator(payload: bytes) -> RecoveryCheckpointObservation:
+    value = json.loads(payload)
+    return RecoveryCheckpointObservation(
+        execution_id=value["execution_id"],
+        execution_revision_id=value["execution_revision_id"],
+        state=value["state"],
+        retryable=value["retryable"],
+        failure_code=value["failure_code"],
+    )
 
 
 def test_missing_or_terminal_checkpoint_root_admits_deployment(tmp_path: Path) -> None:
@@ -114,6 +133,121 @@ def test_retryable_blocked_checkpoint_refuses_deployment(tmp_path: Path) -> None
 
     with pytest.raises(DeploymentAdmissionError, match="NONTERMINAL_EXECUTION_PRESENT"):
         _inspect(root)
+
+
+def test_exact_retryable_blocked_checkpoint_admits_explicit_recovery_deployment(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "production"
+    root.mkdir(mode=0o750)
+    execution_id = "productionexec_" + "1" * 32
+    execution_revision_id = "productionexecrev_" + "2" * 32
+    current = _write_checkpoint(
+        root,
+        execution_id,
+        "BLOCKED",
+        retryable=True,
+        execution_revision_id=execution_revision_id,
+        failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    )
+    admission = ExactRetryableBlockedAdmission(
+        execution_id=execution_id,
+        execution_revision_id=execution_revision_id,
+        checkpoint_sha256="sha256:" + hashlib.sha256(current.read_bytes()).hexdigest(),
+        failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    )
+
+    result = inspect_checkpoint_root(
+        root,
+        validator=_validator,
+        expected_owner_uid=os.geteuid(),
+        expected_owner_gid=os.getegid(),
+        recovery_admission=admission,
+        recovery_validator=_recovery_validator,
+    )
+
+    assert result.terminal_execution_count == 0
+    assert result.recovery_execution_id == execution_id
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "error"),
+    (
+        ("execution_revision_id", "productionexecrev_" + "3" * 32, "MISMATCH"),
+        ("checkpoint_sha256", "sha256:" + "4" * 64, "MISMATCH"),
+        ("failure_code", "DIFFERENT_RETRYABLE_FAILURE", "MISMATCH"),
+    ),
+)
+def test_recovery_deployment_rejects_any_authorization_pointer_drift(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+    error: str,
+) -> None:
+    root = tmp_path / "production"
+    root.mkdir(mode=0o750)
+    execution_id = "productionexec_" + "1" * 32
+    execution_revision_id = "productionexecrev_" + "2" * 32
+    current = _write_checkpoint(
+        root,
+        execution_id,
+        "BLOCKED",
+        retryable=True,
+        execution_revision_id=execution_revision_id,
+        failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    )
+    values = {
+        "execution_id": execution_id,
+        "execution_revision_id": execution_revision_id,
+        "checkpoint_sha256": "sha256:" + hashlib.sha256(current.read_bytes()).hexdigest(),
+        "failure_code": "APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    }
+    values[field] = replacement
+    admission = ExactRetryableBlockedAdmission(**values)
+
+    with pytest.raises(DeploymentAdmissionError, match=error):
+        inspect_checkpoint_root(
+            root,
+            validator=_validator,
+            expected_owner_uid=os.geteuid(),
+            expected_owner_gid=os.getegid(),
+            recovery_admission=admission,
+            recovery_validator=_recovery_validator,
+        )
+
+
+def test_recovery_deployment_still_rejects_a_second_nonterminal_execution(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "production"
+    root.mkdir(mode=0o750)
+    execution_id = "productionexec_" + "1" * 32
+    execution_revision_id = "productionexecrev_" + "2" * 32
+    current = _write_checkpoint(
+        root,
+        execution_id,
+        "BLOCKED",
+        retryable=True,
+        execution_revision_id=execution_revision_id,
+        failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    )
+    _write_checkpoint(root, "productionexec_" + "3" * 32, "GRAPH_PUBLICATION")
+    admission = ExactRetryableBlockedAdmission(
+        execution_id=execution_id,
+        execution_revision_id=execution_revision_id,
+        checkpoint_sha256="sha256:" + hashlib.sha256(current.read_bytes()).hexdigest(),
+        failure_code="APPROVED_ITEM_GRAPH_ANALYSIS_INELIGIBLE",
+    )
+
+    with pytest.raises(DeploymentAdmissionError, match="NONTERMINAL_EXECUTION_PRESENT"):
+        inspect_checkpoint_root(
+            root,
+            validator=_validator,
+            expected_owner_uid=os.geteuid(),
+            expected_owner_gid=os.getegid(),
+            recovery_admission=admission,
+            recovery_validator=_recovery_validator,
+        )
 
 
 def test_contract_terminal_rule_distinguishes_retryable_blocked_execution() -> None:
