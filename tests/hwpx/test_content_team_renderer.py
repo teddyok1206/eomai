@@ -479,8 +479,16 @@ def test_v2_renderer_replaces_image_slots_with_exact_pinned_pngs(
         for ordinal, image in enumerate(images):
             assert archive.read(f"BinData/content-team-visual-{ordinal}.png") == image
         section = archive.read("Contents/section0.xml")
+        content = parse_xml(archive.read("Contents/content.hpf"), "Contents/content.hpf").root
+    manifest_items = {
+        element.get("id"): element
+        for element in content.iter()
+        if local_name(element.tag) == "item"
+    }
     for ordinal in range(image_count):
-        assert f"eomContentTeamVisual{ordinal}".encode() in section
+        binary_id = f"eomContentTeamVisual{ordinal}"
+        assert binary_id.encode() in section
+        assert manifest_items[binary_id].get("isEmbeded") == "1"
     assert "그림 삽입" not in section.decode("utf-8")
     _assert_separate_png_cells_and_text_label_row(section, image_count)
 

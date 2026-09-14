@@ -293,6 +293,16 @@ def test_exam_merger_is_deterministic_and_remaps_each_item_binary_pointer(tmp_pa
         "section1": "Contents/section1.xml",
         "eomExam002Binary000": "BinData/item-002-000.png",
     }
+    embedded_entries = {
+        _attribute(element, "id"): _attribute(element, "isEmbeded")
+        for element in manifest
+        if local_name(element.tag) == "item"
+        and (_attribute(element, "href") or "").startswith("BinData/")
+    }
+    assert embedded_entries == {
+        "eomExam001Binary000": "1",
+        "eomExam002Binary000": "1",
+    }
     spine = next(element for element in content.iter() if local_name(element.tag) == "spine")
     assert tuple(
         _attribute(element, "idref") for element in spine if local_name(element.tag) == "itemref"

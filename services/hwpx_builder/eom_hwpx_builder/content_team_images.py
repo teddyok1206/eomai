@@ -232,7 +232,12 @@ def inject_content_team_images(
         etree.SubElement(
             manifests[0],
             OPF + "item",
-            {"id": binary_id, "href": f"../{part_name}", "media-type": "image/png"},
+            {
+                "id": binary_id,
+                "href": f"../{part_name}",
+                "media-type": "image/png",
+                "isEmbeded": "1",
+            },
         )
         added.append((part_name, payload))
     replacements["Contents/section0.xml"] = serialize_xml(section)

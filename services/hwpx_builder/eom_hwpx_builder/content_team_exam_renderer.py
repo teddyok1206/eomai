@@ -722,6 +722,7 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             cloned_binary = copy.deepcopy(binary_item)
             _set_attribute(cloned_binary, "id", new_id)
             _set_attribute(cloned_binary, "href", new_name)
+            _set_attribute(cloned_binary, "isEmbeded", "1")
             first_manifest.append(cloned_binary)
             payloads[new_name] = (
                 entries[binary_name].data,
