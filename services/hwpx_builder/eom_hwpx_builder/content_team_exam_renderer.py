@@ -9,7 +9,7 @@ import stat
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from eom_hwpx_contracts import (
     ContentTeamExamBuildResult,
@@ -68,6 +68,20 @@ MAX_EXAM_PACKAGE_BYTES = 64 * 1024 * 1024
 MAX_HANDOFF_BYTES = 64 * 1024 * 1024
 
 _PLANNED_SCORE_DISPLAY = {1500: "1.5", 2000: "2", 2500: "2.5", 3000: "3"}
+
+_HEADER_RESOURCE_CATALOGS = (
+    "tabProperties",
+    "charProperties",
+    "paraProperties",
+    "styles",
+)
+_SECTION_RESOURCE_REFERENCES = {
+    "tabpridref": "tabProperties",
+    "charpridref": "charProperties",
+    "parapridref": "paraProperties",
+    "styleidref": "styles",
+    "charstyleidref": "styles",
+}
 
 
 def _load_exam_request(raw: dict[str, Any]) -> ContentTeamExamRenderRequestContract:
@@ -220,50 +234,341 @@ def _binary_manifest_items(
     return tuple(result)
 
 
-def _attributes_without(element: etree._Element, *ignored: str) -> dict[str, str]:
-    ignored_names = frozenset(ignored)
-    return {
-        str(key): str(value)
-        for key, value in element.attrib.items()
-        if local_name(key) not in ignored_names
-    }
+def _remove_attribute(element: etree._Element, name: str) -> None:
+    for key in tuple(element.attrib):
+        if local_name(key).casefold() == name.casefold():
+            del element.attrib[key]
 
 
-def _header_node_covers(
-    candidate: etree._Element,
-    required: etree._Element,
-    *,
-    root: bool = False,
-) -> bool:
-    """Return whether one reviewed header is an append-only superset of another."""
+def _header_catalog(root: etree._Element, name: str) -> etree._Element | None:
+    matches = tuple(element for element in root.iter() if local_name(element.tag) == name)
+    if len(matches) > 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team header resource catalog is ambiguous",
+        )
+    return matches[0] if matches else None
 
-    ignored = ("secCnt",) if root else ()
-    if (
-        candidate.tag != required.tag
-        or candidate.text != required.text
-        or candidate.tail != required.tail
-        or _attributes_without(candidate, "itemCnt", *ignored)
-        != _attributes_without(required, "itemCnt", *ignored)
-    ):
-        return False
-    candidate_count = _attribute(candidate, "itemCnt")
-    required_count = _attribute(required, "itemCnt")
-    if (candidate_count is None) != (required_count is None):
-        return False
-    if candidate_count is not None and required_count is not None:
+
+def _catalog_rows(
+    catalog: etree._Element | None,
+) -> tuple[tuple[str, etree._Element], ...]:
+    if catalog is None:
+        return ()
+    if catalog.text is not None and catalog.text.strip():
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team header resource catalog contains unexpected text",
+        )
+    count = _attribute(catalog, "itemCnt")
+    if count is None:
+        if len(catalog):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team header resource count is missing",
+            )
+    else:
         try:
-            if int(candidate_count) != len(candidate) or int(required_count) != len(required):
-                return False
+            valid_count = int(count) == len(catalog)
         except ValueError:
-            return False
-        if len(candidate) < len(required):
-            return False
-    elif len(candidate) != len(required):
-        return False
-    return all(
-        _header_node_covers(candidate_child, required_child)
-        for candidate_child, required_child in zip(candidate, required, strict=False)
-    )
+            valid_count = False
+        if not valid_count:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team header resource count differs",
+            )
+    rows: list[tuple[str, etree._Element]] = []
+    identifiers: set[int] = set()
+    for child in catalog:
+        identifier = _attribute(child, "id")
+        if identifier is None:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team header resource identity is invalid",
+            )
+        try:
+            numeric_id = int(identifier)
+        except ValueError as exc:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team header resource identity is invalid",
+            ) from exc
+        if numeric_id < 0 or numeric_id in identifiers:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team header resource identity is invalid",
+            )
+        identifiers.add(numeric_id)
+        rows.append((identifier, child))
+    return tuple(rows)
+
+
+def _header_skeleton(root: etree._Element) -> bytes:
+    skeleton = copy.deepcopy(root)
+    _remove_attribute(skeleton, "secCnt")
+    for name in _HEADER_RESOURCE_CATALOGS:
+        catalog = _header_catalog(skeleton, name)
+        _catalog_rows(catalog)
+        if catalog is None:
+            continue
+        for child in tuple(catalog):
+            catalog.remove(child)
+        catalog.text = None
+        _remove_attribute(catalog, "itemCnt")
+    return cast(bytes, etree.tostring(skeleton, encoding="utf-8", with_tail=False))
+
+
+def _definition_key(element: etree._Element, catalog_name: str) -> bytes:
+    clone = copy.deepcopy(element)
+    identifier = _attribute(clone, "id")
+    _remove_attribute(clone, "id")
+    clone.tail = None
+    if catalog_name == "styles":
+        next_style = _attribute(clone, "nextStyleIDRef")
+        if next_style is not None and next_style == identifier:
+            _set_attribute(clone, "nextStyleIDRef", "__SELF__")
+    return cast(bytes, etree.tostring(clone, encoding="utf-8", with_tail=False))
+
+
+def _remap_attributes(
+    element: etree._Element,
+    attributes: dict[str, tuple[dict[str, str], bool]],
+) -> None:
+    for node in element.iter():
+        for key, value in tuple(node.attrib.items()):
+            target = attributes.get(local_name(key).casefold())
+            if target is None:
+                continue
+            mapping, catalog_exists = target
+            if not catalog_exists:
+                continue
+            replacement = mapping.get(str(value))
+            if replacement is None:
+                raise HwpxError(
+                    HwpxErrorCode.HWPX_REFERENCE_BROKEN,
+                    "content-team header resource reference is missing",
+                )
+            node.attrib[key] = replacement
+
+
+def _next_resource_id(used: set[int], preferred: str, next_candidate: int) -> tuple[str, int]:
+    numeric = int(preferred)
+    if numeric not in used:
+        used.add(numeric)
+        return str(numeric), max(next_candidate, numeric + 1)
+    allocated = next_candidate
+    while allocated in used:
+        allocated += 1
+    used.add(allocated)
+    return str(allocated), allocated + 1
+
+
+def _validate_header_resource_references(
+    rows: dict[str, tuple[tuple[str, etree._Element], ...]],
+    mappings: dict[str, dict[str, str]],
+    catalog_names: frozenset[str],
+) -> None:
+    for _source_id, source in rows["paraProperties"]:
+        _remap_attributes(
+            copy.deepcopy(source),
+            {
+                "tabpridref": (
+                    mappings.get("tabProperties", {}),
+                    "tabProperties" in catalog_names,
+                )
+            },
+        )
+    for _source_id, source in rows["styles"]:
+        _remap_attributes(
+            copy.deepcopy(source),
+            {
+                "charpridref": (
+                    mappings.get("charProperties", {}),
+                    "charProperties" in catalog_names,
+                ),
+                "parapridref": (
+                    mappings.get("paraProperties", {}),
+                    "paraProperties" in catalog_names,
+                ),
+                "nextstyleidref": (
+                    mappings.get("styles", {}),
+                    "styles" in catalog_names,
+                ),
+            },
+        )
+
+
+def _merge_header_resources(
+    roots: tuple[etree._Element, ...],
+) -> tuple[
+    etree._Element,
+    tuple[dict[str, dict[str, str]], ...],
+    frozenset[str],
+]:
+    if not roots:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team exam has no header resources",
+        )
+    expected_skeleton = _header_skeleton(roots[0])
+    if any(_header_skeleton(root) != expected_skeleton for root in roots[1:]):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team item header changed outside renderer-owned resources",
+        )
+
+    merged = copy.deepcopy(roots[0])
+    merged_catalogs = {name: _header_catalog(merged, name) for name in _HEADER_RESOURCE_CATALOGS}
+    catalog_names = frozenset(name for name, value in merged_catalogs.items() if value is not None)
+    indexes: dict[str, dict[bytes, str]] = {}
+    used_ids: dict[str, set[int]] = {}
+    next_ids: dict[str, int] = {}
+    first_mapping: dict[str, dict[str, str]] = {}
+    first_rows: dict[str, tuple[tuple[str, etree._Element], ...]] = {}
+    for name, catalog in merged_catalogs.items():
+        rows = _catalog_rows(catalog)
+        first_rows[name] = rows
+        identity_mapping = {identifier: identifier for identifier, _child in rows}
+        first_mapping[name] = identity_mapping
+        indexes[name] = {}
+        used_ids[name] = {int(identifier) for identifier in identity_mapping}
+        next_ids[name] = max(used_ids[name], default=-1) + 1
+        for identifier, child in rows:
+            indexes[name].setdefault(_definition_key(child, name), identifier)
+    _validate_header_resource_references(first_rows, first_mapping, catalog_names)
+
+    all_mappings: list[dict[str, dict[str, str]]] = [first_mapping]
+    for root in roots[1:]:
+        source_catalogs = {name: _header_catalog(root, name) for name in _HEADER_RESOURCE_CATALOGS}
+        if (
+            frozenset(name for name, value in source_catalogs.items() if value is not None)
+            != catalog_names
+        ):
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team item header resource catalogs differ",
+            )
+        source_rows = {name: _catalog_rows(catalog) for name, catalog in source_catalogs.items()}
+        mappings: dict[str, dict[str, str]] = {}
+        for name in ("tabProperties", "charProperties", "paraProperties"):
+            mapping: dict[str, str] = {}
+            target = merged_catalogs[name]
+            for source_id, source in source_rows[name]:
+                clone = copy.deepcopy(source)
+                if name == "paraProperties":
+                    _remap_attributes(
+                        clone,
+                        {
+                            "tabpridref": (
+                                mappings.get("tabProperties", {}),
+                                "tabProperties" in catalog_names,
+                            )
+                        },
+                    )
+                key = _definition_key(clone, name)
+                output_id = indexes[name].get(key)
+                if output_id is None:
+                    if target is None:
+                        raise HwpxError(
+                            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                            "content-team header resource target is missing",
+                        )
+                    output_id, next_ids[name] = _next_resource_id(
+                        used_ids[name], source_id, next_ids[name]
+                    )
+                    _set_attribute(clone, "id", output_id)
+                    target.append(clone)
+                    indexes[name][key] = output_id
+                mapping[source_id] = output_id
+            mappings[name] = mapping
+
+        style_mapping: dict[str, str] = {}
+        pending_styles: list[tuple[str, str, etree._Element]] = []
+        style_target = merged_catalogs["styles"]
+        for source_id, source in source_rows["styles"]:
+            clone = copy.deepcopy(source)
+            _remap_attributes(
+                clone,
+                {
+                    "charpridref": (
+                        mappings.get("charProperties", {}),
+                        "charProperties" in catalog_names,
+                    ),
+                    "parapridref": (
+                        mappings.get("paraProperties", {}),
+                        "paraProperties" in catalog_names,
+                    ),
+                },
+            )
+            key = _definition_key(clone, "styles")
+            output_id = indexes["styles"].get(key)
+            if output_id is None:
+                if style_target is None:
+                    raise HwpxError(
+                        HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                        "content-team header style target is missing",
+                    )
+                output_id, next_ids["styles"] = _next_resource_id(
+                    used_ids["styles"], source_id, next_ids["styles"]
+                )
+                indexes["styles"][key] = output_id
+                pending_styles.append((source_id, output_id, clone))
+            style_mapping[source_id] = output_id
+        mappings["styles"] = style_mapping
+        for source_id, output_id, clone in pending_styles:
+            next_style = _attribute(clone, "nextStyleIDRef")
+            if next_style is not None:
+                replacement = style_mapping.get(next_style)
+                if replacement is None:
+                    raise HwpxError(
+                        HwpxErrorCode.HWPX_REFERENCE_BROKEN,
+                        "content-team next-style reference is missing",
+                    )
+                if next_style != source_id and replacement != next_style:
+                    raise HwpxError(
+                        HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                        "content-team cross-style remapping is unsupported",
+                    )
+                _set_attribute(clone, "nextStyleIDRef", replacement)
+            _set_attribute(clone, "id", output_id)
+            if style_target is None:  # pragma: no cover - guarded above
+                raise AssertionError("style target disappeared")
+            style_target.append(clone)
+        for source_id, source in source_rows["styles"]:
+            next_style = _attribute(source, "nextStyleIDRef")
+            if next_style is None or next_style == source_id:
+                continue
+            replacement = style_mapping.get(next_style)
+            if replacement is None or replacement != next_style:
+                raise HwpxError(
+                    HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                    "content-team cross-style remapping is unsupported",
+                )
+        _validate_header_resource_references(source_rows, mappings, catalog_names)
+        all_mappings.append(mappings)
+
+    for catalog in merged_catalogs.values():
+        if catalog is not None and (_attribute(catalog, "itemCnt") is not None or len(catalog)):
+            _set_attribute(catalog, "itemCnt", str(len(catalog)))
+    merged_rows = {name: _catalog_rows(catalog) for name, catalog in merged_catalogs.items()}
+    merged_identity = {
+        name: {identifier: identifier for identifier, _child in rows}
+        for name, rows in merged_rows.items()
+    }
+    _validate_header_resource_references(merged_rows, merged_identity, catalog_names)
+    return merged, tuple(all_mappings), catalog_names
+
+
+def _rewrite_section_resource_references(
+    section: etree._Element,
+    mappings: dict[str, dict[str, str]],
+    catalog_names: frozenset[str],
+) -> None:
+    attributes = {
+        name: (mappings.get(catalog, {}), catalog in catalog_names)
+        for name, catalog in _SECTION_RESOURCE_REFERENCES.items()
+    }
+    _remap_attributes(section, attributes)
 
 
 def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any]:
@@ -273,31 +578,20 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
     first = packages[0]
     first_entries = first.by_name()
     first_content, first_manifest, first_spine, first_section_item = _manifest_parts(first)
-    selected_header = first_entries.get("Contents/header.xml")
-    if selected_header is None:
-        raise HwpxError(
-            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
-            "content-team item has no shared header",
-        )
-    selected_header_root = parse_xml(selected_header.data, "Contents/header.xml").root
-    for package in packages[1:]:
+    header_entries = []
+    header_roots = []
+    for package in packages:
         header = package.by_name().get("Contents/header.xml")
         if header is None:
             raise HwpxError(
                 HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
                 "content-team item has no shared header",
             )
-        header_root = parse_xml(header.data, "Contents/header.xml").root
-        if _header_node_covers(selected_header_root, header_root, root=True):
-            continue
-        if _header_node_covers(header_root, selected_header_root, root=True):
-            selected_header = header
-            selected_header_root = header_root
-            continue
-        raise HwpxError(
-            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
-            "exam item headers do not form one reviewed append-only runtime",
-        )
+        header_entries.append(header)
+        header_roots.append(parse_xml(header.data, "Contents/header.xml").root)
+    merged_header, header_mappings, header_catalog_names = _merge_header_resources(
+        tuple(header_roots)
+    )
 
     for child in tuple(first_spine):
         if local_name(child.tag) == "itemref":
@@ -342,16 +636,6 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             )
         _content, manifest, _spine, section_item = _manifest_parts(package)
         entries = package.by_name()
-        header = entries.get("Contents/header.xml")
-        if header is None or not _header_node_covers(
-            selected_header_root,
-            parse_xml(header.data, "Contents/header.xml").root,
-            root=True,
-        ):
-            raise HwpxError(
-                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
-                "exam item header is outside the reviewed append-only runtime",
-            )
         section_href = _attribute(section_item, "href")
         section_id = _attribute(section_item, "id")
         if section_href is None or section_id is None:
@@ -367,6 +651,11 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
                 "exam item section target is missing",
             )
         section = parse_xml(section_entry.data, section_name).root
+        _rewrite_section_resource_references(
+            section,
+            header_mappings[index],
+            header_catalog_names,
+        )
         binary_items = _binary_manifest_items(package, manifest)
         binary_id_map: dict[str, str] = {}
         for binary_number, (binary_item, binary_name) in enumerate(binary_items):
@@ -423,10 +712,10 @@ def _merge_item_packages(items: tuple[Path, ...], output: Path) -> dict[str, Any
             }
         )
 
-    header = copy.deepcopy(selected_header_root)
-    _set_attribute(header, "secCnt", str(len(items)))
+    _set_attribute(merged_header, "secCnt", str(len(items)))
+    selected_header = header_entries[0]
     payloads["Contents/header.xml"] = (
-        _serialize_like(selected_header.data, "Contents/header.xml", header),
+        _serialize_like(selected_header.data, "Contents/header.xml", merged_header),
         selected_header.info.compress_type,
     )
     content_entry = first_entries["Contents/content.hpf"]

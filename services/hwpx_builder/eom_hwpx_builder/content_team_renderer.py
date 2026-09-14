@@ -292,6 +292,9 @@ def _content_team_engine(engine_module: Any) -> Any:
 def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
     """Disambiguate authored ``[풀이] 참조`` from removed template samples."""
 
+    wrong_answer_lines = frozenset(
+        line.strip() for line in question.wrong_answer.splitlines() if line.strip()
+    )
     intentional_references = frozenset(
         f"{label}. [풀이] 참조"
         for label, body in (
@@ -299,7 +302,7 @@ def _content_team_validator_class(validator_module: Any, question: Any) -> Any:
             ("ㄴ", question.solution_na),
             ("ㄷ", question.solution_da),
         )
-        if body.strip() == "[풀이] 참조"
+        if body.strip() == "[풀이] 참조" or f"{label}. [풀이] 참조" in wrong_answer_lines
     )
 
     class InputAwareValidator(validator_module.HwpxValidator):  # type: ignore[misc]
@@ -796,6 +799,7 @@ def _external_render(
         question = parser_module.QuestionParser().parse(
             handoff_markdown.decode("utf-8"),
             question_name=f"item-{rendered_item_number}",
+            is_inquiry_experiment=handoff_draft.inquiry is not None,
         )
         bottom_stem_projection_applied = _bind_typed_bottom_stem_for_handoff(
             question,

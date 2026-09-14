@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Superseded by ADR 0089. The shared-template and atomic-output boundaries remain in force; ADR 0089
+replaces only the append-only header selection rule with deterministic typed resource union and
+section reference remapping.
 
 ## Context and responsibility
 

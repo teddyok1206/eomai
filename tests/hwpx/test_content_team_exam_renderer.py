@@ -298,6 +298,23 @@ def _synthetic_parts_with_header(header: bytes) -> list[tuple[str, bytes, int]]:
     ]
 
 
+def _synthetic_parts_with_header_and_section(
+    header: bytes, section: bytes
+) -> list[tuple[str, bytes, int]]:
+    return [
+        (
+            name,
+            header
+            if name == "Contents/header.xml"
+            else section
+            if name == "Contents/section0.xml"
+            else data,
+            compression,
+        )
+        for name, data, compression in synthetic_parts()
+    ]
+
+
 def test_exam_merger_selects_existing_append_only_header_superset(tmp_path: Path) -> None:
     base_header = (
         b'<?xml version="1.0" encoding="UTF-8"?>'
@@ -324,19 +341,117 @@ def test_exam_merger_selects_existing_append_only_header_superset(tmp_path: Path
     assert b'<paraPr id="1" align="RIGHT"/>' in header
 
 
-def test_exam_merger_rejects_incomparable_header_definitions(tmp_path: Path) -> None:
+def test_exam_merger_unions_conflicting_resources_and_remaps_section_references(
+    tmp_path: Path,
+) -> None:
+    header_prefix = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<header xmlns="urn:synthetic:header" secCnt="1">'
+        b'<tabProperties itemCnt="1"><tabPr id="0"/></tabProperties>'
+        b'<charProperties itemCnt="1"><charPr id="0"/></charProperties>'
+    )
     first_header = (
+        header_prefix + b'<paraProperties itemCnt="1"><paraPr id="0" tabPrIDRef="0" align="LEFT"/>'
+        b"</paraProperties>"
+        b'<styles itemCnt="1"><style id="0" charPrIDRef="0" paraPrIDRef="0" '
+        b'nextStyleIDRef="0"/></styles></header>'
+    )
+    second_header = first_header.replace(b'align="LEFT"', b'align="RIGHT"')
+
+    def section(marker: bytes, *, para_id: bytes = b"0") -> bytes:
+        return (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<section xmlns="urn:synthetic:section"><p paraPrIDRef="'
+            + para_id
+            + b'" styleIDRef="0"><run charPrIDRef="0"><t>'
+            + marker
+            + b"</t></run></p></section>"
+        )
+
+    first = write_hwpx(
+        tmp_path / "first.hwpx",
+        _synthetic_parts_with_header_and_section(first_header, section(b"FIRST")),
+    )
+    second = write_hwpx(
+        tmp_path / "second.hwpx",
+        _synthetic_parts_with_header_and_section(second_header, section(b"SECOND")),
+    )
+    third = write_hwpx(
+        tmp_path / "third.hwpx",
+        _synthetic_parts_with_header_and_section(second_header, section(b"THIRD")),
+    )
+    output = tmp_path / "output/exam.hwpx"
+
+    _merge_item_packages((first, second, third), output)
+
+    with zipfile.ZipFile(output) as archive:
+        header = archive.read("Contents/header.xml")
+        first_section = archive.read("Contents/section0.xml")
+        second_section = archive.read("Contents/section1.xml")
+        third_section = archive.read("Contents/section2.xml")
+    assert b'<paraProperties itemCnt="2">' in header
+    assert b'<paraPr id="0" tabPrIDRef="0" align="LEFT"/>' in header
+    assert b'<paraPr id="1" tabPrIDRef="0" align="RIGHT"/>' in header
+    assert b'<styles itemCnt="2">' in header
+    assert b' id="1" charPrIDRef="0" paraPrIDRef="1" nextStyleIDRef="1"' in header
+    assert b'paraPrIDRef="0" styleIDRef="0"' in first_section
+    assert b'paraPrIDRef="1" styleIDRef="1"' in second_section
+    assert b'paraPrIDRef="1" styleIDRef="1"' in third_section
+
+
+def test_exam_merger_rejects_a_dangling_section_resource_reference(tmp_path: Path) -> None:
+    header = (
         b'<?xml version="1.0" encoding="UTF-8"?>'
         b'<header xmlns="urn:synthetic:header" secCnt="1">'
         b'<paraProperties itemCnt="1"><paraPr id="0" align="LEFT"/></paraProperties>'
         b"</header>"
     )
-    changed_header = first_header.replace(b'align="LEFT"', b'align="RIGHT"')
-    first = write_hwpx(tmp_path / "first.hwpx", _synthetic_parts_with_header(first_header))
-    second = write_hwpx(tmp_path / "second.hwpx", _synthetic_parts_with_header(changed_header))
+    valid_section = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<section xmlns="urn:synthetic:section"><p paraPrIDRef="0"/></section>'
+    )
+    dangling_section = valid_section.replace(b'paraPrIDRef="0"', b'paraPrIDRef="99"')
+    first = write_hwpx(
+        tmp_path / "first.hwpx",
+        _synthetic_parts_with_header_and_section(header, valid_section),
+    )
+    second = write_hwpx(
+        tmp_path / "second.hwpx",
+        _synthetic_parts_with_header_and_section(header, dangling_section),
+    )
 
-    with pytest.raises(HwpxError, match="append-only runtime"):
+    with pytest.raises(HwpxError, match="header resource reference is missing"):
         _merge_item_packages((first, second), tmp_path / "output/exam.hwpx")
+
+
+def test_exam_merger_rejects_static_header_drift_and_duplicate_resource_ids(
+    tmp_path: Path,
+) -> None:
+    base_header = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<header xmlns="urn:synthetic:header" secCnt="1" runtime="reviewed">'
+        b'<paraProperties itemCnt="1"><paraPr id="0" align="LEFT"/></paraProperties>'
+        b"</header>"
+    )
+    first = write_hwpx(tmp_path / "first.hwpx", _synthetic_parts_with_header(base_header))
+    drifted = write_hwpx(
+        tmp_path / "drifted.hwpx",
+        _synthetic_parts_with_header(
+            base_header.replace(b'runtime="reviewed"', b'runtime="unreviewed"')
+        ),
+    )
+    with pytest.raises(HwpxError, match="outside renderer-owned resources"):
+        _merge_item_packages((first, drifted), tmp_path / "drift/output.hwpx")
+
+    duplicate_header = base_header.replace(
+        b'<paraProperties itemCnt="1"><paraPr id="0" align="LEFT"/>',
+        b'<paraProperties itemCnt="2"><paraPr id="0" align="LEFT"/><paraPr id="0" align="RIGHT"/>',
+    )
+    duplicate = write_hwpx(
+        tmp_path / "duplicate.hwpx", _synthetic_parts_with_header(duplicate_header)
+    )
+    with pytest.raises(HwpxError, match="resource identity is invalid"):
+        _merge_item_packages((first, duplicate), tmp_path / "duplicate/output.hwpx")
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")

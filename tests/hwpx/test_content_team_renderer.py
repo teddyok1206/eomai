@@ -34,7 +34,7 @@ from eom_hwpx_contracts import (
 )
 
 from tests.hwpx.helpers import png_bytes
-from tests.hwpx.test_content_team_markdown import GENERAL_ITEM, LABELED_BLOCK_ITEM
+from tests.hwpx.test_content_team_markdown import GENERAL_ITEM, INQUIRY_ITEM, LABELED_BLOCK_ITEM
 
 ROOT = Path(__file__).resolve().parents[2]
 HANDOFF = ROOT / "staging/HwpQuestionEditor_handoff_export.zip"
@@ -181,6 +181,17 @@ def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
         ),
         pytest.param(
             LABELED_BLOCK_ITEM.replace(
+                "ㄴ. 조건에 외부 조건이 일정하다고 제시되어 있으므로 틀리다.",
+                "ㄴ. [풀이] 참조",
+                1,
+            ),
+            0,
+            0,
+            2,
+            id="intentional-wrong-answer-reference-is-not-template-residue",
+        ),
+        pytest.param(
+            LABELED_BLOCK_ITEM.replace(
                 "관측 과정에서 외부 조건은 일정하였다.",
                 "관측 과정에서 외부 조건은 일정하였다.\n\n추가 조건도 일정하였다.",
                 1,
@@ -200,6 +211,13 @@ def test_typed_bottom_stem_binding_rejects_an_unproven_boundary() -> None:
             0,
             2,
             id="typed-bottom-stem-outside-handoff-phrase-vocabulary",
+        ),
+        pytest.param(
+            INQUIRY_ITEM,
+            0,
+            0,
+            0,
+            id="typed-inquiry-routes-through-inquiry-renderer",
         ),
     ],
 )
@@ -260,7 +278,10 @@ def test_reviewed_handoff_renders_v2_item_with_dynamic_program_layout(
     assert result.table_count == expected_table_count
     assert result.visual_count == expected_visual_count
     assert result.labeled_block_count == expected_labeled_count
-    assert report["unused_visual_sample_hidden"] is (expected_visual_count == 0)
+    assert report["inquiry"] is (draft.inquiry is not None)
+    assert report["unused_visual_sample_hidden"] is (
+        expected_visual_count == 0 and draft.inquiry is None
+    )
     assert report["labeled_image_projection_applied"] is False
     assert report["projected_image_slot_count"] == 0
     assert stat.S_IMODE(output.stat().st_mode) == 0o640
