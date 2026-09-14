@@ -140,11 +140,12 @@ observed pointers. `NEEDS_REVIEW` is actionable and resumable through an explici
 the coordinator never invents an analysis approval. Resumption loads the validated current checkpoint
 and advances only the requested phase.
 
-A review with blocking findings remains deliberately fail-closed in V1. A future explicit rework
-boundary must first add a typed blocking-review pointer and append-only attempt/rework history so the
-original review is never overwritten; it may then issue the standard `REQUEST_REWORK` action to the
-fixed `authoring` target within the pinned workflow's three-cycle limit. V1 does not silently infer or
-submit that decision.
+A review with blocking findings remains deliberately fail-closed in V1. Trusted-RAG production
+successors use the explicit coordinator-owned boundary in ADR 0084: they resolve the typed review
+eligibility and pending approval pointers, issue the standard idempotent `REQUEST_REWORK` action to
+the fixed `authoring` target, and rely on the Workflow service's append-only command, approval, and
+superseded-attempt history. They never persist a blocking review as an approvable pointer. Historical
+V1 does not infer or submit that decision.
 
 ## Rejected simpler alternative
 

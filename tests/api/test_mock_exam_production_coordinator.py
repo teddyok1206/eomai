@@ -19,6 +19,7 @@ from eom_api.services.mock_exam_production_coordinator import (
     MockExamProductionCoordinator,
     MockExamProductionCoordinatorError,
     WorkflowApprovalReceipt,
+    WorkflowReworkReceipt,
     WorkflowStartReceipt,
 )
 from eom_api.services.mock_exam_production_runner import MockExamProductionRunner
@@ -83,6 +84,7 @@ from eom_catalog_contracts.mock_exam_production_plan import (
     MockExamOneItemGenerationBlockV4,
     MockExamOneItemGenerationBlockV5,
     MockExamProductionPlanV1,
+    MockExamProductionPlanV5,
     build_integrated_science_mock_exam_production_plan,
     build_integrated_science_mock_exam_production_plan_v2,
     build_integrated_science_mock_exam_production_plan_v3,
@@ -219,6 +221,14 @@ def _plan() -> MockExamProductionPlanV1:
     )
 
 
+def _plan_v5() -> MockExamProductionPlanV5:
+    return build_integrated_science_mock_exam_production_plan_v5(
+        policy=load_integrated_science_mock_exam_policy(),
+        layout_policy=load_integrated_science_mock_exam_layout_policy(),
+        outline=load_integrated_science_editorial_outline(),
+    )
+
+
 def _actor() -> ActorContext:
     return ActorContext(
         actor_type=ActorType.OPERATOR,
@@ -244,6 +254,9 @@ class FakeWorkflowOperations:
         legacy_null_provenance_roots: bool = False,
         workflow_failed_positions: frozenset[int] = frozenset(),
         workflow_running_positions: frozenset[int] = frozenset(),
+        lose_first_rework_response: bool = False,
+        exhausted_rework_positions: frozenset[int] = frozenset(),
+        stale_review_positions: frozenset[int] = frozenset(),
     ) -> None:
         self.blocking_positions = blocking_positions
         self.lose_first_start_response = lose_first_start_response
@@ -254,17 +267,25 @@ class FakeWorkflowOperations:
         self.legacy_null_provenance_roots = legacy_null_provenance_roots
         self.workflow_failed_positions = workflow_failed_positions
         self.workflow_running_positions = workflow_running_positions
+        self.lose_first_rework_response = lose_first_rework_response
+        self.exhausted_rework_positions = exhausted_rework_positions
+        self.stale_review_positions = stale_review_positions
         self.provenance_drift_positions: set[int] = set()
         self.provenance_root_drift_positions: set[int] = set()
         self.start_requests: list[WorkflowStartRequest] = []
         self.start_keys: list[str] = []
         self.get_keys: list[str] = []
         self.approval_keys: list[str] = []
+        self.rework_keys: list[str] = []
+        self.rework_requests: list[tuple[str, int, str, int, str]] = []
         self._start_by_key: dict[str, WorkflowStartReceipt] = {}
+        self._rework_by_key: dict[str, WorkflowReworkReceipt] = {}
         self._position_by_workflow: dict[str, int] = {}
         self._request_by_workflow: dict[str, WorkflowStartRequest] = {}
         self._approved: set[str] = set()
         self._lost_keys: set[str] = set()
+        self._lost_rework_keys: set[str] = set()
+        self._rework_cycles: dict[str, int] = {}
 
     def resolve_generation_block(
         self, block: MockExamOneItemGenerationBlockV1
@@ -440,7 +461,11 @@ class FakeWorkflowOperations:
                 else "review"
             ),
             resource_version=2 if completed else 1,
-            rework_cycle_count=0,
+            rework_cycle_count=(
+                3
+                if position in self.exhausted_rework_positions
+                else self._rework_cycles.get(workflow_id, 0)
+            ),
             created_at=NOW,
             updated_at=NOW,
             completed_at=NOW if completed else None,
@@ -493,19 +518,20 @@ class FakeWorkflowOperations:
         request = self._request_by_workflow[workflow_id]
         if request.definition_version == "1.10.0":
             assert isinstance(knowledge_provenance, MockExamWorkflowKnowledgeProvenancePointerV3)
-            assert not blocking
             receipts = _trusted_receipts(workflow_id, position)
             review = receipts.review
             return MockExamReviewEligibilityObservationV3(
                 schema_version="mock-exam-review-eligibility/3.0",
                 workflow_id=workflow_id,
-                workflow_resource_version=2 if approved else 1,
+                workflow_resource_version=(
+                    2 if approved or position in self.stale_review_positions else 1
+                ),
                 approval_request_id=_hex_id("approval_", position),
                 approval_resource_version=2 if approved else 1,
                 approval_state="APPROVED" if approved else "PENDING",
                 reviewer_operator_id=self.approved_operator_id if approved else None,
                 approved_at=self.approved_at if approved else None,
-                eligibility="ELIGIBLE",
+                eligibility="BLOCKED" if blocking else "ELIGIBLE",
                 step_run_id=review.step_run_id,
                 artifact_id=review.artifact_id,
                 artifact_revision_id=review.artifact_revision_id,
@@ -514,7 +540,7 @@ class FakeWorkflowOperations:
                 worker_decision="ready_for_human",
                 finding_info_count=0,
                 finding_warning_count=0,
-                finding_blocking_count=0,
+                finding_blocking_count=1 if blocking else 0,
                 trusted_evidence_usage_receipts=receipts,
             )
         return MockExamReviewEligibilityObservationV1(
@@ -559,6 +585,47 @@ class FakeWorkflowOperations:
             command_id=f"approval-command-{self._position_by_workflow[workflow_id]}",
             resource_version=2,
         )
+
+    def request_rework(
+        self,
+        workflow_id: str,
+        actor: ActorContext,
+        *,
+        expected_version: int,
+        approval_request_id: str,
+        approval_resource_version: int,
+        reason: str,
+        idempotency_key: str,
+    ) -> WorkflowReworkReceipt:
+        assert actor.actor_id == OPERATOR_ID
+        assert expected_version == 1
+        position = self._position_by_workflow[workflow_id]
+        assert approval_request_id == _hex_id("approval_", position)
+        assert approval_resource_version == 1
+        self.rework_keys.append(idempotency_key)
+        self.rework_requests.append(
+            (
+                workflow_id,
+                expected_version,
+                approval_request_id,
+                approval_resource_version,
+                reason,
+            )
+        )
+        receipt = self._rework_by_key.setdefault(
+            idempotency_key,
+            WorkflowReworkReceipt(
+                command_id=f"rework-command-{position}",
+                resource_version=expected_version,
+            ),
+        )
+        if self.lose_first_rework_response and idempotency_key not in self._lost_rework_keys:
+            self._lost_rework_keys.add(idempotency_key)
+            raise RuntimeError("simulated rework response loss")
+        self.blocking_positions = self.blocking_positions - {position}
+        self.workflow_running_positions = self.workflow_running_positions | {position}
+        self._rework_cycles[workflow_id] = self._rework_cycles.get(workflow_id, 0) + 1
+        return receipt
 
     @property
     def occurrence_count(self) -> int:
@@ -1577,7 +1644,7 @@ def test_checkpointed_knowledge_provenance_cannot_change_after_approval() -> Non
     assert drifted.registration is None
 
 
-def test_blocking_review_is_never_approved_or_registered() -> None:
+def test_legacy_blocking_review_is_never_approved_or_registered() -> None:
     workflows = FakeWorkflowOperations(blocking_positions=frozenset({1}))
     coordinator, *_ = _coordinator(workflows=workflows)
     plan = _plan()
@@ -1593,6 +1660,141 @@ def test_blocking_review_is_never_approved_or_registered() -> None:
     assert checkpoint.state == "BLOCKED"
     assert blocked.state == "REVIEW_BLOCKED"
     assert blocked.review is None and blocked.registration is None
+    assert workflows.approval_keys == []
+
+
+def test_trusted_rag_blocking_review_requests_bounded_authoring_rework() -> None:
+    workflows = FakeWorkflowOperations(blocking_positions=frozenset({13}))
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan_v5()
+    initial = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    pinned = coordinator.advance_items(plan, initial, _actor(), at=NOW)
+
+    reworking = coordinator.advance_items(plan, pinned, _actor(), at=NOW)
+
+    repaired = reworking.item_runs[12]
+    assert reworking.state == "ITEM_PRODUCTION"
+    assert repaired.state == "WORKFLOW_ACTIVE"
+    assert repaired.review is None and repaired.failure is None
+    assert len(workflows.rework_keys) == 1
+    assert len(set(workflows.rework_keys)) == 1
+    assert len(workflows.rework_requests) == 1
+    assert workflows.rework_requests[0][:4] == (
+        _hex_id("workflow_", 13),
+        1,
+        _hex_id("approval_", 13),
+        1,
+    )
+    assert "blocking quality findings" in workflows.rework_requests[0][4]
+    assert workflows.approval_keys == []
+
+    waiting = coordinator.advance_items(
+        plan,
+        reworking,
+        _actor(),
+        at=NOW + timedelta(seconds=1),
+    )
+    assert workflows.approval_keys == []
+    assert waiting.item_runs[12].state == "WORKFLOW_ACTIVE"
+
+    workflows.workflow_running_positions = frozenset()
+    submitted = coordinator.advance_items(
+        plan,
+        waiting,
+        _actor(),
+        at=NOW + timedelta(seconds=2),
+    )
+    assert len(workflows.approval_keys) == 25
+    assert all(row.state == "APPROVAL_SUBMITTED" for row in submitted.item_runs)
+
+
+def test_trusted_rag_rework_response_loss_replays_the_exact_operation_key() -> None:
+    workflows = FakeWorkflowOperations(
+        blocking_positions=frozenset({13}),
+        lose_first_rework_response=True,
+    )
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan_v5()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+
+    uncertain = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    blocked = uncertain.item_runs[12]
+    assert blocked.state == "REVIEW_BLOCKED"
+    assert blocked.failure is not None
+    assert blocked.failure.code == "WORKFLOW_REWORK_OUTCOME_UNKNOWN"
+    assert blocked.failure.retryable
+
+    resumed = coordinator.advance_items(
+        plan,
+        uncertain,
+        _actor(),
+        at=NOW + timedelta(seconds=1),
+    )
+    assert resumed.item_runs[12].state == "WORKFLOW_ACTIVE"
+    assert _monotonic_successor(uncertain, resumed)
+    assert workflows.rework_keys[0] == workflows.rework_keys[1]
+    assert len(set(workflows.rework_keys)) == 1
+    assert workflows.approval_keys == []
+
+
+def test_trusted_rag_rework_limit_exhaustion_remains_fail_closed() -> None:
+    workflows = FakeWorkflowOperations(
+        blocking_positions=frozenset({13}),
+        exhausted_rework_positions=frozenset({13}),
+    )
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan_v5()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+
+    blocked_checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    blocked = blocked_checkpoint.item_runs[12]
+    assert blocked_checkpoint.state == "BLOCKED"
+    assert blocked.state == "REVIEW_BLOCKED"
+    assert blocked.failure is not None
+    assert blocked.failure.code == "WORKFLOW_REWORK_LIMIT_EXHAUSTED"
+    assert not blocked.failure.retryable
+    assert workflows.rework_keys == []
+    assert workflows.approval_keys == []
+
+
+def test_stale_trusted_review_is_never_converted_into_rework() -> None:
+    workflows = FakeWorkflowOperations(
+        blocking_positions=frozenset({13}),
+        stale_review_positions=frozenset({13}),
+    )
+    coordinator, *_ = _coordinator(workflows=workflows)
+    plan = _plan_v5()
+    checkpoint = coordinator.initialize(
+        plan,
+        production_request_id=PRODUCTION_REQUEST_ID,
+        operator_id=OPERATOR_ID,
+        at=NOW,
+    )
+    checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+
+    blocked_checkpoint = coordinator.advance_items(plan, checkpoint, _actor(), at=NOW)
+    blocked = blocked_checkpoint.item_runs[12]
+    assert blocked.state == "REVIEW_BLOCKED"
+    assert blocked.failure is not None
+    assert blocked.failure.code == "WORKFLOW_REVIEW_EVIDENCE_STALE"
+    assert workflows.rework_keys == []
     assert workflows.approval_keys == []
 
 
@@ -1835,6 +2037,73 @@ def test_existing_workflow_adapter_pins_observed_approval_expectation() -> None:
     assert captured["kwargs"] == {
         "expected_version": 7,
         "idempotency_key": "approval-key",
+    }
+
+
+def test_existing_workflow_adapter_pins_rework_reason_and_approval_expectation() -> None:
+    captured: dict[str, Any] = {}
+
+    class Commands:
+        def start_workflow(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("not used")
+
+        def workflow_action(
+            self,
+            workflow_id: str,
+            action: Any,
+            request: Any,
+            actor: ActorContext,
+            **kwargs: Any,
+        ) -> tuple[str, int]:
+            captured.update(
+                workflow_id=workflow_id,
+                action=action,
+                request=request,
+                actor=actor,
+                kwargs=kwargs,
+            )
+            return "rework-command", 9
+
+    class Queries:
+        def workflow(self, workflow_id: str) -> Any:
+            raise AssertionError("not used")
+
+    class Resolver:
+        def resolve_generation_block(self, block: Any) -> Any:
+            raise AssertionError("not used")
+
+    class Evidence:
+        def review_eligibility(self, workflow_id: str) -> Any:
+            raise AssertionError("not used")
+
+    operations = ExistingOneItemWorkflowOperations(
+        Commands(),
+        Queries(),
+        Resolver(),
+        Evidence(),  # type: ignore[arg-type]
+    )
+    workflow_id = _hex_id("workflow_", 2)
+    approval_request_id = _hex_id("approval_", 2)
+    receipt = operations.request_rework(
+        workflow_id,
+        _actor(),
+        expected_version=8,
+        approval_request_id=approval_request_id,
+        approval_resource_version=4,
+        reason="Resolve the blocking quality finding.",
+        idempotency_key="rework-key",
+    )
+
+    request = captured["request"]
+    expectation = request.approval_expectation
+    assert receipt == WorkflowReworkReceipt("rework-command", 9)
+    assert captured["action"].value == "REQUEST_REWORK"
+    assert request.reason == "Resolve the blocking quality finding."
+    assert expectation.approval_request_id == approval_request_id
+    assert expectation.approval_resource_version == 4
+    assert captured["kwargs"] == {
+        "expected_version": 8,
+        "idempotency_key": "rework-key",
     }
 
 

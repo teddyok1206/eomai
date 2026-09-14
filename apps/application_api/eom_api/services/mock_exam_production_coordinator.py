@@ -144,6 +144,29 @@ class WorkflowApprovalReceipt:
     resource_version: int
 
 
+@dataclass(frozen=True)
+class WorkflowReworkReceipt:
+    command_id: str
+    resource_version: int
+
+
+ReviewGateAction = Literal["OBSERVE", "SUBMIT_REWORK", "SUBMIT_APPROVAL"]
+
+
+@dataclass
+class _ReviewGateReadiness:
+    approval_workflow_calls: set[str]
+    rework_workflow_calls: set[str]
+
+
+_TRUSTED_RAG_WORKFLOW_DEFINITION = ("generic-item-development", "1.10.0")
+_TRUSTED_RAG_MAX_REWORK_CYCLES = 3
+_BLOCKING_REVIEW_REWORK_REASON = (
+    "Production review reported blocking quality findings. Regenerate from authoring and satisfy "
+    "every released Content Pack, evidence, content, image, equation, and formatting constraint."
+)
+
+
 class GenerationBlockResolver(Protocol):
     def resolve_generation_block(
         self,
@@ -332,6 +355,18 @@ class OneItemWorkflowOperations(Protocol):
         idempotency_key: str,
     ) -> WorkflowApprovalReceipt: ...
 
+    def request_rework(
+        self,
+        workflow_id: str,
+        actor: ActorContext,
+        *,
+        expected_version: int,
+        approval_request_id: str,
+        approval_resource_version: int,
+        reason: str,
+        idempotency_key: str,
+    ) -> WorkflowReworkReceipt: ...
+
 
 class ExistingOneItemWorkflowOperations:
     """Concrete adapter over the current CommandAdapter and QueryAdapter boundaries."""
@@ -408,6 +443,33 @@ class ExistingOneItemWorkflowOperations:
             idempotency_key=idempotency_key,
         )
         return WorkflowApprovalReceipt(command_id, version)
+
+    def request_rework(
+        self,
+        workflow_id: str,
+        actor: ActorContext,
+        *,
+        expected_version: int,
+        approval_request_id: str,
+        approval_resource_version: int,
+        reason: str,
+        idempotency_key: str,
+    ) -> WorkflowReworkReceipt:
+        command_id, version = self._commands.workflow_action(
+            workflow_id,
+            CommandType.REQUEST_REWORK,
+            WorkflowActionRequest(
+                reason=reason,
+                approval_expectation=WorkflowApprovalExpectationV1(
+                    approval_request_id=approval_request_id,
+                    approval_resource_version=approval_resource_version,
+                ),
+            ),
+            actor,
+            expected_version=expected_version,
+            idempotency_key=idempotency_key,
+        )
+        return WorkflowReworkReceipt(command_id, version)
 
 
 class AnalysisCatalogClientPort(Protocol):
@@ -788,7 +850,10 @@ class MockExamProductionCoordinator:
             changed = changed or current != row
 
         observed: list[MockExamProductionItemRunV1] = []
-        approval_ready_workflow_calls: set[str] = set()
+        readiness = _ReviewGateReadiness(
+            approval_workflow_calls=set(),
+            rework_workflow_calls=set(),
+        )
         for row in rows:
             current = self._observe_workflow(
                 row,
@@ -796,14 +861,34 @@ class MockExamProductionCoordinator:
                 resolution,
                 checkpoint.operator_id,
                 actor,
-                submit_approval=False,
-                approval_ready_workflow_calls=approval_ready_workflow_calls,
+                review_gate_action="OBSERVE",
+                review_gate_readiness=readiness,
                 at=at,
             )
             observed.append(current)
             changed = changed or current != row
-        if all(
-            row.workflow_call_id in approval_ready_workflow_calls
+        if readiness.rework_workflow_calls:
+            rework_observed: list[MockExamProductionItemRunV1] = []
+            for row in observed:
+                current = (
+                    self._observe_workflow(
+                        row,
+                        calls[row.workflow_call_id],
+                        resolution,
+                        checkpoint.operator_id,
+                        actor,
+                        review_gate_action="SUBMIT_REWORK",
+                        review_gate_readiness=None,
+                        at=at,
+                    )
+                    if row.workflow_call_id in readiness.rework_workflow_calls
+                    else row
+                )
+                rework_observed.append(current)
+                changed = changed or current != row
+            observed = rework_observed
+        elif all(
+            row.workflow_call_id in readiness.approval_workflow_calls
             or (row.review is not None and row.failure is None)
             for row in observed
         ):
@@ -815,8 +900,8 @@ class MockExamProductionCoordinator:
                     resolution,
                     checkpoint.operator_id,
                     actor,
-                    submit_approval=True,
-                    approval_ready_workflow_calls=None,
+                    review_gate_action="SUBMIT_APPROVAL",
+                    review_gate_readiness=None,
                     at=at,
                 )
                 approval_observed.append(current)
@@ -928,8 +1013,8 @@ class MockExamProductionCoordinator:
         operator_id: str,
         actor: ActorContext,
         *,
-        submit_approval: bool,
-        approval_ready_workflow_calls: set[str] | None,
+        review_gate_action: ReviewGateAction,
+        review_gate_readiness: _ReviewGateReadiness | None,
         at: datetime,
     ) -> MockExamProductionItemRunV1:
         if row.state == "FAILED" or row.workflow_id is None or row.registration is not None:
@@ -995,12 +1080,12 @@ class MockExamProductionCoordinator:
                         at,
                     ),
                 )
-            return self._approve_zero_blocking(
+            return self._reconcile_review_gate(
                 base,
                 workflow,
                 actor,
-                submit_approval=submit_approval,
-                approval_ready_workflow_calls=approval_ready_workflow_calls,
+                action=review_gate_action,
+                readiness=review_gate_readiness,
                 at=at,
             )
         if workflow.state in {"APPROVED", "REGISTERING", "COMPLETED"}:
@@ -1107,14 +1192,14 @@ class MockExamProductionCoordinator:
             )
         return base
 
-    def _approve_zero_blocking(
+    def _reconcile_review_gate(
         self,
         row: MockExamProductionItemRunV1,
         workflow: WorkflowView,
         actor: ActorContext,
         *,
-        submit_approval: bool,
-        approval_ready_workflow_calls: set[str] | None,
+        action: ReviewGateAction,
+        readiness: _ReviewGateReadiness | None,
         at: datetime,
     ) -> MockExamProductionItemRunV1:
         assert row.knowledge_provenance is not None
@@ -1153,6 +1238,75 @@ class MockExamProductionCoordinator:
                 ),
             )
         if observation.eligibility != "ELIGIBLE" or observation.finding_blocking_count:
+            trusted_rag_rework = (
+                isinstance(observation, MockExamReviewEligibilityObservationV3)
+                and row.review is None
+                and row.approval_command_id is None
+                and observation.approval_state == "PENDING"
+                and observation.finding_blocking_count > 0
+                and (workflow.definition_key, workflow.definition_version)
+                == _TRUSTED_RAG_WORKFLOW_DEFINITION
+            )
+            if trusted_rag_rework and workflow.rework_cycle_count >= _TRUSTED_RAG_MAX_REWORK_CYCLES:
+                return _update_run(
+                    row,
+                    state="REVIEW_BLOCKED",
+                    review=None,
+                    failure=_fixed_failure(
+                        "REVIEW_GATE",
+                        "QUALITY_GATE_FAILED",
+                        "WORKFLOW_REWORK_LIMIT_EXHAUSTED",
+                        False,
+                        at,
+                    ),
+                )
+            if trusted_rag_rework and action == "OBSERVE":
+                assert readiness is not None
+                readiness.rework_workflow_calls.add(row.workflow_call_id)
+            elif trusted_rag_rework and action == "SUBMIT_REWORK":
+                try:
+                    rework_receipt = self.workflows.request_rework(
+                        workflow.workflow_id,
+                        actor,
+                        expected_version=workflow.resource_version,
+                        approval_request_id=observation.approval_request_id,
+                        approval_resource_version=observation.approval_resource_version,
+                        reason=_BLOCKING_REVIEW_REWORK_REASON,
+                        idempotency_key=_operation_key(
+                            workflow.workflow_id,
+                            row.workflow_call_id,
+                            observation.approval_request_id,
+                            str(observation.approval_resource_version),
+                            observation.artifact_revision_id,
+                            observation.sha256,
+                            str(workflow.rework_cycle_count),
+                            "review-blocking-rework",
+                        ),
+                    )
+                except Exception as exc:
+                    return _update_run(
+                        row,
+                        state="REVIEW_BLOCKED",
+                        review=None,
+                        failure=_failure(
+                            exc,
+                            stage="REVIEW_GATE",
+                            category="OPERATION_OUTCOME_UNKNOWN",
+                            default_code="WORKFLOW_REWORK_OUTCOME_UNKNOWN",
+                            retryable=True,
+                            at=at,
+                        ),
+                    )
+                return _update_run(
+                    row,
+                    state="WORKFLOW_ACTIVE",
+                    review=None,
+                    workflow_resource_version=max(
+                        workflow.resource_version,
+                        rework_receipt.resource_version,
+                    ),
+                    failure=None,
+                )
             return _update_run(
                 row,
                 state="REVIEW_BLOCKED",
@@ -1179,12 +1333,14 @@ class MockExamProductionCoordinator:
                 ),
             )
         review = observation.approved_pointer()
-        if not submit_approval:
-            assert approval_ready_workflow_calls is not None
-            approval_ready_workflow_calls.add(row.workflow_call_id)
+        if action == "OBSERVE":
+            assert readiness is not None
+            readiness.approval_workflow_calls.add(row.workflow_call_id)
+            return row
+        if action != "SUBMIT_APPROVAL":
             return row
         try:
-            receipt = self.workflows.approve(
+            approval_receipt = self.workflows.approve(
                 workflow.workflow_id,
                 actor,
                 expected_version=workflow.resource_version,
@@ -1217,8 +1373,11 @@ class MockExamProductionCoordinator:
             row,
             state="APPROVAL_SUBMITTED",
             review=review,
-            approval_command_id=receipt.command_id,
-            workflow_resource_version=max(workflow.resource_version, receipt.resource_version),
+            approval_command_id=approval_receipt.command_id,
+            workflow_resource_version=max(
+                workflow.resource_version,
+                approval_receipt.resource_version,
+            ),
             failure=None,
         )
 
