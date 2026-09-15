@@ -17,6 +17,11 @@ from eom_observe.cli import rotate_token
 from eom_observe.errors import ObserveError, ObserveErrorCode
 from eom_observe.event_mapper import merge_events, role_node
 from eom_observe.logging import JsonFormatter
+from eom_observe.read_model import (
+    COLUMN_SELECT_GRANTS,
+    FULL_SELECT_TABLES,
+    REQUIRED_READ_MODEL_TABLES,
+)
 from eom_observe.redaction import (
     logical_artifact_uri,
     metadata_summary,
@@ -223,6 +228,74 @@ def test_runtime_resources_are_package_resources() -> None:
     assert package.joinpath("resources", "worker-slots.example.yaml").is_file()
     for filename in SCHEMA_FILES.values():
         assert schema_resource(filename).is_file()
+
+
+def test_operational_overview_ui_keeps_exact_ids_in_closed_detail() -> None:
+    package = files("eom_observe")
+    html = package.joinpath("static", "index.html").read_text(encoding="utf-8")
+    javascript = package.joinpath("static", "app.js").read_text(encoding="utf-8")
+    assert 'id="operational-workflows"' in html
+    assert '<details class="operational-details">' in html
+    assert "Non-terminal workflows" in html
+    assert 'apiGet("/operational-overview")' in javascript
+    assert "window.setInterval(refreshOperationalOverview, 10000)" in javascript
+    assert "textContent = value" in javascript
+
+
+def test_operational_read_model_uses_exact_minimum_column_grants() -> None:
+    assert set(FULL_SELECT_TABLES) == {
+        "worker_slots",
+        "jobs",
+        "job_events",
+        "artifacts",
+        "artifact_revisions",
+        "workflow_instances",
+        "workflow_step_runs",
+        "workflow_events",
+        "approval_requests",
+    }
+    assert COLUMN_SELECT_GRANTS == {
+        "workflow_commands": (
+            "command_id",
+            "workflow_id",
+            "state",
+            "lease_expires_at",
+            "error_code",
+        ),
+        "worker_leases": ("lease_id", "workflow_id", "job_id", "state", "expires_at"),
+        "api_idempotency_records": (
+            "api_idempotency_record_id",
+            "state",
+            "lease_expires_at",
+            "error_code",
+        ),
+    }
+    assert len(REQUIRED_READ_MODEL_TABLES) == 12
+
+
+def test_operational_overview_uses_one_repeatable_read_snapshot() -> None:
+    source = Path("apps/observe_console/eom_observe/repository.py").read_text(encoding="utf-8")
+    operational = source.split("    def operational_overview_rows(", 1)[1].split(
+        "    def ping(", 1
+    )[0]
+    assert operational.count("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY") == 1
+
+
+def test_observe_deployment_reconciles_minimum_grants_before_restart() -> None:
+    deploy = Path("scripts/observe/deploy_release.sh").read_text(encoding="utf-8")
+    reconcile = Path("scripts/observe/reconcile_readonly_grants.sh").read_text(encoding="utf-8")
+    bootstrap = Path("scripts/observe/bootstrap_readonly_role.sh").read_text(encoding="utf-8")
+    invocation = '    "${READONLY_GRANT_RECONCILER}"\n'
+    assert deploy.count(invocation) == 1
+    assert deploy.index(invocation) < deploy.index('    systemctl stop "${SERVICE}"')
+    assert (
+        "from eom_observe.read_model import COLUMN_SELECT_GRANTS, FULL_SELECT_TABLES" in reconcile
+    )
+    assert (
+        "from eom_observe.read_model import COLUMN_SELECT_GRANTS, FULL_SELECT_TABLES" in bootstrap
+    )
+    assert "REVOKE ALL PRIVILEGES ON TABLE" in reconcile
+    assert 'BUILD_ROOT="/tmp/eom-observe-build-${EUID}/${COMMIT}"' in deploy
 
 
 def test_source_build_info_is_safe_without_git_lookup() -> None:

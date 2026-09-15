@@ -26,12 +26,40 @@
 
     <main>
       <section class="summary-band" aria-label="System summary">
-        <article><span>Active workflows</span><strong id="metric-workflows">0</strong></article>
+        <article><span>Non-terminal workflows</span><strong id="metric-workflows">0</strong></article>
         <article><span>Awaiting approval</span><strong id="metric-approvals">0</strong></article>
         <article><span>Queued jobs</span><strong id="metric-queued">0</strong></article>
         <article><span>Running jobs</span><strong id="metric-running">0</strong></article>
         <article><span>Recent failures</span><strong id="metric-failures">0</strong></article>
         <article><span>Idle workers</span><strong id="metric-idle">0</strong></article>
+      </section>
+
+      <section class="operational-overview" aria-labelledby="operational-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="eyebrow">EXECUTION EVIDENCE</p>
+            <h2 id="operational-title">Current operational state</h2>
+          </div>
+          <span class="freshness" id="operational-time">LOADING</span>
+        </div>
+        <div class="operational-grid">
+          <article><span>Executable workflows</span><strong id="operational-workflows">-</strong></article>
+          <article><span>Active commands</span><strong id="operational-commands">-</strong></article>
+          <article><span>Active jobs</span><strong id="operational-jobs">-</strong></article>
+          <article><span>Held leases</span><strong id="operational-leases">-</strong></article>
+          <article><span>Human approvals</span><strong id="operational-approvals">-</strong></article>
+          <article><span>Quiescent non-terminal</span><strong id="operational-quiescent">-</strong></article>
+        </div>
+        <details class="operational-details">
+          <summary>Attention and historical failure detail</summary>
+          <p id="operational-history" class="operational-history"></p>
+          <div class="operational-table-wrap">
+            <table>
+              <thead><tr><th>UTC</th><th>Classification</th><th>State</th><th>Reference</th><th>Error</th></tr></thead>
+              <tbody id="operational-attention"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       <div class="workspace">

@@ -14,6 +14,9 @@ const elements = {
   detail: document.querySelector("#detail-content"),
   queue: document.querySelector("#queue-list"),
   timeline: document.querySelector("#timeline-body"),
+  operationalTime: document.querySelector("#operational-time"),
+  operationalHistory: document.querySelector("#operational-history"),
+  operationalAttention: document.querySelector("#operational-attention"),
 };
 
 const metricIds = {
@@ -32,6 +35,69 @@ function text(value) {
 function formatUtc(value) {
   if (!value) return "-";
   return new Date(value).toISOString().replace(".000Z", "Z");
+}
+
+const operationalMetricIds = {
+  executable_workflows: "operational-workflows",
+  active_workflow_commands: "operational-commands",
+  active_jobs: "operational-jobs",
+  held_worker_leases: "operational-leases",
+  pending_human_approvals: "operational-approvals",
+  quiescent_nonterminal_workflows: "operational-quiescent",
+};
+
+function attentionReference(item) {
+  return item.workflow_id || item.job_id || item.command_id || item.lease_id
+    || item.api_idempotency_record_id || "-";
+}
+
+function renderOperationalOverview(overview) {
+  elements.operationalTime.textContent = formatUtc(overview.generated_at);
+  for (const [key, id] of Object.entries(operationalMetricIds)) {
+    document.querySelector(`#${id}`).textContent = overview.counts[key];
+  }
+  elements.operationalHistory.textContent = [
+    `API requests processing: ${overview.counts.processing_api_requests}`,
+    `recent failed workflows/jobs: ${overview.counts.recent_failed_workflows}/${overview.counts.recent_failed_jobs}`,
+    `historical failed workflows/jobs: ${overview.counts.historical_failed_workflows}/${overview.counts.historical_failed_jobs}`,
+  ].join(" · ");
+  elements.operationalAttention.replaceChildren();
+  if (!overview.attention.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "empty-state";
+    cell.textContent = "No operational attention records.";
+    row.append(cell);
+    elements.operationalAttention.append(row);
+    return;
+  }
+  for (const item of overview.attention) {
+    const row = document.createElement("tr");
+    for (const value of [
+      formatUtc(item.observed_at),
+      item.classification,
+      item.state,
+      attentionReference(item),
+      item.error_code || "-",
+    ]) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    }
+    elements.operationalAttention.append(row);
+  }
+}
+
+let operationalOverviewRequest = null;
+
+async function refreshOperationalOverview() {
+  if (operationalOverviewRequest) return operationalOverviewRequest;
+  operationalOverviewRequest = apiGet("/operational-overview")
+    .then(renderOperationalOverview)
+    .catch(() => { elements.operationalTime.textContent = "UNAVAILABLE"; })
+    .finally(() => { operationalOverviewRequest = null; });
+  return operationalOverviewRequest;
 }
 
 function definitionList(values) {
@@ -249,4 +315,6 @@ elements.pause.addEventListener("click", togglePaused);
 document.querySelector("#logout-button").addEventListener("click", logout);
 subscribe(render);
 apiGet("/snapshot").then(receiveSnapshot).catch(() => setStreamConnected(false));
+refreshOperationalOverview();
+window.setInterval(refreshOperationalOverview, 10000);
 connectStream();

@@ -5,6 +5,7 @@ REPOSITORY_ROOT="/home/eom/EOM"
 EXPECTED_BRANCHES=("main" "feat/observability-console-v0")
 OBSERVE_PYTHON="/srv/eom/conda/envs/eom-observe/bin/python"
 SERVICE="eom-observe.service"
+READONLY_GRANT_RECONCILER="${REPOSITORY_ROOT}/scripts/observe/reconcile_readonly_grants.sh"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-observe.service"
 UNIT_TARGET="/etc/systemd/system/eom-observe.service"
 STATE_ROOT="/var/lib/eom-observe/deployments"
@@ -63,7 +64,7 @@ VERSION="$(PYPROJECT="${REPOSITORY_ROOT}/apps/observe_console/pyproject.toml" \
   ${OBSERVE_PYTHON} -c \
   'import os,pathlib,tomllib; print(tomllib.loads(pathlib.Path(os.environ["PYPROJECT"]).read_text())["project"]["version"])' \
   2>/dev/null)"
-BUILD_ROOT="/tmp/eom-observe-build/${COMMIT}"
+BUILD_ROOT="/tmp/eom-observe-build-${EUID}/${COMMIT}"
 DIST_DIR="${BUILD_ROOT}/dist"
 WHEEL="${DIST_DIR}/eom_observe-${VERSION}-py3-none-any.whl"
 
@@ -152,8 +153,8 @@ with zipfile.ZipFile(wheel) as archive:
     schemas = {name for name in names if name.startswith("eom_observe_contracts/schemas/") and name.endswith(".json")}
     if missing := required - names:
         raise SystemExit(f"wheel resource missing: {sorted(missing)}")
-    if len(schemas) != 8:
-        raise SystemExit(f"expected 8 schemas, found {len(schemas)}")
+    if len(schemas) != 9:
+        raise SystemExit(f"expected 9 schemas, found {len(schemas)}")
     entry_points = next(name for name in names if name.endswith(".dist-info/entry_points.txt"))
     metadata = next(name for name in names if name.endswith(".dist-info/METADATA"))
     if "eom-observe = eom_observe.cli:main" not in archive.read(entry_points).decode():
@@ -350,6 +351,7 @@ for path in (
     "/observe/assets/app.js",
     "/observe/assets/icons.svg",
     "/observe/api/v1/health/ready",
+    "/observe/api/v1/operational-overview",
 ):
     with opener.open("http://127.0.0.1:8780" + path, timeout=5) as response:
         if response.status != 200:
@@ -401,6 +403,7 @@ case "${ACTION}" in
     fi
     build_wheel
     record_rollback
+    "${READONLY_GRANT_RECONCILER}"
     systemctl stop "${SERVICE}"
     remove_observer_editables
     "${OBSERVE_PYTHON}" -m pip install --no-deps --no-cache-dir --force-reinstall \

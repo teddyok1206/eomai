@@ -12,6 +12,8 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from eom_observe.errors import ObserveError, ObserveErrorCode
+from eom_observe.operational_overview import OperationalOverviewRows
+from eom_observe.read_model import REQUIRED_READ_MODEL_TABLES
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,158 @@ class ObserveRepository:
                 ObserveErrorCode.OBSERVE_QUERY_FAILED, "observability query failed"
             ) from exc
 
+    def operational_overview_rows(
+        self, *, recent_failure_window_seconds: int, attention_limit: int
+    ) -> OperationalOverviewRows:
+        """Return one exact read-only operational classification snapshot."""
+
+        if not 60 <= recent_failure_window_seconds <= 86_400:
+            raise ValueError("recent failure window is outside the contract")
+        if not 1 <= attention_limit <= 100:
+            raise ValueError("attention limit is outside the contract")
+        active_command_states = "('PENDING','LEASED','PROCESSING')"
+        active_job_states = (
+            "('CREATED','VALIDATED','QUEUED','CLAIMED','RUNNING','VALIDATING_RESULT','COMMITTING')"
+        )
+        held_lease_states = "('ACTIVE','RECONCILING')"
+        nonterminal_workflow_states = (
+            "('REQUESTED','RUNNING','AWAITING_HUMAN_APPROVAL','REWORK_REQUESTED',"
+            "'APPROVED','REGISTERING')"
+        )
+        active_workflow_ids = (
+            "SELECT workflow_id FROM workflow_commands WHERE state IN "
+            f"{active_command_states} UNION "
+            "SELECT sr.workflow_id FROM workflow_step_runs sr JOIN jobs j "
+            "ON j.job_id=sr.platform_job_id WHERE j.status IN "
+            f"{active_job_states} UNION "
+            "SELECT workflow_id FROM worker_leases WHERE state IN "
+            f"{held_lease_states}"
+        )
+        parameters = {
+            "recent_failure_window_seconds": recent_failure_window_seconds,
+            "attention_limit": attention_limit,
+        }
+        try:
+            with self.engine.connect() as connection, connection.begin():
+                connection.execute(
+                    text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+                )
+                counts = dict(
+                    connection.execute(
+                        text(
+                            "WITH active_workflow_ids AS ("
+                            + active_workflow_ids
+                            + ") SELECT transaction_timestamp() AS observed_at, "
+                            "(SELECT count(command_id) FROM workflow_commands WHERE state IN "
+                            + active_command_states
+                            + ") AS active_workflow_commands, "
+                            "(SELECT count(*) FROM jobs WHERE status IN "
+                            + active_job_states
+                            + ") AS active_jobs, "
+                            "(SELECT count(lease_id) FROM worker_leases WHERE state IN "
+                            + held_lease_states
+                            + ") AS held_worker_leases, "
+                            "(SELECT count(api_idempotency_record_id) FROM api_idempotency_records "
+                            "WHERE state='PROCESSING') AS processing_api_requests, "
+                            "(SELECT count(*) FROM approval_requests "
+                            "WHERE status='PENDING') AS pending_human_approvals, "
+                            "(SELECT count(*) FROM active_workflow_ids) AS executable_workflows, "
+                            "(SELECT count(*) FROM workflow_instances w WHERE w.state IN "
+                            + nonterminal_workflow_states
+                            + " AND NOT EXISTS (SELECT 1 FROM active_workflow_ids a "
+                            "WHERE a.workflow_id=w.workflow_id) AND NOT EXISTS "
+                            "(SELECT 1 FROM approval_requests p WHERE p.workflow_id=w.workflow_id "
+                            "AND p.status='PENDING')) AS quiescent_nonterminal_workflows, "
+                            "(SELECT count(*) FROM workflow_instances WHERE state='FAILED' "
+                            "AND updated_at >= transaction_timestamp() - "
+                            "(:recent_failure_window_seconds * interval '1 second')) "
+                            "AS recent_failed_workflows, "
+                            "(SELECT count(*) FROM jobs WHERE status='FAILED' AND updated_at >= "
+                            "transaction_timestamp() - (:recent_failure_window_seconds * "
+                            "interval '1 second')) AS recent_failed_jobs, "
+                            "(SELECT count(*) FROM workflow_instances WHERE state='FAILED' "
+                            "AND updated_at < transaction_timestamp() - "
+                            "(:recent_failure_window_seconds * interval '1 second')) "
+                            "AS historical_failed_workflows, "
+                            "(SELECT count(*) FROM jobs WHERE status='FAILED' AND updated_at < "
+                            "transaction_timestamp() - (:recent_failure_window_seconds * "
+                            "interval '1 second')) AS historical_failed_jobs"
+                        ),
+                        parameters,
+                    )
+                    .mappings()
+                    .one()
+                )
+                observed_at = counts.pop("observed_at")
+                attention = self._rows(
+                    connection.execute(
+                        text(
+                            "WITH active_workflow_ids AS ("
+                            + active_workflow_ids
+                            + "), attention AS ("
+                            "SELECT 'QUIESCENT_NONTERMINAL_WORKFLOW' AS classification, "
+                            "w.workflow_id, NULL::text AS job_id, NULL::text AS command_id, "
+                            "NULL::text AS lease_id, NULL::text AS api_idempotency_record_id, "
+                            "w.state, w.failure_code AS error_code, w.updated_at AS observed_at "
+                            "FROM workflow_instances w WHERE w.state IN "
+                            + nonterminal_workflow_states
+                            + " AND NOT EXISTS (SELECT 1 FROM active_workflow_ids a "
+                            "WHERE a.workflow_id=w.workflow_id) AND NOT EXISTS "
+                            "(SELECT 1 FROM approval_requests p WHERE p.workflow_id=w.workflow_id "
+                            "AND p.status='PENDING') UNION ALL "
+                            "SELECT 'EXPIRED_WORKFLOW_COMMAND_CLAIM', c.workflow_id, NULL::text, "
+                            "c.command_id, NULL::text, NULL::text, c.state, c.error_code, "
+                            "c.lease_expires_at FROM workflow_commands c WHERE c.state IN "
+                            "('LEASED','PROCESSING') AND c.lease_expires_at <= "
+                            "transaction_timestamp() UNION ALL "
+                            "SELECT 'EXPIRED_WORKER_LEASE', l.workflow_id, l.job_id, NULL::text, "
+                            "l.lease_id, NULL::text, l.state, NULL::text, l.expires_at "
+                            "FROM worker_leases l WHERE l.state IN "
+                            + held_lease_states
+                            + " AND l.expires_at <= transaction_timestamp() UNION ALL "
+                            "SELECT 'EXPIRED_API_IDEMPOTENCY_CLAIM', NULL::text, NULL::text, "
+                            "NULL::text, NULL::text, i.api_idempotency_record_id, i.state, "
+                            "i.error_code, i.lease_expires_at FROM api_idempotency_records i "
+                            "WHERE i.state='PROCESSING' AND i.lease_expires_at <= "
+                            "transaction_timestamp() UNION ALL "
+                            "SELECT 'RECENT_FAILED_WORKFLOW', w.workflow_id, NULL::text, NULL::text, "
+                            "NULL::text, NULL::text, w.state, w.failure_code, w.updated_at "
+                            "FROM workflow_instances w WHERE w.state='FAILED' AND w.updated_at >= "
+                            "transaction_timestamp() - (:recent_failure_window_seconds * "
+                            "interval '1 second') UNION ALL "
+                            "SELECT 'RECENT_FAILED_JOB', sr.workflow_id, j.job_id, NULL::text, "
+                            "NULL::text, NULL::text, j.status, j.error_code, j.updated_at "
+                            "FROM jobs j LEFT JOIN LATERAL (SELECT workflow_id FROM "
+                            "workflow_step_runs WHERE platform_job_id=j.job_id ORDER BY "
+                            "workflow_id LIMIT 1) sr ON true WHERE j.status='FAILED' AND "
+                            "j.updated_at >= transaction_timestamp() - "
+                            "(:recent_failure_window_seconds * interval '1 second')) "
+                            "SELECT classification, workflow_id, job_id, command_id, lease_id, "
+                            "api_idempotency_record_id, state, error_code, observed_at FROM attention "
+                            "ORDER BY observed_at DESC, classification DESC, "
+                            "COALESCE(workflow_id,job_id,command_id,lease_id,"
+                            "api_idempotency_record_id) DESC LIMIT :attention_limit"
+                        ),
+                        parameters,
+                    )
+                )
+                return OperationalOverviewRows(
+                    observed_at=observed_at,
+                    counts=counts,
+                    attention=attention,
+                )
+        except DBAPIError as exc:
+            code = (
+                ObserveErrorCode.OBSERVE_DATABASE_TIMEOUT
+                if "statement timeout" in str(exc).lower()
+                else ObserveErrorCode.OBSERVE_DATABASE_UNAVAILABLE
+            )
+            raise ObserveError(code, "operational overview query failed") from exc
+        except SQLAlchemyError as exc:
+            raise ObserveError(
+                ObserveErrorCode.OBSERVE_QUERY_FAILED, "operational overview query failed"
+            ) from exc
+
     def ping(self) -> bool:
         try:
             with self.engine.connect() as connection:
@@ -217,17 +371,7 @@ class ObserveRepository:
         return False
 
     def required_tables(self) -> list[str]:
-        names = (
-            "worker_slots",
-            "jobs",
-            "job_events",
-            "artifacts",
-            "artifact_revisions",
-            "workflow_instances",
-            "workflow_step_runs",
-            "workflow_events",
-            "approval_requests",
-        )
+        names = REQUIRED_READ_MODEL_TABLES
         with self.engine.connect() as connection, connection.begin():
             connection.execute(text("SET TRANSACTION READ ONLY"))
             rows = connection.execute(

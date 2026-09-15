@@ -59,7 +59,7 @@ existing 1.5-second statement timeout. Query-plan evidence is required before ad
 claiming a performance improvement; this change has no migration.
 
 The production-shaped read-only probe on 2026-09-15 completed Python startup, both SQL statements,
-Pydantic validation, and JSON Schema validation in 0.295 seconds against 11,332 Job rows and 8,836
+Pydantic validation, and JSON Schema validation in 0.296 seconds against 11,332 Job rows and 8,836
 Workflow-command rows. This is release evidence for the current scale, not a future SLO.
 
 The endpoint runs through the existing authenticated Observability API. Each open console performs

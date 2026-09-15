@@ -46,6 +46,17 @@ main { padding: 18px 24px 28px; }
 .summary-band span { display: block; color: #66757a; font-size: 12px; }
 .summary-band strong { display: block; margin-top: 5px; font-size: 25px; letter-spacing: 0; }
 
+.operational-overview { margin-top: 16px; background: #fff; border: 1px solid #ccd4d6; border-radius: 6px; }
+.operational-grid { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); }
+.operational-grid article { min-height: 68px; padding: 12px 16px; border-right: 1px solid #e2e7e8; }
+.operational-grid article:last-child { border-right: 0; }
+.operational-grid span { display: block; color: #66757a; font-size: 11px; }
+.operational-grid strong { display: block; margin-top: 5px; font-size: 22px; }
+.operational-details { border-top: 1px solid #e2e7e8; }
+.operational-details summary { cursor: pointer; padding: 12px 16px; color: #425157; font-size: 12px; font-weight: 700; }
+.operational-history { margin: 0; padding: 2px 16px 12px; color: #66757a; font-size: 11px; }
+.operational-table-wrap { max-height: 260px; overflow: auto; border-top: 1px solid #edf0f1; }
+
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 16px; }
 .graph-section, .detail-panel, .queue-panel, .timeline-panel { background: #fff; border: 1px solid #ccd4d6; border-radius: 6px; }
 .graph-section { min-width: 0; }
@@ -109,6 +120,7 @@ tbody tr:hover, tbody tr:focus { background: #eef7f4; }
 
 @media (max-width: 1100px) {
   .summary-band { grid-template-columns: repeat(3, 1fr); }
+  .operational-grid { grid-template-columns: repeat(3, 1fr); }
   .summary-band article:nth-child(3) { border-right: 0; }
   .workspace { grid-template-columns: 1fr; }
   .detail-panel { min-height: 360px; max-height: none; }
@@ -122,6 +134,7 @@ tbody tr:hover, tbody tr:focus { background: #eef7f4; }
   .header-meta { display: none; }
   main { padding: 12px; }
   .summary-band { grid-template-columns: repeat(2, 1fr); }
+  .operational-grid { grid-template-columns: repeat(2, 1fr); }
   .summary-band article:nth-child(3) { border-right: 1px solid #dfe4e5; }
   .summary-band article:nth-child(2n) { border-right: 0; }
   .graph-frame { min-height: 390px; overflow-x: auto; }

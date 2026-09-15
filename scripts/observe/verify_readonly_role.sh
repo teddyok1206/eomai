@@ -14,6 +14,9 @@ engine = create_engine(load_secrets().database_url, pool_pre_ping=True)
 checks = {}
 with engine.connect() as connection:
     checks["select"] = connection.scalar(text("SELECT count(*) >= 0 FROM jobs")) is True
+    checks["operational_select"] = connection.scalar(
+        text("SELECT count(command_id) >= 0 FROM workflow_commands WHERE state='PENDING'")
+    ) is True
 
 statements = {
     "insert": "INSERT INTO worker_slots (slot_id, linux_user, role, enabled, gpu) VALUES ('zz','observe-denied','support',false,false)",
@@ -27,6 +30,19 @@ for name, sql in statements.items():
         with engine.connect() as connection, connection.begin():
             connection.execute(text(sql))
             connection.rollback()
+    except DBAPIError:
+        denied = True
+    checks[name] = denied
+
+for name, sql in {
+    "command_payload": "SELECT payload FROM workflow_commands LIMIT 0",
+    "lease_release_reason": "SELECT release_reason FROM worker_leases LIMIT 0",
+    "api_response_body": "SELECT response_body FROM api_idempotency_records LIMIT 0",
+}.items():
+    denied = False
+    try:
+        with engine.connect() as connection:
+            connection.execute(text(sql))
     except DBAPIError:
         denied = True
     checks[name] = denied

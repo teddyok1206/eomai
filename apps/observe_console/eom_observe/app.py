@@ -10,7 +10,13 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from eom_observe_contracts import HealthResponse, NodeStatus, ObserveSnapshot, validate_contract
+from eom_observe_contracts import (
+    HealthResponse,
+    NodeStatus,
+    ObserveSnapshot,
+    OperationalOverview,
+    validate_contract,
+)
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from eom_observe.auth import AuthService
 from eom_observe.database import build_readonly_engine
 from eom_observe.errors import ObserveError, ObserveErrorCode
+from eom_observe.operational_overview import OperationalOverviewBuilder
 from eom_observe.repository import ObserveRepository
 from eom_observe.resources import static_resource
 from eom_observe.settings import ObserveSecrets, ObserveSettings, load_secrets, load_settings
@@ -58,6 +65,7 @@ class AppServices:
         self.auth = auth
         self.hub = hub
         self.poller = poller
+        self.operational_overview = OperationalOverviewBuilder(repository)
 
 
 def build_services(
@@ -229,6 +237,17 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         _session: str = Depends(require_session),
     ) -> ObserveSnapshot:
         return await current_snapshot()
+
+    @app.get(
+        f"{API_PREFIX}/operational-overview",
+        response_model=OperationalOverview,
+    )
+    async def operational_overview(
+        _session: str = Depends(require_session),
+    ) -> OperationalOverview:
+        result = await asyncio.to_thread(actual.operational_overview.build)
+        validate_contract("operational-overview", result.model_dump(mode="json"))
+        return result
 
     @app.get(f"{API_PREFIX}/nodes")
     async def nodes(

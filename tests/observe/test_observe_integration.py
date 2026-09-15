@@ -9,6 +9,7 @@ import pytest
 pytest.importorskip("eom_observe")
 
 from eom_observe.database import build_readonly_engine
+from eom_observe.read_model import REQUIRED_READ_MODEL_TABLES
 from eom_observe.repository import ObserveRepository
 from eom_observe.settings import load_secrets, load_settings
 from eom_observe.snapshot import SnapshotBuilder
@@ -39,15 +40,48 @@ def test_readonly_role_select_and_write_denials() -> None:
     repo = repository()
     assert repo.ping()
     assert repo.database_is_readonly()
-    assert len(repo.required_tables()) == 9
+    assert repo.required_tables() == list(REQUIRED_READ_MODEL_TABLES)
     for statement in (
         "INSERT INTO worker_slots (slot_id,linux_user,role,enabled,gpu) "
         "VALUES ('zz','denied','support',false,false)",
         "UPDATE worker_slots SET enabled=enabled WHERE slot_id='01'",
         "DELETE FROM worker_slots WHERE slot_id='zz'",
         "CREATE TABLE observe_write_must_fail (id integer)",
+        "UPDATE workflow_commands SET state=state WHERE false",
+        "UPDATE worker_leases SET state=state WHERE false",
+        "UPDATE api_idempotency_records SET state=state WHERE false",
     ):
         with pytest.raises(DBAPIError), repo.engine.connect() as connection, connection.begin():
+            connection.execute(text(statement))
+    repo.engine.dispose()
+
+
+def test_operational_overview_contract_and_column_grant_boundaries() -> None:
+    repo = repository()
+    overview = repo.operational_overview_rows(
+        recent_failure_window_seconds=3600,
+        attention_limit=100,
+    )
+    assert overview.observed_at.tzinfo is not None
+    assert set(overview.counts) == {
+        "active_workflow_commands",
+        "active_jobs",
+        "held_worker_leases",
+        "processing_api_requests",
+        "pending_human_approvals",
+        "executable_workflows",
+        "quiescent_nonterminal_workflows",
+        "recent_failed_workflows",
+        "recent_failed_jobs",
+        "historical_failed_workflows",
+        "historical_failed_jobs",
+    }
+    for statement in (
+        "SELECT payload FROM workflow_commands LIMIT 0",
+        "SELECT release_reason FROM worker_leases LIMIT 0",
+        "SELECT response_body FROM api_idempotency_records LIMIT 0",
+    ):
+        with pytest.raises(DBAPIError), repo.engine.connect() as connection:
             connection.execute(text(statement))
     repo.engine.dispose()
 

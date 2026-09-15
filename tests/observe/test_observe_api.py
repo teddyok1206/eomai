@@ -12,7 +12,14 @@ from eom_observe.settings import ObserveSecrets
 from eom_observe.stream import SharedSnapshotPoller, SubscriptionHub
 from fastapi.testclient import TestClient
 
-from tests.observe.helpers import artifact_detail, job_detail, settings, snapshot, workflow_detail
+from tests.observe.helpers import (
+    artifact_detail,
+    job_detail,
+    operational_overview,
+    settings,
+    snapshot,
+    workflow_detail,
+)
 
 ACCESS_TOKEN = "observe-test-token-that-is-long-enough"
 
@@ -30,6 +37,20 @@ class FakeRepository:
 
     def database_is_readonly(self) -> bool:
         return True
+
+    def operational_overview_rows(
+        self, *, recent_failure_window_seconds: int, attention_limit: int
+    ):
+        from eom_observe.operational_overview import OperationalOverviewRows
+
+        value = operational_overview()
+        assert recent_failure_window_seconds == value.recent_failure_window_seconds
+        assert attention_limit == 100
+        return OperationalOverviewRows(
+            observed_at=value.generated_at,
+            counts=value.counts.model_dump(mode="python"),
+            attention=[item.model_dump(mode="python") for item in value.attention],
+        )
 
 
 class FakeBuilder:
@@ -87,6 +108,7 @@ def test_health_live_is_public_and_minimal(client: TestClient) -> None:
 
 def test_unauthenticated_data_access_rejected(client: TestClient) -> None:
     assert client.get("/observe/api/v1/snapshot").status_code == 401
+    assert client.get("/observe/api/v1/operational-overview").status_code == 401
     assert client.get("/observe/api/v1/stream").status_code == 401
 
 
@@ -120,6 +142,10 @@ def test_authenticated_health_and_snapshot_endpoints(client: TestClient) -> None
     assert len(client.get("/observe/api/v1/nodes").json()) == 10
     assert len(client.get("/observe/api/v1/edges").json()) == 1
     assert len(client.get("/observe/api/v1/events").json()) == 1
+    overview = client.get("/observe/api/v1/operational-overview")
+    assert overview.status_code == 200
+    assert overview.json()["counts"]["quiescent_nonterminal_workflows"] == 1
+    assert overview.json()["attention"][0]["classification"] == "RECENT_FAILED_JOB"
 
 
 @pytest.mark.parametrize(
