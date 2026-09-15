@@ -17,6 +17,7 @@ from eom_web_gui.contracts import (
     PreviewTableBlockV3,
     RequestDraftInput,
     RequestDraftUpdate,
+    StudioProblem,
     WorkflowApproval,
 )
 from eom_web_gui.request_drafts import DEMO_REQUEST, normalize_request, update_draft
@@ -28,11 +29,23 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 13
+    assert len(schemas) == 14
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(schema)
+
+
+def test_studio_problem_matches_web_schema_and_rejects_extra_data() -> None:
+    value = StudioProblem(
+        error_code="APPLICATION_API_UNAVAILABLE",
+        message="request could not be completed",
+        request_id="webreq_" + "a" * 24,
+    )
+    schema = json.loads((SCHEMA_ROOT / "studio-problem-v1.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(value.model_dump(mode="json") | {"detail": "x"})
 
 
 def _curriculum_outline_projection() -> dict[str, object]:

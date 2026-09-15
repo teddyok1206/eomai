@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/web-gui/studio-problem/1.0",
+  "title": "EOM Scientific Studio Problem",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["error_code", "message", "request_id"],
+  "properties": {
+    "error_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^webreq_[0-9a-f]{24}$"
+    }
+  }
+}

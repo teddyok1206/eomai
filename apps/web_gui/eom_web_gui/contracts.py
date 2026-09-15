@@ -41,6 +41,12 @@ class WebModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class StudioProblem(WebModel):
+    error_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    message: str = Field(min_length=1, max_length=160)
+    request_id: str = Field(pattern=r"^webreq_[0-9a-f]{24}$")
+
+
 class QualityProfile(StrEnum):
     FAST = "fast"
     BALANCED = "balanced"
