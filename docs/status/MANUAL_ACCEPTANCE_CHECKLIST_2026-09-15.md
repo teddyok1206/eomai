@@ -11,6 +11,11 @@ outcome. Do not record Item content, credentials, cookies, prompts, or private s
 
 ## Gate A: Scientific Studio in a real browser
 
+- [x] Open Scientific Studio and confirm that Item Preview V3 is usable for viewing the current
+      Item content. User-reported PASS at 2026-09-15 14:28 UTC.
+- [x] Download the current whole-exam HWPX through the authenticated Scientific Studio path.
+      User-reported PASS at 2026-09-15 14:28 UTC. This records download availability, not Hancom
+      layout or editability.
 - [ ] Open a current approved table-only Item. Confirm that the data remains an editable table,
       there is no empty image frame, and no invented `(가)` label appears.
 - [ ] Open a current approved paired-image Item. Confirm that two different images render in authored
@@ -30,6 +35,10 @@ outcome. Do not record Item content, credentials, cookies, prompts, or private s
 
 Automated baseline: build `hwpxbuild_da626008bbc14afc9d3408bc0107a0f9`, 25 Items, output SHA-256
 `sha256:5f1ab03c1123957c6bd550a9b2e9bfd73030fa40bbdcf70e6433d757e1f22bab`.
+
+The accepted product contract is one whole-exam HWPX build for the Assembly of 25 approved Item
+Revisions. Separate HWPX builds for every Item are not required and must not be fabricated or
+backfilled merely to populate a list.
 
 - [ ] Download the exact build through Scientific Studio and open it in Hancom without a repair or
       corruption warning.
@@ -86,3 +95,5 @@ Add observations here only when the manual review is performed.
 
 | UTC time | Observer | Gate/case | Visible identity | Result | Concise observation |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-15 14:28 | User | Gate A browser Preview | Current Scientific Studio Item Preview V3 | PASS | Item content was viewable and the Preview was usable. |
+| 2026-09-15 14:28 | User | Gate A authenticated download | Current whole-exam HWPX delivery | PASS | Download succeeded; Hancom rendering was not separately reported. |

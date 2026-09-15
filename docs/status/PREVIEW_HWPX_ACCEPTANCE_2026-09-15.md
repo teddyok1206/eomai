@@ -2,9 +2,10 @@
 
 Observed at: 2026-09-15 12:51–12:58 UTC
 
-This record covers the automated portions of roadmap steps S03 and S04 after the coordinated
-`d4748d1` API/Web release. It uses the public HTTPS reverse-proxy path and immutable approved
-products. It does not claim a human visual review in a browser or Hancom application.
+This record covers roadmap steps S03 and S04 after the coordinated `d4748d1` API/Web release. It
+uses the public HTTPS reverse-proxy path and immutable approved products. Automated evidence was
+recorded at 12:51–12:58 UTC. The user subsequently confirmed the browser Preview and authenticated
+HWPX download at 14:28 UTC. It does not claim a Hancom application render or edit review.
 
 ## Public HTTPS and session boundary
 
@@ -97,10 +98,33 @@ delivery or generation was required for this confirmation.
 This reuses the approved Item set and immutable build rather than consuming a new generation or
 render budget solely for release alignment.
 
+## User-observed browser and download result
+
+At 2026-09-15 14:28 UTC, the user reported that the current Scientific Studio Item Preview V3 was
+usable in a real browser and that authenticated HWPX download succeeded. This closes the manual
+browser availability and download checks. It does not prove every material-layout branch by visual
+inspection and does not prove Hancom rendering or editability.
+
+The accepted current 25-Item product shape is:
+
+```text
+25 approved Item Revisions
+  -> one Assessment Assembly
+  -> one whole-exam HWPX build
+```
+
+The absence of 25 separate per-Item HWPX build rows is therefore not a missing build, data loss, or
+UI defect. No per-Item delivery backfill, synthetic build rows, historical regeneration, or new
+acceptance cycle is required. A future ability to derive one standalone HWPX delivery from an
+approved Item Revision may be considered separately as a low-priority product feature; it is not a
+Gate A blocker.
+
 ## Remaining human gate
 
 The host has no installed supported browser engine, and automated HTTP/JavaScript contract tests do
-not evaluate typography or visual layout. The following remain explicitly manual:
+not evaluate typography or visual layout. The user has now performed the high-level browser and
+download checks. The granular material inspection and Hancom layout/editability review remain
+explicitly manual:
 
 1. open Scientific Studio in a real browser and inspect at least one table-only, paired-image, and
    mixed-material Item;
@@ -108,10 +132,25 @@ not evaluate typography or visual layout. The following remain explicitly manual
 3. open the exact whole-exam HWPX in Hancom and inspect editable tables, embedded images, `(가)/(나)`
    labels, equations, and page flow.
 
-Until those observations are recorded:
+Current status:
 
 `S03_AUTOMATED_PRODUCT_SMOKE=PASS`
 
 `S04_AUTOMATED_DELIVERY_SMOKE=PASS`
 
-`GATE_A=MANUAL_VISUAL_REVIEW_PENDING`
+`MANUAL_BROWSER_PREVIEW=PASS`
+
+`MANUAL_HWPX_DOWNLOAD=PASS`
+
+`MANUAL_HANCOM_RENDER_REVIEW=NOT_RECORDED`
+
+`TWENTY_FIVE_ITEM_PER_ITEM_HWPX_BUILDS=NOT_REQUIRED_BY_CURRENT_PRODUCT_CONTRACT`
+
+`WHOLE_EXAM_HWPX=ACCEPTED_EXISTING_PATH`
+
+`GATE_A_BROWSER_AND_DOWNLOAD=PASS`
+
+Because the roadmap explicitly requires opening the exact whole-exam HWPX in Hancom and inspecting
+its layout and editability, the honest aggregate state remains:
+
+`GATE_A=PARTIAL_MANUAL_PASS`
