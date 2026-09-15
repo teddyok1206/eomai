@@ -28,11 +28,13 @@ lease indexes prevent duplicate command execution and duplicate slot/job ownersh
 
 ## Scale and capacity
 
-The campaign has one legacy-extraction slot and one knowledge-analysis slot. Two runner processes
-allow those independent pools to execute concurrently. The existing global Codex concurrency
-limit and per-pool `max_active` values remain authoritative; adding runner processes cannot create
-capacity beyond those limits. Expected additional memory is about one runner process (well below
-the existing service and host limits).
+The current knowledge-analysis policy has two support slots, 05 and 06, a support-pool maximum of
+two, a knowledge-analysis maximum of two, and a global Codex maximum of three. Two runner processes
+allow two independently claimed support commands to reach those two slots concurrently. The
+existing global and per-pool `max_active` values remain authoritative; adding runner processes
+cannot create capacity beyond those limits. Other campaigns may share the support pool, so the
+capacity controller rather than the process count remains the final admission boundary. Expected
+additional memory is about one runner process (well below the existing service and host limits).
 
 ## Transaction and concurrency boundary
 
@@ -62,18 +64,36 @@ re-materialize it from the newly verified canonical unit. Rollback is immediate:
 the accelerator runtime unit and continue with the canonical single runner. Existing commands,
 jobs, and leases remain durable.
 
+The only supported operator path is `scripts/workflow/manage_runner_scale_out.py`. It pins the
+exact installed canonical unit SHA-256, publishes the runtime unit with no-replace semantics, and
+accepts an existing target only when its bytes and metadata are exact. `start` requires the base
+runner to be active, healthy, restart-free, and free of drop-ins. `stop` first stops the accelerator
+and removes only the exact reviewed runtime unit. Both transitions reload systemd and independently
+verify the final unit state. The accelerator name remains inside the shared-runtime deployment
+fence pattern, so a release fails closed until it is stopped and removed.
+
+Release installation also rejects the inactive runtime unit path. Merely stopping the accelerator
+is insufficient: the exact staged copy must be removed before shared runtime bytes change. This
+prevents an older inactive unit from being adopted after a later deployment.
+
+An exact runtime unit may be present while inactive. The manager reports this explicitly as
+`STAGED` or, before a manager reload, `STAGED_UNLOADED`; it neither treats staged bytes as an active
+consumer nor overwrites them. `start` may adopt those exact bytes, while any hash, metadata, path,
+drop-in, or service-state mismatch fails closed.
+
 ## Simpler alternative
 
-A single runner is simpler but serializes long slot-06 extraction and slot-05 knowledge analysis,
-leaving an authenticated worker slot idle for minutes per item. Increasing queue polling or host
-resources cannot remove that blocking call. Two bounded consumers are the smallest change that
-uses the concurrency and idempotency mechanisms already present.
+A single runner is simpler but serializes long support commands and leaves one authenticated
+support slot idle for minutes per Item when two eligible commands are queued. Increasing queue
+polling or host resources cannot remove that blocking call. Two bounded consumers are the smallest
+change that uses the concurrency and idempotency mechanisms already present.
 
 ## Verification
 
 - canonical and runtime unit bytes have identical SHA-256 values;
 - both runner services are active under the same non-root identity and sandbox;
 - slot 05 and slot 06 can be active concurrently;
-- database counts show one extraction and one analysis in flight, never duplicate jobs;
+- database counts stay within the pinned global, knowledge-analysis, and support-pool maxima and
+  never expose duplicate commands, Jobs, leases, or accepted successors;
 - watchdog, API, GUI, Catalog, and non-target listener health remain active;
 - removal of the accelerator returns operation to the original single-runner topology.

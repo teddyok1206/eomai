@@ -21,6 +21,7 @@ PLATFORM_CONSUMER_SERVICES=(
 SHARED_RUNTIME_TRANSIENT_PATTERNS=(
   "eom-workflow-runner-*.service"
 )
+WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT="/run/systemd/system/eom-workflow-runner-accelerator.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
 WORKFLOW_MAINTENANCE_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_MAINTENANCE_SERVICE}"
@@ -2524,6 +2525,12 @@ require_no_active_transient_platform_consumers() {
     fail "active transient shared-runtime consumers must be quiesced and stopped before installation: ${active_units[*]}"
 }
 
+require_no_staged_workflow_runner_accelerator() {
+  [[ ! -e "${WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT}" && \
+    ! -L "${WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT}" ]] || \
+    fail "staged Workflow runner accelerator must be removed before release"
+}
+
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
@@ -2594,6 +2601,7 @@ case "${ACTION}" in
     verify_workflow_runner_deployment_hold
     verify_mock_exam_deployment_admission
     require_no_active_transient_platform_consumers
+    require_no_staged_workflow_runner_accelerator
     install_wheels
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges
