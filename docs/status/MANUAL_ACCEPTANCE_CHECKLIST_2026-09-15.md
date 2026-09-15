@@ -22,6 +22,8 @@ outcome. Do not record Item content, credentials, cookies, prompts, or private s
 - [ ] Refresh the Item and HWPX lists, then log out and back in. Confirm that loading, empty, denied,
       expired-session, and unavailable-preview states give an actionable Korean message rather than
       a generic API error.
+- [ ] When a safe failed or denied request is visible, confirm that it shows one inquiry number that
+      an administrator can correlate, without showing a payload, path, prompt, or Item content.
 - [ ] With a role that lacks access, confirm that Item media and administrator details are not shown.
 
 ## Gate A: exact whole-exam HWPX in Hancom
