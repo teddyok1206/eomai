@@ -12,8 +12,10 @@ Authenticated Preview and media behavior remain separate S03 product gates.
 
 The follow-up [Preview and HWPX acceptance](PREVIEW_HWPX_ACCEPTANCE_2026-09-15.md) passed the public
 HTTPS session, V1/V2/V3 Preview compatibility, media hash, material-contract, and existing single
-and 25-Item HWPX download checks. Gate A still records real-browser and Hancom visual review as a
-manual pending boundary.
+and 25-Item HWPX download checks. The user subsequently confirmed the real-browser Preview V3 and
+authenticated HWPX download. Gate A is therefore `PARTIAL_MANUAL_PASS`; only the previously defined
+Hancom layout and editability observation remains unrecorded. The accepted 25-Item delivery is one
+Assembly-level whole-exam HWPX build, not 25 separate per-Item build rows.
 
 This document describes the repository state, not an implicit claim that every additive successor
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
