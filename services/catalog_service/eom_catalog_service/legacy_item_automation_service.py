@@ -104,13 +104,6 @@ class LegacyItemAutomaticLearningService:
             return self._advance_pinned_once()
 
     def _advance_pinned_once(self) -> bool:
-        terminal = self._terminal_analysis()
-        if terminal is not None:
-            raise LegacyItemLearningError(
-                "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS",
-                "automatic learning stopped at a terminal leaf analysis",
-            )
-
         active_analyses = self._active_analyses()
         progressed = False
         for active in active_analyses:
@@ -128,12 +121,12 @@ class LegacyItemAutomaticLearningService:
                     )
                 )
             progressed = True
-            terminal = self._terminal_analysis()
-            if terminal is not None:
-                raise LegacyItemLearningError(
-                    "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS",
-                    "automatic learning stopped at a terminal leaf analysis",
-                )
+        terminal = self._terminal_analysis()
+        if terminal is not None:
+            raise LegacyItemLearningError(
+                "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS",
+                "automatic learning stopped at a terminal leaf analysis",
+            )
         if len(active_analyses) == MAX_AUTOMATIC_ACTIVE_ANALYSES:
             return progressed
         solution_retry = self._retryable_solution_analysis()

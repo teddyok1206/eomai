@@ -21,7 +21,10 @@ from eom_catalog_service.legacy_item_automation_service import (
     _LearningCandidate,
 )
 from eom_catalog_service.legacy_item_graph_learning_service import LegacyItemGraphCandidate
-from eom_catalog_service.legacy_item_learning_service import LegacyItemLearningPresetPin
+from eom_catalog_service.legacy_item_learning_service import (
+    LegacyItemLearningError,
+    LegacyItemLearningPresetPin,
+)
 from sqlalchemy import Engine, create_engine, text
 
 
@@ -802,22 +805,36 @@ def test_automation_preset_pin_requires_every_exact_pointer(
     assert _legacy_automation_preset_pin() is None
 
 
-def test_terminal_leaf_stops_before_reconcile_graph_retry_or_promotion() -> None:
+def test_terminal_leaf_fences_refill_after_all_bounded_active_reconciliation() -> None:
     service = object.__new__(LegacyItemAutomaticLearningService)
     service.learning = Mock()
     service.analyses = Mock()
     service.graph = Mock()
     service._terminal_analysis = cast(Any, lambda: ("analysisrun_" + "9" * 32, "FAILED"))
-    service._active_analyses = Mock()
+    service._active_analyses = Mock(
+        return_value=(
+            ("analysisrun_" + "7" * 32, "operator_first", "RUNNING"),
+            ("analysisrun_" + "8" * 32, "operator_second", "QUEUED"),
+        )
+    )
+    service._retryable_solution_analysis = Mock()
+    service._solution_candidate = Mock()
     service._retryable_analysis = Mock()
     service._candidate = Mock()
     service.preset_pin = _pin()
     service.learning.preset_pin_guard.return_value = nullcontext()
 
-    with pytest.raises(RuntimeError, match="terminal leaf analysis"):
+    with pytest.raises(LegacyItemLearningError, match="terminal leaf analysis") as captured:
         service.advance_once()
 
-    service._active_analyses.assert_not_called()
+    assert captured.value.code == "LEGACY_ITEM_AUTOMATION_TERMINAL_ANALYSIS"
+    commands = tuple(call.args[0] for call in service.analyses.reconcile.call_args_list)
+    assert tuple(command.analysis_run_id for command in commands) == (
+        "analysisrun_" + "7" * 32,
+        "analysisrun_" + "8" * 32,
+    )
     service.graph.pending_candidates.assert_not_called()
+    service._retryable_solution_analysis.assert_not_called()
+    service._solution_candidate.assert_not_called()
     service._retryable_analysis.assert_not_called()
     service._candidate.assert_not_called()
