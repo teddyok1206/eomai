@@ -18,6 +18,9 @@ PLATFORM_CONSUMER_SERVICES=(
   "eom-hwpx-application-runner.service"
   "eom-api.service"
 )
+SHARED_RUNTIME_TRANSIENT_PATTERNS=(
+  "eom-workflow-runner-*.service"
+)
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
 WORKFLOW_MAINTENANCE_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_MAINTENANCE_SERVICE}"
@@ -2502,6 +2505,25 @@ restart_platform_consumers() {
   done
 }
 
+require_no_active_transient_platform_consumers() {
+  local pattern unit
+  local -a active_units=()
+  for pattern in "${SHARED_RUNTIME_TRANSIENT_PATTERNS[@]}"; do
+    while IFS= read -r unit; do
+      [[ -n "${unit}" ]] && active_units+=("${unit}")
+    done < <(
+      systemctl list-units \
+        --type=service \
+        --state=active \
+        --no-legend \
+        --plain \
+        "${pattern}" | awk 'NF {print $1}'
+    )
+  done
+  ((${#active_units[@]} == 0)) || \
+    fail "active transient shared-runtime consumers must be quiesced and stopped before installation: ${active_units[*]}"
+}
+
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
@@ -2571,6 +2593,7 @@ case "${ACTION}" in
     # Close the build-window race before replacing any installed runtime package.
     verify_workflow_runner_deployment_hold
     verify_mock_exam_deployment_admission
+    require_no_active_transient_platform_consumers
     install_wheels
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges

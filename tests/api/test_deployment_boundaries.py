@@ -895,6 +895,21 @@ def test_shared_platform_release_restarts_every_long_lived_consumer() -> None:
     assert '"eom-workflow-runner",' in deployment
 
 
+def test_shared_platform_release_fences_transient_consumers_before_install() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    install_branch = deployment.partition('case "${ACTION}" in')[2]
+
+    assert '"eom-workflow-runner-*.service"' in deployment
+    assert "require_no_active_transient_platform_consumers()" in deployment
+    assert "systemctl list-units" in deployment
+    assert "--state=active" in deployment
+    assert "active transient shared-runtime consumers must be quiesced" in deployment
+    assert "require_no_active_transient_platform_consumers" in install_branch
+    assert install_branch.index("require_no_active_transient_platform_consumers") < (
+        install_branch.index("install_wheels")
+    )
+
+
 @pytest.mark.parametrize(
     "relative",
     [
