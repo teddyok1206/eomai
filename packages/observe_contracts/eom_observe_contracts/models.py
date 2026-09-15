@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SummaryValue = str | int | bool | None | list[str]
 
@@ -39,6 +39,149 @@ class SnapshotSummary(StrictModel):
     running_jobs: int = Field(ge=0)
     failed_jobs_recent: int = Field(ge=0)
     idle_workers: int = Field(ge=0)
+
+
+class OperationalAttentionClass(StrEnum):
+    QUIESCENT_NONTERMINAL_WORKFLOW = "QUIESCENT_NONTERMINAL_WORKFLOW"
+    EXPIRED_WORKFLOW_COMMAND_CLAIM = "EXPIRED_WORKFLOW_COMMAND_CLAIM"
+    EXPIRED_WORKER_LEASE = "EXPIRED_WORKER_LEASE"
+    EXPIRED_API_IDEMPOTENCY_CLAIM = "EXPIRED_API_IDEMPOTENCY_CLAIM"
+    RECENT_FAILED_WORKFLOW = "RECENT_FAILED_WORKFLOW"
+    RECENT_FAILED_JOB = "RECENT_FAILED_JOB"
+
+
+class OperationalCounts(StrictModel):
+    active_workflow_commands: int = Field(ge=0)
+    active_jobs: int = Field(ge=0)
+    held_worker_leases: int = Field(ge=0)
+    processing_api_requests: int = Field(ge=0)
+    pending_human_approvals: int = Field(ge=0)
+    executable_workflows: int = Field(ge=0)
+    quiescent_nonterminal_workflows: int = Field(ge=0)
+    recent_failed_workflows: int = Field(ge=0)
+    recent_failed_jobs: int = Field(ge=0)
+    historical_failed_workflows: int = Field(ge=0)
+    historical_failed_jobs: int = Field(ge=0)
+
+
+class OperationalAttentionItem(StrictModel):
+    classification: OperationalAttentionClass
+    workflow_id: str | None = Field(default=None, pattern=r"^workflow_[a-z0-9_]{8,55}$")
+    job_id: str | None = Field(default=None, pattern=r"^job_[a-z0-9_]{8,55}$")
+    command_id: str | None = Field(default=None, pattern=r"^wfcmd_[a-z0-9_]{8,55}$")
+    lease_id: str | None = Field(default=None, pattern=r"^workerlease_[a-z0-9_]{8,55}$")
+    api_idempotency_record_id: str | None = Field(
+        default=None, pattern=r"^apiidem_[a-z0-9_]{8,55}$"
+    )
+    state: str = Field(pattern=r"^[A-Z][A-Z0-9_]{0,39}$")
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def require_classification_identity(self) -> OperationalAttentionItem:
+        identities = {
+            "workflow_id": self.workflow_id,
+            "job_id": self.job_id,
+            "command_id": self.command_id,
+            "lease_id": self.lease_id,
+            "api_idempotency_record_id": self.api_idempotency_record_id,
+        }
+        required, permitted = {
+            OperationalAttentionClass.QUIESCENT_NONTERMINAL_WORKFLOW: (
+                frozenset({"workflow_id"}),
+                frozenset({"workflow_id"}),
+            ),
+            OperationalAttentionClass.EXPIRED_WORKFLOW_COMMAND_CLAIM: (
+                frozenset({"workflow_id", "command_id"}),
+                frozenset({"workflow_id", "command_id"}),
+            ),
+            OperationalAttentionClass.EXPIRED_WORKER_LEASE: (
+                frozenset({"workflow_id", "job_id", "lease_id"}),
+                frozenset({"workflow_id", "job_id", "lease_id"}),
+            ),
+            OperationalAttentionClass.EXPIRED_API_IDEMPOTENCY_CLAIM: (
+                frozenset({"api_idempotency_record_id"}),
+                frozenset({"api_idempotency_record_id"}),
+            ),
+            OperationalAttentionClass.RECENT_FAILED_WORKFLOW: (
+                frozenset({"workflow_id"}),
+                frozenset({"workflow_id"}),
+            ),
+            OperationalAttentionClass.RECENT_FAILED_JOB: (
+                frozenset({"job_id"}),
+                frozenset({"workflow_id", "job_id"}),
+            ),
+        }[self.classification]
+        if any(identities[name] is None for name in required):
+            raise ValueError("operational attention identity is incomplete")
+        if any(value is not None and name not in permitted for name, value in identities.items()):
+            raise ValueError(
+                "operational attention identity is inconsistent with its classification"
+            )
+        permitted_states = {
+            OperationalAttentionClass.QUIESCENT_NONTERMINAL_WORKFLOW: frozenset(
+                {
+                    "REQUESTED",
+                    "RUNNING",
+                    "AWAITING_HUMAN_APPROVAL",
+                    "REWORK_REQUESTED",
+                    "APPROVED",
+                    "REGISTERING",
+                }
+            ),
+            OperationalAttentionClass.EXPIRED_WORKFLOW_COMMAND_CLAIM: frozenset(
+                {"LEASED", "PROCESSING"}
+            ),
+            OperationalAttentionClass.EXPIRED_WORKER_LEASE: frozenset({"ACTIVE", "RECONCILING"}),
+            OperationalAttentionClass.EXPIRED_API_IDEMPOTENCY_CLAIM: frozenset({"PROCESSING"}),
+            OperationalAttentionClass.RECENT_FAILED_WORKFLOW: frozenset({"FAILED"}),
+            OperationalAttentionClass.RECENT_FAILED_JOB: frozenset({"FAILED"}),
+        }[self.classification]
+        if self.state not in permitted_states:
+            raise ValueError("operational attention state is inconsistent with its classification")
+        return self
+
+
+class OperationalOverview(StrictModel):
+    schema_version: Literal["observe-operational-overview/1.0"] = "observe-operational-overview/1.0"
+    generated_at: datetime
+    recent_failure_window_seconds: int = Field(ge=60, le=86_400)
+    counts: OperationalCounts
+    attention: list[OperationalAttentionItem] = Field(max_length=100)
+
+    @model_validator(mode="after")
+    def require_stable_attention_order(self) -> OperationalOverview:
+        def key(item: OperationalAttentionItem) -> tuple[datetime, str, str]:
+            identity = next(
+                value
+                for value in (
+                    item.workflow_id,
+                    item.job_id,
+                    item.command_id,
+                    item.lease_id,
+                    item.api_idempotency_record_id,
+                )
+                if value is not None
+            )
+            return (item.observed_at, item.classification.value, identity)
+
+        expected = sorted(self.attention, key=key, reverse=True)
+        if self.attention != expected:
+            raise ValueError("operational attention values must use canonical newest-first order")
+        identities = {
+            (
+                item.classification,
+                item.workflow_id,
+                item.job_id,
+                item.command_id,
+                item.lease_id,
+                item.api_idempotency_record_id,
+            )
+            for item in self.attention
+        }
+        if len(identities) != len(self.attention):
+            raise ValueError("operational attention values must be unique")
+        return self
 
 
 class DeploymentInfo(StrictModel):

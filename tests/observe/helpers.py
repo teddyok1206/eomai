@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from eom_observe.settings import (
@@ -22,6 +22,10 @@ from eom_observe_contracts import (
     ObserveEvent,
     ObserveNode,
     ObserveSnapshot,
+    OperationalAttentionClass,
+    OperationalAttentionItem,
+    OperationalCounts,
+    OperationalOverview,
     SnapshotSummary,
     WorkflowDetail,
 )
@@ -122,6 +126,50 @@ def snapshot() -> ObserveSnapshot:
         nodes=nodes,
         edges=[edge],
         recent_events=[event()],
+    )
+
+
+def operational_overview() -> OperationalOverview:
+    return OperationalOverview(
+        generated_at=NOW,
+        recent_failure_window_seconds=3600,
+        counts=OperationalCounts(
+            active_workflow_commands=1,
+            active_jobs=1,
+            held_worker_leases=1,
+            processing_api_requests=0,
+            pending_human_approvals=1,
+            executable_workflows=1,
+            quiescent_nonterminal_workflows=1,
+            recent_failed_workflows=0,
+            recent_failed_jobs=1,
+            historical_failed_workflows=3,
+            historical_failed_jobs=5,
+        ),
+        attention=[
+            OperationalAttentionItem(
+                classification=OperationalAttentionClass.RECENT_FAILED_JOB,
+                workflow_id="workflow_12345678",
+                job_id="job_12345678",
+                command_id=None,
+                lease_id=None,
+                api_idempotency_record_id=None,
+                state="FAILED",
+                error_code="WORKER_RESULT_INVALID",
+                observed_at=NOW,
+            ),
+            OperationalAttentionItem(
+                classification=OperationalAttentionClass.QUIESCENT_NONTERMINAL_WORKFLOW,
+                workflow_id="workflow_87654321",
+                job_id=None,
+                command_id=None,
+                lease_id=None,
+                api_idempotency_record_id=None,
+                state="RUNNING",
+                error_code=None,
+                observed_at=NOW - timedelta(seconds=1),
+            ),
+        ],
     )
 
 

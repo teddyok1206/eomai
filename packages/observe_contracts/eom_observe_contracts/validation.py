@@ -14,6 +14,7 @@ from referencing import Registry, Resource
 SCHEMA_FILES = {
     "health": "observe-health.schema.json",
     "snapshot": "observe-snapshot.schema.json",
+    "operational-overview": "observe-operational-overview.schema.json",
     "node": "observe-node.schema.json",
     "edge": "observe-edge.schema.json",
     "event": "observe-event.schema.json",

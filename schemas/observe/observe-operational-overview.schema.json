@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/observe/observe-operational-overview.schema.json",
+  "title": "EOM Observe Operational Overview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "recent_failure_window_seconds", "counts", "attention"],
+  "properties": {
+    "schema_version": {"const": "observe-operational-overview/1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "recent_failure_window_seconds": {"type": "integer", "minimum": 60, "maximum": 86400},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_workflow_commands",
+        "active_jobs",
+        "held_worker_leases",
+        "processing_api_requests",
+        "pending_human_approvals",
+        "executable_workflows",
+        "quiescent_nonterminal_workflows",
+        "recent_failed_workflows",
+        "recent_failed_jobs",
+        "historical_failed_workflows",
+        "historical_failed_jobs"
+      ],
+      "properties": {
+        "active_workflow_commands": {"type": "integer", "minimum": 0},
+        "active_jobs": {"type": "integer", "minimum": 0},
+        "held_worker_leases": {"type": "integer", "minimum": 0},
+        "processing_api_requests": {"type": "integer", "minimum": 0},
+        "pending_human_approvals": {"type": "integer", "minimum": 0},
+        "executable_workflows": {"type": "integer", "minimum": 0},
+        "quiescent_nonterminal_workflows": {"type": "integer", "minimum": 0},
+        "recent_failed_workflows": {"type": "integer", "minimum": 0},
+        "recent_failed_jobs": {"type": "integer", "minimum": 0},
+        "historical_failed_workflows": {"type": "integer", "minimum": 0},
+        "historical_failed_jobs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "attention": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "classification",
+          "workflow_id",
+          "job_id",
+          "command_id",
+          "lease_id",
+          "api_idempotency_record_id",
+          "state",
+          "error_code",
+          "observed_at"
+        ],
+        "properties": {
+          "classification": {
+            "enum": [
+              "QUIESCENT_NONTERMINAL_WORKFLOW",
+              "EXPIRED_WORKFLOW_COMMAND_CLAIM",
+              "EXPIRED_WORKER_LEASE",
+              "EXPIRED_API_IDEMPOTENCY_CLAIM",
+              "RECENT_FAILED_WORKFLOW",
+              "RECENT_FAILED_JOB"
+            ]
+          },
+          "workflow_id": {"type": ["string", "null"], "pattern": "^workflow_[a-z0-9_]{8,55}$"},
+          "job_id": {"type": ["string", "null"], "pattern": "^job_[a-z0-9_]{8,55}$"},
+          "command_id": {"type": ["string", "null"], "pattern": "^wfcmd_[a-z0-9_]{8,55}$"},
+          "lease_id": {"type": ["string", "null"], "pattern": "^workerlease_[a-z0-9_]{8,55}$"},
+          "api_idempotency_record_id": {"type": ["string", "null"], "pattern": "^apiidem_[a-z0-9_]{8,55}$"},
+          "state": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,39}$"},
+          "error_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,79}$"},
+          "observed_at": {"type": "string", "format": "date-time"}
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "classification": {"const": "QUIESCENT_NONTERMINAL_WORKFLOW"},
+              "workflow_id": {"type": "string"},
+              "job_id": {"const": null},
+              "command_id": {"const": null},
+              "lease_id": {"const": null},
+              "api_idempotency_record_id": {"const": null},
+              "state": {
+                "enum": ["REQUESTED", "RUNNING", "AWAITING_HUMAN_APPROVAL", "REWORK_REQUESTED", "APPROVED", "REGISTERING"]
+              }
+            }
+          },
+          {
+            "properties": {
+              "classification": {"const": "EXPIRED_WORKFLOW_COMMAND_CLAIM"},
+              "workflow_id": {"type": "string"},
+              "job_id": {"const": null},
+              "command_id": {"type": "string"},
+              "lease_id": {"const": null},
+              "api_idempotency_record_id": {"const": null},
+              "state": {"enum": ["LEASED", "PROCESSING"]}
+            }
+          },
+          {
+            "properties": {
+              "classification": {"const": "EXPIRED_WORKER_LEASE"},
+              "workflow_id": {"type": "string"},
+              "job_id": {"type": "string"},
+              "command_id": {"const": null},
+              "lease_id": {"type": "string"},
+              "api_idempotency_record_id": {"const": null},
+              "state": {"enum": ["ACTIVE", "RECONCILING"]}
+            }
+          },
+          {
+            "properties": {
+              "classification": {"const": "EXPIRED_API_IDEMPOTENCY_CLAIM"},
+              "workflow_id": {"const": null},
+              "job_id": {"const": null},
+              "command_id": {"const": null},
+              "lease_id": {"const": null},
+              "api_idempotency_record_id": {"type": "string"},
+              "state": {"const": "PROCESSING"}
+            }
+          },
+          {
+            "properties": {
+              "classification": {"const": "RECENT_FAILED_WORKFLOW"},
+              "workflow_id": {"type": "string"},
+              "job_id": {"const": null},
+              "command_id": {"const": null},
+              "lease_id": {"const": null},
+              "api_idempotency_record_id": {"const": null},
+              "state": {"const": "FAILED"}
+            }
+          },
+          {
+            "properties": {
+              "classification": {"const": "RECENT_FAILED_JOB"},
+              "workflow_id": {"type": ["string", "null"]},
+              "job_id": {"type": "string"},
+              "command_id": {"const": null},
+              "lease_id": {"const": null},
+              "api_idempotency_record_id": {"const": null},
+              "state": {"const": "FAILED"}
+            }
+          }
+        ]
+      }
+    }
+  }
+}
