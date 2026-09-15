@@ -86,6 +86,14 @@ The current embedded-image 25-Item delivery was independently queried and downlo
 | status / validation | `SUCCEEDED` / `PASS` |
 | ZIP CRC / mimetype / core | PASS |
 
+A follow-up authenticated byte audit parsed every XML/HPF relationship in this exact downloaded
+package. Every image manifest target resolved to an existing package-internal `BinData/` member,
+every image was explicitly declared `isEmbeded=1`, every section binary reference resolved to a
+declared image identity, and the image manifest set equalled the binary-member set. The package had
+no URI scheme, network-relative path, absolute filesystem path, backslash path, root escape, or
+missing relationship target. The downloaded SHA remained the exact committed SHA above. No new
+delivery or generation was required for this confirmation.
+
 This reuses the approved Item set and immutable build rather than consuming a new generation or
 render budget solely for release alignment.
 
@@ -107,4 +115,3 @@ Until those observations are recorded:
 `S04_AUTOMATED_DELIVERY_SMOKE=PASS`
 
 `GATE_A=MANUAL_VISUAL_REVIEW_PENDING`
-

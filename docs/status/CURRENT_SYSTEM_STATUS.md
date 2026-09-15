@@ -52,11 +52,15 @@ edited or reinterpreted.
 
 ## 3. RAG and knowledge state
 
-The original validated past-exam baseline consists of 50 source PDFs and 520 approved Item analyses
-in one published Graph lineage. One subsequently approved canary Item has joined the additive
-lineage, so the current corpus projection contains 521 accepted bases. “Learning” here means RAG
-ingestion and indexed evidence, not model-weight training. Evidence resolution is bounded,
-permission checked, schema/media checked, revision pinned, and hash verified.
+The current batch-free past-exam corpus consists of 50 source PDFs, 25 occurrence revisions, and
+520 approved Item analyses in one published Graph lineage. Its typed denominator is the set of
+distinct Item Revisions placed in those past-exam occurrences and joined one-to-one to an accepted
+V9 analysis. A separately approved trusted-RAG canary Item has no past-exam occurrence placement or
+V9 base in that projection and is intentionally outside the 520 solution-report target. The earlier
+521 statement mixed that separate product lineage into the past-exam denominator and is superseded
+by the 2026-09-15 read-only target-set audit. “Learning” here means RAG ingestion and indexed
+evidence, not model-weight training. Evidence resolution is bounded, permission checked,
+schema/media checked, revision pinned, and hash verified.
 
 The current trusted-RAG path requires authoring and review to cite the same exact Evidence Bundle
 entry and Graph anchors and to identify non-null scalar application locations in the draft. The
@@ -215,10 +219,11 @@ build is a new immutable build resource; no failed record was rewritten.
 4. The current official HWPX resource is valid even though an earlier checkpoint contains an
    immutable failed build. Recovery tooling must create or resolve an idempotent successor; it must
    not mutate history or reinterpret a failed build as successful.
-5. Solution-report enrichment is still operationally active on support slots 5 and 6. At
-   2026-09-14 13:06 UTC, 212 of the current 521 accepted bases had an accepted additive report,
-   309 remained, and duplicate accepted predecessors were zero. Scientific Studio's batch-free
-   corpus projection is authoritative after this timestamp.
+5. Solution-report enrichment targets the exact 520 occurrence-backed past-exam bases. The later
+   2026-09-15 runtime baseline supersedes the historical 212/521 snapshot and records 322 completed,
+   one active stale row, one failed row, and 196 not started. Scientific Studio's batch-free corpus
+   projection is authoritative after the recorded timestamp; a separate canary is not added merely
+   to make the denominator 521.
 6. The next product-quality gate is no longer basic transport feasibility. It is measured reviewer
    acceptance: scientific correctness, evidence relevance, novelty, visual accuracy, explanation
    quality, and HWPX edit time must be recorded without weakening schema, pointer, approval, or
