@@ -10,6 +10,11 @@ The coordinated [2026-09-15 release alignment](RELEASE_ALIGNMENT_2026-09-15.md) 
 the installed Application API and Scientific Studio Web to one verified `d4748d1` source identity.
 Authenticated Preview and media behavior remain separate S03 product gates.
 
+The follow-up [Preview and HWPX acceptance](PREVIEW_HWPX_ACCEPTANCE_2026-09-15.md) passed the public
+HTTPS session, V1/V2/V3 Preview compatibility, media hash, material-contract, and existing single
+and 25-Item HWPX download checks. Gate A still records real-browser and Hancom visual review as a
+manual pending boundary.
+
 This document describes the repository state, not an implicit claim that every additive successor
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
 state remains authoritative only in Scientific Studio and the corresponding typed API views.
