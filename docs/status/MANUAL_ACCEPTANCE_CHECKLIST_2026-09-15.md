@@ -67,6 +67,10 @@ Automated baseline: build `hwpxbuild_da626008bbc14afc9d3408bc0107a0f9`, 25 Items
 
 ## Final operational review
 
+- [ ] Open the administrator operational details panel. Confirm that executable work, pending human
+      approval, quiescent non-terminal history, and recent/historical failures are visually distinct.
+- [ ] Confirm that technical IDs remain hidden from the default user view and appear only after the
+      administrator detail is deliberately opened.
 - [ ] Confirm that the administrator view separates a current actionable failure, historical terminal
       failure, and retired transient unit state.
 - [ ] Follow one UI correlation ID to its immutable Workflow, Job, Artifact Revision, receipt, and
