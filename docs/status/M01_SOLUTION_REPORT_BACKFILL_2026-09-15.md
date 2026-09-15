@@ -108,3 +108,30 @@ not by runner process state or the count shown at this intermediate snapshot.
 Monitoring must stop new refill on any new unallowlisted terminal leaf. A timeout alone must not
 create a new retry identity. Completion requires 520 accepted successors, zero current failed,
 zero active/pending target work, and a final target-set/uniqueness/quiescence audit.
+
+## 15:38 UTC validator stop and prepared recovery
+
+At 2026-09-15 15:38:36 UTC, the terminal-failure fence stopped refill on one new exact failed leaf.
+The typed corpus at the subsequent read-only audit was 362 completed, 0 active, 157 pending, and 1
+failed. Global active Jobs, held/reconciling leases, and active Workflow commands were all zero.
+
+The failed Workflow is `workflow_08d2f382c9744aa2ad78159ca754d1ea`; its analysis is
+`analysisrun_86f074e5d7404c18b76b18eca5130b32`. The support worker on slot 05 exited zero, but the V10
+result repeated one node identity inside `solution_steps[0].node_ids`. The existing role-result
+validator rejected the non-unique array as `WORKER_RESULT_INVALID`; the Workflow and analysis
+failed closed, and the Job committed zero Artifact Revisions. This is the same bounded class as the
+earlier worker-output nonconformance, not evidence that the current schema or instruction omits the
+uniqueness rule.
+
+No deterministic retry exists for this exact failed analysis. The current ordered retry allowlist
+contains 16 unique entries and excludes it. A single successor file has been staged at
+`/tmp/eom-m01-legacy-item-automation-86f0.env`, adding only that exact identity; its SHA-256 is
+`eb1df08ba08052afbdf24c7a775b26913b62b3689f5e87f020ada692591a5bec` and its count is 17 of the
+maximum 32. The staging script passed Ruff, format, strict mypy, exact source-byte, metadata,
+uniqueness, no-replay, and quiescence gates.
+
+The installed environment was not changed because non-interactive operator sudo was unavailable.
+Recovery remains the existing supported sequence: atomically install only the exact staged file,
+restart only `eom-catalog-application-runner.service`, require exactly one deterministic retry, and
+verify that it is accepted before refill resumes. Direct row updates, a new retry key, failed-history
+reinterpretation, or a second retry are forbidden.

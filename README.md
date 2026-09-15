@@ -187,6 +187,25 @@ Revision, 관계, 상태, pointer와 hash만 저장합니다.
 
 ## 현재 검증 상태
 
+2026-09-15 로드맵 상태는 다음과 같습니다. Preview V3와 인증 HWPX 다운로드는 사용자가 실제
+브라우저에서 확인했고, Hancom 내부 레이아웃·편집성은 최종 수동 확인 목록에 남아 있습니다.
+기존 25문항은 개별 HWPX 25개가 아니라 하나의 승인 Assembly와 whole-exam HWPX로 제공되는 것이
+현재 제품 계약입니다.
+
+- S01–S04 자동화 경계: PASS; Gate A browser/download: PASS;
+- M02: 기존 25문항의 사람 품질평가 worksheet 준비 완료, 평가는 진행 전;
+- M03 자동 UX 기반과 M04 관리자 관측성: PASS;
+- L01 제한 교과서 evidence 기술 파일럿: PASS, 교육적 개선 효과는 미평가;
+- L02 반복 생산 기술 경계: PASS, M02 결과 전 새 25문항 생성은 시작하지 않음;
+- L03 두 support slot 측정: 33.5분 동안 17개 승인, 백업 manifest source hardening PASS;
+- M01 풀이보고서: 362/520 완료 후 worker 결과 중복 ID 1건을 validator가 차단하여 안전 정지.
+
+M01의 현재 실패는 Artifact commit 전에 차단됐으며 active Job·lease·command는 0입니다. exact
+deterministic retry stage는 준비됐고 operator sudo 적용만 남았습니다. 최신 mutable 값은
+[M01 기록](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md),
+[L03 기준선](docs/status/L03_SOLUTION_REPORT_CAPACITY_BASELINE_2026-09-15.md), 그리고 Studio typed
+projection을 확인해야 합니다.
+
 2026-09-13 저장소 후보는 runtime별 명시적 환경에서 non-live 테스트 2,916개를 통과했고, 158개
 live·DB·privileged opt-in 테스트는 조건 미설정으로 skip했습니다.
 
@@ -216,9 +235,11 @@ native 표 7개, visual 13개와 PNG 6개를 검증했고, 출력의 SHA-256·ZI
 재확인했습니다. 로그인한 Studio 사용자는
 [검증된 25문항 HWPX를 다운로드](https://eomai.duckdns.org/studio/api/v1/mock-exam-hwpx/builds/hwpxbuild_f3686d5ca87042e390537464a49f1878/download)할 수 있습니다.
 
-기출 풀이보고서 보강은 사용자 작업과 독립된 support slot 5·6에서 계속 진행됩니다. 2026-09-14
-13:06 UTC 스냅샷은 전체 521개 중 212개 완료, 309개 남음, 중복 승인 0개입니다. 이 수치는 진행
-중인 운영 상태이므로 최종 정본은 Studio의 batch-free corpus 집계입니다.
+기출 풀이보고서 보강의 모집단은 occurrence-backed 원 기출 분석 520개입니다. 별도 trusted-RAG
+canary는 의도적으로 제외합니다. 2026-09-15 15:38 UTC에는 362개 완료 후 한 worker 결과가 중복
+node identity로 검증 실패하여 refill이 안전 정지했습니다. 실패 이력은 보존되며, 새로운 key나 DB
+수정이 아니라 기존 exact allowlist와 deterministic retry 경계만 사용합니다. 이 수치는 mutable
+운영 상태이므로 최종 정본은 Studio의 batch-free corpus 집계입니다.
 
 더 자세한 구현/운영 구분과 남은 경계는
 [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)를 참고하십시오.

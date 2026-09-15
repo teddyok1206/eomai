@@ -1,6 +1,6 @@
 # Current System Status
 
-Status date: 2026-09-14 (UTC)
+Status date: 2026-09-15 (UTC)
 
 The later read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md) supersedes the
 mutable deployment, Graph, queue/lease, and solution-report counts below. The architecture and
@@ -8,7 +8,7 @@ historical acceptance in this document remain applicable.
 
 The coordinated [2026-09-15 release alignment](RELEASE_ALIGNMENT_2026-09-15.md) subsequently moved
 the installed Application API and Scientific Studio Web to one verified `d4748d1` source identity.
-Authenticated Preview and media behavior remain separate S03 product gates.
+Authenticated Preview, media, and download behavior were subsequently verified by S03/S04.
 
 The follow-up [Preview and HWPX acceptance](PREVIEW_HWPX_ACCEPTANCE_2026-09-15.md) passed the public
 HTTPS session, V1/V2/V3 Preview compatibility, media hash, material-contract, and existing single
@@ -16,6 +16,24 @@ and 25-Item HWPX download checks. The user subsequently confirmed the real-brows
 authenticated HWPX download. Gate A is therefore `PARTIAL_MANUAL_PASS`; only the previously defined
 Hancom layout and editability observation remains unrecorded. The accepted 25-Item delivery is one
 Assembly-level whole-exam HWPX build, not 25 separate per-Item build rows.
+
+The roadmap follow-up has also prepared the frozen M02 human-quality worksheet, completed the M03
+automated UX foundation and M04 operational projection, verified an existing textbook-grounded
+author/review receipt chain for the limited L01 technical pilot, and re-ran 185 focused V5
+production/readiness tests for L02. These technical results do not substitute for educational
+review.
+
+At 2026-09-15 15:38 UTC, M01 stopped safely after 362 of 520 solution reports because one new
+worker result repeated a node identity. Validation rejected it before Artifact commit. The exact
+deterministic retry stage is prepared, but the root-owned runtime allowlist was not changed without
+operator sudo. The corresponding active Job, lease, and command counts were zero at the audit
+boundary. See [M01 solution-report backfill](M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md).
+
+L03 measured 17 accepted reports across slots 05 and 06 during the 33.5-minute available scale-out
+window. It also added a source candidate for typed PostgreSQL backup manifests and verified the
+newest existing 754 MB dump against its historical manifest. The newest dump has not been restored
+in this session, Artifact-store snapshot/replication is not verified, and RTO/RPO remain undefined.
+See [L03 capacity and recovery](L03_SOLUTION_REPORT_CAPACITY_BASELINE_2026-09-15.md).
 
 This document describes the repository state, not an implicit claim that every additive successor
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
@@ -221,11 +239,10 @@ build is a new immutable build resource; no failed record was rewritten.
 4. The current official HWPX resource is valid even though an earlier checkpoint contains an
    immutable failed build. Recovery tooling must create or resolve an idempotent successor; it must
    not mutate history or reinterpret a failed build as successful.
-5. Solution-report enrichment targets the exact 520 occurrence-backed past-exam bases. The later
-   2026-09-15 runtime baseline supersedes the historical 212/521 snapshot and records 322 completed,
-   one active stale row, one failed row, and 196 not started. Scientific Studio's batch-free corpus
-   projection is authoritative after the recorded timestamp; a separate canary is not added merely
-   to make the denominator 521.
+5. Solution-report enrichment targets the exact 520 occurrence-backed past-exam bases. The
+   2026-09-15 15:38 UTC milestone records 362 completed, zero active, one failed validator-rejected
+   worker result, and 157 pending. Scientific Studio's batch-free corpus projection is authoritative
+   after the recorded timestamp; a separate canary is not added merely to make the denominator 521.
 6. The next product-quality gate is no longer basic transport feasibility. It is measured reviewer
    acceptance: scientific correctness, evidence relevance, novelty, visual accuracy, explanation
    quality, and HWPX edit time must be recorded without weakening schema, pointer, approval, or
