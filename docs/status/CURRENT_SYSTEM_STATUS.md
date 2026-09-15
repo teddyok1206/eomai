@@ -6,6 +6,10 @@ The later read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md
 mutable deployment, Graph, queue/lease, and solution-report counts below. The architecture and
 historical acceptance in this document remain applicable.
 
+The coordinated [2026-09-15 release alignment](RELEASE_ALIGNMENT_2026-09-15.md) subsequently moved
+the installed Application API and Scientific Studio Web to one verified `d4748d1` source identity.
+Authenticated Preview and media behavior remain separate S03 product gates.
+
 This document describes the repository state, not an implicit claim that every additive successor
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
 state remains authoritative only in Scientific Studio and the corresponding typed API views.
