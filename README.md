@@ -56,10 +56,11 @@ readiness가 정본입니다.
 ## RAG 학습의 의미와 현재 기준선
 
 EOM에서 “기출 학습”은 모델 weight training이 아니라 PDF를 검증 가능한 문항·페이지·anchor와
-Graph evidence로 구조화하는 RAG ingestion입니다. 원래 검증된 기준선은 기출 PDF 50개와 승인된
-기출 문항 분석 520개이며, 이후 승인된 카나리 문항이 additive lineage에 합류해 현재 corpus에는
-521개가 있습니다. 생성 worker는 원 PDF 전체를 복사받지 않고, 권한·Revision·Schema·Hash를
-확인한 Evidence Bundle의 bounded context만 받습니다.
+Graph evidence로 구조화하는 RAG ingestion입니다. 현재 typed corpus 기준선은 기출 PDF 50개와
+occurrence-backed 승인 기출 문항 분석 520개입니다. 별도로 승인된 trusted-RAG 카나리 문항은
+신규 문항의 독립 lineage이며 이 520개 풀이보고서 target에 합산하지 않습니다. 생성 worker는 원
+PDF 전체를 복사받지 않고, 권한·Revision·Schema·Hash를 확인한 Evidence Bundle의 bounded
+context만 받습니다.
 
 근거를 실제로 사용했는지는 `graph_grounded=true` 같은 boolean 하나로 판정하지 않습니다.
 Authoring과 Review가 동일한 evidence와 anchor, 문항 JSON Pointer를 선언하고 Orchestrator가
@@ -263,6 +264,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 ## 핵심 문서
 
 - [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)
+- [M01 Solution-report Backfill Recovery](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md)
 - [Repository agent rules](AGENTS.md)
 - [Knowledge-backed Item Execution V3](docs/architecture/KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md)
 - [Trusted Evidence Registration Gate](docs/architecture/TRUSTED_EVIDENCE_REGISTRATION_GATE.md)
