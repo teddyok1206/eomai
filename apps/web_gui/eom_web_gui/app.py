@@ -33,6 +33,7 @@ from eom_web_gui.contracts import (
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
+    StudioProblem,
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
@@ -96,13 +97,16 @@ def create_app(
     @app.middleware("http")
     async def request_boundary(request: Request, call_next: Any) -> Response:
         request_id = f"webreq_{secrets.token_hex(12)}"
+        request.state.request_id = request_id
         host = request.headers.get("host", "").rsplit(":", 1)[0]
         if host not in actual_settings.server.allowed_hosts:
-            return _problem(400, "WEB_HOST_INVALID", request_id)
-        content_length = request.headers.get("content-length")
-        if content_length and content_length.isdigit() and int(content_length) > MAX_BODY_BYTES:
-            return _problem(413, "WEB_BODY_TOO_LARGE", request_id)
-        response: Response = await call_next(request)
+            response: Response = _problem(400, "WEB_HOST_INVALID", request_id)
+        else:
+            content_length = request.headers.get("content-length")
+            if content_length and content_length.isdigit() and int(content_length) > MAX_BODY_BYTES:
+                response = _problem(413, "WEB_BODY_TOO_LARGE", request_id)
+            else:
+                response = await call_next(request)
         response.headers.update(
             {
                 "Cache-Control": "no-store",
@@ -131,12 +135,12 @@ def create_app(
         return response
 
     @app.exception_handler(GatewayError)
-    async def gateway_error(_: Request, exc: GatewayError) -> JSONResponse:
-        return _problem(exc.status, exc.code, f"webreq_{secrets.token_hex(12)}")
+    async def gateway_error(request: Request, exc: GatewayError) -> JSONResponse:
+        return _problem(exc.status, exc.code, request.state.request_id)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:
-        return _problem(422, "WEB_REQUEST_INVALID", f"webreq_{secrets.token_hex(12)}")
+    async def validation_error(request: Request, _: RequestValidationError) -> JSONResponse:
+        return _problem(422, "WEB_REQUEST_INVALID", request.state.request_id)
 
     def require_session(
         session_cookie: Annotated[str | None, Cookie(alias=COOKIE_NAME)] = None,
@@ -758,13 +762,14 @@ def _session_view(session: WebSession) -> dict[str, Any]:
 
 
 def _problem(status: int, code: str, request_id: str) -> JSONResponse:
+    body = StudioProblem(
+        error_code=code,
+        message="request could not be completed",
+        request_id=request_id,
+    )
     return JSONResponse(
         status_code=status,
-        content={
-            "error_code": code,
-            "message": "request could not be completed",
-            "request_id": request_id,
-        },
+        content=body.model_dump(mode="json"),
     )
 
 

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
+
+from eom_web_gui.contracts import StudioProblem
+from jsonschema import Draft202012Validator
+
 from tests.web_gui.helpers import (
     INTAKE_ID,
     ITEM_ID,
@@ -37,6 +44,40 @@ def test_login_requires_same_origin_and_never_echoes_password() -> None:
         )
         assert response.status_code == 403
         assert "TEST_ONLY_PASSWORD" not in response.text
+
+
+def test_problem_request_id_matches_header_log_and_typed_contract(caplog) -> None:
+    client, _ = make_client()
+    with client, caplog.at_level(logging.INFO, logger="eom_web_gui"):
+        login(client)
+        response = client.post(
+            "/studio/api/v1/request-drafts",
+            json={"original_request_text": "충분히 긴 통합과학 문항 요청입니다."},
+        )
+
+    assert response.status_code == 403
+    problem = StudioProblem.model_validate(response.json())
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2] / "schemas/web-gui/studio-problem-v1.schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    Draft202012Validator(schema).validate(problem.model_dump(mode="json"))
+    assert response.headers["X-Request-ID"] == problem.request_id
+    records = [record for record in caplog.records if record.msg == "web request completed"]
+    assert records[-1].request_id == problem.request_id
+
+
+def test_early_request_boundary_problem_keeps_correlation_and_security_headers() -> None:
+    client, _ = make_client()
+    with client:
+        response = client.get("/studio/", headers={"Host": "invalid.example"})
+
+    assert response.status_code == 400
+    problem = StudioProblem.model_validate(response.json())
+    assert response.headers["X-Request-ID"] == problem.request_id
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 def test_request_draft_workflow_submission_and_replay() -> None:

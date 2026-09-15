@@ -16,6 +16,7 @@ const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const ITEM_REVISION_PATTERN = /^itemrev_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
+const WEB_REQUEST_ID_PATTERN = /^webreq_[a-f0-9]{24}$/;
 const state = {
   csrf: "",
   operator: null,
@@ -103,25 +104,36 @@ async function api(path, options = {}) {
   }
   if (!response.ok) {
     let code = `HTTP_${response.status}`;
+    let bodyRequestId = null;
     try {
       const problem = await response.json();
       if (typeof problem.error_code === "string") code = problem.error_code;
+      if (WEB_REQUEST_ID_PATTERN.test(problem.request_id)) bodyRequestId = problem.request_id;
     } catch (_) {
       // The stable HTTP code remains the sanitized fallback.
     }
-    throw new StudioApiError(code);
+    const headerRequestId = response.headers.get("X-Request-ID");
+    const requestId = WEB_REQUEST_ID_PATTERN.test(headerRequestId || "")
+      && (bodyRequestId === null || bodyRequestId === headerRequestId)
+      ? headerRequestId
+      : bodyRequestId !== null && headerRequestId === null
+        ? bodyRequestId
+        : null;
+    throw new StudioApiError(code, requestId);
   }
   if (response.status === 204) return null;
   return response.json();
 }
 
 class StudioApiError extends Error {
-  constructor(code) {
+  constructor(code, requestId = null) {
     const presentation = errorPresentation(code);
     const action = presentation.action ? ` ${presentation.action}` : "";
-    super(`${presentation.label}${action} (기술 코드: ${code})`);
+    const inquiry = requestId ? ` 문의 번호: ${requestId}.` : "";
+    super(`${presentation.label}${action}${inquiry} (기술 코드: ${code})`);
     this.name = "StudioApiError";
     this.code = code;
+    this.requestId = requestId;
   }
 }
 

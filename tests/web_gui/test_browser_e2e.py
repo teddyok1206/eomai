@@ -169,6 +169,8 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'id="hwpx-existing-build-id"' in html
     assert 'id="hwpx-recent-builds"' in html
     assert "const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/" in javascript
+    assert "const WEB_REQUEST_ID_PATTERN = /^webreq_[a-f0-9]{24}$/" in javascript
+    assert "문의 번호: ${requestId}" in javascript
     assert 'url.searchParams.set("hwpx_build_id", buildId)' in javascript
     assert 'window.history.replaceState(null, "",' in javascript
     assert 'entity: "hwpx_builds"' in javascript

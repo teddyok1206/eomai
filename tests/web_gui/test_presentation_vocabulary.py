@@ -135,7 +135,7 @@ def test_gui_uses_vocabulary_only_at_the_presentation_boundary() -> None:
     assert "domains?.[domain]?.states?.[raw] || domains?.generic?.states?.[raw]" in javascript
     assert "element.dataset.rawState = presentation.raw;" in javascript
     assert 'label: "알 수 없는 상태"' in javascript
-    assert "throw new StudioApiError(code);" in javascript
+    assert "throw new StudioApiError(code, requestId);" in javascript
     assert "(기술 코드: ${code})" in javascript
 
     # Raw protocol values still drive transitions and polling. The vocabulary never changes them.
