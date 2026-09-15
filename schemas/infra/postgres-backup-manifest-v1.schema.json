@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/infra/postgres-backup-manifest/1.0",
+  "title": "EOM PostgreSQL Backup Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "backup_id",
+    "created_at_utc",
+    "database",
+    "postgres_version",
+    "dump_format",
+    "file",
+    "size_bytes",
+    "sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "postgres-backup-manifest/1.0"
+    },
+    "backup_id": {
+      "type": "string",
+      "pattern": "^pgbackup_[0-9]{8}T[0-9]{6}Z_[0-9a-f]{12}$"
+    },
+    "created_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z$"
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_$-]*$"
+    },
+    "postgres_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "dump_format": {
+      "const": "custom"
+    },
+    "file": {
+      "type": "string",
+      "pattern": "^eom_[0-9]{8}T[0-9]{6}Z_[0-9a-f]{12}\\.dump$"
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

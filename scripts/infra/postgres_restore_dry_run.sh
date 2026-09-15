@@ -4,6 +4,8 @@ set -euo pipefail
 COMPOSE_FILE="/home/eom/EOM/infra/compose/compose.yml"
 SECRET_FILE="/etc/eom/secrets/postgres.env"
 SERVICE="eom-postgres"
+EOM_CORE_PYTHON="/srv/eom/conda/envs/eom-core/bin/python"
+MANIFEST_CONTRACT="/home/eom/EOM/scripts/infra/postgres_backup_contract.py"
 BACKUP="${1:-}"
 
 usage() {
@@ -15,9 +17,15 @@ if [[ -z "$BACKUP" || "$BACKUP" == "-h" || "$BACKUP" == "--help" ]]; then
   exit 2
 fi
 
-for cmd in docker sha256sum basename date python3; do
+for cmd in docker basename date; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "missing command: $cmd" >&2; exit 2; }
 done
+
+[[ -x "$EOM_CORE_PYTHON" ]] || { echo "explicit EOM Python is unavailable" >&2; exit 2; }
+[[ -f "$MANIFEST_CONTRACT" && ! -L "$MANIFEST_CONTRACT" ]] || {
+  echo "backup manifest contract is unavailable" >&2
+  exit 2
+}
 
 case "$BACKUP" in
   /mnt/nas/eom/backups/postgresql/*.dump) ;;
@@ -28,14 +36,17 @@ esac
 MANIFEST="${BACKUP%.dump}.manifest.json"
 [[ -f "$MANIFEST" ]] || { echo "manifest missing" >&2; exit 3; }
 
+VALIDATION="$("$EOM_CORE_PYTHON" -I "$MANIFEST_CONTRACT" verify "$BACKUP" "$MANIFEST")"
+
+[[ -r "$SECRET_FILE" ]] || { echo "secret file not readable: $SECRET_FILE" >&2; exit 3; }
 set -a
 # shellcheck disable=SC1090
 source "$SECRET_FILE"
 set +a
 
 TS="$(date -u +%Y%m%d%H%M%S)"
-RESTORE_DB="eom_restore_${TS}"
-CONTAINER_PATH="/tmp/$(basename "$BACKUP")"
+RESTORE_DB="eom_restore_${TS}_$$"
+CONTAINER_PATH="/tmp/${RESTORE_DB}_$(basename "$BACKUP")"
 
 cleanup() {
   docker compose --env-file "$SECRET_FILE" -f "$COMPOSE_FILE" exec -T "$SERVICE" \
@@ -43,14 +54,6 @@ cleanup() {
   docker compose --env-file "$SECRET_FILE" -f "$COMPOSE_FILE" exec -T "$SERVICE" rm -f "$CONTAINER_PATH" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-
-expected="$(python3 - "$MANIFEST" <<'PY'
-import json, sys
-print(json.load(open(sys.argv[1], encoding='utf-8'))['sha256'])
-PY
-)"
-actual="$(sha256sum "$BACKUP" | awk '{print $1}')"
-[[ "$expected" == "$actual" ]] || { echo "checksum mismatch" >&2; exit 4; }
 
 docker cp "$BACKUP" "$SERVICE:$CONTAINER_PATH"
 docker compose --env-file "$SECRET_FILE" -f "$COMPOSE_FILE" exec -T "$SERVICE" \
@@ -65,3 +68,4 @@ trap - EXIT
 echo "PASS postgres_restore_dry_run"
 echo "database_restored_and_removed=$RESTORE_DB"
 echo "backup=$(basename "$BACKUP")"
+echo "$VALIDATION"
