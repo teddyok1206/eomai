@@ -265,6 +265,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 
 - [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)
 - [M01 Solution-report Backfill Recovery](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md)
+- [M02 25-Item Educational Review Baseline](docs/status/M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md)
 - [Repository agent rules](AGENTS.md)
 - [Knowledge-backed Item Execution V3](docs/architecture/KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md)
 - [Trusted Evidence Registration Gate](docs/architecture/TRUSTED_EVIDENCE_REGISTRATION_GATE.md)

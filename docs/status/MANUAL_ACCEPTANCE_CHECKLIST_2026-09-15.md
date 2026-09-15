@@ -44,6 +44,9 @@ Automated baseline: build `hwpxbuild_da626008bbc14afc9d3408bc0107a0f9`, 25 Items
 
 ## Gate B: educational and workflow review
 
+- [ ] Use the exact frozen cohort and rubric in
+      [M02 25-Item Educational Review Baseline](M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md);
+      do not substitute current Item revisions.
 - [ ] Review all 25 baseline Items for scientific correctness, unique answer, evidence relevance,
       visual consistency, authoring value, and required edit time.
 - [ ] Have a second content lead independently review at least the agreed sample; record disagreements
@@ -77,4 +80,3 @@ Add observations here only when the manual review is performed.
 
 | UTC time | Observer | Gate/case | Visible identity | Result | Concise observation |
 | --- | --- | --- | --- | --- | --- |
-
