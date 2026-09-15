@@ -15,6 +15,7 @@ from eom_observe.app import build_services, create_app
 from eom_observe.database import build_readonly_engine
 from eom_observe.doctor import run_doctor
 from eom_observe.logging import configure_logging
+from eom_observe.read_model import REQUIRED_READ_MODEL_TABLES
 from eom_observe.repository import ObserveRepository
 from eom_observe.security import generate_access_token, hash_access_token
 from eom_observe.settings import (
@@ -148,7 +149,7 @@ def verify_readonly() -> None:
     result = {
         "select": repository.ping(),
         "default_transaction_read_only": repository.database_is_readonly(),
-        "required_tables": len(repository.required_tables()) == 9,
+        "required_tables": repository.required_tables() == list(REQUIRED_READ_MODEL_TABLES),
     }
     engine.dispose()
     typer.echo(json.dumps(result, indent=2))

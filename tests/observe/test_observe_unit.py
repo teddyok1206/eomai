@@ -298,6 +298,15 @@ def test_observe_deployment_reconciles_minimum_grants_before_restart() -> None:
     assert 'BUILD_ROOT="/tmp/eom-observe-build-${EUID}/${COMMIT}"' in deploy
 
 
+def test_observe_cli_and_doctor_share_authoritative_read_model_inventory() -> None:
+    cli = Path("apps/observe_console/eom_observe/cli.py").read_text(encoding="utf-8")
+    doctor = Path("apps/observe_console/eom_observe/doctor.py").read_text(encoding="utf-8")
+    for source in (cli, doctor):
+        assert "REQUIRED_READ_MODEL_TABLES" in source
+        assert "required_tables()) == 9" not in source
+        assert '"0/9"' not in source
+
+
 def test_source_build_info_is_safe_without_git_lookup() -> None:
     info = get_build_info()
     assert info.source_commit == "unbuilt" or len(info.source_commit) == 40

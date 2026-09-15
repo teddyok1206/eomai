@@ -16,6 +16,7 @@ from eom_observe_contracts.validation import SCHEMA_FILES, schema_resource
 
 from eom_observe.build_info import get_build_info
 from eom_observe.database import build_readonly_engine
+from eom_observe.read_model import REQUIRED_READ_MODEL_TABLES
 from eom_observe.repository import ObserveRepository
 from eom_observe.resources import static_resource, worker_slot_resource
 from eom_observe.settings import (
@@ -154,7 +155,14 @@ def run_doctor(
         checks.append(
             Check("forbidden_insert", insert_denied, "denied" if insert_denied else "allowed")
         )
-        checks.append(Check("required_table_select", len(required) == 9, f"{len(required)}/9"))
+        required_count = len(REQUIRED_READ_MODEL_TABLES)
+        checks.append(
+            Check(
+                "required_table_select",
+                required == list(REQUIRED_READ_MODEL_TABLES),
+                f"{len(required)}/{required_count}",
+            )
+        )
         if repository is not None:
             repository.engine.dispose()
     else:
@@ -163,7 +171,11 @@ def run_doctor(
                 Check("database_connection", False, "not configured"),
                 Check("database_read_only", False, "not configured"),
                 Check("forbidden_insert", False, "not configured"),
-                Check("required_table_select", False, "0/9"),
+                Check(
+                    "required_table_select",
+                    False,
+                    f"0/{len(REQUIRED_READ_MODEL_TABLES)}",
+                ),
             ]
         )
     try:
