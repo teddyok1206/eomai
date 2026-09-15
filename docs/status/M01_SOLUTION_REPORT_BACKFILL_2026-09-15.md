@@ -2,7 +2,7 @@
 
 Status: `RUNNING`
 
-Evidence time: 2026-09-15 13:32 UTC
+Evidence time: 2026-09-15 15:05 UTC
 
 This record distinguishes the immutable 520-Item target, historical failed attempts, current
 corpus truth, and the operational work that resumed the additive V10 solution-report backfill. It
@@ -67,22 +67,30 @@ current corpus failed count became zero.
 
 ## Current projection
 
-At the evidence time above:
+At the evidence time above, immediately after the bounded second runner began consuming work:
 
 | Field | Value |
 | --- | ---: |
 | target | 520 |
-| completed | 324 |
+| completed | 346 |
 | active | 2 |
-| pending | 194 |
+| pending | 172 |
 | current failed | 0 |
 | status | `RUNNING` |
 
-The persistent Workflow runner currently executes one support Job at a time. The automation keeps
-at most two analyses active, so one runs on support slot 05 while the next remains queued. The two
-previous ad-hoc transient runners were removed during release alignment and were not recreated.
-Safe multi-consumer throughput requires a tracked deployment/hold/restart contract and belongs to
-the later measured-capacity work; an untracked transient process is not used to shorten this run.
+The bounded scale-out contract in commit `823f7be` was activated through its sole operator path,
+`scripts/workflow/manage_runner_scale_out.py`. The manager adopted only the already staged runtime
+unit whose bytes exactly matched the installed canonical runner unit at
+`sha256:1688c77a606ea647d498aacbb3f8f75265f459cf888e1495ae82a8d2887b2878`.
+The canonical and accelerator services were active under `eom-workflow-runner:eom` with distinct
+PIDs, zero restarts, and no warning-or-higher accelerator journal entry. PostgreSQL then showed two
+distinct `PROCESSING` commands, two support Jobs, and one active knowledge-analysis lease on each
+of slots 05 and 06. The exact pinned maxima remained two for knowledge analysis, two for the
+support pool, and three globally. This is tracked bounded concurrency, not an ad-hoc worker.
+
+The accelerator must be stopped and its exact runtime unit removed at M01 terminal completion or
+before any shared-runtime release. Completion is still determined by the typed corpus projection,
+not by runner process state or the count shown at this intermediate snapshot.
 
 ## Verification and remaining gate
 
@@ -93,7 +101,9 @@ the later measured-capacity work; an untracked transient process is not used to 
 - release wheel/RECORD inspection: passed;
 - installed-source ordering and service health: passed;
 - deterministic failed-attempt successor: accepted;
-- current corpus uniqueness and final quiescence: pending completion of the remaining 196 Items.
+- bounded scale-out source/identity/fencing suite: 81 passed;
+- live two-runner service, command, Job, lease, and capacity verification: passed;
+- current corpus uniqueness and final quiescence: pending completion of the remaining 172 Items.
 
 Monitoring must stop new refill on any new unallowlisted terminal leaf. A timeout alone must not
 create a new retry identity. Completion requires 520 accepted successors, zero current failed,

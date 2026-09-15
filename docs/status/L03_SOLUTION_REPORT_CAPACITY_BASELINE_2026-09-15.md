@@ -1,13 +1,13 @@
 # L03 solution-report capacity baseline — 2026-09-15
 
-Status: `EARLY_READ_ONLY_MEASUREMENT`
+Status: `BOUNDED_SCALE_OUT_MEASUREMENT_IN_PROGRESS`
 
 Observed at: 2026-09-15 14:51:56 UTC
 
-This is an early L03 measurement collected while M01 was running. It does not change the runner,
-capacity policy, worker slots, queue, database, or Artifact state. It does not authorize a second
-runner process. The transaction used `REPEATABLE READ` and `SET TRANSACTION READ ONLY`; no Item
-content, worker output, prompt, secret, or storage path was emitted.
+The first section is an early read-only L03 measurement collected while M01 was running on one
+runner. Its transaction used `REPEATABLE READ` and `SET TRANSACTION READ ONLY`; no Item content,
+worker output, prompt, secret, or storage path was emitted. A later section records the separately
+reviewed bounded two-runner activation and will compare throughput under the same workload family.
 
 ## Measurement identity
 
@@ -46,7 +46,7 @@ the single persistent command consumer, rather than the indexed PostgreSQL claim
 the observed wall time. This is a measured inference, not a proof that adding another consumer is
 safe or that throughput would double.
 
-## Decision boundary
+## Original decision boundary
 
 M01 continues on the existing supported topology because it is producing accepted successors with
 zero current failures. An ad-hoc transient runner is not introduced during the campaign. Before
@@ -61,3 +61,33 @@ using slot 06 concurrently, L03 must close the already documented bounded scale-
 - a bounded before/after throughput measurement under the same workload family.
 
 Until those gates exist, the single persistent runner remains the canonical safe runtime.
+
+## Bounded scale-out activation
+
+Those gates were subsequently implemented and committed as `823f7be`. The implementation extends
+the existing runner boundary instead of introducing a queue or scheduler: two distinct runner
+identities consume the indexed PostgreSQL command queue with the existing `FOR UPDATE SKIP LOCKED`
+claim and capacity-lease fencing. The exact installed canonical unit and staged accelerator unit
+both had SHA-256
+`1688c77a606ea647d498aacbb3f8f75265f459cf888e1495ae82a8d2887b2878`.
+
+At 2026-09-15 15:05 UTC, a repeatable-read preflight showed two M01 commands, one running support
+Job on slot 05, slot 06 free, zero current corpus failures, and zero API idempotency claims. The
+operator manager then adopted the exact staged accelerator without replacing its bytes. Immediate
+post-start verification showed:
+
+| Invariant | Result |
+| --- | --- |
+| canonical runner | active, PID 3093849, restarts 0 |
+| accelerator runner | active, PID 3193838, restarts 0 |
+| active target commands | 2 distinct `PROCESSING` commands |
+| active support Jobs | 2 |
+| knowledge-analysis leases | slot 05 = 1, slot 06 = 1 |
+| current target failures | 0 |
+| capacity | knowledge analysis 2/2, support 2/2, global Codex at or below 3 |
+| accelerator warnings | none |
+
+This section establishes correct bounded admission, not a throughput conclusion. The before/after
+event-window comparison remains pending enough post-start completions. At M01 completion, the
+accelerator is removed through the exact manager path and the single canonical runner state is
+reverified.
