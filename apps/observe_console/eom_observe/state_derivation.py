@@ -95,6 +95,10 @@ def derive_nodes(
 ) -> list[ObserveNode]:
     current = now or datetime.now(UTC)
     latest = _last_event_by_node(events)
+    workers_by_role: dict[str, list[dict[str, Any]]] = {}
+    for worker in sorted(workers, key=lambda item: item["slot_id"]):
+        workers_by_role.setdefault(worker["role"], []).append(worker)
+    jobs_by_id = {job["job_id"]: job for job in jobs}
     active_steps = [
         row
         for row in steps
@@ -108,18 +112,23 @@ def derive_nodes(
         reverse=True,
     )
     worker_nodes: list[ObserveNode] = []
-    for worker in sorted(workers, key=lambda item: item["slot_id"]):
-        node_id = role_node(worker["role"])
-        active = next(
-            (row for row in active_steps if row.get("worker_role") == worker["role"]), None
-        )
-        recent = next((row for row in steps if row.get("worker_role") == worker["role"]), None)
-        status = NodeStatus.IDLE
+    for worker_role, role_workers in sorted(workers_by_role.items()):
+        node_id = role_node(worker_role)
+        active = next((row for row in active_steps if row.get("worker_role") == worker_role), None)
+        recent = next((row for row in steps if row.get("worker_role") == worker_role), None)
         selected = active or recent
-        if not worker["enabled"]:
+        selected_job = jobs_by_id.get(selected.get("platform_job_id")) if selected else None
+        selected_slot_id = selected_job.get("worker_slot_id") if selected_job else None
+        selected_worker = next(
+            (worker for worker in role_workers if worker["slot_id"] == selected_slot_id),
+            role_workers[0] if len(role_workers) == 1 else None,
+        )
+        enabled_workers = [worker for worker in role_workers if worker["enabled"]]
+        status = NodeStatus.IDLE
+        if not enabled_workers:
             status = NodeStatus.DISABLED
-        elif available_workers is not None and not available_workers.get(
-            worker["linux_user"], False
+        elif available_workers is not None and not any(
+            available_workers.get(worker["linux_user"], False) for worker in enabled_workers
         ):
             status = NodeStatus.UNAVAILABLE
         elif active is not None:
@@ -142,10 +151,10 @@ def derive_nodes(
             ObserveNode(
                 node_id=node_id,
                 node_type="WORKER",
-                display_name=worker["role"].replace("_", " ").title(),
-                role=worker["role"],
-                linux_user=worker["linux_user"],
-                slot_id=worker["slot_id"],
+                display_name=worker_role.replace("_", " ").title(),
+                role=worker_role,
+                linux_user=selected_worker["linux_user"] if selected_worker else None,
+                slot_id=selected_worker["slot_id"] if selected_worker else None,
                 status=status,
                 current_workflow_id=active.get("workflow_id") if active else None,
                 current_step_key=active.get("step_key") if active else None,

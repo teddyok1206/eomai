@@ -49,6 +49,13 @@ remain separate and are never synthesized into a replacement identity. The domin
 - count aggregation by state and time boundary; and
 - bounded newest-first iteration of attention rows.
 
+The existing topology snapshot is role-oriented, while `worker_slots` is slot-oriented and may
+contain more than one enabled slot for the same role. Snapshot derivation therefore groups slots in
+a role-keyed map and emits exactly one worker node per role. A Job-keyed map resolves the active or
+most recent slot identity when one exists; an idle multi-slot role does not pretend that either slot
+is active. This keeps graph node IDs unique while preserving the concrete slot on active work. Both
+maps are O(n) in the bounded snapshot input and avoid repeated scans across Jobs and slots.
+
 SQL uses `UNION`/`EXISTS` sets and existing primary, foreign-key, claimable-command, held-lease, and
 approval indexes instead of application-side repeated list scans. The current schema has no
 general Job-status or Workflow-state/time index; those count partitions can scan their bounded

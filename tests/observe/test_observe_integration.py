@@ -106,7 +106,14 @@ def test_snapshot_contract_and_query_timeout() -> None:
     snapshot = SnapshotBuilder(repo, load_settings()).build()
     validate_contract("snapshot", snapshot.model_dump(mode="json"))
     assert snapshot.data_freshness.database == "fresh"
-    assert len(snapshot.nodes) == 10
+    assert len(snapshot.nodes) == len({node.node_id for node in snapshot.nodes})
+    assert {node.role for node in snapshot.nodes if node.node_type == "WORKER"} == {
+        "authoring",
+        "review",
+        "image",
+        "item_management",
+        "support",
+    }
     repo.engine.dispose()
 
 

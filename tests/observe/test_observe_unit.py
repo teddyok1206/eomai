@@ -87,6 +87,45 @@ def test_worker_state_derivation(job_status: str, expected: NodeStatus) -> None:
     assert next(node for node in nodes if node.node_id == "authoring").status == expected
 
 
+def test_duplicate_role_slots_derive_one_role_node_with_active_slot_identity() -> None:
+    config = settings()
+    nodes = derive_nodes(
+        workers=[
+            {"slot_id": "05", "linux_user": "eom-cdx-05", "role": "support", "enabled": True},
+            {"slot_id": "06", "linux_user": "eom-cdx-06", "role": "support", "enabled": True},
+        ],
+        workflows=[],
+        steps=[
+            {
+                "step_run_id": "steprun_1",
+                "workflow_id": "workflow_1",
+                "step_key": "solution_report",
+                "attempt": 1,
+                "state": "RUNNING",
+                "worker_role": "support",
+                "platform_job_id": "job_1",
+                "job_status": "RUNNING",
+                "started_at": NOW,
+                "finished_at": None,
+                "input_pointer_manifest": {},
+            }
+        ],
+        jobs=[{"job_id": "job_1", "worker_slot_id": "06", "status": "RUNNING"}],
+        approvals=[],
+        events=[],
+        privacy=config.privacy,
+        database_fresh=True,
+        system_probe_fresh=True,
+        available_workers={"eom-cdx-05": True, "eom-cdx-06": True},
+        now=NOW,
+    )
+    support_nodes = [node for node in nodes if node.node_id == "support"]
+    assert len(support_nodes) == 1
+    assert support_nodes[0].status == NodeStatus.RUNNING
+    assert support_nodes[0].slot_id == "06"
+    assert support_nodes[0].linux_user == "eom-cdx-06"
+
+
 def test_workflow_and_approval_state_mapping() -> None:
     config = settings()
     nodes = derive_nodes(
