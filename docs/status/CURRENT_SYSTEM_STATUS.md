@@ -25,9 +25,11 @@ review.
 
 At 2026-09-15 15:38 UTC, M01 stopped safely after 362 of 520 solution reports because one new
 worker result repeated a node identity. Validation rejected it before Artifact commit. The exact
-deterministic retry stage is prepared, but the root-owned runtime allowlist was not changed without
-operator sudo. The corresponding active Job, lease, and command counts were zero at the audit
-boundary. See [M01 solution-report backfill](M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md).
+deterministic retry was installed through the reviewed operator boundary at 16:21 UTC. It produced
+exactly one retry run, cleared the current failed count, and resumed both bounded support slots.
+The immediate typed projection was 362 completed, 2 active, 156 pending, 0 failed, and 0 duplicate
+accepted successors. See
+[M01 solution-report backfill](M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md).
 
 L03 measured 17 accepted reports across slots 05 and 06 during the 33.5-minute available scale-out
 window. It also added a source candidate for typed PostgreSQL backup manifests and verified the
@@ -240,9 +242,10 @@ build is a new immutable build resource; no failed record was rewritten.
    immutable failed build. Recovery tooling must create or resolve an idempotent successor; it must
    not mutate history or reinterpret a failed build as successful.
 5. Solution-report enrichment targets the exact 520 occurrence-backed past-exam bases. The
-   2026-09-15 15:38 UTC milestone records 362 completed, zero active, one failed validator-rejected
-   worker result, and 157 pending. Scientific Studio's batch-free corpus projection is authoritative
-   after the recorded timestamp; a separate canary is not added merely to make the denominator 521.
+   2026-09-15 16:21 UTC recovery milestone records 362 completed, two active, zero current failed,
+   and 156 pending after one exact deterministic retry. Scientific Studio's batch-free corpus
+   projection is authoritative after the recorded timestamp; a separate canary is not added merely
+   to make the denominator 521.
 6. The next product-quality gate is no longer basic transport feasibility. It is measured reviewer
    acceptance: scientific correctness, evidence relevance, novelty, visual accuracy, explanation
    quality, and HWPX edit time must be recorded without weakening schema, pointer, approval, or

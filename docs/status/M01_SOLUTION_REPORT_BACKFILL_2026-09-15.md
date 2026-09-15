@@ -135,3 +135,22 @@ Recovery remains the existing supported sequence: atomically install only the ex
 restart only `eom-catalog-application-runner.service`, require exactly one deterministic retry, and
 verify that it is accepted before refill resumes. Direct row updates, a new retry key, failed-history
 reinterpretation, or a second retry are forbidden.
+
+## 16:21 UTC deterministic recovery and resume
+
+The operator subsequently ran the reviewed exact installer. The installed environment is
+`root:eom`, mode `0640`, link count one, and has SHA-256
+`eb1df08ba08052afbdf24c7a775b26913b62b3689f5e87f020ada692591a5bec`. The installer left no incoming
+or rollback file and restarted only `eom-catalog-application-runner.service`; the service returned
+active/running with restart count zero.
+
+The read-only postcondition found exactly one deterministic retry row with idempotency key derived
+from the failed analysis. It created analysis `analysisrun_0f8227785d3e4200942d81617d946442`,
+pinning the original accepted predecessor `analysisrun_a21030e75e8b4eea89b33179fcd52ba0`, and entered
+`RUNNING`. No second retry row or duplicate accepted successor exists.
+
+At 2026-09-15 16:21:10 UTC, the typed projection was 362 completed, 2 active, 156 pending, 0 current
+failed, and 0 duplicate accepted successors. Two Jobs, two leases, and two Workflow commands were
+active, matching the bounded two-support-slot policy. This is a recovery milestone, not final M01
+acceptance. Subsequent monitoring remains at the requested 30-minute cadence and must stop on a new
+unallowlisted terminal failure.

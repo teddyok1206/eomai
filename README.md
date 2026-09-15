@@ -198,10 +198,11 @@ Revision, 관계, 상태, pointer와 hash만 저장합니다.
 - L01 제한 교과서 evidence 기술 파일럿: PASS, 교육적 개선 효과는 미평가;
 - L02 반복 생산 기술 경계: PASS, M02 결과 전 새 25문항 생성은 시작하지 않음;
 - L03 두 support slot 측정: 33.5분 동안 17개 승인, 백업 manifest source hardening PASS;
-- M01 풀이보고서: 362/520 완료 후 worker 결과 중복 ID 1건을 validator가 차단하여 안전 정지.
+- M01 풀이보고서: 362/520 완료 지점의 worker 결과 중복 ID 1건을 validator가 차단했고,
+  exact deterministic retry 1건으로 16:21 UTC에 안전 재개.
 
-M01의 현재 실패는 Artifact commit 전에 차단됐으며 active Job·lease·command는 0입니다. exact
-deterministic retry stage는 준비됐고 operator sudo 적용만 남았습니다. 최신 mutable 값은
+M01의 실패는 Artifact commit 전에 차단됐으며 이력은 보존됩니다. 16:21 UTC 재개 직후 typed
+projection은 362 완료, active 2, pending 156, failed 0, 중복 승인 0이었습니다. 최신 mutable 값은
 [M01 기록](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md),
 [L03 기준선](docs/status/L03_SOLUTION_REPORT_CAPACITY_BASELINE_2026-09-15.md), 그리고 Studio typed
 projection을 확인해야 합니다.
@@ -237,9 +238,9 @@ native 표 7개, visual 13개와 PNG 6개를 검증했고, 출력의 SHA-256·ZI
 
 기출 풀이보고서 보강의 모집단은 occurrence-backed 원 기출 분석 520개입니다. 별도 trusted-RAG
 canary는 의도적으로 제외합니다. 2026-09-15 15:38 UTC에는 362개 완료 후 한 worker 결과가 중복
-node identity로 검증 실패하여 refill이 안전 정지했습니다. 실패 이력은 보존되며, 새로운 key나 DB
-수정이 아니라 기존 exact allowlist와 deterministic retry 경계만 사용합니다. 이 수치는 mutable
-운영 상태이므로 최종 정본은 Studio의 batch-free corpus 집계입니다.
+node identity로 검증 실패하여 refill이 안전 정지했습니다. 실패 이력은 보존했고, DB 수정이나 새
+임의 key가 아니라 기존 exact allowlist와 deterministic retry 경계로 16:21 UTC에 재개했습니다.
+이 수치는 mutable 운영 상태이므로 최종 정본은 Studio의 batch-free corpus 집계입니다.
 
 더 자세한 구현/운영 구분과 남은 경계는
 [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)를 참고하십시오.
