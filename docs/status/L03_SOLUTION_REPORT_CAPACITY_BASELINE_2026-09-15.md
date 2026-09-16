@@ -1,6 +1,6 @@
 # L03 solution-report capacity baseline — 2026-09-15
 
-Status: `BOUNDED_SCALE_OUT_MEASURED`; `RECOVERY_SOURCE_HARDENING_PASS`
+Status: `BOUNDED_SCALE_OUT_MEASURED_AND_RETIRED`; `RECOVERY_SOURCE_HARDENING_PASS`
 
 Observed at: 2026-09-15 14:51:56 UTC
 
@@ -177,3 +177,15 @@ snapshot/replication failure domain, create a fresh typed PostgreSQL backup, res
 isolated database, resolve a bounded set of restored immutable Artifact pointers against the
 corresponding snapshot, and measure elapsed recovery time. It must not restore over production or
 copy the canonical Artifact store into Git.
+
+## M01 completion and accelerator retirement
+
+M01 became quiescent at 520/520 on 2026-09-16. The final repeatable-read audit reported zero active
+or pending target, zero current failed target, zero duplicate accepted successor, and zero active
+Job, lease, Workflow command, or processing API idempotency record. Its immutable mapping evidence
+is `sha256:d3ec932f2b85cf44b8289b5bf77459f5e40c86071139ffb982473472ab522520`.
+
+The scale-out manager then stopped the accelerator, removed only its exact runtime unit, reloaded
+systemd, and verified manager status `ABSENT`. No active transient Workflow runner remains. The
+canonical runner stays active/running with zero restarts. The bounded scale-out measurement is
+therefore historical capacity evidence, not a permanent second-runner topology.

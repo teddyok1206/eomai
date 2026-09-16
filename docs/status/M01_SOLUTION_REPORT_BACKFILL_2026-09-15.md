@@ -1,12 +1,12 @@
 # M01 solution-report backfill recovery
 
-Status: `RUNNING`
+Status: `COMPLETED`
 
-Evidence time: 2026-09-15 15:05 UTC
+Final evidence time: 2026-09-16 04:44:41 UTC
 
-This record distinguishes the immutable 520-Item target, historical failed attempts, current
-corpus truth, and the operational work that resumed the additive V10 solution-report backfill. It
-does not claim that the backfill is complete and does not reinterpret a failed attempt as success.
+This record distinguishes the immutable 520-Item target, historical failed attempts, final corpus
+truth, and the operational work that completed the additive V10 solution-report backfill. Failed
+attempts remain immutable history and are not reinterpreted as success.
 
 ## Exact target
 
@@ -154,3 +154,50 @@ failed, and 0 duplicate accepted successors. Two Jobs, two leases, and two Workf
 active, matching the bounded two-support-slot policy. This is a recovery milestone, not final M01
 acceptance. Subsequent monitoring remains at the requested 30-minute cadence and must stop on a new
 unallowlisted terminal failure.
+
+## 2026-09-16 terminal completion and operational finalization
+
+The authoritative typed projection and an independent repeatable-read mapping audit reached the
+following terminal state at 2026-09-16 04:44:41 UTC:
+
+| Field | Value |
+| --- | ---: |
+| target | 520 |
+| completed | 520 |
+| active | 0 |
+| pending | 0 |
+| current failed | 0 |
+| duplicate accepted successor | 0 |
+| preserved terminal attempts | 17 |
+| typed status | `COMPLETED` |
+
+Every accepted V9 predecessor in the occurrence-backed target maps to exactly one accepted V10
+successor with a non-null immutable result Artifact pointer and content hash. The audit canonicalized
+the corpus revision, Graph revision/hash, and the sorted 520 predecessor-to-successor mappings. Its
+completion-set identity is:
+
+```text
+sha256:d3ec932f2b85cf44b8289b5bf77459f5e40c86071139ffb982473472ab522520
+```
+
+This hash is audit evidence, not a replacement for the canonical Artifact Revisions or the typed
+corpus projection. The database partial unique index continues to enforce at most one accepted V10
+successor per predecessor. No database row, historical failure, or accepted Artifact was edited to
+obtain completion.
+
+The reviewed finalizer then changed only the operational refill boundary and temporary capacity:
+
+- `/etc/eom/legacy-item-automation.env` is `root:eom`, mode `0640`, link count one, SHA-256
+  `e5299508e4c472d9d5af37f3206f355de4e842167f5dc94ceb5c3f3d0d10c824`, with
+  `EOM_LEGACY_ITEM_AUTOMATION_MODE=DISABLED`;
+- Catalog restarted after the configuration mutation and returned active/running with zero restarts;
+- `eom-workflow-runner-accelerator.service` was stopped and its runtime unit removed through
+  `scripts/workflow/manage_runner_scale_out.py stop`;
+- manager status is `ABSENT`, with no active transient Workflow runner unit;
+- the canonical `eom-workflow-runner.service` remains active/running with zero restarts; and
+- the final audit again produced the same completion-set hash with no active Job, lease, Workflow
+  command, or processing API idempotency record.
+
+The automatic campaign is therefore closed. Future accepted past-exam inputs require an explicit
+successor campaign decision; this completion is not maintained by silently reopening the old
+520-Item target.

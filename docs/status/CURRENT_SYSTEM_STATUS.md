@@ -1,10 +1,10 @@
 # Current System Status
 
-Status date: 2026-09-15 (UTC)
+Status date: 2026-09-16 (UTC)
 
-The later read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md) supersedes the
-mutable deployment, Graph, queue/lease, and solution-report counts below. The architecture and
-historical acceptance in this document remain applicable.
+The read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md) records the roadmap
+starting point. The 2026-09-16 M01 completion evidence below supersedes its mutable solution-report
+and queue/lease counts. The architecture and historical acceptance remain applicable.
 
 The coordinated [2026-09-15 release alignment](RELEASE_ALIGNMENT_2026-09-15.md) subsequently moved
 the installed Application API and Scientific Studio Web to one verified `d4748d1` source identity.
@@ -23,12 +23,14 @@ author/review receipt chain for the limited L01 technical pilot, and re-ran 185 
 production/readiness tests for L02. These technical results do not substitute for educational
 review.
 
-At 2026-09-15 15:38 UTC, M01 stopped safely after 362 of 520 solution reports because one new
-worker result repeated a node identity. Validation rejected it before Artifact commit. The exact
-deterministic retry was installed through the reviewed operator boundary at 16:21 UTC. It produced
-exactly one retry run, cleared the current failed count, and resumed both bounded support slots.
-The immediate typed projection was 362 completed, 2 active, 156 pending, 0 failed, and 0 duplicate
-accepted successors. See
+M01 reached terminal completion on 2026-09-16. The exact occurrence-backed denominator is 520;
+the separate trusted-RAG canary remains intentionally outside it. A repeatable-read final audit at
+04:44:41 UTC found 520 accepted V10 successors, active/pending/current-failed all zero, and no
+duplicate accepted predecessor. The canonical target-to-successor mapping hash is
+`sha256:d3ec932f2b85cf44b8289b5bf77459f5e40c86071139ffb982473472ab522520`.
+Seventeen terminal attempts remain immutable historical evidence. Finalization disabled the
+automatic refill mode and removed the bounded accelerator through its official manager, leaving
+the healthy canonical Workflow runner only. See
 [M01 solution-report backfill](M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md).
 
 L03 measured 17 accepted reports across slots 05 and 06 during the 33.5-minute available scale-out
@@ -241,11 +243,10 @@ build is a new immutable build resource; no failed record was rewritten.
 4. The current official HWPX resource is valid even though an earlier checkpoint contains an
    immutable failed build. Recovery tooling must create or resolve an idempotent successor; it must
    not mutate history or reinterpret a failed build as successful.
-5. Solution-report enrichment targets the exact 520 occurrence-backed past-exam bases. The
-   2026-09-15 16:21 UTC recovery milestone records 362 completed, two active, zero current failed,
-   and 156 pending after one exact deterministic retry. Scientific Studio's batch-free corpus
-   projection is authoritative after the recorded timestamp; a separate canary is not added merely
-   to make the denominator 521.
+5. Solution-report enrichment completed the exact 520 occurrence-backed past-exam bases. The final
+   typed projection has 520 completed, no active/pending/current-failed target, and no duplicate
+   accepted successor. Its canonical completion-set SHA-256 is recorded above. A separate canary is
+   not added merely to make the denominator 521.
 6. The next product-quality gate is no longer basic transport feasibility. It is measured reviewer
    acceptance: scientific correctness, evidence relevance, novelty, visual accuracy, explanation
    quality, and HWPX edit time must be recorded without weakening schema, pointer, approval, or
@@ -275,12 +276,12 @@ The following repository documents are sufficient to reconstruct the major desig
 
 The current documents and verified runtime evidence support this order:
 
-1. Finish the additive solution-report enrichment with support slots 5 and 6, preserving every
-   accepted V9 analysis and requiring exactly one accepted V10 successor per base.
+1. Perform the prepared M02 human quality review of the existing 25-Item accepted set; do not rerun
+   production merely to collect the scorecard.
 2. Keep a small release-blocking material matrix with one independently checked example for TEXT,
    DATA, one/two TABLE, one/two IMAGE, MIXED, and INQUIRY. Validate the registered Item manifest and
    rendered HWPX for each branch before relying on a whole-exam aggregate.
-3. Measure product quality with a reviewer scorecard: scientific correctness, evidence relevance,
+3. Measure product quality with the reviewer scorecard: scientific correctness, evidence relevance,
    novelty, answer uniqueness, visual accuracy, explanation quality, and minutes of HWPX editing.
    Use the measurements to revise the next additive Content Pack rather than changing a released
    prompt or interpreting transport success as Item quality.
