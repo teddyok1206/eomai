@@ -110,7 +110,7 @@ def _records() -> tuple[
         protocol_version="workflow-role/1.22.0",
         idempotency_key="customer-support-projection-test",
         request_hash="sha256:" + "6" * 64,
-        task_type="workflow_diagnose",
+        task_type="workflow_support",
         request={},
         status="SUCCEEDED",
         logical_artifact_id=ARTIFACT_ID,
@@ -121,7 +121,7 @@ def _records() -> tuple[
     artifact = ArtifactRecord(
         logical_artifact_id=ARTIFACT_ID,
         job_id=JOB_ID,
-        artifact_type="workflow_diagnose",
+        artifact_type="workflow_support",
         approved=True,
     )
     revision = ArtifactRevisionRecord(
@@ -217,12 +217,20 @@ def test_customer_support_projection_withholds_answer_until_workflow_completes()
 
 @pytest.mark.parametrize(
     "drift",
-    ("job_lifecycle", "artifact_lifecycle", "content_hash", "manifest_media", "terminal_event"),
+    (
+        "job_lifecycle",
+        "artifact_lifecycle",
+        "task_artifact_type",
+        "content_hash",
+        "manifest_media",
+        "terminal_event",
+    ),
 )
 def test_customer_support_projection_rejects_stale_or_unapproved_pointer(
     drift: Literal[
         "job_lifecycle",
         "artifact_lifecycle",
+        "task_artifact_type",
         "content_hash",
         "manifest_media",
         "terminal_event",
@@ -233,6 +241,9 @@ def test_customer_support_projection_rejects_stale_or_unapproved_pointer(
         job.status = "FAILED"
     elif drift == "artifact_lifecycle":
         artifact.approved = False
+    elif drift == "task_artifact_type":
+        job.task_type = "workflow_diagnose"
+        artifact.artifact_type = "workflow_diagnose"
     elif drift == "content_hash":
         revision.content_hash = "sha256:" + "9" * 64
     elif drift == "manifest_media":

@@ -2666,13 +2666,13 @@ class QueryAdapter:
             or job.status != "SUCCEEDED"
             or job.completed_at is None
             or job.protocol_version != "workflow-role/1.22.0"
-            or job.task_type != "workflow_diagnose"
+            or job.task_type != "workflow_support"
             or job.logical_artifact_id != pointer.logical_artifact_id
             or job.revision_id != pointer.revision_id
             or job.worker_slot_id != "06"
             or artifact.logical_artifact_id != pointer.logical_artifact_id
             or artifact.job_id != pointer.job_id
-            or artifact.artifact_type != "workflow_diagnose"
+            or artifact.artifact_type != "workflow_support"
             or not artifact.approved
             or revision.revision_id != pointer.revision_id
             or revision.logical_artifact_id != pointer.logical_artifact_id
