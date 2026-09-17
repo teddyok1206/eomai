@@ -763,6 +763,50 @@ class ResolvedExecutionPlanV9(ResolvedExecutionPlanV8):
     resolver_version: Literal["9.0.0"] = "9.0.0"  # type: ignore[assignment]
 
 
+class ResolvedExecutionPlanV10(FrozenModel):
+    """One exact in-product customer-support diagnosis pinned to isolated slot 06."""
+
+    schema_version: Literal["resolved-execution-plan/10.0"] = "resolved-execution-plan/10.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["CODEX"] = "CODEX"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["customer-support"] = "customer-support"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    support_case_sha256: Sha256
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["10.0.0"] = "10.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_customer_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV10:
+        step = self.steps[0]
+        if (
+            step.step_key != "diagnose"
+            or step.role != WorkerRole.SUPPORT
+            or step.model != "gpt-5.6-terra"
+            or step.reasoning_effort != "medium"
+            or step.worker_pool_key != "customer-support"
+            or step.reference_bundle is not None
+            or step.timeout_seconds != 900
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "ALLOWED_WITH_PROVENANCE"
+        ):
+            raise ValueError("customer support plan requires its isolated support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("customer support plan hash does not match canonical content")
+        return self
+
+
 class CodexInvocation(FrozenModel):
     """Bounded job-local CLI selection derived from one resolved plan step."""
 
@@ -1443,6 +1487,41 @@ class WorkerCapacityPolicyV3(FrozenModel):
         }
         if actual != reviewed or len(actual) != len(self.pools):
             raise ValueError("capacity V3 differs from the reviewed isolated pools")
+        return self
+
+
+class WorkerCapacityPolicyV4(FrozenModel):
+    """Six-slot policy reserving slot 06 for bounded customer-support diagnosis."""
+
+    schema_version: Literal["worker-capacity-policy/1.3"] = "worker-capacity-policy/1.3"
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    revision_number: Literal[4] = 4
+    state: RevisionState
+    max_configured_slots: Literal[6] = 6
+    max_active_codex: Literal[3] = 3
+    max_active_per_slot: Literal[1] = 1
+    max_active_gpu: Literal[1] = 1
+    max_active_knowledge_analysis: Literal[2] = 2
+    pools: tuple[WorkerCapacityPoolV2, ...] = Field(min_length=6, max_length=6)
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def coherent_customer_support_capacity(self) -> WorkerCapacityPolicyV4:
+        actual = {
+            pool.pool_key: (pool.roles, pool.slot_keys, pool.max_active) for pool in self.pools
+        }
+        reviewed = {
+            "authoring": (("authoring",), ("slot01",), 1),
+            "review": (("review",), ("slot02",), 1),
+            "image": (("image",), ("slot03",), 1),
+            "item-management": (("item_management",), ("slot04",), 1),
+            "support": (("support",), ("slot05",), 1),
+            "customer-support": (("support",), ("slot06",), 1),
+        }
+        if actual != reviewed or len(actual) != len(self.pools):
+            raise ValueError("capacity V4 differs from the reviewed customer-support pools")
         return self
 
 

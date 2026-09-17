@@ -21,6 +21,7 @@ from eom_workflow import (
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
+    WorkerCapacityPolicyV4,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -128,6 +129,7 @@ def _validated_document(
         | WorkerCapacityPolicy
         | WorkerCapacityPolicyV2
         | WorkerCapacityPolicyV3
+        | WorkerCapacityPolicyV4
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -141,6 +143,7 @@ def _validated_document(
     | WorkerCapacityPolicy
     | WorkerCapacityPolicyV2
     | WorkerCapacityPolicyV3
+    | WorkerCapacityPolicyV4
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -478,12 +481,22 @@ def record_capacity_policy_revision(
         model, normalized = _validated_document(
             "worker-capacity-policy-v3", document, WorkerCapacityPolicyV3
         )
+    elif schema_version == "worker-capacity-policy/1.3":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v4", document, WorkerCapacityPolicyV4
+        )
     else:
         raise ControlPlaneError(
             "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
         )
     if not isinstance(
-        model, (WorkerCapacityPolicy, WorkerCapacityPolicyV2, WorkerCapacityPolicyV3)
+        model,
+        (
+            WorkerCapacityPolicy,
+            WorkerCapacityPolicyV2,
+            WorkerCapacityPolicyV3,
+            WorkerCapacityPolicyV4,
+        ),
     ):
         raise AssertionError("validated capacity model has the wrong type")
     _require_declared_hash(normalized, "content_sha256")

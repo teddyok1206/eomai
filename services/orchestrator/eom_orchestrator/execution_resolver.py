@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
@@ -37,11 +37,13 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV7,
     ResolvedExecutionPlanV8,
     ResolvedExecutionPlanV9,
+    ResolvedExecutionPlanV10,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     WorkerRole,
 )
 from eom_workflow.control_schemas import validate_control_contract
+from eom_workflow.models import CustomerSupportCase
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -396,6 +398,179 @@ def resolve_execution_plan(
         dependencies=dependencies,
     )
     return ResolvedExecutionPlan.model_validate(record.canonical_document)
+
+
+def resolve_customer_support_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    support_case: CustomerSupportCase,
+    resolved_at: datetime | None = None,
+) -> ResolvedExecutionPlanV10:
+    """Resolve one immutable read-only support diagnosis onto the slot-06 pool."""
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        try:
+            existing_plan = ResolvedExecutionPlanV10.model_validate(existing.canonical_document)
+        except ValueError as exc:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_INVALID",
+                "stored customer support plan is invalid",
+            ) from exc
+        expected_case_hash = content_sha256(support_case.model_dump(mode="json"))
+        if (
+            existing.plan_sha256 != existing_plan.plan_sha256
+            or existing_plan.workflow_id != workflow_id
+            or existing_plan.workflow_definition_version != workflow_definition_version
+            or existing_plan.workflow_definition_sha256 != workflow_definition_sha256
+            or existing_plan.support_case_sha256 != expected_case_hash
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_BINDING_MISMATCH",
+                "stored customer support plan differs from its Workflow",
+            )
+        return existing_plan
+
+    if workflow_role_schema_version != "workflow-role/1.22.0":
+        raise ControlPlaneError(
+            "CONTROL_WORKFLOW_PROTOCOL_INVALID",
+            "customer support requires workflow-role/1.22.0",
+        )
+
+    logical = session.scalar(
+        select(ExecutionPresetRecord).where(ExecutionPresetRecord.preset_key == "customer-support")
+    )
+    revision = (
+        session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+        if logical is not None and logical.current_revision_id is not None
+        else None
+    )
+    if (
+        logical is None
+        or logical.state != "ACTIVE"
+        or revision is None
+        or revision.preset_id != logical.preset_id
+        or revision.state != "RELEASED"
+        or workflow_role_schema_version not in revision.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_NOT_PUBLISHED", "customer support preset is not published"
+        )
+    preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
+    if (
+        preset.content_sha256 != revision.content_sha256
+        or compute_control_document_hash(revision.canonical_document, "content_sha256")
+        != preset.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_HASH_MISMATCH", "customer support preset content is stale"
+        )
+    support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
+    if len(support_policies) != 1:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_ROLE_MISSING", "customer support preset needs one support policy"
+        )
+    policy = support_policies[0]
+    if (
+        len(preset.role_policies) != 1
+        or policy.worker_pool_key != "customer-support"
+        or policy.reference_bundle is not None
+        or preset.general_knowledge_policy != "ALLOW_WITH_PROVENANCE"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "customer support policy must use its isolated read-only pool",
+        )
+    if len(policy.model_candidates) != 1:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "customer support requires exactly one model candidate",
+        )
+    candidate = policy.model_candidates[0]
+    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "medium":
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "customer support requires the reviewed model policy",
+        )
+    step = ResolvedStepExecution(
+        step_key="diagnose",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key="customer-support",
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="ALLOWED_WITH_PROVENANCE",
+    )
+    actual_resolved_at = resolved_at or datetime.now(UTC)
+    if actual_resolved_at.tzinfo is None or actual_resolved_at.utcoffset() != timedelta(0):
+        raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/10.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "CODEX",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "customer-support",
+        "workflow_definition_version": workflow_definition_version,
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "support_case_sha256": content_sha256(support_case.model_dump(mode="json")),
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "10.0.0",
+        "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v10", document)
+    model = ResolvedExecutionPlanV10.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=model.plan_id,
+            workflow_id=model.workflow_id,
+            preset_id=model.preset_id,
+            preset_revision_id=model.preset_revision_id,
+            capacity_policy_revision_id=model.capacity_policy_revision_id,
+            graph_snapshot_revision_id=None,
+            evidence_bundle_revision_id=None,
+            plan_sha256=model.plan_sha256,
+            resolver_version=model.resolver_version,
+            canonical_document=model.model_dump(mode="json"),
+            resolved_at=model.resolved_at,
+        )
+    )
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=model.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return model
 
 
 def resolve_knowledge_analysis_plan(

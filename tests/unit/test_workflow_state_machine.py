@@ -30,6 +30,12 @@ def test_direct_image_agent_enters_required_image_stage() -> None:
     assert target in STAGE_TRANSITIONS[WorkflowStage.AUTHORING]
 
 
+def test_customer_support_stage_has_only_terminal_success_or_failure_targets() -> None:
+    assert STAGE_TRANSITIONS[WorkflowStage.CUSTOMER_SUPPORT] == frozenset(
+        {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
+    )
+
+
 @pytest.mark.parametrize(
     ("stage", "worker_role"),
     (

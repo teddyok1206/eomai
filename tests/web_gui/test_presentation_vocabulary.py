@@ -119,6 +119,9 @@ def test_known_user_errors_have_explanation_and_next_action() -> None:
         "HWPX_RENDERER_NOT_READY",
         "AUTH_REAUTHENTICATION_REQUIRED",
         "WEB_REQUEST_INVALID",
+        "CUSTOMER_SUPPORT_NOT_READY",
+        "CUSTOMER_SUPPORT_CONTRACT_INVALID",
+        "CONTROL_PRESET_NOT_PUBLISHED",
         "HTTP_500",
     ):
         assert errors[code]["label"]

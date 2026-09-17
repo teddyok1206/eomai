@@ -1,12 +1,14 @@
 from pathlib import Path
 
 from eom_workflow import (
+    CustomerSupportWorkerRequest,
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
     WorkerRequest,
 )
-from eom_workflow_runner.engine import _prompt_name_for_request
+from eom_workflow_runner.engine import _capacity_resume_target, _prompt_name_for_request
+from eom_workflow_runner.state_machine import WorkflowStage, WorkflowState
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -52,6 +54,26 @@ def test_other_support_requests_keep_existing_support_prompt() -> None:
 
     assert _prompt_name_for_request(worker_role="support", request=knowledge_request) == "support"
     assert _prompt_name_for_request(worker_role="support", request=placeholder_request) == "support"
+
+
+def test_customer_support_uses_bounded_read_only_prompt() -> None:
+    request = CustomerSupportWorkerRequest.model_construct(case=None)
+
+    assert _prompt_name_for_request(worker_role="support", request=request) == "customer-support"
+    prompt = (ROOT / "content/prompt-templates/placeholders/customer-support.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "untrusted evidence" in prompt
+    assert "Do not execute commands" in prompt
+    assert "mutation_performed must be false" in prompt
+    assert "Do not claim to have read logs" in prompt
+
+
+def test_customer_support_capacity_reconciliation_preserves_its_domain_stage() -> None:
+    assert _capacity_resume_target("support", "customer-support") == (
+        WorkflowState.RUNNING,
+        WorkflowStage.CUSTOMER_SUPPORT,
+    )
 
 
 def test_item_management_keeps_registration_prompt_alias() -> None:

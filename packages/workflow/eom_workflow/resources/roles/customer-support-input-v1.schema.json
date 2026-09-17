@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/customer-support-input-v1.schema.json",
+  "title": "EOM Customer Support Worker Input V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "attempt",
+    "role",
+    "request",
+    "upstream_artifacts",
+    "artifact"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.22.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "role": {
+      "const": "support"
+    },
+    "request": {
+      "$ref": "#/$defs/request"
+    },
+    "upstream_artifacts": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    }
+  },
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_name",
+        "case"
+      ],
+      "properties": {
+        "request_name": {
+          "const": "CUSTOMER_SUPPORT_REQUEST"
+        },
+        "case": {
+          "$ref": "#/$defs/case"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "category",
+        "subject",
+        "question",
+        "locale",
+        "diagnostics"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "customer-support-case/1.0"
+        },
+        "category": {
+          "enum": [
+            "HOW_TO",
+            "TECHNICAL_ERROR",
+            "CONTENT_QUALITY",
+            "FEATURE_REQUEST"
+          ]
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 4000,
+          "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+        },
+        "locale": {
+          "const": "ko-KR"
+        },
+        "diagnostics": {
+          "$ref": "#/$defs/diagnostics"
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observed_at",
+        "browser_route",
+        "inquiry_id",
+        "stable_error_code",
+        "api_release_commit",
+        "web_release_commit"
+      ],
+      "properties": {
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "browser_route": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^/[^\\u0000-\\u001F?#]*$"
+        },
+        "inquiry_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^webreq_[0-9a-f]{24}$"
+        },
+        "stable_error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "api_release_commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "web_release_commit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "properties": {
+        "logical_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "file_name": {
+          "const": "result.json"
+        },
+        "media_type": {
+          "const": "application/json"
+        }
+      }
+    }
+  }
+}

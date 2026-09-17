@@ -1148,6 +1148,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/auth.schema.json",
         "eom_api_contracts/schemas/common.schema.json",
         "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
+        "eom_api_contracts/schemas/customer-support-v1.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
         "eom_api_contracts/schemas/hwpx-v2.schema.json",
@@ -1173,7 +1174,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 32 packaged API schemas including release identity, Workflow-start, "
+            "expected exactly 33 packaged API schemas including customer support, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1182,6 +1183,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     required_contract_runtime = {
         "eom_api_contracts/__init__.py",
         "eom_api_contracts/assessment_assemblies.py",
+        "eom_api_contracts/customer_support.py",
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
@@ -1243,6 +1245,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/capacity_controller.py",
         "eom_orchestrator/control_artifacts.py",
         "eom_orchestrator/control_bootstrap.py",
+        "eom_orchestrator/customer_support_bootstrap.py",
         "eom_orchestrator/knowledge_item_bootstrap.py",
         "eom_orchestrator/control_command_processor.py",
         "eom_orchestrator/control_commands.py",
@@ -1826,6 +1829,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/legacy-item-editorial-compatibility.v1.yaml"
         ).read_bytes()
     )
+    customer_support_definition = root / "customer-support.v1.yaml"
+    customer_support_definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/customer-support.v1.yaml"
+        ).read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -1875,7 +1885,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -1967,6 +1977,15 @@ recovery_help = CliRunner().invoke(
 )
 if recovery_help.exit_code != 0 or "emergency-reset-admin-password" not in recovery_help.stdout:
     raise SystemExit("installed-wheel eomctl emergency recovery command is unavailable")
+customer_support_help = CliRunner().invoke(
+    eomctl_app,
+    ["control-plane", "bootstrap-customer-support", "--help"],
+)
+if (
+    customer_support_help.exit_code != 0
+    or "bootstrap-customer-support" not in customer_support_help.stdout
+):
+    raise SystemExit("installed-wheel eomctl customer-support bootstrap command is unavailable")
 if any(
     model.__module__ != "eom_api_contracts.mock_exam_execution"
     for model in (
@@ -2012,7 +2031,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20260912_0035":
+if CURRENT_MIGRATION_REVISION != "20260917_0036":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
@@ -2063,6 +2082,7 @@ load_role_input_schema("review", "workflow-role/1.17.0")
 load_role_input_schema("item_management", "workflow-role/1.17.0")
 load_role_input_schema("support", "workflow-role/1.18.0")
 load_role_input_schema("support", "workflow-role/1.21.0")
+load_role_input_schema("support", "workflow-role/1.22.0")
 load_role_input_schema("authoring", "workflow-role/1.19.0")
 load_role_input_schema("image", "workflow-role/1.19.0")
 load_role_input_schema("review", "workflow-role/1.19.0")
@@ -2086,6 +2106,9 @@ if not {
     "knowledge-item-control-bootstrap-v10",
     "standard-control-bootstrap-v14",
     "knowledge-item-control-bootstrap-v11",
+    "customer-support-control-bootstrap",
+    "resolved-execution-plan-v10",
+    "worker-capacity-policy-v4",
 }.issubset(control_schema_names):
     raise SystemExit("control-policy successor schema inventory is incomplete")
 for schema_name in control_schema_names:
@@ -2127,6 +2150,12 @@ if (
     or editorial.definition_version != "1.0.0"
 ):
     raise SystemExit("legacy item editorial compatibility workflow definition mismatch")
+customer_support = compile_definition(Path(customer_support_definition), {"support"}).definition
+if (
+    customer_support.definition_key != "customer-support"
+    or customer_support.definition_version != "1.0.0"
+):
+    raise SystemExit("customer-support workflow definition mismatch")
 admitted_definitions = (
     compile_definition(Path(definition_v1_8), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(definition_v1_9), {"authoring", "image", "review", "item_management"}),
@@ -2138,6 +2167,7 @@ admitted_definitions = (
     compile_definition(Path(analysis_v10), {"support"}),
     compile_definition(Path(legacy_definition), {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
+    compile_definition(Path(customer_support_definition), {"support"}),
 )
 if {
     (compiled.definition.definition_key, compiled.definition.definition_version): next(iter({
@@ -2184,6 +2214,7 @@ validate_contract(
             *(str(definition) for definition in analysis_definitions),
             str(legacy_definition),
             str(editorial_definition),
+            str(customer_support_definition),
             str(worker_config),
             str(staging),
             str(workspace_root),

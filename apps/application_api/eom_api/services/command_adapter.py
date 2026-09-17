@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime
 from typing import Any, Literal
 
 from eom_api_contracts.assessment_assemblies import (
@@ -10,6 +11,7 @@ from eom_api_contracts.assessment_assemblies import (
     CreatePlannedMockExamAssemblyRequest,
 )
 from eom_api_contracts.content_packs import ActivateContentPackRequest
+from eom_api_contracts.customer_support import CreateCustomerSupportCaseRequest
 from eom_api_contracts.deliverables import CreateDeliverableRequest
 from eom_api_contracts.items import ItemRetirementRequest, StructuredItemContentImportRequest
 from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequest
@@ -45,12 +47,15 @@ from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
     current_knowledge_backed_preset,
     pinned_knowledge_backed_preset,
+    resolve_customer_support_plan,
     resolve_execution_plan,
     resolve_knowledge_backed_execution_plan,
     validate_educational_retrieval_policy,
 )
 from eom_workflow import (
     AgentStep,
+    CustomerSupportCase,
+    CustomerSupportDiagnostics,
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
     WorkflowRequest,
@@ -554,6 +559,211 @@ class CommandAdapter:
             assert command is not None
             command_id = command.command_id
             return command_id, workflow.workflow_id, workflow.lock_version
+
+    def start_customer_support(
+        self,
+        request: CreateCustomerSupportCaseRequest,
+        actor: ActorContext,
+        *,
+        idempotency_key: str,
+        api_release_commit: str | None,
+        observed_at: datetime,
+    ) -> tuple[str, str, int]:
+        """Create one read-only support Workflow and pin its exact execution plan."""
+
+        replay = self._customer_support_start_replay(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+        )
+        if replay is not None:
+            return replay
+        support_case = CustomerSupportCase(
+            category=request.category,
+            subject=request.subject,
+            question=request.question,
+            locale=request.locale,
+            diagnostics=CustomerSupportDiagnostics(
+                observed_at=observed_at,
+                browser_route=request.browser_route,
+                inquiry_id=request.inquiry_id,
+                stable_error_code=request.stable_error_code,
+                api_release_commit=api_release_commit,
+                web_release_commit=request.web_release_commit,
+            ),
+        )
+        workflow_request = WorkflowRequest(
+            request_name="CUSTOMER_SUPPORT_REQUEST",
+            image_mode="skip",
+            execution_preset_key="customer-support",
+            customer_support_case=support_case,
+        )
+        with transaction(self.sessions) as session:
+            definition = admitted_workflow_definition(
+                session,
+                definition_key="customer-support",
+                definition_version="1.0.0",
+            )
+            if definition is None:
+                raise ApiError(
+                    503,
+                    "CUSTOMER_SUPPORT_NOT_READY",
+                    "Customer support unavailable",
+                    "The customer-support workflow is not active.",
+                )
+            compiled = compile_definition_data(
+                definition.canonical_definition,
+                definition.source_path,
+                {"support"},
+            )
+            protocols = {
+                result_schema_protocol(step.result_schema)
+                for step in compiled.definition.steps
+                if isinstance(step, AgentStep)
+            }
+            if protocols != {"workflow-role/1.22.0"}:
+                raise ApiError(
+                    503,
+                    "CUSTOMER_SUPPORT_CONTRACT_INVALID",
+                    "Customer support unavailable",
+                    "The customer-support workflow contract is not installed correctly.",
+                )
+            workflow, created = create_workflow_instance(
+                session,
+                definition=definition,
+                request=workflow_request,
+                idempotency_key=idempotency_key,
+                actor_type="human",
+                actor_id=actor.actor_id,
+                runtime_context={},
+            )
+            if created:
+                try:
+                    plan = resolve_customer_support_plan(
+                        session,
+                        workflow_id=workflow.workflow_id,
+                        workflow_definition_version=definition.definition_version,
+                        workflow_definition_sha256=definition.definition_hash,
+                        workflow_role_schema_version=workflow.role_schema_version,
+                        support_case=support_case,
+                    )
+                except ControlPlaneError as exc:
+                    raise ApiError(
+                        503,
+                        exc.code,
+                        "Customer support unavailable",
+                        "The customer-support execution policy is not published.",
+                    ) from exc
+                context = dict(workflow.runtime_context)
+                context["execution_plan"] = {
+                    "plan_id": plan.plan_id,
+                    "plan_sha256": plan.plan_sha256,
+                    "preset_id": plan.preset_id,
+                    "preset_revision_id": plan.preset_revision_id,
+                }
+                workflow.runtime_context = context
+                command, _ = enqueue_command(
+                    session,
+                    workflow_id=workflow.workflow_id,
+                    command_type=CommandType.START_WORKFLOW,
+                    payload={},
+                    actor_type="human",
+                    actor_id=actor.actor_id,
+                    source="application_api",
+                    idempotency_key=f"start:{workflow.workflow_id}",
+                )
+            else:
+                existing_command = session.scalar(
+                    select(WorkflowCommandRecord)
+                    .where(
+                        WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                        WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                    )
+                    .order_by(
+                        WorkflowCommandRecord.created_at,
+                        WorkflowCommandRecord.command_id,
+                    )
+                    .limit(1)
+                )
+                if existing_command is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                        "existing customer-support workflow has no start command",
+                    )
+                command = existing_command
+            return command.command_id, workflow.workflow_id, workflow.lock_version
+
+    def _customer_support_start_replay(
+        self,
+        request: CreateCustomerSupportCaseRequest,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> tuple[str, str, int] | None:
+        """Replay a case while excluding server-observation time from request identity."""
+
+        with self.sessions() as session:
+            workflow = session.scalar(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == idempotency_key
+                )
+            )
+            if workflow is None:
+                return None
+            try:
+                stored = load_persisted_workflow_request(workflow.initial_request)
+            except ValueError as exc:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "stored customer-support request is invalid",
+                ) from exc
+            case = stored.customer_support_case
+            expected_values = (
+                request.category,
+                request.subject,
+                request.question,
+                request.locale,
+                request.browser_route,
+                request.stable_error_code,
+            )
+            stored_values = (
+                case.category if case is not None else None,
+                case.subject if case is not None else None,
+                case.question if case is not None else None,
+                case.locale if case is not None else None,
+                case.diagnostics.browser_route if case is not None else None,
+                case.diagnostics.stable_error_code if case is not None else None,
+            )
+            if (
+                workflow.created_actor_type != "human"
+                or workflow.created_actor_id != actor.actor_id
+                or workflow.definition_key != "customer-support"
+                or workflow.definition_version != "1.0.0"
+                or stored.request_name != "CUSTOMER_SUPPORT_REQUEST"
+                or expected_values != stored_values
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_COMMAND_DUPLICATE,
+                    "customer-support idempotency key was reused with different input",
+                )
+            command = session.scalar(
+                select(WorkflowCommandRecord)
+                .where(
+                    WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                )
+                .order_by(
+                    WorkflowCommandRecord.created_at,
+                    WorkflowCommandRecord.command_id,
+                )
+                .limit(1)
+            )
+            if command is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "existing customer-support workflow has no start command",
+                )
+            return command.command_id, workflow.workflow_id, workflow.lock_version
 
     def _workflow_start_replay(
         self,

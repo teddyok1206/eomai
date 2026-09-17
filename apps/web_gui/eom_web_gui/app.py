@@ -21,6 +21,7 @@ from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
+    CustomerSupportSubmission,
     DraftSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
@@ -37,7 +38,7 @@ from eom_web_gui.contracts import (
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
-from eom_web_gui.resources import static_resource
+from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
 from eom_web_gui.settings import WebSecrets, WebSettings, load_secrets, load_settings
@@ -224,6 +225,43 @@ def create_app(
     ) -> dict[str, Any]:
         draft = actual.create_draft(session, value)
         return draft.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/customer-support/cases")
+    async def customer_support_cases(
+        session: Annotated[WebSession, Depends(require_session)],
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, object]:
+        values, next_cursor, has_more = await actual.customer_support_cases(
+            session,
+            cursor=cursor,
+        )
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in values),
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
+
+    @app.post(f"{API_PREFIX}/customer-support/cases", status_code=202)
+    async def create_customer_support_case(
+        value: CustomerSupportSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        inquiry_id = (
+            "webreq_" + hashlib.sha256(value.idempotency_key.encode("ascii")).hexdigest()[:24]
+        )
+        return await actual.create_customer_support_case(
+            session,
+            value,
+            inquiry_id=inquiry_id,
+            web_release_commit=installed_web_source_commit(),
+        )
+
+    @app.get(f"{API_PREFIX}/customer-support/cases/{{workflow_id}}")
+    async def customer_support_case(
+        workflow_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.customer_support_case(session, workflow_id)).model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/curriculum/editorial-outline")
     async def curriculum_editorial_outline(

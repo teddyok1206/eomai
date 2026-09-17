@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/workflow/roles/customer-support-result-v1.schema.json",
+  "title": "EOM Customer Support Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.22.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "status": {
+      "const": "ok"
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "role": {
+      "const": "support"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "properties": {
+        "logical_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "file_name": {
+          "const": "result.json"
+        },
+        "media_type": {
+          "const": "application/json"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "instruction"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^\\u0000-\\u001F]+$"
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "answer_text",
+        "recommended_actions",
+        "needs_operator",
+        "operator_summary",
+        "confidence",
+        "mutation_performed"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "USAGE_GUIDANCE",
+            "TRANSIENT_RUNTIME",
+            "VALIDATION_ERROR",
+            "PERMISSION_OR_SESSION",
+            "CONTENT_QUALITY",
+            "FEATURE_REQUEST",
+            "UNKNOWN"
+          ]
+        },
+        "answer_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 6000,
+          "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+        },
+        "recommended_actions": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        },
+        "needs_operator": {
+          "type": "boolean"
+        },
+        "operator_summary": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000,
+          "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+        },
+        "confidence": {
+          "enum": [
+            "HIGH",
+            "MEDIUM",
+            "LOW"
+          ]
+        },
+        "mutation_performed": {
+          "const": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "needs_operator": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "operator_summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "operator_summary": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

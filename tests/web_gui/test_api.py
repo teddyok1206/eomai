@@ -1,22 +1,120 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
 
-from eom_web_gui.contracts import StudioProblem
+import pytest
+from eom_web_gui.contracts import CustomerSupportCaseView, StudioProblem
 from jsonschema import Draft202012Validator
 
 from tests.web_gui.helpers import (
     INTAKE_ID,
     ITEM_ID,
     REVISION_ID,
+    SUPPORT_WORKFLOW_ID,
     WORKFLOW_ID,
     FakeGateway,
     login,
     make_client,
     structured_item_content,
 )
+
+
+def test_customer_support_create_list_and_read_use_authenticated_bff() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        empty = client.get("/studio/api/v1/customer-support/cases")
+        assert empty.status_code == 200
+        assert empty.json() == {"values": [], "next_cursor": None, "has_more": False}
+
+        denied = client.post(
+            "/studio/api/v1/customer-support/cases",
+            json={
+                "category": "TECHNICAL_ERROR",
+                "subject": "미리보기 상태 확인",
+                "question": "문항 미리보기가 준비 중으로만 표시되는 이유를 알려주세요.",
+                "browser_route": "/studio/",
+                "stable_error_code": "ITEM_PREVIEW_NOT_READY",
+                "idempotency_key": "studio:support:test-without-csrf",
+            },
+        )
+        assert denied.status_code == 403
+
+        created = client.post(
+            "/studio/api/v1/customer-support/cases",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "category": "TECHNICAL_ERROR",
+                "subject": "미리보기 상태 확인",
+                "question": "문항 미리보기가 준비 중으로만 표시되는 이유를 알려주세요.",
+                "browser_route": "/studio/",
+                "stable_error_code": "ITEM_PREVIEW_NOT_READY",
+                "idempotency_key": "studio:support:test-create-0001",
+            },
+        )
+        assert created.status_code == 202
+        assert created.json()["resource_id"] == SUPPORT_WORKFLOW_ID
+        assert gateway.customer_support_create_calls == 1
+        expected_inquiry = (
+            "webreq_" + hashlib.sha256(b"studio:support:test-create-0001").hexdigest()[:24]
+        )
+        assert gateway.customer_support_inquiry_ids == [expected_inquiry]
+
+        listed = client.get("/studio/api/v1/customer-support/cases")
+        assert listed.status_code == 200
+        assert listed.json()["values"][0]["subject"] == "미리보기 상태 확인"
+        assert "operator_summary" not in listed.text
+
+        older = client.get("/studio/api/v1/customer-support/cases?cursor=cursor_page_2")
+        assert older.status_code == 200
+        assert gateway.customer_support_cursors == [None, None, "cursor_page_2"]
+
+        detail = client.get(f"/studio/api/v1/customer-support/cases/{SUPPORT_WORKFLOW_ID}")
+        assert detail.status_code == 200
+        assert detail.json()["state"] == "SUBMITTED"
+
+
+def test_customer_support_bff_rejects_mixed_state_and_answer_projection() -> None:
+    with pytest.raises(ValueError, match="non-answered customer-support case"):
+        CustomerSupportCaseView.model_validate(
+            {
+                "workflow_id": SUPPORT_WORKFLOW_ID,
+                "category": "HOW_TO",
+                "subject": "조회 상태 확인",
+                "question": "아직 처리 중인 문의에 답변이 섞이면 안 됩니다.",
+                "state": "DIAGNOSING",
+                "classification": "USAGE_GUIDANCE",
+                "answer_text": "잘못 섞인 답변",
+                "recommended_actions": [],
+                "needs_operator": False,
+                "failure_code": None,
+                "created_at": "2026-09-17T00:00:00Z",
+                "updated_at": "2026-09-17T00:00:00Z",
+                "resource_version": 1,
+            }
+        )
+
+    with pytest.raises(ValueError, match="requires a classified answer"):
+        CustomerSupportCaseView.model_validate(
+            {
+                "workflow_id": SUPPORT_WORKFLOW_ID,
+                "category": "HOW_TO",
+                "subject": "완료 상태 확인",
+                "question": "답변 완료 상태에는 실제 답변이 반드시 있어야 합니다.",
+                "state": "ANSWERED",
+                "classification": None,
+                "answer_text": None,
+                "recommended_actions": [],
+                "needs_operator": False,
+                "failure_code": None,
+                "created_at": "2026-09-17T00:00:00Z",
+                "updated_at": "2026-09-17T00:00:00Z",
+                "resource_version": 1,
+            }
+        )
 
 
 def test_login_session_cookie_csrf_and_security_headers() -> None:

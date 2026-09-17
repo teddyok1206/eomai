@@ -20,6 +20,7 @@ fail() {
 declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.10.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v10.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/customer-support.v1.yaml"]="${WORKFLOW_ROOT}/customer-support.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-extraction.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-extraction.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-editorial-compatibility.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-editorial-compatibility.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"
@@ -29,6 +30,7 @@ declare -A FILES=(
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/review.txt"]="${PROMPT_ROOT}/review.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/registration.txt"]="${PROMPT_ROOT}/registration.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/support.txt"]="${PROMPT_ROOT}/support.txt"
+  ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/customer-support.txt"]="${PROMPT_ROOT}/customer-support.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/legacy-item-extraction.txt"]="${PROMPT_ROOT}/legacy-item-extraction.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/legacy-item-editorial-compatibility.txt"]="${PROMPT_ROOT}/legacy-item-editorial-compatibility.txt"
 )

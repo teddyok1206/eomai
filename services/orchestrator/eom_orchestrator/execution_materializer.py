@@ -37,6 +37,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV7,
     ResolvedExecutionPlanV8,
     ResolvedExecutionPlanV9,
+    ResolvedExecutionPlanV10,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -166,6 +167,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV7
         | ResolvedExecutionPlanV8
         | ResolvedExecutionPlanV9
+        | ResolvedExecutionPlanV10
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -183,6 +185,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/9.0":
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/10.0":
+        plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -521,6 +525,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV7
             | ResolvedExecutionPlanV8
             | ResolvedExecutionPlanV9
+            | ResolvedExecutionPlanV10
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -536,6 +541,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/9.0":
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/10.0":
+        plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (

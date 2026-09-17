@@ -1,6 +1,6 @@
 # Current System Status
 
-Status date: 2026-09-16 (UTC)
+Status date: 2026-09-17 (UTC)
 
 The read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md) records the roadmap
 starting point. The 2026-09-16 M01 completion evidence below supersedes its mutable solution-report
@@ -43,6 +43,21 @@ This document describes the repository state, not an implicit claim that every a
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
 state remains authoritative only in Scientific Studio and the corresponding typed API views.
 
+On 2026-09-17 the repository added a protocol-first in-product customer-support candidate. It is
+not described as live merely because the source exists. The candidate reuses one owner-scoped
+Workflow as the canonical case, pins `customer-support@1.0.0`, `workflow-role/1.22.0`,
+`resolved-execution-plan/10.0`, and a V4 capacity successor that reserves slot 06 for a one-shot
+read-only `gpt-5.6-terra/medium` diagnosis. The worker cannot mutate application state, contact
+another worker, use network access, or write DB/NAS; only the Orchestrator validates and commits
+its immutable result Artifact. The API and Studio expose authenticated create/list/read use cases,
+owner-only history, exact idempotent replay, cursor pagination, stale-response protection, and no
+operator-only summary. Migration `20260917_0036` adds the explicit `CUSTOMER_SUPPORT` Workflow
+stage and the partial owner/history lookup index.
+See [ADR 0096](../adr/0096-orchestrated-customer-support.md) and the
+[rollout runbook](../operations/CUSTOMER_SUPPORT_ROLLOUT.md). The guarded disposable-PostgreSQL
+gate has passed; wheel inspection, compatible deployment, and live-canary status must still be
+recorded separately before this candidate is called active.
+
 ## 1. Product boundary
 
 EOM currently has one primary product path: request one Integrated Science Item, resolve an exact
@@ -69,6 +84,7 @@ Manager owns delivery projection and commits validated builder output.
 | Material-first request | Material requirement 1.0, Item Brief 4.0 | Active in the verified V5 run |
 | Fresh 25-Item production | Production plan/execution family 5.0 | Active; pins Pack 1.16.1 |
 | Material-first Content Pack | Pack 1.16.1, standard control 13, knowledge control 10 | Released and exercised live |
+| In-product customer support | Workflow 1.0, role 1.22, result 1.0, plan 10.0 | Repository candidate; live activation pending |
 
 Logical IDs, revision IDs, Artifact IDs, Artifact Revision IDs, schema identities, storage paths,
 and SHA-256 hashes remain separate. New versions are additive; released predecessors are not
@@ -225,6 +241,24 @@ test. The gate skipped 35 live or database API tests, one privileged HWPX test, 
 PostgreSQL/system tests instead of redirecting them to production. Full Ruff format/lint passed for
 1,331 files and strict mypy passed for 417 source files. The new component-media operation also
 passed its focused Catalog, API/OpenAPI, browser, pointer-negative, and release-integrity suites.
+
+The 2026-09-17 customer-support source candidate passes the current standard non-live entrypoints:
+2,991 API/domain/Catalog/Orchestrator/Studio tests passed with 36 explicit live or database skips;
+197 HWPX/local-image tests passed with one privileged skip; and the integration collection retained
+one pure PASS while 127 PostgreSQL/system cases stayed opt-in. Focused support tests additionally
+cover schema/Pydantic parity, owner authorization, exact idempotent replay, cursor pagination,
+stale-browser responses, partial-answer withholding, and missing/stale/hash/lifecycle Artifact
+resolution. Ruff, strict mypy on changed source, shell/JavaScript syntax, schema mirror parity, and
+OpenAPI checksum checks pass. This remains source evidence until wheel inspection, compatible
+deployment, and one bounded live canary are separately recorded.
+
+The customer-support PostgreSQL gate then passed in a newly created guarded disposable database.
+It migrated from an empty database through `20260917_0036`, downgraded one revision, upgraded back
+to the exact head, reconciled the isolated runtime role, and removed the database after the test.
+The focused persistence case proved first publication plus exact replay of the normal immutable
+`DRAFT` → `RELEASED` preset history, preservation of capacity V3 while V4 stays current, stable
+plan binding, and use of `ix_workflow_customer_support_owner` for the owner-history query. This is
+database integration evidence only; it does not imply live activation or a successful Codex call.
 
 The historical failed build/checkpoint remains preserved as audit evidence. The successful official
 build is a new immutable build resource; no failed record was rewritten.

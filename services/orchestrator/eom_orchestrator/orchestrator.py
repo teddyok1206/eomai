@@ -25,6 +25,7 @@ from eom_protocol import (
 from eom_workflow.control_plane import EvidenceResultArtifactPointer, ResolvedExecutionPlanV3
 from eom_workflow.models import (
     ArtifactPointer,
+    CustomerSupportWorkerRequest,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -118,6 +119,7 @@ WorkflowRoleRequest = (
     | KnowledgeAnalysisWorkerRequest
     | LegacyItemExtractionWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
+    | CustomerSupportWorkerRequest
 )
 
 

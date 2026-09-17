@@ -144,7 +144,10 @@
     "HTTP_429": {"label": "요청이 많아 잠시 대기해야 합니다.", "audience": "USER", "action": "잠시 후 다시 시도하세요."},
     "HTTP_500": {"label": "서비스 내부 오류가 발생했습니다.", "audience": "USER", "action": "관리자에게 기술 오류 코드와 함께 알려주세요."},
     "HTTP_503": {"label": "서비스를 일시적으로 사용할 수 없습니다.", "audience": "USER", "action": "잠시 후 다시 시도하세요."},
-    "APPLICATION_API_REQUEST_FAILED": {"label": "서비스 요청을 완료하지 못했습니다.", "audience": "USER", "action": "상태를 새로고침한 뒤 다시 확인하세요."}
+    "APPLICATION_API_REQUEST_FAILED": {"label": "서비스 요청을 완료하지 못했습니다.", "audience": "USER", "action": "상태를 새로고침한 뒤 다시 확인하세요."},
+    "CUSTOMER_SUPPORT_NOT_READY": {"label": "고객센터가 아직 준비되지 않았습니다.", "audience": "USER", "action": "기존 화면은 계속 사용할 수 있습니다. 잠시 후 다시 확인하거나 외부 운영 채널로 관리자에게 알려주세요."},
+    "CUSTOMER_SUPPORT_CONTRACT_INVALID": {"label": "고객센터 실행 구성이 일치하지 않습니다.", "audience": "USER", "action": "중복 문의를 보내지 말고 외부 운영 채널로 관리자에게 알려주세요."},
+    "CONTROL_PRESET_NOT_PUBLISHED": {"label": "고객센터 실행 설정이 아직 활성화되지 않았습니다.", "audience": "USER", "action": "중복 문의를 보내지 말고 외부 운영 채널로 관리자에게 알려주세요."}
   },
   "terms": {
     "workflow_id": {"label": "문항 제작 진행 ID", "audience": "DIAGNOSTIC", "description": "한 번의 문항 제작 과정을 식별합니다."},

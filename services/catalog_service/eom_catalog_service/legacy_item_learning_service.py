@@ -32,6 +32,7 @@ from eom_workflow.control_plane import (
     ExecutionPresetRevision,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
+    WorkerCapacityPolicyV4,
 )
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine, func, select
@@ -274,9 +275,18 @@ class LegacyItemLearningCoordinator:
             try:
                 preset_model = ExecutionPresetRevision.model_validate(revision.canonical_document)
                 capacity_model = WorkerCapacityPolicyV2.model_validate(capacity.canonical_document)
-                current_capacity_model = WorkerCapacityPolicyV3.model_validate(
-                    capacity_current.canonical_document
-                )
+                current_capacity_schema = capacity_current.canonical_document.get("schema_version")
+                current_capacity_model: WorkerCapacityPolicyV3 | WorkerCapacityPolicyV4
+                if current_capacity_schema == "worker-capacity-policy/1.2":
+                    current_capacity_model = WorkerCapacityPolicyV3.model_validate(
+                        capacity_current.canonical_document
+                    )
+                elif current_capacity_schema == "worker-capacity-policy/1.3":
+                    current_capacity_model = WorkerCapacityPolicyV4.model_validate(
+                        capacity_current.canonical_document
+                    )
+                else:
+                    raise ValueError("automatic learning current capacity schema is unsupported")
                 preset_document = preset_model.model_dump(mode="json")
                 capacity_document = capacity_model.model_dump(mode="json")
                 current_capacity_document = current_capacity_model.model_dump(mode="json")

@@ -44,6 +44,10 @@ from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
 )
+from eom_api_contracts.customer_support import (
+    CustomerSupportActionView,
+    CustomerSupportCaseView,
+)
 from eom_api_contracts.deliverables import DeliverableView
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
@@ -142,7 +146,7 @@ from eom_catalog_service.models import (
     UsageRecord,
 )
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorEventRecord
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_session_factory
@@ -150,13 +154,26 @@ from eom_orchestrator.knowledge_analysis_models import (
     KnowledgeAnalysisEventRecord,
     KnowledgeAnalysisRunRecord,
 )
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from eom_workflow import ResolvedExecutionPlanV3
+from eom_orchestrator.models import (
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    JobEventRecord,
+    JobRecord,
+)
+from eom_protocol import ArtifactManifest
+from eom_workflow import (
+    ArtifactPointer as WorkflowArtifactPointer,
+)
+from eom_workflow import (
+    CustomerSupportRoleResult,
+    ResolvedExecutionPlanV3,
+)
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
+from eom_workflow_runner.repository import load_persisted_workflow_request
 from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
@@ -2398,6 +2415,371 @@ class QueryAdapter:
                 next_cursor,
                 more,
             )
+
+    def list_customer_support_cases(
+        self,
+        *,
+        actor_id: str,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[CustomerSupportCaseView]:
+        """List only the authenticated operator's support Workflows."""
+
+        with self.sessions() as session:
+            statement = select(WorkflowInstanceRecord).where(
+                WorkflowInstanceRecord.definition_key == "customer-support",
+                WorkflowInstanceRecord.created_actor_type == "human",
+                WorkflowInstanceRecord.created_actor_id == actor_id,
+            )
+            if cursor:
+                timestamp, resource_id = self.cursors.decode(cursor, "customer-support")
+                statement = statement.where(
+                    or_(
+                        WorkflowInstanceRecord.created_at < timestamp,
+                        and_(
+                            WorkflowInstanceRecord.created_at == timestamp,
+                            WorkflowInstanceRecord.workflow_id < resource_id,
+                        ),
+                    )
+                )
+            workflows = list(
+                session.scalars(
+                    statement.order_by(
+                        WorkflowInstanceRecord.created_at.desc(),
+                        WorkflowInstanceRecord.workflow_id.desc(),
+                    ).limit(limit + 1)
+                )
+            )
+            more = len(workflows) > limit
+            workflows = workflows[:limit]
+            results = self._customer_support_results(session, workflows)
+            next_cursor = (
+                self.cursors.encode(
+                    "customer-support",
+                    workflows[-1].created_at,
+                    workflows[-1].workflow_id,
+                )
+                if more and workflows
+                else None
+            )
+            return PageResult(
+                tuple(
+                    self._customer_support_case(workflow, results.get(workflow.workflow_id))
+                    for workflow in workflows
+                ),
+                next_cursor,
+                more,
+            )
+
+    def customer_support_case(
+        self,
+        *,
+        actor_id: str,
+        workflow_id: str,
+    ) -> CustomerSupportCaseView:
+        """Resolve one owned support Workflow without exposing another operator's case."""
+
+        with self.sessions() as session:
+            workflow = session.scalar(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.workflow_id == workflow_id,
+                    WorkflowInstanceRecord.definition_key == "customer-support",
+                    WorkflowInstanceRecord.created_actor_type == "human",
+                    WorkflowInstanceRecord.created_actor_id == actor_id,
+                )
+            )
+            if workflow is None:
+                self._not_found("CUSTOMER_SUPPORT_CASE_NOT_FOUND")
+            results = self._customer_support_results(session, [workflow])
+            return self._customer_support_case(workflow, results.get(workflow.workflow_id))
+
+    @staticmethod
+    def _customer_support_results(
+        session: Session,
+        workflows: list[WorkflowInstanceRecord],
+    ) -> dict[str, CustomerSupportRoleResult]:
+        if not workflows:
+            return {}
+        workflow_by_id = {workflow.workflow_id: workflow for workflow in workflows}
+        step_rows = list(
+            session.scalars(
+                select(WorkflowStepRunRecord)
+                .where(
+                    WorkflowStepRunRecord.workflow_id.in_(tuple(workflow_by_id)),
+                    WorkflowStepRunRecord.step_key == "diagnose",
+                    WorkflowStepRunRecord.state != "SUPERSEDED",
+                )
+                .order_by(
+                    WorkflowStepRunRecord.workflow_id,
+                    WorkflowStepRunRecord.attempt.desc(),
+                )
+            )
+        )
+        step_by_workflow: dict[str, WorkflowStepRunRecord] = {}
+        for step in step_rows:
+            step_by_workflow.setdefault(step.workflow_id, step)
+        pointers: dict[str, WorkflowArtifactPointer] = {}
+        for workflow_id, step in step_by_workflow.items():
+            if step.output_pointer_manifest is None:
+                continue
+            try:
+                pointer = WorkflowArtifactPointer.model_validate(step.output_pointer_manifest)
+            except ValueError as exc:
+                raise ApiError(
+                    500,
+                    "CUSTOMER_SUPPORT_RESULT_INVALID",
+                    "Customer support result invalid",
+                    "The stored support result pointer is invalid.",
+                ) from exc
+            if (
+                pointer.step_key != "diagnose"
+                or pointer.attempt != step.attempt
+                or pointer.job_id != step.platform_job_id
+                or pointer.result_schema != "customer-support-result@1.0"
+            ):
+                raise ApiError(
+                    500,
+                    "CUSTOMER_SUPPORT_RESULT_INVALID",
+                    "Customer support result invalid",
+                    "The stored support result pointer does not match its Workflow step.",
+                )
+            pointers[workflow_id] = pointer
+        revision_ids = tuple(pointer.revision_id for pointer in pointers.values())
+        revisions = (
+            {
+                revision.revision_id: revision
+                for revision in session.scalars(
+                    select(ArtifactRevisionRecord).where(
+                        ArtifactRevisionRecord.revision_id.in_(revision_ids)
+                    )
+                )
+            }
+            if revision_ids
+            else {}
+        )
+        job_ids = tuple(pointer.job_id for pointer in pointers.values())
+        jobs = (
+            {
+                job.job_id: job
+                for job in session.scalars(select(JobRecord).where(JobRecord.job_id.in_(job_ids)))
+            }
+            if job_ids
+            else {}
+        )
+        artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers.values())
+        artifacts = (
+            {
+                artifact.logical_artifact_id: artifact
+                for artifact in session.scalars(
+                    select(ArtifactRecord).where(
+                        ArtifactRecord.logical_artifact_id.in_(artifact_ids)
+                    )
+                )
+            }
+            if artifact_ids
+            else {}
+        )
+        committed_events: dict[str, list[JobEventRecord]] = {}
+        if job_ids:
+            for event in session.scalars(
+                select(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id.in_(job_ids),
+                    JobEventRecord.event == "ARTIFACT_COMMITTED",
+                )
+                .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
+            ):
+                committed_events.setdefault(event.job_id, []).append(event)
+        results: dict[str, CustomerSupportRoleResult] = {}
+        for workflow_id, pointer in pointers.items():
+            step = step_by_workflow[workflow_id]
+            revision = revisions.get(pointer.revision_id)
+            events = committed_events.get(pointer.job_id, [])
+            results[workflow_id] = QueryAdapter._validated_customer_support_result(
+                workflow_id=workflow_id,
+                step=step,
+                pointer=pointer,
+                job=jobs.get(pointer.job_id),
+                artifact=artifacts.get(pointer.logical_artifact_id),
+                revision=revision,
+                event=events[0] if len(events) == 1 else None,
+            )
+        for workflow in workflows:
+            if workflow.state == "COMPLETED" and workflow.workflow_id not in results:
+                raise ApiError(
+                    500,
+                    "CUSTOMER_SUPPORT_RESULT_MISSING",
+                    "Customer support result missing",
+                    "The completed support Workflow has no validated answer Artifact.",
+                )
+        return results
+
+    @staticmethod
+    def _validated_customer_support_result(
+        *,
+        workflow_id: str,
+        step: WorkflowStepRunRecord,
+        pointer: WorkflowArtifactPointer,
+        job: JobRecord | None,
+        artifact: ArtifactRecord | None,
+        revision: ArtifactRevisionRecord | None,
+        event: JobEventRecord | None,
+    ) -> CustomerSupportRoleResult:
+        try:
+            manifest = (
+                ArtifactManifest.model_validate(revision.manifest) if revision is not None else None
+            )
+            result = (
+                CustomerSupportRoleResult.model_validate(revision.result)
+                if revision is not None
+                else None
+            )
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "CUSTOMER_SUPPORT_RESULT_INVALID",
+                "Customer support result invalid",
+                "The stored support result contract or manifest is invalid.",
+            ) from exc
+        expected_event_data = {
+            "logical_artifact_id": pointer.logical_artifact_id,
+            "revision_id": pointer.revision_id,
+            "content_hash": pointer.content_hash,
+        }
+        if (
+            job is None
+            or artifact is None
+            or revision is None
+            or manifest is None
+            or result is None
+            or event is None
+            or step.workflow_id != workflow_id
+            or step.step_key != "diagnose"
+            or step.worker_role != "support"
+            or step.result_schema != "customer-support-result@1.0"
+            or step.state != "SUCCEEDED"
+            or step.platform_job_id != pointer.job_id
+            or pointer.step_key != "diagnose"
+            or pointer.attempt != step.attempt
+            or pointer.result_schema != "customer-support-result@1.0"
+            or job.job_id != pointer.job_id
+            or job.status != "SUCCEEDED"
+            or job.completed_at is None
+            or job.protocol_version != "workflow-role/1.22.0"
+            or job.task_type != "workflow_diagnose"
+            or job.logical_artifact_id != pointer.logical_artifact_id
+            or job.revision_id != pointer.revision_id
+            or job.worker_slot_id != "06"
+            or artifact.logical_artifact_id != pointer.logical_artifact_id
+            or artifact.job_id != pointer.job_id
+            or artifact.artifact_type != "workflow_diagnose"
+            or not artifact.approved
+            or revision.revision_id != pointer.revision_id
+            or revision.logical_artifact_id != pointer.logical_artifact_id
+            or revision.job_id != pointer.job_id
+            or revision.content_hash != pointer.content_hash
+            or revision.content_hash != content_sha256(revision.result)
+            or revision.manifest_hash != content_sha256(revision.manifest)
+            or revision.content_bytes != len(canonical_json_bytes(revision.result))
+            or revision.content_bytes != manifest.content_bytes
+            or not revision.approved
+            or manifest.job_id != pointer.job_id
+            or manifest.logical_artifact_id != pointer.logical_artifact_id
+            or manifest.revision_id != pointer.revision_id
+            or manifest.content_hash != pointer.content_hash
+            or manifest.file_name != "result.json"
+            or manifest.media_type != "application/json"
+            or manifest.worker_slot != "06"
+            or event.job_id != pointer.job_id
+            or event.from_state != "COMMITTING"
+            or event.to_state != "SUCCEEDED"
+            or event.event != "ARTIFACT_COMMITTED"
+            or event.data != expected_event_data
+            or result.workflow_id != workflow_id
+            or result.step_run_id != step.step_run_id
+            or result.job_id != pointer.job_id
+            or result.artifact.logical_artifact_id != pointer.logical_artifact_id
+            or result.artifact.revision_id != pointer.revision_id
+            or result.artifact.file_name != "result.json"
+            or result.artifact.media_type != "application/json"
+        ):
+            raise ApiError(
+                500,
+                "CUSTOMER_SUPPORT_RESULT_INVALID",
+                "Customer support result invalid",
+                "The stored support result pointer, lifecycle, or Artifact differs.",
+            )
+        return result
+
+    @staticmethod
+    def _customer_support_case(
+        workflow: WorkflowInstanceRecord,
+        result: CustomerSupportRoleResult | None,
+    ) -> CustomerSupportCaseView:
+        try:
+            request = load_persisted_workflow_request(workflow.initial_request)
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "CUSTOMER_SUPPORT_REQUEST_INVALID",
+                "Customer support request invalid",
+                "The stored support request does not match its contract.",
+            ) from exc
+        case = request.customer_support_case
+        if request.request_name != "CUSTOMER_SUPPORT_REQUEST" or case is None:
+            raise ApiError(
+                500,
+                "CUSTOMER_SUPPORT_REQUEST_INVALID",
+                "Customer support request invalid",
+                "The stored Workflow is not a customer-support case.",
+            )
+        state_by_workflow: dict[
+            str,
+            Literal["SUBMITTED", "DIAGNOSING", "ANSWERED", "FAILED"],
+        ] = {
+            "REQUESTED": "SUBMITTED",
+            "RUNNING": "DIAGNOSING",
+            "COMPLETED": "ANSWERED",
+            "FAILED": "FAILED",
+            "CANCELLED": "FAILED",
+        }
+        try:
+            state = state_by_workflow[workflow.state]
+        except KeyError as exc:
+            raise ApiError(
+                500,
+                "CUSTOMER_SUPPORT_STATE_INVALID",
+                "Customer support state invalid",
+                "The support Workflow entered an unsupported state.",
+            ) from exc
+        # A committed step Artifact can briefly precede the Workflow terminal transition.
+        # Do not expose a partial answer until the canonical case lifecycle is ANSWERED.
+        output = result.output if state == "ANSWERED" and result is not None else None
+        return CustomerSupportCaseView(
+            workflow_id=workflow.workflow_id,
+            category=case.category,
+            subject=case.subject,
+            question=case.question,
+            state=state,
+            classification=output.classification if output is not None else None,
+            answer_text=output.answer_text if output is not None else None,
+            recommended_actions=(
+                tuple(
+                    CustomerSupportActionView(
+                        title=action.title,
+                        instruction=action.instruction,
+                    )
+                    for action in output.recommended_actions
+                )
+                if output is not None
+                else ()
+            ),
+            needs_operator=output.needs_operator if output is not None else False,
+            failure_code=workflow.failure_code,
+            created_at=workflow.created_at,
+            updated_at=workflow.updated_at,
+            resource_version=workflow.lock_version,
+        )
 
     def workflow(self, workflow_id: str) -> WorkflowView:
         with self.sessions() as session:

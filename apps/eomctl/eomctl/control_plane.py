@@ -11,6 +11,9 @@ from eom_orchestrator.control_bootstrap import (
     bootstrap_standard_control_plane,
 )
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.customer_support_bootstrap import (
+    bootstrap_customer_support_control_plane,
+)
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.knowledge_item_bootstrap import bootstrap_knowledge_item_control_plane
 from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
@@ -66,6 +69,15 @@ LEGACY_ITEM_EDITORIAL_COMPATIBILITY_CONFIG_DIRECTORY_OPTION = typer.Option(
     dir_okay=True,
     resolve_path=True,
     help="Reviewed absolute legacy-item editorial-compatibility bootstrap directory",
+)
+CUSTOMER_SUPPORT_CONFIG_DIRECTORY_OPTION = typer.Option(
+    ...,
+    "--config-directory",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+    resolve_path=True,
+    help="Reviewed absolute customer-support bootstrap directory",
 )
 STANDARD_CONTENT_DIRECTORY_OPTION = typer.Option(
     None,
@@ -199,6 +211,37 @@ def bootstrap_legacy_item_editorial_compatibility(
             source_commit=source_commit,
             actor_id=actor_id,
             evaluation_cases_total=evaluation_cases_total,
+            settings=Settings.from_environment(),
+        )
+    except ControlPlaneError as exc:
+        typer.echo(json.dumps({"status": "FAILED", "error_code": exc.code}, sort_keys=True))
+        raise typer.Exit(1) from None
+    finally:
+        engine.dispose()
+    typer.echo(
+        json.dumps(
+            {"status": "SUCCEEDED", **result.model_dump(mode="json")},
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+    )
+
+
+@control_plane_app.command("bootstrap-customer-support")
+def bootstrap_customer_support(
+    source_commit: str = typer.Option(..., "--source-commit"),
+    actor_id: str = typer.Option(..., "--actor-id"),
+    config_directory: Path = CUSTOMER_SUPPORT_CONFIG_DIRECTORY_OPTION,
+) -> None:
+    """Publish the evaluated read-only customer-support preset without invoking Codex."""
+
+    engine = build_engine()
+    try:
+        result = bootstrap_customer_support_control_plane(
+            engine,
+            config_directory=config_directory,
+            source_commit=source_commit,
+            actor_id=actor_id,
             settings=Settings.from_environment(),
         )
     except ControlPlaneError as exc:

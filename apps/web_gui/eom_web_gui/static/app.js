@@ -64,6 +64,13 @@ const state = {
   curriculumOutline: null,
   curriculumUnitsByKey: new Map(),
   curriculumSelection: {large: "", middle: "", small: ""},
+  customerSupportCases: [],
+  customerSupportNextCursor: null,
+  customerSupportHasMore: false,
+  customerSupportSelectedId: null,
+  customerSupportPollTimer: null,
+  customerSupportRequestSequence: 0,
+  customerSupportPendingSubmission: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -80,6 +87,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   learning: "engine",
   knowledge: "engine",
   explorer: "engine",
+  support: "human",
   dashboard: "human",
 });
 
@@ -272,6 +280,11 @@ function showView(name) {
   if (name === "control" && hasAdminRole()) loadCodexControlPlane();
   if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();
   if (name === "learning" && hasAdminRole()) loadAssessmentLearning();
+  if (name === "support") loadCustomerSupportCases();
+  if (name !== "support") {
+    stopCustomerSupportPolling();
+    state.customerSupportRequestSequence += 1;
+  }
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   window.scrollTo({top: 0, behavior});
@@ -3154,6 +3167,235 @@ async function copyExplorerId() {
   toast("ID를 복사했습니다.");
 }
 
+function customerSupportState(value) {
+  return {
+    SUBMITTED: {label: "접수됨", tone: "warning", icon: "◆"},
+    DIAGNOSING: {label: "Codex 확인 중", tone: "primary", icon: "●"},
+    ANSWERED: {label: "답변 완료", tone: "success", icon: "✓"},
+    FAILED: {label: "답변 실패", tone: "danger", icon: "!"},
+  }[value] || {label: "상태 확인 필요", tone: "neutral", icon: "■"};
+}
+
+function customerSupportCategory(value) {
+  return {
+    HOW_TO: "사용 방법",
+    TECHNICAL_ERROR: "기능 오류",
+    CONTENT_QUALITY: "문항·결과 품질",
+    FEATURE_REQUEST: "개선 제안",
+  }[value] || "문의";
+}
+
+function renderCustomerSupportList() {
+  const root = $("#support-list");
+  const more = $("#support-more");
+  root.replaceChildren();
+  more.hidden = !state.customerSupportHasMore;
+  if (!state.customerSupportCases.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "아직 등록한 문의가 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const item of state.customerSupportCases) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `support-case${item.workflow_id === state.customerSupportSelectedId ? " selected" : ""}`;
+    const title = document.createElement("strong");
+    title.textContent = item.subject;
+    const meta = document.createElement("span");
+    meta.textContent = `${customerSupportCategory(item.category)} · ${customerSupportState(item.state).label} · ${formatSeoulDateTime(item.updated_at)}`;
+    button.append(title, meta);
+    button.addEventListener("click", () => selectCustomerSupportCase(item.workflow_id));
+    root.append(button);
+  }
+}
+
+function renderCustomerSupportCase(item) {
+  state.customerSupportSelectedId = item.workflow_id;
+  const status = customerSupportState(item.state);
+  setStatus($("#support-state"), status.tone, status.icon, status.label);
+  const root = $("#support-detail");
+  root.replaceChildren();
+
+  const question = document.createElement("p");
+  question.className = "support-question";
+  question.textContent = item.question;
+  root.append(question);
+
+  const response = document.createElement("p");
+  response.className = "support-response";
+  if (item.state === "ANSWERED") {
+    response.textContent = item.answer_text || "답변 내용을 확인할 수 없습니다.";
+  } else if (item.state === "FAILED") {
+    response.textContent = "이번 진단을 완료하지 못했습니다. 새 문의를 중복 제출하지 말고 관리자에게 상태 확인을 요청해주세요.";
+  } else {
+    response.textContent = "전용 고객지원 슬롯에서 문의를 확인하고 있습니다. 이 화면에서 상태가 자동으로 갱신됩니다.";
+  }
+  root.append(response);
+
+  if (Array.isArray(item.recommended_actions) && item.recommended_actions.length) {
+    const actions = document.createElement("ol");
+    actions.className = "support-actions";
+    for (const action of item.recommended_actions) {
+      const row = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = action.title;
+      const instruction = document.createElement("span");
+      instruction.textContent = action.instruction;
+      row.append(title, instruction);
+      actions.append(row);
+    }
+    root.append(actions);
+  }
+  if (item.needs_operator) {
+    const escalation = document.createElement("p");
+    escalation.className = "support-escalation";
+    escalation.textContent = "관리자 확인이 필요한 문의입니다. 문의 기록은 안전하게 보존되어 있습니다.";
+    root.append(escalation);
+  }
+  if (item.failure_code) {
+    const detail = document.createElement("details");
+    detail.className = "technical-details";
+    const summary = document.createElement("summary");
+    summary.textContent = "기술 정보";
+    const code = document.createElement("p");
+    code.textContent = `오류 코드: ${item.failure_code}`;
+    detail.append(summary, code);
+    root.append(detail);
+  }
+  renderCustomerSupportList();
+  if (["SUBMITTED", "DIAGNOSING"].includes(item.state)) startCustomerSupportPolling();
+  else stopCustomerSupportPolling();
+}
+
+async function loadCustomerSupportCases(append = false) {
+  try {
+    const cursor = append ? state.customerSupportNextCursor : null;
+    const path = cursor
+      ? `/customer-support/cases?cursor=${encodeURIComponent(cursor)}`
+      : "/customer-support/cases";
+    const result = await api(path);
+    const values = Array.isArray(result.values) ? result.values : [];
+    if (append) {
+      const casesById = new Map(
+        state.customerSupportCases.map((item) => [item.workflow_id, item]),
+      );
+      for (const item of values) casesById.set(item.workflow_id, item);
+      state.customerSupportCases = [...casesById.values()];
+    } else {
+      state.customerSupportCases = values;
+    }
+    state.customerSupportNextCursor = typeof result.next_cursor === "string"
+      ? result.next_cursor
+      : null;
+    state.customerSupportHasMore = result.has_more === true;
+    renderCustomerSupportList();
+    const selected = state.customerSupportCases.find(
+      (item) => item.workflow_id === state.customerSupportSelectedId,
+    );
+    if (selected) renderCustomerSupportCase(selected);
+  } catch (failure) {
+    if (append) {
+      showMessage($("#support-form-message"), `이전 문의 조회 실패: ${failure.message}`, "error");
+      return;
+    }
+    $("#support-list").replaceChildren();
+    const message = document.createElement("p");
+    message.className = "empty-state";
+    message.textContent = `문의 내역 조회 실패: ${failure.message}`;
+    $("#support-list").append(message);
+  }
+}
+
+async function selectCustomerSupportCase(workflowId) {
+  const requestSequence = ++state.customerSupportRequestSequence;
+  state.customerSupportSelectedId = workflowId;
+  renderCustomerSupportList();
+  try {
+    const item = await api(`/customer-support/cases/${encodeURIComponent(workflowId)}`);
+    if (
+      requestSequence !== state.customerSupportRequestSequence
+      || state.customerSupportSelectedId !== workflowId
+    ) return;
+    const index = state.customerSupportCases.findIndex(
+      (candidate) => candidate.workflow_id === workflowId,
+    );
+    if (index >= 0) state.customerSupportCases[index] = item;
+    else state.customerSupportCases.unshift(item);
+    renderCustomerSupportCase(item);
+  } catch (failure) {
+    if (requestSequence !== state.customerSupportRequestSequence) return;
+    showMessage($("#support-form-message"), `문의 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function startCustomerSupportPolling() {
+  stopCustomerSupportPolling();
+  if (!state.customerSupportSelectedId || !$('[data-view="support"].active')) return;
+  state.customerSupportPollTimer = window.setTimeout(async () => {
+    const workflowId = state.customerSupportSelectedId;
+    state.customerSupportPollTimer = null;
+    if (workflowId) await selectCustomerSupportCase(workflowId);
+  }, 8000);
+}
+
+function stopCustomerSupportPolling() {
+  if (state.customerSupportPollTimer) window.clearTimeout(state.customerSupportPollTimer);
+  state.customerSupportPollTimer = null;
+}
+
+async function submitCustomerSupportCase(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const submit = $("#support-submit");
+  const errorCode = form.elements.stable_error_code.value.trim().toUpperCase();
+  const businessInput = {
+    category: form.elements.category.value,
+    subject: form.elements.subject.value.trim(),
+    question: form.elements.question.value.trim(),
+    browser_route: window.location.pathname.slice(0, 512),
+    stable_error_code: errorCode || null,
+  };
+  const fingerprint = JSON.stringify(businessInput);
+  if (state.customerSupportPendingSubmission?.fingerprint !== fingerprint) {
+    state.customerSupportPendingSubmission = {
+      fingerprint,
+      idempotencyKey: `studio:support:${crypto.randomUUID()}`,
+    };
+  }
+  const body = {
+    ...businessInput,
+    idempotency_key: state.customerSupportPendingSubmission.idempotencyKey,
+  };
+  submit.disabled = true;
+  showMessage($("#support-form-message"), "문의를 안전하게 접수하고 있습니다.");
+  try {
+    const result = await api("/customer-support/cases", {
+      method: "POST",
+      mutation: true,
+      body,
+    });
+    if (typeof result.resource_id !== "string") throw new StudioApiError("APPLICATION_API_RESPONSE_INVALID");
+    state.customerSupportPendingSubmission = null;
+    form.reset();
+    showMessage($("#support-form-message"), "문의가 접수되었습니다.", "success");
+    await loadCustomerSupportCases();
+    await selectCustomerSupportCase(result.resource_id);
+  } catch (failure) {
+    showMessage($("#support-form-message"), `문의 접수 실패: ${failure.message}`, "error");
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+function installCustomerSupport() {
+  $("#support-form").addEventListener("submit", submitCustomerSupportCase);
+  $("#support-refresh").addEventListener("click", () => loadCustomerSupportCases());
+  $("#support-more").addEventListener("click", () => loadCustomerSupportCases(true));
+}
+
 async function logout() {
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
@@ -3173,6 +3415,7 @@ async function boot() {
   installAssessmentLearning();
   installKnowledgeQuality();
   installExplorer();
+  installCustomerSupport();
   $("#logout").addEventListener("click", logout);
   await initializeSession();
   await loadCurriculumOutline();

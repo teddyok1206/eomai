@@ -17,6 +17,7 @@ import eom_catalog_service.models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.models  # noqa: F401
 import eom_orchestrator.knowledge_analysis_models  # noqa: F401
+import eom_orchestrator.legacy_item_editorial_compatibility_bootstrap as editorial_bootstrap
 import eom_orchestrator.legacy_item_extraction_bootstrap as legacy_extraction_bootstrap
 import eom_workflow_runner.models  # noqa: F401
 import pytest
@@ -89,6 +90,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
     WorkerCapacityPolicyRecord,
+    WorkerCapacityPolicyRevisionRecord,
     WorkerLeaseEventRecord,
     WorkerLeaseRecord,
 )
@@ -109,6 +111,10 @@ from eom_orchestrator.control_service import (
     terminalize_worker_lease,
     worker_lease_view,
 )
+from eom_orchestrator.customer_support_bootstrap import (
+    CustomerSupportBootstrapResult,
+    bootstrap_customer_support_control_plane,
+)
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.execution_materializer import (
     authorized_execution_artifact_revisions,
@@ -116,6 +122,7 @@ from eom_orchestrator.execution_materializer import (
 )
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
+    resolve_customer_support_plan,
     resolve_execution_plan,
 )
 from eom_orchestrator.knowledge_item_bootstrap import (
@@ -146,6 +153,7 @@ from eom_orchestrator.preset_lifecycle import (
 )
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
+from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_IDS
@@ -154,7 +162,15 @@ from eom_orchestrator.workflow_job_retirement import (
     WorkflowJobRetirementError,
     require_no_held_worker_leases,
 )
-from eom_workflow import CodexUsageObservation, ControlArtifactPointer, ExecutionPresetRevisionV2
+from eom_workflow import (
+    CodexUsageObservation,
+    ControlArtifactPointer,
+    CustomerSupportCase,
+    CustomerSupportDiagnostics,
+    ExecutionPresetRevisionV2,
+    WorkflowRequest,
+    compile_definition,
+)
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.models import (
@@ -164,11 +180,14 @@ from eom_workflow_runner.models import (
 )
 from eom_workflow_runner.repository import (
     CommandType,
+    admitted_workflow_definition,
     claim_next_command,
     claimable_command_exists,
+    create_workflow_instance,
     enqueue_command,
+    import_workflow_definition,
 )
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -3566,6 +3585,206 @@ def test_historical_protocol_rows_remain_byte_identical(db_session: Session) -> 
     assert current is not None
     assert current.schema_sha256 == role_schema_bundle_hash("workflow-role/1.3.0")
     assert db_session.get(WorkerSlotRecord, "01") is not None
+
+
+def test_customer_support_bootstrap_is_idempotent_and_preserves_capacity_v3(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=1800,
+    )
+    sessions = build_session_factory(integration_engine)
+    slots = resolve_worker_configuration(settings).registry.config.slots
+    with transaction(sessions) as session:
+        for slot in slots:
+            upsert_worker_slot(
+                session,
+                slot_id=slot.slot_id,
+                linux_user=slot.linux_user,
+                role=slot.role,
+                enabled=slot.enabled,
+                gpu=slot.gpu,
+            )
+        import_workflow_definition(
+            session,
+            compile_definition(
+                Path("config/workflows/customer-support.v1.yaml"),
+                {"support"},
+            ),
+        )
+    predecessor_revision_id = editorial_bootstrap._stable_id("capacityrev_", "fixed-host:v3")
+    with sessions() as session:
+        predecessor = session.get(WorkerCapacityPolicyRevisionRecord, predecessor_revision_id)
+    if predecessor is None:
+        editorial_bootstrap._publish_editorial_compatibility_capacity_policy(
+            sessions,
+            slots=slots,
+            actor_id="customer-support-integration",
+        )
+
+    def bootstrap() -> CustomerSupportBootstrapResult:
+        return bootstrap_customer_support_control_plane(
+            integration_engine,
+            config_directory=Path("config/control-plane/customer-support-v1").resolve(),
+            source_commit="c" * 40,
+            actor_id="customer-support-integration",
+            settings=settings,
+        )
+
+    first = bootstrap()
+    assert bootstrap() == first
+
+    assert (
+        editorial_bootstrap._publish_editorial_compatibility_capacity_policy(
+            sessions,
+            slots=slots,
+            actor_id="customer-support-integration",
+        )
+        == predecessor_revision_id
+    )
+    assert (
+        legacy_extraction_bootstrap._publish_extraction_capacity_policy(
+            sessions,
+            slots=slots,
+            actor_id="customer-support-integration",
+        )
+        == predecessor_revision_id
+    )
+
+    with sessions() as session:
+        logical = session.get(ExecutionPresetRecord, first.preset_id)
+        revision = session.get(ExecutionPresetRevisionRecord, first.preset_revision_id)
+        preset_revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == first.preset_id)
+                .order_by(ExecutionPresetRevisionRecord.revision_number)
+            )
+        )
+        evaluation = session.get(ExecutionPresetEvaluationRecord, first.evaluation_id)
+        capacity_v3 = session.get(
+            WorkerCapacityPolicyRevisionRecord,
+            predecessor_revision_id,
+        )
+        capacity_v4 = session.get(
+            WorkerCapacityPolicyRevisionRecord,
+            first.capacity_policy_revision_id,
+        )
+        protocol = session.get(ProtocolVersionRecord, "workflow-role/1.22.0")
+        assert logical is not None and logical.current_revision_id == first.preset_revision_id
+        assert revision is not None and revision.state == "RELEASED"
+        assert tuple(item.state for item in preset_revisions) == ("DRAFT", "RELEASED")
+        assert (
+            len(
+                {
+                    execution_preset_policy_sha256(item.canonical_document)
+                    for item in preset_revisions
+                }
+            )
+            == 1
+        )
+        assert evaluation is not None and evaluation.quality_score_permille is None
+        assert capacity_v3 is not None and capacity_v3.canonical_document["revision_number"] == 3
+        assert capacity_v4 is not None and capacity_v4.canonical_document["revision_number"] == 4
+        capacity_logical = session.get(
+            WorkerCapacityPolicyRecord,
+            capacity_v4.capacity_policy_id,
+        )
+        assert capacity_logical is not None
+        assert capacity_logical.current_revision_id == first.capacity_policy_revision_id
+        assert protocol is not None
+        assert protocol.schema_sha256 == role_schema_bundle_hash("workflow-role/1.22.0")
+
+    support_case = CustomerSupportCase(
+        category="TECHNICAL_ERROR",
+        subject="미리보기 상태 확인",
+        question="문항 미리보기가 준비 중으로 표시되는 이유를 설명해주세요.",
+        diagnostics=CustomerSupportDiagnostics(
+            observed_at=datetime(2026, 9, 17, 1, 0, tzinfo=UTC),
+            browser_route="/studio/",
+            stable_error_code="ITEM_PREVIEW_NOT_READY",
+        ),
+    )
+    with transaction(sessions) as session:
+        definition = admitted_workflow_definition(
+            session,
+            definition_key="customer-support",
+            definition_version="1.0.0",
+        )
+        assert definition is not None
+        workflow, created = create_workflow_instance(
+            session,
+            definition=definition,
+            request=WorkflowRequest(
+                request_name="CUSTOMER_SUPPORT_REQUEST",
+                image_mode="skip",
+                execution_preset_key="customer-support",
+                customer_support_case=support_case,
+            ),
+            idempotency_key="customer-support-integration-create",
+            actor_type="human",
+            actor_id="operator_" + "d" * 32,
+        )
+        assert created
+        assert workflow.stage == "CUSTOMER_SUPPORT"
+        plan = resolve_customer_support_plan(
+            session,
+            workflow_id=workflow.workflow_id,
+            workflow_definition_version=definition.definition_version,
+            workflow_definition_sha256=definition.definition_hash,
+            workflow_role_schema_version=workflow.role_schema_version,
+            support_case=support_case,
+            resolved_at=datetime(2026, 9, 17, 1, 1, tzinfo=UTC),
+        )
+        replay = resolve_customer_support_plan(
+            session,
+            workflow_id=workflow.workflow_id,
+            workflow_definition_version=definition.definition_version,
+            workflow_definition_sha256=definition.definition_hash,
+            workflow_role_schema_version=workflow.role_schema_version,
+            support_case=support_case,
+            resolved_at=datetime(2026, 9, 17, 1, 2, tzinfo=UTC),
+        )
+        assert replay == plan
+        assert plan.steps[0].worker_pool_key == "customer-support"
+        changed_case = support_case.model_copy(update={"question": support_case.question + " 변경"})
+        with pytest.raises(ControlPlaneError) as captured:
+            resolve_customer_support_plan(
+                session,
+                workflow_id=workflow.workflow_id,
+                workflow_definition_version=definition.definition_version,
+                workflow_definition_sha256=definition.definition_hash,
+                workflow_role_schema_version=workflow.role_schema_version,
+                support_case=changed_case,
+            )
+        assert captured.value.code == "CONTROL_PLAN_BINDING_MISMATCH"
+        session.execute(text("SET LOCAL enable_seqscan = off"))
+        query_plan = tuple(
+            session.execute(
+                text(
+                    "EXPLAIN (FORMAT TEXT) "
+                    "SELECT workflow_id FROM workflow_instances "
+                    "WHERE definition_key = 'customer-support' "
+                    "AND created_actor_type = 'human' "
+                    "AND created_actor_id = :actor_id "
+                    "ORDER BY created_at DESC, workflow_id DESC LIMIT 25"
+                ),
+                {"actor_id": "operator_" + "d" * 32},
+            ).scalars()
+        )
+        assert any("ix_workflow_customer_support_owner" in row for row in query_plan)
 
 
 def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: Engine) -> None:

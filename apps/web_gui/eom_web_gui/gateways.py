@@ -26,6 +26,8 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
+    CustomerSupportCaseView,
+    CustomerSupportSubmission,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -272,6 +274,26 @@ class ApplicationGateway(Protocol):
     async def start_workflow(
         self, session: WebSession, payload: dict[str, object], idempotency_key: str
     ) -> dict[str, Any]: ...
+
+    async def create_customer_support_case(
+        self,
+        session: WebSession,
+        value: CustomerSupportSubmission,
+        *,
+        inquiry_id: str,
+        web_release_commit: str | None,
+    ) -> dict[str, Any]: ...
+
+    async def customer_support_cases(
+        self,
+        session: WebSession,
+        *,
+        cursor: str | None,
+    ) -> tuple[tuple[CustomerSupportCaseView, ...], str | None, bool]: ...
+
+    async def customer_support_case(
+        self, session: WebSession, workflow_id: str
+    ) -> CustomerSupportCaseView: ...
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]: ...
 
@@ -761,6 +783,79 @@ class HttpApplicationGateway:
             timeout=self._workflow_start_timeout,
         )
         return sanitize_mapping(self._data(response))
+
+    async def create_customer_support_case(
+        self,
+        session: WebSession,
+        value: CustomerSupportSubmission,
+        *,
+        inquiry_id: str,
+        web_release_commit: str | None,
+    ) -> dict[str, Any]:
+        payload = value.model_dump(
+            mode="json",
+            exclude={"idempotency_key"},
+            exclude_none=True,
+        )
+        payload.update(
+            {
+                "locale": "ko-KR",
+                "inquiry_id": inquiry_id,
+                "web_release_commit": web_release_commit,
+            }
+        )
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/customer-support/cases",
+            json=payload,
+            headers={"Idempotency-Key": value.idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def customer_support_cases(
+        self,
+        session: WebSession,
+        *,
+        cursor: str | None,
+    ) -> tuple[tuple[CustomerSupportCaseView, ...], str | None, bool]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/customer-support/cases",
+            params={"limit": 25, "cursor": cursor},
+        )
+        document = self._document(response)
+        values = document.get("data")
+        page = document.get("page")
+        if (
+            not isinstance(values, list)
+            or not isinstance(page, dict)
+            or not isinstance(page.get("has_more"), bool)
+            or (page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str))
+            or (page["has_more"] and not page.get("next_cursor"))
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            cases = tuple(CustomerSupportCaseView.model_validate(value) for value in values)
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        return cases, page.get("next_cursor"), page["has_more"]
+
+    async def customer_support_case(
+        self, session: WebSession, workflow_id: str
+    ) -> CustomerSupportCaseView:
+        _require_id(workflow_id, "workflow_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/customer-support/cases/{workflow_id}",
+        )
+        try:
+            return CustomerSupportCaseView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/codex-accounts")

@@ -37,6 +37,7 @@ WORKFLOW_STATES = (
 )
 WORKFLOW_STAGES = (
     "KNOWLEDGE_ANALYSIS",
+    "CUSTOMER_SUPPORT",
     "AUTHORING",
     "IMAGE_REQUIRED",
     "IMAGE_SKIPPED",
@@ -92,12 +93,22 @@ class WorkflowInstanceRecord(Base):
             name="ck_workflow_instances_state",
         ),
         CheckConstraint(
-            "stage IN ('KNOWLEDGE_ANALYSIS','AUTHORING','IMAGE_REQUIRED','IMAGE_SKIPPED',"
+            "stage IN ('KNOWLEDGE_ANALYSIS','CUSTOMER_SUPPORT','AUTHORING','IMAGE_REQUIRED',"
+            "'IMAGE_SKIPPED',"
             "'REVIEWING','AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED',"
             "'CANCELLED')",
             name="ck_workflow_instances_stage",
         ),
         Index("ix_workflow_instances_request_hash", "request_hash"),
+        Index(
+            "ix_workflow_customer_support_owner",
+            "created_actor_id",
+            "created_at",
+            "workflow_id",
+            postgresql_where=text(
+                "definition_key = 'customer-support' AND created_actor_type = 'human'"
+            ),
+        ),
         Index(
             "uq_workflow_active_request_hash",
             "request_hash",

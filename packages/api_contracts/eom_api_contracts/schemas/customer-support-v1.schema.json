@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/customer-support/1.0",
+  "title": "EOM Customer Support API V1",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/CreateCustomerSupportCaseRequest" },
+    { "$ref": "#/$defs/CustomerSupportCaseView" }
+  ],
+  "$defs": {
+    "CreateCustomerSupportCaseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "subject", "question", "locale"],
+      "properties": {
+        "category": {
+          "enum": ["HOW_TO", "TECHNICAL_ERROR", "CONTENT_QUALITY", "FEATURE_REQUEST"]
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120,
+          "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]+$"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 4000,
+          "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]+$"
+        },
+        "locale": { "const": "ko-KR" },
+        "browser_route": {
+          "type": ["string", "null"],
+          "maxLength": 512,
+          "pattern": "^/[^\\u0000-\\u001f?#]*$"
+        },
+        "inquiry_id": {
+          "type": ["string", "null"],
+          "pattern": "^webreq_[0-9a-f]{24}$"
+        },
+        "stable_error_code": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "web_release_commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "CustomerSupportAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "instruction"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "instruction": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "CustomerSupportCaseView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "category",
+        "subject",
+        "question",
+        "state",
+        "needs_operator",
+        "created_at",
+        "updated_at",
+        "resource_version"
+      ],
+      "properties": {
+        "workflow_id": { "type": "string", "pattern": "^workflow_[0-9a-f]{32}$" },
+        "category": {
+          "enum": ["HOW_TO", "TECHNICAL_ERROR", "CONTENT_QUALITY", "FEATURE_REQUEST"]
+        },
+        "subject": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "question": { "type": "string", "minLength": 10, "maxLength": 4000 },
+        "state": { "enum": ["SUBMITTED", "DIAGNOSING", "ANSWERED", "FAILED"] },
+        "classification": {
+          "type": ["string", "null"],
+          "enum": [
+            "USAGE_GUIDANCE",
+            "TRANSIENT_RUNTIME",
+            "VALIDATION_ERROR",
+            "PERMISSION_OR_SESSION",
+            "CONTENT_QUALITY",
+            "FEATURE_REQUEST",
+            "UNKNOWN",
+            null
+          ]
+        },
+        "answer_text": { "type": ["string", "null"], "minLength": 1, "maxLength": 6000 },
+        "recommended_actions": {
+          "type": "array",
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/CustomerSupportAction" }
+        },
+        "needs_operator": { "type": "boolean" },
+        "failure_code": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "resource_version": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "ANSWERED" } } },
+          "then": {
+            "properties": {
+              "classification": { "type": "string" },
+              "answer_text": { "type": "string" }
+            }
+          },
+          "else": {
+            "properties": {
+              "classification": { "type": "null" },
+              "answer_text": { "type": "null" },
+              "recommended_actions": { "maxItems": 0 },
+              "needs_operator": { "const": false }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

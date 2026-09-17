@@ -31,6 +31,7 @@ from eom_workflow import (
     ArtifactPointer,
     CompiledWorkflowDefinition,
     ContentTeamItemBriefV4,
+    CustomerSupportWorkerRequest,
     DecisionStep,
     HumanGateStep,
     KnowledgeAnalysisWorkerRequest,
@@ -152,6 +153,7 @@ def _prompt_name_for_request(
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
+        | CustomerSupportWorkerRequest
     ),
 ) -> str:
     """Select the fixed prompt without conflating support workloads."""
@@ -162,6 +164,8 @@ def _prompt_name_for_request(
         request, LegacyItemEditorialCompatibilityWorkerRequest
     ):
         return "legacy-item-editorial-compatibility"
+    if worker_role == "support" and isinstance(request, CustomerSupportWorkerRequest):
+        return "customer-support"
     if worker_role == "item_management":
         return "registration"
     return worker_role
@@ -201,6 +205,7 @@ class RoleJobExecutor(Protocol):
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
+            | CustomerSupportWorkerRequest
         ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
@@ -240,6 +245,7 @@ class PlatformRoleJobExecutor:
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
+            | CustomerSupportWorkerRequest
         ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
@@ -2039,6 +2045,8 @@ def _capacity_resume_target(
         return WorkflowState.RUNNING, WorkflowStage.REVIEWING
     if worker_role == "item_management":
         return WorkflowState.REGISTERING, WorkflowStage.REGISTERING
+    if worker_role == "support" and definition_key == "customer-support":
+        return WorkflowState.RUNNING, WorkflowStage.CUSTOMER_SUPPORT
     if worker_role == "support" and definition_key in {
         "knowledge-analysis",
         "legacy-item-extraction",

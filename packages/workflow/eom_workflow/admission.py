@@ -27,6 +27,7 @@ _ADMISSIONS = (
     WorkflowAdmission("knowledge-analysis", "8.0.0", "workflow-role/1.11.0"),
     WorkflowAdmission("knowledge-analysis", "9.0.0", "workflow-role/1.18.0"),
     WorkflowAdmission("knowledge-analysis", "10.0.0", "workflow-role/1.21.0"),
+    WorkflowAdmission("customer-support", "1.0.0", "workflow-role/1.22.0"),
     WorkflowAdmission("legacy-item-extraction", "1.0.0", "workflow-role/1.14.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",

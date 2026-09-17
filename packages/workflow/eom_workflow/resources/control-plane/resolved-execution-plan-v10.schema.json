@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/10.0",
+  "title": "EOM Customer Support Resolved Execution Plan V10",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "support_case_sha256",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "resolved-execution-plan/10.0"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^execplan_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "workload_class": {
+      "const": "CODEX"
+    },
+    "preset_id": {
+      "type": "string",
+      "pattern": "^execpreset_[0-9a-f]{32}$"
+    },
+    "preset_revision_id": {
+      "type": "string",
+      "pattern": "^execpresetrev_[0-9a-f]{32}$"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_definition_key": {
+      "const": "customer-support"
+    },
+    "workflow_definition_version": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "support_case_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode"
+        ],
+        "properties": {
+          "step_key": {
+            "const": "diagnose"
+          },
+          "role": {
+            "const": "support"
+          },
+          "model": {
+            "const": "gpt-5.6-terra"
+          },
+          "reasoning_effort": {
+            "const": "medium"
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "reference_bundle": {
+            "type": "null"
+          },
+          "worker_pool_key": {
+            "const": "customer-support"
+          },
+          "timeout_seconds": {
+            "const": 900
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "general_knowledge_mode": {
+            "const": "ALLOWED_WITH_PROVENANCE"
+          }
+        }
+      }
+    },
+    "resolver_version": {
+      "const": "10.0.0"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    }
+  }
+}

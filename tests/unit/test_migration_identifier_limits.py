@@ -17,6 +17,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260909_0033_pdf_learning_completion",
     "migrations.versions.20260912_0034_workflow_command_fencing",
     "migrations.versions.20260912_0035_additive_solution_analysis",
+    "migrations.versions.20260917_0036_customer_support_workflow_index",
 )
 
 

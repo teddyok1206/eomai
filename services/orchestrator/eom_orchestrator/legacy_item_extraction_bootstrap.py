@@ -15,6 +15,7 @@ from eom_workflow import (
     ExecutionPresetRevision,
     InstructionBundleManifest,
     WorkerCapacityPolicyV3,
+    WorkerCapacityPolicyV4,
     compile_definition_data,
 )
 from eom_workflow.control_schemas import validate_control_contract
@@ -51,6 +52,7 @@ from eom_orchestrator.control_models import (
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRecord,
     WorkerCapacityPolicyRevisionRecord,
 )
 from eom_orchestrator.control_service import (
@@ -1001,11 +1003,44 @@ def _publish_extraction_capacity_policy(
             document=policy.model_dump(mode="json"),
             created_by=actor_id,
         )
-        publish_capacity_policy_revision(
-            session,
-            capacity_policy_id=policy_id,
-            capacity_policy_revision_id=revision_id,
+        logical = session.get(WorkerCapacityPolicyRecord, policy_id)
+        current = (
+            session.get(WorkerCapacityPolicyRevisionRecord, logical.current_revision_id)
+            if logical is not None and logical.current_revision_id is not None
+            else None
         )
+        if logical is None or logical.state != "ACTIVE":
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                "fixed-host capacity logical record is unavailable",
+            )
+        if current is not None and current.revision_number > policy.revision_number:
+            try:
+                successor = WorkerCapacityPolicyV4.model_validate(current.canonical_document)
+            except ValueError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                    "fixed-host capacity successor is invalid",
+                ) from exc
+            if (
+                successor.capacity_policy_id != policy_id
+                or successor.revision_number != 4
+                or current.content_sha256 != successor.content_sha256
+                or compute_control_document_hash(
+                    successor.model_dump(mode="json"), "content_sha256"
+                )
+                != successor.content_sha256
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_HISTORY_INVALID",
+                    "fixed-host capacity successor differs",
+                )
+        else:
+            publish_capacity_policy_revision(
+                session,
+                capacity_policy_id=policy_id,
+                capacity_policy_revision_id=revision_id,
+            )
     return revision_id
 
 

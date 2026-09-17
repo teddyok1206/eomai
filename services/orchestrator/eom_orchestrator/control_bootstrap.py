@@ -217,6 +217,9 @@ STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
         "capacityrev_d8ce74ff203d225081fe8e9686457dd9": (
             "sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660"
         ),
+        "capacityrev_7bf8e36f42b1a7b495a6858a5ea827b9": (
+            "sha256:8b90252a79240a90e4cd8452960732ea14f4602ad70fc80dee9b7cc281d04035"
+        ),
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(

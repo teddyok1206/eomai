@@ -37,6 +37,11 @@ from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
 )
+from eom_api_contracts.customer_support import (
+    CreateCustomerSupportCaseRequest,
+    CustomerSupportActionView,
+    CustomerSupportCaseView,
+)
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
@@ -136,6 +141,7 @@ __all__ = [
     "CommandResult",
     "ContentIntakeAnalysisSourceInput",
     "CreateAssessmentHwpxBuildRequest",
+    "CreateCustomerSupportCaseRequest",
     "CreateEvidenceBundleRequest",
     "CreateHwpxBuildRequest",
     "CreateKnowledgeAnalysisBatchRequest",
@@ -144,6 +150,8 @@ __all__ = [
     "CreatePlannedMockExamAssemblyRequest",
     "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
+    "CustomerSupportActionView",
+    "CustomerSupportCaseView",
     "EducationalDocumentAnalysisSourceInput",
     "EvidenceBudgetInput",
     "EvidenceBundleBudgetView",

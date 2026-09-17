@@ -18,6 +18,8 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
+    CustomerSupportCaseView,
+    CustomerSupportSubmission,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -60,6 +62,7 @@ WORKFLOW_ID = "workflow_test0000000000000000000000000001"
 ITEM_ID = "item_test000000000000000000000000000001"
 REVISION_ID = "itemrev_test00000000000000000000000001"
 INTAKE_ID = "intake_00000000000000000000000000000001"
+SUPPORT_WORKFLOW_ID = "workflow_" + "9" * 32
 
 
 def structured_item_content() -> dict[str, object]:
@@ -206,6 +209,10 @@ class FakeGateway:
         self.auth_enrollment_calls = 0
         self.auth_challenge_reveal_calls = 0
         self.preset_mutation_calls = 0
+        self.customer_support_create_calls = 0
+        self.customer_support_inquiry_ids: list[str] = []
+        self.customer_support_cursors: list[str | None] = []
+        self.customer_support_case_values: list[CustomerSupportCaseView] = []
         self.last_start_payload: dict[str, object] | None = None
 
     async def health(self) -> dict[str, str]:
@@ -343,6 +350,53 @@ class FakeGateway:
             "status": "ACCEPTED",
             "resource_version": 1,
         }
+
+    async def create_customer_support_case(
+        self,
+        session: WebSession,
+        value: CustomerSupportSubmission,
+        *,
+        inquiry_id: str,
+        web_release_commit: str | None,
+    ) -> dict[str, Any]:
+        del session, web_release_commit
+        self.customer_support_create_calls += 1
+        self.customer_support_inquiry_ids.append(inquiry_id)
+        case = CustomerSupportCaseView(
+            workflow_id=SUPPORT_WORKFLOW_ID,
+            category=value.category,
+            subject=value.subject,
+            question=value.question,
+            state="SUBMITTED",
+            created_at=NOW,
+            updated_at=NOW,
+            resource_version=1,
+        )
+        self.customer_support_case_values = [case]
+        return {
+            "command_id": "wfcmd_" + "8" * 32,
+            "resource_type": "customer_support_case",
+            "resource_id": SUPPORT_WORKFLOW_ID,
+            "status": "ACCEPTED",
+            "resource_version": 1,
+        }
+
+    async def customer_support_cases(
+        self,
+        session: WebSession,
+        *,
+        cursor: str | None,
+    ) -> tuple[tuple[CustomerSupportCaseView, ...], str | None, bool]:
+        del session
+        self.customer_support_cursors.append(cursor)
+        return tuple(self.customer_support_case_values), None, False
+
+    async def customer_support_case(
+        self, session: WebSession, workflow_id: str
+    ) -> CustomerSupportCaseView:
+        del session
+        assert workflow_id == SUPPORT_WORKFLOW_ID
+        return self.customer_support_case_values[0]
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         del session

@@ -493,6 +493,43 @@ def test_preset_pin_guard_accepts_all_exact_pointers_and_canonical_hashes() -> N
     )
 
 
+def test_preset_pin_guard_accepts_exact_customer_support_capacity_successor() -> None:
+    pin, rows, documents = _exact_pin_fixture()
+    current_capacity = deepcopy(documents[2])
+    current_capacity.update(
+        {
+            "schema_version": "worker-capacity-policy/1.3",
+            "revision_number": 4,
+            "pools": [
+                *cast(list[dict[str, object]], current_capacity["pools"])[:-1],
+                {
+                    "pool_key": "customer-support",
+                    "roles": ["support"],
+                    "slot_keys": ["slot06"],
+                    "max_active": 1,
+                },
+            ],
+        }
+    )
+    current_capacity["content_sha256"] = compute_control_document_hash(
+        current_capacity, "content_sha256"
+    )
+    pin = pin.model_copy(
+        update={
+            "capacity_current_content_sha256": current_capacity["content_sha256"],
+        }
+    )
+    rows[4].schema_version = current_capacity["schema_version"]
+    rows[4].revision_number = current_capacity["revision_number"]
+    rows[4].content_sha256 = current_capacity["content_sha256"]
+    rows[4].canonical_document = current_capacity
+    coordinator = object.__new__(LegacyItemLearningCoordinator)
+    coordinator.sessions = cast(Any, _PinSessions(rows))
+
+    with coordinator.preset_pin_guard(pin):
+        pass
+
+
 @pytest.mark.parametrize(
     ("document_index", "row_index"),
     ((0, 1), (1, 2), (2, 4)),

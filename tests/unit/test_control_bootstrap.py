@@ -423,6 +423,9 @@ def test_standard_capacity_accepts_only_hash_pinned_shared_policy_revisions() ->
         control_bootstrap._stable_id("capacityrev_", "fixed-host:v3"): (
             "sha256:0d57aca8671aebd1f487bb1d39ef1bbfb75b07f618bd26a38e863d69920f1660"
         ),
+        control_bootstrap._stable_id("capacityrev_", "fixed-host:v4"): (
+            "sha256:8b90252a79240a90e4cd8452960732ea14f4602ad70fc80dee9b7cc281d04035"
+        ),
     } == STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS
 
 

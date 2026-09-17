@@ -62,6 +62,7 @@ def classify_workflow_state(state: WorkflowState) -> WorkflowStateCategory:
 
 class WorkflowStage(StrEnum):
     KNOWLEDGE_ANALYSIS = "KNOWLEDGE_ANALYSIS"
+    CUSTOMER_SUPPORT = "CUSTOMER_SUPPORT"
     AUTHORING = "AUTHORING"
     IMAGE_REQUIRED = "IMAGE_REQUIRED"
     IMAGE_SKIPPED = "IMAGE_SKIPPED"
@@ -133,6 +134,9 @@ WORKFLOW_TRANSITIONS: dict[WorkflowState, frozenset[WorkflowState]] = {
 
 STAGE_TRANSITIONS: dict[WorkflowStage, frozenset[WorkflowStage]] = {
     WorkflowStage.KNOWLEDGE_ANALYSIS: frozenset(
+        {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
+    ),
+    WorkflowStage.CUSTOMER_SUPPORT: frozenset(
         {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
     ),
     WorkflowStage.AUTHORING: frozenset(

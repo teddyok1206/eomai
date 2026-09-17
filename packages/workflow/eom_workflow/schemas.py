@@ -59,6 +59,7 @@ from eom_workflow.models import (
     ContentTeamReviewRoleResultV8,
     ContentTeamReviewRoleResultV9,
     ContentTeamReviewRoleResultV10,
+    CustomerSupportRoleResult,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -188,6 +189,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
+            "customer-support-result@1.0",
         }
     ),
 }
@@ -247,6 +249,7 @@ RESULT_SCHEMA_FILES = {
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
+    "customer-support-result@1.0": "customer-support-result-v1.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -275,6 +278,7 @@ INPUT_SCHEMA_FILES_V1_18 = {"support": "knowledge-analysis-input-v9.schema.json"
 INPUT_SCHEMA_FILES_V1_19 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_20 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_21 = {"support": "knowledge-analysis-input-v10.schema.json"}
+INPUT_SCHEMA_FILES_V1_22 = {"support": "customer-support-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -302,6 +306,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "knowledge-analysis-proposal-result@8.0": "workflow-role/1.11.0",
     "knowledge-analysis-proposal-result@9.0": "workflow-role/1.18.0",
     "knowledge-analysis-proposal-result@10.0": "workflow-role/1.21.0",
+    "customer-support-result@1.0": "workflow-role/1.22.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -351,6 +356,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.19.0": INPUT_SCHEMA_FILES_V1_19,
     "workflow-role/1.20.0": INPUT_SCHEMA_FILES_V1_20,
     "workflow-role/1.21.0": INPUT_SCHEMA_FILES_V1_21,
+    "workflow-role/1.22.0": INPUT_SCHEMA_FILES_V1_22,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -375,6 +381,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.19.0",
     "workflow-role/1.20.0",
     "workflow-role/1.21.0",
+    "workflow-role/1.22.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -397,6 +404,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_19.values(),
             *INPUT_SCHEMA_FILES_V1_20.values(),
             *INPUT_SCHEMA_FILES_V1_21.values(),
+            *INPUT_SCHEMA_FILES_V1_22.values(),
         }
     )
 )
@@ -865,6 +873,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return LegacyItemExtractionRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
+        if schema_id == "customer-support-result@1.0" and role == "support":
+            return CustomerSupportRoleResult.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -2366,6 +2376,9 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         _project_legacy_editorial_compatibility_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
+    if schema_id == "customer-support-result@1.0":
+        output = _mapping(_mapping(schema, "$defs"), "output")
+        output.pop("allOf", None)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema

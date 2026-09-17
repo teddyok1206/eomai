@@ -23,6 +23,8 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     CurriculumEditorialOutline,
+    CustomerSupportCaseView,
+    CustomerSupportSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
@@ -183,6 +185,34 @@ class WebServices:
         }
         session.replay_results[replay_key] = result
         return result
+
+    async def create_customer_support_case(
+        self,
+        session: WebSession,
+        value: CustomerSupportSubmission,
+        *,
+        inquiry_id: str,
+        web_release_commit: str | None,
+    ) -> dict[str, Any]:
+        return await self.gateway.create_customer_support_case(
+            session,
+            value,
+            inquiry_id=inquiry_id,
+            web_release_commit=web_release_commit,
+        )
+
+    async def customer_support_cases(
+        self,
+        session: WebSession,
+        *,
+        cursor: str | None,
+    ) -> tuple[tuple[CustomerSupportCaseView, ...], str | None, bool]:
+        return await self.gateway.customer_support_cases(session, cursor=cursor)
+
+    async def customer_support_case(
+        self, session: WebSession, workflow_id: str
+    ) -> CustomerSupportCaseView:
+        return await self.gateway.customer_support_case(session, workflow_id)
 
     async def workflow(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         value = await self.gateway.workflow_bundle(session, workflow_id)

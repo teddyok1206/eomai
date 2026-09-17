@@ -193,6 +193,46 @@ class LegacyItemEditorialCompatibilityWorkerRequest(FrozenModel):
     compatibility_request: LegacyItemEditorialCompatibilityRequest
 
 
+class CustomerSupportDiagnostics(FrozenModel):
+    """Small server-authored facts supplied to a read-only support worker."""
+
+    observed_at: UtcDatetime
+    browser_route: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=512,
+        pattern=r"^/[^\x00-\x1f?#]*$",
+    )
+    inquiry_id: str | None = Field(default=None, pattern=r"^webreq_[0-9a-f]{24}$")
+    stable_error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    api_release_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    web_release_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+
+class CustomerSupportCase(FrozenModel):
+    """One immutable, bounded in-product support question."""
+
+    schema_version: Literal["customer-support-case/1.0"] = "customer-support-case/1.0"
+    category: Literal["HOW_TO", "TECHNICAL_ERROR", "CONTENT_QUALITY", "FEATURE_REQUEST"]
+    subject: str = Field(
+        min_length=3,
+        max_length=120,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    question: str = Field(
+        min_length=10,
+        max_length=4000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    locale: Literal["ko-KR"] = "ko-KR"
+    diagnostics: CustomerSupportDiagnostics
+
+
+class CustomerSupportWorkerRequest(FrozenModel):
+    request_name: Literal["CUSTOMER_SUPPORT_REQUEST"] = "CUSTOMER_SUPPORT_REQUEST"
+    case: CustomerSupportCase
+
+
 class ItemBrief(FrozenModel):
     subject: str = Field(min_length=1, max_length=80)
     topic: str = Field(min_length=1, max_length=160)
@@ -378,6 +418,7 @@ class WorkflowRequest(FrozenModel):
         "KNOWLEDGE_ANALYSIS_REQUEST",
         "LEGACY_ITEM_EXTRACTION_REQUEST",
         "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
+        "CUSTOMER_SUPPORT_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
@@ -406,6 +447,7 @@ class WorkflowRequest(FrozenModel):
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
+    customer_support_case: CustomerSupportCase | None = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -430,7 +472,11 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("catalog workflow request fields must be supplied together")
         if self.source_intake is not None and self.content_pack is None:
             raise ValueError("source Intake pointers require a Content Pack")
-        if self.execution_preset_key is not None and self.content_pack is None:
+        if (
+            self.execution_preset_key is not None
+            and self.content_pack is None
+            and self.request_name != "CUSTOMER_SUPPORT_REQUEST"
+        ):
             raise ValueError("execution preset requires a pinned Content Pack workflow")
         if self.educational_retrieval is not None and (
             self.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"
@@ -574,11 +620,40 @@ class WorkflowRequest(FrozenModel):
                 raise ValueError(
                     "legacy editorial compatibility requires one pinned request and no item fields"
                 )
+        elif self.request_name == "CUSTOMER_SUPPORT_REQUEST":
+            if (
+                self.customer_support_case is None
+                or self.analysis_request is not None
+                or self.legacy_extraction_request is not None
+                or self.legacy_editorial_compatibility_request is not None
+                or self.image_mode != "skip"
+                or any(
+                    value is not None
+                    for value in (
+                        self.content_pack,
+                        self.profiles,
+                        self.source_intake,
+                        self.registry_intent,
+                        self.item_brief,
+                        self.stimulus_asset,
+                        self.educational_retrieval,
+                        self.production_occurrence,
+                        self.expected_resolution,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "customer support requires one bounded case, skip image mode, and no content "
+                    "or analysis fields"
+                )
+            if self.execution_preset_key != "customer-support":
+                raise ValueError("customer support requires its exact execution preset")
         else:
             if (
                 self.analysis_request is not None
                 or self.legacy_extraction_request is not None
                 or self.legacy_editorial_compatibility_request is not None
+                or self.customer_support_case is not None
             ):
                 raise ValueError("non-analysis workflow cannot include an analysis request")
             if self.item_brief is not None or self.stimulus_asset is not None:
@@ -596,7 +671,10 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
+        | CustomerSupportWorkerRequest
     ):
+        if self.customer_support_case is not None:
+            return CustomerSupportWorkerRequest(case=self.customer_support_case)
         if self.legacy_editorial_compatibility_request is not None:
             return LegacyItemEditorialCompatibilityWorkerRequest(
                 compatibility_request=self.legacy_editorial_compatibility_request
@@ -613,6 +691,8 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("legacy extraction worker request is missing its pinned request")
         if self.request_name == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
             raise ValueError("editorial compatibility worker request is missing its pinned request")
+        if self.request_name == "CUSTOMER_SUPPORT_REQUEST":
+            raise ValueError("customer support worker request is missing its bounded case")
         return WorkerRequest(request_name=self.request_name, image_mode=self.image_mode)
 
 
@@ -658,6 +738,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.19.0",
         "workflow-role/1.20.0",
         "workflow-role/1.21.0",
+        "workflow-role/1.22.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -669,6 +750,7 @@ class RoleWorkerInput(FrozenModel):
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
+        | CustomerSupportWorkerRequest
     )
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
@@ -682,6 +764,7 @@ class RoleWorkerInput(FrozenModel):
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
+        | CustomerSupportWorkerRequest
     ):
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
@@ -693,6 +776,8 @@ class RoleWorkerInput(FrozenModel):
             return LegacyItemExtractionWorkerRequest.model_validate(value)
         if value.get("request_name") == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
             return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
+        if value.get("request_name") == "CUSTOMER_SUPPORT_REQUEST":
+            return CustomerSupportWorkerRequest.model_validate(value)
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
         )
@@ -765,6 +850,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.19.0",
         "workflow-role/1.20.0",
         "workflow-role/1.21.0",
+        "workflow-role/1.22.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1797,6 +1883,54 @@ class LegacyItemEditorialCompatibilityRoleResult(RoleResultBase):
     output: LegacyItemEditorialCompatibilityOutput
 
 
+class CustomerSupportAction(FrozenModel):
+    title: str = Field(min_length=1, max_length=80, pattern=r"^[^\x00-\x1f]+$")
+    instruction: str = Field(
+        min_length=1,
+        max_length=1000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+
+
+class CustomerSupportOutput(FrozenModel):
+    classification: Literal[
+        "USAGE_GUIDANCE",
+        "TRANSIENT_RUNTIME",
+        "VALIDATION_ERROR",
+        "PERMISSION_OR_SESSION",
+        "CONTENT_QUALITY",
+        "FEATURE_REQUEST",
+        "UNKNOWN",
+    ]
+    answer_text: str = Field(
+        min_length=1,
+        max_length=6000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    recommended_actions: tuple[CustomerSupportAction, ...] = Field(max_length=5)
+    needs_operator: bool
+    operator_summary: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    confidence: Literal["HIGH", "MEDIUM", "LOW"]
+    mutation_performed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def escalation_summary_matches_decision(self) -> CustomerSupportOutput:
+        if self.needs_operator != (self.operator_summary is not None):
+            raise ValueError("operator summary must be present exactly when escalation is needed")
+        return self
+
+
+class CustomerSupportRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.22.0"] = "workflow-role/1.22.0"
+    role: Literal["support"] = "support"
+    output: CustomerSupportOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -1849,4 +1983,5 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV10
     | LegacyItemExtractionRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
+    | CustomerSupportRoleResult
 )

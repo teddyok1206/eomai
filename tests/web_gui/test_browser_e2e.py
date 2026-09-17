@@ -229,3 +229,37 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert '$("#codex-challenge-reveal").disabled = false' in javascript
     assert "localStorage" not in javascript
     assert "sessionStorage" not in javascript
+
+
+def test_customer_support_ignores_stale_case_responses() -> None:
+    javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+
+    assert "customerSupportRequestSequence: 0" in javascript
+    assert "const requestSequence = ++state.customerSupportRequestSequence;" in javascript
+    assert "state.customerSupportSelectedId !== workflowId" in javascript
+    assert javascript.count("requestSequence !== state.customerSupportRequestSequence") >= 2
+
+
+def test_customer_support_reuses_pending_submission_idempotency_key() -> None:
+    javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+
+    assert "customerSupportPendingSubmission: null" in javascript
+    assert "state.customerSupportPendingSubmission?.fingerprint !== fingerprint" in javascript
+    assert "idempotencyKey: `studio:support:${crypto.randomUUID()}`" in javascript
+    assert "idempotency_key: state.customerSupportPendingSubmission.idempotencyKey" in javascript
+    assert "state.customerSupportPendingSubmission = null;" in javascript
+
+
+def test_customer_support_exposes_cursor_pagination_without_duplicate_rows() -> None:
+    javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    html = Path("apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
+
+    assert 'id="support-more"' in html
+    assert "customerSupportNextCursor: null" in javascript
+    assert "customerSupportHasMore: false" in javascript
+    assert "const casesById = new Map(" in javascript
+    assert "casesById.set(item.workflow_id, item)" in javascript
+    assert (
+        '$("#support-more").addEventListener("click", () => loadCustomerSupportCases(true))'
+        in javascript
+    )

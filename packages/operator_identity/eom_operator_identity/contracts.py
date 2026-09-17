@@ -44,6 +44,8 @@ class PermissionKey(StrEnum):
     CONTENT_PACK_RELEASE = "content_pack:release"
     CONTENT_PACK_ACTIVATE = "content_pack:activate"
     CONTENT_PACK_DEPRECATE = "content_pack:deprecate"
+    CUSTOMER_SUPPORT_READ = "customer_support:read"
+    CUSTOMER_SUPPORT_CREATE = "customer_support:create"
     WORKFLOW_READ = "workflow:read"
     WORKFLOW_START = "workflow:start"
     WORKFLOW_APPROVE = "workflow:approve"
@@ -81,6 +83,8 @@ VIEWER_PERMISSIONS = frozenset(
         PermissionKey.SYSTEM_READ,
         PermissionKey.CONTENT_INTAKE_READ,
         PermissionKey.CONTENT_PACK_READ,
+        PermissionKey.CUSTOMER_SUPPORT_READ,
+        PermissionKey.CUSTOMER_SUPPORT_CREATE,
         PermissionKey.WORKFLOW_READ,
         PermissionKey.ITEM_READ,
         PermissionKey.DELIVERABLE_READ,

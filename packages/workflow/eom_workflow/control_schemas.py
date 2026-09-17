@@ -53,6 +53,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:180ed1de28badecb2fcea4fb8f78cfb1efd95b45a225434fe9654a97264f4b17",
         ),
+        "customer-support-control-bootstrap": ControlSchemaResource(
+            "schemas/workflow/control-plane/customer-support-control-bootstrap-v1.schema.json",
+            "resources/control-plane/customer-support-control-bootstrap-v1.schema.json",
+            "1.0",
+            "sha256:a9b3f83818b5d0e6b585b357867c254105a029d9a9917e6fe3f5f05587b97cbb",
+        ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
             "resources/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
@@ -293,6 +299,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "9.0",
             "sha256:cf7cb9c5309d61558a6e5d55f0520d9d6911413382e8e4258f1111240b42f328",
         ),
+        "resolved-execution-plan-v10": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v10.schema.json",
+            "resources/control-plane/resolved-execution-plan-v10.schema.json",
+            "10.0",
+            "sha256:95a552e420322d54bcd02dfc9180c407d42dddd9cafab347bccd4abd730e0b53",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
@@ -436,6 +448,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/worker-capacity-policy-v3.schema.json",
             "1.2",
             "sha256:83d8c3f258b0aa5b660c7dd75dda3b486e36564d4736767ca01c7a62cf9ee439",
+        ),
+        "worker-capacity-policy-v4": ControlSchemaResource(
+            "schemas/workflow/control-plane/worker-capacity-policy-v4.schema.json",
+            "resources/control-plane/worker-capacity-policy-v4.schema.json",
+            "1.3",
+            "sha256:6b0c09522db5c6995468a41cc54fdcab4ea3d9df1a5cdcfc8502d0833b47a3e5",
         ),
         "worker-slot-inventory-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/worker-slot-inventory-v2.schema.json",
