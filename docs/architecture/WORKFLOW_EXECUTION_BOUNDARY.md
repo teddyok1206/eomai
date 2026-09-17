@@ -87,8 +87,10 @@ only when an operator installs the reviewed unit, helper, and polkit sources.
 
 ## Fixed systemd launch contract
 
-The five root-owned templates are `eom-worker-01@.service` through
-`eom-worker-05@.service`. The instance is a canonical `job_[0-9a-f]{32}` ID. The runner can request
+The six root-owned standard templates are `eom-worker-01@.service` through
+`eom-worker-06@.service`. Slot 06 also has the reviewed 900-second
+`eom-worker-support-06@.service` contract; it shares the same slot lease and cannot add capacity.
+The instance is a canonical `job_[0-9a-f]{32}` ID. The runner can request
 only `systemctl --no-ask-password --wait start <fixed-instance>`; it cannot choose a user, group,
 command, environment, capability, path, or systemd property. The installed
 `/usr/local/libexec/eom-worker-exec` is also root-owned and runs with root-owned

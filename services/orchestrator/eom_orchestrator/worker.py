@@ -350,7 +350,6 @@ class CodexWorkerAdapter:
         timeout_seconds: int | None = None,
     ) -> WorkerRun:
         del schema_path, prompt_path
-        unit_name = worker_unit_name(slot, job_id)
         stdout_path = staging / "worker.stdout.log"
         stderr_path = staging / "worker.stderr.log"
         try:
@@ -377,7 +376,7 @@ class CodexWorkerAdapter:
             result_path=workspace / "result.json",
             stdout_path=stdout_path,
             stderr_path=stderr_path,
-            unit_name=unit_name,
+            unit_name=completed.unit_name,
         )
         return run
 

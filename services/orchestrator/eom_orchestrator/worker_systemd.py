@@ -38,6 +38,7 @@ AUTHORIZATION_DENIED_MARKERS = (
 )
 FIXED_WORKER_TIMEOUT_SECONDS = 1800
 FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS = 7200
+FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS = 900
 FIXED_WORKER_CLIENT_GUARD_SECONDS = 30
 
 
@@ -61,6 +62,9 @@ WORKER_TEMPLATE_SHA256 = {
     "05": "15216cdcd8b397520b7125f719db8f62142f625456fe6ed9b2a058a5bba36a79",
     "06": "4fd257b45cc10c4b181a6c75572ff5b786d30d6a374e4d76d62c2cdf552abfd3",
 }
+CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256 = (
+    "1c8672c001c0670b405dba697e7d6e91ea89e97a783ef98c8f4829a81d553ce2"
+)
 PROBE_TEMPLATE_SHA256 = {
     "01": "6d74599b84b8ac243656fb1cef1ffb459261ff23195428cd47be4da86134d4e4",
     "02": "66fd5e603821b3c21c76d06cc96cf29aaba30c5c90f99e2a0c08ee347dff555c",
@@ -185,6 +189,22 @@ def validate_job_id(job_id: str) -> str:
 def worker_unit_name(slot: WorkerSlot, job_id: str) -> str:
     slot_id = validate_slot(slot)
     return f"eom-worker-{slot_id}@{validate_job_id(job_id)}.service"
+
+
+def worker_unit_name_for_execution(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -> str:
+    """Select one reviewed fixed template from the exact execution contract."""
+
+    slot_id = validate_slot(slot)
+    canonical_job_id = validate_job_id(job_id)
+    if (
+        slot_id == "06"
+        and slot.role == "support"
+        and timeout_seconds == FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS
+    ):
+        return f"eom-worker-support-06@{canonical_job_id}.service"
+    if timeout_seconds == fixed_worker_timeout_seconds(slot):
+        return f"eom-worker-{slot_id}@{canonical_job_id}.service"
+    raise ValueError("worker timeout does not match a fixed unit contract")
 
 
 def probe_unit_name(slot: WorkerSlot, probe_id: str | None = None) -> str:
@@ -333,11 +353,12 @@ def _start_unit(unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
 
 
 def launch_worker_unit(slot: WorkerSlot, job_id: str, *, timeout_seconds: int) -> FixedUnitRun:
-    if timeout_seconds != fixed_worker_timeout_seconds(slot):
+    try:
+        unit_name = worker_unit_name_for_execution(slot, job_id, timeout_seconds=timeout_seconds)
+    except ValueError as exc:
         raise PlatformError(
             ErrorCode.WORKER_UNAVAILABLE, "worker timeout does not match fixed unit contract"
-        )
-    unit_name = worker_unit_name(slot, job_id)
+        ) from exc
     try:
         run = _start_unit(
             unit_name,
@@ -393,6 +414,12 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
             expected_mode=0o644,
             expected_sha256=WORKER_TEMPLATE_SHA256[slot_id],
         )
+        if slot_id == "06":
+            _validate_root_owned_artifact(
+                SYSTEMD_UNIT_ROOT / "eom-worker-support-06@.service",
+                expected_mode=0o644,
+                expected_sha256=CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
+            )
         _validate_root_owned_artifact(
             SYSTEMD_UNIT_ROOT / f"eom-worker-probe-{slot_id}@.service",
             expected_mode=0o644,
@@ -437,7 +464,7 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
         return WorkerSystemdReadiness(
             False, "WORKER_SYSTEMD_TEMPLATE_INVALID", f"slot {slot.slot_id}"
         )
-    contract_version = "v2" if slot_id == "06" else "v1"
+    contract_version = "v3" if slot_id == "06" else "v1"
     return WorkerSystemdReadiness(True, "READY", f"slot {slot_id} contract {contract_version}")
 
 
@@ -540,10 +567,7 @@ def inspect_device_login_unit(slot: WorkerSlot, enrollment_id: str) -> WorkerDev
     )
 
 
-def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitActivity:
-    """Inspect one exact fixed worker instance without starting, stopping, or resetting it."""
-
-    unit_name = worker_unit_name(slot, job_id)
+def _inspect_exact_worker_unit(unit_name: str) -> WorkerUnitActivity:
     try:
         active_returncode = _read_unit_active_returncode(unit_name)
         active = _unit_is_lingering(active_returncode)
@@ -559,6 +583,31 @@ def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitAct
         unit_name,
         status.exit_code if status.process_started else None,
     )
+
+
+def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitActivity:
+    """Inspect every fixed template for one slot/job and reject ambiguous observations."""
+
+    standard_unit = worker_unit_name(slot, job_id)
+    unit_names = [standard_unit]
+    if validate_slot(slot) == "06":
+        unit_names.append(f"eom-worker-support-06@{validate_job_id(job_id)}.service")
+    observations = tuple(_inspect_exact_worker_unit(unit_name) for unit_name in unit_names)
+    if any(observation.state == "UNKNOWN" for observation in observations):
+        return WorkerUnitActivity("UNKNOWN", standard_unit, None)
+    running = tuple(observation for observation in observations if observation.state == "RUNNING")
+    if len(running) == 1:
+        return running[0]
+    if len(running) > 1:
+        return WorkerUnitActivity("UNKNOWN", standard_unit, None)
+    completed = tuple(
+        observation for observation in observations if observation.exit_code is not None
+    )
+    if len(completed) == 1:
+        return completed[0]
+    if len(completed) > 1:
+        return WorkerUnitActivity("UNKNOWN", standard_unit, None)
+    return WorkerUnitActivity("ABSENT", standard_unit, None)
 
 
 def probe_worker_systemd_authorization(slot: WorkerSlot) -> WorkerSystemdReadiness:

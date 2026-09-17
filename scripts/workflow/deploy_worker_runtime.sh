@@ -103,6 +103,7 @@ runuser -u eom-workflow-runner -g eom -- \
 SOURCES=(
   "${APPARMOR_SOURCE}"
   "${REPOSITORY}/infra/systemd/eom-workflow-runner.service"
+  "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service"
   "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
@@ -154,6 +155,9 @@ if [[ ${ACTION} == install ]]; then
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
     "${UNIT_ROOT}/eom-workflow-runner.service"
+  install -o root -g root -m 0644 \
+    "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service" \
+    "${UNIT_ROOT}/eom-worker-support-06@.service"
   install -o root -g root -m 0755 \
     "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py" \
     "${LIBEXEC_ROOT}/eom-worker-exec"
@@ -204,6 +208,7 @@ cmp -s "${WORKER_CONFIG_SOURCE}" "${WORKER_CONFIG_TARGET}" || \
   fail "worker inventory source drift"
 systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" \
+  "${UNIT_ROOT}/eom-worker-support-06@.service" \
   "${UNIT_ROOT}"/eom-worker-{01,02,03,04,05,06}@.service \
   "${UNIT_ROOT}"/eom-worker-probe-{01,02,03,04,05,06}@.service \
   "${UNIT_ROOT}"/eom-worker-auth-{01,02,03,04,05,06}.service \
@@ -213,6 +218,10 @@ systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
 require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
   "${UNIT_ROOT}/eom-workflow-runner.service" || fail "workflow runner unit source drift"
+require_regular "${UNIT_ROOT}/eom-worker-support-06@.service" root:root:644
+cmp -s "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service" \
+  "${UNIT_ROOT}/eom-worker-support-06@.service" || \
+  fail "customer-support worker unit source drift"
 require_regular "${LIBEXEC_ROOT}/eom-worker-exec" root:root:755
 require_regular "${LIBEXEC_ROOT}/eom-worker-auth-status" root:root:755
 require_regular "${LIBEXEC_ROOT}/eom-worker-device-login" root:root:755

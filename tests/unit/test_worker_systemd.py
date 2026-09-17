@@ -21,6 +21,8 @@ from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
     AUTH_REQUIRED_EXIT,
     AUTH_TEMPLATE_SHA256,
+    CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
+    FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS,
     LOGIN_TEMPLATE_SHA256,
     PROBE_TEMPLATE_SHA256,
     USAGE_TEMPLATE_SHA256,
@@ -46,6 +48,7 @@ from eom_orchestrator.worker_systemd import (
     systemctl_start_async_argv,
     usage_unit_name,
     worker_unit_name,
+    worker_unit_name_for_execution,
 )
 from eom_protocol import ErrorCode
 
@@ -61,6 +64,17 @@ def _slot(index: int = 1) -> WorkerSlot:
             "slot_id": slot_id,
             "linux_user": f"eom-cdx-{slot_id}",
             "role": "authoring",
+            "enabled": True,
+        }
+    )
+
+
+def _support_slot() -> WorkerSlot:
+    return WorkerSlot.model_validate(
+        {
+            "slot_id": "06",
+            "linux_user": "eom-cdx-06",
+            "role": "support",
             "enabled": True,
         }
     )
@@ -106,6 +120,30 @@ def test_fixed_unit_name_accepts_only_canonical_job_identity() -> None:
     ):
         with pytest.raises(ValueError):
             worker_unit_name(_slot(), invalid)
+
+
+def test_execution_contract_selects_only_reviewed_fixed_templates() -> None:
+    support = _support_slot()
+    assert (
+        worker_unit_name_for_execution(
+            support,
+            JOB_ID,
+            timeout_seconds=FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS,
+        )
+        == f"eom-worker-support-06@{JOB_ID}.service"
+    )
+    assert (
+        worker_unit_name_for_execution(
+            support,
+            JOB_ID,
+            timeout_seconds=7200,
+        )
+        == f"eom-worker-06@{JOB_ID}.service"
+    )
+    with pytest.raises(ValueError, match="fixed unit contract"):
+        worker_unit_name_for_execution(support, JOB_ID, timeout_seconds=899)
+    with pytest.raises(ValueError, match="fixed unit contract"):
+        worker_unit_name_for_execution(_slot(), JOB_ID, timeout_seconds=900)
 
 
 @pytest.mark.skipif(shutil.which("systemd-escape") is None, reason="systemd-escape unavailable")
@@ -366,6 +404,29 @@ def test_analysis_slot_requires_the_reviewed_two_hour_timeout(
         with pytest.raises(PlatformError) as captured:
             launch_worker_unit(slot, JOB_ID, timeout_seconds=invalid)
         assert captured.value.code is ErrorCode.WORKER_UNAVAILABLE
+
+
+def test_customer_support_slot_uses_the_reviewed_fifteen_minute_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    slot = _support_slot()
+    unit = f"eom-worker-support-06@{JOB_ID}.service"
+    observed: list[tuple[str, int]] = []
+
+    def start(unit_name: str, *, timeout_seconds: int) -> FixedUnitRun:
+        observed.append((unit_name, timeout_seconds))
+        return FixedUnitRun(unit_name, 0, b"", b"", _status(), 3)
+
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._start_unit", start)
+
+    run = launch_worker_unit(
+        slot,
+        JOB_ID,
+        timeout_seconds=FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS,
+    )
+
+    assert run.unit_name == unit
+    assert observed == [(unit, 930)]
 
 
 def test_collected_probe_status_is_not_a_lingering_process() -> None:
@@ -784,6 +845,11 @@ def test_canonical_unit_and_helper_hashes_match_runtime_contract() -> None:
         assert hashlib.sha256(auth.read_bytes()).hexdigest() == AUTH_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(login.read_bytes()).hexdigest() == LOGIN_TEMPLATE_SHA256[slot_id]
         assert hashlib.sha256(usage.read_bytes()).hexdigest() == USAGE_TEMPLATE_SHA256[slot_id]
+    support_worker = ROOT / "infra/systemd/eom-worker-support-06@.service"
+    assert (
+        hashlib.sha256(support_worker.read_bytes()).hexdigest()
+        == CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256
+    )
     executable = ROOT / "services/orchestrator/eom_orchestrator/worker_exec.py"
     assert hashlib.sha256(executable.read_bytes()).hexdigest() == WORKER_EXECUTABLE_SHA256
     auth_executable = ROOT / "services/orchestrator/eom_orchestrator/worker_auth_exec.py"
@@ -826,6 +892,11 @@ def test_standard_and_analysis_slots_have_their_reviewed_systemd_ceilings() -> N
         analysis_text = analysis_unit.read_text(encoding="utf-8")
         assert "TimeoutStartSec=7200\n" in analysis_text
         assert "TimeoutStartSec=1800\n" not in analysis_text
+    support_text = (ROOT / "infra/systemd/eom-worker-support-06@.service").read_text(
+        encoding="utf-8"
+    )
+    assert f"TimeoutStartSec={FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS}\n" in support_text
+    assert "TimeoutStartSec=7200\n" not in support_text
 
 
 def test_standard_preset_timeouts_match_fixed_worker_unit_contract() -> None:
@@ -887,6 +958,9 @@ def test_all_worker_templates_verify_without_diagnostics(tmp_path: Path) -> None
         ):
             shutil.copy2(ROOT / "infra/systemd" / name, unit_root / name)
             unit_paths.append(f"/etc/systemd/system/{name}")
+    support_name = "eom-worker-support-06@.service"
+    shutil.copy2(ROOT / "infra/systemd" / support_name, unit_root / support_name)
+    unit_paths.append(f"/etc/systemd/system/{support_name}")
 
     completed = subprocess.run(
         [
@@ -942,6 +1016,14 @@ def test_worker_templates_fix_identity_command_and_sandbox() -> None:
         )
         assert "systemd-run" not in source
         assert all(setting in source for setting in required)
+    support_source = (ROOT / "infra/systemd/eom-worker-support-06@.service").read_text(
+        encoding="utf-8"
+    )
+    assert "User=eom-cdx-06" in support_source
+    assert "Group=eom-cdx-06" in support_source
+    assert "ExecStart=/usr/local/libexec/eom-worker-exec --slot 06 --job-id %i" in support_source
+    assert "systemd-run" not in support_source
+    assert all(setting in support_source for setting in required)
 
 
 def test_worker_templates_allow_only_bubblewrap_control_netlink() -> None:
@@ -1054,6 +1136,45 @@ def test_exact_worker_activity_is_read_only_and_fail_closed(
     assert activity.unit_name == worker_unit_name(_slot(), JOB_ID)
 
 
+def test_slot06_recovery_finds_the_exact_support_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    support_unit = f"eom-worker-support-06@{JOB_ID}.service"
+
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_active_returncode",
+        lambda _unit: 3,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_status",
+        lambda unit: _status() if unit == support_unit else _status(main_code=0, started=0),
+    )
+
+    activity = inspect_worker_unit_activity(_support_slot(), JOB_ID)
+
+    assert activity.state == "ABSENT"
+    assert activity.unit_name == support_unit
+    assert activity.exit_code == 0
+
+
+def test_slot06_recovery_rejects_dual_template_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_active_returncode",
+        lambda _unit: 3,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_status",
+        lambda _unit: _status(),
+    )
+
+    activity = inspect_worker_unit_activity(_support_slot(), JOB_ID)
+
+    assert activity.state == "UNKNOWN"
+    assert activity.exit_code is None
+
+
 def test_workflow_worker_runtime_contains_no_transient_launcher() -> None:
     for relative in (
         "services/orchestrator/eom_orchestrator/worker.py",
@@ -1079,6 +1200,13 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
             f"eom-worker-01@{JOB_ID}.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-support-06@{JOB_ID}.service",
             "start",
             "yes",
         ),
@@ -1184,6 +1312,20 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "eom-workflow-runner",
             "org.freedesktop.systemd1.manage-units",
             "eom-worker-auth-07.service",
+            "start",
+            "no",
+        ),
+        (
+            "eom",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-support-06@{JOB_ID}.service",
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-support-05@{JOB_ID}.service",
             "start",
             "no",
         ),

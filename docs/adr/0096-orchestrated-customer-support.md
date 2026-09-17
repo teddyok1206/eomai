@@ -79,6 +79,14 @@ definition identities. The normal capacity controller performs the lease claim. 
 is one; global Codex capacity remains unchanged. A support ticket therefore cannot race a legacy
 slot-06 workload or start a second process on the same slot.
 
+Slot 06 has two root-owned fixed systemd templates with distinct reviewed execution ceilings. The
+legacy analysis template remains fixed at 7,200 seconds. Customer support uses the dedicated
+`eom-worker-support-06@.service` template fixed at 900 seconds. Selection is an O(1) lookup keyed by
+the validated `(slot identity, worker role, timeout)` tuple; an unknown tuple fails closed. Both
+templates use the same Linux account, workspace identity, and atomic slot-06 capacity lease, so
+the additional template does not add capacity or permit concurrent processes. Recovery inspects
+both exact instance names and rejects an ambiguous dual observation instead of guessing.
+
 Customer-support work has no right to preempt an already-held lease. “Always available” means the
 slot and preset stay READY, not that a long-lived model process or an unbounded priority bypass is
 kept running.
@@ -134,6 +142,10 @@ when the snapshot cannot support a safe answer.
   a present requirement.
 - Routing directly to slot 06 without a resolved plan bypasses the capacity lease and can start two
   processes for one Linux worker account.
+- Lowering the existing slot-06 template from 7,200 to 900 seconds would silently change the
+  immutable execution contract used by long-running analysis work.
+- Allowing arbitrary plan timeouts through the generic slot-06 template would weaken the
+  root-owned execution ceiling and make the installed systemd contract unverifiable.
 
 ## Availability limit
 

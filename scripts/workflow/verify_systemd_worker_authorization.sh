@@ -7,6 +7,8 @@ HELPER_SOURCE="${REPOSITORY_ROOT}/services/orchestrator/eom_orchestrator/worker_
 HELPER_INSTALLED="/usr/local/libexec/eom-worker-exec"
 AUTH_HELPER_SOURCE="${REPOSITORY_ROOT}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
 AUTH_HELPER_INSTALLED="/usr/local/libexec/eom-worker-auth-status"
+SUPPORT_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-support-06@.service"
+SUPPORT_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-support-06@.service"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -25,6 +27,10 @@ cmp --silent "${HELPER_SOURCE}" "${HELPER_INSTALLED}" || fail "worker executable
   fail "worker auth executable ownership or mode is invalid"
 cmp --silent "${AUTH_HELPER_SOURCE}" "${AUTH_HELPER_INSTALLED}" || \
   fail "worker auth executable source drift"
+cmp --silent "${SUPPORT_WORKER_SOURCE}" "${SUPPORT_WORKER_INSTALLED}" || \
+  fail "customer-support worker template source drift"
+[[ "$(stat -c '%U:%G:%a' "${SUPPORT_WORKER_INSTALLED}")" == "root:root:644" ]] || \
+  fail "customer-support worker template ownership or mode is invalid"
 
 for slot in 01 02 03 04 05 06; do
   worker_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${slot}@.service"
@@ -62,6 +68,10 @@ fi
 if /usr/bin/systemctl --no-ask-password --wait start \
   "eom-worker-probe-01@malformed.service"; then
   fail "malformed worker instance authorization was unexpectedly granted"
+fi
+if /usr/bin/systemctl --no-ask-password --wait restart \
+  "eom-worker-support-06@job_0123456789abcdef0123456789abcdef.service"; then
+  fail "customer-support worker restart authorization was unexpectedly granted"
 fi
 if /usr/bin/systemd-run --no-ask-password --wait --collect \
   --uid=root --gid=root /usr/bin/true; then

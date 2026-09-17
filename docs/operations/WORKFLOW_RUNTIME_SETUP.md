@@ -3,7 +3,7 @@
 ## Runtime Accounts
 
 The production runner executes as the locked `eom-workflow-runner` identity. It must have the
-configured `eom-cdx-01` through `eom-cdx-05` supplementary groups in both account configuration and
+configured `eom-cdx-01` through `eom-cdx-06` supplementary groups in both account configuration and
 the current process. The interactive `eom` account is only the operator boundary.
 
 ```bash
@@ -19,9 +19,10 @@ An operator installs these reviewed sources as root-owned files; normal job exec
 `sudo`:
 
 ```text
-infra/systemd/eom-worker-01@.service ... eom-worker-05@.service
-infra/systemd/eom-worker-probe-01@.service ... eom-worker-probe-05@.service
-infra/systemd/eom-worker-auth-01.service ... eom-worker-auth-05.service
+infra/systemd/eom-worker-01@.service ... eom-worker-06@.service
+infra/systemd/eom-worker-support-06@.service
+infra/systemd/eom-worker-probe-01@.service ... eom-worker-probe-06@.service
+infra/systemd/eom-worker-auth-01.service ... eom-worker-auth-06.service
 infra/polkit/50-eom-worker-units.rules
 services/orchestrator/eom_orchestrator/worker_exec.py
   -> /usr/local/libexec/eom-worker-exec

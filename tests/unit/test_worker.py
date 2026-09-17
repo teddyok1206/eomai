@@ -84,6 +84,40 @@ def test_worker_command_has_no_caller_selected_identity_or_properties() -> None:
     assert command.endswith("start eom-worker-01@job_0123456789abcdef0123456789abcdef.service")
 
 
+def test_worker_run_preserves_the_template_selected_by_the_fixed_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / JOB_ID
+    staging = tmp_path / "staging"
+    workspace.mkdir()
+    staging.mkdir()
+    support_unit = f"eom-worker-support-06@{JOB_ID}.service"
+    collected = _collected_run()
+    monkeypatch.setattr(
+        "eom_orchestrator.worker.launch_worker_unit",
+        lambda *_args, **_kwargs: FixedUnitRun(
+            unit_name=support_unit,
+            exit_code=collected.exit_code,
+            command_stdout=collected.command_stdout,
+            command_stderr=collected.command_stderr,
+            status=collected.status,
+            active_returncode=collected.active_returncode,
+        ),
+    )
+
+    run = CodexWorkerAdapter(Settings())._execute(
+        job_id=JOB_ID,
+        workspace=workspace,
+        schema_path=workspace / "worker-result.schema.json",
+        prompt_path=workspace / "prompt.txt",
+        slot=WorkerSlot(slot_id="06", linux_user="eom-cdx-06", role="support", enabled=True),
+        staging=staging,
+        timeout_seconds=900,
+    )
+
+    assert run.unit_name == support_unit
+
+
 def test_collected_worker_success_reaches_valid_result_protocol(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
