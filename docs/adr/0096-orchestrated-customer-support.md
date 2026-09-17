@@ -45,6 +45,12 @@ diagnostics. Both role messages are defined first as JSON Schema 2020-12 and the
 Pydantic models. User text and diagnostic strings are untrusted data and never instructions to
 change the execution policy.
 
+The two owner-facing Application API permissions are additive built-in RBAC values. They are
+seeded by a successor migration for every authenticated built-in role; readiness compares the
+persisted permission inventory with the typed `PermissionKey` contract and fails closed when they
+drift. This keeps authorization data aligned with the public route contract without mutating the
+already-applied Workflow-stage migration.
+
 The first version accepts no file attachment and no arbitrary filesystem, Artifact, database, or
 URL pointer. It may carry a bounded Studio route, a `webreq_` inquiry identifier, and a stable error
 code. Rich authorized resource pointers can be added by a successor contract after each resource

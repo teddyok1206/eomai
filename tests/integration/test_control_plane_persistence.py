@@ -38,7 +38,13 @@ from eom_identifiers import (
     new_reference_bundle_revision_id,
     new_revision_id,
 )
-from eom_identity_service.models import ApiSessionRecord, OperatorRecord
+from eom_identity_service.models import (
+    ApiSessionRecord,
+    OperatorRecord,
+    PermissionRecord,
+    RolePermissionRecord,
+    RoleRecord,
+)
 from eom_orchestrator.auth_enrollment import (
     build_codex_auth_enrollment_request,
     claim_due_codex_auth_enrollment,
@@ -3606,6 +3612,27 @@ def test_customer_support_bootstrap_is_idempotent_and_preserves_capacity_v3(
         worker_timeout_seconds=1800,
     )
     sessions = build_session_factory(integration_engine)
+    with sessions() as session:
+        customer_support_bindings = set(
+            session.execute(
+                select(RoleRecord.role_key, PermissionRecord.permission_key)
+                .join(RolePermissionRecord, RolePermissionRecord.role_id == RoleRecord.role_id)
+                .join(
+                    PermissionRecord,
+                    PermissionRecord.permission_id == RolePermissionRecord.permission_id,
+                )
+                .where(
+                    PermissionRecord.permission_key.in_(
+                        ("customer_support:read", "customer_support:create")
+                    )
+                )
+            ).tuples()
+        )
+    assert customer_support_bindings == {
+        (role_key, permission_key)
+        for role_key in ("VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN")
+        for permission_key in ("customer_support:read", "customer_support:create")
+    }
     slots = resolve_worker_configuration(settings).registry.config.slots
     with transaction(sessions) as session:
         for slot in slots:

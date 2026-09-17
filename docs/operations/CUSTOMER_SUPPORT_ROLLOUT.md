@@ -56,10 +56,11 @@ hashes must come from the reviewed release receipt. Do not copy values from a pr
 1. Require a clean reviewed Git candidate and capture its commit/tree.
 2. Run Ruff format/check, strict mypy on changed source, focused customer-support tests, the full
    non-live platform/API/Web suite, and shell/JavaScript syntax checks.
-3. In a disposable PostgreSQL database, migrate from the prior head to `20260917_0036`, run the
+3. In a disposable PostgreSQL database, migrate through `20260917_0037`, run the
    customer-support control persistence test, prove the owner query uses
    `ix_workflow_customer_support_owner`, and complete the downgrade/upgrade cycle owned by the
-   repository test tooling.
+   repository test tooling. Migration `0036` owns the Workflow stage/index and additive migration
+   `0037` seeds both customer-support permissions for all five built-in roles.
 4. Build and inspect the Application API/platform/API-contract wheels. Confirm the new schema,
    bootstrap module, role resources, migration head, CLI command, Workflow definition, and prompt
    are present in the installed-resource checks.
@@ -158,8 +159,9 @@ Rollback is a compatible release-set operation, not data deletion.
 1. Stop accepting new support inquiries by restoring the reviewed prior API/Web release set.
 2. Let an already claimed one-shot Job reach its normal terminal boundary, or use the existing
    supported runner/lease recovery procedure if it is genuinely stranded. Do not force-release it.
-3. Keep migration `0036`, Workflow history, V4 capacity revision, preset, instructions, events, and
-   Artifacts. They are additive immutable history and do not require destructive rollback.
+3. Keep migrations `0036` and `0037`, Workflow history, V4 capacity revision, preset, instructions,
+   events, and Artifacts. They are additive immutable history and do not require destructive
+   rollback.
 4. V4 may remain current while no endpoint submits customer-support work. Historical V3 plans keep
    their pinned capacity revision and remain reproducible.
 5. Record the failed release identity and stable error code before restoring the compatible service

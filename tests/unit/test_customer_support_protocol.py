@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 from datetime import UTC, datetime
+from importlib import import_module
 from pathlib import Path
 
 import pytest
@@ -376,6 +377,22 @@ def test_customer_support_route_cannot_carry_query_secrets() -> None:
     )
     with pytest.raises((ValidationError, ValueError)):
         validate_role_input(value, "support", "workflow-role/1.22.0")
+
+
+def test_customer_support_rbac_migration_matches_builtin_role_contract() -> None:
+    from eom_operator_identity.contracts import ROLE_PERMISSIONS, PermissionKey, RoleKey
+
+    migration = import_module("migrations.versions.20260917_0037_customer_support_rbac")
+    expected_permissions = {
+        PermissionKey.CUSTOMER_SUPPORT_READ,
+        PermissionKey.CUSTOMER_SUPPORT_CREATE,
+    }
+    assert set(migration.NEW_PERMISSIONS) == {
+        permission.value for permission in expected_permissions
+    }
+    assert set(migration.BUILT_IN_ROLES) == {role.value for role in RoleKey}
+    for role in RoleKey:
+        assert expected_permissions <= ROLE_PERMISSIONS[role]
 
 
 def test_customer_support_public_view_rejects_state_answer_mismatch() -> None:

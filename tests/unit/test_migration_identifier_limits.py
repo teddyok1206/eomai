@@ -18,6 +18,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260912_0034_workflow_command_fencing",
     "migrations.versions.20260912_0035_additive_solution_analysis",
     "migrations.versions.20260917_0036_customer_support_workflow_index",
+    "migrations.versions.20260917_0037_customer_support_rbac",
 )
 
 
@@ -82,6 +83,9 @@ class _MigrationOperationRecorder:
             flags=re.IGNORECASE,
         ):
             self._record(f"{action.lower()}_{kind.lower()}", name)
+
+    def bulk_insert(self, *_: object, **__: object) -> None:
+        pass
 
 
 @pytest.mark.parametrize("module_name", MIGRATION_MODULES)

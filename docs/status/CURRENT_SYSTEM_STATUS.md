@@ -52,7 +52,8 @@ another worker, use network access, or write DB/NAS; only the Orchestrator valid
 its immutable result Artifact. The API and Studio expose authenticated create/list/read use cases,
 owner-only history, exact idempotent replay, cursor pagination, stale-response protection, and no
 operator-only summary. Migration `20260917_0036` adds the explicit `CUSTOMER_SUPPORT` Workflow
-stage and the partial owner/history lookup index.
+stage and the partial owner/history lookup index; additive migration `20260917_0037` seeds the two
+customer-support permissions for every built-in authenticated role.
 See [ADR 0096](../adr/0096-orchestrated-customer-support.md) and the
 [rollout runbook](../operations/CUSTOMER_SUPPORT_ROLLOUT.md). The guarded disposable-PostgreSQL
 gate has passed; wheel inspection, compatible deployment, and live-canary status must still be
@@ -253,12 +254,14 @@ OpenAPI checksum checks pass. This remains source evidence until wheel inspectio
 deployment, and one bounded live canary are separately recorded.
 
 The customer-support PostgreSQL gate then passed in a newly created guarded disposable database.
-It migrated from an empty database through `20260917_0036`, downgraded one revision, upgraded back
+It migrated from an empty database through `20260917_0037`, downgraded one revision, upgraded back
 to the exact head, reconciled the isolated runtime role, and removed the database after the test.
 The focused persistence case proved first publication plus exact replay of the normal immutable
 `DRAFT` → `RELEASED` preset history, preservation of capacity V3 while V4 stays current, stable
 plan binding, and use of `ix_workflow_customer_support_owner` for the owner-history query. This is
-database integration evidence only; it does not imply live activation or a successful Codex call.
+database integration evidence only. The same gate verifies the exact two customer-support
+permissions and their ten built-in role bindings; it does not imply live activation or a successful
+Codex call.
 
 The historical failed build/checkpoint remains preserved as audit evidence. The successful official
 build is a new immutable build resource; no failed record was rewritten.
