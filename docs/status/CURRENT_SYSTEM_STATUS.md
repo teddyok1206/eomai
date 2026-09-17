@@ -43,8 +43,8 @@ This document describes the repository state, not an implicit claim that every a
 is active in a particular runtime. Mutable service, activation, queue, lease, and corpus-progress
 state remains authoritative only in Scientific Studio and the corresponding typed API views.
 
-On 2026-09-17 the repository added a protocol-first in-product customer-support candidate. It is
-not described as live merely because the source exists. The candidate reuses one owner-scoped
+On 2026-09-17 the repository added and then activated protocol-first in-product customer support.
+It reuses one owner-scoped
 Workflow as the canonical case, pins `customer-support@1.0.0`, `workflow-role/1.22.0`,
 `resolved-execution-plan/10.0`, and a V4 capacity successor that reserves slot 06 for a one-shot
 read-only `gpt-5.6-terra/medium` diagnosis. The worker cannot mutate application state, contact
@@ -53,11 +53,13 @@ its immutable result Artifact. The API and Studio expose authenticated create/li
 owner-only history, exact idempotent replay, cursor pagination, stale-response protection, and no
 operator-only summary. Migration `20260917_0036` adds the explicit `CUSTOMER_SUPPORT` Workflow
 stage and the partial owner/history lookup index; additive migration `20260917_0037` seeds the two
-customer-support permissions for every built-in authenticated role.
-See [ADR 0096](../adr/0096-orchestrated-customer-support.md) and the
-[rollout runbook](../operations/CUSTOMER_SUPPORT_ROLLOUT.md). The guarded disposable-PostgreSQL
-gate has passed; wheel inspection, compatible deployment, and live-canary status must still be
-recorded separately before this candidate is called active.
+customer-support permissions for every built-in authenticated role. The compatible API/Web/worker
+set was installed and one bounded live canary reached `ANSWERED`; exact replay returned the same
+Workflow without another worker execution, and post-canary active commands, Jobs, API idempotency
+records, and held leases were all zero. See [ADR 0096](../adr/0096-orchestrated-customer-support.md),
+the [rollout runbook](../operations/CUSTOMER_SUPPORT_ROLLOUT.md), and the
+[live acceptance receipt](CUSTOMER_SUPPORT_ACCEPTANCE_2026-09-17.md). Manual Studio layout and
+usability review remains consolidated for the end-of-work user checklist.
 
 ## 1. Product boundary
 
@@ -85,7 +87,7 @@ Manager owns delivery projection and commits validated builder output.
 | Material-first request | Material requirement 1.0, Item Brief 4.0 | Active in the verified V5 run |
 | Fresh 25-Item production | Production plan/execution family 5.0 | Active; pins Pack 1.16.1 |
 | Material-first Content Pack | Pack 1.16.1, standard control 13, knowledge control 10 | Released and exercised live |
-| In-product customer support | Workflow 1.0, role 1.22, result 1.0, plan 10.0 | Repository candidate; live activation pending |
+| In-product customer support | Workflow 1.0, role 1.22, result 1.0, plan 10.0 | Active; bounded live canary and exact replay PASS |
 
 Logical IDs, revision IDs, Artifact IDs, Artifact Revision IDs, schema identities, storage paths,
 and SHA-256 hashes remain separate. New versions are additive; released predecessors are not
@@ -250,8 +252,11 @@ one pure PASS while 127 PostgreSQL/system cases stayed opt-in. Focused support t
 cover schema/Pydantic parity, owner authorization, exact idempotent replay, cursor pagination,
 stale-browser responses, partial-answer withholding, and missing/stale/hash/lifecycle Artifact
 resolution. Ruff, strict mypy on changed source, shell/JavaScript syntax, schema mirror parity, and
-OpenAPI checksum checks pass. This remains source evidence until wheel inspection, compatible
-deployment, and one bounded live canary are separately recorded.
+OpenAPI checksum checks pass. Wheel inspection, compatible deployment, the dedicated root-owned
+900-second support worker template, and one bounded live canary were subsequently verified. The
+canary completed one immutable `workflow_support` Artifact, the owner projection returned
+`ANSWERED`, exact replay created no second execution, and post-canary work/lease counts were zero.
+See the linked live acceptance receipt for exact content-free identities and preserved failures.
 
 The customer-support PostgreSQL gate then passed in a newly created guarded disposable database.
 It migrated from an empty database through `20260917_0037`, downgraded one revision, upgraded back
@@ -260,8 +265,8 @@ The focused persistence case proved first publication plus exact replay of the n
 `DRAFT` → `RELEASED` preset history, preservation of capacity V3 while V4 stays current, stable
 plan binding, and use of `ix_workflow_customer_support_owner` for the owner-history query. This is
 database integration evidence only. The same gate verifies the exact two customer-support
-permissions and their ten built-in role bindings; it does not imply live activation or a successful
-Codex call.
+permissions and their ten built-in role bindings. Live activation and the successful Codex call
+are separate evidence recorded in the live acceptance receipt.
 
 The historical failed build/checkpoint remains preserved as audit evidence. The successful official
 build is a new immutable build resource; no failed record was rewritten.

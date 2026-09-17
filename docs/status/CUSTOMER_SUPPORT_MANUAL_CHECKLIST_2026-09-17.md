@@ -1,7 +1,8 @@
 # Customer Support Manual Verification Checklist
 
-Status: deferred until the reviewed source candidate is deployed and its automated live canary has
-passed. This checklist does not authorize deployment, Codex execution, or state mutation.
+Status: automated live canary passed; consolidated manual Studio review remains pending. This
+checklist does not authorize another Codex execution or state mutation. The completed canary is
+recorded in [Customer Support Live Acceptance](CUSTOMER_SUPPORT_ACCEPTANCE_2026-09-17.md).
 
 The user asked to receive visual checks once, at the end, rather than being interrupted during
 implementation. Automated contract, authorization, idempotency, database, and Artifact checks stay
@@ -12,7 +13,8 @@ separate from these observations.
 - [ ] Open **고객센터** from the normal authenticated navigation on a desktop-width browser.
 - [ ] Confirm the category, subject, question, optional error-code field, and submit button are
   readable without explanatory clutter.
-- [ ] Submit the agreed harmless HOW_TO canary only once and confirm it appears in **내 문의**.
+- [ ] Confirm the already completed harmless HOW_TO canary appears in **내 문의**. Do not submit a
+  duplicate merely to perform this visual check.
 - [ ] Confirm `접수됨` → `Codex 확인 중` → `답변 완료` is understandable and refreshes without
   replacing the currently selected case with a late response from another case.
 - [ ] Confirm Korean answer paragraphs and recommended actions wrap cleanly and no HTML supplied by

@@ -1,12 +1,18 @@
 # Orchestrated Customer Support Rollout
 
-Status: reviewed source rollout procedure; live activation requires the gates below.
+Status: executed successfully on 2026-09-17; retain as the rollout and recovery procedure.
 
 Source/database checkpoint (2026-09-17 UTC): the guarded disposable-PostgreSQL migration cycle and
 focused customer-support persistence gate passed. The test created and removed a fresh database,
 reconciled its isolated runtime role, proved exact bootstrap replay across the preserved DRAFT and
 current RELEASED revisions, preserved capacity V3 beside current V4, and verified the owner query's
 partial index. This checkpoint does not authorize or claim wheel installation or a live Codex run.
+
+Operational checkpoint (2026-09-17 UTC): the compatible API/Web/worker set was installed and one
+bounded live canary reached `ANSWERED`. Exact replay returned the same Workflow and did not launch a
+second worker. The complete content-free receipt and preserved rollout failures are recorded in
+[Customer Support Live Acceptance](../status/CUSTOMER_SUPPORT_ACCEPTANCE_2026-09-17.md). Future
+rollouts must still execute the gates below; this checkpoint is not permission to skip them.
 
 ## Product boundary
 

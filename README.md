@@ -46,7 +46,7 @@ readiness가 정본입니다.
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
-| 제품 내 고객지원 후보 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
+| 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
@@ -54,7 +54,7 @@ readiness가 정본입니다.
 검색 요소를 파생하며, V1–V4 계획과 checkpoint는 기존 실행 재현을 위해 그대로 읽을 수 있고
 의미를 바꾸지 않습니다.
 
-제품 내 고객지원은 현재 저장소의 additive release candidate입니다. 인증된 사용자가 Scientific
+제품 내 고객지원은 현재 운영에 활성화된 additive 기능입니다. 인증된 사용자가 Scientific
 Studio에서 bounded 문의를 등록하면 기존 Workflow command·lease·격리 worker·Artifact commit
 경계를 그대로 사용해 slot 06의 `gpt-5.6-terra`가 한국어 답변을 생성합니다. 상주 모델 process를
 두거나 Web에서 Codex를 직접 호출하지 않으며, support worker는 읽기 전용·network disabled이고
@@ -62,7 +62,10 @@ Studio에서 bounded 문의를 등록하면 기존 Workflow command·lease·격�
 [고객지원 rollout runbook](docs/operations/CUSTOMER_SUPPORT_ROLLOUT.md)의 배포·canary gate로만
 판정합니다. 새 disposable PostgreSQL에서 migration 왕복, runtime-role reconciliation, 정상적인
 `DRAFT`→`RELEASED` immutable preset replay, V3/V4 capacity 공존과 owner-history index 사용까지
-검증됐지만, 이는 아직 wheel 설치나 live Codex canary를 의미하지 않습니다.
+검증했고, 호환 API/Web/worker 배포 뒤 실제 문의 1건이 `ANSWERED`에 도달했습니다. 동일
+idempotency key의 exact replay는 같은 Workflow를 반환하고 두 번째 worker를 실행하지 않았습니다.
+상세한 content-free 증거는
+[고객지원 live acceptance](docs/status/CUSTOMER_SUPPORT_ACCEPTANCE_2026-09-17.md)에 기록합니다.
 
 ## RAG 학습의 의미와 현재 기준선
 
