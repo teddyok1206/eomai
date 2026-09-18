@@ -329,6 +329,11 @@ class CommandAdapter:
             requester_permission_keys = tuple(
                 sorted(permission.value for permission in actor.permissions)
             )
+            solution_evidence_requirement: Literal["NONE", "REQUIRE_ACCEPTED_SOLUTION_REPORT"] = (
+                "REQUIRE_ACCEPTED_SOLUTION_REPORT"
+                if request.definition_version == "1.11.0"
+                else "NONE"
+            )
             command_value = {
                 "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
                 "requirement": workflow_request.educational_retrieval.model_dump(mode="json"),
@@ -342,6 +347,7 @@ class CommandAdapter:
                 "requester_role": requester_role,
                 "requester_permission_keys": list(requester_permission_keys),
                 "requested_by": actor.actor_id,
+                "solution_evidence_requirement": solution_evidence_requirement,
             }
             evidence_command = CreateItemProductionEvidenceCommand(
                 operation="CREATE_ITEM_PRODUCTION_EVIDENCE",
@@ -354,6 +360,7 @@ class CommandAdapter:
                 requester_role=requester_role,
                 requester_permission_keys=requester_permission_keys,
                 requested_by=actor.actor_id,
+                solution_evidence_requirement=solution_evidence_requirement,
                 idempotency_key=idempotency_key,
                 submission_sha256=content_sha256(command_value),
             )

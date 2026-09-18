@@ -738,6 +738,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "15.0",
             "sha256:f6f6a6ea8404fe9b54687e515a32adb1ab1ae24be1082542ad9dd9213f85fa2b",
         ),
+        "catalog-application-request-v16": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v16.schema.json",
+            "resources/catalog-application/catalog-application-request-v16.schema.json",
+            "16.0",
+            "sha256:90c849ae999dfa367d6cb725e7aa58a3670beb255400da9f281a41609bba59de",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",

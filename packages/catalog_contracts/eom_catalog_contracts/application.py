@@ -415,6 +415,7 @@ class CreateItemProductionEvidenceCommand(FrozenModel):
     requester_role: Literal["ADMIN", "EDITOR", "REVIEWER"]
     requester_permission_keys: tuple[PermissionKeyValue, ...] = Field(min_length=1, max_length=128)
     requested_by: ActorId
+    solution_evidence_requirement: Literal["NONE", "REQUIRE_ACCEPTED_SOLUTION_REPORT"] = "NONE"
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
     submission_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
@@ -649,7 +650,7 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
             "catalog-application-response-v15",
         ),
         "CREATE_ITEM_PRODUCTION_EVIDENCE": CatalogApplicationSchemaRoute(
-            "catalog-application-request-v4",
+            "catalog-application-request-v16",
             "catalog-application-response-v15",
         ),
         "PUBLISH_APPROVED_ITEM_ANALYSES": CatalogApplicationSchemaRoute(

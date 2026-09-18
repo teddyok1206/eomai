@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     EducationRetrievalRequestV2,
     EvidenceBundleManifestV5,
     EvidenceBundleMaterialsV2,
+    EvidenceBundlePublicationResultV2,
     EvidenceEntryV5,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSolutionReport,
@@ -568,6 +569,7 @@ def _item_production_command() -> CreateItemProductionEvidenceCommand:
         "requester_role": "ADMIN",
         "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
         "requested_by": "operator_" + "6" * 32,
+        "solution_evidence_requirement": "NONE",
         "idempotency_key": "knowledge-backed-item-miss",
         "submission_sha256": "sha256:" + "0" * 64,
     }
@@ -630,6 +632,101 @@ def test_item_production_private_idempotency_rejects_different_input() -> None:
             record,  # type: ignore[arg-type]
         )
     assert captured.value.code == "KNOWLEDGE_RETRIEVAL_IDEMPOTENCY_CONFLICT"
+
+
+def test_required_solution_evidence_rejects_non_v5_replay() -> None:
+    legacy = EvidenceBundlePublicationResultV2.model_construct()
+
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        KnowledgeRetrievalApplicationService._require_solution_evidence_result(
+            legacy,
+            required=True,
+        )
+
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_SOLUTION_EVIDENCE_REQUIRED"
+
+
+def test_required_solution_evidence_fails_before_artifact_commit() -> None:
+    command_value = {
+        "operation": "CREATE_EVIDENCE_BUNDLE",
+        "graph_snapshot_revision_id": "graphrev_" + "3" * 32,
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_scope": None,
+        "topic_keys": ["earth.plate-boundary"],
+        "target_item_revision_id": None,
+        "required_item_elements": [],
+        "source_classes": ["PAST_EXAM"],
+        "evidence_budget": {
+            "max_documents": 2,
+            "max_item_revisions": 2,
+            "max_graph_nodes": 8,
+            "max_claims": 2,
+            "max_context_tokens": 2000,
+        },
+        "access_policy_revision_id": "accessrev_" + "5" * 32,
+        "requester_role": "ADMIN",
+        "requester_permission_keys": [
+            "knowledge_graph:read",
+            "knowledge_graph:retrieve",
+        ],
+        "requested_by": "operator_" + "6" * 32,
+        "idempotency_key": "required-solution-evidence-missing",
+        "submission_sha256": "sha256:" + "0" * 64,
+    }
+    command_value["submission_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in command_value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    command = retrieval_module.CreateEvidenceBundleCommand.model_validate(command_value)
+    item = ApprovedItemKnowledgeSourceV2(
+        source_class="PAST_EXAM",
+        item_id="item_" + "9" * 32,
+        item_revision_id="itemrev_" + "a" * 32,
+        artifact_member=_member(
+            "a", media_type="application/json", schema_ref="eom.assessment.item-content/1.0"
+        ),
+    )
+    candidate = _Candidate(
+        analysis_run_id="analysisrun_" + "3" * 32,
+        source=item,
+        node_ids=("knode_exam",),
+        anchor_ids=("anchor_item",),
+        node_labels=("past exam structure",),
+        node_types=("ASSESSMENT_PATTERN",),
+        relevance_milli=900,
+        answer_bearing=False,
+    )
+    service = object.__new__(KnowledgeRetrievalApplicationService)
+    cast(Any, service)._existing = lambda _command: None
+    cast(Any, service).sessions = lambda: _SequenceSession([])
+    cast(Any, service)._snapshot_pointer = lambda *_args: _request().graph_snapshot
+    cast(Any, service)._policy = lambda *_args: SimpleNamespace(
+        access_policy_revision_id="accessrev_" + "5" * 32,
+        content_sha256="sha256:" + "5" * 64,
+    )
+    cast(Any, service)._authorize = lambda *_args: None
+    cast(Any, service)._request = lambda *_args, **_kwargs: _request()
+    cast(Any, service)._candidates = lambda *_args, **_kwargs: (candidate,)
+    committed = False
+
+    def commit_context(*_args: object, **_kwargs: object) -> None:
+        nonlocal committed
+        committed = True
+
+    cast(Any, service)._commit_context = commit_context
+
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        service.create(
+            command,
+            include_solution_evidence=True,
+            require_solution_evidence=True,
+        )
+
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_SOLUTION_EVIDENCE_REQUIRED"
+    assert not committed
 
 
 class _BulkSourceSession:

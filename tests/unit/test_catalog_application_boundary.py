@@ -513,6 +513,7 @@ def _item_evidence_command() -> CreateItemProductionEvidenceCommand:
         "requester_role": "ADMIN",
         "requester_permission_keys": ["knowledge_graph:read", "knowledge_graph:retrieve"],
         "requested_by": "operator_" + "1" * 32,
+        "solution_evidence_requirement": "NONE",
         "idempotency_key": "item-production-evidence-round-trip",
         "submission_sha256": "sha256:" + "0" * 64,
     }
@@ -788,7 +789,11 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     validate_contract("catalog-application-response-v5", retrieval_response)
     item_command = _item_evidence_command()
     item_request = CatalogApplicationRequest(root=item_command).model_dump(mode="json")
-    validate_contract("catalog-application-request-v4", item_request)
+    validate_contract("catalog-application-request-v16", item_request)
+    invalid_item_request = dict(item_request)
+    invalid_item_request.pop("solution_evidence_requirement")
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("catalog-application-request-v16", invalid_item_request)
     item_response = CatalogApplicationResponse(
         status="OK",
         operation="CREATE_ITEM_PRODUCTION_EVIDENCE",

@@ -445,6 +445,9 @@ class KnowledgeRetrievalApplicationService:
     ) -> ItemProductionEvidencePublicationContract:
         """Resolve a stable educational intent without accepting a raw snapshot control."""
 
+        solution_evidence_required = (
+            command.solution_evidence_requirement == "REQUIRE_ACCEPTED_SOLUTION_REPORT"
+        )
         internal_key = "item-evidence:" + content_sha256(
             {"idempotency_key": command.idempotency_key}
         ).removeprefix("sha256:")
@@ -467,7 +470,12 @@ class KnowledgeRetrievalApplicationService:
                         "KNOWLEDGE_RETRIEVAL_PUBLICATION_INCOMPLETE",
                         "item production retrieval has no published Evidence Bundle",
                     )
-                return self._result_v2(session, existing, revision)
+                result = self._result_v2(session, existing, revision)
+                self._require_solution_evidence_result(
+                    result,
+                    required=solution_evidence_required,
+                )
+                return result
             corpus = session.scalar(
                 select(KnowledgeCorpusRecord).where(
                     KnowledgeCorpusRecord.corpus_key == command.requirement.corpus_key
@@ -562,7 +570,8 @@ class KnowledgeRetrievalApplicationService:
         )
         published = self.create(
             CreateEvidenceBundleCommand.model_validate(inner_value),
-            include_solution_evidence=False,
+            include_solution_evidence=solution_evidence_required,
+            require_solution_evidence=solution_evidence_required,
         )
         with self.sessions() as session:
             request = session.get(EducationRetrievalRequestRecord, published.retrieval_request_id)
@@ -574,7 +583,24 @@ class KnowledgeRetrievalApplicationService:
                     "KNOWLEDGE_RETRIEVAL_PUBLICATION_INCOMPLETE",
                     "published item production Evidence Bundle cannot be reloaded",
                 )
-            return self._result_v2(session, request, revision)
+            result = self._result_v2(session, request, revision)
+            self._require_solution_evidence_result(
+                result,
+                required=solution_evidence_required,
+            )
+            return result
+
+    @staticmethod
+    def _require_solution_evidence_result(
+        result: EvidencePublicationContract | EvidenceBundlePublicationResultV2,
+        *,
+        required: bool,
+    ) -> None:
+        if required and not isinstance(result, EvidenceBundlePublicationResultV5):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_SOLUTION_EVIDENCE_REQUIRED",
+                "item production requires an Evidence Bundle with accepted solution evidence",
+            )
 
     @staticmethod
     def _validate_item_production_replay(
@@ -640,9 +666,14 @@ class KnowledgeRetrievalApplicationService:
         command: CreateEvidenceBundleCommand,
         *,
         include_solution_evidence: bool = True,
+        require_solution_evidence: bool = False,
     ) -> EvidencePublicationContract:
         existing = self._existing(command)
         if existing is not None:
+            self._require_solution_evidence_result(
+                existing,
+                required=require_solution_evidence,
+            )
             return existing
         created_at = datetime.now(UTC)
         retrieval_request_id = _typed_id(
@@ -677,6 +708,14 @@ class KnowledgeRetrievalApplicationService:
                 request=request,
                 candidates=candidates,
             )
+            if require_solution_evidence and not any(
+                isinstance(entry, EvidenceEntryV5) and entry.solution_evidence is not None
+                for entry in entries
+            ):
+                raise KnowledgeRetrievalServiceError(
+                    "KNOWLEDGE_RETRIEVAL_SOLUTION_EVIDENCE_REQUIRED",
+                    "retrieval selected no evidence with an accepted solution report",
+                )
 
         context_artifact = self._commit_context(request, context_markdown, entries=entries)
         context_pointer = KnowledgeArtifactMemberPointer(

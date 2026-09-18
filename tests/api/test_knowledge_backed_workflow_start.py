@@ -9,7 +9,7 @@ import pytest
 from eom_api.services.catalog_application_client import CatalogApplicationClientError
 from eom_api.services.command_adapter import CommandAdapter
 from eom_api_contracts.workflows import WorkflowStartRequest
-from eom_catalog_contracts import EvidenceBudget
+from eom_catalog_contracts import CreateItemProductionEvidenceCommand, EvidenceBudget
 from eom_operator_identity import (
     ActorContext,
     ActorSource,
@@ -22,7 +22,50 @@ from eom_workflow_runner.models import WorkflowInstanceRecord
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _request() -> WorkflowStartRequest:
+def _request(definition_version: str = "1.8.0") -> WorkflowStartRequest:
+    if definition_version == "1.11.0":
+        return WorkflowStartRequest.model_validate(
+            {
+                "definition_key": "generic-item-development",
+                "definition_version": definition_version,
+                "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
+                "image_mode": "skip",
+                "pack_key": "generated-knowledge-item",
+                "execution_preset_key": "knowledge-grounded-item",
+                "item_brief": {
+                    "schema_version": "4.0",
+                    "subject": "통합과학",
+                    "topic": "시간과 공간에서 물체의 운동 분석",
+                    "task_type": "TEXT",
+                    "difficulty": "중",
+                    "authoring_guidance": (
+                        "통합과학 시간과 공간 범위에서 자료를 해석하는 문항을 출제한다."
+                    ),
+                    "authoring_guidance_sha256": (
+                        "sha256:038af27cedd6eab2a978f5d9c8d647eed36d455b52d41aca01ec2c5f5e1fd228"
+                    ),
+                    "curriculum_selected_unit_key": "eom.is.middle.1-1",
+                    "mock_exam_slot": None,
+                    "material_requirement": {
+                        "schema_version": "content-team-material-requirement/1.0",
+                        "form": "TABLE",
+                        "panel_count": 1,
+                    },
+                    "original_request_sha256": (
+                        "038af27cedd6eab2a978f5d9c8d647eed36d455b52d41aca01ec2c5f5e1fd228"
+                    ),
+                },
+                "educational_retrieval": {
+                    "schema_version": "educational-retrieval-requirement/1.0",
+                    "corpus_key": "integrated-science-textbooks",
+                    "query_kind": "ITEM_PREPARATION",
+                    "curriculum_root_key": None,
+                    "topic_keys": [],
+                    "required_item_elements": ["choice", "paragraph", "table"],
+                    "source_classes": ["PAST_EXAM"],
+                },
+            }
+        )
     return WorkflowStartRequest.model_validate(
         {
             "definition_key": "generic-item-development",
@@ -73,15 +116,26 @@ class _ReadSession:
 
 
 class _GraphMissCatalog:
-    def create_item_production_evidence(self, _command: object) -> None:
+    def __init__(self) -> None:
+        self.command: CreateItemProductionEvidenceCommand | None = None
+
+    def create_item_production_evidence(self, command: CreateItemProductionEvidenceCommand) -> None:
+        self.command = command
         raise CatalogApplicationClientError("KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE", "graph miss")
 
 
-def test_graph_miss_happens_before_workflow_transaction_or_worker_claim(
+@pytest.mark.parametrize(
+    ("definition_version", "expected_solution_requirement"),
+    (("1.8.0", "NONE"), ("1.11.0", "REQUIRE_ACCEPTED_SOLUTION_REPORT")),
+)
+def test_graph_miss_happens_before_workflow_transaction_or_worker_claim_and_pins_solution_policy(
     monkeypatch: pytest.MonkeyPatch,
+    definition_version: str,
+    expected_solution_requirement: str,
 ) -> None:
+    definition_name = "generic-item-development.v" + definition_version.removesuffix(".0") + ".yaml"
     compiled = compile_definition(
-        ROOT / "config/workflows/generic-item-development.v1.8.yaml",
+        ROOT / "config" / "workflows" / definition_name,
         {"authoring", "image", "review", "item_management"},
     )
     definition = SimpleNamespace(
@@ -91,7 +145,8 @@ def test_graph_miss_happens_before_workflow_transaction_or_worker_claim(
     )
     adapter = object.__new__(CommandAdapter)
     adapter.sessions = lambda: _ReadSession(definition)  # type: ignore[method-assign]
-    adapter.catalog_application = _GraphMissCatalog()  # type: ignore[assignment]
+    catalog = _GraphMissCatalog()
+    adapter.catalog_application = catalog  # type: ignore[assignment]
     retrieval_policy = SimpleNamespace(
         maximum_budget=EvidenceBudget(
             max_documents=2,
@@ -135,6 +190,10 @@ def test_graph_miss_happens_before_workflow_transaction_or_worker_claim(
         source=ActorSource.APPLICATION_API,
     )
     with pytest.raises(CatalogApplicationClientError) as captured:
-        adapter.start_workflow(_request(), actor, idempotency_key="api:" + "6" * 64)
+        adapter.start_workflow(
+            _request(definition_version), actor, idempotency_key="api:" + "6" * 64
+        )
     assert captured.value.code == "KNOWLEDGE_RETRIEVAL_CORPUS_UNAVAILABLE"
+    assert catalog.command is not None
+    assert catalog.command.solution_evidence_requirement == expected_solution_requirement
     assert not transaction_started
