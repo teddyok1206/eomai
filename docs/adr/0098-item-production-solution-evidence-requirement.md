@@ -26,10 +26,13 @@ solution-report revisions. PostgreSQL stores only bounded pointers and hashes; r
 canonical artifacts. Candidate lookup and solution merge remain O(candidates + accepted
 successors), using the existing indexed predecessor relation and in-memory map.
 
-Resolution verifies accepted-result and proposal-receipt hashes against the same JSON-mode value
-representation written by the Artifact commit boundary. It must not hash a reconstructed Pydantic
-object directly because Python datetime normalization can add fractional seconds that were absent
-from the immutable JSON source, producing a false integrity failure without any byte drift.
+Resolution preserves the two existing Artifact commit representations instead of forcing a new
+shared representation onto immutable history. The accepted-result boundary writes and hashes a
+JSON-mode mapping, so resolution hashes `model_dump(mode="json")`; hashing that model directly
+could add fractional seconds through Python datetime normalization. The proposal-receipt boundary
+historically writes and hashes the typed model directly, so resolution repeats that exact operation.
+Tests construct both artifacts through their respective production representations. This apparent
+asymmetry is intentional compatibility with canonical predecessor bytes, not silent normalization.
 
 The API owns workflow-to-requirement selection, Catalog owns evidence resolution and artifact
 publication, and the Orchestrator continues to validate the returned pinned plan. There is no new

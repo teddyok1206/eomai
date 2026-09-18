@@ -989,8 +989,9 @@ def _solution_resolution_records() -> tuple[object, object, object, object, obje
         )
     )
     receipt_model = KnowledgeAnalysisProposalReceiptV9.model_validate(receipt)
-    # Match the production commit boundary, which writes the exact JSON-mode dictionary.
-    receipt_bytes = canonical_json_bytes(receipt_model.model_dump(mode="json"))
+    # Match the proposal Artifact's historical commit boundary. It hashes the typed model
+    # directly, unlike the accepted-result boundary below, which writes a JSON-mode mapping.
+    receipt_bytes = canonical_json_bytes(receipt_model)
     receipt_hash = sha256_bytes(receipt_bytes)
 
     result = _result_value()
