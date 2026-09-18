@@ -158,8 +158,13 @@ def _resolve_row(
             or receipt_pointer.sha256 != proposal_revision.content_hash
             or receipt_bytes != proposal_revision.content_bytes
             or report_bytes < 1
-            or sha256_bytes(canonical_json_bytes(accepted)) != accepted_revision.content_hash
-            or sha256_bytes(canonical_json_bytes(receipt)) != proposal_revision.content_hash
+            # The commit boundary hashes the JSON-mode dictionary written to the Artifact.
+            # Hashing the model directly would re-encode UTC strings through Python datetimes
+            # and can add fractional seconds that were absent from the immutable source bytes.
+            or sha256_bytes(canonical_json_bytes(accepted.model_dump(mode="json")))
+            != accepted_revision.content_hash
+            or sha256_bytes(canonical_json_bytes(receipt.model_dump(mode="json")))
+            != proposal_revision.content_hash
             or accepted.analysis_request_id != run.analysis_request_id
             or accepted.analysis_request_sha256 != run.request_sha256
             or accepted.source != request.source

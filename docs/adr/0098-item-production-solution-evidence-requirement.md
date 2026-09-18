@@ -26,6 +26,11 @@ solution-report revisions. PostgreSQL stores only bounded pointers and hashes; r
 canonical artifacts. Candidate lookup and solution merge remain O(candidates + accepted
 successors), using the existing indexed predecessor relation and in-memory map.
 
+Resolution verifies accepted-result and proposal-receipt hashes against the same JSON-mode value
+representation written by the Artifact commit boundary. It must not hash a reconstructed Pydantic
+object directly because Python datetime normalization can add fractional seconds that were absent
+from the immutable JSON source, producing a false integrity failure without any byte drift.
+
 The API owns workflow-to-requirement selection, Catalog owns evidence resolution and artifact
 publication, and the Orchestrator continues to validate the returned pinned plan. There is no new
 queue, database schema, worker communication, or NAS writer.

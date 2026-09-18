@@ -989,7 +989,8 @@ def _solution_resolution_records() -> tuple[object, object, object, object, obje
         )
     )
     receipt_model = KnowledgeAnalysisProposalReceiptV9.model_validate(receipt)
-    receipt_bytes = canonical_json_bytes(receipt_model)
+    # Match the production commit boundary, which writes the exact JSON-mode dictionary.
+    receipt_bytes = canonical_json_bytes(receipt_model.model_dump(mode="json"))
     receipt_hash = sha256_bytes(receipt_bytes)
 
     result = _result_value()
@@ -1008,7 +1009,7 @@ def _solution_resolution_records() -> tuple[object, object, object, object, obje
         {key: value for key, value in result.items() if key != "result_sha256"}
     )
     result_model = KnowledgeAnalysisResultV10.model_validate(result)
-    result_bytes = canonical_json_bytes(result_model)
+    result_bytes = canonical_json_bytes(result_model.model_dump(mode="json"))
     result_hash = sha256_bytes(result_bytes)
 
     run = type(
