@@ -33,6 +33,7 @@ ADMITTED_DEFINITIONS = {
     ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
     ("generic-item-development", "1.9.0"): "generic-item-development.v1.9.yaml",
     ("generic-item-development", "1.10.0"): "generic-item-development.v1.10.yaml",
+    ("generic-item-development", "1.11.0"): "generic-item-development.v1.11.yaml",
     ("knowledge-analysis", "1.0.0"): "knowledge-analysis.v1.yaml",
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",

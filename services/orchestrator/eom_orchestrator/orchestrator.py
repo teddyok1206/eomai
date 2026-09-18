@@ -22,7 +22,12 @@ from eom_protocol import (
     WorkerResult,
     validate_message,
 )
-from eom_workflow.control_plane import EvidenceResultArtifactPointer, ResolvedExecutionPlanV3
+from eom_workflow.control_plane import (
+    EvidenceResultArtifactPointer,
+    EvidenceResultArtifactPointerV2,
+    ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV11,
+)
 from eom_workflow.models import (
     ArtifactPointer,
     CustomerSupportWorkerRequest,
@@ -111,7 +116,9 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
         "CONTROL_ELIGIBLE_SLOT_UNAVAILABLE",
     }
 )
-_EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset({"resolved-execution-plan/3.0"})
+_EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
+    {"resolved-execution-plan/3.0", "resolved-execution-plan/11.0"}
+)
 
 
 WorkflowRoleRequest = (
@@ -157,11 +164,19 @@ def _resolved_evidence_plan_for_response(
     """Validate the canonical evidence plan before projecting worker-owned output."""
 
     if (
-        result_schema not in {"authoring-result@10.0", "review-result@10.0"}
+        result_schema
+        not in {
+            "authoring-result@10.0",
+            "review-result@10.0",
+            "authoring-result@11.0",
+            "review-result@11.0",
+        }
         or evidence_access != "EVIDENCE_CONTEXT"
     ):
         return None
     try:
+        if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
+            return ResolvedExecutionPlanV11.model_validate(plan_document)
         return ResolvedExecutionPlanV3.model_validate(plan_document)
     except ValidationError as exc:
         raise ControlPlaneError(
@@ -772,7 +787,35 @@ class Orchestrator:
                     staging=staging,
                     worker_slot=slot.slot_id,
                 )
-                if result_schema in {"authoring-result@10.0", "review-result@10.0"}:
+                if result_schema in {
+                    "authoring-result@10.0",
+                    "review-result@10.0",
+                    "authoring-result@11.0",
+                    "review-result@11.0",
+                }:
+                    result_artifact_pointer: (
+                        EvidenceResultArtifactPointer | EvidenceResultArtifactPointerV2
+                    )
+                    if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
+                        result_artifact_pointer = EvidenceResultArtifactPointerV2(
+                            logical_artifact_id=artifact.logical_artifact_id,
+                            revision_id=artifact.revision_id,
+                            content_hash=staged.content_hash,
+                            result_schema=cast(
+                                Literal["authoring-result@11.0", "review-result@11.0"],
+                                result_schema,
+                            ),
+                        )
+                    else:
+                        result_artifact_pointer = EvidenceResultArtifactPointer(
+                            logical_artifact_id=artifact.logical_artifact_id,
+                            revision_id=artifact.revision_id,
+                            content_hash=staged.content_hash,
+                            result_schema=cast(
+                                Literal["authoring-result@10.0", "review-result@10.0"],
+                                result_schema,
+                            ),
+                        )
                     with self.sessions() as validation_session:
                         evidence_receipt = validate_evidence_usage_for_commit(
                             validation_session,
@@ -780,15 +823,7 @@ class Orchestrator:
                             step_key=step_key,
                             worker_input=worker_input,
                             result=result,
-                            result_artifact=EvidenceResultArtifactPointer(
-                                logical_artifact_id=artifact.logical_artifact_id,
-                                revision_id=artifact.revision_id,
-                                content_hash=staged.content_hash,
-                                result_schema=cast(
-                                    Literal["authoring-result@10.0", "review-result@10.0"],
-                                    result_schema,
-                                ),
-                            ),
+                            result_artifact=result_artifact_pointer,
                             canonical_artifact_root=self.settings.nas_artifact_root,
                         )
                     evidence_event_data = evidence_receipt_event_data(

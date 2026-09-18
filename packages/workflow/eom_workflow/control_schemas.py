@@ -53,6 +53,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:180ed1de28badecb2fcea4fb8f78cfb1efd95b45a225434fe9654a97264f4b17",
         ),
+        "evidence-usage-validation-receipt-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/evidence-usage-validation-receipt-v2.schema.json",
+            "resources/control-plane/evidence-usage-validation-receipt-v2.schema.json",
+            "2.0",
+            "sha256:c467863c0cae6d5a4ff3a94d27bd09fa1b21f7b0805424497fffcc6e08f57c0a",
+        ),
         "customer-support-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/customer-support-control-bootstrap-v1.schema.json",
             "resources/control-plane/customer-support-control-bootstrap-v1.schema.json",
@@ -124,6 +130,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/knowledge-item-control-bootstrap-v11.schema.json",
             "11.0",
             "sha256:5ae084d5bb9e535d2fd7970de4928988dfcc90ba3d032825f9f9036cb1c1e213",
+        ),
+        "knowledge-item-control-bootstrap-v12": ControlSchemaResource(
+            "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v12.schema.json",
+            "resources/control-plane/knowledge-item-control-bootstrap-v12.schema.json",
+            "12.0",
+            "sha256:969afbca62c8fc9bbe395272da5ede9d22343fffd9c3822a908eedaba83e30b9",
         ),
         "legacy-item-extraction-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/legacy-item-extraction-control-bootstrap-v1.schema.json",
@@ -233,6 +245,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "14.0",
             "sha256:869601a838763f7fdc7e774a2b2a605ac7a700a7e3ce0f1741e8a752cd1efa94",
         ),
+        "standard-control-bootstrap-v15": ControlSchemaResource(
+            "schemas/workflow/control-plane/standard-control-bootstrap-v15.schema.json",
+            "resources/control-plane/standard-control-bootstrap-v15.schema.json",
+            "15.0",
+            "sha256:f37492c59a49bd485dd4931bdf8a8b06a07e852b816a2cca5a70cae4ad8877f6",
+        ),
         "instruction-bundle-manifest": ControlSchemaResource(
             "schemas/workflow/control-plane/instruction-bundle-manifest-v1.schema.json",
             "resources/control-plane/instruction-bundle-manifest-v1.schema.json",
@@ -304,6 +322,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/resolved-execution-plan-v10.schema.json",
             "10.0",
             "sha256:95a552e420322d54bcd02dfc9180c407d42dddd9cafab347bccd4abd730e0b53",
+        ),
+        "resolved-execution-plan-v11": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v11.schema.json",
+            "resources/control-plane/resolved-execution-plan-v11.schema.json",
+            "11.0",
+            "sha256:5410e94b098651c08abc30a26a2514800879ca876779d853a5717140d1ab56ea",
         ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",

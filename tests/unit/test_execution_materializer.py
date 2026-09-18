@@ -945,7 +945,7 @@ def _document_analysis_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     return fixture
 
 
-@pytest.mark.parametrize("manifest_schema_version", ["2.0", "4.0"])
+@pytest.mark.parametrize("manifest_schema_version", ["2.0", "4.0", "5.0"])
 def test_knowledge_materializer_stages_exact_manifest_and_context_and_records_provenance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, manifest_schema_version: str
 ) -> None:
@@ -953,7 +953,7 @@ def test_knowledge_materializer_stages_exact_manifest_and_context_and_records_pr
         tmp_path,
         monkeypatch,
         manifest_schema_version=manifest_schema_version,
-        workflow_definition_version="1.10.0",
+        workflow_definition_version=("1.11.0" if manifest_schema_version == "5.0" else "1.10.0"),
     )
     authorized = authorized_execution_artifact_revisions(
         fixture["session"], plan_id=str(fixture["plan_id"]), step_key="authoring"
@@ -1087,7 +1087,7 @@ def _knowledge_fixture(
     manifest_schema_version: str = "2.0",
     workflow_definition_version: str | None = None,
 ) -> dict[str, Any]:
-    if manifest_schema_version not in {"2.0", "4.0"}:
+    if manifest_schema_version not in {"2.0", "4.0", "5.0"}:
         raise ValueError("unsupported test manifest schema version")
     fixture = _fixture(tmp_path, monkeypatch)
     session = fixture["session"]
@@ -1154,6 +1154,53 @@ def _knowledge_fixture(
         "media_type": "application/json",
         "logical_name": "content.json",
     }
+    solution_evidence: dict[str, Any] | None = None
+    if manifest_schema_version == "5.0":
+
+        def solution_member(
+            seed: str, member_path: str, logical_name: str, schema_ref: str
+        ) -> dict[str, str]:
+            return {
+                "artifact_id": "artifact_" + seed * 32,
+                "artifact_revision_id": "rev_" + seed * 32,
+                "sha256": "sha256:" + seed * 64,
+                "schema_ref": schema_ref,
+                "media_type": "application/json",
+                "logical_name": logical_name,
+                "member_path": member_path,
+            }
+
+        solution_evidence = {
+            "schema_version": "knowledge-solution-evidence-pointer/1.0",
+            "base_analysis_run_id": "analysisrun_" + "5" * 32,
+            "base_analysis_result_id": "knowledgeanalysisresult_" + "5" * 32,
+            "solution_analysis_run_id": "analysisrun_" + "6" * 32,
+            "solution_analysis_result_id": "knowledgeanalysisresult_" + "6" * 32,
+            "solution_result_sha256": "sha256:" + "6" * 64,
+            "accepted_result_artifact": solution_member(
+                "6",
+                "evidence/accepted-result.json",
+                "accepted-result.json",
+                "eom://schemas/knowledge/knowledge-analysis-result/10.0",
+            ),
+            "proposal_receipt": solution_member(
+                "7",
+                "normalized/proposal-receipt.json",
+                "proposal-receipt.json",
+                "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0",
+            ),
+            "solution_report": solution_member(
+                "8",
+                "normalized/solution-report.json",
+                "solution-report.json",
+                "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0",
+            ),
+            "proposal_content_set_sha256": "sha256:" + "9" * 64,
+            "pointer_sha256": ZERO_SHA,
+        }
+        solution_evidence["pointer_sha256"] = content_sha256(
+            {key: value for key, value in solution_evidence.items() if key != "pointer_sha256"}
+        )
     manifest: dict[str, Any] = {
         "schema_version": f"evidence-bundle-manifest/{manifest_schema_version}",
         "evidence_bundle_id": "evidence_" + "f" * 32,
@@ -1183,6 +1230,11 @@ def _knowledge_fixture(
                 "anchor_ids": ["anchor_item"],
                 "relevance_milli": 900,
                 "answer_bearing": False,
+                **(
+                    {"solution_evidence": solution_evidence}
+                    if manifest_schema_version == "5.0"
+                    else {}
+                ),
             }
         ],
         "budget": {
@@ -1250,7 +1302,11 @@ def _knowledge_fixture(
             },
         )
     knowledge_plan: dict[str, Any] = {
-        "schema_version": "resolved-execution-plan/3.0",
+        "schema_version": (
+            "resolved-execution-plan/11.0"
+            if manifest_schema_version == "5.0"
+            else "resolved-execution-plan/3.0"
+        ),
         "plan_id": old_plan["plan_id"],
         "workflow_id": old_plan["workflow_id"],
         "workload_class": "KNOWLEDGE_BACKED_ITEM",
@@ -1287,7 +1343,7 @@ def _knowledge_fixture(
         "evidence_manifest_sha256": manifest["manifest_sha256"],
         "evidence_context_artifact": context_pointer,
         "steps": [{**old_plan["steps"][0], "evidence_access": "EVIDENCE_CONTEXT"}],
-        "resolver_version": "3.0.0",
+        "resolver_version": "4.0.0" if manifest_schema_version == "5.0" else "3.0.0",
         "resolved_at": "2026-08-24T03:00:00Z",
         "plan_sha256": ZERO_SHA,
     }

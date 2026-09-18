@@ -739,6 +739,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.20.0",
         "workflow-role/1.21.0",
         "workflow-role/1.22.0",
+        "workflow-role/1.23.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -851,6 +852,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.20.0",
         "workflow-role/1.21.0",
         "workflow-role/1.22.0",
+        "workflow-role/1.23.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1659,6 +1661,7 @@ DraftJsonPointer = Annotated[
         pattern=r"^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
     ),
 ]
+EvidenceItemId = Annotated[str, Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")]
 
 
 class EvidenceUsageCitationV1(FrozenModel):
@@ -1769,6 +1772,293 @@ class ContentTeamReviewRoleResultV10(RoleResultBase):
 
 class ContentTeamRegistrationRoleResultV10(ContentTeamRegistrationRoleResultV9):
     protocol_version: Literal["workflow-role/1.20.0"] = "workflow-role/1.20.0"  # type: ignore[assignment]
+
+
+ReviewEvidencePurpose = Literal[
+    "SCIENTIFIC_VALIDATION",
+    "CURRICULUM_SCOPE",
+    "ORIGINALITY_CHECK",
+    "VISUAL_VALIDATION",
+]
+
+
+class ReviewEvidenceReferenceV1(FrozenModel):
+    """One pinned manifest entry independently selected for a review purpose."""
+
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    anchor_ids: tuple[AnchorId, ...] = Field(min_length=1, max_length=32)
+    purposes: tuple[ReviewEvidencePurpose, ...] = Field(min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> ReviewEvidenceReferenceV1:
+        for values, label in (
+            (self.anchor_ids, "anchor IDs"),
+            (self.purposes, "purposes"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"review evidence {label} must be sorted and unique")
+        return self
+
+
+class ReviewVerificationClaimV1(FrozenModel):
+    """Short auditable conclusion; never an unrestricted reasoning transcript."""
+
+    claim_key: str = Field(pattern=r"^claim_[a-z0-9][a-z0-9_]{0,31}$")
+    conclusion: str = Field(min_length=1, max_length=2000)
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(min_length=1, max_length=16)
+    evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> ReviewVerificationClaimV1:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.evidence_ids, "evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"review claim {label} must be sorted and unique")
+        return self
+
+
+class IndependentAnswerReviewV1(FrozenModel):
+    authored_answer_number: Literal["①", "②", "③", "④", "⑤"]
+    derived_answer_number: Literal["①", "②", "③", "④", "⑤"]
+    alignment: Literal["MATCH", "MISMATCH"]
+    verification_summary: str = Field(min_length=1, max_length=4000)
+    claims: tuple[ReviewVerificationClaimV1, ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def exact_alignment_and_claims(self) -> IndependentAnswerReviewV1:
+        expected = (
+            "MATCH" if self.authored_answer_number == self.derived_answer_number else "MISMATCH"
+        )
+        if self.alignment != expected:
+            raise ValueError("independent answer alignment differs from the two answers")
+        claim_keys = tuple(item.claim_key for item in self.claims)
+        if claim_keys != tuple(sorted(set(claim_keys))):
+            raise ValueError("independent answer claim keys must be sorted and unique")
+        return self
+
+
+class ChoiceDiagnosticV1(FrozenModel):
+    number: Literal["①", "②", "③", "④", "⑤"]
+    verdict: Literal["CORRECT", "DISTRACTOR"]
+    rationale: str = Field(min_length=1, max_length=2000)
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(min_length=1, max_length=8)
+    evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> ChoiceDiagnosticV1:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.evidence_ids, "evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"choice diagnostic {label} must be sorted and unique")
+        return self
+
+
+class StatementDiagnosticV1(FrozenModel):
+    label: Literal["ㄱ", "ㄴ", "ㄷ"]
+    verdict: Literal["TRUE", "FALSE"]
+    rationale: str = Field(min_length=1, max_length=2000)
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(min_length=1, max_length=8)
+    evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> StatementDiagnosticV1:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.evidence_ids, "evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"statement diagnostic {label} must be sorted and unique")
+        return self
+
+
+class ReviewAssessmentBase(FrozenModel):
+    rationale: str = Field(min_length=1, max_length=3000)
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(max_length=16)
+    evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> ReviewAssessmentBase:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.evidence_ids, "evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"review assessment {label} must be sorted and unique")
+        return self
+
+
+class ExplanationAssessmentV1(ReviewAssessmentBase):
+    status: Literal["PASS", "FAIL"]
+
+
+class CurriculumAssessmentV1(ReviewAssessmentBase):
+    status: Literal["IN_SCOPE", "OUT_OF_SCOPE", "UNCERTAIN"]
+
+
+class OriginalityAssessmentV1(ReviewAssessmentBase):
+    status: Literal["DISTINCT", "TOO_SIMILAR", "INSUFFICIENT_EVIDENCE"]
+
+
+class VisualAssessmentV1(ReviewAssessmentBase):
+    status: Literal["CONSISTENT", "INCONSISTENT", "NOT_APPLICABLE"]
+
+
+class IndependentReviewReportV1(FrozenModel):
+    """Bounded public verification record for one exact authoring draft."""
+
+    schema_version: Literal["independent-item-review/1.0"] = "independent-item-review/1.0"
+    evidence_references: tuple[ReviewEvidenceReferenceV1, ...] = Field(max_length=64)
+    answer_review: IndependentAnswerReviewV1
+    choice_diagnostics: tuple[ChoiceDiagnosticV1, ...] = Field(min_length=5, max_length=5)
+    statement_diagnostics: tuple[StatementDiagnosticV1, ...] = Field(max_length=3)
+    explanation_assessment: ExplanationAssessmentV1
+    curriculum_assessment: CurriculumAssessmentV1
+    originality_assessment: OriginalityAssessmentV1
+    visual_assessment: VisualAssessmentV1
+
+    @model_validator(mode="after")
+    def exact_coverage_and_evidence(self) -> IndependentReviewReportV1:
+        references = {item.evidence_id: item for item in self.evidence_references}
+        if tuple(references) != tuple(sorted(references)) or len(references) != len(
+            self.evidence_references
+        ):
+            raise ValueError("review evidence references must have sorted unique evidence IDs")
+        if tuple(item.number for item in self.choice_diagnostics) != (
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤",
+        ):
+            raise ValueError("choice diagnostics must exactly preserve ① through ⑤ order")
+        correct = tuple(
+            item.number for item in self.choice_diagnostics if item.verdict == "CORRECT"
+        )
+        if correct != (self.answer_review.derived_answer_number,):
+            raise ValueError("choice diagnostics must mark only the independently derived answer")
+        labels = tuple(item.label for item in self.statement_diagnostics)
+        if labels not in {(), ("ㄱ", "ㄴ", "ㄷ")}:
+            raise ValueError("statement diagnostics must be absent or exactly cover ㄱ/ㄴ/ㄷ")
+
+        scientific_ids: set[str] = set()
+        for claim in self.answer_review.claims:
+            scientific_ids.update(claim.evidence_ids)
+        for choice in self.choice_diagnostics:
+            scientific_ids.update(choice.evidence_ids)
+        for statement in self.statement_diagnostics:
+            scientific_ids.update(statement.evidence_ids)
+        axis_ids = {
+            "CURRICULUM_SCOPE": set(self.curriculum_assessment.evidence_ids),
+            "ORIGINALITY_CHECK": set(self.originality_assessment.evidence_ids),
+            "VISUAL_VALIDATION": set(self.visual_assessment.evidence_ids),
+        }
+        used = scientific_ids.union(*(values for values in axis_ids.values()))
+        used.update(self.explanation_assessment.evidence_ids)
+        if used != set(references):
+            raise ValueError("review evidence references must exactly cover used evidence IDs")
+        for evidence_id in scientific_ids.union(self.explanation_assessment.evidence_ids):
+            if "SCIENTIFIC_VALIDATION" not in references[evidence_id].purposes:
+                raise ValueError("scientific review evidence purpose is missing")
+        for purpose, evidence_ids in axis_ids.items():
+            for evidence_id in evidence_ids:
+                if purpose not in references[evidence_id].purposes:
+                    raise ValueError("review axis evidence purpose is missing")
+        if self.visual_assessment.status == "NOT_APPLICABLE" and (
+            self.visual_assessment.draft_json_paths or self.visual_assessment.evidence_ids
+        ):
+            raise ValueError("nonvisual review cannot claim visual paths or evidence")
+        return self
+
+
+class EvidenceAuthoringArtifactPointerV2(EvidenceAuthoringArtifactPointerV1):
+    result_schema: Literal["authoring-result@11.0"] = "authoring-result@11.0"  # type: ignore[assignment]
+
+
+class EvidenceUsageReviewAttestationV2(EvidenceUsageReviewAttestationV1):
+    schema_version: Literal["evidence-usage-review-attestation/2.0"] = (
+        "evidence-usage-review-attestation/2.0"  # type: ignore[assignment]
+    )
+    authoring_artifact: EvidenceAuthoringArtifactPointerV2
+
+
+class KnowledgeReviewOutputV11(FrozenModel):
+    review: KnowledgeReview
+    independent_review_report: IndependentReviewReportV1
+    evidence_usage_attestation: EvidenceUsageReviewAttestationV2 | None
+
+    @model_validator(mode="after")
+    def findings_match_independent_assessments(self) -> KnowledgeReviewOutputV11:
+        blocking_codes = {
+            finding.code for finding in self.review.findings if finding.severity == "blocking"
+        }
+        report = self.independent_review_report
+        grounded = self.evidence_usage_attestation is not None
+        scientific_ids: set[str] = set()
+        for claim in report.answer_review.claims:
+            scientific_ids.update(claim.evidence_ids)
+        for choice in report.choice_diagnostics:
+            scientific_ids.update(choice.evidence_ids)
+        for statement in report.statement_diagnostics:
+            scientific_ids.update(statement.evidence_ids)
+        all_evidence_ids = {
+            *scientific_ids,
+            *report.explanation_assessment.evidence_ids,
+            *report.curriculum_assessment.evidence_ids,
+            *report.originality_assessment.evidence_ids,
+            *report.visual_assessment.evidence_ids,
+        }
+        if grounded:
+            if (
+                not report.evidence_references
+                or not scientific_ids
+                or not report.curriculum_assessment.evidence_ids
+            ):
+                raise ValueError(
+                    "Graph-grounded review requires scientific and curriculum evidence"
+                )
+            if report.originality_assessment.status != "INSUFFICIENT_EVIDENCE" and not (
+                report.originality_assessment.evidence_ids
+            ):
+                raise ValueError("conclusive originality review requires comparison evidence")
+        elif report.evidence_references or all_evidence_ids:
+            raise ValueError("general-knowledge review cannot claim Graph evidence")
+        required: dict[str, bool] = {
+            "INDEPENDENT_ANSWER_MISMATCH": report.answer_review.alignment == "MISMATCH",
+            "EXPLANATION_INCONSISTENT": report.explanation_assessment.status == "FAIL",
+            "CURRICULUM_SCOPE_INVALID": report.curriculum_assessment.status
+            in {"OUT_OF_SCOPE", "UNCERTAIN"},
+            "ORIGINALITY_RISK": report.originality_assessment.status == "TOO_SIMILAR",
+            "ORIGINALITY_EVIDENCE_INSUFFICIENT": (
+                report.originality_assessment.status == "INSUFFICIENT_EVIDENCE"
+            ),
+            "VISUAL_CONTENT_INCONSISTENT": report.visual_assessment.status == "INCONSISTENT",
+        }
+        for code, needed in required.items():
+            if needed != (code in blocking_codes):
+                raise ValueError(f"review blocking finding {code} differs from its assessment")
+        return self
+
+
+class ContentTeamAuthoringRoleResultV11(ContentTeamAuthoringRoleResultV10):
+    protocol_version: Literal["workflow-role/1.23.0"] = "workflow-role/1.23.0"  # type: ignore[assignment]
+
+
+class ContentTeamImageRoleResultV11(ContentTeamImageRoleResultV10):
+    protocol_version: Literal["workflow-role/1.23.0"] = "workflow-role/1.23.0"  # type: ignore[assignment]
+
+
+class ContentTeamReviewRoleResultV11(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.23.0"] = "workflow-role/1.23.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutputV11
+
+
+class ContentTeamRegistrationRoleResultV11(ContentTeamRegistrationRoleResultV10):
+    protocol_version: Literal["workflow-role/1.23.0"] = "workflow-role/1.23.0"  # type: ignore[assignment]
 
 
 class KnowledgeAnalysisProposalOutput(FrozenModel):
@@ -1971,6 +2261,10 @@ RoleResult = (
     | ContentTeamImageRoleResultV10
     | ContentTeamReviewRoleResultV10
     | ContentTeamRegistrationRoleResultV10
+    | ContentTeamAuthoringRoleResultV11
+    | ContentTeamImageRoleResultV11
+    | ContentTeamReviewRoleResultV11
+    | ContentTeamRegistrationRoleResultV11
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

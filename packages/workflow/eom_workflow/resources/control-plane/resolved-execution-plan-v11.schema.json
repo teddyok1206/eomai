@@ -1,0 +1,394 @@
+{
+  "$defs": {
+    "knowledgeArtifactPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "not": {
+            "pattern": "(?:^|/)\\.\\.?(/|$)"
+          },
+          "pattern": "^(evidence|projections)/[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "type": "object"
+    },
+    "retrievalRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "corpus_key": {
+          "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+          "type": "string"
+        },
+        "curriculum_root_key": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,191}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "query_kind": {
+          "enum": [
+            "CURRICULUM_COMPONENTS",
+            "APPROVED_ITEM_STRUCTURE",
+            "ITEM_PREPARATION"
+          ]
+        },
+        "required_item_elements": {
+          "items": {
+            "enum": [
+              "paragraph",
+              "table",
+              "image",
+              "equation",
+              "statement_set",
+              "choice"
+            ]
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "schema_version": {
+          "const": "educational-retrieval-requirement/1.0"
+        },
+        "source_classes": {
+          "items": {
+            "enum": [
+              "CURRICULUM",
+              "TEXTBOOK",
+              "APPROVED_ITEM",
+              "PAST_EXAM",
+              "INTERNAL_GUIDE"
+            ]
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "topic_keys": {
+          "items": {
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "corpus_key",
+        "query_kind",
+        "curriculum_root_key",
+        "topic_keys",
+        "required_item_elements",
+        "source_classes"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/workflow/resolved-execution-plan/11.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "access_policy_revision_id": {
+      "pattern": "^accessrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "access_policy_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "capacity_policy_revision_id": {
+      "pattern": "^capacityrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "content_pack_release_id": {
+      "pattern": "^packrel_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "content_pack_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "evidence_bundle_id": {
+      "pattern": "^evidence_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "evidence_bundle_revision_id": {
+      "pattern": "^evidencerev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "evidence_context_artifact": {
+      "$ref": "#/$defs/knowledgeArtifactPointer"
+    },
+    "evidence_manifest_artifact": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/knowledgeArtifactPointer"
+        },
+        {
+          "properties": {
+            "media_type": {
+              "const": "application/json"
+            },
+            "member_path": {
+              "const": "evidence/manifest.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+            }
+          }
+        }
+      ]
+    },
+    "evidence_manifest_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "graph_snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "graph_id": {
+          "pattern": "^graph_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/knowledgeArtifactPointer"
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+        }
+      },
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "plan_id": {
+      "pattern": "^execplan_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "preset_id": {
+      "pattern": "^execpreset_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "preset_revision_id": {
+      "pattern": "^execpresetrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "requester_permissions_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "resolver_version": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"
+    },
+    "retrieval_request_id": {
+      "pattern": "^retrieval_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "retrieval_request_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "retrieval_requirement": {
+      "$ref": "#/$defs/retrievalRequirement"
+    },
+    "retrieval_requirement_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "resolved-execution-plan/11.0"
+    },
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_access": {
+            "enum": [
+              "NONE",
+              "EVIDENCE_CONTEXT"
+            ]
+          },
+          "general_knowledge_mode": {
+            "enum": [
+              "DENIED",
+              "ALLOWED_WITH_PROVENANCE"
+            ]
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "model": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "reasoning_effort": {
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reference_bundle": {
+            "anyOf": [
+              {
+                "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/role"
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "step_key": {
+            "pattern": "^[a-z][a-z0-9_]{1,63}$",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "worker_pool_key": {
+            "pattern": "^[a-z][a-z0-9_-]{1,63}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode",
+          "evidence_access"
+        ],
+        "type": "object"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array"
+    },
+    "workflow_definition_key": {
+      "pattern": "^[a-z][a-z0-9-]{2,63}$",
+      "type": "string"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_definition_version": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/semver"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "workload_class": {
+      "const": "KNOWLEDGE_BACKED_ITEM"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "content_pack_release_id",
+    "content_pack_sha256",
+    "capacity_policy_revision_id",
+    "retrieval_requirement",
+    "retrieval_requirement_sha256",
+    "retrieval_request_id",
+    "retrieval_request_sha256",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requester_permissions_sha256",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "evidence_manifest_artifact",
+    "evidence_manifest_sha256",
+    "evidence_context_artifact",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "title": "EOM Knowledge-Backed Item Resolved Execution Plan V3",
+  "type": "object"
+}

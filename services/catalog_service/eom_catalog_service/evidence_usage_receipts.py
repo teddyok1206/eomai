@@ -18,9 +18,13 @@ from eom_protocol import ArtifactManifest
 from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
+    AuthoringEvidenceUsageValidationReceiptV2,
     EvidenceResultArtifactPointer,
+    EvidenceResultArtifactPointerV2,
     ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV11,
     ReviewEvidenceUsageValidationReceipt,
+    ReviewEvidenceUsageValidationReceiptV2,
     RoleWorkerInput,
     validate_control_contract,
 )
@@ -39,8 +43,8 @@ class EvidenceUsageReceiptResolutionError(RuntimeError):
 class EvidenceUsageReceiptPair:
     """Exact authoring/review receipts for one Graph-grounded workflow."""
 
-    authoring: AuthoringEvidenceUsageValidationReceipt
-    review: ReviewEvidenceUsageValidationReceipt
+    authoring: AuthoringEvidenceUsageValidationReceipt | AuthoringEvidenceUsageValidationReceiptV2
+    review: ReviewEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceiptV2
 
 
 @dataclass(frozen=True)
@@ -85,7 +89,10 @@ class MockExamEvidenceUsageReceiptResolver(Protocol):
 
 
 EvidenceUsageValidationReceipt = (
-    AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt
+    AuthoringEvidenceUsageValidationReceipt
+    | ReviewEvidenceUsageValidationReceipt
+    | AuthoringEvidenceUsageValidationReceiptV2
+    | ReviewEvidenceUsageValidationReceiptV2
 )
 _RECEIPT_ADAPTER: TypeAdapter[EvidenceUsageValidationReceipt] = TypeAdapter(
     EvidenceUsageValidationReceipt
@@ -98,6 +105,13 @@ _EVENT_DATA_KEYS = frozenset(
         "evidence_usage_validation_receipt",
     }
 )
+_PROTOCOL_BY_RESULT_SCHEMA = {
+    "authoring-result@10.0": "workflow-role/1.20.0",
+    "review-result@10.0": "workflow-role/1.20.0",
+    "authoring-result@11.0": "workflow-role/1.23.0",
+    "review-result@11.0": "workflow-role/1.23.0",
+}
+_V11_RESULT_SCHEMAS = frozenset({"authoring-result@11.0", "review-result@11.0"})
 
 
 class OrchestratorEvidenceUsageReceiptResolver:
@@ -160,7 +174,8 @@ class OrchestratorEvidenceUsageReceiptResolver:
                 or worker_input.attempt != pointer.attempt
                 or worker_input.job_id != pointer.job_id
                 or worker_input.role != role
-                or worker_input.protocol_version != "workflow-role/1.20.0"
+                or worker_input.protocol_version
+                != _PROTOCOL_BY_RESULT_SCHEMA.get(pointer.result_schema)
                 or worker_input.protocol_version != job.protocol_version
                 or worker_input.artifact.logical_artifact_id != pointer.logical_artifact_id
                 or worker_input.artifact.revision_id != pointer.revision_id
@@ -187,11 +202,14 @@ class OrchestratorEvidenceUsageReceiptResolver:
                 )
             )
         try:
-            plan = (
-                ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
-                if plan_record is not None
-                else None
-            )
+            plan = None
+            if plan_record is not None:
+                plan = (
+                    ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
+                    if plan_record.canonical_document.get("schema_version")
+                    == "resolved-execution-plan/11.0"
+                    else ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
+                )
         except (PydanticValidationError, ValueError) as exc:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipt knowledge plan is invalid"
@@ -235,15 +253,19 @@ class OrchestratorEvidenceUsageReceiptResolver:
         review: ArtifactPointer,
     ) -> tuple[EvidenceUsageReceiptPair, dict[str, JobRecord]]:
         pointers = (authoring, review)
+        result_family = (authoring.result_schema, review.result_schema)
         if (
             authoring.step_key != "authoring"
-            or authoring.result_schema != "authoring-result@10.0"
             or review.step_key != "review"
-            or review.result_schema != "review-result@10.0"
+            or result_family
+            not in {
+                ("authoring-result@10.0", "review-result@10.0"),
+                ("authoring-result@11.0", "review-result@11.0"),
+            }
             or authoring.job_id == review.job_id
         ):
             raise EvidenceUsageReceiptResolutionError(
-                "evidence receipt pointers are not one exact @10 authoring/review pair"
+                "evidence receipt pointers are not one exact @10 or @11 authoring/review family"
             )
         job_ids = tuple(pointer.job_id for pointer in pointers)
         artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers)
@@ -289,13 +311,30 @@ class OrchestratorEvidenceUsageReceiptResolver:
             for pointer in pointers
         )
         authoring_receipt, review_receipt = resolved
-        if not isinstance(
+        exact_v1_pair = isinstance(
             authoring_receipt, AuthoringEvidenceUsageValidationReceipt
-        ) or not isinstance(review_receipt, ReviewEvidenceUsageValidationReceipt):
+        ) and isinstance(review_receipt, ReviewEvidenceUsageValidationReceipt)
+        exact_v2_pair = isinstance(
+            authoring_receipt, AuthoringEvidenceUsageValidationReceiptV2
+        ) and isinstance(review_receipt, ReviewEvidenceUsageValidationReceiptV2)
+        if exact_v1_pair:
+            assert isinstance(authoring_receipt, AuthoringEvidenceUsageValidationReceipt)
+            assert isinstance(review_receipt, ReviewEvidenceUsageValidationReceipt)
+            pair = EvidenceUsageReceiptPair(
+                authoring=authoring_receipt,
+                review=review_receipt,
+            )
+        elif exact_v2_pair:
+            assert isinstance(authoring_receipt, AuthoringEvidenceUsageValidationReceiptV2)
+            assert isinstance(review_receipt, ReviewEvidenceUsageValidationReceiptV2)
+            pair = EvidenceUsageReceiptPair(
+                authoring=authoring_receipt,
+                review=review_receipt,
+            )
+        else:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipts do not match their authoring/review roles"
             )
-        pair = EvidenceUsageReceiptPair(authoring=authoring_receipt, review=review_receipt)
         self._validate_pair(pair)
         return pair, jobs
 
@@ -329,7 +368,8 @@ class OrchestratorEvidenceUsageReceiptResolver:
             and record.plan_sha256 == plan.plan_sha256
             and record.resolved_at == plan.resolved_at
             and plan.workflow_definition_key == "generic-item-development"
-            and plan.workflow_definition_version == "1.10.0"
+            and plan.workflow_definition_version
+            == ("1.11.0" if isinstance(plan, ResolvedExecutionPlanV11) else "1.10.0")
         )
 
     @staticmethod
@@ -381,7 +421,7 @@ class OrchestratorEvidenceUsageReceiptResolver:
         artifact: ArtifactRecord | None,
         revision: ArtifactRevisionRecord | None,
         events: tuple[JobEventRecord, ...],
-    ) -> AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt:
+    ) -> EvidenceUsageValidationReceipt:
         if job is None or artifact is None or revision is None or len(events) != 1:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipt job, artifact, revision, or terminal event does not resolve"
@@ -398,7 +438,7 @@ class OrchestratorEvidenceUsageReceiptResolver:
             job.job_id != pointer.job_id
             or job.status != "SUCCEEDED"
             or job.completed_at is None
-            or job.protocol_version != "workflow-role/1.20.0"
+            or job.protocol_version != _PROTOCOL_BY_RESULT_SCHEMA.get(pointer.result_schema)
             or job.task_type != f"workflow_{pointer.step_key}"
             or job.logical_artifact_id != pointer.logical_artifact_id
             or job.revision_id != pointer.revision_id
@@ -434,18 +474,32 @@ class OrchestratorEvidenceUsageReceiptResolver:
             )
         raw_receipt = data.get("evidence_usage_validation_receipt")
         try:
-            validate_control_contract("evidence-usage-validation-receipt", raw_receipt)
+            receipt_schema = (
+                "evidence-usage-validation-receipt-v2"
+                if pointer.result_schema in _V11_RESULT_SCHEMAS
+                else "evidence-usage-validation-receipt"
+            )
+            validate_control_contract(receipt_schema, raw_receipt)
             receipt = _RECEIPT_ADAPTER.validate_python(raw_receipt)
         except (JsonSchemaValidationError, PydanticValidationError, ValueError) as exc:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipt failed its JSON Schema or typed contract"
             ) from exc
-        expected_result = EvidenceResultArtifactPointer(
-            logical_artifact_id=pointer.logical_artifact_id,
-            revision_id=pointer.revision_id,
-            content_hash=pointer.content_hash,
-            result_schema=pointer.result_schema,  # type: ignore[arg-type]
-        )
+        expected_result: EvidenceResultArtifactPointer | EvidenceResultArtifactPointerV2
+        if pointer.result_schema in _V11_RESULT_SCHEMAS:
+            expected_result = EvidenceResultArtifactPointerV2(
+                logical_artifact_id=pointer.logical_artifact_id,
+                revision_id=pointer.revision_id,
+                content_hash=pointer.content_hash,
+                result_schema=pointer.result_schema,  # type: ignore[arg-type]
+            )
+        else:
+            expected_result = EvidenceResultArtifactPointer(
+                logical_artifact_id=pointer.logical_artifact_id,
+                revision_id=pointer.revision_id,
+                content_hash=pointer.content_hash,
+                result_schema=pointer.result_schema,  # type: ignore[arg-type]
+            )
         if receipt.step_key != pointer.step_key or receipt.result_artifact != expected_result:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipt does not bind the exact workflow result"

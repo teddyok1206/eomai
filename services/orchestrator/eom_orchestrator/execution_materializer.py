@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
+    EvidenceBundleManifestV5,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisResultV9,
     KnowledgeArtifactMemberPointer,
@@ -38,6 +39,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV8,
     ResolvedExecutionPlanV9,
     ResolvedExecutionPlanV10,
+    ResolvedExecutionPlanV11,
     ResolvedStepExecutionV3,
     validate_control_contract,
 )
@@ -125,7 +127,12 @@ class MaterializedExecution:
 class ResolvedEvidenceMaterials:
     """Exact, fully validated Evidence Bundle members safe to stage or inspect."""
 
-    manifest: EvidenceBundleManifestV2 | EvidenceBundleManifestV3 | EvidenceBundleManifestV4
+    manifest: (
+        EvidenceBundleManifestV2
+        | EvidenceBundleManifestV3
+        | EvidenceBundleManifestV4
+        | EvidenceBundleManifestV5
+    )
     manifest_payload: bytes
     context_payload: bytes
 
@@ -168,6 +175,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV8
         | ResolvedExecutionPlanV9
         | ResolvedExecutionPlanV10
+        | ResolvedExecutionPlanV11
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -187,6 +195,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/11.0":
+        plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -526,6 +536,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV8
             | ResolvedExecutionPlanV9
             | ResolvedExecutionPlanV10
+            | ResolvedExecutionPlanV11
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -543,6 +554,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
+        plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -1546,11 +1559,11 @@ def _materialize_evidence_context(
 
 
 def plan_stages_evidence_manifest(plan: ResolvedExecutionPlanV3) -> bool:
-    """Keep historical 1.9 workspaces/events stable; only the 1.10 family exposes IDs."""
+    """Keep historical 1.9 workspaces stable; explicit-RAG successors expose IDs."""
 
     return (
         plan.workflow_definition_key == "generic-item-development"
-        and plan.workflow_definition_version == "1.10.0"
+        and plan.workflow_definition_version in {"1.10.0", "1.11.0"}
     )
 
 
@@ -1580,8 +1593,16 @@ def resolve_evidence_materials(
         if not isinstance(manifest_value, dict):
             raise ValueError("manifest root is not an object")
         manifest_schema_ref = plan.evidence_manifest_artifact.schema_ref
-        manifest: EvidenceBundleManifestV2 | EvidenceBundleManifestV3 | EvidenceBundleManifestV4
-        if manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/4.0":
+        manifest: (
+            EvidenceBundleManifestV2
+            | EvidenceBundleManifestV3
+            | EvidenceBundleManifestV4
+            | EvidenceBundleManifestV5
+        )
+        if manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/5.0":
+            validate_catalog_contract("evidence-bundle-manifest-v5", manifest_value)
+            manifest = EvidenceBundleManifestV5.model_validate(manifest_value)
+        elif manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/4.0":
             validate_catalog_contract("evidence-bundle-manifest-v4", manifest_value)
             manifest = EvidenceBundleManifestV4.model_validate(manifest_value)
         elif manifest_schema_ref == "eom://schemas/knowledge/evidence-bundle-manifest/3.0":

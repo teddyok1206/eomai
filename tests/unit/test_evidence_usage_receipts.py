@@ -28,7 +28,9 @@ from eom_orchestrator.models import (
 from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
+    AuthoringEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceipt,
+    ReviewEvidenceUsageValidationReceiptV2,
     RoleWorkerInput,
     WorkerRequest,
     WorkflowRequest,
@@ -135,6 +137,63 @@ def _receipts(*, review_plan_marker: str = "f") -> EvidenceUsageReceiptPair:
     return EvidenceUsageReceiptPair(authoring=authoring, review=review)
 
 
+def _receipts_v2() -> EvidenceUsageReceiptPair:
+    authoring_pointer = AUTHORING.model_copy(update={"result_schema": "authoring-result@11.0"})
+    review_pointer = REVIEW.model_copy(update={"result_schema": "review-result@11.0"})
+    manifest_pointer = _material_pointer(manifest=True)
+    manifest_pointer["schema_ref"] = "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+    shared: dict[str, object] = {
+        "schema_version": "evidence-usage-validation-receipt/2.0",
+        "plan_id": "execplan_" + "f" * 32,
+        "plan_sha256": "sha256:" + "f" * 64,
+        "evidence_bundle_id": "evidence_" + "1" * 32,
+        "evidence_bundle_revision_id": "evidencerev_" + "2" * 32,
+        "retrieval_request_id": "retrieval_" + "3" * 32,
+        "retrieval_request_sha256": "sha256:" + "4" * 64,
+        "graph_snapshot_revision_id": "graphrev_" + "5" * 32,
+        "graph_snapshot_sha256": "sha256:" + "6" * 64,
+        "evidence_manifest_artifact": manifest_pointer,
+        "evidence_manifest_sha256": "sha256:" + "7" * 64,
+        "evidence_context_artifact": _material_pointer(manifest=False),
+    }
+    authoring_result = {
+        "logical_artifact_id": authoring_pointer.logical_artifact_id,
+        "revision_id": authoring_pointer.revision_id,
+        "content_hash": authoring_pointer.content_hash,
+        "result_schema": authoring_pointer.result_schema,
+    }
+    citation_hash = "sha256:" + "8" * 64
+    authoring_value = {
+        **shared,
+        "step_key": "authoring",
+        "result_artifact": authoring_result,
+        "authoring_citation_set_sha256": citation_hash,
+    }
+    authoring = AuthoringEvidenceUsageValidationReceiptV2.model_validate(
+        {**authoring_value, "receipt_sha256": content_sha256(authoring_value)}
+    )
+    review_value = {
+        **shared,
+        "step_key": "review",
+        "result_artifact": {
+            "logical_artifact_id": review_pointer.logical_artifact_id,
+            "revision_id": review_pointer.revision_id,
+            "content_hash": review_pointer.content_hash,
+            "result_schema": review_pointer.result_schema,
+        },
+        "authoring_artifact": authoring_result,
+        "authoring_citation_set_sha256": citation_hash,
+        "review_citation_set_sha256": citation_hash,
+        "citation_sets_equal": True,
+        "independent_review_report_sha256": "sha256:" + "9" * 64,
+        "review_evidence_set_sha256": "sha256:" + "a" * 64,
+    }
+    review = ReviewEvidenceUsageValidationReceiptV2.model_validate(
+        {**review_value, "receipt_sha256": content_sha256(review_value)}
+    )
+    return EvidenceUsageReceiptPair(authoring=authoring, review=review)
+
+
 def _replace_review_receipt(
     review: ReviewEvidenceUsageValidationReceipt,
     **changes: object,
@@ -148,7 +207,12 @@ def _replace_review_receipt(
 
 def _record_set(
     pointer: ArtifactPointer,
-    receipt: AuthoringEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceipt,
+    receipt: (
+        AuthoringEvidenceUsageValidationReceipt
+        | ReviewEvidenceUsageValidationReceipt
+        | AuthoringEvidenceUsageValidationReceiptV2
+        | ReviewEvidenceUsageValidationReceiptV2
+    ),
 ) -> tuple[JobRecord, ArtifactRecord, ArtifactRevisionRecord, JobEventRecord]:
     manifest = {
         "protocol_version": "1.0.1",
@@ -165,7 +229,11 @@ def _record_set(
     }
     job = JobRecord(
         job_id=pointer.job_id,
-        protocol_version="workflow-role/1.20.0",
+        protocol_version=(
+            "workflow-role/1.23.0"
+            if pointer.result_schema.endswith("@11.0")
+            else "workflow-role/1.20.0"
+        ),
         idempotency_key=f"unit-{pointer.step_key}-receipt",
         request_hash="sha256:" + "0" * 64,
         task_type=f"workflow_{pointer.step_key}",
@@ -261,6 +329,38 @@ def test_trusted_receipt_record_and_pair_bind_exact_artifacts_and_plan() -> None
 
     assert resolved.authoring.result_artifact.revision_id == AUTHORING.revision_id
     assert resolved.review.authoring_artifact == resolved.authoring.result_artifact
+
+
+def test_v2_receipt_record_binds_independent_review_hashes_and_v5_manifest() -> None:
+    pair = _receipts_v2()
+    authoring_pointer = AUTHORING.model_copy(update={"result_schema": "authoring-result@11.0"})
+    review_pointer = REVIEW.model_copy(update={"result_schema": "review-result@11.0"})
+    authoring_records = _record_set(authoring_pointer, pair.authoring)
+    review_records = _record_set(review_pointer, pair.review)
+
+    authoring = OrchestratorEvidenceUsageReceiptResolver._validate_receipt_record(
+        pointer=authoring_pointer,
+        job=authoring_records[0],
+        artifact=authoring_records[1],
+        revision=authoring_records[2],
+        events=(authoring_records[3],),
+    )
+    review = OrchestratorEvidenceUsageReceiptResolver._validate_receipt_record(
+        pointer=review_pointer,
+        job=review_records[0],
+        artifact=review_records[1],
+        revision=review_records[2],
+        events=(review_records[3],),
+    )
+    resolved = EvidenceUsageReceiptPair(
+        authoring=cast(AuthoringEvidenceUsageValidationReceiptV2, authoring),
+        review=cast(ReviewEvidenceUsageValidationReceiptV2, review),
+    )
+    OrchestratorEvidenceUsageReceiptResolver._validate_pair(resolved)
+
+    assert resolved.review.independent_review_report_sha256 == "sha256:" + "9" * 64
+    assert resolved.review.review_evidence_set_sha256 == "sha256:" + "a" * 64
+    assert resolved.authoring.evidence_manifest_artifact.schema_ref.endswith("/5.0")
 
 
 def test_trusted_receipt_resolution_rejects_duplicate_event_and_stale_chain() -> None:

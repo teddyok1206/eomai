@@ -52,7 +52,7 @@
             "type": "string"
           },
           "maxItems": 16,
-          "minItems": 1,
+          "minItems": 0,
           "type": "array",
           "uniqueItems": true
         },
@@ -444,7 +444,7 @@
             "$ref": "#/$defs/ReviewEvidenceReferenceV1"
           },
           "maxItems": 64,
-          "minItems": 1,
+          "minItems": 0,
           "type": "array"
         },
         "explanation_assessment": {
@@ -710,7 +710,7 @@
             "type": "string"
           },
           "maxItems": 16,
-          "minItems": 1,
+          "minItems": 0,
           "type": "array",
           "uniqueItems": true
         }
@@ -743,7 +743,7 @@
             "type": "string"
           },
           "maxItems": 16,
-          "minItems": 1,
+          "minItems": 0,
           "type": "array",
           "uniqueItems": true
         },

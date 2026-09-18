@@ -56,9 +56,11 @@ from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV8,
     ContentTeamAuthoringRoleResultV9,
     ContentTeamAuthoringRoleResultV10,
+    ContentTeamAuthoringRoleResultV11,
     ContentTeamImageRoleResultV8,
     ContentTeamImageRoleResultV9,
     ContentTeamImageRoleResultV10,
+    ContentTeamImageRoleResultV11,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -191,6 +193,10 @@ ROLE_BY_RESULT_SCHEMA = {
     "image-result@10.0": "image",
     "review-result@10.0": "review",
     "registration-result@10.0": "item_management",
+    "authoring-result@11.0": "authoring",
+    "image-result@11.0": "image",
+    "review-result@11.0": "review",
+    "registration-result@11.0": "item_management",
     "review-result@7.0": "review",
     "registration-result@7.0": "item_management",
     "knowledge-analysis-proposal-result@1.0": "support",
@@ -913,6 +919,7 @@ class WorkflowCatalogService:
             "authoring-result@8.0",
             "authoring-result@9.0",
             "authoring-result@10.0",
+            "authoring-result@11.0",
         }:
             raise ValueError(
                 "image decision does not reference a supported content-team authoring result"
@@ -922,7 +929,8 @@ class WorkflowCatalogService:
             parsed,
             ContentTeamAuthoringRoleResultV8
             | ContentTeamAuthoringRoleResultV9
-            | ContentTeamAuthoringRoleResultV10,
+            | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11,
         ):
             raise ValueError("content-team image decision result type is invalid")
         count = sum(visual.kind == "IMAGE" for visual in parsed.output.draft.visuals)
@@ -983,6 +991,7 @@ class WorkflowCatalogService:
                     "authoring-result@8.0",
                     "authoring-result@9.0",
                     "authoring-result@10.0",
+                    "authoring-result@11.0",
                 }
             ),
             None,
@@ -992,6 +1001,7 @@ class WorkflowCatalogService:
                 "authoring-result@8.0": "image-result@8.0",
                 "authoring-result@9.0": "image-result@9.0",
                 "authoring-result@10.0": "image-result@10.0",
+                "authoring-result@11.0": "image-result@11.0",
             }.get(authoring.result_schema)
             if authoring is not None
             else None
@@ -1019,8 +1029,15 @@ class WorkflowCatalogService:
                 raise ValueError("content-team image result types are invalid")
             authoring_draft = authoring_result.output.draft
             image_drawings = image_result.output.drawings
+        elif isinstance(authoring_result, ContentTeamAuthoringRoleResultV11):
+            if not isinstance(image_result, ContentTeamImageRoleResultV11):
+                raise ValueError("content-team image result types are invalid")
+            authoring_draft = authoring_result.output.draft
+            image_drawings = image_result.output.drawings
         elif isinstance(authoring_result, ContentTeamAuthoringRoleResultV10):
-            if not isinstance(image_result, ContentTeamImageRoleResultV10):
+            if not isinstance(image_result, ContentTeamImageRoleResultV10) or isinstance(
+                image_result, ContentTeamImageRoleResultV11
+            ):
                 raise ValueError("content-team image result types are invalid")
             authoring_draft = authoring_result.output.draft
             image_drawings = image_result.output.drawings
@@ -1226,6 +1243,7 @@ class WorkflowCatalogService:
                     "authoring-result@8.0",
                     "authoring-result@9.0",
                     "authoring-result@10.0",
+                    "authoring-result@11.0",
                 }
                 for pointer in artifacts
             ):
@@ -1330,32 +1348,49 @@ class WorkflowCatalogService:
         request: WorkflowRequest,
         artifacts: tuple[ArtifactPointer, ...],
     ) -> EvidenceUsageReceiptPair | None:
-        """Fail before derived artifact writes when a grounded @10 result lacks proof."""
+        """Fail before derived writes when an evidence-aware result lacks trusted proof."""
 
+        evidence_families = {
+            suffix
+            for pointer in artifacts
+            for suffix in ("@10.0", "@11.0")
+            if pointer.result_schema.endswith(suffix)
+        }
+        if len(evidence_families) > 1:
+            raise ValueError("evidence-aware registration cannot mix @10 and @11 result families")
+        successor = evidence_families == {"@11.0"}
+        authoring_schema = "authoring-result@11.0" if successor else "authoring-result@10.0"
+        review_schema = "review-result@11.0" if successor else "review-result@10.0"
         authoring = tuple(
             pointer
             for pointer in artifacts
-            if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0"
+            if pointer.step_key == "authoring" and pointer.result_schema == authoring_schema
         )
         review = tuple(
             pointer
             for pointer in artifacts
-            if pointer.step_key == "review" and pointer.result_schema == "review-result@10.0"
+            if pointer.step_key == "review" and pointer.result_schema == review_schema
         )
-        has_v10 = any(
+        has_evidence_family = any(
             pointer.result_schema
             in {
                 "authoring-result@10.0",
                 "image-result@10.0",
                 "review-result@10.0",
                 "registration-result@10.0",
+                "authoring-result@11.0",
+                "image-result@11.0",
+                "review-result@11.0",
+                "registration-result@11.0",
             }
             for pointer in artifacts
         )
-        if not has_v10:
+        if not has_evidence_family:
             return None
         if len(authoring) != 1 or len(review) != 1:
-            raise ValueError("@10 registration requires one exact authoring/review result pair")
+            raise ValueError(
+                "evidence-aware registration requires one exact authoring/review result pair"
+            )
         if self._knowledge_source_mode(request) != GRAPH_GROUNDED_KNOWLEDGE_SOURCE_MODE:
             return None
         return self.evidence_usage_receipts.resolve_pair(
@@ -1370,9 +1405,15 @@ class WorkflowCatalogService:
     ) -> dict[str, str]:
         if receipts is None:
             return {}
-        if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0":
+        if pointer.step_key == "authoring" and pointer.result_schema in {
+            "authoring-result@10.0",
+            "authoring-result@11.0",
+        }:
             return {"evidence_usage_validation_receipt_sha256": receipts.authoring.receipt_sha256}
-        if pointer.step_key == "review" and pointer.result_schema == "review-result@10.0":
+        if pointer.step_key == "review" and pointer.result_schema in {
+            "review-result@10.0",
+            "review-result@11.0",
+        }:
             return {"evidence_usage_validation_receipt_sha256": receipts.review.receipt_sha256}
         return {}
 
@@ -1415,6 +1456,7 @@ class WorkflowCatalogService:
             "1.15.9",
             "1.16.0",
             "1.16.1",
+            "1.17.0",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1422,12 +1464,12 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            if (release_version in {"1.16.0", "1.16.1"}) != is_material_v4:
+            if (release_version in {"1.16.0", "1.16.1", "1.17.0"}) != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "Content Pack release and material-aware item brief differ",
                 )
-            if release_version in {"1.16.0", "1.16.1"}:
+            if release_version in {"1.16.0", "1.16.1", "1.17.0"}:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
                 expected_image_profile = (
@@ -1622,6 +1664,7 @@ class WorkflowCatalogService:
                 "authoring-result@8.0",
                 "authoring-result@9.0",
                 "authoring-result@10.0",
+                "authoring-result@11.0",
             }
             for pointer in artifacts
         ):
@@ -1710,6 +1753,7 @@ class WorkflowCatalogService:
                     "authoring-result@8.0",
                     "authoring-result@9.0",
                     "authoring-result@10.0",
+                    "authoring-result@11.0",
                 }
             ),
             None,
@@ -1721,7 +1765,8 @@ class WorkflowCatalogService:
             parsed,
             ContentTeamAuthoringRoleResultV8
             | ContentTeamAuthoringRoleResultV9
-            | ContentTeamAuthoringRoleResultV10,
+            | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11,
         ):
             raise ValueError("content-team authoring result type is invalid")
         slots = tuple(
@@ -1743,12 +1788,16 @@ class WorkflowCatalogService:
                 if pointer.step_key == "image"
                 and pointer.result_schema
                 == (
-                    "image-result@10.0"
-                    if isinstance(parsed, ContentTeamAuthoringRoleResultV10)
+                    "image-result@11.0"
+                    if isinstance(parsed, ContentTeamAuthoringRoleResultV11)
                     else (
-                        "image-result@9.0"
-                        if isinstance(parsed, ContentTeamAuthoringRoleResultV9)
-                        else "image-result@8.0"
+                        "image-result@10.0"
+                        if isinstance(parsed, ContentTeamAuthoringRoleResultV10)
+                        else (
+                            "image-result@9.0"
+                            if isinstance(parsed, ContentTeamAuthoringRoleResultV9)
+                            else "image-result@8.0"
+                        )
                     )
                 )
             ),
@@ -1831,6 +1880,7 @@ class WorkflowCatalogService:
                     "authoring-result@8.0",
                     "authoring-result@9.0",
                     "authoring-result@10.0",
+                    "authoring-result@11.0",
                 }
             ),
             None,
@@ -1843,12 +1893,15 @@ class WorkflowCatalogService:
             ContentTeamAuthoringRoleResultV7
             | ContentTeamAuthoringRoleResultV8
             | ContentTeamAuthoringRoleResultV9
-            | ContentTeamAuthoringRoleResultV10,
+            | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11,
         ):
             raise ValueError("content-team authoring result type is invalid")
         is_v3 = isinstance(
             parsed,
-            ContentTeamAuthoringRoleResultV9 | ContentTeamAuthoringRoleResultV10,
+            ContentTeamAuthoringRoleResultV9
+            | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11,
         )
         content: AssessmentItemContentV2 | AssessmentItemContentV3 = parsed.output.draft
         expected_source_mode = self._knowledge_source_mode(request)
@@ -2149,6 +2202,7 @@ class WorkflowCatalogService:
                 "authoring-result@8.0",
                 "authoring-result@9.0",
                 "authoring-result@10.0",
+                "authoring-result@11.0",
             }
             else result
         )

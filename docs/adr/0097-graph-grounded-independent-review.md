@@ -51,12 +51,13 @@ The successor uses new immutable identities:
 - `authoring-result@11.0`, `image-result@11.0`, `review-result@11.0`, and
   `registration-result@11.0`;
 - `evidence-usage-validation-receipt/2.0`;
+- `resolved-execution-plan/11.0` and Evidence Bundle manifest/result V5;
 - `generic-item-development@1.11.0`; and
 - `generated-knowledge-item@1.17.0`.
 
 Authoring, image, and registration V11 results are protocol wrappers around the V10 content
-contracts. Review V11 is the only role with new product semantics. A successor Standard and
-Graph-grounded preset pins the new role schema bundle and instructions. A future mock-exam
+contracts. Review V11 is the only role with new product semantics. `standard-control-bootstrap/15.0`
+and `knowledge-item-control-bootstrap/12.0` pin the new role schema bundle and instructions. A future mock-exam
 production-plan successor may pin the same workflow and pack; released V5 remains unchanged.
 
 ## Responsibility and boundary
@@ -76,8 +77,11 @@ No worker communicates with another worker or writes to NAS.
 
 The canonical sources are the exact authoring Artifact Revision, its `AssessmentItemContentV3`
 draft, the resolved execution plan, the Evidence Bundle manifest/context Artifact members, and the
-pinned Graph snapshot. The review result points to the authoring Artifact and evidence entries; it
-does not copy source documents or evidence bytes.
+pinned Graph snapshot. Evidence manifest V5 entries may additionally point to immutable accepted
+solution-report Artifacts. The staged context exposes only the report's bounded
+`assessment_design_summary` and `reusable_generation_guidance`; it never copies hidden reasoning or
+the source answer. The review result points to the authoring Artifact and evidence entries; it does
+not copy source documents, reports, or evidence bytes.
 
 Logical Artifact ID, Artifact Revision ID, content hash, result schema, Evidence Bundle ID/revision,
 retrieval request ID, Graph revision/hash, and receipt hash remain distinct. Resolution checks
@@ -119,6 +123,7 @@ At minimum, validation rejects:
 - missing or non-scalar/noncanonical draft pointers;
 - unknown evidence or anchors, answer-bearing evidence used positively, or an evidence purpose
   incompatible with the manifest use;
+- no solution-report-backed V5 entry used for Graph-grounded scientific validation;
 - originality marked `DISTINCT` without a comparison reference;
 - visual assessment marked `NOT_APPLICABLE` when the draft contains visuals, or vice versa;
 - a review citation/authoring pointer differing from the exact authoring result; and

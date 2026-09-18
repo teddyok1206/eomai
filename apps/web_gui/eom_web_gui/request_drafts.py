@@ -118,7 +118,7 @@ def workflow_start_payload(
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
     payload: dict[str, object] = {
         "definition_key": "generic-item-development",
-        "definition_version": "1.10.0",
+        "definition_version": "1.11.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": (
             "required" if draft.material_requirement.form in {"AUTO", "IMAGE", "MIXED"} else "skip"

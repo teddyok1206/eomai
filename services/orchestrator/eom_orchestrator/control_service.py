@@ -18,6 +18,7 @@ from eom_workflow import (
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV11,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -134,6 +135,7 @@ def _validated_document(
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
         | ResolvedExecutionPlanV3
+        | ResolvedExecutionPlanV11
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -148,6 +150,7 @@ def _validated_document(
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
     | ResolvedExecutionPlanV3
+    | ResolvedExecutionPlanV11
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -963,11 +966,20 @@ def record_knowledge_backed_execution_plan(
     document: dict[str, Any],
     dependencies: ResolvedPlanDependencyEvidence,
 ) -> ResolvedExecutionPlanRecord:
-    """Persist one V3 plan after validating exact preset and bundle policy pointers."""
+    """Persist one knowledge-backed plan after validating exact immutable pointers."""
 
-    model, normalized = _validated_document(
-        "resolved-execution-plan-v3", document, ResolvedExecutionPlanV3
+    schema_version = document.get("schema_version")
+    schema_name = (
+        "resolved-execution-plan-v11"
+        if schema_version == "resolved-execution-plan/11.0"
+        else "resolved-execution-plan-v3"
     )
+    model_type = (
+        ResolvedExecutionPlanV11
+        if schema_version == "resolved-execution-plan/11.0"
+        else ResolvedExecutionPlanV3
+    )
+    model, normalized = _validated_document(schema_name, document, model_type)
     if not isinstance(model, ResolvedExecutionPlanV3):
         raise AssertionError("validated knowledge-backed plan has the wrong type")
     _require_declared_hash(normalized, "plan_sha256")

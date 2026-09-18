@@ -410,7 +410,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 72
+    assert len(entries) == 76
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "evidence-usage-validation-receipt",
@@ -426,6 +426,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "knowledge-item-control-bootstrap-v9",
         "knowledge-item-control-bootstrap-v10",
         "knowledge-item-control-bootstrap-v11",
+        "knowledge-item-control-bootstrap-v12",
         "standard-control-bootstrap-v3",
         "standard-control-bootstrap-v4",
         "standard-control-bootstrap-v5",
@@ -438,6 +439,7 @@ def test_control_schema_resources_are_immutable_and_packaged() -> None:
         "standard-control-bootstrap-v12",
         "standard-control-bootstrap-v13",
         "standard-control-bootstrap-v14",
+        "standard-control-bootstrap-v15",
         "legacy-item-extraction-control-bootstrap-v2",
         "customer-support-control-bootstrap",
         "resolved-execution-plan-v3",

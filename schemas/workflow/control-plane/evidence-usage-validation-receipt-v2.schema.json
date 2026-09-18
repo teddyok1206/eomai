@@ -81,12 +81,7 @@
               "const": "evidence/manifest.json"
             },
             "schema_ref": {
-              "enum": [
-                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
-                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
-                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
-                "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
-              ]
+              "const": "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
             }
           }
         }

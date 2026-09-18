@@ -406,9 +406,15 @@ def test_graph_claim_marks_atomic_commit_receipt_as_required(
 
 def test_orchestrator_validates_receipt_before_nas_and_persists_it_atomically() -> None:
     source = inspect.getsource(Orchestrator.submit_workflow_role)
-    branch_start = source.index(
-        'if result_schema in {"authoring-result@10.0", "review-result@10.0"}'
-    )
+    structured_start = source.index("staged = stage_structured_artifact(")
+    branch_start = source.index("if result_schema in {", structured_start)
+    evidence_branch = source[
+        branch_start : source.index("with self.sessions() as validation_session:", branch_start)
+    ]
+    assert "authoring-result@10.0" in evidence_branch
+    assert "review-result@10.0" in evidence_branch
+    assert "authoring-result@11.0" in evidence_branch
+    assert "review-result@11.0" in evidence_branch
     transaction_start = source.index("with transaction(self.sessions) as session:", branch_start)
     precommit = source[branch_start:transaction_start]
     assert precommit.index("validate_evidence_usage_for_commit(") < precommit.index(

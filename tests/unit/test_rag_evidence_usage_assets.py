@@ -201,18 +201,24 @@ def test_catalog_admits_v120_patch_successor_for_content_team_brief() -> None:
     )
 
 
-def test_api_accepts_standalone_v120_content_team_start_contract() -> None:
+def test_api_preserves_v120_and_accepts_v123_successor_start_contract() -> None:
     request = WorkflowStartRequest.model_validate(_content_team_start_request())
     assert request.definition_version == "1.10.0"
     assert request.image_mode == "required"
 
+    successor = WorkflowStartRequest.model_validate(
+        _content_team_start_request() | {"definition_version": "1.11.0"}
+    )
+    assert successor.definition_version == "1.11.0"
+
     with pytest.raises(ValidationError, match="workflow definition is unsupported"):
         WorkflowStartRequest.model_validate(
-            _content_team_start_request() | {"definition_version": "1.11.0"}
+            _content_team_start_request() | {"definition_version": "1.12.0"}
         )
 
 
-def test_runner_installer_selects_only_v120_generic_definition() -> None:
+def test_runner_installer_selects_v123_successor_generic_definition() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
-    assert "generic-item-development.v1.10.yaml" in source
+    assert "generic-item-development.v1.11.yaml" in source
+    assert "generic-item-development.v1.10.yaml" not in source
     assert "generic-item-development.v1.9.yaml" not in source

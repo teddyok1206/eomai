@@ -48,17 +48,21 @@ from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV8,
     ContentTeamAuthoringRoleResultV9,
     ContentTeamAuthoringRoleResultV10,
+    ContentTeamAuthoringRoleResultV11,
     ContentTeamImageRoleResultV8,
     ContentTeamImageRoleResultV9,
     ContentTeamImageRoleResultV10,
+    ContentTeamImageRoleResultV11,
     ContentTeamRegistrationRoleResultV7,
     ContentTeamRegistrationRoleResultV8,
     ContentTeamRegistrationRoleResultV9,
     ContentTeamRegistrationRoleResultV10,
+    ContentTeamRegistrationRoleResultV11,
     ContentTeamReviewRoleResultV7,
     ContentTeamReviewRoleResultV8,
     ContentTeamReviewRoleResultV9,
     ContentTeamReviewRoleResultV10,
+    ContentTeamReviewRoleResultV11,
     CustomerSupportRoleResult,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
@@ -132,6 +136,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "authoring-result@8.0",
             "authoring-result@9.0",
             "authoring-result@10.0",
+            "authoring-result@11.0",
         }
     ),
     "image": frozenset(
@@ -145,6 +150,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "image-result@8.0",
             "image-result@9.0",
             "image-result@10.0",
+            "image-result@11.0",
         }
     ),
     "review": frozenset(
@@ -159,6 +165,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "review-result@8.0",
             "review-result@9.0",
             "review-result@10.0",
+            "review-result@11.0",
         }
     ),
     "item_management": frozenset(
@@ -173,6 +180,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "registration-result@8.0",
             "registration-result@9.0",
             "registration-result@10.0",
+            "registration-result@11.0",
         }
     ),
     "support": frozenset(
@@ -233,6 +241,10 @@ RESULT_SCHEMA_FILES = {
     "image-result@10.0": "image-result-v10.schema.json",
     "review-result@10.0": "review-result-v10.schema.json",
     "registration-result@10.0": "registration-result-v10.schema.json",
+    "authoring-result@11.0": "authoring-result-v11.schema.json",
+    "image-result@11.0": "image-result-v11.schema.json",
+    "review-result@11.0": "review-result-v11.schema.json",
+    "registration-result@11.0": "registration-result-v11.schema.json",
     "knowledge-analysis-proposal-result@1.0": ("knowledge-analysis-proposal-result-v1.schema.json"),
     "knowledge-analysis-proposal-result@2.0": ("knowledge-analysis-proposal-result-v2.schema.json"),
     "knowledge-analysis-proposal-result@3.0": ("knowledge-analysis-proposal-result-v3.schema.json"),
@@ -279,6 +291,7 @@ INPUT_SCHEMA_FILES_V1_19 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_20 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_21 = {"support": "knowledge-analysis-input-v10.schema.json"}
 INPUT_SCHEMA_FILES_V1_22 = {"support": "customer-support-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_23 = INPUT_SCHEMA_FILES_V1_17
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -332,6 +345,10 @@ RESULT_SCHEMA_PROTOCOLS = {
     "image-result@10.0": "workflow-role/1.20.0",
     "review-result@10.0": "workflow-role/1.20.0",
     "registration-result@10.0": "workflow-role/1.20.0",
+    "authoring-result@11.0": "workflow-role/1.23.0",
+    "image-result@11.0": "workflow-role/1.23.0",
+    "review-result@11.0": "workflow-role/1.23.0",
+    "registration-result@11.0": "workflow-role/1.23.0",
 }
 PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.0.1": INPUT_SCHEMA_FILES,
@@ -357,6 +374,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.20.0": INPUT_SCHEMA_FILES_V1_20,
     "workflow-role/1.21.0": INPUT_SCHEMA_FILES_V1_21,
     "workflow-role/1.22.0": INPUT_SCHEMA_FILES_V1_22,
+    "workflow-role/1.23.0": INPUT_SCHEMA_FILES_V1_23,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -382,6 +400,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.20.0",
     "workflow-role/1.21.0",
     "workflow-role/1.22.0",
+    "workflow-role/1.23.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -405,6 +424,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_20.values(),
             *INPUT_SCHEMA_FILES_V1_21.values(),
             *INPUT_SCHEMA_FILES_V1_22.values(),
+            *INPUT_SCHEMA_FILES_V1_23.values(),
         }
     )
 )
@@ -489,6 +509,7 @@ def load_role_input_schema(
         "workflow-role/1.17.0",
         "workflow-role/1.19.0",
         "workflow-role/1.20.0",
+        "workflow-role/1.23.0",
     }:
         schema = copy.deepcopy(schema)
         _mapping(_mapping(schema, "properties"), "protocol_version")["const"] = protocol_version
@@ -507,6 +528,7 @@ def load_role_input_schema(
                 "workflow-role/1.17.0",
                 "workflow-role/1.19.0",
                 "workflow-role/1.20.0",
+                "workflow-role/1.23.0",
             }
             else "KNOWLEDGE_ITEM_REQUEST"
         )
@@ -765,15 +787,18 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             "authoring-result@8.0",
             "authoring-result@9.0",
             "authoring-result@10.0",
+            "authoring-result@11.0",
         }
         and role == "authoring"
     ):
         canonical_value = _canonicalize_content_team_authoring_result(value, schema_id=schema_id)
+    elif schema_id == "review-result@11.0" and role == "review":
+        canonical_value = _canonicalize_graph_review_v11_result(value)
     elif schema_id == "legacy-item-extraction-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
-    if schema_id == "authoring-result@10.0" and role == "authoring":
+    if schema_id in {"authoring-result@10.0", "authoring-result@11.0"} and role == "authoring":
         if not isinstance(canonical_value, dict):
             raise WorkflowSchemaError("content-team authoring result is not an object")
         output = canonical_value.get("output")
@@ -783,7 +808,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             draft,
             "content-team-editorial-material/1.0",
         )
-    elif schema_id == "image-result@10.0" and role == "image":
+    elif schema_id in {"image-result@10.0", "image-result@11.0"} and role == "image":
         validate_schema_message(
             load_content_team_image_route_schema(),
             canonical_value,
@@ -849,6 +874,14 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return ContentTeamReviewRoleResultV10.model_validate(canonical_value)
         if schema_id == "registration-result@10.0" and role == "item_management":
             return ContentTeamRegistrationRoleResultV10.model_validate(value)
+        if schema_id == "authoring-result@11.0" and role == "authoring":
+            return ContentTeamAuthoringRoleResultV11.model_validate(canonical_value)
+        if schema_id == "image-result@11.0" and role == "image":
+            return ContentTeamImageRoleResultV11.model_validate(value)
+        if schema_id == "review-result@11.0" and role == "review":
+            return ContentTeamReviewRoleResultV11.model_validate(canonical_value)
+        if schema_id == "registration-result@11.0" and role == "item_management":
+            return ContentTeamRegistrationRoleResultV11.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@1.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResult.model_validate(value)
         if schema_id == "knowledge-analysis-proposal-result@2.0" and role == "support":
@@ -1033,6 +1066,7 @@ def _canonicalize_content_team_authoring_result(
             | ContentTeamAuthoringRoleResultV8
             | ContentTeamAuthoringRoleResultV9
             | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11
         )
         if schema_id == "authoring-result@7.0":
             preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
@@ -1040,8 +1074,10 @@ def _canonicalize_content_team_authoring_result(
             preliminary = ContentTeamAuthoringRoleResultV8.model_validate(canonical)
         elif schema_id == "authoring-result@9.0":
             preliminary = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
-        else:
+        elif schema_id == "authoring-result@10.0":
             preliminary = ContentTeamAuthoringRoleResultV10.model_validate(canonical)
+        else:
+            preliminary = ContentTeamAuthoringRoleResultV11.model_validate(canonical)
         canonical_draft["equation_sources"] = list(
             derive_content_team_equation_sources(preliminary.output.draft)
         )
@@ -1050,6 +1086,7 @@ def _canonicalize_content_team_authoring_result(
             | ContentTeamAuthoringRoleResultV8
             | ContentTeamAuthoringRoleResultV9
             | ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11
         )
         if schema_id == "authoring-result@7.0":
             validated = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
@@ -1057,8 +1094,10 @@ def _canonicalize_content_team_authoring_result(
             validated = ContentTeamAuthoringRoleResultV8.model_validate(canonical)
         elif schema_id == "authoring-result@9.0":
             validated = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
-        else:
+        elif schema_id == "authoring-result@10.0":
             validated = ContentTeamAuthoringRoleResultV10.model_validate(canonical)
+        else:
+            validated = ContentTeamAuthoringRoleResultV11.model_validate(canonical)
         serialize_content_team_markdown(validated.output.draft)
     except ValidationError as exc:
         raise WorkflowSchemaError(f"{schema_id} failed typed validation") from exc
@@ -1097,6 +1136,110 @@ def _normalize_evidence_usage_order(output: dict[str, Any]) -> None:
         evidence_ids
     ) == len(set(evidence_ids)):
         citations.sort(key=lambda citation: citation["evidence_id"])
+
+
+def _canonicalize_graph_review_v11_result(value: object) -> object:
+    """Order bounded set-like review members without repairing identities or values."""
+
+    if not isinstance(value, dict):
+        return value
+    canonical = copy.deepcopy(value)
+    output = canonical.get("output")
+    if not isinstance(output, dict):
+        return canonical
+    attestation = output.get("evidence_usage_attestation")
+    if isinstance(attestation, dict):
+        citations = attestation.get("citations")
+        if isinstance(citations, list):
+            for citation in citations:
+                if isinstance(citation, dict):
+                    for field_name in ("anchor_ids", "draft_json_paths"):
+                        _sort_unique_strings(citation.get(field_name))
+            _sort_dicts_by_unique_string(citations, "evidence_id")
+
+    report = output.get("independent_review_report")
+    if not isinstance(report, dict):
+        return canonical
+    references = report.get("evidence_references")
+    if isinstance(references, list):
+        for reference in references:
+            if isinstance(reference, dict):
+                _sort_unique_strings(reference.get("anchor_ids"))
+                _sort_unique_strings(reference.get("purposes"))
+        _sort_dicts_by_unique_string(references, "evidence_id")
+
+    answer_review = report.get("answer_review")
+    if isinstance(answer_review, dict):
+        claims = answer_review.get("claims")
+        if isinstance(claims, list):
+            for claim in claims:
+                if isinstance(claim, dict):
+                    _sort_unique_strings(claim.get("draft_json_paths"))
+                    _sort_unique_strings(claim.get("evidence_ids"))
+            _sort_dicts_by_unique_string(claims, "claim_key")
+
+    choice_order = {value: index for index, value in enumerate(("①", "②", "③", "④", "⑤"))}
+    choices = report.get("choice_diagnostics")
+    if isinstance(choices, list):
+        for choice in choices:
+            if isinstance(choice, dict):
+                _sort_unique_strings(choice.get("draft_json_paths"))
+                _sort_unique_strings(choice.get("evidence_ids"))
+        if len({choice.get("number") for choice in choices if isinstance(choice, dict)}) == len(
+            choices
+        ):
+            choices.sort(
+                key=lambda choice: (
+                    choice_order.get(str(choice.get("number")), len(choice_order))
+                    if isinstance(choice, dict)
+                    else len(choice_order)
+                )
+            )
+
+    statement_order = {value: index for index, value in enumerate(("ㄱ", "ㄴ", "ㄷ"))}
+    statements = report.get("statement_diagnostics")
+    if isinstance(statements, list):
+        for statement in statements:
+            if isinstance(statement, dict):
+                _sort_unique_strings(statement.get("draft_json_paths"))
+                _sort_unique_strings(statement.get("evidence_ids"))
+        if len(
+            {statement.get("label") for statement in statements if isinstance(statement, dict)}
+        ) == len(statements):
+            statements.sort(
+                key=lambda statement: (
+                    statement_order.get(str(statement.get("label")), len(statement_order))
+                    if isinstance(statement, dict)
+                    else len(statement_order)
+                )
+            )
+
+    for field_name in (
+        "explanation_assessment",
+        "curriculum_assessment",
+        "originality_assessment",
+        "visual_assessment",
+    ):
+        assessment = report.get(field_name)
+        if isinstance(assessment, dict):
+            _sort_unique_strings(assessment.get("draft_json_paths"))
+            _sort_unique_strings(assessment.get("evidence_ids"))
+    return canonical
+
+
+def _sort_unique_strings(value: object) -> None:
+    if (
+        isinstance(value, list)
+        and all(isinstance(item, str) for item in value)
+        and len(value) == len(set(value))
+    ):
+        value.sort()
+
+
+def _sort_dicts_by_unique_string(values: list[object], field_name: str) -> None:
+    keys = tuple(value.get(field_name) if isinstance(value, dict) else None for value in values)
+    if all(isinstance(key, str) for key in keys) and len(keys) == len(set(keys)):
+        values.sort(key=lambda value: value[field_name] if isinstance(value, dict) else "")
 
 
 def _normalize_content_team_math_values(value: object) -> object:
@@ -1634,19 +1777,27 @@ def constrained_result_schema(
             "start with '/' are invalid."
         )
         _prune_unreferenced_definitions(schema)
-    if schema_id == "review-result@10.0":
+    if schema_id in {"review-result@10.0", "review-result@11.0"}:
+        authoring_schema = (
+            "authoring-result@11.0"
+            if schema_id == "review-result@11.0"
+            else "authoring-result@10.0"
+        )
         authoring = tuple(
             pointer
             for pointer in worker_input.upstream_artifacts
-            if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@10.0"
+            if pointer.step_key == "authoring" and pointer.result_schema == authoring_schema
         )
         if len(authoring) != 1:
             raise WorkflowSchemaError(
-                "evidence review requires one exact authoring-result@10.0 pointer"
+                f"evidence review requires one exact {authoring_schema} pointer"
             )
-        authoring_properties = _mapping(
-            _mapping(definitions, "EvidenceAuthoringArtifactPointerV1"), "properties"
+        pointer_definition = (
+            "EvidenceAuthoringArtifactPointerV2"
+            if schema_id == "review-result@11.0"
+            else "EvidenceAuthoringArtifactPointerV1"
         )
+        authoring_properties = _mapping(_mapping(definitions, pointer_definition), "properties")
         for field_name, field_value in (
             ("logical_artifact_id", authoring[0].logical_artifact_id),
             ("revision_id", authoring[0].revision_id),
@@ -1669,7 +1820,7 @@ def _bind_evidence_result_branch(
     resolved_evidence_plan: ResolvedExecutionPlanV3 | None,
     material_requirement: ContentTeamMaterialRequirementV1 | None,
 ) -> None:
-    """Bind the @10 nullable evidence branch to the immutable resolved-plan step.
+    """Bind nullable evidence branches to the immutable resolved-plan step.
 
     Codex Structured Outputs cannot retain the canonical cross-field conditional. The resolved
     plan already owns whether this step receives evidence, so this O(1) projection prevents a
@@ -1677,7 +1828,12 @@ def _bind_evidence_result_branch(
     authoritative.
     """
 
-    if schema_id not in {"authoring-result@10.0", "review-result@10.0"}:
+    if schema_id not in {
+        "authoring-result@10.0",
+        "review-result@10.0",
+        "authoring-result@11.0",
+        "review-result@11.0",
+    }:
         return
     if evidence_access is None:
         return
@@ -1690,7 +1846,7 @@ def _bind_evidence_result_branch(
         raise WorkflowSchemaError("evidence result requires its typed resolved plan")
     if not grounded and resolved_evidence_plan is not None:
         raise WorkflowSchemaError("non-evidence result cannot receive an evidence plan")
-    if schema_id == "authoring-result@10.0":
+    if schema_id in {"authoring-result@10.0", "authoring-result@11.0"}:
         output_properties = _mapping(
             _mapping(definitions, "ContentTeamAuthoringOutputV10"),
             "properties",
@@ -1736,14 +1892,24 @@ def _bind_evidence_result_branch(
             )
         return
 
+    review_output_definition = (
+        "KnowledgeReviewOutputV11"
+        if schema_id == "review-result@11.0"
+        else "KnowledgeReviewOutputV10"
+    )
+    attestation_definition = (
+        "EvidenceUsageReviewAttestationV2"
+        if schema_id == "review-result@11.0"
+        else "EvidenceUsageReviewAttestationV1"
+    )
     output_properties = _mapping(
-        _mapping(definitions, "KnowledgeReviewOutputV10"),
+        _mapping(definitions, review_output_definition),
         "properties",
     )
     attestation = _mapping(output_properties, "evidence_usage_attestation")
     attestation.clear()
     attestation.update(
-        {"$ref": "#/$defs/EvidenceUsageReviewAttestationV1"} if grounded else {"type": "null"}
+        {"$ref": f"#/$defs/{attestation_definition}"} if grounded else {"type": "null"}
     )
 
 
@@ -2345,9 +2511,10 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "authoring-result@8.0",
         "authoring-result@9.0",
         "authoring-result@10.0",
+        "authoring-result@11.0",
     }:
         _project_content_team_authoring_contract(schema, schema_id=schema_id)
-    if schema_id in {"image-result@9.0", "image-result@10.0"}:
+    if schema_id in {"image-result@9.0", "image-result@10.0", "image-result@11.0"}:
         _project_content_team_image_v9_codex_contract(schema)
     if schema_id in {
         "knowledge-analysis-proposal-result@1.0",
@@ -2485,7 +2652,7 @@ def _project_content_team_authoring_contract(
     definitions = _mapping(schema, "$defs")
     draft_name = (
         "AssessmentItemContentV3"
-        if schema_id in {"authoring-result@9.0", "authoring-result@10.0"}
+        if schema_id in {"authoring-result@9.0", "authoring-result@10.0", "authoring-result@11.0"}
         else "AssessmentItemContentV2"
     )
     draft = _mapping(definitions, draft_name)
@@ -2498,7 +2665,7 @@ def _project_content_team_authoring_contract(
         raise WorkflowSchemaError("content-team visual layout requirement is not projectable")
     draft["required"] = [name for name in required if name != "visual_layout"]
 
-    if schema_id == "authoring-result@10.0":
+    if schema_id in {"authoring-result@10.0", "authoring-result@11.0"}:
         output = _mapping(definitions, "ContentTeamAuthoringOutputV10")
         conditional = output.pop("allOf", None)
         if not isinstance(conditional, list) or len(conditional) != 1:
@@ -2525,7 +2692,7 @@ def _project_content_team_authoring_contract(
         "Use the reviewed 탐구/실험 structure only when the item requires it. When present, keep "
         "visuals empty because the program renders the inquiry box as its own layout."
     )
-    if schema_id == "authoring-result@10.0":
+    if schema_id in {"authoring-result@10.0", "authoring-result@11.0"}:
         explanations = _mapping(definitions, "ContentTeamExplanationSections")
         wrong_answer = _mapping(_mapping(explanations, "properties"), "wrong_answer")
         wrong_answer["description"] = (

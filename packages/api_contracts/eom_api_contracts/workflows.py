@@ -289,16 +289,22 @@ class WorkflowStartRequest(ApiModel):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
                 if isinstance(self.item_brief, ContentTeamItemBriefRequestV4):
-                    if self.definition_version != "1.10.0":
-                        raise ValueError("V4 material requests require workflow definition 1.10")
+                    if self.definition_version not in {"1.10.0", "1.11.0"}:
+                        raise ValueError("V4 material requests require workflow definition 1.10+")
                     expected_image_mode = self.item_brief.material_requirement.image_mode
                 else:
                     expected_image_mode = (
                         "required"
-                        if self.definition_version in {"1.8.0", "1.9.0", "1.10.0"}
+                        if self.definition_version in {"1.8.0", "1.9.0", "1.10.0", "1.11.0"}
                         else "skip"
                     )
-                if self.definition_version not in {"1.7.0", "1.8.0", "1.9.0", "1.10.0"}:
+                if self.definition_version not in {
+                    "1.7.0",
+                    "1.8.0",
+                    "1.9.0",
+                    "1.10.0",
+                    "1.11.0",
+                }:
                     raise ValueError("content-team workflow definition is unsupported")
                 if self.image_mode != expected_image_mode:
                     raise ValueError(

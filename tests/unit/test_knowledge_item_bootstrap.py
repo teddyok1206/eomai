@@ -25,6 +25,9 @@ from eom_orchestrator.knowledge_item_bootstrap import (
     EXPECTED_V11_BASE_INSTRUCTION_BUNDLE_IDS,
     EXPECTED_V11_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
     EXPECTED_V11_BASE_INSTRUCTION_MEMBER_SHA256S,
+    EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_IDS,
+    EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
+    EXPECTED_V12_BASE_INSTRUCTION_MEMBER_SHA256S,
     KnowledgeItemBootstrapManifest,
     load_knowledge_item_bootstrap_manifest,
 )
@@ -44,12 +47,14 @@ CONFIG_V8 = ROOT / "config/control-plane/knowledge-grounded-item-v8"
 CONFIG_V9 = ROOT / "config/control-plane/knowledge-grounded-item-v9"
 CONFIG_V10 = ROOT / "config/control-plane/knowledge-grounded-item-v10"
 CONFIG_V11 = ROOT / "config/control-plane/knowledge-grounded-item-v11"
+CONFIG_V12 = ROOT / "config/control-plane/knowledge-grounded-item-v12"
 STANDARD_CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 STANDARD_CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 STANDARD_CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
 STANDARD_CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
 STANDARD_CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
 STANDARD_CONFIG_V14 = ROOT / "config/control-plane/standard-item-v14"
+STANDARD_CONFIG_V15 = ROOT / "config/control-plane/standard-item-v15"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -421,6 +426,28 @@ def test_knowledge_item_v11_pins_selected_material_authority_successor() -> None
     )
     assert hashlib.sha256((CONFIG_V11 / "bootstrap.yaml").read_bytes()).hexdigest() == (
         "896343a3f2d20b9e7e56eb30400114bbb5d1bd3705ac711b93fae08fe9cb615e"
+    )
+
+
+def test_knowledge_item_v12_pins_solution_enriched_review_successor() -> None:
+    standard = load_standard_bootstrap_manifest(STANDARD_CONFIG_V15)
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V12)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v12", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/12.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.23.0",)
+    assert standard.created_at < manifest.created_at
+    assert manifest.base_instruction_bundle_ids == dict(EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_IDS)
+    assert manifest.base_instruction_bundle_revision_ids == dict(
+        EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+    )
+    assert manifest.base_instruction_bundle_revision_ids == {
+        role: control_bootstrap._stable_id("instrrev_", f"standard-item:{role}:v15")
+        for role in ("authoring", "image", "review", "item_management")
+    }
+    assert manifest.base_instruction_member_sha256s == dict(
+        EXPECTED_V12_BASE_INSTRUCTION_MEMBER_SHA256S
     )
 
 

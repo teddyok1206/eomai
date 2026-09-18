@@ -36,10 +36,10 @@ readiness가 정본입니다.
 
 | 경계 | 최신 additive 계약 |
 | --- | --- |
-| 단일 문항 Workflow | `generic-item-development@1.10.0` |
-| 역할 protocol / 결과 | `workflow-role/1.20.0` / `authoring·image·review·registration-result@10.0` |
-| Content Pack | `generated-knowledge-item@1.16.1` |
-| 표준 / RAG 실행 정책 | `standard-control-bootstrap/13.0` / `knowledge-item-control-bootstrap/10.0` |
+| 단일 문항 Workflow | `generic-item-development@1.11.0` |
+| 역할 protocol / 결과 | `workflow-role/1.23.0` / `authoring·image·review·registration-result@11.0` |
+| Content Pack | `generated-knowledge-item@1.17.0` |
+| 표준 / RAG 실행 정책 | `standard-control-bootstrap/15.0` / `knowledge-item-control-bootstrap/12.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
@@ -47,6 +47,12 @@ readiness가 정본입니다.
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
+
+단일 문항의 V11 검토 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
+각각 독립 판정합니다. Graph 모드에서는 Evidence Bundle V5에 연결된 승인 풀이보고서를 과학 검증에
+실제로 사용해야 하며, Orchestrator가 검토 결과를 정확한 authoring Artifact와 다시 대조한 뒤
+`evidence-usage-validation-receipt/2.0`을 같은 commit transaction에 남깁니다. 일반지식 모드도
+근거를 가장할 수 없고 동일한 draft 결속 검증을 받습니다. 사람 최종 승인은 그대로 유지됩니다.
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
@@ -244,6 +250,13 @@ Item Preview 3.0과 프론트엔드–백엔드 정합성 게이트를 포함한
 collection 순수 테스트 1개를 통과했습니다. live·DB·privileged opt-in 162개는 운영 환경으로
 우회하지 않고 명시적으로 skip했습니다. Ruff는 1,331개 파일, strict mypy는 417개 source를
 통과했습니다.
+
+2026-09-18 Graph-RAG 독립 검토 V11 저장소 후보는 API/domain/Catalog/Orchestrator/Studio
+3,020개와 HWPX/local-image 197개를 통과했습니다. 환경이 필요한 테스트는 API 36개, HWPX 1개,
+PostgreSQL integration 127개를 운영 환경으로 우회하지 않고 skip했으며 integration collection의
+순수 테스트 1개는 통과했습니다. Ruff format/check는 1,383개 파일, strict mypy는 420개 source,
+successor schema generator idempotence와 release wheel의 새 schema 8개 및 RECORD hash도 통과했습니다.
+이 결과는 저장소 후보 검증이며 운영 활성화나 live 문항 품질 판정을 의미하지 않습니다.
 
 Pack 1.16.1과 production plan/execution 5.0은 운영에서 실제 25문항 생성·검토·승인·등록까지
 완료했습니다. 같은 immutable Item set을 공식 HWPX API로 빌드해 25개 section, native 수식 81개,

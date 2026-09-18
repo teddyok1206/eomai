@@ -165,6 +165,94 @@ EvidenceUsageValidationReceipt = Annotated[
 ]
 
 
+class EvidenceResultArtifactPointerV2(FrozenModel):
+    """Exact V11 result revision pinned by the successor evidence receipt."""
+
+    logical_artifact_id: ArtifactId
+    revision_id: ArtifactRevisionId
+    content_hash: Sha256
+    result_schema: Literal["authoring-result@11.0", "review-result@11.0"]
+
+
+class EvidenceUsageValidationReceiptBaseV2(FrozenModel):
+    """Trusted Graph and Artifact pins for independent-review successors."""
+
+    schema_version: Literal["evidence-usage-validation-receipt/2.0"] = (
+        "evidence-usage-validation-receipt/2.0"
+    )
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: Sha256
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_materials_and_hash(self) -> EvidenceUsageValidationReceiptBaseV2:
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("evidence validation receipt material pointer is incompatible")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+            != self.receipt_sha256
+        ):
+            raise ValueError("evidence validation receipt hash differs")
+        return self
+
+
+class AuthoringEvidenceUsageValidationReceiptV2(EvidenceUsageValidationReceiptBaseV2):
+    step_key: Literal["authoring"] = "authoring"
+    result_artifact: EvidenceResultArtifactPointerV2
+    authoring_citation_set_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_authoring_result_family(self) -> AuthoringEvidenceUsageValidationReceiptV2:
+        if self.result_artifact.result_schema != "authoring-result@11.0":
+            raise ValueError("authoring evidence receipt result schema differs")
+        return self
+
+
+class ReviewEvidenceUsageValidationReceiptV2(EvidenceUsageValidationReceiptBaseV2):
+    step_key: Literal["review"] = "review"
+    result_artifact: EvidenceResultArtifactPointerV2
+    authoring_artifact: EvidenceResultArtifactPointerV2
+    authoring_citation_set_sha256: Sha256
+    review_citation_set_sha256: Sha256
+    citation_sets_equal: Literal[True]
+    independent_review_report_sha256: Sha256
+    review_evidence_set_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_review_result_family(self) -> ReviewEvidenceUsageValidationReceiptV2:
+        if (
+            self.result_artifact.result_schema != "review-result@11.0"
+            or self.authoring_artifact.result_schema != "authoring-result@11.0"
+            or self.review_citation_set_sha256 != self.authoring_citation_set_sha256
+        ):
+            raise ValueError("review evidence receipt fields differ")
+        return self
+
+
+EvidenceUsageValidationReceiptV2 = Annotated[
+    AuthoringEvidenceUsageValidationReceiptV2 | ReviewEvidenceUsageValidationReceiptV2,
+    Field(discriminator="step_key"),
+]
+
+
 class ReasoningEffort(StrEnum):
     MINIMAL = "minimal"
     LOW = "low"
@@ -556,15 +644,17 @@ class ResolvedExecutionPlanV3(FrozenModel):
             self.retrieval_requirement_sha256
         ):
             raise ValueError("educational retrieval requirement hash differs")
+        allowed_manifest_schemas = {
+            "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+            "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+            "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+        }
+        if self.model_dump(mode="json").get("schema_version") == "resolved-execution-plan/11.0":
+            allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (
             self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
             or self.evidence_manifest_artifact.media_type != "application/json"
-            or self.evidence_manifest_artifact.schema_ref
-            not in {
-                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
-                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
-                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
-            }
+            or self.evidence_manifest_artifact.schema_ref not in allowed_manifest_schemas
             or self.evidence_context_artifact.member_path != "evidence/context.md"
             or self.evidence_context_artifact.media_type != "text/markdown"
             or self.evidence_context_artifact.schema_ref
@@ -578,6 +668,12 @@ class ResolvedExecutionPlanV3(FrozenModel):
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("knowledge-backed execution plan hash differs")
         return self
+
+
+class ResolvedExecutionPlanV11(ResolvedExecutionPlanV3):
+    """Knowledge-backed item plan accepting solution-enriched Evidence Bundle V5."""
+
+    schema_version: Literal["resolved-execution-plan/11.0"] = "resolved-execution-plan/11.0"  # type: ignore[assignment]
 
 
 class ResolvedExecutionPlanV4(FrozenModel):

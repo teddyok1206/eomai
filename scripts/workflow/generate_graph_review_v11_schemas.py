@@ -50,9 +50,13 @@ def _replace_exact(value: object, old: str, new: str) -> object:
 
 def _role_wrapper(role: str) -> dict[str, Any]:
     source_name = f"{role}-result-v10.schema.json"
-    value = _load(PACKAGE_ROLE_ROOT / source_name)
-    value = _replace_exact(value, "workflow-role/1.20.0", "workflow-role/1.23.0")
-    assert isinstance(value, dict)
+    replaced = _replace_exact(
+        _load(PACKAGE_ROLE_ROOT / source_name),
+        "workflow-role/1.20.0",
+        "workflow-role/1.23.0",
+    )
+    assert isinstance(replaced, dict)
+    value: dict[str, Any] = replaced
     value["$id"] = f"https://eom.local/schemas/workflow/roles/{role}-result-v11.schema.json"
     value["title"] = str(value["title"]).replace("V10", "V11")
     return value
@@ -144,7 +148,7 @@ def _review_schema() -> dict[str, Any]:
             "conclusion": {"type": "string", "minLength": 1, "maxLength": 2000},
             "draft_json_paths": _draft_paths(maximum=16),
             "evidence_ids": _string_array(
-                minimum=1,
+                minimum=0,
                 maximum=16,
                 pattern=r"^evidenceitem_[0-9a-f]{32}$",
             ),
@@ -185,7 +189,7 @@ def _review_schema() -> dict[str, Any]:
             "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
             "draft_json_paths": _draft_paths(maximum=8),
             "evidence_ids": _string_array(
-                minimum=1,
+                minimum=0,
                 maximum=16,
                 pattern=r"^evidenceitem_[0-9a-f]{32}$",
             ),
@@ -202,7 +206,7 @@ def _review_schema() -> dict[str, Any]:
             "rationale": {"type": "string", "minLength": 1, "maxLength": 2000},
             "draft_json_paths": _draft_paths(maximum=8),
             "evidence_ids": _string_array(
-                minimum=1,
+                minimum=0,
                 maximum=16,
                 pattern=r"^evidenceitem_[0-9a-f]{32}$",
             ),
@@ -256,7 +260,7 @@ def _review_schema() -> dict[str, Any]:
             "schema_version": {"const": "independent-item-review/1.0"},
             "evidence_references": {
                 "type": "array",
-                "minItems": 1,
+                "minItems": 0,
                 "maxItems": 64,
                 "items": {"$ref": "#/$defs/ReviewEvidenceReferenceV1"},
             },
@@ -304,10 +308,9 @@ def _receipt_schema() -> dict[str, Any]:
     value = _load(CANONICAL_CONTROL_ROOT / "evidence-usage-validation-receipt-v1.schema.json")
     value["$id"] = "eom://schemas/workflow/evidence-usage-validation-receipt/2.0"
     value["properties"]["schema_version"] = {"const": "evidence-usage-validation-receipt/2.0"}
-    manifest_refs = value["$defs"]["manifestArtifactMemberPointer"]["allOf"][1]["properties"][
-        "schema_ref"
-    ]["enum"]
-    manifest_refs.append("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
+    value["$defs"]["manifestArtifactMemberPointer"]["allOf"][1]["properties"]["schema_ref"] = {
+        "const": "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+    }
     value["$defs"]["resultArtifactPointer"]["properties"]["result_schema"]["enum"] = [
         "authoring-result@11.0",
         "review-result@11.0",
@@ -363,6 +366,22 @@ def main() -> None:
         _receipt_schema(),
         control=True,
     )
+    plan = _load(CANONICAL_CONTROL_ROOT / "resolved-execution-plan-v3.schema.json")
+    plan["$id"] = "eom://schemas/workflow/resolved-execution-plan/11.0"
+    plan["properties"]["schema_version"] = {"const": "resolved-execution-plan/11.0"}
+    plan["properties"]["evidence_manifest_artifact"] = {
+        "allOf": [
+            {"$ref": "#/$defs/knowledgeArtifactPointer"},
+            {
+                "properties": {
+                    "member_path": {"const": "evidence/manifest.json"},
+                    "media_type": {"const": "application/json"},
+                    "schema_ref": {"const": "eom://schemas/knowledge/evidence-bundle-manifest/5.0"},
+                }
+            },
+        ]
+    }
+    _write_pair("resolved-execution-plan-v11.schema.json", plan, control=True)
 
 
 if __name__ == "__main__":

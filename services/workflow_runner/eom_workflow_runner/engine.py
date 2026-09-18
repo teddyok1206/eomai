@@ -128,7 +128,7 @@ TERMINAL_WORKFLOW_STATES = {
     for state in SUCCESSFUL_TERMINAL_WORKFLOW_STATES | UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES
 }
 CONTENT_TEAM_IMAGE_RESULT_SCHEMAS = frozenset(
-    {"image-result@8.0", "image-result@9.0", "image-result@10.0"}
+    {"image-result@8.0", "image-result@9.0", "image-result@10.0", "image-result@11.0"}
 )
 _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES = frozenset(
     {
