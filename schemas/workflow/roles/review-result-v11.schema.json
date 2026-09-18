@@ -1,0 +1,890 @@
+{
+  "$defs": {
+    "ArtifactSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json",
+          "title": "File Name",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "title": "ArtifactSpec",
+      "type": "object"
+    },
+    "ChoiceDiagnosticV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ]
+        },
+        "rationale": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "CORRECT",
+            "DISTRACTOR"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "verdict",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "ChoiceDiagnosticV1",
+      "type": "object"
+    },
+    "CurriculumAssessmentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "IN_SCOPE",
+            "OUT_OF_SCOPE",
+            "UNCERTAIN"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "CurriculumAssessmentV1",
+      "type": "object"
+    },
+    "EvidenceAuthoringArtifactPointerV1": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "authoring-result@10.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "title": "EvidenceAuthoringArtifactPointerV1",
+      "type": "object"
+    },
+    "EvidenceAuthoringArtifactPointerV2": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Logical Artifact Id",
+          "type": "string"
+        },
+        "result_schema": {
+          "const": "authoring-result@11.0",
+          "title": "Result Schema",
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Revision Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "title": "EvidenceAuthoringArtifactPointerV2",
+      "type": "object"
+    },
+    "EvidenceUsageCitationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_ids": {
+          "items": {
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Anchor Ids",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "application": {
+          "enum": [
+            "CONCEPT_GROUNDING",
+            "STRUCTURE_PATTERN",
+            "AVOID_COPY_CHECK"
+          ],
+          "title": "Application",
+          "type": "string"
+        },
+        "application_description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Application Description",
+          "type": "string"
+        },
+        "draft_json_paths": {
+          "items": {
+            "maxLength": 256,
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Draft Json Paths",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_id": {
+          "pattern": "^evidenceitem_[0-9a-f]{32}$",
+          "title": "Evidence Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "anchor_ids",
+        "application",
+        "application_description",
+        "draft_json_paths"
+      ],
+      "title": "EvidenceUsageCitationV1",
+      "type": "object"
+    },
+    "EvidenceUsageReviewAttestationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_artifact": {
+          "$ref": "#/$defs/EvidenceAuthoringArtifactPointerV1"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/EvidenceUsageCitationV1"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "decision": {
+          "const": "VERIFIED",
+          "title": "Decision",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "evidence-usage-review-attestation/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "decision",
+        "authoring_artifact",
+        "citations"
+      ],
+      "title": "EvidenceUsageReviewAttestationV1",
+      "type": "object"
+    },
+    "EvidenceUsageReviewAttestationV2": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_artifact": {
+          "$ref": "#/$defs/EvidenceAuthoringArtifactPointerV2"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/EvidenceUsageCitationV1"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Citations",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "decision": {
+          "const": "VERIFIED",
+          "title": "Decision",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "evidence-usage-review-attestation/2.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "decision",
+        "authoring_artifact",
+        "citations"
+      ],
+      "title": "EvidenceUsageReviewAttestationV2",
+      "type": "object"
+    },
+    "ExplanationAssessmentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "ExplanationAssessmentV1",
+      "type": "object"
+    },
+    "IndependentAnswerReviewV1": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment": {
+          "enum": [
+            "MATCH",
+            "MISMATCH"
+          ]
+        },
+        "authored_answer_number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ]
+        },
+        "claims": {
+          "items": {
+            "$ref": "#/$defs/ReviewVerificationClaimV1"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array"
+        },
+        "derived_answer_number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ]
+        },
+        "verification_summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "authored_answer_number",
+        "derived_answer_number",
+        "alignment",
+        "verification_summary",
+        "claims"
+      ],
+      "title": "IndependentAnswerReviewV1",
+      "type": "object"
+    },
+    "IndependentReviewReportV1": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_review": {
+          "$ref": "#/$defs/IndependentAnswerReviewV1"
+        },
+        "choice_diagnostics": {
+          "items": {
+            "$ref": "#/$defs/ChoiceDiagnosticV1"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "type": "array"
+        },
+        "curriculum_assessment": {
+          "$ref": "#/$defs/CurriculumAssessmentV1"
+        },
+        "evidence_references": {
+          "items": {
+            "$ref": "#/$defs/ReviewEvidenceReferenceV1"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        "explanation_assessment": {
+          "$ref": "#/$defs/ExplanationAssessmentV1"
+        },
+        "originality_assessment": {
+          "$ref": "#/$defs/OriginalityAssessmentV1"
+        },
+        "schema_version": {
+          "const": "independent-item-review/1.0"
+        },
+        "statement_diagnostics": {
+          "items": {
+            "$ref": "#/$defs/StatementDiagnosticV1"
+          },
+          "maxItems": 3,
+          "minItems": 0,
+          "type": "array"
+        },
+        "visual_assessment": {
+          "$ref": "#/$defs/VisualAssessmentV1"
+        }
+      },
+      "required": [
+        "schema_version",
+        "evidence_references",
+        "answer_review",
+        "choice_diagnostics",
+        "statement_diagnostics",
+        "explanation_assessment",
+        "curriculum_assessment",
+        "originality_assessment",
+        "visual_assessment"
+      ],
+      "title": "IndependentReviewReportV1",
+      "type": "object"
+    },
+    "KnowledgeReview": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "const": "ready_for_human",
+          "title": "Decision",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/ReviewFinding"
+          },
+          "maxItems": 20,
+          "title": "Findings",
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "findings",
+        "summary"
+      ],
+      "title": "KnowledgeReview",
+      "type": "object"
+    },
+    "KnowledgeReviewOutputV10": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_usage_attestation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceUsageReviewAttestationV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "$ref": "#/$defs/KnowledgeReview"
+        }
+      },
+      "required": [
+        "review",
+        "evidence_usage_attestation"
+      ],
+      "title": "KnowledgeReviewOutputV10",
+      "type": "object"
+    },
+    "KnowledgeReviewOutputV11": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_usage_attestation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceUsageReviewAttestationV2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "independent_review_report": {
+          "$ref": "#/$defs/IndependentReviewReportV1"
+        },
+        "review": {
+          "$ref": "#/$defs/KnowledgeReview"
+        }
+      },
+      "required": [
+        "review",
+        "independent_review_report",
+        "evidence_usage_attestation"
+      ],
+      "title": "KnowledgeReviewOutputV11",
+      "type": "object"
+    },
+    "OriginalityAssessmentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "DISTINCT",
+            "TOO_SIMILAR",
+            "INSUFFICIENT_EVIDENCE"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "OriginalityAssessmentV1",
+      "type": "object"
+    },
+    "ReviewEvidenceReferenceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_ids": {
+          "items": {
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_id": {
+          "pattern": "^evidenceitem_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "purposes": {
+          "items": {
+            "enum": [
+              "SCIENTIFIC_VALIDATION",
+              "CURRICULUM_SCOPE",
+              "ORIGINALITY_CHECK",
+              "VISUAL_VALIDATION"
+            ]
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "evidence_id",
+        "anchor_ids",
+        "purposes"
+      ],
+      "title": "ReviewEvidenceReferenceV1",
+      "type": "object"
+    },
+    "ReviewFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "ReviewFinding",
+      "type": "object"
+    },
+    "ReviewVerificationClaimV1": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_key": {
+          "pattern": "^claim_[a-z0-9][a-z0-9_]{0,31}$",
+          "type": "string"
+        },
+        "conclusion": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "claim_key",
+        "conclusion",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "ReviewVerificationClaimV1",
+      "type": "object"
+    },
+    "StatementDiagnosticV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "label": {
+          "enum": [
+            "ㄱ",
+            "ㄴ",
+            "ㄷ"
+          ]
+        },
+        "rationale": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "TRUE",
+            "FALSE"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "verdict",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "StatementDiagnosticV1",
+      "type": "object"
+    },
+    "VisualAssessmentV1": {
+      "additionalProperties": false,
+      "properties": {
+        "draft_json_paths": {
+          "items": {
+            "pattern": "^/(?:[^~/]|~0|~1)+(?:/(?:[^~/]|~0|~1)+)*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^evidenceitem_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rationale": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "CONSISTENT",
+            "INCONSISTENT",
+            "NOT_APPLICABLE"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "rationale",
+        "draft_json_paths",
+        "evidence_ids"
+      ],
+      "title": "VisualAssessmentV1",
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/review-result-v11.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/ArtifactSpec"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "output": {
+      "$ref": "#/$defs/KnowledgeReviewOutputV11"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.23.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "role": {
+      "const": "review",
+      "title": "Role",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "title": "Status",
+      "type": "string"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "title": "Step Run Id",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "title": "Workflow Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "title": "ContentTeamReviewRoleResultV11",
+  "type": "object"
+}

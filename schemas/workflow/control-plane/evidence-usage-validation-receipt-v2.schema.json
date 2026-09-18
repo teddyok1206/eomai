@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "contextArtifactMemberPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/knowledgeArtifactMemberPointer"
+        },
+        {
+          "properties": {
+            "media_type": {
+              "const": "text/markdown"
+            },
+            "member_path": {
+              "const": "evidence/context.md"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/evidence-bundle-context/1.0"
+            }
+          }
+        }
+      ]
+    },
+    "knowledgeArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[^/]+(?:/[^/]+)*$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "type": "object"
+    },
+    "manifestArtifactMemberPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/knowledgeArtifactMemberPointer"
+        },
+        {
+          "properties": {
+            "media_type": {
+              "const": "application/json"
+            },
+            "member_path": {
+              "const": "evidence/manifest.json"
+            },
+            "schema_ref": {
+              "enum": [
+                "eom://schemas/knowledge/evidence-bundle-manifest/2.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "resultArtifactPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "result_schema": {
+          "enum": [
+            "authoring-result@11.0",
+            "review-result@11.0"
+          ]
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/workflow/evidence-usage-validation-receipt/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "authoring_artifact": {
+            "properties": {
+              "result_schema": {
+                "const": "authoring-result@11.0"
+              }
+            }
+          },
+          "citation_sets_equal": {
+            "const": true
+          },
+          "independent_review_report_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "result_artifact": {
+            "properties": {
+              "result_schema": {
+                "const": "review-result@11.0"
+              }
+            }
+          },
+          "review_citation_set_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "review_evidence_set_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authoring_artifact",
+          "review_citation_set_sha256",
+          "citation_sets_equal",
+          "independent_review_report_sha256",
+          "review_evidence_set_sha256"
+        ]
+      },
+      "if": {
+        "properties": {
+          "step_key": {
+            "const": "authoring"
+          }
+        },
+        "required": [
+          "step_key"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "authoring_artifact"
+              ]
+            },
+            {
+              "required": [
+                "review_citation_set_sha256"
+              ]
+            },
+            {
+              "required": [
+                "citation_sets_equal"
+              ]
+            },
+            {
+              "required": [
+                "independent_review_report_sha256"
+              ]
+            },
+            {
+              "required": [
+                "review_evidence_set_sha256"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "result_artifact": {
+            "properties": {
+              "result_schema": {
+                "const": "authoring-result@11.0"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "authoring_artifact": {
+      "$ref": "#/$defs/resultArtifactPointer"
+    },
+    "authoring_citation_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "citation_sets_equal": {
+      "anyOf": [
+        {
+          "const": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence_bundle_id": {
+      "pattern": "^evidence_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "evidence_bundle_revision_id": {
+      "pattern": "^evidencerev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "evidence_context_artifact": {
+      "$ref": "#/$defs/contextArtifactMemberPointer"
+    },
+    "evidence_manifest_artifact": {
+      "$ref": "#/$defs/manifestArtifactMemberPointer"
+    },
+    "evidence_manifest_sha256": {
+      "description": "Semantic manifest self-hash; distinct from evidence_manifest_artifact.sha256.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "graph_snapshot_revision_id": {
+      "pattern": "^graphrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "graph_snapshot_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "independent_review_report_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "plan_id": {
+      "pattern": "^execplan_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receipt_sha256": {
+      "description": "SHA-256 of repository canonical JSON (UTF-8, sorted keys, compact separators, floats forbidden) with receipt_sha256 omitted.",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result_artifact": {
+      "$ref": "#/$defs/resultArtifactPointer"
+    },
+    "retrieval_request_id": {
+      "pattern": "^retrieval_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "retrieval_request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_citation_set_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_evidence_set_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "evidence-usage-validation-receipt/2.0"
+    },
+    "step_key": {
+      "enum": [
+        "authoring",
+        "review"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "step_key",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "retrieval_request_id",
+    "retrieval_request_sha256",
+    "graph_snapshot_revision_id",
+    "graph_snapshot_sha256",
+    "evidence_manifest_artifact",
+    "evidence_manifest_sha256",
+    "evidence_context_artifact",
+    "result_artifact",
+    "authoring_citation_set_sha256",
+    "receipt_sha256"
+  ],
+  "type": "object"
+}
