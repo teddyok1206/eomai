@@ -167,6 +167,7 @@ from eom_workflow import (
 from eom_workflow import (
     CustomerSupportRoleResult,
     ResolvedExecutionPlanV3,
+    ResolvedExecutionPlanV11,
 )
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
@@ -3654,12 +3655,18 @@ class QueryAdapter:
         workflow: WorkflowInstanceRecord,
         record: ResolvedExecutionPlanRecord | None,
     ) -> WorkflowKnowledgeProvenanceView | None:
-        if record is None or record.canonical_document.get("schema_version") != (
-            "resolved-execution-plan/3.0"
-        ):
+        if record is None:
+            return None
+        schema_version = record.canonical_document.get("schema_version")
+        plan_type: type[ResolvedExecutionPlanV3]
+        if schema_version == "resolved-execution-plan/3.0":
+            plan_type = ResolvedExecutionPlanV3
+        elif schema_version == "resolved-execution-plan/11.0":
+            plan_type = ResolvedExecutionPlanV11
+        else:
             return None
         try:
-            plan = ResolvedExecutionPlanV3.model_validate(record.canonical_document)
+            plan = plan_type.model_validate(record.canonical_document)
         except ValueError as exc:
             raise ApiError(
                 500,

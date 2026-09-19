@@ -24,12 +24,18 @@ def test_historical_workflow_without_knowledge_plan_has_no_projection() -> None:
     )
 
 
-def test_knowledge_plan_projection_fails_closed_on_invalid_canonical_document() -> None:
+@pytest.mark.parametrize(
+    "schema_version",
+    ("resolved-execution-plan/3.0", "resolved-execution-plan/11.0"),
+)
+def test_knowledge_plan_projection_fails_closed_on_invalid_canonical_document(
+    schema_version: str,
+) -> None:
     workflow = SimpleNamespace(workflow_id="workflow_" + "1" * 32)
     malformed = SimpleNamespace(
         graph_snapshot_revision_id="graphrev_" + "2" * 32,
         evidence_bundle_revision_id="evidencerev_" + "3" * 32,
-        canonical_document={"schema_version": "resolved-execution-plan/3.0"},
+        canonical_document={"schema_version": schema_version},
     )
     with pytest.raises(ApiError) as captured:
         QueryAdapter._knowledge_provenance(  # type: ignore[arg-type]
@@ -37,6 +43,64 @@ def test_knowledge_plan_projection_fails_closed_on_invalid_canonical_document() 
             malformed,
         )
     assert captured.value.error_code == "WORKFLOW_KNOWLEDGE_PROVENANCE_INVALID"
+
+
+def test_solution_enriched_v11_plan_projects_the_same_pinned_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workflow_id = "workflow_" + "1" * 32
+    requirement = SimpleNamespace(
+        corpus_key="integrated-science-textbooks",
+        query_kind="ITEM_PREPARATION",
+        curriculum_root_key=None,
+        required_item_elements=("choice", "paragraph", "table"),
+        source_classes=("PAST_EXAM",),
+    )
+    graph_snapshot = SimpleNamespace(graph_snapshot_revision_id="graphrev_" + "2" * 32)
+    plan = SimpleNamespace(
+        plan_id="execplan_" + "3" * 32,
+        plan_sha256="sha256:" + "4" * 64,
+        workflow_id=workflow_id,
+        preset_id="execpreset_" + "5" * 32,
+        preset_revision_id="execpresetrev_" + "6" * 32,
+        capacity_policy_revision_id="capacityrev_" + "7" * 32,
+        graph_snapshot=graph_snapshot,
+        evidence_bundle_revision_id="evidencerev_" + "8" * 32,
+        retrieval_requirement=requirement,
+        retrieval_request_id="retrieval_" + "9" * 32,
+        retrieval_request_sha256="sha256:" + "a" * 64,
+        access_policy_revision_id="accessrev_" + "b" * 32,
+        access_policy_sha256="sha256:" + "c" * 64,
+        evidence_manifest_sha256="sha256:" + "d" * 64,
+        resolved_at="2026-09-19T15:00:00Z",
+    )
+    monkeypatch.setattr(
+        "eom_api.services.query_adapter.ResolvedExecutionPlanV11.model_validate",
+        lambda _value: plan,
+    )
+    record = SimpleNamespace(
+        plan_id=plan.plan_id,
+        workflow_id=workflow_id,
+        preset_id=plan.preset_id,
+        preset_revision_id=plan.preset_revision_id,
+        capacity_policy_revision_id=plan.capacity_policy_revision_id,
+        graph_snapshot_revision_id=plan.graph_snapshot.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=plan.evidence_bundle_revision_id,
+        plan_sha256=plan.plan_sha256,
+        resolved_at=plan.resolved_at,
+        canonical_document={"schema_version": "resolved-execution-plan/11.0"},
+    )
+
+    projected = QueryAdapter._knowledge_provenance(  # type: ignore[arg-type]
+        SimpleNamespace(workflow_id=workflow_id),
+        record,
+    )
+
+    assert projected is not None
+    assert projected.plan_id == plan.plan_id
+    assert projected.preset_revision_id == plan.preset_revision_id
+    assert projected.graph_snapshot_revision_id == plan.graph_snapshot.graph_snapshot_revision_id
+    assert projected.source_classes == ("PAST_EXAM",)
 
 
 def test_completed_workflow_projects_only_the_registered_item_revision_pointer() -> None:
