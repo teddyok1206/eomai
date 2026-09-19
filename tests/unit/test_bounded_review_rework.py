@@ -12,8 +12,10 @@ from eom_workflow import (
     WORKFLOW_ADMISSION_BY_IDENTITY,
     ArtifactPointer,
     WorkflowReviewReworkDirective,
+    append_review_rework_directive,
     build_review_rework_directive,
     compile_definition,
+    validate_review_rework_history,
 )
 from eom_workflow.models import (
     ContentTeamReviewRoleResultV11,
@@ -87,6 +89,95 @@ def test_unknown_blocking_finding_never_enters_an_automatic_loop() -> None:
 
     assert directive.outcome == "HUMAN_REVIEW_REQUIRED"
     assert directive.human_required_finding_codes == ("FUTURE_UNCLASSIFIED_BLOCKER",)
+
+
+def test_review_rework_history_validates_every_cycle_and_adopts_exact_replay() -> None:
+    authoring = _pointer("authoring", 1, "authoring-result@11.0", "1")
+    first = build_review_rework_directive(
+        prior_authoring=authoring,
+        source_review=_pointer("review", 1, "review-result@11.0", "2"),
+        blocking_finding_codes=("DIFFICULTY_MISMATCH",),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=0,
+        max_rework_cycles=3,
+    )
+    second = build_review_rework_directive(
+        # A human may request re-review without replacing an already-correct authoring Artifact.
+        prior_authoring=authoring,
+        source_review=_pointer("review", 2, "review-result@11.0", "3"),
+        blocking_finding_codes=(),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=1,
+        max_rework_cycles=3,
+    )
+
+    history = append_review_rework_directive([], first)
+    assert append_review_rework_directive(history, first) == history
+    history = append_review_rework_directive(history, second)
+    parsed = validate_review_rework_history(history)
+
+    assert [entry.observed_rework_cycle_count for entry in parsed] == [0, 1]
+    assert [entry.source_review.attempt for entry in parsed] == [1, 2]
+
+
+def test_review_rework_history_rejects_a_corrupt_earlier_cycle_hidden_by_a_valid_latest() -> None:
+    first = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 1, "authoring-result@11.0", "1"),
+        source_review=_pointer("review", 1, "review-result@11.0", "2"),
+        blocking_finding_codes=("DIFFICULTY_MISMATCH",),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=0,
+        max_rework_cycles=3,
+    )
+    second = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 2, "authoring-result@11.0", "3"),
+        source_review=_pointer("review", 2, "review-result@11.0", "4"),
+        blocking_finding_codes=(),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=1,
+        max_rework_cycles=3,
+    )
+    corrupted = [first.model_dump(mode="json"), second.model_dump(mode="json")]
+    corrupted[0]["decision_sha256"] = "sha256:" + "f" * 64
+
+    with pytest.raises(ValueError, match="hash differs"):
+        validate_review_rework_history(corrupted)
+
+
+def test_review_rework_history_rejects_cycle_gaps_and_cross_cycle_pointer_drift() -> None:
+    first = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 1, "authoring-result@11.0", "1"),
+        source_review=_pointer("review", 1, "review-result@11.0", "2"),
+        blocking_finding_codes=("DIFFICULTY_MISMATCH",),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=0,
+        max_rework_cycles=3,
+    )
+    skipped = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 2, "authoring-result@11.0", "3"),
+        source_review=_pointer("review", 2, "review-result@11.0", "4"),
+        blocking_finding_codes=(),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=2,
+        max_rework_cycles=3,
+    )
+    with pytest.raises(ValueError, match="cycle sequence differs"):
+        validate_review_rework_history(
+            [first.model_dump(mode="json"), skipped.model_dump(mode="json")]
+        )
+
+    changed_same_attempt = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 1, "authoring-result@11.0", "5"),
+        source_review=_pointer("review", 2, "review-result@11.0", "6"),
+        blocking_finding_codes=(),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=1,
+        max_rework_cycles=3,
+    )
+    with pytest.raises(ValueError, match="changes an immutable authoring attempt"):
+        validate_review_rework_history(
+            [first.model_dump(mode="json"), changed_same_attempt.model_dump(mode="json")]
+        )
 
 
 @pytest.mark.parametrize(
@@ -221,6 +312,7 @@ def test_prompt_materialization_resolves_exact_prior_results_only_at_the_boundar
             workflow_id="workflow_" + "9" * 32,
             runtime_context={
                 "review_rework_history": [directive.model_dump(mode="json")],
+                "review_rework_status": directive.outcome,
             },
         ),  # type: ignore[arg-type]
         SimpleNamespace(step_key="authoring"),  # type: ignore[arg-type]
@@ -236,6 +328,45 @@ def test_prompt_materialization_resolves_exact_prior_results_only_at_the_boundar
     assert json.loads(context["rework"]["source_review_result_json"])["artifact"] == (
         review_result.artifact.model_dump(mode="json")
     )
+
+
+def test_prompt_materialization_rejects_corrupt_earlier_review_history() -> None:
+    first = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 1, "authoring-result@11.0", "1"),
+        source_review=_pointer("review", 1, "review-result@11.0", "2"),
+        blocking_finding_codes=("DIFFICULTY_MISMATCH",),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=0,
+        max_rework_cycles=3,
+    ).model_dump(mode="json")
+    latest = build_review_rework_directive(
+        prior_authoring=_pointer("authoring", 2, "authoring-result@11.0", "3"),
+        source_review=_pointer("review", 2, "review-result@11.0", "4"),
+        blocking_finding_codes=(),
+        disregarded_finding_codes=(),
+        observed_rework_cycle_count=1,
+        max_rework_cycles=3,
+    )
+    first["decision_sha256"] = "sha256:" + "f" * 64
+    service = object.__new__(WorkflowCatalogService)
+    request = WorkflowRequest.model_validate_json(
+        (PACK / "fixtures/smoke-request.json").read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(ValueError, match="hash differs"):
+        service._prompt_context(
+            SimpleNamespace(
+                workflow_id="workflow_" + "9" * 32,
+                runtime_context={
+                    "review_rework_history": [first, latest.model_dump(mode="json")],
+                    "review_rework_status": latest.outcome,
+                },
+            ),  # type: ignore[arg-type]
+            SimpleNamespace(step_key="authoring"),  # type: ignore[arg-type]
+            request,
+            (),
+            "packrel_" + "8" * 32,
+        )
 
 
 def test_bounded_rework_pack_workflow_and_prompts_form_one_successor_family() -> None:

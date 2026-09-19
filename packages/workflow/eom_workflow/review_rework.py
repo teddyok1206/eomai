@@ -38,6 +38,94 @@ HUMAN_REQUIRED_REVIEW_FINDING_CODES = frozenset(
 )
 
 
+def validate_review_rework_history(
+    raw_history: object,
+    *,
+    max_rework_cycles: int = 3,
+) -> tuple[WorkflowReviewReworkDirective, ...]:
+    """Validate the complete bounded decision chain, not only its latest member.
+
+    One review decision exists for cycle zero and for every subsequent rework cycle. Step attempts
+    may skip because infrastructure retries have their own attempt budget, but review source
+    attempts must advance and an unchanged authoring attempt must keep the exact same immutable
+    pointer. The released history is bounded, so full validation is O(H) with H <= 4.
+    """
+
+    if max_rework_cycles != 3:
+        raise ValueError("review rework history requires the released three-cycle limit")
+    if not isinstance(raw_history, list):
+        raise ValueError("review rework history must be an array")
+    if len(raw_history) > max_rework_cycles + 1:
+        raise ValueError("review rework history exceeds its bounded decision count")
+
+    directives: list[WorkflowReviewReworkDirective] = []
+    decision_hashes: set[str] = set()
+    review_revisions: set[str] = set()
+    for expected_cycle, raw_directive in enumerate(raw_history):
+        validate_schema_message(
+            load_review_rework_directive_schema(),
+            raw_directive,
+            "workflow-review-rework-directive/1.0",
+        )
+        directive = WorkflowReviewReworkDirective.model_validate(raw_directive)
+        if directive.max_rework_cycles != max_rework_cycles:
+            raise ValueError("review rework history limit differs")
+        if directive.observed_rework_cycle_count != expected_cycle:
+            raise ValueError("review rework history cycle sequence differs")
+        if directive.decision_sha256 in decision_hashes:
+            raise ValueError("review rework history repeats a decision hash")
+        if directive.source_review.revision_id in review_revisions:
+            raise ValueError("review rework history repeats a review revision")
+
+        if directives:
+            previous = directives[-1]
+            if directive.source_review.attempt <= previous.source_review.attempt:
+                raise ValueError("review rework history review attempts do not advance")
+            if directive.prior_authoring.attempt < previous.prior_authoring.attempt:
+                raise ValueError("review rework history authoring attempts move backward")
+            if (
+                directive.prior_authoring.attempt == previous.prior_authoring.attempt
+                and directive.prior_authoring != previous.prior_authoring
+            ):
+                raise ValueError("review rework history changes an immutable authoring attempt")
+
+        decision_hashes.add(directive.decision_sha256)
+        review_revisions.add(directive.source_review.revision_id)
+        directives.append(directive)
+    return tuple(directives)
+
+
+def append_review_rework_directive(
+    raw_history: object,
+    directive: WorkflowReviewReworkDirective,
+    *,
+    max_rework_cycles: int = 3,
+) -> list[dict[str, object]]:
+    """Append exactly one cycle decision, or adopt its byte-equivalent replay."""
+
+    history = validate_review_rework_history(
+        raw_history,
+        max_rework_cycles=max_rework_cycles,
+    )
+    observed = directive.observed_rework_cycle_count
+    if len(history) == observed + 1:
+        if history[-1] != directive:
+            raise ValueError("recorded review rework directive differs on replay")
+        return [entry.model_dump(mode="json") for entry in history]
+    if len(history) != observed:
+        raise ValueError("review rework history differs from the observed cycle")
+
+    appended = [
+        *(entry.model_dump(mode="json") for entry in history),
+        directive.model_dump(mode="json"),
+    ]
+    validate_review_rework_history(
+        appended,
+        max_rework_cycles=max_rework_cycles,
+    )
+    return appended
+
+
 def build_review_rework_directive(
     *,
     prior_authoring: ArtifactPointer,

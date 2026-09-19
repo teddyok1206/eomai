@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -497,6 +498,41 @@ class FakeWorkflowCatalog:
         return ()
 
 
+class WorkflowScopedReviewCatalog(FakeWorkflowCatalog):
+    """Test adapter whose immutable policy input is keyed by Workflow identity."""
+
+    def __init__(self, codes_by_workflow: dict[str, tuple[tuple[str, ...], ...]]) -> None:
+        super().__init__()
+        self.codes_by_workflow = codes_by_workflow
+
+    def classify_review_rework(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+        observed_rework_cycle_count: int,
+        max_rework_cycles: int,
+    ) -> WorkflowReviewReworkDirective:
+        del request
+        authoring = tuple(pointer for pointer in artifacts if pointer.step_key == "authoring")
+        review = tuple(pointer for pointer in artifacts if pointer.step_key == "review")
+        assert len(authoring) == 1
+        assert len(review) == 1
+        cycles = self.codes_by_workflow[workflow.workflow_id]
+        codes = (
+            cycles[observed_rework_cycle_count] if observed_rework_cycle_count < len(cycles) else ()
+        )
+        return build_review_rework_directive(
+            prior_authoring=authoring[0],
+            source_review=review[0],
+            blocking_finding_codes=codes,
+            disregarded_finding_codes=(),
+            observed_rework_cycle_count=observed_rework_cycle_count,
+            max_rework_cycles=max_rework_cycles,
+        )
+
+
 class FailedRoleExecutor:
     def __init__(
         self,
@@ -954,6 +990,157 @@ def test_review_rework_successor_stops_after_three_automatic_cycles(
         )
     finally:
         _close(resources)
+
+
+def test_parallel_workflows_keep_bounded_review_feedback_isolated(
+    integration_engine: Engine,
+) -> None:
+    sessions = sessionmaker(bind=integration_engine, expire_on_commit=False)
+    suffix = uuid4().hex
+    workflow_ids: list[str] = []
+    seen_job_ids: set[str] = set()
+    try:
+        compiled = compile_definition(
+            Path("config/workflows/generic-item-development.v1.12.yaml"),
+            set(ROLE_SLOTS) | {"support"},
+        )
+        with transaction(sessions) as session:
+            ensure_protocol_version(session, "workflow-role/1.0.1", role_schema_bundle_hash())
+            for role, (slot_id, linux_user) in ROLE_SLOTS.items():
+                upsert_worker_slot(
+                    session,
+                    slot_id=slot_id,
+                    linux_user=linux_user,
+                    role=role,
+                    enabled=True,
+                    gpu=role == "image",
+                )
+            definition, _ = import_workflow_definition(session, compiled)
+            for index in range(3):
+                request_document = json.loads(
+                    (
+                        ROOT
+                        / "content/packs/generated-knowledge-item"
+                        / "1.18.0/fixtures/smoke-request.json"
+                    ).read_text(encoding="utf-8")
+                )
+                request_document["item_brief"]["original_request_sha256"] = str(index + 1) * 64
+                workflow, created = create_workflow_instance(
+                    session,
+                    definition=definition,
+                    request=WorkflowRequest.model_validate(request_document),
+                    idempotency_key=f"parallel-review-{suffix}-{index}",
+                    actor_type="human",
+                    actor_id="requester_01",
+                )
+                assert created
+                workflow_ids.append(workflow.workflow_id)
+                enqueue_command(
+                    session,
+                    workflow_id=workflow.workflow_id,
+                    command_type=CommandType.START_WORKFLOW,
+                    payload={},
+                    actor_type="human",
+                    actor_id="requester_01",
+                    source="test",
+                    idempotency_key=f"parallel-review-start:{workflow.workflow_id}",
+                )
+
+        catalog = WorkflowScopedReviewCatalog(
+            {
+                workflow_ids[0]: (("DIFFICULTY_MISMATCH",), ()),
+                workflow_ids[1]: (
+                    ("SCORE_MISMATCH",),
+                    ("EXPLANATION_INCONSISTENT",),
+                    (),
+                ),
+                workflow_ids[2]: (("ORIGINALITY_EVIDENCE_INSUFFICIENT",),),
+            }
+        )
+        runners = tuple(
+            WorkflowRunner(
+                integration_engine,
+                _workflow_settings(),
+                FakeRoleExecutor(sessions),
+                catalog=catalog,
+                actor_authorizer=_static_actor_authorizer(),
+                readiness=ReadyWorkflowRuntime(),
+                available_roles=frozenset(ROLE_SLOTS) | {"support"},
+                runner_id=f"parallel-review-runner-{index}-{suffix}",
+            )
+            for index in range(3)
+        )
+
+        def drain(runner: WorkflowRunner) -> int:
+            processed = 0
+            while runner.run_once() is not None:
+                processed += 1
+            return processed
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            processed = tuple(executor.map(drain, runners))
+
+        assert sum(processed) == 3
+        expected_outcomes = (
+            ("REWORK_AUTHORING", "READY_FOR_HUMAN"),
+            ("REWORK_AUTHORING", "REWORK_AUTHORING", "READY_FOR_HUMAN"),
+            ("HUMAN_REVIEW_REQUIRED",),
+        )
+        seen_decisions: set[str] = set()
+        seen_review_revisions: set[str] = set()
+        with sessions() as session:
+            for workflow_id, outcomes in zip(workflow_ids, expected_outcomes, strict=True):
+                workflow = session.get(WorkflowInstanceRecord, workflow_id)
+                assert workflow is not None
+                assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+                assert workflow.rework_cycle_count == outcomes.count("REWORK_AUTHORING")
+                history = workflow.runtime_context["review_rework_history"]
+                assert tuple(entry["outcome"] for entry in history) == outcomes
+                assert workflow.runtime_context["review_rework_status"] == outcomes[-1]
+
+                own_steps = list_step_runs(session, workflow_id)
+                own_revisions = {
+                    step.output_pointer_manifest["revision_id"]
+                    for step in own_steps
+                    if step.output_pointer_manifest is not None
+                }
+                for entry in history:
+                    assert entry["prior_authoring"]["revision_id"] in own_revisions
+                    review_revision = entry["source_review"]["revision_id"]
+                    assert review_revision in own_revisions
+                    assert review_revision not in seen_review_revisions
+                    assert entry["decision_sha256"] not in seen_decisions
+                    seen_review_revisions.add(review_revision)
+                    seen_decisions.add(entry["decision_sha256"])
+                workflow_job_ids = {
+                    step.platform_job_id for step in own_steps if step.platform_job_id is not None
+                }
+                assert seen_job_ids.isdisjoint(workflow_job_ids)
+                seen_job_ids.update(workflow_job_ids)
+
+            active_commands = session.scalars(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id.in_(workflow_ids),
+                    WorkflowCommandRecord.state.in_(
+                        (
+                            CommandState.PENDING.value,
+                            CommandState.LEASED.value,
+                            CommandState.PROCESSING.value,
+                        )
+                    ),
+                )
+            ).all()
+            assert active_commands == []
+    finally:
+        if workflow_ids:
+            with integration_engine.begin() as connection:
+                # The guarded disposable database owns immutable Job/Artifact cleanup. Removing
+                # approved Artifacts here would correctly trip the production immutability guard.
+                connection.execute(
+                    delete(WorkflowInstanceRecord).where(
+                        WorkflowInstanceRecord.workflow_id.in_(workflow_ids)
+                    )
+                )
 
 
 def test_capacity_queue_yields_once_and_admin_reconcile_resumes_same_job(

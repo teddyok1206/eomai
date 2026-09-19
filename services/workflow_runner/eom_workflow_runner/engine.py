@@ -41,9 +41,11 @@ from eom_workflow import (
     WorkerRequest,
     WorkflowRequest,
     WorkflowReviewReworkDirective,
+    append_review_rework_directive,
     compile_definition_data,
     evaluate_decision,
     load_review_rework_directive_schema,
+    validate_review_rework_history,
     validate_schema_message,
 )
 from sqlalchemy import Engine, select
@@ -983,29 +985,36 @@ class WorkflowRunner:
                     }
                 automatic_rework_scheduled = False
                 if review_rework_directive is not None:
-                    history = list(context.get("review_rework_history", []))
-                    directive_document = review_rework_directive.model_dump(mode="json")
-                    latest_history = history[-1] if history else None
-                    if latest_history is not None and not isinstance(latest_history, dict):
+                    raw_history = context.get("review_rework_history", [])
+                    try:
+                        recorded = validate_review_rework_history(
+                            raw_history,
+                            max_rework_cycles=compiled.definition.limits.max_rework_cycles,
+                        )
+                        recorded_status = context.get("review_rework_status")
+                        if recorded and recorded_status != recorded[-1].outcome:
+                            raise ValueError("review rework status differs from its history")
+                        if not recorded and recorded_status is not None:
+                            raise ValueError("review rework status exists without history")
+                        history = append_review_rework_directive(
+                            raw_history,
+                            review_rework_directive,
+                            max_rework_cycles=compiled.definition.limits.max_rework_cycles,
+                        )
+                        validated_history = validate_review_rework_history(
+                            history,
+                            max_rework_cycles=compiled.definition.limits.max_rework_cycles,
+                        )
+                        self._validate_review_rework_history_sources(
+                            session,
+                            workflow_id=workflow.workflow_id,
+                            history=validated_history,
+                        )
+                    except (TypeError, ValueError) as exc:
                         raise WorkflowError(
                             WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                             "recorded review rework history is invalid",
-                        )
-                    if latest_history is not None and latest_history.get(
-                        "source_review"
-                    ) == directive_document.get("source_review"):
-                        if history[-1] != directive_document:
-                            raise WorkflowError(
-                                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                                "recorded review rework directive differs on replay",
-                            )
-                    else:
-                        history.append(directive_document)
-                    if len(history) > 4:
-                        raise WorkflowError(
-                            WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                            "review rework history exceeds its bounded attempt count",
-                        )
+                        ) from exc
                     context["review_rework_history"] = history
                     context["review_rework_status"] = review_rework_directive.outcome
                 current.runtime_context = context
@@ -1054,6 +1063,31 @@ class WorkflowRunner:
                 "platform role job failed",
             )
         return True
+
+    @staticmethod
+    def _validate_review_rework_history_sources(
+        session: Session,
+        *,
+        workflow_id: str,
+        history: tuple[WorkflowReviewReworkDirective, ...],
+    ) -> None:
+        """Resolve every bounded history pointer against this workflow's exact step attempt."""
+
+        for directive in history:
+            for pointer in (directive.prior_authoring, directive.source_review):
+                source = session.scalar(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == pointer.step_key,
+                        WorkflowStepRunRecord.attempt == pointer.attempt,
+                    )
+                )
+                if (
+                    source is None
+                    or source.state not in {StepState.SUCCEEDED.value, StepState.SUPERSEDED.value}
+                    or source.output_pointer_manifest != pointer.model_dump(mode="json")
+                ):
+                    raise ValueError("review rework history source pointer cannot be resolved")
 
     def _schedule_automatic_review_rework(
         self,

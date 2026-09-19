@@ -116,7 +116,9 @@ from eom_workflow.models import (
 from eom_workflow.review_rework import (
     HUMAN_REQUIRED_REVIEW_FINDING_CODES,
     REPAIRABLE_REVIEW_FINDING_CODES,
+    append_review_rework_directive,
     build_review_rework_directive,
+    validate_review_rework_history,
 )
 from eom_workflow.schemas import load_review_rework_directive_schema, validate_schema_message
 
@@ -218,6 +220,7 @@ __all__ = [
     "WorkflowProductionOccurrence",
     "WorkflowRequest",
     "WorkflowReviewReworkDirective",
+    "append_review_rework_directive",
     "build_review_rework_directive",
     "compile_definition",
     "compile_definition_data",
@@ -226,6 +229,7 @@ __all__ = [
     "load_control_schema",
     "load_review_rework_directive_schema",
     "validate_control_contract",
+    "validate_review_rework_history",
     "validate_schema_message",
     "workflow_admission",
     "workflow_definition_is_admitted",

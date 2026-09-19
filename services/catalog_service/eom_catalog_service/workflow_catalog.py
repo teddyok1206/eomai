@@ -52,6 +52,7 @@ from eom_workflow import (
     WorkflowRequest,
     WorkflowReviewReworkDirective,
     build_review_rework_directive,
+    validate_review_rework_history,
 )
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
@@ -80,11 +81,7 @@ from eom_workflow.models import (
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
-from eom_workflow.schemas import (
-    load_review_rework_directive_schema,
-    validate_role_result,
-    validate_schema_message,
-)
+from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.catalog_port import (
     ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
@@ -1713,14 +1710,12 @@ class WorkflowCatalogService:
         }
         raw_history = workflow.runtime_context.get("review_rework_history")
         if raw_history is not None:
-            if not isinstance(raw_history, list) or not raw_history:
+            history = validate_review_rework_history(raw_history)
+            if not history:
                 raise ValueError("workflow review rework history is invalid")
-            validate_schema_message(
-                load_review_rework_directive_schema(),
-                raw_history[-1],
-                "workflow-review-rework-directive/1.0",
-            )
-            directive = WorkflowReviewReworkDirective.model_validate(raw_history[-1])
+            if workflow.runtime_context.get("review_rework_status") != history[-1].outcome:
+                raise ValueError("workflow review rework status differs from its history")
+            directive = history[-1]
             prior_authoring, _ = self._load_upstream_result(
                 workflow,
                 directive.prior_authoring,

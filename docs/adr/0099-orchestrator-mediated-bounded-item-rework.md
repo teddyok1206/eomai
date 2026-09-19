@@ -59,6 +59,12 @@ With at most 20 findings and four review decisions, classification is O(F), poin
 O(1) per bounded pointer, and temporary space is O(F). No database migration, new queue, cache,
 binary column, or unbounded JSON value is introduced.
 
+The complete bounded history is validated whenever a decision is appended and whenever feedback is
+materialized for another role. Observed cycle numbers must be contiguous from zero, decision hashes
+and review revisions must be unique, review attempts must advance, and an unchanged authoring
+attempt must retain the same immutable pointer. Validation is O(H), where `H <= 4`; a separate
+mutable index or cached summary would add invalidation risk without improving this scale.
+
 ## Transaction, concurrency, retry, and idempotency
 
 The review worker Artifact commits before classification. Under the existing fenced Workflow
@@ -73,6 +79,11 @@ than replacing history. The rework limit bounds feedback to three cycles, while 
 ten-attempt step ceiling leaves room for proven pre-commit infrastructure retries without creating
 additional review decisions. Command lease fencing and existing unique constraints continue to
 serialize concurrent advancement.
+
+Different Items have different Workflow IDs and therefore different command rows, step-attempt
+keys, runtime histories, and job idempotency keys. Multiple Runners may advance different Items in
+parallel through the shared indexed queue. They do not share a process-global feedback collection;
+each exact directive and Artifact pointer pair remains scoped to the claimed Workflow transaction.
 
 ## Dependency direction and adapters
 
