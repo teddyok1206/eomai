@@ -1798,6 +1798,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         "1.9",
         "1.10",
         "1.11",
+        "1.12",
     ):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
@@ -1887,7 +1888,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2114,6 +2115,8 @@ if not {
     "knowledge-item-control-bootstrap-v11",
     "standard-control-bootstrap-v15",
     "knowledge-item-control-bootstrap-v12",
+    "standard-control-bootstrap-v16",
+    "knowledge-item-control-bootstrap-v13",
     "customer-support-control-bootstrap",
     "resolved-execution-plan-v10",
     "worker-capacity-policy-v4",
@@ -2137,9 +2140,10 @@ compiled_versions = {
         definition_v1_9,
         definition_v1_10,
         definition_v1_11,
+        definition_v1_12,
     )
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
@@ -2170,6 +2174,7 @@ admitted_definitions = (
     compile_definition(Path(definition_v1_9), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(definition_v1_10), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(definition_v1_11), {"authoring", "image", "review", "item_management"}),
+    compile_definition(Path(definition_v1_12), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(analysis_v1), {"support"}),
     compile_definition(Path(analysis_v4), {"support"}),
     compile_definition(Path(analysis_v8), {"support"}),

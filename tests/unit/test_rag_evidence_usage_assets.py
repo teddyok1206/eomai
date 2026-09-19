@@ -210,15 +210,20 @@ def test_api_preserves_v120_and_accepts_v123_successor_start_contract() -> None:
         _content_team_start_request() | {"definition_version": "1.11.0"}
     )
     assert successor.definition_version == "1.11.0"
+    bounded_rework = WorkflowStartRequest.model_validate(
+        _content_team_start_request() | {"definition_version": "1.12.0"}
+    )
+    assert bounded_rework.definition_version == "1.12.0"
 
     with pytest.raises(ValidationError, match="workflow definition is unsupported"):
         WorkflowStartRequest.model_validate(
-            _content_team_start_request() | {"definition_version": "1.12.0"}
+            _content_team_start_request() | {"definition_version": "1.13.0"}
         )
 
 
 def test_runner_installer_selects_v123_successor_generic_definition() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
-    assert "generic-item-development.v1.11.yaml" in source
+    assert "generic-item-development.v1.12.yaml" in source
+    assert "generic-item-development.v1.11.yaml" not in source
     assert "generic-item-development.v1.10.yaml" not in source
     assert "generic-item-development.v1.9.yaml" not in source

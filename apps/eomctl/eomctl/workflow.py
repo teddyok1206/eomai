@@ -197,6 +197,7 @@ def workflow_start(
         "1.9.0",
         "1.10.0",
         "1.11.0",
+        "1.12.0",
     } and (request.request_name != "GENERATED_KNOWLEDGE_ITEM_REQUEST"):
         raise typer.BadParameter("generated-item workflow requires its generated request contract")
     engine = build_engine()

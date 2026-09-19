@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-item-control-bootstrap/13.0",
+  "title": "Knowledge-backed item control bootstrap manifest V13",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "base_preset_key",
+    "base_preset_schema_version",
+    "base_instruction_bundle_ids",
+    "base_instruction_bundle_revision_ids",
+    "base_instruction_member_sha256s",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "evidence_access_by_role",
+    "retrieval_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-item-control-bootstrap/13.0"
+    },
+    "preset_key": {
+      "const": "knowledge-grounded-item"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "base_preset_key": {
+      "const": "standard-item"
+    },
+    "base_preset_schema_version": {
+      "const": "execution-preset-revision/1.0"
+    },
+    "base_instruction_bundle_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authoring",
+        "image",
+        "review",
+        "item_management"
+      ],
+      "properties": {
+        "authoring": {
+          "const": "instrbundle_7bcd83d35c6ac27021fb5fcd8d9065a4"
+        },
+        "image": {
+          "const": "instrbundle_f536a34f517207e39abd32d469a4e834"
+        },
+        "review": {
+          "const": "instrbundle_713c412dfd049dfdaa8b2bbe961eeda8"
+        },
+        "item_management": {
+          "const": "instrbundle_bea9c5397ee3b8069d3ee9ef74418a37"
+        }
+      }
+    },
+    "base_instruction_bundle_revision_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authoring",
+        "image",
+        "review",
+        "item_management"
+      ],
+      "properties": {
+        "authoring": {
+          "const": "instrrev_a9534d5257bd2b296284c7b03b5e0d6b"
+        },
+        "image": {
+          "const": "instrrev_de46a725c0669895800f39a85dd49570"
+        },
+        "review": {
+          "const": "instrrev_753cf196875a8727bdaac95352a2b692"
+        },
+        "item_management": {
+          "const": "instrrev_a14c34553e29458a44e68c909a13d9bf"
+        }
+      }
+    },
+    "base_instruction_member_sha256s": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "authoring",
+        "image",
+        "review",
+        "item_management"
+      ],
+      "properties": {
+        "platform": {
+          "const": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b"
+        },
+        "authoring": {
+          "const": "sha256:bc7e896e4910eb3328cfc2c8594a03b796cbc13fc315148e52b02eaee1a9c1aa"
+        },
+        "image": {
+          "const": "sha256:8beaab8891e74a32fbd739f26f8ba1c8da562dc7d2cef69ef6b8de2727e8c361"
+        },
+        "review": {
+          "const": "sha256:318c24577678f72790985174ada155f6a11474799c658a54929db233fd9e05ed"
+        },
+        "item_management": {
+          "const": "sha256:6bb460e4acab7d78f0ccd4b952f044261660e7c5f280a3c8019dfd3cc09868c4"
+        }
+      }
+    },
+    "general_knowledge_policy": {
+      "const": "ALLOW_WITH_PROVENANCE"
+    },
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "workflow-role/1.23.0"
+        }
+      ],
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true
+    },
+    "evidence_access_by_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authoring",
+        "image",
+        "review",
+        "item_management"
+      ],
+      "properties": {
+        "authoring": {
+          "const": "EVIDENCE_CONTEXT"
+        },
+        "image": {
+          "const": "EVIDENCE_CONTEXT"
+        },
+        "review": {
+          "const": "EVIDENCE_CONTEXT"
+        },
+        "item_management": {
+          "const": "NONE"
+        }
+      }
+    },
+    "retrieval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "allowed_corpus_keys",
+        "allowed_query_kinds",
+        "allowed_source_classes",
+        "maximum_budget"
+      ],
+      "properties": {
+        "access_policy_revision_id": {
+          "const": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9"
+        },
+        "access_policy_sha256": {
+          "const": "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+        },
+        "allowed_corpus_keys": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "integrated-science-textbooks"
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_query_kinds": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "ITEM_PREPARATION"
+            }
+          ],
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_source_classes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "APPROVED_ITEM"
+            },
+            {
+              "const": "PAST_EXAM"
+            },
+            {
+              "const": "TEXTBOOK"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "maximum_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_documents",
+            "max_item_revisions",
+            "max_graph_nodes",
+            "max_claims",
+            "max_context_tokens"
+          ],
+          "properties": {
+            "max_documents": {
+              "const": 16
+            },
+            "max_item_revisions": {
+              "const": 32
+            },
+            "max_graph_nodes": {
+              "const": 128
+            },
+            "max_claims": {
+              "const": 64
+            },
+            "max_context_tokens": {
+              "const": 16000
+            }
+          }
+        }
+      }
+    }
+  }
+}

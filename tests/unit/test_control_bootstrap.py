@@ -26,6 +26,7 @@ from eom_orchestrator.control_bootstrap import (
     EXPECTED_STANDARD_V13_REFERENCE_KEYS,
     EXPECTED_STANDARD_V14_REFERENCE_KEYS,
     EXPECTED_STANDARD_V15_REFERENCE_KEYS,
+    EXPECTED_STANDARD_V16_REFERENCE_KEYS,
     KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS,
     STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS,
     STANDARD_BOOTSTRAP_REFERENCE_REVISIONS,
@@ -56,6 +57,7 @@ CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
 CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
 CONFIG_V14 = ROOT / "config/control-plane/standard-item-v14"
 CONFIG_V15 = ROOT / "config/control-plane/standard-item-v15"
+CONFIG_V16 = ROOT / "config/control-plane/standard-item-v16"
 ANALYSIS_CONFIG = ROOT / "config/control-plane/knowledge-analysis-v1"
 ANALYSIS_CONFIG_V2 = ROOT / "config/control-plane/knowledge-analysis-v2"
 ANALYSIS_CONFIG_V3 = ROOT / "config/control-plane/knowledge-analysis-v3"
@@ -615,6 +617,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/13.0": 13,
         "standard-control-bootstrap/14.0": 14,
         "standard-control-bootstrap/15.0": 15,
+        "standard-control-bootstrap/16.0": 16,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -658,6 +661,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/13.0": 5,
         "standard-control-bootstrap/14.0": 5,
         "standard-control-bootstrap/15.0": 5,
+        "standard-control-bootstrap/16.0": 5,
     }
 
 
@@ -1023,6 +1027,28 @@ def test_standard_bootstrap_v15_pins_independent_graph_review_contract() -> None
     assert hashlib.sha256(review.encode()).hexdigest() == (
         "1b930e0dd1a5f4cb0b24877e4243c29b73c5110d0fa312b770529cfa703e794f"
     )
+
+
+def test_standard_bootstrap_v16_pins_orchestrator_mediated_rework_contract() -> None:
+    manifest = load_standard_bootstrap_manifest(CONFIG_V16)
+
+    assert manifest.schema_version == "standard-control-bootstrap/16.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.23.0",)
+    assert load_standard_bootstrap_manifest(CONFIG_V15).created_at < manifest.created_at
+    assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest.schema_version] == 16
+    assert STANDARD_BOOTSTRAP_REFERENCE_REVISIONS[manifest.schema_version] == 5
+    assert {role.role: role.reference_keys for role in manifest.roles} == dict(
+        EXPECTED_STANDARD_V16_REFERENCE_KEYS
+    )
+    authoring = (CONFIG_V16 / "instructions/authoring.md").read_text(encoding="utf-8")
+    review = (CONFIG_V16 / "instructions/review.md").read_text(encoding="utf-8")
+    assert "REWORK_FEEDBACK_JSON" in authoring
+    assert "complete new result" in authoring
+    assert "independently review the new" in review
+    assert "do not communicate with the\nreview worker directly" in authoring
+    assert "mock_exam_slot=null" in authoring
+    assert "task_type` remains an editorial task label" in authoring
+    assert "a difference from the material form\n  is not a finding" in review
 
 
 def test_standard_bootstrap_v6_pins_source_prompt_and_handoff_profile() -> None:

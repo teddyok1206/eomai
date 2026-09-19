@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _request(definition_version: str = "1.8.0") -> WorkflowStartRequest:
-    if definition_version == "1.11.0":
+    if definition_version in {"1.11.0", "1.12.0"}:
         return WorkflowStartRequest.model_validate(
             {
                 "definition_key": "generic-item-development",
@@ -126,7 +126,11 @@ class _GraphMissCatalog:
 
 @pytest.mark.parametrize(
     ("definition_version", "expected_solution_requirement"),
-    (("1.8.0", "NONE"), ("1.11.0", "REQUIRE_ACCEPTED_SOLUTION_REPORT")),
+    (
+        ("1.8.0", "NONE"),
+        ("1.11.0", "REQUIRE_ACCEPTED_SOLUTION_REPORT"),
+        ("1.12.0", "REQUIRE_ACCEPTED_SOLUTION_REPORT"),
+    ),
 )
 def test_graph_miss_happens_before_workflow_transaction_or_worker_claim_and_pins_solution_policy(
     monkeypatch: pytest.MonkeyPatch,

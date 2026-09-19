@@ -210,7 +210,7 @@ def resolve_knowledge_backed_execution_plan(
             "CONTROL_PRESET_POLICY_INVALID", "knowledge-backed request requires a V2 preset"
         ) from exc
     validate_educational_retrieval_policy(preset, requirement)
-    graph_review_successor = dependencies.workflow_definition_version == "1.11.0"
+    graph_review_successor = dependencies.workflow_definition_version in {"1.11.0", "1.12.0"}
     role_is_successor = dependencies.workflow_role_schema_version == "workflow-role/1.23.0"
     evidence_is_successor = isinstance(evidence, EvidenceBundlePublicationResultV5)
     successor_inputs = (
@@ -225,7 +225,7 @@ def resolve_knowledge_backed_execution_plan(
     ):
         raise ControlPlaneError(
             "CONTROL_GRAPH_REVIEW_PROTOCOL_MISMATCH",
-            "graph-review successor requires workflow 1.11, role 1.23, and Evidence Bundle V5",
+            "graph-review successor requires workflow 1.11/1.12, role 1.23, and Evidence Bundle V5",
         )
     policy = preset.retrieval_policy
     if (

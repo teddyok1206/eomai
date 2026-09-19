@@ -85,6 +85,7 @@ from eom_workflow.control_schemas import (
 from eom_workflow.models import (
     AgentStep,
     ArtifactPointer,
+    AutomaticReviewReworkPolicy,
     ContentTeamItemBrief,
     ContentTeamItemBriefV4,
     CustomerSupportCase,
@@ -110,16 +111,26 @@ from eom_workflow.models import (
     WorkflowDefinition,
     WorkflowProductionOccurrence,
     WorkflowRequest,
+    WorkflowReviewReworkDirective,
 )
+from eom_workflow.review_rework import (
+    HUMAN_REQUIRED_REVIEW_FINDING_CODES,
+    REPAIRABLE_REVIEW_FINDING_CODES,
+    build_review_rework_directive,
+)
+from eom_workflow.schemas import load_review_rework_directive_schema, validate_schema_message
 
 __all__ = [
     "CONTROL_SCHEMA_RESOURCES",
+    "HUMAN_REQUIRED_REVIEW_FINDING_CODES",
     "MANAGED_WORKFLOW_DEFINITION_KEYS",
+    "REPAIRABLE_REVIEW_FINDING_CODES",
     "WORKFLOW_ADMISSION_BY_IDENTITY",
     "AgentStep",
     "ArtifactPointer",
     "AuthoringEvidenceUsageValidationReceipt",
     "AuthoringEvidenceUsageValidationReceiptV2",
+    "AutomaticReviewReworkPolicy",
     "BundleRevisionPointer",
     "CodexAssessmentImageInput",
     "CodexAssessmentImageInputManifest",
@@ -206,12 +217,16 @@ __all__ = [
     "WorkflowDefinitionError",
     "WorkflowProductionOccurrence",
     "WorkflowRequest",
+    "WorkflowReviewReworkDirective",
+    "build_review_rework_directive",
     "compile_definition",
     "compile_definition_data",
     "control_schema_inventory",
     "evaluate_decision",
     "load_control_schema",
+    "load_review_rework_directive_schema",
     "validate_control_contract",
+    "validate_schema_message",
     "workflow_admission",
     "workflow_definition_is_admitted",
 ]

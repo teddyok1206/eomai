@@ -32,6 +32,8 @@ from eom_workflow import (
     LegacyItemExtractionWorkerRequest,
     WorkerRequest,
     WorkflowRequest,
+    WorkflowReviewReworkDirective,
+    build_review_rework_directive,
     compile_definition,
 )
 from eom_workflow.compiler import compile_definition_data
@@ -377,6 +379,35 @@ class FakeWorkflowCatalog:
         self.registrations: list[tuple[str, int]] = []
         self.materializations: list[tuple[str, str]] = []
         self.content_team_image_count = 0
+        self.review_blocking_codes_by_cycle: list[tuple[str, ...]] = []
+
+    def classify_review_rework(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+        observed_rework_cycle_count: int,
+        max_rework_cycles: int,
+    ) -> WorkflowReviewReworkDirective:
+        del workflow, request
+        authoring = tuple(pointer for pointer in artifacts if pointer.step_key == "authoring")
+        review = tuple(pointer for pointer in artifacts if pointer.step_key == "review")
+        assert len(authoring) == 1
+        assert len(review) == 1
+        codes = (
+            self.review_blocking_codes_by_cycle[observed_rework_cycle_count]
+            if observed_rework_cycle_count < len(self.review_blocking_codes_by_cycle)
+            else ()
+        )
+        return build_review_rework_directive(
+            prior_authoring=authoring[0],
+            source_review=review[0],
+            blocking_finding_codes=codes,
+            disregarded_finding_codes=(),
+            observed_rework_cycle_count=observed_rework_cycle_count,
+            max_rework_cycles=max_rework_cycles,
+        )
 
     def content_team_image_slot_count(
         self,
@@ -832,6 +863,95 @@ def test_content_team_v8_dispatches_only_the_validated_image_slot_count(
             if image_count == 0:
                 assert workflow.runtime_context["content_team_stimuli"] == []
         assert [role for _, _, role in executor.calls] == expected_roles
+    finally:
+        _close(resources)
+
+
+def test_review_rework_successor_returns_one_repairable_review_to_authoring(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-automatic-review-rework-once",
+        definition_path=Path("config/workflows/generic-item-development.v1.12.yaml"),
+    )
+    catalog = cast(FakeWorkflowCatalog, runner.catalog)
+    catalog.review_blocking_codes_by_cycle = [("DIFFICULTY_MISMATCH",), ()]
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert workflow.rework_cycle_count == 1
+            history = workflow.runtime_context["review_rework_history"]
+            assert [entry["outcome"] for entry in history] == [
+                "REWORK_AUTHORING",
+                "READY_FOR_HUMAN",
+            ]
+            authoring = [
+                step
+                for step in list_step_runs(session, workflow_id)
+                if step.step_key == "authoring"
+            ]
+            review = [
+                step for step in list_step_runs(session, workflow_id) if step.step_key == "review"
+            ]
+            assert [(step.attempt, step.state) for step in authoring] == [
+                (1, StepState.SUPERSEDED.value),
+                (2, StepState.SUCCEEDED.value),
+            ]
+            assert [(step.attempt, step.state) for step in review] == [
+                (1, StepState.SUPERSEDED.value),
+                (2, StepState.SUCCEEDED.value),
+            ]
+            directive = authoring[1].input_pointer_manifest["review_rework_directive"]
+            assert directive["source_review"] == review[0].output_pointer_manifest
+            assert directive["prior_authoring"] == authoring[0].output_pointer_manifest
+        assert [
+            (step_key, attempt)
+            for step_key, attempt, _role in executor.calls
+            if step_key in {"authoring", "review"}
+        ] == [("authoring", 1), ("review", 1), ("authoring", 2), ("review", 2)]
+    finally:
+        _close(resources)
+
+
+def test_review_rework_successor_stops_after_three_automatic_cycles(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-automatic-review-rework-limit",
+        definition_path=Path("config/workflows/generic-item-development.v1.12.yaml"),
+    )
+    catalog = cast(FakeWorkflowCatalog, runner.catalog)
+    catalog.review_blocking_codes_by_cycle = [("DIFFICULTY_MISMATCH",)] * 4
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert workflow.rework_cycle_count == 3
+            history = workflow.runtime_context["review_rework_history"]
+            assert [entry["outcome"] for entry in history] == [
+                "REWORK_AUTHORING",
+                "REWORK_AUTHORING",
+                "REWORK_AUTHORING",
+                "HUMAN_REVIEW_REQUIRED",
+            ]
+            attempts = [
+                step.attempt
+                for step in list_step_runs(session, workflow_id)
+                if step.step_key == "authoring"
+            ]
+            assert attempts == [1, 2, 3, 4]
+        assert Counter(role for _step, _attempt, role in executor.calls) == Counter(
+            {"authoring": 4, "review": 4}
+        )
     finally:
         _close(resources)
 

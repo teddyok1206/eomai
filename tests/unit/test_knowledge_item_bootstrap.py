@@ -28,6 +28,9 @@ from eom_orchestrator.knowledge_item_bootstrap import (
     EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_IDS,
     EXPECTED_V12_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
     EXPECTED_V12_BASE_INSTRUCTION_MEMBER_SHA256S,
+    EXPECTED_V13_BASE_INSTRUCTION_BUNDLE_IDS,
+    EXPECTED_V13_BASE_INSTRUCTION_BUNDLE_REVISION_IDS,
+    EXPECTED_V13_BASE_INSTRUCTION_MEMBER_SHA256S,
     KnowledgeItemBootstrapManifest,
     load_knowledge_item_bootstrap_manifest,
 )
@@ -48,6 +51,7 @@ CONFIG_V9 = ROOT / "config/control-plane/knowledge-grounded-item-v9"
 CONFIG_V10 = ROOT / "config/control-plane/knowledge-grounded-item-v10"
 CONFIG_V11 = ROOT / "config/control-plane/knowledge-grounded-item-v11"
 CONFIG_V12 = ROOT / "config/control-plane/knowledge-grounded-item-v12"
+CONFIG_V13 = ROOT / "config/control-plane/knowledge-grounded-item-v13"
 STANDARD_CONFIG_V9 = ROOT / "config/control-plane/standard-item-v9"
 STANDARD_CONFIG_V10 = ROOT / "config/control-plane/standard-item-v10"
 STANDARD_CONFIG_V11 = ROOT / "config/control-plane/standard-item-v11"
@@ -55,6 +59,7 @@ STANDARD_CONFIG_V12 = ROOT / "config/control-plane/standard-item-v12"
 STANDARD_CONFIG_V13 = ROOT / "config/control-plane/standard-item-v13"
 STANDARD_CONFIG_V14 = ROOT / "config/control-plane/standard-item-v14"
 STANDARD_CONFIG_V15 = ROOT / "config/control-plane/standard-item-v15"
+STANDARD_CONFIG_V16 = ROOT / "config/control-plane/standard-item-v16"
 
 
 def test_knowledge_item_bootstrap_is_schema_first_and_exact() -> None:
@@ -448,6 +453,24 @@ def test_knowledge_item_v12_pins_solution_enriched_review_successor() -> None:
     }
     assert manifest.base_instruction_member_sha256s == dict(
         EXPECTED_V12_BASE_INSTRUCTION_MEMBER_SHA256S
+    )
+
+
+def test_knowledge_item_v13_pins_bounded_rework_control_successor() -> None:
+    standard = load_standard_bootstrap_manifest(STANDARD_CONFIG_V16)
+    manifest = load_knowledge_item_bootstrap_manifest(CONFIG_V13)
+    value = manifest.model_dump(mode="json")
+
+    validate_control_contract("knowledge-item-control-bootstrap-v13", value)
+    assert manifest.schema_version == "knowledge-item-control-bootstrap/13.0"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.23.0",)
+    assert standard.created_at < manifest.created_at
+    assert manifest.base_instruction_bundle_ids == dict(EXPECTED_V13_BASE_INSTRUCTION_BUNDLE_IDS)
+    assert manifest.base_instruction_bundle_revision_ids == dict(
+        EXPECTED_V13_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+    )
+    assert manifest.base_instruction_member_sha256s == dict(
+        EXPECTED_V13_BASE_INSTRUCTION_MEMBER_SHA256S
     )
 
 

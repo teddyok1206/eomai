@@ -50,6 +50,8 @@ from eom_workflow import (
     ContentTeamItemBriefV4,
     ItemBriefV2,
     WorkflowRequest,
+    WorkflowReviewReworkDirective,
+    build_review_rework_directive,
 )
 from eom_workflow.models import (
     ContentTeamAuthoringRoleResultV7,
@@ -61,6 +63,7 @@ from eom_workflow.models import (
     ContentTeamImageRoleResultV9,
     ContentTeamImageRoleResultV10,
     ContentTeamImageRoleResultV11,
+    ContentTeamReviewRoleResultV11,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -77,7 +80,11 @@ from eom_workflow.models import (
     KnowledgeAuthoringRoleResult,
     RoleResult,
 )
-from eom_workflow.schemas import validate_role_result
+from eom_workflow.schemas import (
+    load_review_rework_directive_schema,
+    validate_role_result,
+    validate_schema_message,
+)
 from eom_workflow_runner.catalog_port import (
     ContentTeamStimulusPointer,
     GeneratedStimulusPointer,
@@ -907,6 +914,81 @@ class WorkflowCatalogService:
             source_result_revision_id=image.revision_id,
         )
 
+    def classify_review_rework(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+        observed_rework_cycle_count: int,
+        max_rework_cycles: int,
+    ) -> WorkflowReviewReworkDirective:
+        """Resolve one exact @11 pair and classify only trusted blocking findings."""
+
+        authoring = tuple(
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@11.0"
+        )
+        review = tuple(
+            pointer
+            for pointer in artifacts
+            if pointer.step_key == "review" and pointer.result_schema == "review-result@11.0"
+        )
+        if len(authoring) != 1 or len(review) != 1:
+            raise ValueError("automatic review rework requires one exact @11 result pair")
+        _, authoring_result = self._load_upstream_result(workflow, authoring[0])
+        _, review_result = self._load_upstream_result(workflow, review[0])
+        if not isinstance(authoring_result, ContentTeamAuthoringRoleResultV11) or not isinstance(
+            review_result, ContentTeamReviewRoleResultV11
+        ):
+            raise ValueError("automatic review rework result family differs")
+        attestation = review_result.output.evidence_usage_attestation
+        if attestation is not None and attestation.authoring_artifact.model_dump(mode="json") != {
+            "logical_artifact_id": authoring[0].logical_artifact_id,
+            "revision_id": authoring[0].revision_id,
+            "content_hash": authoring[0].content_hash,
+            "result_schema": authoring[0].result_schema,
+        }:
+            raise ValueError("automatic review rework authoring attestation differs")
+        blocking_codes = {
+            finding.code
+            for finding in review_result.output.review.findings
+            if finding.severity == "blocking"
+        }
+        disregarded: set[str] = set()
+        brief = request.item_brief
+        if isinstance(brief, ContentTeamItemBriefV4):
+            material_matches = True
+            try:
+                validate_content_team_material_requirement(
+                    brief.material_requirement,
+                    authoring_result.output.draft,
+                )
+            except ValueError:
+                material_matches = False
+            if material_matches:
+                # V4 standalone requests intentionally separate the editorial task label from
+                # the authoritative student-visible material form.  A mock-exam slot, when
+                # present, is already cross-field validated by ContentTeamItemBriefV4.
+                disregarded.update(
+                    blocking_codes & {"MATERIAL_PROFILE_MISMATCH", "MATERIAL_REQUIREMENT_MISMATCH"}
+                )
+        expected_mode = self._knowledge_source_mode(request)
+        if (
+            authoring_result.output.metadata.knowledge_source_mode == expected_mode
+            and "KNOWLEDGE_SOURCE_MODE_MISMATCH" in blocking_codes
+        ):
+            disregarded.add("KNOWLEDGE_SOURCE_MODE_MISMATCH")
+        return build_review_rework_directive(
+            prior_authoring=authoring[0],
+            source_review=review[0],
+            blocking_finding_codes=blocking_codes,
+            disregarded_finding_codes=disregarded,
+            observed_rework_cycle_count=observed_rework_cycle_count,
+            max_rework_cycles=max_rework_cycles,
+        )
+
     def content_team_image_slot_count(
         self,
         *,
@@ -1457,6 +1539,7 @@ class WorkflowCatalogService:
             "1.16.0",
             "1.16.1",
             "1.17.0",
+            "1.18.0",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1464,12 +1547,12 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            if (release_version in {"1.16.0", "1.16.1", "1.17.0"}) != is_material_v4:
+            if (release_version in {"1.16.0", "1.16.1", "1.17.0", "1.18.0"}) != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "Content Pack release and material-aware item brief differ",
                 )
-            if release_version in {"1.16.0", "1.16.1", "1.17.0"}:
+            if release_version in {"1.16.0", "1.16.1", "1.17.0", "1.18.0"}:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
                 expected_image_profile = (
@@ -1622,7 +1705,39 @@ class WorkflowCatalogService:
             },
             "upstream": upstream_context,
             "pack": {"release_id": release_id},
+            "rework": {
+                "feedback_json": "null",
+                "prior_authoring_result_json": "null",
+                "source_review_result_json": "null",
+            },
         }
+        raw_history = workflow.runtime_context.get("review_rework_history")
+        if raw_history is not None:
+            if not isinstance(raw_history, list) or not raw_history:
+                raise ValueError("workflow review rework history is invalid")
+            validate_schema_message(
+                load_review_rework_directive_schema(),
+                raw_history[-1],
+                "workflow-review-rework-directive/1.0",
+            )
+            directive = WorkflowReviewReworkDirective.model_validate(raw_history[-1])
+            prior_authoring, _ = self._load_upstream_result(
+                workflow,
+                directive.prior_authoring,
+            )
+            source_review, _ = self._load_upstream_result(
+                workflow,
+                directive.source_review,
+            )
+            context["rework"] = {
+                "feedback_json": canonical_json_bytes(directive.model_dump(mode="json")).decode(
+                    "utf-8"
+                ),
+                "prior_authoring_result_json": canonical_json_bytes(prior_authoring).decode(
+                    "utf-8"
+                ),
+                "source_review_result_json": canonical_json_bytes(source_review).decode("utf-8"),
+            }
         if request.item_brief is not None:
             brief = request.item_brief.model_dump(mode="json")
             if isinstance(request.item_brief, (ItemBriefV2, ContentTeamItemBrief)):

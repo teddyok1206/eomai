@@ -168,6 +168,33 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
     if unreachable:
         raise WorkflowDefinitionError(f"unreachable workflow step: {unreachable[0]}")
 
+    policy = definition.automatic_review_rework
+    if policy is not None:
+        source_agent = steps.get(policy.source_review_step)
+        target_agent = steps.get(policy.target_authoring_step)
+        if (
+            not isinstance(source_agent, AgentStep)
+            or source_agent.worker_role != "review"
+            or source_agent.result_schema != "review-result@11.0"
+        ):
+            raise WorkflowDefinitionError(
+                "automatic rework source must be one @11 review agent step"
+            )
+        if (
+            not isinstance(target_agent, AgentStep)
+            or target_agent.worker_role != "authoring"
+            or target_agent.result_schema != "authoring-result@11.0"
+        ):
+            raise WorkflowDefinitionError(
+                "automatic rework target must be one @11 authoring agent step"
+            )
+        if keys.index(target_agent.key) >= keys.index(source_agent.key):
+            raise WorkflowDefinitionError("automatic rework target must precede its review step")
+        if definition.limits.max_rework_cycles != 3 or definition.limits.max_step_attempts < 4:
+            raise WorkflowDefinitionError(
+                "automatic review rework requires three cycles and four step attempts"
+            )
+
 
 def evaluate_decision(step: DecisionStep, initial_request: dict[str, Any]) -> str:
     if step.operator not in {"input_equals", "input_in"}:

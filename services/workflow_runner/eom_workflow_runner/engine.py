@@ -40,8 +40,11 @@ from eom_workflow import (
     TerminalStep,
     WorkerRequest,
     WorkflowRequest,
+    WorkflowReviewReworkDirective,
     compile_definition_data,
     evaluate_decision,
+    load_review_rework_directive_schema,
+    validate_schema_message,
 )
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -737,8 +740,12 @@ class WorkflowRunner:
                 )
             step_run_id = step.step_run_id
             attempt = step.attempt
-            upstream = self._upstream_pointers(
-                session, workflow.workflow_id, compiled, definition.key
+            upstream = self._input_upstream_pointers(
+                session,
+                workflow.workflow_id,
+                compiled,
+                definition.key,
+                step,
             )
 
         idempotency_key = _step_job_idempotency_key(
@@ -750,6 +757,7 @@ class WorkflowRunner:
         generated_stimulus: GeneratedStimulusPointer | None = None
         content_team_stimuli: tuple[ContentTeamStimulusPointer, ...] | None = None
         result_pointer: ArtifactPointer | None = None
+        review_rework_directive: WorkflowReviewReworkDirective | None = None
         try:
             prompt_text: str | None = None
             if full_request.content_pack is not None:
@@ -810,6 +818,15 @@ class WorkflowRunner:
                     content_hash=execution.content_hash,
                     result_schema=definition.result_schema,
                 )
+                rework_policy = compiled.definition.automatic_review_rework
+                if rework_policy is not None and definition.key == rework_policy.source_review_step:
+                    review_rework_directive = self.catalog.classify_review_rework(
+                        workflow=workflow,
+                        request=full_request,
+                        artifacts=(*upstream, result_pointer),
+                        observed_rework_cycle_count=workflow.rework_cycle_count,
+                        max_rework_cycles=compiled.definition.limits.max_rework_cycles,
+                    )
                 if definition.worker_role == "item_management":
                     registration = self.catalog.register_workflow(
                         workflow=workflow,
@@ -964,6 +981,33 @@ class WorkflowRunner:
                         ),
                         "manifest_sha256": registration.manifest_sha256,
                     }
+                automatic_rework_scheduled = False
+                if review_rework_directive is not None:
+                    history = list(context.get("review_rework_history", []))
+                    directive_document = review_rework_directive.model_dump(mode="json")
+                    latest_history = history[-1] if history else None
+                    if latest_history is not None and not isinstance(latest_history, dict):
+                        raise WorkflowError(
+                            WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                            "recorded review rework history is invalid",
+                        )
+                    if latest_history is not None and latest_history.get(
+                        "source_review"
+                    ) == directive_document.get("source_review"):
+                        if history[-1] != directive_document:
+                            raise WorkflowError(
+                                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                                "recorded review rework directive differs on replay",
+                            )
+                    else:
+                        history.append(directive_document)
+                    if len(history) > 4:
+                        raise WorkflowError(
+                            WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                            "review rework history exceeds its bounded attempt count",
+                        )
+                    context["review_rework_history"] = history
+                    context["review_rework_status"] = review_rework_directive.outcome
                 current.runtime_context = context
                 record_workflow_event(
                     session,
@@ -981,14 +1025,27 @@ class WorkflowRunner:
                         "revision_id": execution.revision_id,
                     },
                 )
-                self._move_after_agent(
-                    session,
-                    current,
-                    definition,
-                    command_id,
-                    actor_type,
-                    actor_id,
-                )
+                if (
+                    review_rework_directive is not None
+                    and review_rework_directive.outcome == "REWORK_AUTHORING"
+                ):
+                    self._schedule_automatic_review_rework(
+                        session=session,
+                        workflow=current,
+                        compiled=compiled,
+                        directive=review_rework_directive,
+                        command_id=command_id,
+                    )
+                    automatic_rework_scheduled = True
+                if not automatic_rework_scheduled:
+                    self._move_after_agent(
+                        session,
+                        current,
+                        definition,
+                        command_id,
+                        actor_type,
+                        actor_id,
+                    )
         if execution_failed:
             if retry_scheduled:
                 return False
@@ -997,6 +1054,136 @@ class WorkflowRunner:
                 "platform role job failed",
             )
         return True
+
+    def _schedule_automatic_review_rework(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        directive: WorkflowReviewReworkDirective,
+        command_id: str | None,
+    ) -> None:
+        """Atomically supersede one reviewed attempt and enter its next authoring cycle."""
+
+        policy = compiled.definition.automatic_review_rework
+        if policy is None or directive.outcome != "REWORK_AUTHORING":
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "automatic review rework policy or directive is missing",
+            )
+        if (
+            directive.observed_rework_cycle_count != workflow.rework_cycle_count
+            or directive.max_rework_cycles != compiled.definition.limits.max_rework_cycles
+            or workflow.rework_cycle_count >= compiled.definition.limits.max_rework_cycles
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REWORK_LIMIT_EXCEEDED,
+                "automatic review rework count differs or is exhausted",
+            )
+        target_definition = compiled.steps_by_key[policy.target_authoring_step]
+        source_definition = compiled.steps_by_key[policy.source_review_step]
+        if not isinstance(target_definition, AgentStep) or not isinstance(
+            source_definition, AgentStep
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID,
+                "automatic review rework step types differ",
+            )
+        source_pairs = (
+            (target_definition.key, directive.prior_authoring),
+            (source_definition.key, directive.source_review),
+        )
+        source_review_step_run_id: str | None = None
+        for step_key, pointer in source_pairs:
+            source_run = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow.workflow_id,
+                    WorkflowStepRunRecord.step_key == step_key,
+                    WorkflowStepRunRecord.attempt == pointer.attempt,
+                )
+            )
+            if (
+                source_run is None
+                or source_run.state != StepState.SUCCEEDED.value
+                or source_run.output_pointer_manifest != pointer.model_dump(mode="json")
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "automatic review rework source pointer is stale",
+                )
+            if step_key == source_definition.key:
+                source_review_step_run_id = source_run.step_run_id
+        if source_review_step_run_id is None:  # pragma: no cover - guarded by source_pairs
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "automatic review source step is missing",
+            )
+
+        order = [step.key for step in compiled.definition.steps]
+        target_index = order.index(target_definition.key)
+        for step_run in list_step_runs(session, workflow.workflow_id):
+            if order.index(step_run.step_key) < target_index:
+                continue
+            if step_run.state in {
+                StepState.SUCCEEDED.value,
+                StepState.SKIPPED.value,
+                StepState.WAITING_FOR_HUMAN.value,
+            }:
+                transition_step(step_run, StepState.SUPERSEDED)
+        new_target = create_step_run(
+            session,
+            workflow_id=workflow.workflow_id,
+            step_key=target_definition.key,
+            step_type=target_definition.type,
+            worker_role=target_definition.worker_role,
+            result_schema=target_definition.result_schema,
+            input_pointer_manifest={
+                "upstream_artifacts": [
+                    directive.prior_authoring.model_dump(mode="json"),
+                    directive.source_review.model_dump(mode="json"),
+                ],
+                "review_rework_directive": directive.model_dump(mode="json"),
+            },
+            max_attempts=compiled.definition.limits.max_step_attempts,
+        )
+        workflow.rework_cycle_count += 1
+        workflow.current_step_key = target_definition.key
+        context = dict(workflow.runtime_context)
+        context.pop("generated_stimulus", None)
+        context["content_team_stimuli"] = []
+        workflow.runtime_context = context
+        transition_stage(
+            session,
+            workflow.workflow_id,
+            WorkflowStage.AUTHORING,
+            target_definition.key,
+            "AUTOMATIC_REWORK_STAGE_ENTERED",
+            actor_type="system",
+            actor_id=self.runner_id,
+            command_id=command_id,
+            payload={
+                "new_step_run_id": new_target.step_run_id,
+                "rework_cycle_count": workflow.rework_cycle_count,
+                "decision_sha256": directive.decision_sha256,
+            },
+        )
+        record_workflow_event(
+            session,
+            workflow.workflow_id,
+            "AUTOMATIC_REVIEW_REWORK_SCHEDULED",
+            actor_type="system",
+            actor_id=self.runner_id,
+            command_id=command_id,
+            step_key=target_definition.key,
+            payload={
+                "source_review_step_run_id": source_review_step_run_id,
+                "new_authoring_step_run_id": new_target.step_run_id,
+                "rework_cycle_count": workflow.rework_cycle_count,
+                "decision_sha256": directive.decision_sha256,
+                "repairable_finding_codes": list(directive.repairable_finding_codes),
+            },
+        )
 
     def _schedule_precommit_agent_retry(
         self,
@@ -1056,6 +1243,20 @@ class WorkflowRunner:
         ):
             return False
 
+        successor_input_manifest: dict[str, object] = {
+            "upstream_artifacts": [pointer.model_dump(mode="json") for pointer in upstream]
+        }
+        rework_directive = step.input_pointer_manifest.get("review_rework_directive")
+        if rework_directive is not None:
+            # A proven pre-commit infrastructure retry is still the same review cycle. Preserve
+            # the exact small directive, while prompt pointers/envelopes are rematerialized.
+            validate_schema_message(
+                load_review_rework_directive_schema(),
+                rework_directive,
+                "workflow-review-rework-directive/1.0",
+            )
+            WorkflowReviewReworkDirective.model_validate(rework_directive)
+            successor_input_manifest["review_rework_directive"] = rework_directive
         transition_step(step, StepState.FAILED)
         successor = create_step_run(
             session,
@@ -1064,9 +1265,7 @@ class WorkflowRunner:
             step_type=definition.type,
             worker_role=definition.worker_role,
             result_schema=definition.result_schema,
-            input_pointer_manifest={
-                "upstream_artifacts": [pointer.model_dump(mode="json") for pointer in upstream]
-            },
+            input_pointer_manifest=successor_input_manifest,
             max_attempts=compiled.definition.limits.max_step_attempts,
         )
         step.superseded_by_step_run_id = successor.step_run_id
@@ -1867,6 +2066,68 @@ class WorkflowRunner:
             if latest.output_pointer_manifest:
                 pointers.append(ArtifactPointer.model_validate(latest.output_pointer_manifest))
         return tuple(pointers)
+
+    def _input_upstream_pointers(
+        self,
+        session: Session,
+        workflow_id: str,
+        compiled: CompiledWorkflowDefinition,
+        current_step_key: str,
+        step: WorkflowStepRunRecord,
+    ) -> tuple[ArtifactPointer, ...]:
+        """Resolve exact rework inputs or fall back to the active DAG predecessor set."""
+
+        raw_directive = step.input_pointer_manifest.get("review_rework_directive")
+        if raw_directive is None:
+            return self._upstream_pointers(session, workflow_id, compiled, current_step_key)
+        if current_step_key != (
+            compiled.definition.automatic_review_rework.target_authoring_step
+            if compiled.definition.automatic_review_rework is not None
+            else None
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review rework directive is attached to the wrong step",
+            )
+        validate_schema_message(
+            load_review_rework_directive_schema(),
+            raw_directive,
+            "workflow-review-rework-directive/1.0",
+        )
+        directive = WorkflowReviewReworkDirective.model_validate(raw_directive)
+        if (
+            directive.outcome != "REWORK_AUTHORING"
+            or step.attempt <= directive.prior_authoring.attempt
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review rework directive differs from the successor attempt",
+            )
+        pointers = (directive.prior_authoring, directive.source_review)
+        raw_pointers = step.input_pointer_manifest.get("upstream_artifacts")
+        if raw_pointers != [pointer.model_dump(mode="json") for pointer in pointers]:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review rework input pointers differ from the directive",
+            )
+        for pointer in pointers:
+            source = session.scalar(
+                select(WorkflowStepRunRecord).where(
+                    WorkflowStepRunRecord.workflow_id == workflow_id,
+                    WorkflowStepRunRecord.step_key == pointer.step_key,
+                    WorkflowStepRunRecord.attempt == pointer.attempt,
+                )
+            )
+            if (
+                source is None
+                or source.state != StepState.SUPERSEDED.value
+                or source.output_pointer_manifest != pointer.model_dump(mode="json")
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review rework input pointer cannot be resolved exactly",
+                )
+        return pointers
 
     @staticmethod
     def _latest_active_step(

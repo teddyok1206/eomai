@@ -19,7 +19,7 @@ logical Item
 ## 지금 할 수 있는 일
 
 - Scientific Studio에서 통합과학 단일 문항을 요청하고 진행 상태 확인
-- Authoring → Image(조건부) → Review → Human Approval → Registration 실행
+- Authoring → Image(조건부) → Review → 최대 3회 bounded 개선 → Human Approval → Registration 실행
 - 검증된 기출 PDF Graph를 검색해 Evidence Bundle을 만들고, 인용한 evidence·anchor·문항 적용
   위치를 authoring/review 영수증으로 다시 검증
 - 표, 수식, `<자료>`, `<조건>`, 탐구, `ㄱ/ㄴ/ㄷ`, 5지선다와 해설을 구조화된 Item으로 등록
@@ -36,10 +36,10 @@ readiness가 정본입니다.
 
 | 경계 | 최신 additive 계약 |
 | --- | --- |
-| 단일 문항 Workflow | `generic-item-development@1.11.0` |
+| 단일 문항 Workflow | `generic-item-development@1.12.0` |
 | 역할 protocol / 결과 | `workflow-role/1.23.0` / `authoring·image·review·registration-result@11.0` |
-| Content Pack | `generated-knowledge-item@1.17.0` |
-| 표준 / RAG 실행 정책 | `standard-control-bootstrap/15.0` / `knowledge-item-control-bootstrap/12.0` |
+| Content Pack | `generated-knowledge-item@1.18.0` |
+| 표준 / RAG 실행 정책 | `standard-control-bootstrap/16.0` / `knowledge-item-control-bootstrap/13.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
@@ -48,11 +48,14 @@ readiness가 정본입니다.
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 
-단일 문항의 V11 검토 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
+단일 문항의 V12 bounded-rework successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
 각각 독립 판정합니다. Graph 모드에서는 Evidence Bundle V5에 연결된 승인 풀이보고서를 과학 검증에
 실제로 사용해야 하며, Orchestrator가 검토 결과를 정확한 authoring Artifact와 다시 대조한 뒤
 `evidence-usage-validation-receipt/2.0`을 같은 commit transaction에 남깁니다. 일반지식 모드도
-근거를 가장할 수 없고 동일한 draft 결속 검증을 받습니다. 사람 최종 승인은 그대로 유지됩니다.
+근거를 가장할 수 없고 동일한 draft 결속 검증을 받습니다. 검증된 교정 가능 finding이 남으면
+Orchestrator가 정확한 이전 authoring/review Artifact pointer와 typed directive를 다음 authoring에 전달해
+최대 세 번까지 다시 작성·검토합니다. worker 간 직접 대화는 없으며, unknown·근거 변경·정책 판단
+사안과 3회 소진은 사람 게이트로 보냅니다. 사람 최종 승인은 그대로 유지됩니다.
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
@@ -108,8 +111,10 @@ flowchart LR
   I -->|TEXT · DATA · TABLE · INQUIRY| V[Review]
   I -->|IMAGE · MIXED| G[Local GPU + SVG]
   G --> V
-  V --> H{Human approval}
-  H -->|rework| A
+  V --> Q{Verified finding?}
+  Q -->|repairable · cycle < 3| A
+  Q -->|clean · human-required · exhausted| H{Human approval}
+  H -->|manual rework| A
   H -->|approve| C[Registration]
   C --> IR[Approved Item Revision]
   IR --> X[HWPX projection]

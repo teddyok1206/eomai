@@ -369,7 +369,7 @@ class OrchestratorEvidenceUsageReceiptResolver:
             and record.resolved_at == plan.resolved_at
             and plan.workflow_definition_key == "generic-item-development"
             and plan.workflow_definition_version
-            == ("1.11.0" if isinstance(plan, ResolvedExecutionPlanV11) else "1.10.0")
+            in ({"1.11.0", "1.12.0"} if isinstance(plan, ResolvedExecutionPlanV11) else {"1.10.0"})
         )
 
     @staticmethod

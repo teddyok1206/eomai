@@ -1563,7 +1563,7 @@ def plan_stages_evidence_manifest(plan: ResolvedExecutionPlanV3) -> bool:
 
     return (
         plan.workflow_definition_key == "generic-item-development"
-        and plan.workflow_definition_version in {"1.10.0", "1.11.0"}
+        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0"}
     )
 
 

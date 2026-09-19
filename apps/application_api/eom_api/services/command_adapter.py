@@ -331,7 +331,7 @@ class CommandAdapter:
             )
             solution_evidence_requirement: Literal["NONE", "REQUIRE_ACCEPTED_SOLUTION_REPORT"] = (
                 "REQUIRE_ACCEPTED_SOLUTION_REPORT"
-                if request.definition_version == "1.11.0"
+                if request.definition_version in {"1.11.0", "1.12.0"}
                 else "NONE"
             )
             command_value = {

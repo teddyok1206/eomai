@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from eom_workflow import ArtifactPointer, WorkflowRequest
+from eom_workflow import ArtifactPointer, WorkflowRequest, WorkflowReviewReworkDirective
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 
@@ -67,6 +67,16 @@ class ContentTeamStimulusPointer(GeneratedStimulusPointer):
 
 
 class WorkflowCatalogPort(Protocol):
+    def classify_review_rework(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        artifacts: tuple[ArtifactPointer, ...],
+        observed_rework_cycle_count: int,
+        max_rework_cycles: int,
+    ) -> WorkflowReviewReworkDirective: ...
+
     def content_team_image_slot_count(
         self,
         *,

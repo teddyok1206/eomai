@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -51,6 +52,7 @@ from eom_catalog_contracts import (
     validate_reviewed_authoring_guidance,
 )
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
+from eom_identifiers import content_sha256
 from eom_image_contracts import sanitize_svg_overlay
 from pydantic import (
     AfterValidator,
@@ -100,6 +102,13 @@ class DecisionOperator(StrEnum):
 class WorkflowLimits(FrozenModel):
     max_rework_cycles: int = Field(ge=0, le=10)
     max_step_attempts: int = Field(ge=1, le=10)
+
+
+class AutomaticReviewReworkPolicy(FrozenModel):
+    """Definition-owned source and target for bounded review-driven rework."""
+
+    source_review_step: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    target_authoring_step: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
 
 
 class AgentStep(FrozenModel):
@@ -154,6 +163,7 @@ class WorkflowDefinition(FrozenModel):
     definition_version: str = Field(pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
     start_step: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     limits: WorkflowLimits
+    automatic_review_rework: AutomaticReviewReworkPolicy | None = None
     steps: tuple[StepDefinition, ...] = Field(min_length=2, max_length=64)
 
 
@@ -711,6 +721,71 @@ class ArtifactPointer(FrozenModel):
     revision_id: RevisionId
     content_hash: Sha256
     result_schema: str = Field(min_length=1, max_length=128)
+
+
+class WorkflowReviewReworkDirective(FrozenModel):
+    """Self-hashed decision over one exact authoring/review Artifact pair."""
+
+    schema_version: Literal["workflow-review-rework-directive/1.0"] = (
+        "workflow-review-rework-directive/1.0"
+    )
+    observed_rework_cycle_count: int = Field(ge=0, le=3)
+    max_rework_cycles: Literal[3] = 3
+    outcome: Literal["READY_FOR_HUMAN", "REWORK_AUTHORING", "HUMAN_REVIEW_REQUIRED"]
+    prior_authoring: ArtifactPointer
+    source_review: ArtifactPointer
+    verified_blocking_finding_codes: tuple[str, ...] = Field(max_length=20)
+    repairable_finding_codes: tuple[str, ...] = Field(max_length=20)
+    human_required_finding_codes: tuple[str, ...] = Field(max_length=20)
+    disregarded_finding_codes: tuple[str, ...] = Field(max_length=20)
+    decision_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_sources_codes_outcome_and_hash(self) -> WorkflowReviewReworkDirective:
+        if (
+            self.prior_authoring.step_key != "authoring"
+            or self.prior_authoring.result_schema != "authoring-result@11.0"
+            or self.source_review.step_key != "review"
+            or self.source_review.result_schema != "review-result@11.0"
+        ):
+            raise ValueError("review rework directive source pointers differ")
+        if self.prior_authoring.attempt > 10 or self.source_review.attempt > 10:
+            raise ValueError("review rework directive source attempt exceeds the workflow limit")
+        groups = (
+            self.verified_blocking_finding_codes,
+            self.repairable_finding_codes,
+            self.human_required_finding_codes,
+            self.disregarded_finding_codes,
+        )
+        for values in groups:
+            if values != tuple(sorted(set(values))):
+                raise ValueError("review rework finding codes must be sorted and unique")
+            if any(re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", value) is None for value in values):
+                raise ValueError("review rework finding code is invalid")
+        repairable = set(self.repairable_finding_codes)
+        human = set(self.human_required_finding_codes)
+        disregarded = set(self.disregarded_finding_codes)
+        if repairable & human or (repairable | human) & disregarded:
+            raise ValueError("review rework finding code classes must be disjoint")
+        if set(self.verified_blocking_finding_codes) != repairable | human:
+            raise ValueError("verified blocking findings differ from classified findings")
+        expected_outcome: str
+        if human:
+            expected_outcome = "HUMAN_REVIEW_REQUIRED"
+        elif repairable and self.observed_rework_cycle_count < self.max_rework_cycles:
+            expected_outcome = "REWORK_AUTHORING"
+        elif repairable:
+            expected_outcome = "HUMAN_REVIEW_REQUIRED"
+        else:
+            expected_outcome = "READY_FOR_HUMAN"
+        if self.outcome != expected_outcome:
+            raise ValueError("review rework outcome differs from its finding classes or limit")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"decision_sha256"}))
+            != self.decision_sha256
+        ):
+            raise ValueError("review rework directive hash differs")
+        return self
 
 
 class RoleWorkerInput(FrozenModel):

@@ -19,6 +19,15 @@
         "max_step_attempts": {"type": "integer", "minimum": 1, "maximum": 10}
       }
     },
+    "automatic_review_rework": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_review_step", "target_authoring_step"],
+      "properties": {
+        "source_review_step": {"$ref": "#/$defs/stepKey"},
+        "target_authoring_step": {"$ref": "#/$defs/stepKey"}
+      }
+    },
     "steps": {
       "type": "array",
       "minItems": 2,

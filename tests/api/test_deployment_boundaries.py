@@ -746,7 +746,7 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
 
     assert '"1.10",\n        "1.11",' in deployment
     assert "definition_v1_9, definition_v1_10, definition_v1_11" in deployment
-    assert '"1.9.0", "1.10.0", "1.11.0"}' in deployment
+    assert '"1.10.0", "1.11.0", "1.12.0"}' in deployment
     assert "MockExamProductionExecutionV3" in deployment
     assert "MockExamProductionExecutionV4" in deployment
     assert "MockExamProductionExecutionV5" in deployment

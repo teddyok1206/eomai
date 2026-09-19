@@ -155,6 +155,7 @@ STAGE_TRANSITIONS: dict[WorkflowStage, frozenset[WorkflowStage]] = {
     ),
     WorkflowStage.REVIEWING: frozenset(
         {
+            WorkflowStage.AUTHORING,
             WorkflowStage.AWAITING_HUMAN_APPROVAL,
             WorkflowStage.FAILED,
             WorkflowStage.CANCELLED,

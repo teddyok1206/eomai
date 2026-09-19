@@ -453,6 +453,11 @@ def load_definition_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
+def load_review_rework_directive_schema() -> dict[str, Any]:
+    logical_name = "workflow-review-rework-directive-v1.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
 def load_knowledge_item_brief_schema() -> dict[str, Any]:
     logical_name = "knowledge-item-brief-v1.schema.json"
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
