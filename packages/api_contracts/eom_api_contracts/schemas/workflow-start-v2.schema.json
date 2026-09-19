@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/workflow-start/2.0",
+  "title": "Workflow Start Request V2",
+  "oneOf": [
+    {"$ref": "eom://schemas/api/v1/workflow-start/1.0"},
+    {"$ref": "#/$defs/content_team_v4_start"}
+  ],
+  "$defs": {
+    "content_team_v4_start": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definition_key",
+        "definition_version",
+        "request_name",
+        "image_mode",
+        "pack_key",
+        "execution_preset_key",
+        "item_brief",
+        "educational_retrieval"
+      ],
+      "properties": {
+        "definition_key": {"const": "generic-item-development"},
+        "definition_version": {
+          "enum": ["1.10.0", "1.11.0", "1.12.0"]
+        },
+        "request_name": {"const": "GENERATED_KNOWLEDGE_ITEM_REQUEST"},
+        "image_mode": {"enum": ["skip", "required"]},
+        "pack_key": {"const": "generated-knowledge-item"},
+        "environment": {"enum": ["development", "test"], "default": "development"},
+        "source_intake_batch_ids": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
+          "default": []
+        },
+        "registry_mode": {
+          "enum": ["CREATE_ITEM", "REVISE_ITEM"],
+          "default": "CREATE_ITEM"
+        },
+        "item_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "maxLength": 128}],
+          "default": null
+        },
+        "base_revision_id": {
+          "oneOf": [{"type": "null"}, {"type": "string", "maxLength": 128}],
+          "default": null
+        },
+        "item_brief": {"$ref": "#/$defs/content_team_item_brief_v4"},
+        "stimulus_asset_key": {"type": "null", "default": null},
+        "execution_preset_key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "educational_retrieval": {
+          "$ref": "eom://schemas/knowledge/educational-retrieval-requirement/1.0"
+        },
+        "production_occurrence": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "eom://schemas/api/v1/workflow-start/1.0#/$defs/production_occurrence"}
+          ],
+          "default": null
+        },
+        "expected_resolution": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "eom://schemas/api/v1/workflow-start/1.0#/$defs/expected_resolution"}
+          ],
+          "default": null
+        }
+      }
+    },
+    "content_team_item_brief_v4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "subject",
+        "topic",
+        "task_type",
+        "difficulty",
+        "authoring_guidance",
+        "authoring_guidance_sha256",
+        "material_requirement",
+        "original_request_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "4.0"},
+        "subject": {"type": "string", "minLength": 1, "maxLength": 80},
+        "topic": {"type": "string", "minLength": 1, "maxLength": 160},
+        "task_type": {"type": "string", "minLength": 1, "maxLength": 80},
+        "difficulty": {"type": "string", "minLength": 1, "maxLength": 80},
+        "authoring_guidance": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000,
+          "pattern": "^(?!.*[\\u0000-\\u001f\\u007f])(?!\\s)(?!.*\\s$)(?!.*\\s{2}).+$"
+        },
+        "authoring_guidance_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "curriculum_selected_unit_key": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "string",
+              "pattern": "^eom\\.is\\.(?:large\\.[1-6]|middle\\.[1-6]-[1-7])$"
+            }
+          ],
+          "default": null
+        },
+        "mock_exam_slot": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "$ref": "eom://schemas/assessment-assembly/mock-exam-production-plan/1.0#/$defs/mock_exam_slot"
+            }
+          ],
+          "default": null
+        },
+        "material_requirement": {
+          "$ref": "eom://schemas/workflow/content-team-material-requirement/1.0"
+        },
+        "original_request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

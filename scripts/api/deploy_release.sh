@@ -1171,10 +1171,11 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
         "eom_api_contracts/schemas/resources.schema.json",
         "eom_api_contracts/schemas/workflow-start-v1.schema.json",
+        "eom_api_contracts/schemas/workflow-start-v2.schema.json",
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 33 packaged API schemas including customer support, release identity, Workflow-start, "
+            "expected exactly 34 packaged API schemas including customer support, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "

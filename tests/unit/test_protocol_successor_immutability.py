@@ -88,6 +88,7 @@ def test_additive_successor_schema_mirrors_are_byte_exact() -> None:
         "mock-exam-production-execution-v2.schema.json",
         "mock-exam-review-eligibility-v2.schema.json",
         "hwpx-v2.schema.json",
+        "workflow-start-v2.schema.json",
     )
     for name in api_names:
         assert (ROOT / "schemas/api/v1" / name).read_bytes() == (
@@ -118,9 +119,14 @@ def test_successor_ids_are_distinct_and_workflow_start_keeps_plan_v1_slot() -> N
     )
     hwpx = json.loads((ROOT / "schemas/api/v1/hwpx-v2.schema.json").read_text())
     workflow_start = json.loads((ROOT / "schemas/api/v1/workflow-start-v1.schema.json").read_text())
+    workflow_start_v2 = json.loads(
+        (ROOT / "schemas/api/v1/workflow-start-v2.schema.json").read_text()
+    )
     assert candidate["properties"]["schema_version"]["const"].endswith("/2.0")
     assert execution["properties"]["schema_version"]["const"].endswith("/2.0")
     assert hwpx["$id"] == "urn:eom:schema:api:v2:hwpx"
+    assert workflow_start_v2["$id"] == "eom://schemas/api/v1/workflow-start/2.0"
+    assert workflow_start_v2["oneOf"][0]["$ref"] == workflow_start["$id"]
     slot_ref = workflow_start["$defs"]["content_team_item_brief_request_v3"]["properties"][
         "mock_exam_slot"
     ]["oneOf"][1]["$ref"]
