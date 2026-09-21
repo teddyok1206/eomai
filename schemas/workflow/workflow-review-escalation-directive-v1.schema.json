@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "authoringPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/basePointer"
+        },
+        {
+          "properties": {
+            "result_schema": {
+              "const": "authoring-result@12.0"
+            },
+            "step_key": {
+              "const": "authoring"
+            }
+          }
+        }
+      ]
+    },
+    "basePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "result_schema": {
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "step_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_key",
+        "attempt",
+        "job_id",
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "type": "object"
+    },
+    "reviewPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/basePointer"
+        },
+        {
+          "properties": {
+            "result_schema": {
+              "const": "review-result@12.0"
+            },
+            "step_key": {
+              "const": "review"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$id": "eom://schemas/workflow/review-escalation-directive/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "escalation_model": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "escalation_reasoning_effort": {
+      "enum": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "next_attempt": {
+      "maximum": 10,
+      "minimum": 2,
+      "type": "integer"
+    },
+    "primary_model": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "primary_reasoning_effort": {
+      "enum": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "reason_codes": {
+      "items": {
+        "enum": [
+          "CANDIDATE_FINDING_PRESENT",
+          "COMPLEX_ITEM",
+          "EVIDENCE_GAP",
+          "EVIDENCE_UNCERTAINTY",
+          "VISUAL_RISK"
+        ]
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "reviewed_authoring": {
+      "$ref": "#/$defs/authoringPointer"
+    },
+    "schema_version": {
+      "const": "workflow-review-escalation-directive/1.0"
+    },
+    "source_attempt": {
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "source_review": {
+      "$ref": "#/$defs/reviewPointer"
+    },
+    "structural_complexity_score": {
+      "maximum": 10,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "workflow_id",
+    "reviewed_authoring",
+    "source_review",
+    "source_attempt",
+    "next_attempt",
+    "reason_codes",
+    "structural_complexity_score",
+    "primary_model",
+    "primary_reasoning_effort",
+    "escalation_model",
+    "escalation_reasoning_effort",
+    "decision_sha256"
+  ],
+  "title": "Workflow Review Escalation Directive V1",
+  "type": "object"
+}

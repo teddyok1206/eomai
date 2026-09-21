@@ -169,6 +169,7 @@ EXPECTED_STANDARD_V13_REFERENCE_KEYS = MappingProxyType(
 EXPECTED_STANDARD_V14_REFERENCE_KEYS = EXPECTED_STANDARD_V13_REFERENCE_KEYS
 EXPECTED_STANDARD_V15_REFERENCE_KEYS = EXPECTED_STANDARD_V14_REFERENCE_KEYS
 EXPECTED_STANDARD_V16_REFERENCE_KEYS = EXPECTED_STANDARD_V15_REFERENCE_KEYS
+EXPECTED_STANDARD_V17_REFERENCE_KEYS = EXPECTED_STANDARD_V16_REFERENCE_KEYS
 STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
     {
         "standard-control-bootstrap/1.0": 1,
@@ -187,6 +188,7 @@ STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/14.0": 14,
         "standard-control-bootstrap/15.0": 15,
         "standard-control-bootstrap/16.0": 16,
+        "standard-control-bootstrap/17.0": 17,
     }
 )
 STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
@@ -207,6 +209,7 @@ STANDARD_BOOTSTRAP_REFERENCE_REVISIONS = MappingProxyType(
         "standard-control-bootstrap/14.0": 5,
         "standard-control-bootstrap/15.0": 5,
         "standard-control-bootstrap/16.0": 5,
+        "standard-control-bootstrap/17.0": 5,
     }
 )
 STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
@@ -318,6 +321,7 @@ class StandardBootstrapManifest(BaseModel):
         "standard-control-bootstrap/14.0",
         "standard-control-bootstrap/15.0",
         "standard-control-bootstrap/16.0",
+        "standard-control-bootstrap/17.0",
     ]
     preset_key: Literal["standard-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -325,6 +329,13 @@ class StandardBootstrapManifest(BaseModel):
     created_at: datetime
     model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
+    review_escalation_model: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    )
+    review_escalation_reasoning_effort: (
+        Literal["minimal", "low", "medium", "high", "xhigh"] | None
+    ) = None
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
     reference_path: str | None = Field(default=None, pattern=r"^references/[a-z0-9-]+\.md$")
@@ -350,7 +361,9 @@ class StandardBootstrapManifest(BaseModel):
                 raise ValueError("standard bootstrap V1 reference contract differs")
             return self
         expected_reference_keys = (
-            EXPECTED_STANDARD_V16_REFERENCE_KEYS
+            EXPECTED_STANDARD_V17_REFERENCE_KEYS
+            if self.schema_version == "standard-control-bootstrap/17.0"
+            else EXPECTED_STANDARD_V16_REFERENCE_KEYS
             if self.schema_version == "standard-control-bootstrap/16.0"
             else EXPECTED_STANDARD_V15_REFERENCE_KEYS
             if self.schema_version == "standard-control-bootstrap/15.0"
@@ -442,6 +455,24 @@ class StandardBootstrapManifest(BaseModel):
             self.compatible_workflow_protocols != ("workflow-role/1.23.0",)
         ):
             raise ValueError("standard bootstrap V16 protocol differs")
+        if self.schema_version == "standard-control-bootstrap/17.0":
+            if self.compatible_workflow_protocols != ("workflow-role/1.24.0",):
+                raise ValueError("standard bootstrap V17 protocol differs")
+            if (
+                self.review_escalation_model is None
+                or self.review_escalation_reasoning_effort is None
+                or (
+                    self.review_escalation_model,
+                    self.review_escalation_reasoning_effort,
+                )
+                == (self.model, self.reasoning_effort)
+            ):
+                raise ValueError("standard bootstrap V17 escalation candidate differs")
+        elif (
+            self.review_escalation_model is not None
+            or self.review_escalation_reasoning_effort is not None
+        ):
+            raise ValueError("legacy standard bootstrap cannot define review escalation")
         return self
 
 
@@ -659,6 +690,7 @@ def bootstrap_standard_control_plane(
             "standard-control-bootstrap/14.0",
             "standard-control-bootstrap/15.0",
             "standard-control-bootstrap/16.0",
+            "standard-control-bootstrap/17.0",
         }
         else config_root
     )
@@ -892,12 +924,21 @@ def bootstrap_standard_control_plane(
 
     role_policies: list[dict[str, object]] = []
     for role in manifest.roles:
+        model_candidates: list[dict[str, object]] = [
+            {"model": manifest.model, "reasoning_effort": manifest.reasoning_effort}
+        ]
+        if role.role == "review" and manifest.review_escalation_model is not None:
+            assert manifest.review_escalation_reasoning_effort is not None
+            model_candidates.append(
+                {
+                    "model": manifest.review_escalation_model,
+                    "reasoning_effort": manifest.review_escalation_reasoning_effort,
+                }
+            )
         role_policies.append(
             {
                 "role": role.role,
-                "model_candidates": [
-                    {"model": manifest.model, "reasoning_effort": manifest.reasoning_effort}
-                ],
+                "model_candidates": model_candidates,
                 "instruction_bundle": instruction_pointers[role.role].model_dump(mode="json"),
                 "reference_bundle": reference_pointers[role.role].model_dump(mode="json"),
                 "worker_pool_key": role.worker_pool_key,
@@ -1268,6 +1309,7 @@ def load_standard_bootstrap_manifest(config_directory: Path) -> StandardBootstra
                 "standard-control-bootstrap/14.0": "standard-control-bootstrap-v14",
                 "standard-control-bootstrap/15.0": "standard-control-bootstrap-v15",
                 "standard-control-bootstrap/16.0": "standard-control-bootstrap-v16",
+                "standard-control-bootstrap/17.0": "standard-control-bootstrap-v17",
             }.get(schema_version if isinstance(schema_version, str) else "")
             if contract_name is not None:
                 validate_control_contract(contract_name, value)

@@ -33,11 +33,18 @@ from eom_workflow import (
     LegacyItemExtractionWorkerRequest,
     WorkerRequest,
     WorkflowRequest,
+    WorkflowReviewEscalationDirective,
     WorkflowReviewReworkDirective,
     build_review_rework_directive,
     compile_definition,
 )
 from eom_workflow.compiler import compile_definition_data
+from eom_workflow.control_plane import (
+    BundleRevisionPointer,
+    ControlArtifactPointer,
+    ModelCandidate,
+    ResolvedStepExecutionV12,
+)
 from eom_workflow.identifiers import new_approval_request_id, new_step_run_id
 from eom_workflow.schemas import role_schema_bundle_hash
 from eom_workflow_runner.actor_authorization_adapters import StaticWorkflowActorAuthorizer
@@ -381,6 +388,44 @@ class FakeWorkflowCatalog:
         self.materializations: list[tuple[str, str]] = []
         self.content_team_image_count = 0
         self.review_blocking_codes_by_cycle: list[tuple[str, ...]] = []
+        self.escalate_primary_review = False
+
+    def classify_review_escalation(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+        plan_step: ResolvedStepExecutionV12,
+        source_directive: WorkflowReviewEscalationDirective | None,
+    ) -> WorkflowReviewEscalationDirective | None:
+        authoring = tuple(pointer for pointer in artifacts if pointer.step_key == "authoring")
+        reviews = tuple(pointer for pointer in artifacts if pointer.step_key == "review")
+        assert len(authoring) == 1
+        if source_directive is not None:
+            assert len(reviews) == 2
+            assert reviews[0] == source_directive.source_review
+            return None
+        assert len(reviews) == 1
+        if not self.escalate_primary_review:
+            return None
+        assert plan_step.escalation_candidate is not None
+        unsigned: dict[str, object] = {
+            "schema_version": "workflow-review-escalation-directive/1.0",
+            "workflow_id": workflow.workflow_id,
+            "reviewed_authoring": authoring[0].model_dump(mode="json"),
+            "source_review": reviews[0].model_dump(mode="json"),
+            "source_attempt": reviews[0].attempt,
+            "next_attempt": reviews[0].attempt + 1,
+            "reason_codes": ["COMPLEX_ITEM"],
+            "structural_complexity_score": 4,
+            "primary_model": plan_step.model,
+            "primary_reasoning_effort": plan_step.reasoning_effort,
+            "escalation_model": plan_step.escalation_candidate.model,
+            "escalation_reasoning_effort": plan_step.escalation_candidate.reasoning_effort,
+        }
+        return WorkflowReviewEscalationDirective.model_validate(
+            {**unsigned, "decision_sha256": content_sha256(unsigned)}
+        )
 
     def classify_review_rework(
         self,
@@ -699,6 +744,35 @@ def _execution(job: JobRecord, content_hash: str) -> RoleExecutionResult:
     )
 
 
+def _verification_review_plan_step() -> ResolvedStepExecutionV12:
+    manifest = ControlArtifactPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "1" * 32,
+        sha256="sha256:" + "1" * 64,
+        schema_ref="eom://schemas/workflow/instruction-bundle-manifest/1.0",
+        media_type="application/json",
+        logical_name="instruction-manifest.json",
+    )
+    return ResolvedStepExecutionV12(
+        step_key="review",
+        role="review",
+        model="gpt-5.6-terra",
+        reasoning_effort="high",
+        escalation_candidate=ModelCandidate(model="gpt-5.6-terra", reasoning_effort="xhigh"),
+        instruction_bundle=BundleRevisionPointer(
+            bundle_id="instrbundle_" + "1" * 32,
+            bundle_revision_id="instrrev_" + "1" * 32,
+            manifest_artifact=manifest,
+            manifest_sha256="sha256:" + "2" * 64,
+        ),
+        reference_bundle=None,
+        worker_pool_key="review",
+        timeout_seconds=1800,
+        general_knowledge_mode="ALLOWED_WITH_PROVENANCE",
+        evidence_access="EVIDENCE_CONTEXT",
+    )
+
+
 def _environment(
     engine: Engine,
     image_mode: str,
@@ -950,6 +1024,53 @@ def test_review_rework_successor_returns_one_repairable_review_to_authoring(
             for step_key, attempt, _role in executor.calls
             if step_key in {"authoring", "review"}
         ] == [("authoring", 1), ("review", 1), ("authoring", 2), ("review", 2)]
+    finally:
+        _close(resources)
+
+
+def test_review_escalation_runs_one_stronger_attempt_before_rework_classification(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-verification-review-escalation-once",
+        definition_path=Path("config/workflows/generic-item-development.v1.13.yaml"),
+    )
+    catalog = cast(FakeWorkflowCatalog, runner.catalog)
+    catalog.escalate_primary_review = True
+    runner._resolved_v12_review_step = lambda _workflow: _verification_review_plan_step()  # type: ignore[method-assign]
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.AWAITING_HUMAN_APPROVAL.value
+            assert workflow.rework_cycle_count == 0
+            history = workflow.runtime_context["review_escalation_history"]
+            assert len(history) == 1
+            assert history[0]["reason_codes"] == ["COMPLEX_ITEM"]
+            assert history[0]["source_attempt"] == 1
+            assert history[0]["next_attempt"] == 2
+            reviews = [
+                step for step in list_step_runs(session, workflow_id) if step.step_key == "review"
+            ]
+            assert [(step.attempt, step.state) for step in reviews] == [
+                (1, StepState.SUPERSEDED.value),
+                (2, StepState.SUCCEEDED.value),
+            ]
+            directive = reviews[1].input_pointer_manifest["review_escalation_directive"]
+            assert directive == history[0]
+            assert reviews[1].input_pointer_manifest["upstream_artifacts"][-1] == (
+                reviews[0].output_pointer_manifest
+            )
+            rework_history = workflow.runtime_context["review_rework_history"]
+            assert [entry["outcome"] for entry in rework_history] == ["READY_FOR_HUMAN"]
+        assert [
+            (step_key, attempt)
+            for step_key, attempt, _role in executor.calls
+            if step_key in {"authoring", "review"}
+        ] == [("authoring", 1), ("review", 1), ("review", 2)]
     finally:
         _close(resources)
 

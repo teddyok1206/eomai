@@ -102,5 +102,5 @@ def test_catalog_registration_rejects_mixed_v10_v11_result_family() -> None:
 
     import pytest
 
-    with pytest.raises(ValueError, match="cannot mix @10 and @11"):
+    with pytest.raises(ValueError, match="cannot mix result families"):
         service._require_evidence_usage_receipts(request=request, artifacts=artifacts)

@@ -19,6 +19,7 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -136,6 +137,7 @@ def _validated_document(
         | ResolvedExecutionPlan
         | ResolvedExecutionPlanV3
         | ResolvedExecutionPlanV11
+        | ResolvedExecutionPlanV12
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -151,6 +153,7 @@ def _validated_document(
     | ResolvedExecutionPlan
     | ResolvedExecutionPlanV3
     | ResolvedExecutionPlanV11
+    | ResolvedExecutionPlanV12
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -903,6 +906,18 @@ def record_resolved_execution_plan(
             raise ControlPlaneError(
                 "CONTROL_PLAN_POLICY_MISMATCH", "resolved plan step differs from preset"
             )
+        escalation = getattr(step, "escalation_candidate", None)
+        if isinstance(model, ResolvedExecutionPlanV12):
+            expected = (
+                candidates[1] if step.role.value == "review" and len(candidates) == 2 else None
+            )
+            if (escalation is None) != (expected is None) or (
+                escalation is not None and escalation.model_dump(mode="json") != expected
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_PLAN_POLICY_MISMATCH",
+                    "resolved plan escalation candidate differs from preset",
+                )
         _validate_bundle_pointer(session, step.instruction_bundle, expected_kind="INSTRUCTION")
         if step.reference_bundle is not None:
             _validate_bundle_pointer(session, step.reference_bundle, expected_kind="REFERENCE")
@@ -969,16 +984,17 @@ def record_knowledge_backed_execution_plan(
     """Persist one knowledge-backed plan after validating exact immutable pointers."""
 
     schema_version = document.get("schema_version")
-    schema_name = (
-        "resolved-execution-plan-v11"
-        if schema_version == "resolved-execution-plan/11.0"
-        else "resolved-execution-plan-v3"
-    )
-    model_type = (
-        ResolvedExecutionPlanV11
-        if schema_version == "resolved-execution-plan/11.0"
-        else ResolvedExecutionPlanV3
-    )
+    schema_name = {
+        "resolved-execution-plan/11.0": "resolved-execution-plan-v11",
+        "resolved-execution-plan/12.0": "resolved-execution-plan-v12",
+    }.get(str(schema_version), "resolved-execution-plan-v3")
+    model_type: type[ResolvedExecutionPlanV3 | ResolvedExecutionPlanV11 | ResolvedExecutionPlanV12]
+    if schema_version == "resolved-execution-plan/11.0":
+        model_type = ResolvedExecutionPlanV11
+    elif schema_version == "resolved-execution-plan/12.0":
+        model_type = ResolvedExecutionPlanV12
+    else:
+        model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)
     if not isinstance(model, ResolvedExecutionPlanV3):
         raise AssertionError("validated knowledge-backed plan has the wrong type")

@@ -1,6 +1,25 @@
 # Current System Status
 
-Status date: 2026-09-17 (UTC)
+Status date: 2026-09-21 (UTC)
+
+On 2026-09-21 the repository added a protocol-first, additive Graph-verification review candidate.
+It is repository-verified only and is not an implicit live activation claim. The candidate pins
+Workflow 1.13, role protocol 1.24, result family 12, Content Pack 1.19, standard control 17,
+knowledge control 14, and evidence-usage validation receipt 3.0 as one compatible release set.
+Review now plans its verification targets before reaching a verdict, checks visual material first
+when present, classifies suspected issues as `CONFIRMED`, `DEMOTED`, or `UNCERTAIN`, and permits only
+confirmed issues to become blocking findings. For structurally complex or uncertain reviews the
+orchestrator may issue one exact, self-hashed escalation directive for one stronger independent
+review attempt. The source review Artifact remains immutable and the final receipt chain binds the
+source and selected review attempts. Workers still neither communicate directly nor write NAS.
+
+The same candidate validates requested source classes against the actual pinned Evidence manifest,
+resolves cited evidence and anchors through the pinned Graph revision, and resolves every review
+target and candidate application path to a non-null scalar draft leaf. Catalog registration
+re-resolves the V3 receipt and exact review lineage. This gives a future PDF textbook review feature
+reusable verification concepts, but not a license to reuse Item result schemas: document review
+requires a separate additive protocol for document revisions, page/region anchors, claims, and
+review reports.
 
 The read-only [2026-09-15 runtime baseline](RUNTIME_BASELINE_2026-09-15.md) records the roadmap
 starting point. The 2026-09-16 M01 completion evidence below supersedes its mutable solution-report
@@ -88,6 +107,7 @@ Manager owns delivery projection and commits validated builder output.
 | Fresh 25-Item production | Production plan/execution family 5.0 | Active; pins Pack 1.16.1 |
 | Material-first Content Pack | Pack 1.16.1, standard control 13, knowledge control 10 | Released and exercised live |
 | In-product customer support | Workflow 1.0, role 1.22, result 1.0, plan 10.0 | Active; bounded live canary and exact replay PASS |
+| Graph-verification review candidate | Workflow 1.13, role 1.24, result 12, receipt 3.0, Pack 1.19, standard 17, knowledge 14 | Repository-verified; not activated live |
 
 Logical IDs, revision IDs, Artifact IDs, Artifact Revision IDs, schema identities, storage paths,
 and SHA-256 hashes remain separate. New versions are additive; released predecessors are not
@@ -270,6 +290,15 @@ are separate evidence recorded in the live acceptance receipt.
 
 The historical failed build/checkpoint remains preserved as audit evidence. The successful official
 build is a new immutable build resource; no failed record was rewritten.
+
+The 2026-09-21 Graph-verification candidate passed 335 focused tests with 33 explicitly guarded
+integration skips, 2,231 remaining full-unit tests, and 739 API/Studio tests with 14 guarded skips. Full Ruff
+format/lint passed for 1,418 files, strict mypy passed for 422 source files, Python compilation,
+shell syntax, Git whitespace, schema mirror parity, and generator idempotence passed. The new
+workflow-engine integration case was collected but not redirected to a live database because no
+explicit disposable PostgreSQL database was provided. Two unchanged image-provider component
+tests also remain environment-specific because the API environment has no Pillow and the image
+environment has no pytest. These are recorded environment boundaries, not fabricated PASS results.
 
 ## 7. Readiness and remaining boundaries
 

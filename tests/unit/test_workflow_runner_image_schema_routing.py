@@ -4,7 +4,7 @@ from eom_workflow_runner.engine import (
 )
 
 
-def test_runner_routes_v11_successor_without_reinterpreting_prior_families() -> None:
+def test_runner_routes_v12_successor_without_reinterpreting_prior_families() -> None:
     assert (
         frozenset(
             {
@@ -12,11 +12,13 @@ def test_runner_routes_v11_successor_without_reinterpreting_prior_families() -> 
                 "image-result@9.0",
                 "image-result@10.0",
                 "image-result@11.0",
+                "image-result@12.0",
             }
         )
         == CONTENT_TEAM_IMAGE_RESULT_SCHEMAS
     )
     assert _is_content_team_image_result_schema("image-result@10.0")
     assert _is_content_team_image_result_schema("image-result@11.0")
+    assert _is_content_team_image_result_schema("image-result@12.0")
     assert not _is_content_team_image_result_schema("image-result@7.0")
-    assert not _is_content_team_image_result_schema("image-result@12.0")
+    assert not _is_content_team_image_result_schema("image-result@13.0")

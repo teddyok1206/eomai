@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from eom_workflow import ArtifactPointer, WorkflowRequest, WorkflowReviewReworkDirective
+from eom_workflow import (
+    ArtifactPointer,
+    ResolvedStepExecutionV12,
+    WorkflowRequest,
+    WorkflowReviewEscalationDirective,
+    WorkflowReviewReworkDirective,
+)
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 
@@ -67,6 +73,15 @@ class ContentTeamStimulusPointer(GeneratedStimulusPointer):
 
 
 class WorkflowCatalogPort(Protocol):
+    def classify_review_escalation(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        artifacts: tuple[ArtifactPointer, ...],
+        plan_step: ResolvedStepExecutionV12,
+        source_directive: WorkflowReviewEscalationDirective | None,
+    ) -> WorkflowReviewEscalationDirective | None: ...
+
     def classify_review_rework(
         self,
         *,

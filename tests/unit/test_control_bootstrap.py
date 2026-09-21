@@ -618,6 +618,7 @@ def test_standard_bootstrap_v4_uses_a_distinct_instruction_bundle_revision() -> 
         "standard-control-bootstrap/14.0": 14,
         "standard-control-bootstrap/15.0": 15,
         "standard-control-bootstrap/16.0": 16,
+        "standard-control-bootstrap/17.0": 17,
     }
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v2.schema_version] == 2
     assert STANDARD_BOOTSTRAP_INSTRUCTION_REVISIONS[manifest_v3.schema_version] == 3
@@ -662,6 +663,7 @@ def test_standard_bootstrap_v5_pins_full_content_team_authoring_prompt() -> None
         "standard-control-bootstrap/14.0": 5,
         "standard-control-bootstrap/15.0": 5,
         "standard-control-bootstrap/16.0": 5,
+        "standard-control-bootstrap/17.0": 5,
     }
 
 

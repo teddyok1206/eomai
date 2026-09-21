@@ -40,8 +40,10 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV9,
     ResolvedExecutionPlanV10,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
+    ResolvedStepExecutionV12,
     WorkerRole,
 )
 from eom_workflow.control_schemas import validate_control_contract
@@ -66,6 +68,7 @@ from eom_orchestrator.control_service import (
 RESOLVER_VERSION = "1.0.0"
 KNOWLEDGE_BACKED_RESOLVER_VERSION = "3.0.0"
 GRAPH_REVIEW_RESOLVER_VERSION = "4.0.0"
+VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION = "5.0.0"
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,8 @@ def resolve_knowledge_backed_execution_plan(
         )
     )
     if existing is not None:
+        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
+            return ResolvedExecutionPlanV12.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
             return ResolvedExecutionPlanV11.model_validate(existing.canonical_document)
         return ResolvedExecutionPlanV3.model_validate(existing.canonical_document)
@@ -210,18 +215,36 @@ def resolve_knowledge_backed_execution_plan(
             "CONTROL_PRESET_POLICY_INVALID", "knowledge-backed request requires a V2 preset"
         ) from exc
     validate_educational_retrieval_policy(preset, requirement)
+    verification_review_successor = dependencies.workflow_definition_version == "1.13.0"
+    verification_role_successor = (
+        dependencies.workflow_role_schema_version == "workflow-role/1.24.0"
+    )
     graph_review_successor = dependencies.workflow_definition_version in {"1.11.0", "1.12.0"}
     role_is_successor = dependencies.workflow_role_schema_version == "workflow-role/1.23.0"
     evidence_is_successor = isinstance(evidence, EvidenceBundlePublicationResultV5)
-    successor_inputs = (
+    verification_inputs = (
+        verification_review_successor
+        and verification_role_successor
+        and evidence_is_successor
+        and evidence.manifest_artifact.schema_ref
+        == "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+    )
+    graph_inputs = (
         graph_review_successor
         and role_is_successor
         and evidence_is_successor
         and evidence.manifest_artifact.schema_ref
         == "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
     )
-    if not successor_inputs and (
-        graph_review_successor or role_is_successor or evidence_is_successor
+    if (verification_review_successor or verification_role_successor) and not verification_inputs:
+        raise ControlPlaneError(
+            "CONTROL_GRAPH_REVIEW_PROTOCOL_MISMATCH",
+            "verification review requires workflow 1.13, role 1.24, and Evidence Bundle V5",
+        )
+    if (
+        not verification_inputs
+        and not graph_inputs
+        and (graph_review_successor or role_is_successor or evidence_is_successor)
     ):
         raise ControlPlaneError(
             "CONTROL_GRAPH_REVIEW_PROTOCOL_MISMATCH",
@@ -239,7 +262,7 @@ def resolve_knowledge_backed_execution_plan(
             "CONTROL_PLAN_DEPENDENCY_MISMATCH", "Evidence Bundle pointer differs from policy"
         )
     policies = {item.role: item for item in preset.role_policies}
-    resolved_steps: list[ResolvedStepExecutionV3] = []
+    resolved_steps: list[ResolvedStepExecutionV3 | ResolvedStepExecutionV12] = []
     seen_keys: set[str] = set()
     for required in steps:
         if required.step_key in seen_keys:
@@ -250,33 +273,50 @@ def resolve_knowledge_backed_execution_plan(
             raise ControlPlaneError(
                 "CONTROL_PRESET_ROLE_MISSING", "execution preset lacks a required role"
             )
-        candidate = role_policy.model_candidates[0]
-        resolved_steps.append(
-            ResolvedStepExecutionV3(
-                step_key=required.step_key,
-                role=required.role,
-                model=candidate.model,
-                reasoning_effort=candidate.reasoning_effort,
-                instruction_bundle=role_policy.instruction_bundle,
-                reference_bundle=role_policy.reference_bundle,
-                worker_pool_key=role_policy.worker_pool_key,
-                timeout_seconds=role_policy.timeout_seconds,
-                sandbox=role_policy.sandbox,
-                network=role_policy.network,
-                general_knowledge_mode=(
-                    "DENIED"
-                    if preset.general_knowledge_policy == "DENY"
-                    else "ALLOWED_WITH_PROVENANCE"
-                ),
-                evidence_access=role_policy.evidence_access,
+        candidates = role_policy.model_candidates
+        if verification_inputs:
+            expected_count = 2 if required.role == WorkerRole.REVIEW else 1
+            if len(candidates) != expected_count:
+                raise ControlPlaneError(
+                    "CONTROL_PRESET_POLICY_INVALID",
+                    "verification review preset candidate cardinality differs",
+                )
+        candidate = candidates[0]
+        step_values: dict[str, object] = {
+            "step_key": required.step_key,
+            "role": required.role,
+            "model": candidate.model,
+            "reasoning_effort": candidate.reasoning_effort,
+            "instruction_bundle": role_policy.instruction_bundle,
+            "reference_bundle": role_policy.reference_bundle,
+            "worker_pool_key": role_policy.worker_pool_key,
+            "timeout_seconds": role_policy.timeout_seconds,
+            "sandbox": role_policy.sandbox,
+            "network": role_policy.network,
+            "general_knowledge_mode": (
+                "DENIED" if preset.general_knowledge_policy == "DENY" else "ALLOWED_WITH_PROVENANCE"
+            ),
+            "evidence_access": role_policy.evidence_access,
+        }
+        if verification_inputs:
+            step_values["escalation_candidate"] = (
+                candidates[1].model_dump(mode="json")
+                if required.role == WorkerRole.REVIEW
+                else None
             )
-        )
+            resolved_steps.append(ResolvedStepExecutionV12.model_validate(step_values))
+        else:
+            resolved_steps.append(ResolvedStepExecutionV3.model_validate(step_values))
     actual_resolved_at = resolved_at or datetime.now(UTC)
     document: dict[str, object] = {
         "schema_version": (
-            "resolved-execution-plan/11.0"
-            if graph_review_successor
-            else "resolved-execution-plan/3.0"
+            "resolved-execution-plan/12.0"
+            if verification_inputs
+            else (
+                "resolved-execution-plan/11.0"
+                if graph_review_successor
+                else "resolved-execution-plan/3.0"
+            )
         ),
         "plan_id": new_execution_plan_id(),
         "workflow_id": dependencies.workflow_id,
@@ -305,16 +345,22 @@ def resolve_knowledge_backed_execution_plan(
         "evidence_context_artifact": evidence.context_artifact.model_dump(mode="json"),
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
         "resolver_version": (
-            GRAPH_REVIEW_RESOLVER_VERSION
-            if graph_review_successor
-            else KNOWLEDGE_BACKED_RESOLVER_VERSION
+            VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION
+            if verification_inputs
+            else (
+                GRAPH_REVIEW_RESOLVER_VERSION
+                if graph_review_successor
+                else KNOWLEDGE_BACKED_RESOLVER_VERSION
+            )
         ),
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
     model: ResolvedExecutionPlanV3
-    if graph_review_successor:
+    if verification_inputs:
+        model = ResolvedExecutionPlanV12.model_validate(document)
+    elif graph_review_successor:
         model = ResolvedExecutionPlanV11.model_validate(document)
     else:
         model = ResolvedExecutionPlanV3.model_validate(document)
@@ -323,6 +369,8 @@ def resolve_knowledge_backed_execution_plan(
         document=model.model_dump(mode="json"),
         dependencies=dependencies,
     )
+    if verification_inputs:
+        return ResolvedExecutionPlanV12.model_validate(record.canonical_document)
     if graph_review_successor:
         return ResolvedExecutionPlanV11.model_validate(record.canonical_document)
     return ResolvedExecutionPlanV3.model_validate(record.canonical_document)

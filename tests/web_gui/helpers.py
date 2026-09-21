@@ -325,7 +325,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.12.0"
+        assert payload["definition_version"] == "1.13.0"
         brief = payload["item_brief"]
         assert isinstance(brief, dict)
         material = brief["material_requirement"]

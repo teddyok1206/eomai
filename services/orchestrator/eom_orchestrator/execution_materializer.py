@@ -8,6 +8,7 @@ import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from eom_catalog_contracts import (
     AssessmentLayoutObservation,
@@ -40,7 +41,9 @@ from eom_workflow import (
     ResolvedExecutionPlanV9,
     ResolvedExecutionPlanV10,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
     ResolvedStepExecutionV3,
+    ResolvedStepExecutionV12,
     validate_control_contract,
 )
 from eom_workflow.control_plane import (
@@ -146,6 +149,7 @@ def materialize_execution_step(
     canonical_artifact_root: Path,
     worker_group_id: int,
     authorized_artifact_revision_ids: frozenset[str],
+    execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
 
@@ -176,6 +180,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV9
         | ResolvedExecutionPlanV10
         | ResolvedExecutionPlanV11
+        | ResolvedExecutionPlanV12
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -197,6 +202,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/11.0":
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/12.0":
+        plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -205,6 +212,21 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
+    execution_model = step.model
+    execution_reasoning_effort = step.reasoning_effort
+    if execution_tier == "ESCALATED":
+        if (
+            not isinstance(plan, ResolvedExecutionPlanV12)
+            or not isinstance(step, ResolvedStepExecutionV12)
+            or step.role.value != "review"
+            or step.escalation_candidate is None
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_ESCALATION_INVALID",
+                "resolved execution step does not authorize escalation",
+            )
+        execution_model = step.escalation_candidate.model
+        execution_reasoning_effort = step.escalation_candidate.reasoning_effort
 
     instruction = _instruction_manifest(
         session,
@@ -470,8 +492,8 @@ def materialize_execution_step(
         "schema_version": "codex-invocation/1.0",
         "plan_id": plan.plan_id,
         "step_key": step.step_key,
-        "model": step.model,
-        "reasoning_effort": step.reasoning_effort,
+        "model": execution_model,
+        "reasoning_effort": execution_reasoning_effort,
         "invocation_sha256": "sha256:" + "0" * 64,
     }
     invocation_document["invocation_sha256"] = content_sha256(
@@ -492,8 +514,8 @@ def materialize_execution_step(
         plan_id=plan.plan_id,
         plan_sha256=plan.plan_sha256,
         step_key=step.step_key,
-        model=step.model,
-        reasoning_effort=str(step.reasoning_effort),
+        model=execution_model,
+        reasoning_effort=str(execution_reasoning_effort),
         instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
         instruction_manifest_sha256=step.instruction_bundle.manifest_sha256,
         reference_bundle_revision_id=(
@@ -537,6 +559,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV9
             | ResolvedExecutionPlanV10
             | ResolvedExecutionPlanV11
+            | ResolvedExecutionPlanV12
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -556,6 +579,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
+        plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -1563,7 +1588,7 @@ def plan_stages_evidence_manifest(plan: ResolvedExecutionPlanV3) -> bool:
 
     return (
         plan.workflow_definition_key == "generic-item-development"
-        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0"}
+        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0", "1.13.0"}
     )
 
 

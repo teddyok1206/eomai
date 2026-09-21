@@ -42,6 +42,30 @@ def _validator() -> Draft202012Validator:
     )
 
 
+def _validator_v3() -> Draft202012Validator:
+    paths = (
+        "schemas/api/v1/workflow-start-v1.schema.json",
+        "schemas/api/v1/workflow-start-v2.schema.json",
+        "schemas/api/v1/workflow-start-v3.schema.json",
+        "schemas/workflow/knowledge-item-brief-v1.schema.json",
+        "schemas/workflow/content-team-material-requirement-v1.schema.json",
+        "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
+        "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+    )
+    resources: list[tuple[str, Resource[object]]] = []
+    schemas: dict[str, dict[str, object]] = {}
+    for path in paths:
+        schema = _schema(path)
+        identifier = schema.get("$id")
+        assert isinstance(identifier, str)
+        resources.append((identifier, Resource.from_contents(schema)))
+        schemas[path] = schema
+    return Draft202012Validator(
+        schemas["schemas/api/v1/workflow-start-v3.schema.json"],
+        registry=Registry().with_resources(resources),
+    )
+
+
 def _request() -> dict[str, object]:
     guidance = "통합과학 범위에서 검증된 근거를 사용하여 표 자료 해석 문항을 작성한다."
     return {
@@ -112,6 +136,21 @@ def test_workflow_start_v2_rejects_v4_without_material_requirement() -> None:
 
     with pytest.raises(ValidationError):
         _validator().validate(request)
+
+
+def test_workflow_start_v3_adds_only_verification_review_definition() -> None:
+    canonical = ROOT / "schemas/api/v1/workflow-start-v3.schema.json"
+    packaged = (
+        ROOT / "packages/api_contracts/eom_api_contracts/schemas/workflow-start-v3.schema.json"
+    )
+    assert canonical.read_bytes() == packaged.read_bytes()
+    request = _request()
+    request["definition_version"] = "1.13.0"
+
+    with pytest.raises(ValidationError):
+        _validator().validate(request)
+    _validator_v3().validate(request)
+    assert WorkflowStartRequest.model_validate(request).definition_version == "1.13.0"
 
 
 def test_workflow_start_v2_preserves_v1_bytes_and_accepts_legacy_branch() -> None:

@@ -63,6 +63,8 @@ AUTHORING_V8 = _pointer("authoring", "2", "authoring-result@8.0")
 IMAGE_V8 = _pointer("image", "3", "image-result@8.0")
 AUTHORING_V10 = _pointer("authoring", "c", "authoring-result@10.0")
 IMAGE_V10 = _pointer("image", "d", "image-result@10.0")
+AUTHORING_V12 = _pointer("authoring", "0", "authoring-result@12.0")
+IMAGE_V12 = _pointer("image", "1", "image-result@12.0")
 
 
 def _image_brief() -> dict[str, object]:
@@ -503,6 +505,24 @@ def _content_team_image_result_v10() -> dict[str, object]:
     return cast(dict[str, object], result)
 
 
+def _content_team_authoring_result_v12() -> dict[str, object]:
+    result = json.loads(json.dumps(_content_team_authoring_result_v10()))
+    result["protocol_version"] = "workflow-role/1.24.0"
+    result["job_id"] = AUTHORING_V12.job_id
+    result["artifact"]["logical_artifact_id"] = AUTHORING_V12.logical_artifact_id
+    result["artifact"]["revision_id"] = AUTHORING_V12.revision_id
+    return cast(dict[str, object], result)
+
+
+def _content_team_image_result_v12() -> dict[str, object]:
+    result = json.loads(json.dumps(_content_team_image_result_v10()))
+    result["protocol_version"] = "workflow-role/1.24.0"
+    result["job_id"] = IMAGE_V12.job_id
+    result["artifact"]["logical_artifact_id"] = IMAGE_V12.logical_artifact_id
+    result["artifact"]["revision_id"] = IMAGE_V12.revision_id
+    return cast(dict[str, object], result)
+
+
 class _Artifacts:
     def __init__(self, *, changed_y: bool = False) -> None:
         self.values = {
@@ -518,6 +538,8 @@ class _Artifacts:
             IMAGE_V8.revision_id: _content_team_image_result_v8(),
             AUTHORING_V10.revision_id: _content_team_authoring_result_v10(),
             IMAGE_V10.revision_id: _content_team_image_result_v10(),
+            AUTHORING_V12.revision_id: _content_team_authoring_result_v12(),
+            IMAGE_V12.revision_id: _content_team_image_result_v12(),
         }
         self.commits: list[dict[str, Any]] = []
         self.verified: list[dict[str, str]] = []
@@ -795,6 +817,49 @@ def test_content_team_v10_parses_grounded_authoring_image_pair_and_content_v3(
         Path(content_commit["files"]["assessment-item-content.json"]).read_text(encoding="utf-8")
     )
     assert content["schema_version"] == "3.0"
+
+
+def test_content_team_v12_materializes_and_registers_the_exact_image_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    svg = tmp_path / "content-team-v12.svg"
+    png = tmp_path / "content-team-v12.png"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>\n', encoding="utf-8")
+    png.write_bytes(b"content-team-v12-png")
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_vector_stimulus",
+        lambda *_args, **_kwargs: RenderedVectorStimulus(
+            svg,
+            png,
+            "eom-safe-svg-compositor/1.1",
+            "rsvg-convert version 2.58.0",
+            "sha256:" + "a" * 64,
+            "sha256:" + "b" * 64,
+            "sha256:" + "c" * 64,
+        ),
+    )
+
+    stimuli = service.materialize_content_team_stimuli(
+        workflow=_workflow(), artifacts=(AUTHORING_V12, IMAGE_V12)
+    )
+    components = service._content_team_image_components(
+        _workflow({"content_team_stimuli": [pointer.as_dict() for pointer in stimuli]}),
+        (AUTHORING_V12, IMAGE_V12),
+    )
+
+    assert ROLE_BY_RESULT_SCHEMA["authoring-result@12.0"] == "authoring"
+    assert ROLE_BY_RESULT_SCHEMA["image-result@12.0"] == "image"
+    assert [(pointer.visual_ordinal, pointer.label) for pointer in stimuli] == [
+        (0, "(가)"),
+        (1, "(나)"),
+    ]
+    assert [(component.component_type, component.ordinal) for component in components] == [
+        ("IMAGE", 0),
+        ("IMAGE", 1),
+    ]
+    assert len(artifacts.commits) == 2
 
 
 def test_content_team_v10_standalone_required_image_cannot_take_zero_image_branch(

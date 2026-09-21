@@ -21,21 +21,27 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
     AuthoringEvidenceUsageValidationReceipt,
     AuthoringEvidenceUsageValidationReceiptV2,
+    AuthoringEvidenceUsageValidationReceiptV3,
     ControlSchemaError,
     EvidenceResultArtifactPointer,
     EvidenceResultArtifactPointerV2,
+    EvidenceResultArtifactPointerV3,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
+    ReviewEvidenceUsageValidationReceiptV3,
     validate_control_contract,
 )
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamAuthoringRoleResultV10,
     ContentTeamAuthoringRoleResultV11,
+    ContentTeamAuthoringRoleResultV12,
     ContentTeamReviewRoleResultV10,
     ContentTeamReviewRoleResultV11,
+    ContentTeamReviewRoleResultV12,
     EvidenceUsageCitationV1,
     RoleResult,
     RoleWorkerInput,
@@ -92,8 +98,14 @@ EvidenceReceipt = (
     | ReviewEvidenceUsageValidationReceipt
     | AuthoringEvidenceUsageValidationReceiptV2
     | ReviewEvidenceUsageValidationReceiptV2
+    | AuthoringEvidenceUsageValidationReceiptV3
+    | ReviewEvidenceUsageValidationReceiptV3
 )
-ResultArtifactPointer = EvidenceResultArtifactPointer | EvidenceResultArtifactPointerV2
+ResultArtifactPointer = (
+    EvidenceResultArtifactPointer
+    | EvidenceResultArtifactPointerV2
+    | EvidenceResultArtifactPointerV3
+)
 
 
 class EvidenceUsageValidationError(ValueError):
@@ -109,7 +121,12 @@ def evidence_receipt_required_for_result(result: RoleResult) -> bool:
 
     if isinstance(result, ContentTeamAuthoringRoleResultV10):
         return result.output.evidence_usage is not None
-    if isinstance(result, ContentTeamReviewRoleResultV10 | ContentTeamReviewRoleResultV11):
+    if isinstance(
+        result,
+        ContentTeamReviewRoleResultV10
+        | ContentTeamReviewRoleResultV11
+        | ContentTeamReviewRoleResultV12,
+    ):
         return result.output.evidence_usage_attestation is not None
     return False
 
@@ -173,17 +190,32 @@ def validate_evidence_usage_for_commit(
         result,
         ContentTeamAuthoringRoleResultV10
         | ContentTeamReviewRoleResultV10
-        | ContentTeamReviewRoleResultV11,
+        | ContentTeamReviewRoleResultV11
+        | ContentTeamAuthoringRoleResultV12
+        | ContentTeamReviewRoleResultV12,
     ):
         return None
-    successor = isinstance(
+    verification_planned = isinstance(
+        result, ContentTeamAuthoringRoleResultV12 | ContentTeamReviewRoleResultV12
+    )
+    successor = verification_planned or isinstance(
         result, ContentTeamAuthoringRoleResultV11 | ContentTeamReviewRoleResultV11
     )
-    expected_protocol = "workflow-role/1.23.0" if successor else "workflow-role/1.20.0"
-    if isinstance(result, ContentTeamAuthoringRoleResultV11):
+    expected_protocol = (
+        "workflow-role/1.24.0"
+        if verification_planned
+        else "workflow-role/1.23.0"
+        if successor
+        else "workflow-role/1.20.0"
+    )
+    if isinstance(result, ContentTeamAuthoringRoleResultV12):
+        expected_result_schema = "authoring-result@12.0"
+    elif isinstance(result, ContentTeamAuthoringRoleResultV11):
         expected_result_schema = "authoring-result@11.0"
     elif isinstance(result, ContentTeamAuthoringRoleResultV10):
         expected_result_schema = "authoring-result@10.0"
+    elif isinstance(result, ContentTeamReviewRoleResultV12):
+        expected_result_schema = "review-result@12.0"
     elif isinstance(result, ContentTeamReviewRoleResultV11):
         expected_result_schema = "review-result@11.0"
     else:
@@ -203,13 +235,28 @@ def validate_evidence_usage_for_commit(
             "EVIDENCE_RESULT_IDENTITY_MISMATCH",
             "evidence-aware result differs from its exact worker input or pending Artifact",
         )
-    if successor and not isinstance(result_artifact, EvidenceResultArtifactPointerV2):
+    if verification_planned and not isinstance(result_artifact, EvidenceResultArtifactPointerV3):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@12 result pointer family differs"
+        )
+    if (
+        successor
+        and not verification_planned
+        and not isinstance(result_artifact, EvidenceResultArtifactPointerV2)
+    ):
         raise EvidenceUsageValidationError(
             "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@11 result pointer family differs"
         )
     if plan_id is None:
         _require_no_evidence_claim(result)
-        if isinstance(result, ContentTeamReviewRoleResultV11):
+        if isinstance(result, ContentTeamReviewRoleResultV12):
+            _validate_ungrounded_review_result_v12(
+                session,
+                worker_input=worker_input,
+                result=result,
+                canonical_artifact_root=canonical_artifact_root,
+            )
+        elif isinstance(result, ContentTeamReviewRoleResultV11):
             _validate_ungrounded_review_result_v11(
                 session,
                 worker_input=worker_input,
@@ -228,11 +275,22 @@ def validate_evidence_usage_for_commit(
             "EVIDENCE_PLAN_INVALID", "evidence validation plan is invalid"
         )
     expected_plan_schema = (
-        "resolved-execution-plan/11.0" if successor else "resolved-execution-plan/3.0"
+        "resolved-execution-plan/12.0"
+        if verification_planned
+        else "resolved-execution-plan/11.0"
+        if successor
+        else "resolved-execution-plan/3.0"
     )
     if plan_document.get("schema_version") != expected_plan_schema:
         _require_no_evidence_claim(result)
-        if isinstance(result, ContentTeamReviewRoleResultV11):
+        if isinstance(result, ContentTeamReviewRoleResultV12):
+            _validate_ungrounded_review_result_v12(
+                session,
+                worker_input=worker_input,
+                result=result,
+                canonical_artifact_root=canonical_artifact_root,
+            )
+        elif isinstance(result, ContentTeamReviewRoleResultV11):
             _validate_ungrounded_review_result_v11(
                 session,
                 worker_input=worker_input,
@@ -242,7 +300,9 @@ def validate_evidence_usage_for_commit(
         return None
     try:
         plan = (
-            ResolvedExecutionPlanV11.model_validate(plan_document)
+            ResolvedExecutionPlanV12.model_validate(plan_document)
+            if verification_planned
+            else ResolvedExecutionPlanV11.model_validate(plan_document)
             if successor
             else ResolvedExecutionPlanV3.model_validate(plan_document)
         )
@@ -262,7 +322,9 @@ def validate_evidence_usage_for_commit(
         raise EvidenceUsageValidationError(
             "EVIDENCE_PROTOCOL_PLAN_MISMATCH",
             (
-                "@11 evidence usage requires the immutable 1.11 workflow family"
+                "@12 evidence usage requires the immutable 1.13 workflow family"
+                if verification_planned
+                else "@11 evidence usage requires the immutable 1.11 workflow family"
                 if successor
                 else "@10 evidence usage requires the immutable 1.10 workflow family"
             ),
@@ -276,7 +338,7 @@ def validate_evidence_usage_for_commit(
         if successor:
             raise EvidenceUsageValidationError(
                 "EVIDENCE_PROTOCOL_PLAN_MISMATCH",
-                "@11 Graph plan review and authoring steps require pinned evidence context",
+                "successor Graph plan review and authoring steps require pinned evidence context",
             )
         _require_no_evidence_claim(result)
         return None
@@ -298,6 +360,13 @@ def validate_evidence_usage_for_commit(
             "pinned evidence material cannot be re-resolved",
         ) from exc
 
+    if isinstance(result, ContentTeamAuthoringRoleResultV12):
+        if not isinstance(result_artifact, EvidenceResultArtifactPointerV3):
+            raise EvidenceUsageValidationError(
+                "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@12 result pointer family differs"
+            )
+        citation_hash = _validate_authoring_result(plan, materials, result)
+        return _authoring_receipt_v3(plan, result_artifact, citation_hash)
     if isinstance(result, ContentTeamAuthoringRoleResultV11):
         if not isinstance(result_artifact, EvidenceResultArtifactPointerV2):
             raise EvidenceUsageValidationError(
@@ -313,6 +382,16 @@ def validate_evidence_usage_for_commit(
         citation_hash = _validate_authoring_result(plan, materials, result)
         return _authoring_receipt(plan, result_artifact, citation_hash)
 
+    if isinstance(result, ContentTeamReviewRoleResultV12):
+        return _validate_review_result_v12(
+            session,
+            plan=plan,
+            materials=materials,
+            worker_input=worker_input,
+            result=result,
+            result_artifact=result_artifact,
+            canonical_artifact_root=canonical_artifact_root,
+        )
     if isinstance(result, ContentTeamReviewRoleResultV11):
         return _validate_review_result_v11(
             session,
@@ -344,6 +423,7 @@ def _require_no_evidence_claim(
         ContentTeamAuthoringRoleResultV10
         | ContentTeamReviewRoleResultV10
         | ContentTeamReviewRoleResultV11
+        | ContentTeamReviewRoleResultV12
     ),
 ) -> None:
     claim = (
@@ -624,7 +704,9 @@ _ALLOWED_EVIDENCE_USES_BY_REVIEW_PURPOSE = {
 }
 
 
-def canonical_review_evidence_set_sha256(result: ContentTeamReviewRoleResultV11) -> str:
+def canonical_review_evidence_set_sha256(
+    result: ContentTeamReviewRoleResultV11 | ContentTeamReviewRoleResultV12,
+) -> str:
     """Hash the canonical bounded evidence set independently selected by review."""
 
     return content_sha256(
@@ -721,9 +803,94 @@ def _validate_review_result_v11(
     )
 
 
+def _validate_review_result_v12(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV3,
+    materials: ResolvedEvidenceMaterials,
+    worker_input: RoleWorkerInput,
+    result: ContentTeamReviewRoleResultV12,
+    result_artifact: ResultArtifactPointer,
+    canonical_artifact_root: Path,
+) -> ReviewEvidenceUsageValidationReceiptV3:
+    """Validate one verification-planned review against exact V12 authoring evidence."""
+
+    if not isinstance(plan, ResolvedExecutionPlanV12) or not isinstance(
+        result_artifact, EvidenceResultArtifactPointerV3
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_PROTOCOL_PLAN_MISMATCH",
+            "@12 review requires its verification-planned plan and result pointer",
+        )
+    attestation = result.output.evidence_usage_attestation
+    if attestation is None:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REVIEW_ATTESTATION_MISSING", "review evidence attestation is missing"
+        )
+    pointers = tuple(
+        pointer
+        for pointer in worker_input.upstream_artifacts
+        if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@12.0"
+    )
+    if len(pointers) != 1:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_POINTER_INVALID",
+            "review requires one exact @12 authoring Artifact pointer",
+        )
+    pointer = pointers[0]
+    if attestation.authoring_artifact.model_dump(mode="json") != {
+        "logical_artifact_id": pointer.logical_artifact_id,
+        "revision_id": pointer.revision_id,
+        "content_hash": pointer.content_hash,
+        "result_schema": pointer.result_schema,
+    }:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_POINTER_MISMATCH",
+            "review attestation differs from its exact authoring pointer",
+        )
+    authoring = _resolve_authoring_result(
+        session,
+        pointer=pointer,
+        workflow_id=result.workflow_id,
+        canonical_artifact_root=canonical_artifact_root,
+        verification_planned=True,
+    )
+    if not isinstance(authoring, ContentTeamAuthoringRoleResultV12):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result family differs"
+        )
+    authoring_hash = _validate_authoring_result(plan, materials, authoring)
+    review_hash = canonical_citation_set_sha256(attestation.citations)
+    authoring_usage = authoring.output.evidence_usage
+    assert authoring_usage is not None
+    if attestation.citations != authoring_usage.citations or review_hash != authoring_hash:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_REVIEW_CITATIONS_MISMATCH",
+            "review citations differ from the exact authoring result",
+        )
+    draft = authoring.output.draft.model_dump(mode="json")
+    _validate_independent_review_report(materials, result, draft)
+    report_hash = content_sha256(result.output.independent_review_report.model_dump(mode="json"))
+    review_evidence_hash = canonical_review_evidence_set_sha256(result)
+    return _review_receipt_v3(
+        plan,
+        result_artifact=result_artifact,
+        authoring_artifact=EvidenceResultArtifactPointerV3(
+            logical_artifact_id=pointer.logical_artifact_id,
+            revision_id=pointer.revision_id,
+            content_hash=pointer.content_hash,
+            result_schema="authoring-result@12.0",
+        ),
+        authoring_hash=authoring_hash,
+        review_hash=review_hash,
+        report_hash=report_hash,
+        review_evidence_hash=review_evidence_hash,
+    )
+
+
 def _validate_independent_review_report(
     materials: ResolvedEvidenceMaterials,
-    result: ContentTeamReviewRoleResultV11,
+    result: ContentTeamReviewRoleResultV11 | ContentTeamReviewRoleResultV12,
     draft: Mapping[str, Any],
 ) -> None:
     report = result.output.independent_review_report
@@ -766,11 +933,74 @@ def _validate_independent_review_report(
             "solution-enriched evidence must ground at least one scientific review claim",
         )
 
+    if isinstance(result, ContentTeamReviewRoleResultV12):
+        _validate_v12_verification_plan(
+            result=result,
+            draft=draft,
+            entries=entries,
+            context_ids=context_ids,
+        )
+
     _validate_independent_review_draft(result, draft)
 
 
+def _validate_v12_verification_plan(
+    *,
+    result: ContentTeamReviewRoleResultV12,
+    draft: Mapping[str, Any],
+    entries: Mapping[str, Any],
+    context_ids: frozenset[str],
+) -> None:
+    """Bind planned targets and candidate triage to the exact Graph evidence snapshot.
+
+    The result model proves shape, ordering, and internal coverage. This trusted boundary proves
+    that every selected ID exists in the immutable manifest/context pair, required source classes
+    were actually used for supported targets, and every claimed application path resolves in the
+    exact authored draft. The pass is O(T + C + U) over bounded target, candidate, and usage IDs;
+    manifest lookup remains O(1) through the pre-built map.
+    """
+
+    report = result.output.independent_review_report
+    for target in report.verification_targets:
+        selected_entries = []
+        for evidence_id in target.selected_evidence_ids:
+            entry = entries.get(evidence_id)
+            if entry is None or evidence_id not in context_ids:
+                raise EvidenceUsageValidationError(
+                    "EVIDENCE_REVIEW_TARGET_UNKNOWN",
+                    "review verification target selects evidence outside pinned materials",
+                )
+            selected_entries.append(entry)
+        required_classes = set(target.required_source_classes)
+        selected_classes = {entry.source.source_class for entry in selected_entries}
+        if required_classes and not selected_classes.issubset(required_classes):
+            raise EvidenceUsageValidationError(
+                "EVIDENCE_REVIEW_TARGET_SOURCE_INVALID",
+                "review verification target selects an unrequested evidence source class",
+            )
+        if target.evidence_status == "SUPPORTED" and not required_classes.issubset(
+            selected_classes
+        ):
+            raise EvidenceUsageValidationError(
+                "EVIDENCE_REVIEW_TARGET_SOURCE_MISSING",
+                "supported review target does not cover every required evidence source class",
+            )
+        for pointer in target.draft_json_paths:
+            _resolve_semantic_leaf(draft, pointer)
+
+    for candidate in report.candidate_findings:
+        for evidence_id in candidate.evidence_ids:
+            if evidence_id not in entries or evidence_id not in context_ids:
+                raise EvidenceUsageValidationError(
+                    "EVIDENCE_REVIEW_CANDIDATE_UNKNOWN",
+                    "review candidate cites evidence outside pinned materials",
+                )
+        for pointer in candidate.draft_json_paths:
+            _resolve_semantic_leaf(draft, pointer)
+
+
 def _validate_independent_review_draft(
-    result: ContentTeamReviewRoleResultV11,
+    result: ContentTeamReviewRoleResultV11 | ContentTeamReviewRoleResultV12,
     draft: Mapping[str, Any],
 ) -> None:
     """Bind the bounded independent report to one exact authored draft."""
@@ -887,6 +1117,47 @@ def _validate_ungrounded_review_result_v11(
     )
 
 
+def _validate_ungrounded_review_result_v12(
+    session: Session,
+    *,
+    worker_input: RoleWorkerInput,
+    result: ContentTeamReviewRoleResultV12,
+    canonical_artifact_root: Path,
+) -> None:
+    """Validate a verification-planned general-knowledge result without inventing Graph pins."""
+
+    pointers = tuple(
+        pointer
+        for pointer in worker_input.upstream_artifacts
+        if pointer.step_key == "authoring" and pointer.result_schema == "authoring-result@12.0"
+    )
+    if len(pointers) != 1:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_POINTER_INVALID",
+            "review requires one exact @12 authoring Artifact pointer",
+        )
+    authoring = _resolve_authoring_result(
+        session,
+        pointer=pointers[0],
+        workflow_id=result.workflow_id,
+        canonical_artifact_root=canonical_artifact_root,
+        verification_planned=True,
+    )
+    if (
+        not isinstance(authoring, ContentTeamAuthoringRoleResultV12)
+        or authoring.output.metadata.knowledge_source_mode != "general_model_knowledge"
+        or authoring.output.evidence_usage is not None
+    ):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_AUTHORING_RESULT_INVALID",
+            "general-knowledge review requires an exact ungrounded @12 authoring result",
+        )
+    _validate_independent_review_draft(
+        result,
+        authoring.output.draft.model_dump(mode="json"),
+    )
+
+
 def _validate_citations(
     manifest: EvidenceManifest,
     context_payload: bytes,
@@ -994,9 +1265,26 @@ def _resolve_authoring_result(
     workflow_id: str,
     canonical_artifact_root: Path,
     successor: bool = False,
-) -> ContentTeamAuthoringRoleResultV10 | ContentTeamAuthoringRoleResultV11:
-    expected_schema = "authoring-result@11.0" if successor else "authoring-result@10.0"
-    expected_protocol = "workflow-role/1.23.0" if successor else "workflow-role/1.20.0"
+    verification_planned: bool = False,
+) -> (
+    ContentTeamAuthoringRoleResultV10
+    | ContentTeamAuthoringRoleResultV11
+    | ContentTeamAuthoringRoleResultV12
+):
+    expected_schema = (
+        "authoring-result@12.0"
+        if verification_planned
+        else "authoring-result@11.0"
+        if successor
+        else "authoring-result@10.0"
+    )
+    expected_protocol = (
+        "workflow-role/1.24.0"
+        if verification_planned
+        else "workflow-role/1.23.0"
+        if successor
+        else "workflow-role/1.20.0"
+    )
     logical = session.get(ArtifactRecord, pointer.logical_artifact_id)
     revision = session.get(ArtifactRevisionRecord, pointer.revision_id)
     job = session.get(JobRecord, pointer.job_id)
@@ -1074,14 +1362,22 @@ def _resolve_authoring_result(
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result is invalid"
         ) from exc
-    if successor:
+    if verification_planned:
+        if not isinstance(result, ContentTeamAuthoringRoleResultV12):
+            raise EvidenceUsageValidationError(
+                "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result type differs"
+            )
+        validated_result: (
+            ContentTeamAuthoringRoleResultV10
+            | ContentTeamAuthoringRoleResultV11
+            | ContentTeamAuthoringRoleResultV12
+        ) = result
+    elif successor:
         if not isinstance(result, ContentTeamAuthoringRoleResultV11):
             raise EvidenceUsageValidationError(
                 "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result type differs"
             )
-        validated_result: ContentTeamAuthoringRoleResultV10 | ContentTeamAuthoringRoleResultV11 = (
-            result
-        )
+        validated_result = result
     elif not isinstance(result, ContentTeamAuthoringRoleResultV10) or isinstance(
         result, ContentTeamAuthoringRoleResultV11
     ):
@@ -1310,4 +1606,83 @@ def _review_receipt_v2(
     except (ControlSchemaError, JsonSchemaValidationError, ValidationError) as exc:
         raise EvidenceUsageValidationError(
             "EVIDENCE_RECEIPT_INVALID", "review successor evidence receipt is invalid"
+        ) from exc
+
+
+def _receipt_common_v3(plan: ResolvedExecutionPlanV12) -> dict[str, object]:
+    return {
+        "schema_version": "evidence-usage-validation-receipt/3.0",
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "evidence_bundle_id": plan.evidence_bundle_id,
+        "evidence_bundle_revision_id": plan.evidence_bundle_revision_id,
+        "retrieval_request_id": plan.retrieval_request_id,
+        "retrieval_request_sha256": plan.retrieval_request_sha256,
+        "graph_snapshot_revision_id": plan.graph_snapshot.graph_snapshot_revision_id,
+        "graph_snapshot_sha256": plan.graph_snapshot.manifest_sha256,
+        "evidence_manifest_artifact": plan.evidence_manifest_artifact.model_dump(mode="json"),
+        "evidence_manifest_sha256": plan.evidence_manifest_sha256,
+        "evidence_context_artifact": plan.evidence_context_artifact.model_dump(mode="json"),
+    }
+
+
+def _authoring_receipt_v3(
+    plan: ResolvedExecutionPlanV3,
+    result_artifact: EvidenceResultArtifactPointerV3,
+    citation_hash: str,
+) -> AuthoringEvidenceUsageValidationReceiptV3:
+    if not isinstance(plan, ResolvedExecutionPlanV12):
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_PROTOCOL_PLAN_MISMATCH", "@12 receipt requires a V12 plan"
+        )
+    document = {
+        **_receipt_common_v3(plan),
+        "step_key": "authoring",
+        "result_artifact": result_artifact.model_dump(mode="json"),
+        "authoring_citation_set_sha256": citation_hash,
+        "receipt_sha256": _ZERO_SHA256,
+    }
+    document["receipt_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "receipt_sha256"}
+    )
+    try:
+        validate_control_contract("evidence-usage-validation-receipt-v3", document)
+        return AuthoringEvidenceUsageValidationReceiptV3.model_validate(document)
+    except (ControlSchemaError, JsonSchemaValidationError, ValidationError) as exc:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RECEIPT_INVALID", "authoring V12 evidence receipt is invalid"
+        ) from exc
+
+
+def _review_receipt_v3(
+    plan: ResolvedExecutionPlanV12,
+    *,
+    result_artifact: EvidenceResultArtifactPointerV3,
+    authoring_artifact: EvidenceResultArtifactPointerV3,
+    authoring_hash: str,
+    review_hash: str,
+    report_hash: str,
+    review_evidence_hash: str,
+) -> ReviewEvidenceUsageValidationReceiptV3:
+    document = {
+        **_receipt_common_v3(plan),
+        "step_key": "review",
+        "result_artifact": result_artifact.model_dump(mode="json"),
+        "authoring_artifact": authoring_artifact.model_dump(mode="json"),
+        "authoring_citation_set_sha256": authoring_hash,
+        "review_citation_set_sha256": review_hash,
+        "citation_sets_equal": True,
+        "independent_review_report_sha256": report_hash,
+        "review_evidence_set_sha256": review_evidence_hash,
+        "receipt_sha256": _ZERO_SHA256,
+    }
+    document["receipt_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "receipt_sha256"}
+    )
+    try:
+        validate_control_contract("evidence-usage-validation-receipt-v3", document)
+        return ReviewEvidenceUsageValidationReceiptV3.model_validate(document)
+    except (ControlSchemaError, JsonSchemaValidationError, ValidationError) as exc:
+        raise EvidenceUsageValidationError(
+            "EVIDENCE_RECEIPT_INVALID", "review V12 evidence receipt is invalid"
         ) from exc

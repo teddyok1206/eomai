@@ -175,19 +175,23 @@ def _validate_semantics(definition: WorkflowDefinition, available_worker_roles: 
         if (
             not isinstance(source_agent, AgentStep)
             or source_agent.worker_role != "review"
-            or source_agent.result_schema != "review-result@11.0"
+            or source_agent.result_schema not in {"review-result@11.0", "review-result@12.0"}
         ):
             raise WorkflowDefinitionError(
-                "automatic rework source must be one @11 review agent step"
+                "automatic rework source must be one supported review agent step"
             )
         if (
             not isinstance(target_agent, AgentStep)
             or target_agent.worker_role != "authoring"
-            or target_agent.result_schema != "authoring-result@11.0"
+            or target_agent.result_schema not in {"authoring-result@11.0", "authoring-result@12.0"}
         ):
             raise WorkflowDefinitionError(
-                "automatic rework target must be one @11 authoring agent step"
+                "automatic rework target must be one supported authoring agent step"
             )
+        if result_schema_protocol(source_agent.result_schema) != result_schema_protocol(
+            target_agent.result_schema
+        ):
+            raise WorkflowDefinitionError("automatic rework steps must use one result family")
         if keys.index(target_agent.key) >= keys.index(source_agent.key):
             raise WorkflowDefinitionError("automatic rework target must precede its review step")
         if definition.limits.max_rework_cycles != 3 or definition.limits.max_step_attempts < 4:

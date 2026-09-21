@@ -184,6 +184,26 @@ EXPECTED_V13_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
         ),
     }
 )
+EXPECTED_V14_BASE_INSTRUCTION_BUNDLE_REVISION_IDS = MappingProxyType(
+    {
+        "authoring": "instrrev_962c3376a767113a6467b20038f92d1e",
+        "image": "instrrev_ba147748d79ebf929979cba963afec20",
+        "review": "instrrev_5fea0e7c90c9c925c494afa2babd29b8",
+        "item_management": "instrrev_e3739f17cd6f72c6ee5f9d10b3cc6a04",
+    }
+)
+EXPECTED_V14_BASE_INSTRUCTION_BUNDLE_IDS = EXPECTED_V13_BASE_INSTRUCTION_BUNDLE_IDS
+EXPECTED_V14_BASE_INSTRUCTION_MEMBER_SHA256S = MappingProxyType(
+    {
+        "platform": "sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b",
+        "authoring": "sha256:f6019d8e13c8887bce76adbf183eaa5aa13bf014a749fcddfb97fa349dc3be0b",
+        "image": "sha256:18ad7994b5d84bb395be1dddc40f3fde6d6637419926f1a7a59c8e8e6ec527e1",
+        "review": "sha256:616b46ceb031c3044242597422c93e5538ab3caebaa16ea5d4650a01725f2898",
+        "item_management": (
+            "sha256:9482b7380920b1f0ffcdbca342e66a1c3797962beaa4d37d8d54eadcc30bdcd8"
+        ),
+    }
+)
 PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA = MappingProxyType(
     {
         "knowledge-item-control-bootstrap/7.0": 10,
@@ -193,6 +213,7 @@ PINNED_STANDARD_INSTRUCTION_REVISION_BY_KNOWLEDGE_SCHEMA = MappingProxyType(
         "knowledge-item-control-bootstrap/11.0": 14,
         "knowledge-item-control-bootstrap/12.0": 15,
         "knowledge-item-control-bootstrap/13.0": 16,
+        "knowledge-item-control-bootstrap/14.0": 17,
     }
 )
 
@@ -252,6 +273,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
         "knowledge-item-control-bootstrap/11.0",
         "knowledge-item-control-bootstrap/12.0",
         "knowledge-item-control-bootstrap/13.0",
+        "knowledge-item-control-bootstrap/14.0",
     ]
     preset_key: Literal["knowledge-grounded-item"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -277,6 +299,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "workflow-role/1.19.0",
             "workflow-role/1.20.0",
             "workflow-role/1.23.0",
+            "workflow-role/1.24.0",
         ],
         ...,
     ] = Field(min_length=1, max_length=1)
@@ -364,6 +387,17 @@ class KnowledgeItemBootstrapManifest(BaseModel):
                 EXPECTED_V13_BASE_INSTRUCTION_MEMBER_SHA256S
             ):
                 raise ValueError("knowledge item V13 base instruction hashes differ")
+        elif self.schema_version == "knowledge-item-control-bootstrap/14.0":
+            if self.base_instruction_bundle_ids != dict(EXPECTED_V14_BASE_INSTRUCTION_BUNDLE_IDS):
+                raise ValueError("knowledge item V14 base instruction bundle identities differ")
+            if self.base_instruction_bundle_revision_ids != dict(
+                EXPECTED_V14_BASE_INSTRUCTION_BUNDLE_REVISION_IDS
+            ):
+                raise ValueError("knowledge item V14 base instruction revisions differ")
+            if self.base_instruction_member_sha256s != dict(
+                EXPECTED_V14_BASE_INSTRUCTION_MEMBER_SHA256S
+            ):
+                raise ValueError("knowledge item V14 base instruction hashes differ")
         elif (
             self.base_instruction_bundle_ids is not None
             or self.base_instruction_bundle_revision_ids is not None
@@ -384,6 +418,7 @@ class KnowledgeItemBootstrapManifest(BaseModel):
             "knowledge-item-control-bootstrap/11.0": "workflow-role/1.20.0",
             "knowledge-item-control-bootstrap/12.0": "workflow-role/1.23.0",
             "knowledge-item-control-bootstrap/13.0": "workflow-role/1.23.0",
+            "knowledge-item-control-bootstrap/14.0": "workflow-role/1.24.0",
         }[self.schema_version]
         if self.compatible_workflow_protocols != (expected_protocol,):
             raise ValueError("knowledge item workflow protocol differs")
@@ -439,6 +474,7 @@ def load_knowledge_item_bootstrap_manifest(
             "knowledge-item-control-bootstrap/11.0": "knowledge-item-control-bootstrap-v11",
             "knowledge-item-control-bootstrap/12.0": "knowledge-item-control-bootstrap-v12",
             "knowledge-item-control-bootstrap/13.0": "knowledge-item-control-bootstrap-v13",
+            "knowledge-item-control-bootstrap/14.0": "knowledge-item-control-bootstrap-v14",
         }.get(schema_version)
         if schema_name is None:
             raise ValueError("knowledge item bootstrap schema version is unsupported")
@@ -665,6 +701,7 @@ def _find_or_create_draft(
             "workflow-role/1.19.0": 4,
             "workflow-role/1.20.0": 5,
             "workflow-role/1.23.0": 6,
+            "workflow-role/1.24.0": 7,
         }
         if (
             len(current_protocols) != 1

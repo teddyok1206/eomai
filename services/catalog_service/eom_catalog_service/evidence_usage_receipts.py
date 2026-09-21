@@ -19,12 +19,16 @@ from eom_workflow import (
     ArtifactPointer,
     AuthoringEvidenceUsageValidationReceipt,
     AuthoringEvidenceUsageValidationReceiptV2,
+    AuthoringEvidenceUsageValidationReceiptV3,
     EvidenceResultArtifactPointer,
     EvidenceResultArtifactPointerV2,
+    EvidenceResultArtifactPointerV3,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
+    ReviewEvidenceUsageValidationReceiptV3,
     RoleWorkerInput,
     validate_control_contract,
 )
@@ -43,8 +47,16 @@ class EvidenceUsageReceiptResolutionError(RuntimeError):
 class EvidenceUsageReceiptPair:
     """Exact authoring/review receipts for one Graph-grounded workflow."""
 
-    authoring: AuthoringEvidenceUsageValidationReceipt | AuthoringEvidenceUsageValidationReceiptV2
-    review: ReviewEvidenceUsageValidationReceipt | ReviewEvidenceUsageValidationReceiptV2
+    authoring: (
+        AuthoringEvidenceUsageValidationReceipt
+        | AuthoringEvidenceUsageValidationReceiptV2
+        | AuthoringEvidenceUsageValidationReceiptV3
+    )
+    review: (
+        ReviewEvidenceUsageValidationReceipt
+        | ReviewEvidenceUsageValidationReceiptV2
+        | ReviewEvidenceUsageValidationReceiptV3
+    )
 
 
 @dataclass(frozen=True)
@@ -93,6 +105,8 @@ EvidenceUsageValidationReceipt = (
     | ReviewEvidenceUsageValidationReceipt
     | AuthoringEvidenceUsageValidationReceiptV2
     | ReviewEvidenceUsageValidationReceiptV2
+    | AuthoringEvidenceUsageValidationReceiptV3
+    | ReviewEvidenceUsageValidationReceiptV3
 )
 _RECEIPT_ADAPTER: TypeAdapter[EvidenceUsageValidationReceipt] = TypeAdapter(
     EvidenceUsageValidationReceipt
@@ -110,8 +124,11 @@ _PROTOCOL_BY_RESULT_SCHEMA = {
     "review-result@10.0": "workflow-role/1.20.0",
     "authoring-result@11.0": "workflow-role/1.23.0",
     "review-result@11.0": "workflow-role/1.23.0",
+    "authoring-result@12.0": "workflow-role/1.24.0",
+    "review-result@12.0": "workflow-role/1.24.0",
 }
 _V11_RESULT_SCHEMAS = frozenset({"authoring-result@11.0", "review-result@11.0"})
+_V12_RESULT_SCHEMAS = frozenset({"authoring-result@12.0", "review-result@12.0"})
 
 
 class OrchestratorEvidenceUsageReceiptResolver:
@@ -205,7 +222,10 @@ class OrchestratorEvidenceUsageReceiptResolver:
             plan = None
             if plan_record is not None:
                 plan = (
-                    ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
+                    ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
+                    if plan_record.canonical_document.get("schema_version")
+                    == "resolved-execution-plan/12.0"
+                    else ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
                     if plan_record.canonical_document.get("schema_version")
                     == "resolved-execution-plan/11.0"
                     else ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -261,11 +281,12 @@ class OrchestratorEvidenceUsageReceiptResolver:
             not in {
                 ("authoring-result@10.0", "review-result@10.0"),
                 ("authoring-result@11.0", "review-result@11.0"),
+                ("authoring-result@12.0", "review-result@12.0"),
             }
             or authoring.job_id == review.job_id
         ):
             raise EvidenceUsageReceiptResolutionError(
-                "evidence receipt pointers are not one exact @10 or @11 authoring/review family"
+                "evidence receipt pointers are not one exact @10/@11/@12 authoring/review family"
             )
         job_ids = tuple(pointer.job_id for pointer in pointers)
         artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers)
@@ -317,6 +338,9 @@ class OrchestratorEvidenceUsageReceiptResolver:
         exact_v2_pair = isinstance(
             authoring_receipt, AuthoringEvidenceUsageValidationReceiptV2
         ) and isinstance(review_receipt, ReviewEvidenceUsageValidationReceiptV2)
+        exact_v3_pair = isinstance(
+            authoring_receipt, AuthoringEvidenceUsageValidationReceiptV3
+        ) and isinstance(review_receipt, ReviewEvidenceUsageValidationReceiptV3)
         if exact_v1_pair:
             assert isinstance(authoring_receipt, AuthoringEvidenceUsageValidationReceipt)
             assert isinstance(review_receipt, ReviewEvidenceUsageValidationReceipt)
@@ -331,6 +355,10 @@ class OrchestratorEvidenceUsageReceiptResolver:
                 authoring=authoring_receipt,
                 review=review_receipt,
             )
+        elif exact_v3_pair:
+            assert isinstance(authoring_receipt, AuthoringEvidenceUsageValidationReceiptV3)
+            assert isinstance(review_receipt, ReviewEvidenceUsageValidationReceiptV3)
+            pair = EvidenceUsageReceiptPair(authoring=authoring_receipt, review=review_receipt)
         else:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipts do not match their authoring/review roles"
@@ -369,7 +397,13 @@ class OrchestratorEvidenceUsageReceiptResolver:
             and record.resolved_at == plan.resolved_at
             and plan.workflow_definition_key == "generic-item-development"
             and plan.workflow_definition_version
-            in ({"1.11.0", "1.12.0"} if isinstance(plan, ResolvedExecutionPlanV11) else {"1.10.0"})
+            in (
+                {"1.13.0"}
+                if isinstance(plan, ResolvedExecutionPlanV12)
+                else {"1.11.0", "1.12.0"}
+                if isinstance(plan, ResolvedExecutionPlanV11)
+                else {"1.10.0"}
+            )
         )
 
     @staticmethod
@@ -475,7 +509,9 @@ class OrchestratorEvidenceUsageReceiptResolver:
         raw_receipt = data.get("evidence_usage_validation_receipt")
         try:
             receipt_schema = (
-                "evidence-usage-validation-receipt-v2"
+                "evidence-usage-validation-receipt-v3"
+                if pointer.result_schema in _V12_RESULT_SCHEMAS
+                else "evidence-usage-validation-receipt-v2"
                 if pointer.result_schema in _V11_RESULT_SCHEMAS
                 else "evidence-usage-validation-receipt"
             )
@@ -485,8 +521,19 @@ class OrchestratorEvidenceUsageReceiptResolver:
             raise EvidenceUsageReceiptResolutionError(
                 "evidence receipt failed its JSON Schema or typed contract"
             ) from exc
-        expected_result: EvidenceResultArtifactPointer | EvidenceResultArtifactPointerV2
-        if pointer.result_schema in _V11_RESULT_SCHEMAS:
+        expected_result: (
+            EvidenceResultArtifactPointer
+            | EvidenceResultArtifactPointerV2
+            | EvidenceResultArtifactPointerV3
+        )
+        if pointer.result_schema in _V12_RESULT_SCHEMAS:
+            expected_result = EvidenceResultArtifactPointerV3(
+                logical_artifact_id=pointer.logical_artifact_id,
+                revision_id=pointer.revision_id,
+                content_hash=pointer.content_hash,
+                result_schema=pointer.result_schema,  # type: ignore[arg-type]
+            )
+        elif pointer.result_schema in _V11_RESULT_SCHEMAS:
             expected_result = EvidenceResultArtifactPointerV2(
                 logical_artifact_id=pointer.logical_artifact_id,
                 revision_id=pointer.revision_id,

@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     EducationalRetrievalRequirement,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV4,
+    EvidenceBundlePublicationResultV5,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
@@ -22,7 +23,7 @@ from eom_orchestrator.execution_resolver import (
     resolve_knowledge_backed_execution_plan,
     validate_educational_retrieval_policy,
 )
-from eom_workflow import ExecutionPresetRevisionV2
+from eom_workflow import ExecutionPresetRevisionV2, ResolvedExecutionPlanV12
 from eom_workflow.control_plane import WorkerRole
 
 NOW = datetime(2026, 8, 24, 3, 0, tzinfo=UTC)
@@ -116,6 +117,26 @@ def _preset() -> ExecutionPresetRevisionV2:
     return ExecutionPresetRevisionV2.model_validate(value)
 
 
+def _verification_preset() -> ExecutionPresetRevisionV2:
+    value = _preset().model_dump(mode="json")
+    authoring = value["role_policies"][0]
+    review = {
+        **authoring,
+        "role": "review",
+        "worker_pool_key": "review",
+        "model_candidates": [
+            {"model": "gpt-5.6-terra", "reasoning_effort": "high"},
+            {"model": "gpt-5.6-terra", "reasoning_effort": "xhigh"},
+        ],
+    }
+    value["compatible_workflow_protocols"] = ["workflow-role/1.24.0"]
+    value["role_policies"] = [authoring, review]
+    value["content_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "content_sha256"}
+    )
+    return ExecutionPresetRevisionV2.model_validate(value)
+
+
 class _PinnedPresetSession:
     def __init__(
         self,
@@ -184,8 +205,12 @@ def test_pinned_preset_rejects_exact_hash_or_key_drift() -> None:
 
 def _evidence(
     *, manifest_schema_version: str = "2.0"
-) -> EvidenceBundlePublicationResultV2 | EvidenceBundlePublicationResultV4:
-    if manifest_schema_version not in {"2.0", "4.0"}:
+) -> (
+    EvidenceBundlePublicationResultV2
+    | EvidenceBundlePublicationResultV4
+    | EvidenceBundlePublicationResultV5
+):
+    if manifest_schema_version not in {"2.0", "4.0", "5.0"}:
         raise ValueError("unsupported test manifest schema version")
     graph = {
         "graph_id": "graph_" + "5" * 32,
@@ -199,11 +224,7 @@ def _evidence(
         "manifest_sha256": "sha256:" + "5" * 64,
     }
     value: dict[str, Any] = {
-        "schema_version": (
-            "evidence-bundle-publication-result/4.0"
-            if manifest_schema_version == "4.0"
-            else "evidence-bundle-publication-result/2.0"
-        ),
+        "schema_version": f"evidence-bundle-publication-result/{manifest_schema_version}",
         "evidence_bundle_id": "evidence_" + "6" * 32,
         "evidence_bundle_revision_id": "evidencerev_" + "6" * 32,
         "revision_number": 1,
@@ -240,6 +261,8 @@ def _evidence(
     value["result_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "result_sha256"}
     )
+    if manifest_schema_version == "5.0":
+        return EvidenceBundlePublicationResultV5.model_validate(value)
     if manifest_schema_version == "4.0":
         return EvidenceBundlePublicationResultV4.model_validate(value)
     return EvidenceBundlePublicationResultV2.model_validate(value)
@@ -356,6 +379,74 @@ def test_resolved_v3_plan_accepts_current_multimodal_evidence_manifest(
     assert plan.evidence_manifest_artifact.schema_ref == (
         "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
     )
+
+
+def test_verification_planned_v12_plan_pins_one_stronger_review_and_replays_exactly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preset = _verification_preset()
+    evidence = _evidence(manifest_schema_version="5.0")
+    dependencies = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "c" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.13.0",
+        workflow_definition_sha256="sha256:" + "d" * 64,
+        workflow_role_schema_version="workflow-role/1.24.0",
+        content_pack_release_id="packrel_" + "e" * 32,
+        content_pack_sha256="sha256:" + "f" * 64,
+        graph_snapshot_revision_id=evidence.graph_snapshot.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=evidence.evidence_bundle_revision_id,
+    )
+    recorded: dict[str, Any] = {}
+
+    def record(_session: object, *, document: dict[str, Any], dependencies: object) -> object:
+        del dependencies
+        recorded.update(document)
+        return SimpleNamespace(canonical_document=document)
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.record_knowledge_backed_execution_plan", record
+    )
+    plan = resolve_knowledge_backed_execution_plan(
+        _Session(preset),  # type: ignore[arg-type]
+        preset_revision_id=preset.preset_revision_id,
+        requirement=_requirement(),
+        evidence=evidence,
+        dependencies=dependencies,
+        steps=(
+            ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),
+            ExecutionStepRequirement("review", WorkerRole.REVIEW),
+        ),
+        resolved_at=NOW,
+    )
+
+    assert isinstance(plan, ResolvedExecutionPlanV12)
+    review = next(step for step in plan.steps if step.role == WorkerRole.REVIEW)
+    assert (review.model, review.reasoning_effort) == ("gpt-5.6-terra", "high")
+    assert review.escalation_candidate is not None
+    assert (review.escalation_candidate.model, review.escalation_candidate.reasoning_effort) == (
+        "gpt-5.6-terra",
+        "xhigh",
+    )
+
+    class ReplaySession:
+        def scalar(self, _statement: object) -> object:
+            return SimpleNamespace(canonical_document=dict(recorded))
+
+        def get(self, _model: type[object], _identity: str) -> object:
+            raise AssertionError("replay must not resolve mutable control state")
+
+    replayed = resolve_knowledge_backed_execution_plan(
+        ReplaySession(),  # type: ignore[arg-type]
+        preset_revision_id="execpresetrev_" + "0" * 32,
+        requirement=_requirement().model_copy(update={"corpus_key": "changed-corpus"}),
+        evidence=evidence,
+        dependencies=dependencies,
+        steps=(ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),),
+        resolved_at=NOW,
+    )
+    assert isinstance(replayed, ResolvedExecutionPlanV12)
+    assert replayed == plan
 
 
 def test_v3_plan_rejects_stale_evidence_policy_before_persist(

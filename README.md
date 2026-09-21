@@ -36,10 +36,10 @@ readiness가 정본입니다.
 
 | 경계 | 최신 additive 계약 |
 | --- | --- |
-| 단일 문항 Workflow | `generic-item-development@1.12.0` |
-| 역할 protocol / 결과 | `workflow-role/1.23.0` / `authoring·image·review·registration-result@11.0` |
-| Content Pack | `generated-knowledge-item@1.18.0` |
-| 표준 / RAG 실행 정책 | `standard-control-bootstrap/16.0` / `knowledge-item-control-bootstrap/13.0` |
+| 단일 문항 Workflow | `generic-item-development@1.13.0` |
+| 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
+| Content Pack | `generated-knowledge-item@1.19.0` |
+| 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
@@ -48,14 +48,27 @@ readiness가 정본입니다.
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 
-단일 문항의 V12 bounded-rework successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
-각각 독립 판정합니다. Graph 모드에서는 Evidence Bundle V5에 연결된 승인 풀이보고서를 과학 검증에
-실제로 사용해야 하며, Orchestrator가 검토 결과를 정확한 authoring Artifact와 다시 대조한 뒤
-`evidence-usage-validation-receipt/2.0`을 같은 commit transaction에 남깁니다. 일반지식 모드도
-근거를 가장할 수 없고 동일한 draft 결속 검증을 받습니다. 검증된 교정 가능 finding이 남으면
-Orchestrator가 정확한 이전 authoring/review Artifact pointer와 typed directive를 다음 authoring에 전달해
-최대 세 번까지 다시 작성·검토합니다. worker 간 직접 대화는 없으며, unknown·근거 변경·정책 판단
-사안과 3회 소진은 사람 게이트로 보냅니다. 사람 최종 승인은 그대로 유지됩니다.
+단일 문항의 최신 Graph 검증 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
+각각 독립 판정합니다. Review worker는 verdict 전에 검증 대상과 필요한 source class를 계획하고,
+시각자료가 있으면 이미지·표와 본문·선택지·해설의 일치를 먼저 확인합니다. 의심 사항은
+`CONFIRMED`, `DEMOTED`, `UNCERTAIN`으로 구분하며, 실제 차단 finding은 `CONFIRMED`에서만 만들 수
+있습니다. 구조가 복잡하거나 불확실성이 남은 문항은 Orchestrator가 정확한 source review Artifact와
+검증 대상을 고정한 directive를 발급해 더 강한 독립 검토를 최대 한 번만 실행합니다. 첫 검토는
+덮어쓰지 않고 `SUPERSEDED` lineage로 보존되며, worker끼리 직접 통신하지 않습니다.
+
+Graph 모드에서는 Evidence Bundle에 연결된 승인 풀이보고서를 과학 검증에 실제로 사용해야 합니다.
+Orchestrator는 검토 결과의 evidence·anchor·문항 JSON Pointer뿐 아니라 검토가 요구한 source class가
+정확한 pinned manifest에 실제로 존재하는지도 대조하고, `evidence-usage-validation-receipt/3.0`을 같은
+commit transaction에 남깁니다. Catalog는 등록 전에 source review와 선택된 최종 review의 pointer,
+attempt, directive, receipt self-hash를 다시 확인합니다. 일반지식 모드도 근거를 가장할 수 없고 같은
+draft 결속 검증을 받습니다. 교정 가능한 확정 finding은 정확한 이전 authoring/review Artifact pointer와
+typed directive로 최대 세 번 다시 작성·검토하며, 불확실성·근거 변경·정책 판단과 소진된 개선 횟수는
+사람 게이트로 보냅니다. 사람 최종 승인은 그대로 유지됩니다.
+
+이 검토 구조는 향후 PDF 교재 검토가 사용할 수 있는 검증 계획·후보 판정·불변 근거 pointer·receipt의
+기반을 제공합니다. 그러나 문항 draft와 교재 문서는 수명주기와 출력 계약이 다르므로 PDF 검토를
+현재 Item result schema에 끼워 넣지 않습니다. 실제 기능을 추가할 때는 문서 Revision, 페이지/영역
+anchor, 주장·검증 대상과 review report를 정의한 별도 additive protocol을 먼저 설계합니다.
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
@@ -262,6 +275,16 @@ PostgreSQL integration 127개를 운영 환경으로 우회하지 않고 skip했
 순수 테스트 1개는 통과했습니다. Ruff format/check는 1,383개 파일, strict mypy는 420개 source,
 successor schema generator idempotence와 release wheel의 새 schema 8개 및 RECORD hash도 통과했습니다.
 이 결과는 저장소 후보 검증이며 운영 활성화나 live 문항 품질 판정을 의미하지 않습니다.
+
+2026-09-21 Graph 검증 계획·시각자료 우선 검토·의심 사항 삼분류·1회 독립 강화 검토를 결합한
+successor 저장소 후보는 focused 335개(guarded skip 33개), 나머지 전체 unit 2,231개,
+API/Studio 739개(guarded skip 14개)를 통과했습니다. PostgreSQL/live opt-in은 운영 환경으로
+우회하지 않았습니다. Ruff
+format/check는 1,418개 파일, strict mypy는 422개 source를 통과했고 새 schema/control/Pack generator의
+재실행도 byte-stable했습니다. 이미지 provider 전용 두 component test는 해당 명시적 image runtime에
+pytest가 없어 실행하지 않았으며, 변경되지 않은 provider 구현의 PASS로 과장하지 않습니다. 이 후보는
+Workflow 1.13, role 1.24, result @12, receipt 3.0, Pack 1.19, standard 17, knowledge 14를 한 release set으로
+요구하며 아직 운영 활성화나 실제 문항의 교육 품질 PASS를 의미하지 않습니다.
 
 Pack 1.16.1과 production plan/execution 5.0은 운영에서 실제 25문항 생성·검토·승인·등록까지
 완료했습니다. 같은 immutable Item set을 공식 HWPX API로 빌드해 25개 section, native 수식 81개,

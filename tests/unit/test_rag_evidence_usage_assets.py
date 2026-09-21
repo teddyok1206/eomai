@@ -3,14 +3,12 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import pytest
 import yaml
 from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_service.content_pack_files import build_pack, compile_pack
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY
-from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 PACK_ROOT_V1_15_0 = ROOT / "content/packs/generated-knowledge-item/1.15.0"
@@ -215,15 +213,16 @@ def test_api_preserves_v120_and_accepts_v123_successor_start_contract() -> None:
     )
     assert bounded_rework.definition_version == "1.12.0"
 
-    with pytest.raises(ValidationError, match="workflow definition is unsupported"):
-        WorkflowStartRequest.model_validate(
-            _content_team_start_request() | {"definition_version": "1.13.0"}
-        )
+    verification_review = WorkflowStartRequest.model_validate(
+        _content_team_start_request() | {"definition_version": "1.13.0"}
+    )
+    assert verification_review.definition_version == "1.13.0"
 
 
-def test_runner_installer_selects_v123_successor_generic_definition() -> None:
+def test_runner_installer_selects_v124_successor_generic_definition() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
-    assert "generic-item-development.v1.12.yaml" in source
+    assert "generic-item-development.v1.13.yaml" in source
+    assert "generic-item-development.v1.12.yaml" not in source
     assert "generic-item-development.v1.11.yaml" not in source
     assert "generic-item-development.v1.10.yaml" not in source
     assert "generic-item-development.v1.9.yaml" not in source

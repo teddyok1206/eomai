@@ -681,6 +681,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/hwpx-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/workflow-start-v3.schema.json"' in deployment
     assert '"eom_api_contracts/mock_exam_execution.py"' in deployment
     assert '"eom_api_contracts/item_bank.py"' in deployment
     assert '"eom_api_contracts/mock_exam_retirement.py"' in deployment
@@ -746,7 +747,7 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
 
     assert '"1.10",\n        "1.11",' in deployment
     assert "definition_v1_9, definition_v1_10, definition_v1_11" in deployment
-    assert '"1.10.0", "1.11.0", "1.12.0"}' in deployment
+    assert '"1.10.0", "1.11.0", "1.12.0", "1.13.0"}' in deployment
     assert "MockExamProductionExecutionV3" in deployment
     assert "MockExamProductionExecutionV4" in deployment
     assert "MockExamProductionExecutionV5" in deployment
@@ -757,6 +758,7 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
         assert f'load_role_input_schema("{role}", "workflow-role/1.19.0")' in deployment
         assert f'load_role_input_schema("{role}", "workflow-role/1.20.0")' in deployment
         assert f'load_role_input_schema("{role}", "workflow-role/1.23.0")' in deployment
+        assert f'load_role_input_schema("{role}", "workflow-role/1.24.0")' in deployment
     for control_schema in (
         "standard-control-bootstrap-v12",
         "knowledge-item-control-bootstrap-v9",
@@ -766,6 +768,10 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
         "knowledge-item-control-bootstrap-v11",
         "standard-control-bootstrap-v15",
         "knowledge-item-control-bootstrap-v12",
+        "standard-control-bootstrap-v16",
+        "knowledge-item-control-bootstrap-v13",
+        "standard-control-bootstrap-v17",
+        "knowledge-item-control-bootstrap-v14",
     ):
         assert control_schema in deployment
     for runtime in (

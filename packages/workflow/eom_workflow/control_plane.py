@@ -253,6 +253,60 @@ EvidenceUsageValidationReceiptV2 = Annotated[
 ]
 
 
+class EvidenceResultArtifactPointerV3(FrozenModel):
+    """Exact V12 result revision pinned by verification-planned review receipts."""
+
+    logical_artifact_id: ArtifactId
+    revision_id: ArtifactRevisionId
+    content_hash: Sha256
+    result_schema: Literal["authoring-result@12.0", "review-result@12.0"]
+
+
+class EvidenceUsageValidationReceiptBaseV3(EvidenceUsageValidationReceiptBaseV2):
+    schema_version: Literal["evidence-usage-validation-receipt/3.0"] = (
+        "evidence-usage-validation-receipt/3.0"  # type: ignore[assignment]
+    )
+
+
+class AuthoringEvidenceUsageValidationReceiptV3(EvidenceUsageValidationReceiptBaseV3):
+    step_key: Literal["authoring"] = "authoring"
+    result_artifact: EvidenceResultArtifactPointerV3
+    authoring_citation_set_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_authoring_result_family(self) -> AuthoringEvidenceUsageValidationReceiptV3:
+        if self.result_artifact.result_schema != "authoring-result@12.0":
+            raise ValueError("authoring evidence receipt result schema differs")
+        return self
+
+
+class ReviewEvidenceUsageValidationReceiptV3(EvidenceUsageValidationReceiptBaseV3):
+    step_key: Literal["review"] = "review"
+    result_artifact: EvidenceResultArtifactPointerV3
+    authoring_artifact: EvidenceResultArtifactPointerV3
+    authoring_citation_set_sha256: Sha256
+    review_citation_set_sha256: Sha256
+    citation_sets_equal: Literal[True]
+    independent_review_report_sha256: Sha256
+    review_evidence_set_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_review_result_family(self) -> ReviewEvidenceUsageValidationReceiptV3:
+        if (
+            self.result_artifact.result_schema != "review-result@12.0"
+            or self.authoring_artifact.result_schema != "authoring-result@12.0"
+            or self.review_citation_set_sha256 != self.authoring_citation_set_sha256
+        ):
+            raise ValueError("review evidence receipt fields differ")
+        return self
+
+
+EvidenceUsageValidationReceiptV3 = Annotated[
+    AuthoringEvidenceUsageValidationReceiptV3 | ReviewEvidenceUsageValidationReceiptV3,
+    Field(discriminator="step_key"),
+]
+
+
 class ReasoningEffort(StrEnum):
     MINIMAL = "minimal"
     LOW = "low"
@@ -599,6 +653,24 @@ class ResolvedStepExecutionV3(ResolvedStepExecution):
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"]
 
 
+class ResolvedStepExecutionV12(ResolvedStepExecutionV3):
+    """One step plus the optional stronger candidate allowed only for item review."""
+
+    escalation_candidate: ModelCandidate | None
+
+    @model_validator(mode="after")
+    def review_only_distinct_escalation(self) -> ResolvedStepExecutionV12:
+        if self.role == WorkerRole.REVIEW:
+            if self.escalation_candidate is None or (
+                self.escalation_candidate.model,
+                self.escalation_candidate.reasoning_effort,
+            ) == (self.model, self.reasoning_effort):
+                raise ValueError("review step requires one distinct escalation candidate")
+        elif self.escalation_candidate is not None:
+            raise ValueError("only the review step may pin an escalation candidate")
+        return self
+
+
 class ResolvedExecutionPlanV3(FrozenModel):
     """One fresh item workflow pinned to an immutable bounded Evidence Bundle."""
 
@@ -649,7 +721,10 @@ class ResolvedExecutionPlanV3(FrozenModel):
             "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
             "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
         }
-        if self.model_dump(mode="json").get("schema_version") == "resolved-execution-plan/11.0":
+        if self.model_dump(mode="json").get("schema_version") in {
+            "resolved-execution-plan/11.0",
+            "resolved-execution-plan/12.0",
+        }:
             allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (
             self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
@@ -674,6 +749,20 @@ class ResolvedExecutionPlanV11(ResolvedExecutionPlanV3):
     """Knowledge-backed item plan accepting solution-enriched Evidence Bundle V5."""
 
     schema_version: Literal["resolved-execution-plan/11.0"] = "resolved-execution-plan/11.0"  # type: ignore[assignment]
+
+
+class ResolvedExecutionPlanV12(ResolvedExecutionPlanV3):
+    """Item plan pinning primary and bounded escalated candidates for review."""
+
+    schema_version: Literal["resolved-execution-plan/12.0"] = "resolved-execution-plan/12.0"  # type: ignore[assignment]
+    steps: tuple[ResolvedStepExecutionV12, ...] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def one_escalatable_review_step(self) -> ResolvedExecutionPlanV12:
+        review = tuple(step for step in self.steps if step.role == WorkerRole.REVIEW)
+        if len(review) != 1 or review[0].step_key != "review":
+            raise ValueError("verification-planned execution requires one review step")
+        return self
 
 
 class ResolvedExecutionPlanV4(FrozenModel):

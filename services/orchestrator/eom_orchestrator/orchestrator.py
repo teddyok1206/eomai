@@ -25,8 +25,10 @@ from eom_protocol import (
 from eom_workflow.control_plane import (
     EvidenceResultArtifactPointer,
     EvidenceResultArtifactPointerV2,
+    EvidenceResultArtifactPointerV3,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
 )
 from eom_workflow.models import (
     ArtifactPointer,
@@ -117,7 +119,11 @@ RETRYABLE_CONTROL_ADMISSION_ERRORS = frozenset(
     }
 )
 _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
-    {"resolved-execution-plan/3.0", "resolved-execution-plan/11.0"}
+    {
+        "resolved-execution-plan/3.0",
+        "resolved-execution-plan/11.0",
+        "resolved-execution-plan/12.0",
+    }
 )
 
 
@@ -170,6 +176,8 @@ def _resolved_evidence_plan_for_response(
             "review-result@10.0",
             "authoring-result@11.0",
             "review-result@11.0",
+            "authoring-result@12.0",
+            "review-result@12.0",
         }
         or evidence_access != "EVIDENCE_CONTEXT"
     ):
@@ -177,6 +185,8 @@ def _resolved_evidence_plan_for_response(
     try:
         if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
             return ResolvedExecutionPlanV11.model_validate(plan_document)
+        if result_schema in {"authoring-result@12.0", "review-result@12.0"}:
+            return ResolvedExecutionPlanV12.model_validate(plan_document)
         return ResolvedExecutionPlanV3.model_validate(plan_document)
     except ValidationError as exc:
         raise ControlPlaneError(
@@ -382,6 +392,7 @@ class Orchestrator:
         prompt_text: str | None = None,
         material_requirement: ContentTeamMaterialRequirementV1 | None = None,
         before_execute: Callable[[str], None] | None = None,
+        execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
@@ -606,6 +617,7 @@ class Orchestrator:
                                 canonical_artifact_root=self.settings.nas_artifact_root,
                                 worker_group_id=private_group.gr_gid,
                                 authorized_artifact_revision_ids=authorized,
+                                execution_tier=execution_tier,
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
                         self._transition(
@@ -792,11 +804,25 @@ class Orchestrator:
                     "review-result@10.0",
                     "authoring-result@11.0",
                     "review-result@11.0",
+                    "authoring-result@12.0",
+                    "review-result@12.0",
                 }:
                     result_artifact_pointer: (
-                        EvidenceResultArtifactPointer | EvidenceResultArtifactPointerV2
+                        EvidenceResultArtifactPointer
+                        | EvidenceResultArtifactPointerV2
+                        | EvidenceResultArtifactPointerV3
                     )
-                    if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
+                    if result_schema in {"authoring-result@12.0", "review-result@12.0"}:
+                        result_artifact_pointer = EvidenceResultArtifactPointerV3(
+                            logical_artifact_id=artifact.logical_artifact_id,
+                            revision_id=artifact.revision_id,
+                            content_hash=staged.content_hash,
+                            result_schema=cast(
+                                Literal["authoring-result@12.0", "review-result@12.0"],
+                                result_schema,
+                            ),
+                        )
+                    elif result_schema in {"authoring-result@11.0", "review-result@11.0"}:
                         result_artifact_pointer = EvidenceResultArtifactPointerV2(
                             logical_artifact_id=artifact.logical_artifact_id,
                             revision_id=artifact.revision_id,

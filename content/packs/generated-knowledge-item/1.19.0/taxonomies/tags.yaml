@@ -1,0 +1,6 @@
+schema_version: "1.0"
+tags:
+  - key: "GENERAL_KNOWLEDGE_GENERATED"
+    label: "일반 지식 기반 생성"
+  - key: "EOM_QUESTION_TEMPLATE"
+    label: "EOM 문항 템플릿 호환"

@@ -1,0 +1,149 @@
+{
+  "$defs": {
+    "authoringPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/basePointer"
+        },
+        {
+          "properties": {
+            "result_schema": {
+              "const": "authoring-result@12.0"
+            },
+            "step_key": {
+              "const": "authoring"
+            }
+          }
+        }
+      ]
+    },
+    "basePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "content_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "result_schema": {
+          "type": "string"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "step_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "step_key",
+        "attempt",
+        "job_id",
+        "logical_artifact_id",
+        "revision_id",
+        "content_hash",
+        "result_schema"
+      ],
+      "type": "object"
+    },
+    "findingCodes": {
+      "items": {
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+        "type": "string"
+      },
+      "maxItems": 20,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "reviewPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/basePointer"
+        },
+        {
+          "properties": {
+            "result_schema": {
+              "const": "review-result@12.0"
+            },
+            "step_key": {
+              "const": "review"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$id": "eom://schemas/workflow/review-rework-directive/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "disregarded_finding_codes": {
+      "$ref": "#/$defs/findingCodes"
+    },
+    "human_required_finding_codes": {
+      "$ref": "#/$defs/findingCodes"
+    },
+    "max_rework_cycles": {
+      "const": 3
+    },
+    "observed_rework_cycle_count": {
+      "maximum": 3,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "outcome": {
+      "enum": [
+        "READY_FOR_HUMAN",
+        "REWORK_AUTHORING",
+        "HUMAN_REVIEW_REQUIRED"
+      ]
+    },
+    "prior_authoring": {
+      "$ref": "#/$defs/authoringPointer"
+    },
+    "repairable_finding_codes": {
+      "$ref": "#/$defs/findingCodes"
+    },
+    "schema_version": {
+      "const": "workflow-review-rework-directive/2.0"
+    },
+    "source_review": {
+      "$ref": "#/$defs/reviewPointer"
+    },
+    "verified_blocking_finding_codes": {
+      "$ref": "#/$defs/findingCodes"
+    }
+  },
+  "required": [
+    "schema_version",
+    "observed_rework_cycle_count",
+    "max_rework_cycles",
+    "outcome",
+    "prior_authoring",
+    "source_review",
+    "verified_blocking_finding_codes",
+    "repairable_finding_codes",
+    "human_required_finding_codes",
+    "disregarded_finding_codes",
+    "decision_sha256"
+  ],
+  "title": "Workflow Review Rework Directive V2",
+  "type": "object"
+}

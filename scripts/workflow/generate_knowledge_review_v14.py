@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Generate the immutable knowledge-grounded review-control V14 manifest."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = ROOT / "config/control-plane/knowledge-grounded-item-v14/bootstrap.yaml"
+
+CONTENT = """schema_version: knowledge-item-control-bootstrap/14.0
+preset_key: knowledge-grounded-item
+display_name: Graph 검증계획 기반 통합과학 독립 검토
+description: 고정 Graph 근거의 검증대상·후보판정과 1회 강화 검토를 결속하는 통합과학 정책입니다.
+created_at: '2026-09-21T00:00:00Z'
+base_preset_key: standard-item
+base_preset_schema_version: execution-preset-revision/1.0
+base_instruction_bundle_ids:
+  authoring: instrbundle_7bcd83d35c6ac27021fb5fcd8d9065a4
+  image: instrbundle_f536a34f517207e39abd32d469a4e834
+  review: instrbundle_713c412dfd049dfdaa8b2bbe961eeda8
+  item_management: instrbundle_bea9c5397ee3b8069d3ee9ef74418a37
+base_instruction_bundle_revision_ids:
+  authoring: instrrev_962c3376a767113a6467b20038f92d1e
+  image: instrrev_ba147748d79ebf929979cba963afec20
+  review: instrrev_5fea0e7c90c9c925c494afa2babd29b8
+  item_management: instrrev_e3739f17cd6f72c6ee5f9d10b3cc6a04
+base_instruction_member_sha256s:
+  platform: sha256:5a3cfab6dc1c195ebc93cb13c7549cd31ea30f6229a4b134bed818d9dd69271b
+  authoring: sha256:f6019d8e13c8887bce76adbf183eaa5aa13bf014a749fcddfb97fa349dc3be0b
+  image: sha256:18ad7994b5d84bb395be1dddc40f3fde6d6637419926f1a7a59c8e8e6ec527e1
+  review: sha256:616b46ceb031c3044242597422c93e5538ab3caebaa16ea5d4650a01725f2898
+  item_management: sha256:9482b7380920b1f0ffcdbca342e66a1c3797962beaa4d37d8d54eadcc30bdcd8
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+- workflow-role/1.24.0
+evidence_access_by_role:
+  authoring: EVIDENCE_CONTEXT
+  image: EVIDENCE_CONTEXT
+  review: EVIDENCE_CONTEXT
+  item_management: NONE
+retrieval_policy:
+  access_policy_revision_id: accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9
+  access_policy_sha256: sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0
+  allowed_corpus_keys:
+  - integrated-science-textbooks
+  allowed_query_kinds:
+  - ITEM_PREPARATION
+  allowed_source_classes:
+  - APPROVED_ITEM
+  - PAST_EXAM
+  - TEXTBOOK
+  maximum_budget:
+    max_documents: 16
+    max_item_revisions: 32
+    max_graph_nodes: 128
+    max_claims: 64
+    max_context_tokens: 16000
+"""
+
+
+def main() -> None:
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT.write_text(CONTENT, encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

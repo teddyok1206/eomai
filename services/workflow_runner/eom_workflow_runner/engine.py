@@ -16,7 +16,7 @@ from uuid import uuid4
 from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
-from eom_orchestrator.control_models import WorkerLeaseRecord
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import (
     ArtifactRecord,
@@ -37,14 +37,22 @@ from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
+    ResolvedExecutionPlanV12,
+    ResolvedStepExecutionV12,
     TerminalStep,
     WorkerRequest,
     WorkflowRequest,
+    WorkflowReviewEscalationDirective,
     WorkflowReviewReworkDirective,
+    WorkflowReviewReworkDirectiveV2,
+    append_review_escalation_directive,
     append_review_rework_directive,
     compile_definition_data,
     evaluate_decision,
+    load_review_escalation_directive_schema,
     load_review_rework_directive_schema,
+    load_review_rework_directive_v2_schema,
+    validate_review_escalation_history,
     validate_review_rework_history,
     validate_schema_message,
 )
@@ -133,7 +141,13 @@ TERMINAL_WORKFLOW_STATES = {
     for state in SUCCESSFUL_TERMINAL_WORKFLOW_STATES | UNSUCCESSFUL_TERMINAL_WORKFLOW_STATES
 }
 CONTENT_TEAM_IMAGE_RESULT_SCHEMAS = frozenset(
-    {"image-result@8.0", "image-result@9.0", "image-result@10.0", "image-result@11.0"}
+    {
+        "image-result@8.0",
+        "image-result@9.0",
+        "image-result@10.0",
+        "image-result@11.0",
+        "image-result@12.0",
+    }
 )
 _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES = frozenset(
     {
@@ -148,6 +162,27 @@ _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES = frozenset(
 
 def _is_content_team_image_result_schema(result_schema: str) -> bool:
     return result_schema in CONTENT_TEAM_IMAGE_RESULT_SCHEMAS
+
+
+def _validate_review_rework_directive(raw: object) -> WorkflowReviewReworkDirective:
+    """Validate the immutable directive with the schema family selected by its discriminator."""
+
+    if not isinstance(raw, dict):
+        raise ValueError("review rework directive must be an object")
+    schema_version = raw.get("schema_version")
+    if schema_version == "workflow-review-rework-directive/2.0":
+        validate_schema_message(
+            load_review_rework_directive_v2_schema(),
+            raw,
+            "workflow-review-rework-directive/2.0",
+        )
+        return WorkflowReviewReworkDirectiveV2.model_validate(raw)
+    validate_schema_message(
+        load_review_rework_directive_schema(),
+        raw,
+        "workflow-review-rework-directive/1.0",
+    )
+    return WorkflowReviewReworkDirective.model_validate(raw)
 
 
 def _prompt_name_for_request(
@@ -304,6 +339,11 @@ class PlatformRoleJobExecutor:
             prompt_text=prompt_text,
             material_requirement=material_requirement,
             before_execute=bind_platform_job,
+            execution_tier=(
+                "ESCALATED"
+                if "review_escalation_directive" in step.input_pointer_manifest
+                else "PRIMARY"
+            ),
         )
         content_hash: str | None = None
         if job.status == "SUCCEEDED":
@@ -631,6 +671,7 @@ class WorkflowRunner:
         actor_type: str,
         actor_id: str,
     ) -> bool:
+        source_escalation_directive: WorkflowReviewEscalationDirective | None = None
         with self._fenced_transaction() as session:
             current = session.get(WorkflowInstanceRecord, workflow.workflow_id)
             if current is None:
@@ -749,6 +790,16 @@ class WorkflowRunner:
                 definition.key,
                 step,
             )
+            raw_escalation = step.input_pointer_manifest.get("review_escalation_directive")
+            if raw_escalation is not None:
+                validate_schema_message(
+                    load_review_escalation_directive_schema(),
+                    raw_escalation,
+                    "workflow-review-escalation-directive/1.0",
+                )
+                source_escalation_directive = WorkflowReviewEscalationDirective.model_validate(
+                    raw_escalation
+                )
 
         idempotency_key = _step_job_idempotency_key(
             workflow.workflow_id, definition.key, attempt, workflow.definition_hash
@@ -760,6 +811,7 @@ class WorkflowRunner:
         content_team_stimuli: tuple[ContentTeamStimulusPointer, ...] | None = None
         result_pointer: ArtifactPointer | None = None
         review_rework_directive: WorkflowReviewReworkDirective | None = None
+        review_escalation_directive: WorkflowReviewEscalationDirective | None = None
         try:
             prompt_text: str | None = None
             if full_request.content_pack is not None:
@@ -822,13 +874,25 @@ class WorkflowRunner:
                 )
                 rework_policy = compiled.definition.automatic_review_rework
                 if rework_policy is not None and definition.key == rework_policy.source_review_step:
-                    review_rework_directive = self.catalog.classify_review_rework(
-                        workflow=workflow,
-                        request=full_request,
-                        artifacts=(*upstream, result_pointer),
-                        observed_rework_cycle_count=workflow.rework_cycle_count,
-                        max_rework_cycles=compiled.definition.limits.max_rework_cycles,
-                    )
+                    if definition.result_schema == "review-result@12.0":
+                        review_escalation_directive = self.catalog.classify_review_escalation(
+                            workflow=workflow,
+                            artifacts=(*upstream, result_pointer),
+                            plan_step=self._resolved_v12_review_step(workflow),
+                            source_directive=source_escalation_directive,
+                        )
+                    if review_escalation_directive is None:
+                        rework_artifacts = (
+                            *(pointer for pointer in upstream if pointer.step_key != "review"),
+                            result_pointer,
+                        )
+                        review_rework_directive = self.catalog.classify_review_rework(
+                            workflow=workflow,
+                            request=full_request,
+                            artifacts=rework_artifacts,
+                            observed_rework_cycle_count=workflow.rework_cycle_count,
+                            max_rework_cycles=compiled.definition.limits.max_rework_cycles,
+                        )
                 if definition.worker_role == "item_management":
                     registration = self.catalog.register_workflow(
                         workflow=workflow,
@@ -984,6 +1048,28 @@ class WorkflowRunner:
                         "manifest_sha256": registration.manifest_sha256,
                     }
                 automatic_rework_scheduled = False
+                review_escalation_scheduled = False
+                if review_escalation_directive is not None:
+                    raw_history = context.get("review_escalation_history", [])
+                    try:
+                        escalation_history = append_review_escalation_directive(
+                            raw_history,
+                            review_escalation_directive,
+                        )
+                        validated_escalation_history = validate_review_escalation_history(
+                            escalation_history
+                        )
+                        self._validate_review_escalation_history_sources(
+                            session,
+                            workflow_id=workflow.workflow_id,
+                            history=validated_escalation_history,
+                        )
+                    except (TypeError, ValueError) as exc:
+                        raise WorkflowError(
+                            WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                            "recorded review escalation history is invalid",
+                        ) from exc
+                    context["review_escalation_history"] = escalation_history
                 if review_rework_directive is not None:
                     raw_history = context.get("review_rework_history", [])
                     try:
@@ -996,26 +1082,26 @@ class WorkflowRunner:
                             raise ValueError("review rework status differs from its history")
                         if not recorded and recorded_status is not None:
                             raise ValueError("review rework status exists without history")
-                        history = append_review_rework_directive(
+                        rework_history = append_review_rework_directive(
                             raw_history,
                             review_rework_directive,
                             max_rework_cycles=compiled.definition.limits.max_rework_cycles,
                         )
-                        validated_history = validate_review_rework_history(
-                            history,
+                        validated_rework_history = validate_review_rework_history(
+                            rework_history,
                             max_rework_cycles=compiled.definition.limits.max_rework_cycles,
                         )
                         self._validate_review_rework_history_sources(
                             session,
                             workflow_id=workflow.workflow_id,
-                            history=validated_history,
+                            history=validated_rework_history,
                         )
                     except (TypeError, ValueError) as exc:
                         raise WorkflowError(
                             WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                             "recorded review rework history is invalid",
                         ) from exc
-                    context["review_rework_history"] = history
+                    context["review_rework_history"] = rework_history
                     context["review_rework_status"] = review_rework_directive.outcome
                 current.runtime_context = context
                 record_workflow_event(
@@ -1035,6 +1121,20 @@ class WorkflowRunner:
                     },
                 )
                 if (
+                    review_escalation_directive is not None
+                    and definition.result_schema == "review-result@12.0"
+                ):
+                    self._schedule_review_escalation(
+                        session=session,
+                        workflow=current,
+                        compiled=compiled,
+                        source_step=step,
+                        source_upstream=upstream,
+                        directive=review_escalation_directive,
+                        command_id=command_id,
+                    )
+                    review_escalation_scheduled = True
+                elif (
                     review_rework_directive is not None
                     and review_rework_directive.outcome == "REWORK_AUTHORING"
                 ):
@@ -1046,7 +1146,7 @@ class WorkflowRunner:
                         command_id=command_id,
                     )
                     automatic_rework_scheduled = True
-                if not automatic_rework_scheduled:
+                if not review_escalation_scheduled and not automatic_rework_scheduled:
                     self._move_after_agent(
                         session,
                         current,
@@ -1063,6 +1163,104 @@ class WorkflowRunner:
                 "platform role job failed",
             )
         return True
+
+    @staticmethod
+    def _validate_review_escalation_history_sources(
+        session: Session,
+        *,
+        workflow_id: str,
+        history: tuple[WorkflowReviewEscalationDirective, ...],
+    ) -> None:
+        """Resolve every escalation source against an immutable successful review attempt."""
+
+        for directive in history:
+            for pointer in (directive.reviewed_authoring, directive.source_review):
+                source = session.scalar(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == pointer.step_key,
+                        WorkflowStepRunRecord.attempt == pointer.attempt,
+                    )
+                )
+                if (
+                    source is None
+                    or source.state
+                    not in {
+                        StepState.SUCCEEDED.value,
+                        StepState.SUPERSEDED.value,
+                    }
+                    or source.output_pointer_manifest != pointer.model_dump(mode="json")
+                ):
+                    raise ValueError("review escalation source pointer cannot be resolved")
+
+    def _schedule_review_escalation(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
+        source_step: WorkflowStepRunRecord,
+        source_upstream: tuple[ArtifactPointer, ...],
+        directive: WorkflowReviewEscalationDirective,
+        command_id: str | None,
+    ) -> None:
+        """Supersede one primary review and atomically schedule its plan-bound stronger pass."""
+
+        definition = compiled.steps_by_key.get(source_step.step_key)
+        if (
+            not isinstance(definition, AgentStep)
+            or definition.worker_role != "review"
+            or definition.result_schema != "review-result@12.0"
+            or source_step.state != StepState.SUCCEEDED.value
+            or source_step.output_pointer_manifest
+            != directive.source_review.model_dump(mode="json")
+            or directive.source_attempt != source_step.attempt
+            or directive.next_attempt != source_step.attempt + 1
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review escalation source differs from the successful primary review",
+            )
+        if any(pointer.step_key == "review" for pointer in source_upstream):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "a review escalation cannot be scheduled from an escalated review",
+            )
+        transition_step(source_step, StepState.SUPERSEDED)
+        successor_pointers = (*source_upstream, directive.source_review)
+        successor = create_step_run(
+            session,
+            workflow_id=workflow.workflow_id,
+            step_key=definition.key,
+            step_type=definition.type,
+            worker_role=definition.worker_role,
+            result_schema=definition.result_schema,
+            input_pointer_manifest={
+                "upstream_artifacts": [
+                    pointer.model_dump(mode="json") for pointer in successor_pointers
+                ],
+                "review_escalation_directive": directive.model_dump(mode="json"),
+            },
+            max_attempts=compiled.definition.limits.max_step_attempts,
+        )
+        workflow.current_step_key = definition.key
+        record_workflow_event(
+            session,
+            workflow.workflow_id,
+            "REVIEW_ESCALATION_SCHEDULED",
+            actor_type="system",
+            actor_id=self.runner_id,
+            command_id=command_id,
+            step_key=definition.key,
+            payload={
+                "source_review_step_run_id": source_step.step_run_id,
+                "escalated_review_step_run_id": successor.step_run_id,
+                "source_attempt": directive.source_attempt,
+                "next_attempt": directive.next_attempt,
+                "decision_sha256": directive.decision_sha256,
+                "reason_codes": list(directive.reason_codes),
+            },
+        )
 
     @staticmethod
     def _validate_review_rework_history_sources(
@@ -1284,13 +1482,17 @@ class WorkflowRunner:
         if rework_directive is not None:
             # A proven pre-commit infrastructure retry is still the same review cycle. Preserve
             # the exact small directive, while prompt pointers/envelopes are rematerialized.
-            validate_schema_message(
-                load_review_rework_directive_schema(),
-                rework_directive,
-                "workflow-review-rework-directive/1.0",
-            )
-            WorkflowReviewReworkDirective.model_validate(rework_directive)
+            _validate_review_rework_directive(rework_directive)
             successor_input_manifest["review_rework_directive"] = rework_directive
+        escalation_directive = step.input_pointer_manifest.get("review_escalation_directive")
+        if escalation_directive is not None:
+            validate_schema_message(
+                load_review_escalation_directive_schema(),
+                escalation_directive,
+                "workflow-review-escalation-directive/1.0",
+            )
+            WorkflowReviewEscalationDirective.model_validate(escalation_directive)
+            successor_input_manifest["review_escalation_directive"] = escalation_directive
         transition_step(step, StepState.FAILED)
         successor = create_step_run(
             session,
@@ -2083,6 +2285,42 @@ class WorkflowRunner:
                 "stored workflow definition is invalid",
             ) from exc
 
+    def _resolved_v12_review_step(
+        self, workflow: WorkflowInstanceRecord
+    ) -> ResolvedStepExecutionV12:
+        """Return the exact plan-pinned primary/escalation candidates for the review step."""
+
+        with self.sessions() as session:
+            record = session.scalar(
+                select(ResolvedExecutionPlanRecord).where(
+                    ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id
+                )
+            )
+            if record is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "workflow review escalation has no resolved execution plan",
+                )
+            try:
+                plan = ResolvedExecutionPlanV12.model_validate(record.canonical_document)
+            except ValueError as exc:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "workflow review escalation plan is not V12",
+                ) from exc
+            if plan.plan_id != record.plan_id or plan.plan_sha256 != record.plan_sha256:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "workflow review escalation plan identity differs",
+                )
+            review_steps = tuple(step for step in plan.steps if step.step_key == "review")
+            if len(review_steps) != 1:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "workflow review escalation plan has no unique review step",
+                )
+            return review_steps[0]
+
     def _upstream_pointers(
         self,
         session: Session,
@@ -2111,6 +2349,75 @@ class WorkflowRunner:
     ) -> tuple[ArtifactPointer, ...]:
         """Resolve exact rework inputs or fall back to the active DAG predecessor set."""
 
+        raw_escalation = step.input_pointer_manifest.get("review_escalation_directive")
+        if raw_escalation is not None:
+            if current_step_key != "review" or step.result_schema != "review-result@12.0":
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review escalation directive is attached to the wrong step",
+                )
+            validate_schema_message(
+                load_review_escalation_directive_schema(),
+                raw_escalation,
+                "workflow-review-escalation-directive/1.0",
+            )
+            escalation_directive = WorkflowReviewEscalationDirective.model_validate(raw_escalation)
+            if (
+                escalation_directive.workflow_id != workflow_id
+                or step.attempt != escalation_directive.next_attempt
+                or escalation_directive.next_attempt != escalation_directive.source_attempt + 1
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review escalation directive differs from the successor attempt",
+                )
+            raw_pointers = step.input_pointer_manifest.get("upstream_artifacts")
+            if not isinstance(raw_pointers, list):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review escalation input pointers are absent",
+                )
+            try:
+                pointers = tuple(ArtifactPointer.model_validate(value) for value in raw_pointers)
+            except ValueError as exc:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review escalation input pointers are invalid",
+                ) from exc
+            if (
+                not pointers
+                or pointers[-1] != escalation_directive.source_review
+                or sum(pointer.step_key == "review" for pointer in pointers) != 1
+                or escalation_directive.reviewed_authoring not in pointers
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                    "review escalation inputs differ from the source directive",
+                )
+            for pointer in pointers:
+                source = session.scalar(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == pointer.step_key,
+                        WorkflowStepRunRecord.attempt == pointer.attempt,
+                    )
+                )
+                expected_state = (
+                    StepState.SUPERSEDED.value
+                    if pointer.step_key == "review"
+                    else StepState.SUCCEEDED.value
+                )
+                if (
+                    source is None
+                    or source.state != expected_state
+                    or source.output_pointer_manifest != pointer.model_dump(mode="json")
+                ):
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                        "review escalation input pointer cannot be resolved exactly",
+                    )
+            return pointers
+
         raw_directive = step.input_pointer_manifest.get("review_rework_directive")
         if raw_directive is None:
             return self._upstream_pointers(session, workflow_id, compiled, current_step_key)
@@ -2123,21 +2430,22 @@ class WorkflowRunner:
                 WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                 "review rework directive is attached to the wrong step",
             )
-        validate_schema_message(
-            load_review_rework_directive_schema(),
-            raw_directive,
-            "workflow-review-rework-directive/1.0",
-        )
-        directive = WorkflowReviewReworkDirective.model_validate(raw_directive)
+        try:
+            rework_directive = _validate_review_rework_directive(raw_directive)
+        except ValueError as exc:
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
+                "review rework directive is invalid",
+            ) from exc
         if (
-            directive.outcome != "REWORK_AUTHORING"
-            or step.attempt <= directive.prior_authoring.attempt
+            rework_directive.outcome != "REWORK_AUTHORING"
+            or step.attempt <= rework_directive.prior_authoring.attempt
         ):
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                 "review rework directive differs from the successor attempt",
             )
-        pointers = (directive.prior_authoring, directive.source_review)
+        pointers = (rework_directive.prior_authoring, rework_directive.source_review)
         raw_pointers = step.input_pointer_manifest.get("upstream_artifacts")
         if raw_pointers != [pointer.model_dump(mode="json") for pointer in pointers]:
             raise WorkflowError(

@@ -742,11 +742,16 @@ class WorkflowReviewReworkDirective(FrozenModel):
 
     @model_validator(mode="after")
     def exact_sources_codes_outcome_and_hash(self) -> WorkflowReviewReworkDirective:
+        successor = self.model_dump(mode="json").get("schema_version") == (
+            "workflow-review-rework-directive/2.0"
+        )
+        authoring_schema = "authoring-result@12.0" if successor else "authoring-result@11.0"
+        review_schema = "review-result@12.0" if successor else "review-result@11.0"
         if (
             self.prior_authoring.step_key != "authoring"
-            or self.prior_authoring.result_schema != "authoring-result@11.0"
+            or self.prior_authoring.result_schema != authoring_schema
             or self.source_review.step_key != "review"
-            or self.source_review.result_schema != "review-result@11.0"
+            or self.source_review.result_schema != review_schema
         ):
             raise ValueError("review rework directive source pointers differ")
         if self.prior_authoring.attempt > 10 or self.source_review.attempt > 10:
@@ -788,6 +793,66 @@ class WorkflowReviewReworkDirective(FrozenModel):
         return self
 
 
+class WorkflowReviewReworkDirectiveV2(WorkflowReviewReworkDirective):
+    schema_version: Literal["workflow-review-rework-directive/2.0"] = (
+        "workflow-review-rework-directive/2.0"  # type: ignore[assignment]
+    )
+
+
+ReviewEscalationReason = Literal[
+    "CANDIDATE_FINDING_PRESENT",
+    "COMPLEX_ITEM",
+    "EVIDENCE_GAP",
+    "EVIDENCE_UNCERTAINTY",
+    "VISUAL_RISK",
+]
+
+
+class WorkflowReviewEscalationDirective(FrozenModel):
+    """One self-hashed, plan-bound successor attempt for the same logical review step."""
+
+    schema_version: Literal["workflow-review-escalation-directive/1.0"] = (
+        "workflow-review-escalation-directive/1.0"
+    )
+    workflow_id: WorkflowId
+    reviewed_authoring: ArtifactPointer
+    source_review: ArtifactPointer
+    source_attempt: int = Field(ge=1, le=10)
+    next_attempt: int = Field(ge=2, le=10)
+    reason_codes: tuple[ReviewEscalationReason, ...] = Field(min_length=1, max_length=5)
+    structural_complexity_score: int = Field(ge=0, le=10)
+    primary_model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    primary_reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
+    escalation_model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    escalation_reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"]
+    decision_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_sources_attempts_candidates_and_hash(self) -> WorkflowReviewEscalationDirective:
+        if (
+            self.reviewed_authoring.step_key != "authoring"
+            or self.reviewed_authoring.result_schema != "authoring-result@12.0"
+            or self.source_review.step_key != "review"
+            or self.source_review.result_schema != "review-result@12.0"
+            or self.source_review.attempt != self.source_attempt
+            or self.next_attempt != self.source_attempt + 1
+        ):
+            raise ValueError("review escalation source pointers or attempts differ")
+        if self.reason_codes != tuple(sorted(set(self.reason_codes))):
+            raise ValueError("review escalation reasons must be sorted and unique")
+        if (self.primary_model, self.primary_reasoning_effort) == (
+            self.escalation_model,
+            self.escalation_reasoning_effort,
+        ):
+            raise ValueError("review escalation candidate must differ from the primary candidate")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"decision_sha256"}))
+            != self.decision_sha256
+        ):
+            raise ValueError("review escalation directive hash differs")
+        return self
+
+
 class RoleWorkerInput(FrozenModel):
     schema_version: Literal["1.0"] = "1.0"
     protocol_version: Literal[
@@ -815,6 +880,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.21.0",
         "workflow-role/1.22.0",
         "workflow-role/1.23.0",
+        "workflow-role/1.24.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -928,6 +994,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.21.0",
         "workflow-role/1.22.0",
         "workflow-role/1.23.0",
+        "workflow-role/1.24.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2136,6 +2203,288 @@ class ContentTeamRegistrationRoleResultV11(ContentTeamRegistrationRoleResultV10)
     protocol_version: Literal["workflow-role/1.23.0"] = "workflow-role/1.23.0"  # type: ignore[assignment]
 
 
+ReviewVerificationTargetKind = Literal[
+    "SCIENTIFIC_CLAIM",
+    "ANSWER_DERIVATION",
+    "CHOICE_DIAGNOSTIC",
+    "STATEMENT_DIAGNOSTIC",
+    "EXPLANATION_CONSISTENCY",
+    "CURRICULUM_SCOPE",
+    "ORIGINALITY",
+    "VISUAL_RELATION",
+]
+
+
+class ReviewVerificationTargetV2(FrozenModel):
+    """A bounded, auditable verification target selected before the final verdict."""
+
+    target_id: str = Field(pattern=r"^target_[a-z0-9][a-z0-9_]{0,47}$")
+    target_kind: ReviewVerificationTargetKind
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(min_length=1, max_length=16)
+    verification_terms: tuple[
+        Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=100,
+                pattern=r"^[^\x00-\x1f\x7f]+$",
+            ),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=8)
+    required_source_classes: tuple[
+        Literal["CURRICULUM", "TEXTBOOK", "APPROVED_ITEM", "PAST_EXAM", "INTERNAL_GUIDE"],
+        ...,
+    ] = Field(max_length=5)
+    selected_evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+    evidence_status: Literal["SUPPORTED", "INSUFFICIENT", "NOT_APPLICABLE"]
+    conclusion: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def canonical_members_and_status(self) -> ReviewVerificationTargetV2:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.verification_terms, "verification terms"),
+            (self.required_source_classes, "required source classes"),
+            (self.selected_evidence_ids, "selected evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"review verification target {label} must be sorted and unique")
+        if self.evidence_status == "SUPPORTED" and not self.selected_evidence_ids:
+            raise ValueError("supported review target requires selected evidence")
+        if self.evidence_status == "NOT_APPLICABLE" and (
+            self.required_source_classes or self.selected_evidence_ids
+        ):
+            raise ValueError("not-applicable review target cannot claim sources or evidence")
+        return self
+
+
+class ReviewCandidateFindingV2(FrozenModel):
+    """One suspected issue after explicit confirmation, demotion, or uncertainty."""
+
+    candidate_id: str = Field(pattern=r"^candidate_[a-z0-9][a-z0-9_]{0,47}$")
+    finding_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    axis: Literal[
+        "ANSWER",
+        "CHOICE",
+        "STATEMENT",
+        "EXPLANATION",
+        "CURRICULUM",
+        "ORIGINALITY",
+        "VISUAL",
+        "MATERIAL",
+        "POLICY",
+    ]
+    draft_json_paths: tuple[DraftJsonPointer, ...] = Field(max_length=16)
+    evidence_ids: tuple[EvidenceItemId, ...] = Field(max_length=16)
+    initial_observation: str = Field(min_length=1, max_length=2000)
+    disposition: Literal["CONFIRMED", "DEMOTED", "UNCERTAIN"]
+    conclusion: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def canonical_members(self) -> ReviewCandidateFindingV2:
+        for values, label in (
+            (self.draft_json_paths, "draft JSON pointers"),
+            (self.evidence_ids, "evidence IDs"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"review candidate {label} must be sorted and unique")
+        return self
+
+
+class ReviewSourceArtifactPointerV1(FrozenModel):
+    logical_artifact_id: ArtifactId
+    revision_id: RevisionId
+    content_hash: Sha256
+    result_schema: Literal["review-result@12.0"] = "review-result@12.0"
+
+
+class ReviewEscalationAssessmentV1(FrozenModel):
+    review_pass: Literal["PRIMARY", "ESCALATED"]
+    inspection_order: Literal["VISUAL_FIRST", "CONTENT_FIRST"]
+    structural_complexity_score: int = Field(ge=0, le=10)
+    reason_codes: tuple[ReviewEscalationReason, ...] = Field(max_length=5)
+    decision: Literal["NOT_REQUIRED", "REQUIRED", "COMPLETED"]
+    source_review_artifact: ReviewSourceArtifactPointerV1 | None
+
+    @model_validator(mode="after")
+    def coherent_pass_and_decision(self) -> ReviewEscalationAssessmentV1:
+        if self.reason_codes != tuple(sorted(set(self.reason_codes))):
+            raise ValueError("review escalation reasons must be sorted and unique")
+        if self.review_pass == "PRIMARY":
+            if self.source_review_artifact is not None or self.decision == "COMPLETED":
+                raise ValueError("primary review cannot claim an escalation source or completion")
+            if (self.decision == "REQUIRED") != bool(self.reason_codes):
+                raise ValueError("primary escalation decision differs from its reasons")
+        elif (
+            self.source_review_artifact is None
+            or self.decision != "COMPLETED"
+            or not self.reason_codes
+        ):
+            raise ValueError("escalated review requires its source, reasons, and completion")
+        return self
+
+
+class IndependentReviewReportV2(IndependentReviewReportV1):
+    """Verification-planned item review with explicit candidate disposition and escalation."""
+
+    schema_version: Literal["independent-item-review/2.0"] = "independent-item-review/2.0"  # type: ignore[assignment]
+    verification_targets: tuple[ReviewVerificationTargetV2, ...] = Field(
+        min_length=8, max_length=32
+    )
+    candidate_findings: tuple[ReviewCandidateFindingV2, ...] = Field(max_length=32)
+    escalation_assessment: ReviewEscalationAssessmentV1
+
+    @model_validator(mode="after")
+    def exact_plan_candidate_and_escalation_invariants(self) -> IndependentReviewReportV2:
+        target_ids = tuple(item.target_id for item in self.verification_targets)
+        candidate_ids = tuple(item.candidate_id for item in self.candidate_findings)
+        if target_ids != tuple(sorted(set(target_ids))):
+            raise ValueError("review verification target IDs must be sorted and unique")
+        if candidate_ids != tuple(sorted(set(candidate_ids))):
+            raise ValueError("review candidate IDs must be sorted and unique")
+
+        kinds = [item.target_kind for item in self.verification_targets]
+        required = {
+            "SCIENTIFIC_CLAIM",
+            "ANSWER_DERIVATION",
+            "CHOICE_DIAGNOSTIC",
+            "EXPLANATION_CONSISTENCY",
+            "CURRICULUM_SCOPE",
+            "ORIGINALITY",
+        }
+        if not required.issubset(kinds) or kinds.count("CHOICE_DIAGNOSTIC") != 5:
+            raise ValueError("review verification plan lacks required target coverage")
+        expected_statements = len(self.statement_diagnostics)
+        if kinds.count("STATEMENT_DIAGNOSTIC") != expected_statements:
+            raise ValueError("statement verification target coverage differs")
+        visual = self.visual_assessment.status != "NOT_APPLICABLE"
+        if kinds.count("VISUAL_RELATION") != (1 if visual else 0):
+            raise ValueError("visual verification target coverage differs")
+        assessment = self.escalation_assessment
+        if visual:
+            if (
+                assessment.inspection_order != "VISUAL_FIRST"
+                or self.verification_targets[0].target_kind != "VISUAL_RELATION"
+            ):
+                raise ValueError("visual review must inspect the visual target first")
+        elif assessment.inspection_order != "CONTENT_FIRST":
+            raise ValueError("nonvisual review must use content-first inspection")
+
+        reference_ids = {item.evidence_id for item in self.evidence_references}
+        for target in self.verification_targets:
+            if not set(target.selected_evidence_ids).issubset(reference_ids):
+                raise ValueError("review target selects evidence outside the review references")
+        for candidate in self.candidate_findings:
+            if not set(candidate.evidence_ids).issubset(reference_ids):
+                raise ValueError("review candidate selects evidence outside the review references")
+
+        if assessment.review_pass == "PRIMARY":
+            expected_reasons: set[str] = set()
+            if any(
+                item.disposition in {"CONFIRMED", "UNCERTAIN"} for item in self.candidate_findings
+            ):
+                expected_reasons.add("CANDIDATE_FINDING_PRESENT")
+            if assessment.structural_complexity_score >= 4:
+                expected_reasons.add("COMPLEX_ITEM")
+            if any(
+                item.evidence_status == "INSUFFICIENT"
+                and item.target_kind
+                in {"SCIENTIFIC_CLAIM", "ANSWER_DERIVATION", "CURRICULUM_SCOPE"}
+                for item in self.verification_targets
+            ):
+                expected_reasons.add("EVIDENCE_GAP")
+            if any(item.disposition == "UNCERTAIN" for item in self.candidate_findings):
+                expected_reasons.add("EVIDENCE_UNCERTAINTY")
+            if any(
+                item.axis == "VISUAL" and item.disposition in {"CONFIRMED", "UNCERTAIN"}
+                for item in self.candidate_findings
+            ):
+                expected_reasons.add("VISUAL_RISK")
+            if set(assessment.reason_codes) != expected_reasons:
+                raise ValueError("primary review escalation reasons differ from review evidence")
+        elif any(item.disposition == "UNCERTAIN" for item in self.candidate_findings):
+            raise ValueError("escalated review cannot retain uncertain candidates")
+        return self
+
+
+class EvidenceAuthoringArtifactPointerV3(EvidenceAuthoringArtifactPointerV2):
+    result_schema: Literal["authoring-result@12.0"] = "authoring-result@12.0"  # type: ignore[assignment]
+
+
+class EvidenceUsageReviewAttestationV3(EvidenceUsageReviewAttestationV2):
+    schema_version: Literal["evidence-usage-review-attestation/3.0"] = (
+        "evidence-usage-review-attestation/3.0"  # type: ignore[assignment]
+    )
+    authoring_artifact: EvidenceAuthoringArtifactPointerV3
+
+
+class KnowledgeReviewOutputV12(FrozenModel):
+    review: KnowledgeReview
+    independent_review_report: IndependentReviewReportV2
+    evidence_usage_attestation: EvidenceUsageReviewAttestationV3 | None
+
+    @model_validator(mode="after")
+    def exact_findings_grounding_and_candidates(self) -> KnowledgeReviewOutputV12:
+        report = self.independent_review_report
+        # Preserve all V11 answer, evidence-purpose, grounding, and assessment invariants.
+        KnowledgeReviewOutputV11.model_validate(
+            {
+                "review": self.review.model_dump(mode="json"),
+                "independent_review_report": {
+                    key: value
+                    for key, value in report.model_dump(mode="json").items()
+                    if key
+                    not in {"verification_targets", "candidate_findings", "escalation_assessment"}
+                }
+                | {"schema_version": "independent-item-review/1.0"},
+                "evidence_usage_attestation": (
+                    None
+                    if self.evidence_usage_attestation is None
+                    else {
+                        **self.evidence_usage_attestation.model_dump(mode="json"),
+                        "schema_version": "evidence-usage-review-attestation/2.0",
+                        "authoring_artifact": {
+                            **self.evidence_usage_attestation.authoring_artifact.model_dump(
+                                mode="json"
+                            ),
+                            "result_schema": "authoring-result@11.0",
+                        },
+                    }
+                ),
+            }
+        )
+        blocking_codes = {
+            finding.code for finding in self.review.findings if finding.severity == "blocking"
+        }
+        confirmed_codes = {
+            candidate.finding_code
+            for candidate in report.candidate_findings
+            if candidate.disposition == "CONFIRMED"
+        }
+        if blocking_codes != confirmed_codes:
+            raise ValueError("blocking findings must exactly equal confirmed review candidates")
+        return self
+
+
+class ContentTeamAuthoringRoleResultV12(ContentTeamAuthoringRoleResultV11):
+    protocol_version: Literal["workflow-role/1.24.0"] = "workflow-role/1.24.0"  # type: ignore[assignment]
+
+
+class ContentTeamImageRoleResultV12(ContentTeamImageRoleResultV11):
+    protocol_version: Literal["workflow-role/1.24.0"] = "workflow-role/1.24.0"  # type: ignore[assignment]
+
+
+class ContentTeamReviewRoleResultV12(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.24.0"] = "workflow-role/1.24.0"
+    role: Literal["review"]
+    output: KnowledgeReviewOutputV12
+
+
+class ContentTeamRegistrationRoleResultV12(ContentTeamRegistrationRoleResultV11):
+    protocol_version: Literal["workflow-role/1.24.0"] = "workflow-role/1.24.0"  # type: ignore[assignment]
+
+
 class KnowledgeAnalysisProposalOutput(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposal
 
@@ -2340,6 +2689,10 @@ RoleResult = (
     | ContentTeamImageRoleResultV11
     | ContentTeamReviewRoleResultV11
     | ContentTeamRegistrationRoleResultV11
+    | ContentTeamAuthoringRoleResultV12
+    | ContentTeamImageRoleResultV12
+    | ContentTeamReviewRoleResultV12
+    | ContentTeamRegistrationRoleResultV12
     | KnowledgeAnalysisProposalRoleResult
     | KnowledgeAnalysisProposalRoleResultV2
     | KnowledgeAnalysisProposalRoleResultV3

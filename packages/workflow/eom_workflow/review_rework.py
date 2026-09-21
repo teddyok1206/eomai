@@ -7,9 +7,14 @@ from typing import Literal
 
 from eom_identifiers import content_sha256
 
-from eom_workflow.models import ArtifactPointer, WorkflowReviewReworkDirective
+from eom_workflow.models import (
+    ArtifactPointer,
+    WorkflowReviewReworkDirective,
+    WorkflowReviewReworkDirectiveV2,
+)
 from eom_workflow.schemas import (
     load_review_rework_directive_schema,
+    load_review_rework_directive_v2_schema,
     validate_schema_message,
 )
 
@@ -62,12 +67,23 @@ def validate_review_rework_history(
     decision_hashes: set[str] = set()
     review_revisions: set[str] = set()
     for expected_cycle, raw_directive in enumerate(raw_history):
-        validate_schema_message(
-            load_review_rework_directive_schema(),
-            raw_directive,
-            "workflow-review-rework-directive/1.0",
+        successor = (
+            isinstance(raw_directive, dict)
+            and raw_directive.get("schema_version") == "workflow-review-rework-directive/2.0"
         )
-        directive = WorkflowReviewReworkDirective.model_validate(raw_directive)
+        schema = (
+            load_review_rework_directive_v2_schema()
+            if successor
+            else load_review_rework_directive_schema()
+        )
+        schema_id = (
+            "workflow-review-rework-directive/2.0"
+            if successor
+            else "workflow-review-rework-directive/1.0"
+        )
+        validate_schema_message(schema, raw_directive, schema_id)
+        model_type = WorkflowReviewReworkDirectiveV2 if successor else WorkflowReviewReworkDirective
+        directive = model_type.model_validate(raw_directive)
         if directive.max_rework_cycles != max_rework_cycles:
             raise ValueError("review rework history limit differs")
         if directive.observed_rework_cycle_count != expected_cycle:
@@ -157,8 +173,22 @@ def build_review_rework_directive(
         outcome = "HUMAN_REVIEW_REQUIRED"
     else:
         outcome = "READY_FOR_HUMAN"
+    successor = (
+        prior_authoring.result_schema == "authoring-result@12.0"
+        and source_review.result_schema == "review-result@12.0"
+    )
+    if not successor and (
+        prior_authoring.result_schema != "authoring-result@11.0"
+        or source_review.result_schema != "review-result@11.0"
+    ):
+        raise ValueError("review rework pointers do not use one supported result family")
+    schema_id = (
+        "workflow-review-rework-directive/2.0"
+        if successor
+        else "workflow-review-rework-directive/1.0"
+    )
     unsigned = {
-        "schema_version": "workflow-review-rework-directive/1.0",
+        "schema_version": schema_id,
         "observed_rework_cycle_count": observed_rework_cycle_count,
         "max_rework_cycles": max_rework_cycles,
         "outcome": outcome,
@@ -171,8 +201,13 @@ def build_review_rework_directive(
     }
     document = {**unsigned, "decision_sha256": content_sha256(unsigned)}
     validate_schema_message(
-        load_review_rework_directive_schema(),
+        (
+            load_review_rework_directive_v2_schema()
+            if successor
+            else load_review_rework_directive_schema()
+        ),
         document,
-        "workflow-review-rework-directive/1.0",
+        schema_id,
     )
-    return WorkflowReviewReworkDirective.model_validate(document)
+    model_type = WorkflowReviewReworkDirectiveV2 if successor else WorkflowReviewReworkDirective
+    return model_type.model_validate(document)
