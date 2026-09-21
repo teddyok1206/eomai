@@ -65,6 +65,40 @@ def test_graph_review_protocol_bundle_hash_is_immutable() -> None:
     )
 
 
+def test_v12_projected_authoring_restores_canonical_draft_fields() -> None:
+    result = ContentTeamAuthoringRoleResultV12.model_validate(
+        {
+            "job_id": "job_" + "1" * 32,
+            "workflow_id": "workflow_" + "2" * 32,
+            "step_run_id": "steprun_" + "3" * 32,
+            "role": "authoring",
+            "artifact": ArtifactSpec(
+                logical_artifact_id="artifact_" + "4" * 32,
+                revision_id="rev_" + "5" * 32,
+            ),
+            "completed_at": datetime(2026, 9, 21, tzinfo=UTC),
+            "output": {
+                "draft": _content_v3(),
+                "metadata": {
+                    "subject": "통합과학",
+                    "topic": "검토 계획 회귀",
+                    "difficulty": "medium",
+                    "knowledge_source_mode": "general_model_knowledge",
+                },
+                "evidence_usage": None,
+            },
+        }
+    )
+    projected: dict[str, Any] = result.model_dump(mode="json")
+    projected["output"]["draft"].pop("visual_layout")
+
+    parsed = validate_role_result(projected, "authoring", "authoring-result@12.0")
+
+    assert isinstance(parsed, ContentTeamAuthoringRoleResultV12)
+    assert parsed.output.draft.visual_layout == "NONE"
+    assert parsed.output.draft.equation_sources == ()
+
+
 def _review_document(fixture: dict[str, Any]) -> dict[str, Any]:
     citation = {
         "evidence_id": EVIDENCE_ID,

@@ -825,6 +825,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             "authoring-result@9.0",
             "authoring-result@10.0",
             "authoring-result@11.0",
+            "authoring-result@12.0",
         }
         and role == "authoring"
     ):
@@ -1130,6 +1131,7 @@ def _canonicalize_content_team_authoring_result(
             | ContentTeamAuthoringRoleResultV9
             | ContentTeamAuthoringRoleResultV10
             | ContentTeamAuthoringRoleResultV11
+            | ContentTeamAuthoringRoleResultV12
         )
         if schema_id == "authoring-result@7.0":
             preliminary = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
@@ -1139,8 +1141,10 @@ def _canonicalize_content_team_authoring_result(
             preliminary = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
         elif schema_id == "authoring-result@10.0":
             preliminary = ContentTeamAuthoringRoleResultV10.model_validate(canonical)
-        else:
+        elif schema_id == "authoring-result@11.0":
             preliminary = ContentTeamAuthoringRoleResultV11.model_validate(canonical)
+        else:
+            preliminary = ContentTeamAuthoringRoleResultV12.model_validate(canonical)
         canonical_draft["equation_sources"] = list(
             derive_content_team_equation_sources(preliminary.output.draft)
         )
@@ -1150,6 +1154,7 @@ def _canonicalize_content_team_authoring_result(
             | ContentTeamAuthoringRoleResultV9
             | ContentTeamAuthoringRoleResultV10
             | ContentTeamAuthoringRoleResultV11
+            | ContentTeamAuthoringRoleResultV12
         )
         if schema_id == "authoring-result@7.0":
             validated = ContentTeamAuthoringRoleResultV7.model_validate(canonical)
@@ -1159,8 +1164,10 @@ def _canonicalize_content_team_authoring_result(
             validated = ContentTeamAuthoringRoleResultV9.model_validate(canonical)
         elif schema_id == "authoring-result@10.0":
             validated = ContentTeamAuthoringRoleResultV10.model_validate(canonical)
-        else:
+        elif schema_id == "authoring-result@11.0":
             validated = ContentTeamAuthoringRoleResultV11.model_validate(canonical)
+        else:
+            validated = ContentTeamAuthoringRoleResultV12.model_validate(canonical)
         serialize_content_team_markdown(validated.output.draft)
     except ValidationError as exc:
         raise WorkflowSchemaError(f"{schema_id} failed typed validation") from exc
