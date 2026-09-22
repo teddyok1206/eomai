@@ -3532,10 +3532,20 @@ function renderDocumentReviewCorrection() {
   const submit = $("#pdf-review-correction-submit");
   const download = $("#pdf-review-correction-download");
   const eligibility = state.pdfDocumentReviewCorrectionEligibility;
-  root.hidden = !(eligibility?.source_format === "HWPX");
+  root.hidden = !eligibility || eligibility.source_format === "PDF";
   download.hidden = true;
   download.removeAttribute("href");
   if (root.hidden) return;
+  if (eligibility.source_format === "HWP") {
+    submit.hidden = true;
+    submit.disabled = true;
+    showMessage(
+      message,
+      "HWP 검토는 완료됐지만 원본 구조를 보존한 자동 교정본은 아직 만들 수 없습니다. HWPX로 저장한 파일을 업로드하면 선택 교정할 수 있습니다.",
+    );
+    return;
+  }
+  submit.hidden = false;
   if (!eligibility.correction_available) {
     submit.disabled = true;
     showMessage(message, "정확히 교체할 수 있는 검토사항이 없어 원본을 그대로 보존합니다.");

@@ -288,6 +288,9 @@ def test_pdf_document_review_ui_keeps_immutable_upload_and_anchor_contracts() ->
     assert "mutation_performed" not in html
     assert "원본 보존 · 수정 글자 빨간색" in html
     assert "pdfDocumentReviewCorrectionFindingIds: new Set()" in javascript
+    assert (
+        "HWP 검토는 완료됐지만 원본 구조를 보존한 자동 교정본은 아직 만들 수 없습니다" in javascript
+    )
 
 
 def test_pdf_document_review_ignores_stale_detail_responses() -> None:
