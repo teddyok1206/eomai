@@ -50,6 +50,47 @@
         "schema_ref"
       ],
       "type": "object"
+    },
+    "reviewResultPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "member_path": {
+          "const": "result.json"
+        },
+        "schema_ref": {
+          "const": "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
     }
   },
   "$id": "eom://schemas/document-review/document-review-hwpx-correction-plan/1.0",
@@ -156,7 +197,7 @@
       "type": "string"
     },
     "review_result": {
-      "$ref": "#/$defs/memberPointer"
+      "$ref": "#/$defs/reviewResultPointer"
     },
     "schema_version": {
       "const": "document-review-hwpx-correction-plan/1.0"

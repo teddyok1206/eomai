@@ -18,6 +18,7 @@ from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionResult,
     DocumentReviewHwpxEdit,
     OfficeDocumentReviewMemberPointer,
+    PdfDocumentReviewResultMemberPointer,
     validate_contract,
 )
 from eom_identifiers import content_sha256, sha256_file
@@ -361,7 +362,7 @@ def build_document_review_hwpx_correction_plan(
     *,
     correction_id: str,
     workflow_id: str,
-    review_result: OfficeDocumentReviewMemberPointer,
+    review_result: PdfDocumentReviewResultMemberPointer,
     base_hwpx: OfficeDocumentReviewMemberPointer,
     replacements: tuple[DocumentReviewReplacement, ...],
 ) -> DocumentReviewHwpxCorrectionPlan:

@@ -6,7 +6,10 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
-from eom_catalog_contracts import OfficeDocumentReviewMemberPointer
+from eom_catalog_contracts import (
+    OfficeDocumentReviewMemberPointer,
+    PdfDocumentReviewResultMemberPointer,
+)
 from eom_catalog_service.document_review_hwpx import (
     DocumentReviewHwpxError,
     DocumentReviewReplacement,
@@ -62,19 +65,24 @@ def _write_hwpx(path: Path, *, split_text: bool = False, duplicate: bool = False
     path.chmod(0o600)
 
 
-def _pointer(path: Path, *, review: bool) -> OfficeDocumentReviewMemberPointer:
+def _base_pointer(path: Path) -> OfficeDocumentReviewMemberPointer:
     return OfficeDocumentReviewMemberPointer(
-        artifact_id="artifact_" + ("1" if review else "2") * 32,
-        artifact_revision_id="rev_" + ("3" if review else "4") * 32,
-        member_path="result.json" if review else "source/original.hwpx",
-        sha256=("sha256:" + "a" * 64) if review else sha256_file(path),
-        content_length=1024 if review else path.stat().st_size,
-        media_type="application/json" if review else "application/vnd.hancom.hwpx",
-        schema_ref=(
-            "eom://schemas/document-review/review-result/1.0"
-            if review
-            else "eom://schemas/document-review/editable-hwpx/1.0"
-        ),
+        artifact_id="artifact_" + "2" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        member_path="source/original.hwpx",
+        sha256=sha256_file(path),
+        content_length=path.stat().st_size,
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+    )
+
+
+def _review_pointer() -> PdfDocumentReviewResultMemberPointer:
+    return PdfDocumentReviewResultMemberPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "3" * 32,
+        sha256="sha256:" + "a" * 64,
+        content_length=1024,
     )
 
 
@@ -100,8 +108,8 @@ def test_redline_hwpx_creates_new_package_and_marks_only_replacement_red(tmp_pat
         source,
         correction_id="doccorrection_" + "6" * 32,
         workflow_id="workflow_" + "7" * 32,
-        review_result=_pointer(source, review=True),
-        base_hwpx=_pointer(source, review=False),
+        review_result=_review_pointer(),
+        base_hwpx=_base_pointer(source),
         replacements=(_replacement(),),
     )
 
@@ -134,8 +142,8 @@ def test_redline_hwpx_applies_multiple_nonoverlapping_edits_in_one_run(tmp_path:
         source,
         correction_id="doccorrection_" + "6" * 32,
         workflow_id="workflow_" + "7" * 32,
-        review_result=_pointer(source, review=True),
-        base_hwpx=_pointer(source, review=False),
+        review_result=_review_pointer(),
+        base_hwpx=_base_pointer(source),
         replacements=(
             DocumentReviewReplacement(
                 finding_id="reviewfinding_" + "5" * 32,
@@ -170,8 +178,8 @@ def test_plan_rejects_ambiguous_replacement_text(tmp_path: Path) -> None:
             source,
             correction_id="doccorrection_" + "6" * 32,
             workflow_id="workflow_" + "7" * 32,
-            review_result=_pointer(source, review=True),
-            base_hwpx=_pointer(source, review=False),
+            review_result=_review_pointer(),
+            base_hwpx=_base_pointer(source),
             replacements=(_replacement(),),
         )
     assert error.value.code == "DOCUMENT_REVIEW_HWPX_REPLACEMENT_AMBIGUOUS"
@@ -186,8 +194,8 @@ def test_plan_rejects_replacement_crossing_text_runs(tmp_path: Path) -> None:
             source,
             correction_id="doccorrection_" + "6" * 32,
             workflow_id="workflow_" + "7" * 32,
-            review_result=_pointer(source, review=True),
-            base_hwpx=_pointer(source, review=False),
+            review_result=_review_pointer(),
+            base_hwpx=_base_pointer(source),
             replacements=(_replacement(),),
         )
     assert error.value.code == "DOCUMENT_REVIEW_HWPX_EDIT_CROSSES_RUN"
@@ -205,8 +213,8 @@ def test_plan_rejects_traversal_member(tmp_path: Path) -> None:
             source,
             correction_id="doccorrection_" + "6" * 32,
             workflow_id="workflow_" + "7" * 32,
-            review_result=_pointer(source, review=True),
-            base_hwpx=_pointer(source, review=False),
+            review_result=_review_pointer(),
+            base_hwpx=_base_pointer(source),
             replacements=(_replacement(),),
         )
     assert error.value.code == "DOCUMENT_REVIEW_HWPX_MEMBER_UNSAFE"

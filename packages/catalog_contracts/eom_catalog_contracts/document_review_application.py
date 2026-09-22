@@ -10,6 +10,7 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewHwpxCorrectionResult,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
+    PdfDocumentReviewResultMemberPointer,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
 )
@@ -286,7 +287,7 @@ class ApplyDocumentReviewHwpxCorrections(FrozenModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
     )
     workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
-    review_result: OfficeDocumentReviewMemberPointer
+    review_result: PdfDocumentReviewResultMemberPointer
     base_hwpx: OfficeDocumentReviewMemberPointer
     finding_ids: tuple[Annotated[str, Field(pattern=r"^reviewfinding_[0-9a-f]{32}$")], ...] = Field(
         min_length=1, max_length=32
@@ -296,12 +297,6 @@ class ApplyDocumentReviewHwpxCorrections(FrozenModel):
     def require_exact_correction_request(self) -> ApplyDocumentReviewHwpxCorrections:
         if len(self.finding_ids) != len(set(self.finding_ids)):
             raise ValueError("HWPX correction finding IDs must be unique")
-        if (
-            self.review_result.member_path != "result.json"
-            or self.review_result.media_type != "application/json"
-            or self.review_result.schema_ref != "eom://schemas/document-review/review-result/1.0"
-        ):
-            raise ValueError("HWPX correction review pointer differs")
         if (
             self.base_hwpx.member_path != "source/original.hwpx"
             or self.base_hwpx.media_type != "application/vnd.hancom.hwpx"

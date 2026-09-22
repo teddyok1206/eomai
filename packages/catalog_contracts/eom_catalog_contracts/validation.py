@@ -245,7 +245,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
                 "document-review-hwpx-correction-request-v1.schema.json"
             ),
             "1.0",
-            "sha256:63aab6087f882b4b111c727f03f8e44ffe82a9ac64f043587d133457314bee39",
+            "sha256:62212d93d6ce15223a60e775b6eb901cc9c4e228256a6e56ee183f98573c7019",
         ),
         "document-review-hwpx-correction-response": CatalogSchemaResource(
             (
@@ -287,7 +287,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
             "resources/document-review/document-review-hwpx-correction-plan-v1.schema.json",
             "1.0",
-            "sha256:b8b3c7c3b149823a13aa8d56446c20812f156041df9d37a38e14c7fc0de09e27",
+            "sha256:26992284f11810a230c6d77b702a41c8064beb38ea7d381ec7f01ea923ec0058",
         ),
         "document-review-hwpx-correction-result": CatalogSchemaResource(
             "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",

@@ -222,6 +222,20 @@ class OfficeDocumentReviewMemberPointer(OfficeDocumentReviewMemberDescriptor):
     artifact_revision_id: ArtifactRevisionId
 
 
+class PdfDocumentReviewResultMemberPointer(FrozenModel):
+    """Exact committed role result used as correction authority."""
+
+    artifact_id: ArtifactId
+    artifact_revision_id: ArtifactRevisionId
+    member_path: Literal["result.json"] = "result.json"
+    sha256: Sha256
+    content_length: int = Field(ge=1, le=256 * 1024 * 1024)
+    media_type: Literal["application/json"] = "application/json"
+    schema_ref: Literal[
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+    ] = "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+
+
 class OfficeDocumentReviewConversionIdentity(FrozenModel):
     conversion_kind: Literal["IDENTITY_PDF", "LIBREOFFICE_H2ORESTART_PDF"]
     review_pdf_sha256: Sha256
@@ -367,7 +381,7 @@ class DocumentReviewHwpxCorrectionPlan(FrozenModel):
     )
     correction_id: Annotated[str, Field(pattern=r"^doccorrection_[0-9a-f]{32}$")]
     workflow_id: Annotated[str, Field(pattern=r"^workflow_[0-9a-f]{32}$")]
-    review_result: OfficeDocumentReviewMemberPointer
+    review_result: PdfDocumentReviewResultMemberPointer
     base_hwpx: OfficeDocumentReviewMemberPointer
     text_color: Literal["#FF0000"] = "#FF0000"
     edits: tuple[DocumentReviewHwpxEdit, ...] = Field(min_length=1, max_length=32)
@@ -375,12 +389,6 @@ class DocumentReviewHwpxCorrectionPlan(FrozenModel):
 
     @model_validator(mode="after")
     def require_exact_plan(self) -> DocumentReviewHwpxCorrectionPlan:
-        if (
-            self.review_result.media_type != "application/json"
-            or self.review_result.schema_ref != "eom://schemas/document-review/review-result/1.0"
-            or self.review_result.member_path != "result.json"
-        ):
-            raise ValueError("HWPX correction review result pointer differs")
         if (
             self.base_hwpx.media_type != "application/vnd.hancom.hwpx"
             or self.base_hwpx.schema_ref != "eom://schemas/document-review/editable-hwpx/1.0"

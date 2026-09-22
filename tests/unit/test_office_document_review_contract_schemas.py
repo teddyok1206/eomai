@@ -171,7 +171,9 @@ def test_hwpx_correction_request_rejects_duplicate_findings() -> None:
         "review_result": _member(
             "result.json",
             media_type="application/json",
-            schema_ref="eom://schemas/document-review/review-result/1.0",
+            schema_ref=(
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+            ),
         ),
         "base_hwpx": _member(
             "source/original.hwpx",

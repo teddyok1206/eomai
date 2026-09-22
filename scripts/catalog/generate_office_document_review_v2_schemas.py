@@ -64,6 +64,19 @@ def member_pointer() -> dict[str, Any]:
     return value
 
 
+def review_result_pointer() -> dict[str, Any]:
+    value = member_pointer()
+    value["properties"]["member_path"] = {"const": "result.json"}
+    value["properties"]["media_type"] = {"const": "application/json"}
+    value["properties"]["schema_ref"] = {
+        "const": (
+            "https://eom.local/schemas/workflow/roles/"
+            "pdf-document-review-result-v1.schema.json"
+        )
+    }
+    return value
+
+
 def conversion() -> dict[str, Any]:
     return {
         "type": "object",
@@ -426,7 +439,7 @@ def correction_request() -> dict[str, Any]:
                 "pattern": r"^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
             },
             "workflow_id": WORKFLOW_ID,
-            "review_result": {"$ref": "#/$defs/memberPointer"},
+            "review_result": {"$ref": "#/$defs/reviewResultPointer"},
             "base_hwpx": {"$ref": "#/$defs/memberPointer"},
             "finding_ids": {
                 "type": "array",
@@ -436,7 +449,10 @@ def correction_request() -> dict[str, Any]:
                 "items": FINDING_ID,
             },
         },
-        "$defs": {"memberPointer": member_pointer()},
+        "$defs": {
+            "memberPointer": member_pointer(),
+            "reviewResultPointer": review_result_pointer(),
+        },
     }
 
 
@@ -634,7 +650,7 @@ def correction_plan() -> dict[str, Any]:
                 "pattern": r"^doccorrection_[0-9a-f]{32}$",
             },
             "workflow_id": WORKFLOW_ID,
-            "review_result": {"$ref": "#/$defs/memberPointer"},
+            "review_result": {"$ref": "#/$defs/reviewResultPointer"},
             "base_hwpx": {"$ref": "#/$defs/memberPointer"},
             "text_color": {"const": "#FF0000"},
             "edits": {
@@ -645,7 +661,10 @@ def correction_plan() -> dict[str, Any]:
             },
             "plan_sha256": SHA,
         },
-        "$defs": {"memberPointer": member_pointer()},
+        "$defs": {
+            "memberPointer": member_pointer(),
+            "reviewResultPointer": review_result_pointer(),
+        },
     }
 
 
