@@ -272,6 +272,13 @@ def workflow_request_storage_document(request: WorkflowRequest) -> dict[str, Any
     document = request.model_dump(mode="json", exclude_none=True)
     if request.analysis_request is not None:
         document["analysis_request"] = request.analysis_request.model_dump(mode="json")
+    if request.pdf_document_review_request is not None:
+        # The PDF pointer contract requires every page to carry an explicit nullable
+        # text-layer member.  The generic exclude_none projection would otherwise
+        # erase that field and make the immutable request impossible to reload.
+        document["pdf_document_review_request"] = request.pdf_document_review_request.model_dump(
+            mode="json"
+        )
     if isinstance(request.item_brief, ContentTeamItemBriefV4):
         stored_brief = request.item_brief.model_dump(mode="json", exclude_none=True)
         stored_material = dict(stored_brief["material_requirement"])
@@ -308,6 +315,26 @@ def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest
             normalized_item_brief = dict(item_brief)
             normalized_item_brief["material_requirement"] = normalized_material_requirement
             normalized["item_brief"] = normalized_item_brief
+    pdf_review = normalized.get("pdf_document_review_request")
+    if normalized.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST" and isinstance(
+        pdf_review, dict
+    ):
+        pdf_document = pdf_review.get("document")
+        pages = pdf_document.get("pages") if isinstance(pdf_document, dict) else None
+        if isinstance(pdf_document, dict) and isinstance(pages, list):
+            normalized_pages: list[object] = []
+            for page in pages:
+                if isinstance(page, dict):
+                    normalized_page = dict(page)
+                    normalized_page.setdefault("text_layer", None)
+                    normalized_pages.append(normalized_page)
+                else:
+                    normalized_pages.append(page)
+            normalized_document = dict(pdf_document)
+            normalized_document["pages"] = normalized_pages
+            normalized_pdf_review = dict(pdf_review)
+            normalized_pdf_review["document"] = normalized_document
+            normalized["pdf_document_review_request"] = normalized_pdf_review
     return WorkflowRequest.model_validate(normalized)
 
 

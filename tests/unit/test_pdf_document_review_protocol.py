@@ -353,6 +353,7 @@ def test_pdf_document_review_rejects_wrong_page_hash_region_and_mutation() -> No
         "support",
         "pdf-document-review-result@1.0",
     )
+    assert isinstance(parsed, PdfDocumentReviewRoleResult)
     with pytest.raises(ValueError, match="pinned page image"):
         validate_pdf_document_review_output_against_request(parsed.output, _request())
 

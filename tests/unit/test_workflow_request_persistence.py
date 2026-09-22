@@ -2,9 +2,17 @@ import hashlib
 from copy import deepcopy
 
 import pytest
-from eom_catalog_contracts import ContentTeamMaterialRequirementV1, KnowledgeAnalysisRequestV2
+from eom_catalog_contracts import (
+    ContentTeamMaterialRequirementV1,
+    KnowledgeAnalysisRequestV2,
+    PdfReviewDocumentPointer,
+)
 from eom_identifiers import content_sha256
-from eom_workflow import ContentTeamItemBriefV4, WorkflowRequest
+from eom_workflow import (
+    ContentTeamItemBriefV4,
+    WorkflowRequest,
+    build_pdf_document_review_request,
+)
 from eom_workflow.models import ContentPackSelection, RegistryIntent, WorkflowProfiles
 from eom_workflow_runner.repository import (
     load_persisted_workflow_request,
@@ -101,12 +109,96 @@ def _material_workflow_request(*, form: str, panel_count: int | None) -> Workflo
     )
 
 
+def _pdf_review_workflow_request() -> WorkflowRequest:
+    artifact_id = "artifact_" + "b" * 32
+    revision_id = "rev_" + "c" * 32
+    document = PdfReviewDocumentPointer.model_validate(
+        {
+            "document_id": "document_" + "d" * 32,
+            "document_revision_id": "documentrev_" + "e" * 32,
+            "original_filename": "review.pdf",
+            "source_pdf": {
+                "artifact_id": artifact_id,
+                "artifact_revision_id": revision_id,
+                "member_path": "source/original.pdf",
+                "sha256": "sha256:" + "1" * 64,
+                "schema_ref": "eom://schemas/document-review/pdf-source/1.0",
+                "media_type": "application/pdf",
+                "content_length": 4096,
+            },
+            "page_count": 1,
+            "pages": [
+                {
+                    "page_number": 1,
+                    "width_px": 1200,
+                    "height_px": 1800,
+                    "rotation_degrees": 0,
+                    "page_image": {
+                        "artifact_id": artifact_id,
+                        "artifact_revision_id": revision_id,
+                        "member_path": "pages/page-0001.png",
+                        "sha256": "sha256:" + "2" * 64,
+                        "schema_ref": "eom://schemas/document-review/pdf-page-render/1.0",
+                        "media_type": "image/png",
+                        "content_length": 2048,
+                    },
+                    "text_layer": None,
+                }
+            ],
+        }
+    )
+    return WorkflowRequest(
+        request_name="PDF_DOCUMENT_REVIEW_REQUEST",
+        image_mode="skip",
+        execution_preset_key="pdf-document-review",
+        pdf_document_review_request=build_pdf_document_review_request(
+            document=document,
+            preset_key="PROBLEM_SET",
+            additional_guidance=None,
+        ),
+    )
+
+
 def test_storage_preserves_schema_required_nullable_analysis_pointers() -> None:
     stored = workflow_request_storage_document(_workflow_request())
 
     assert "content_pack" not in stored
     assert stored["analysis_request"]["predecessor_analysis_run_id"] is None
     assert stored["analysis_request"]["prior_graph_snapshot"] is None
+
+
+def test_storage_preserves_pdf_review_nullable_page_text_layer() -> None:
+    stored = workflow_request_storage_document(_pdf_review_workflow_request())
+
+    page = stored["pdf_document_review_request"]["document"]["pages"][0]
+    assert "text_layer" in page
+    assert page["text_layer"] is None
+    assert stored["pdf_document_review_request"]["additional_guidance"] is None
+    assert stored["pdf_document_review_request"]["additional_guidance_sha256"] is None
+
+
+def test_loader_recovers_pdf_review_omitted_nullable_text_layer() -> None:
+    stored = workflow_request_storage_document(_pdf_review_workflow_request())
+    legacy = deepcopy(stored)
+    del legacy["pdf_document_review_request"]["document"]["pages"][0]["text_layer"]
+
+    loaded = load_persisted_workflow_request(legacy)
+
+    assert loaded.pdf_document_review_request is not None
+    assert loaded.pdf_document_review_request.document.pages[0].text_layer is None
+    assert workflow_request_storage_document(loaded) == stored
+
+
+def test_loader_rejects_pdf_review_omission_with_recomputed_wrong_hash() -> None:
+    legacy = workflow_request_storage_document(_pdf_review_workflow_request())
+    del legacy["pdf_document_review_request"]["document"]["pages"][0]["text_layer"]
+    review = legacy["pdf_document_review_request"]
+    review["request_sha256"] = content_sha256(
+        {key: value for key, value in review.items() if key != "request_sha256"}
+    )
+
+    with pytest.raises(ValidationError, match="request hash differs"):
+        load_persisted_workflow_request(legacy)
 
 
 @pytest.mark.parametrize("form", ["AUTO", "TEXT", "DATA", "INQUIRY"])

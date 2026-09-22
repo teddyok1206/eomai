@@ -182,6 +182,17 @@ def test_pdf_review_projection_resolves_exact_worker_request_and_artifact() -> N
     assert view.pages[0].image_url.endswith("/pages/1/image")
 
 
+def test_pdf_review_projection_recovers_legacy_omitted_nullable_text_layer() -> None:
+    workflow = _workflow("RUNNING")
+    del workflow.initial_request["pdf_document_review_request"]["document"]["pages"][0][
+        "text_layer"
+    ]
+
+    review_request = QueryAdapter._pdf_document_review_request(workflow)
+
+    assert review_request.document.pages[0].text_layer is None
+
+
 def test_pdf_review_projection_withholds_committed_result_until_terminal() -> None:
     result = PdfDocumentReviewRoleResult.model_validate(_result())
     view = QueryAdapter._pdf_document_review(_workflow("RUNNING"), result)
