@@ -98,10 +98,6 @@ class PdfDocumentReviewUploadIntentRecord(Base):
     )
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(240), nullable=False)
-    source_format: Mapped[str] = mapped_column(String(8), nullable=False, default="PDF")
-    source_media_type: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="application/pdf"
-    )
     content_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
     preset_key: Mapped[str] = mapped_column(String(32), nullable=False)
     additional_guidance: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -133,6 +129,13 @@ class PdfDocumentReviewUploadIntentRecord(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Migration 0040 adds these fields to the released 0039 table. Keep the authoritative
+    # metadata order aligned with PostgreSQL's append-only ADD COLUMN result so disposable
+    # migration verification catches real drift rather than declaring an impossible insertion.
+    source_format: Mapped[str] = mapped_column(String(8), nullable=False, default="PDF")
+    source_media_type: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="application/pdf"
+    )
 
 
 class DocumentReviewHwpxCorrectionRecord(Base):

@@ -30,6 +30,7 @@ def test_pdf_review_upload_intent_uses_small_metadata_and_indexed_access() -> No
     assert not any(isinstance(column.type, LargeBinary) for column in table.columns)
     assert "pdf" not in {column.name for column in table.columns}
     assert "content" not in {column.name for column in table.columns}
+    assert tuple(table.columns.keys())[-2:] == ("source_format", "source_media_type")
 
     indexes = _indexes_by_name(table)
     assert set(indexes) == {
