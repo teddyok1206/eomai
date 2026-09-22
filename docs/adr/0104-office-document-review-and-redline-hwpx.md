@@ -72,6 +72,9 @@ correction logical ID        -> pinned source/base HWPX revision
 
 Paths are storage locations, not identities. Every cross-service request carries logical ID,
 revision ID, member path, schema/media type, content length, and SHA-256 needed for resolution.
+The correction command returns only a typed Artifact member pointer and compact correction result;
+the HWPX bytes cross the API boundary through a separate authenticated, hash-checked streaming
+operation. No correction binary is copied into PostgreSQL or a JSON response.
 
 ### Converter dependency and isolation
 

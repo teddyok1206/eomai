@@ -440,6 +440,127 @@ def correction_request() -> dict[str, Any]:
     }
 
 
+def correction_response() -> dict[str, Any]:
+    result = correction_result()
+    result.pop("$schema")
+    result.pop("$id")
+    result.pop("title")
+    return {
+        "$schema": SCHEMA,
+        "$id": "eom://schemas/catalog/document-review-hwpx-correction-response/1.0",
+        "title": "EOM Document Review HWPX Correction Response V1",
+        "oneOf": [
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["schema_version", "operation", "status", "output", "result"],
+                "properties": {
+                    "schema_version": {"const": "document-review-hwpx-correction-response/1.0"},
+                    "operation": {"const": "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS"},
+                    "status": {"const": "OK"},
+                    "output": {"$ref": "#/$defs/memberPointer"},
+                    "result": result,
+                },
+            },
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["schema_version", "operation", "status", "error_code"],
+                "properties": {
+                    "schema_version": {"const": "document-review-hwpx-correction-response/1.0"},
+                    "operation": {"const": "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS"},
+                    "status": {"const": "ERROR"},
+                    "error_code": {
+                        "type": "string",
+                        "pattern": r"^[A-Z][A-Z0-9_]{2,63}$",
+                    },
+                },
+            },
+        ],
+        "$defs": {"memberPointer": member_pointer()},
+    }
+
+
+def correction_media_request() -> dict[str, Any]:
+    return {
+        "$schema": SCHEMA,
+        "$id": "eom://schemas/catalog/document-review-hwpx-correction-media-request/1.0",
+        "title": "EOM Document Review HWPX Correction Media Request V1",
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "schema_version",
+            "operation",
+            "workflow_id",
+            "correction_id",
+            "output",
+        ],
+        "properties": {
+            "schema_version": {"const": "document-review-hwpx-correction-media-request/1.0"},
+            "operation": {"const": "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"},
+            "workflow_id": WORKFLOW_ID,
+            "correction_id": {
+                "type": "string",
+                "pattern": r"^doccorrection_[0-9a-f]{32}$",
+            },
+            "output": {"$ref": "#/$defs/memberPointer"},
+        },
+        "$defs": {"memberPointer": member_pointer()},
+    }
+
+
+def correction_media_response() -> dict[str, Any]:
+    return {
+        "$schema": SCHEMA,
+        "$id": "eom://schemas/catalog/document-review-hwpx-correction-media-response/1.0",
+        "title": "EOM Document Review HWPX Correction Media Response V1",
+        "oneOf": [
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "schema_version",
+                    "operation",
+                    "status",
+                    "media_type",
+                    "content_length",
+                    "sha256",
+                ],
+                "properties": {
+                    "schema_version": {
+                        "const": "document-review-hwpx-correction-media-response/1.0"
+                    },
+                    "operation": {"const": "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"},
+                    "status": {"const": "OK"},
+                    "media_type": {"const": "application/vnd.hancom.hwpx"},
+                    "content_length": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 268435456,
+                    },
+                    "sha256": SHA,
+                },
+            },
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["schema_version", "operation", "status", "error_code"],
+                "properties": {
+                    "schema_version": {
+                        "const": "document-review-hwpx-correction-media-response/1.0"
+                    },
+                    "operation": {"const": "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"},
+                    "status": {"const": "ERROR"},
+                    "error_code": {
+                        "type": "string",
+                        "pattern": r"^[A-Z][A-Z0-9_]{2,63}$",
+                    },
+                },
+            },
+        ],
+    }
+
+
 def correction_plan() -> dict[str, Any]:
     address = {
         "type": "object",
@@ -594,6 +715,17 @@ SCHEMAS = {
     "schemas/catalog/catalog-application/document-review-hwpx-correction-request-v1.schema.json": (
         correction_request()
     ),
+    "schemas/catalog/catalog-application/document-review-hwpx-correction-response-v1.schema.json": (
+        correction_response()
+    ),
+    (
+        "schemas/catalog/catalog-application/"
+        "document-review-hwpx-correction-media-request-v1.schema.json"
+    ): (correction_media_request()),
+    (
+        "schemas/catalog/catalog-application/"
+        "document-review-hwpx-correction-media-response-v1.schema.json"
+    ): (correction_media_response()),
     "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json": (
         correction_plan()
     ),

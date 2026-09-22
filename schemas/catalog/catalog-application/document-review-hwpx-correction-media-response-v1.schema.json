@@ -1,0 +1,67 @@
+{
+  "$id": "eom://schemas/catalog/document-review-hwpx-correction-media-response/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "const": "application/vnd.hancom.hwpx"
+        },
+        "operation": {
+          "const": "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"
+        },
+        "schema_version": {
+          "const": "document-review-hwpx-correction-media-response/1.0"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "media_type",
+        "content_length",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "type": "string"
+        },
+        "operation": {
+          "const": "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"
+        },
+        "schema_version": {
+          "const": "document-review-hwpx-correction-media-response/1.0"
+        },
+        "status": {
+          "const": "ERROR"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "error_code"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Document Review HWPX Correction Media Response V1"
+}

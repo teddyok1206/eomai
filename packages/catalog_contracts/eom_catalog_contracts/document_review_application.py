@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.document_review import (
+    DocumentReviewHwpxCorrectionResult,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
     PdfReviewArtifactMemberPointer,
@@ -307,4 +308,77 @@ class ApplyDocumentReviewHwpxCorrections(FrozenModel):
             or self.base_hwpx.schema_ref != "eom://schemas/document-review/editable-hwpx/1.0"
         ):
             raise ValueError("HWPX correction base pointer differs")
+        return self
+
+
+class DocumentReviewHwpxCorrectionResponse(FrozenModel):
+    schema_version: Literal["document-review-hwpx-correction-response/1.0"] = (
+        "document-review-hwpx-correction-response/1.0"
+    )
+    operation: Literal["APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS"] = (
+        "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS"
+    )
+    status: Literal["OK", "ERROR"]
+    output: OfficeDocumentReviewMemberPointer | None = None
+    result: DocumentReviewHwpxCorrectionResult | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def require_exact_response(self) -> DocumentReviewHwpxCorrectionResponse:
+        if self.status == "OK":
+            if self.output is None or self.result is None or self.error_code is not None:
+                raise ValueError("successful HWPX correction requires output and result")
+            expected = self.result.output_member
+            if (
+                self.output.member_path != expected.member_path
+                or self.output.sha256 != expected.sha256
+                or self.output.content_length != expected.content_length
+                or self.output.media_type != expected.media_type
+                or self.output.schema_ref != "eom://schemas/document-review/corrected-hwpx/1.0"
+            ):
+                raise ValueError("HWPX correction output pointer differs from its result")
+        elif self.output is not None or self.result is not None or self.error_code is None:
+            raise ValueError("failed HWPX correction requires only one stable error code")
+        return self
+
+
+class DocumentReviewHwpxCorrectionMediaQuery(FrozenModel):
+    schema_version: Literal["document-review-hwpx-correction-media-request/1.0"] = (
+        "document-review-hwpx-correction-media-request/1.0"
+    )
+    operation: Literal["GET_DOCUMENT_REVIEW_CORRECTED_HWPX"] = "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    correction_id: str = Field(pattern=r"^doccorrection_[0-9a-f]{32}$")
+    output: OfficeDocumentReviewMemberPointer
+
+    @model_validator(mode="after")
+    def require_exact_output(self) -> DocumentReviewHwpxCorrectionMediaQuery:
+        if (
+            self.output.member_path != "corrected/document-review-redline.hwpx"
+            or self.output.media_type != "application/vnd.hancom.hwpx"
+            or self.output.schema_ref != "eom://schemas/document-review/corrected-hwpx/1.0"
+        ):
+            raise ValueError("HWPX correction media pointer differs")
+        return self
+
+
+class DocumentReviewHwpxCorrectionMediaResponse(FrozenModel):
+    schema_version: Literal["document-review-hwpx-correction-media-response/1.0"] = (
+        "document-review-hwpx-correction-media-response/1.0"
+    )
+    operation: Literal["GET_DOCUMENT_REVIEW_CORRECTED_HWPX"] = "GET_DOCUMENT_REVIEW_CORRECTED_HWPX"
+    status: Literal["OK", "ERROR"]
+    media_type: Literal["application/vnd.hancom.hwpx"] | None = None
+    content_length: int | None = Field(default=None, ge=1, le=256 * 1024 * 1024)
+    sha256: Sha256 | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def require_one_response_variant(self) -> DocumentReviewHwpxCorrectionMediaResponse:
+        success = (self.media_type, self.content_length, self.sha256)
+        if self.status == "OK":
+            if any(value is None for value in success) or self.error_code is not None:
+                raise ValueError("successful HWPX media response requires stream metadata")
+        elif any(value is not None for value in success) or self.error_code is None:
+            raise ValueError("failed HWPX media response requires only one stable error code")
         return self

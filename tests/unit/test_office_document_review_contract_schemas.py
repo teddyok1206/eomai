@@ -14,6 +14,9 @@ SCHEMA_NAMES = (
     "document-review-intake-request-v2.schema.json",
     "document-review-intake-response-v2.schema.json",
     "document-review-hwpx-correction-request-v1.schema.json",
+    "document-review-hwpx-correction-response-v1.schema.json",
+    "document-review-hwpx-correction-media-request-v1.schema.json",
+    "document-review-hwpx-correction-media-response-v1.schema.json",
     "document-review-hwpx-correction-plan-v1.schema.json",
     "document-review-hwpx-correction-result-v1.schema.json",
 )

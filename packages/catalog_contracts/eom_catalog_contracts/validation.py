@@ -247,6 +247,42 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:63aab6087f882b4b111c727f03f8e44ffe82a9ac64f043587d133457314bee39",
         ),
+        "document-review-hwpx-correction-response": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-hwpx-correction-response-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-hwpx-correction-response-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:571956d3b6e4f0c34e75f3a5e59603a1df28ec4113e52824b459513ba7af6582",
+        ),
+        "document-review-hwpx-correction-media-request": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-hwpx-correction-media-request-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-hwpx-correction-media-request-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:1970162089fc2d5648295c10adc5e51aba58f2929009ef3cefad326617e85bbe",
+        ),
+        "document-review-hwpx-correction-media-response": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-hwpx-correction-media-response-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-hwpx-correction-media-response-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:3167d799d8142a1dd0bbeb0f27c9d7471bafee1755aca3a080c4396364ba7cec",
+        ),
         "document-review-hwpx-correction-plan": CatalogSchemaResource(
             "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
             "resources/document-review/document-review-hwpx-correction-plan-v1.schema.json",

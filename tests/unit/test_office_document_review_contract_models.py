@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
+    DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionPlan,
+    DocumentReviewHwpxCorrectionResponse,
     DocumentReviewHwpxCorrectionResult,
     OfficeDocumentReviewIntakeCommand,
     OfficeDocumentReviewIntakeManifest,
@@ -246,3 +248,55 @@ def test_correction_result_requires_new_hwpx_and_self_hash() -> None:
     )
     with pytest.raises(ValidationError, match="must differ"):
         DocumentReviewHwpxCorrectionResult.model_validate(same_bytes)
+
+
+def test_correction_response_and_media_query_pin_one_hwpx_artifact() -> None:
+    plan = _correction_plan()
+    raw_result: dict[str, Any] = {
+        "schema_version": "document-review-hwpx-correction-result/1.0",
+        "correction_id": plan["correction_id"],
+        "workflow_id": plan["workflow_id"],
+        "plan_sha256": plan["plan_sha256"],
+        "base_hwpx_sha256": SHA_B,
+        "output_member": {
+            "member_path": "corrected/document-review-redline.hwpx",
+            "sha256": SHA_C,
+            "content_length": 2048,
+            "media_type": "application/vnd.hancom.hwpx",
+        },
+        "applied_finding_ids": [plan["edits"][0]["finding_id"]],
+        "text_color": "#FF0000",
+    }
+    raw_result["result_sha256"] = content_sha256(raw_result)
+    output = _member(
+        "corrected/document-review-redline.hwpx",
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/corrected-hwpx/1.0",
+        sha256=SHA_C,
+        with_identity=True,
+    )
+    output["content_length"] = 2048
+    value = {
+        "schema_version": "document-review-hwpx-correction-response/1.0",
+        "operation": "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS",
+        "status": "OK",
+        "output": output,
+        "result": raw_result,
+    }
+    validate_contract("document-review-hwpx-correction-response", value)
+    response = DocumentReviewHwpxCorrectionResponse.model_validate(value)
+    assert response.output is not None
+    query = DocumentReviewHwpxCorrectionMediaQuery(
+        workflow_id=str(plan["workflow_id"]),
+        correction_id=str(plan["correction_id"]),
+        output=response.output,
+    )
+    validate_contract(
+        "document-review-hwpx-correction-media-request",
+        query.model_dump(mode="json"),
+    )
+
+    mismatch = deepcopy(value)
+    cast(dict[str, object], mismatch["output"])["sha256"] = SHA_A
+    with pytest.raises(ValidationError, match="pointer differs"):
+        DocumentReviewHwpxCorrectionResponse.model_validate(mismatch)
