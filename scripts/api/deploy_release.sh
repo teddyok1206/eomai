@@ -1999,6 +1999,15 @@ if (
     or "bootstrap-customer-support" not in customer_support_help.stdout
 ):
     raise SystemExit("installed-wheel eomctl customer-support bootstrap command is unavailable")
+pdf_document_review_help = CliRunner().invoke(
+    eomctl_app,
+    ["control-plane", "bootstrap-pdf-document-review", "--help"],
+)
+if (
+    pdf_document_review_help.exit_code != 0
+    or "bootstrap-pdf-document-review" not in pdf_document_review_help.stdout
+):
+    raise SystemExit("installed-wheel eomctl PDF document-review bootstrap is unavailable")
 if any(
     model.__module__ != "eom_api_contracts.mock_exam_execution"
     for model in (
@@ -2135,7 +2144,9 @@ if not {
     "standard-control-bootstrap-v17",
     "knowledge-item-control-bootstrap-v14",
     "customer-support-control-bootstrap",
+    "pdf-document-review-control-bootstrap",
     "resolved-execution-plan-v10",
+    "resolved-execution-plan-v13",
     "worker-capacity-policy-v4",
 }.issubset(control_schema_names):
     raise SystemExit("control-policy successor schema inventory is incomplete")

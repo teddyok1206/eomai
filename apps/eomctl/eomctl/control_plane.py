@@ -22,6 +22,9 @@ from eom_orchestrator.legacy_item_editorial_compatibility_bootstrap import (
 from eom_orchestrator.legacy_item_extraction_bootstrap import (
     bootstrap_legacy_item_extraction_control_plane,
 )
+from eom_orchestrator.pdf_document_review_bootstrap import (
+    bootstrap_pdf_document_review_control_plane,
+)
 from eom_orchestrator.settings import Settings
 
 control_plane_app = typer.Typer(no_args_is_help=True)
@@ -78,6 +81,15 @@ CUSTOMER_SUPPORT_CONFIG_DIRECTORY_OPTION = typer.Option(
     dir_okay=True,
     resolve_path=True,
     help="Reviewed absolute customer-support bootstrap directory",
+)
+PDF_DOCUMENT_REVIEW_CONFIG_DIRECTORY_OPTION = typer.Option(
+    ...,
+    "--config-directory",
+    exists=True,
+    file_okay=False,
+    dir_okay=True,
+    resolve_path=True,
+    help="Reviewed absolute PDF document-review bootstrap directory",
 )
 STANDARD_CONTENT_DIRECTORY_OPTION = typer.Option(
     None,
@@ -238,6 +250,37 @@ def bootstrap_customer_support(
     engine = build_engine()
     try:
         result = bootstrap_customer_support_control_plane(
+            engine,
+            config_directory=config_directory,
+            source_commit=source_commit,
+            actor_id=actor_id,
+            settings=Settings.from_environment(),
+        )
+    except ControlPlaneError as exc:
+        typer.echo(json.dumps({"status": "FAILED", "error_code": exc.code}, sort_keys=True))
+        raise typer.Exit(1) from None
+    finally:
+        engine.dispose()
+    typer.echo(
+        json.dumps(
+            {"status": "SUCCEEDED", **result.model_dump(mode="json")},
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+    )
+
+
+@control_plane_app.command("bootstrap-pdf-document-review")
+def bootstrap_pdf_document_review(
+    source_commit: str = typer.Option(..., "--source-commit"),
+    actor_id: str = typer.Option(..., "--actor-id"),
+    config_directory: Path = PDF_DOCUMENT_REVIEW_CONFIG_DIRECTORY_OPTION,
+) -> None:
+    """Publish the evaluated immutable PDF review preset without invoking Codex."""
+
+    engine = build_engine()
+    try:
+        result = bootstrap_pdf_document_review_control_plane(
             engine,
             config_directory=config_directory,
             source_commit=source_commit,

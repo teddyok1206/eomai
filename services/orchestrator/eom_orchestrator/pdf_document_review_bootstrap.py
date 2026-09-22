@@ -1,4 +1,4 @@
-"""Idempotent control-plane bootstrap for orchestrated in-product customer support."""
+"""Idempotent control-plane bootstrap for immutable PDF document review."""
 
 from __future__ import annotations
 
@@ -53,37 +53,37 @@ from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 
 
-class CustomerSupportBootstrapManifest(BaseModel):
+class PdfDocumentReviewBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["customer-support-control-bootstrap/1.0"]
-    preset_key: Literal["customer-support"]
+    schema_version: Literal["pdf-document-review-control-bootstrap/1.0"]
+    preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
     created_at: datetime
     model: Literal["gpt-5.6-terra"]
-    reasoning_effort: Literal["medium"]
+    reasoning_effort: Literal["xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
-    compatible_workflow_protocols: tuple[Literal["workflow-role/1.22.0"], ...] = Field(
+    compatible_workflow_protocols: tuple[Literal["workflow-role/1.25.0"], ...] = Field(
         min_length=1,
         max_length=1,
     )
     platform_instruction_path: Literal["instructions/platform.md"]
-    role_instruction_path: Literal["instructions/customer-support.md"]
+    role_instruction_path: Literal["instructions/pdf-document-review.md"]
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
-    timeout_seconds: Literal[900]
+    timeout_seconds: Literal[3600]
 
     @model_validator(mode="after")
-    def exact_policy(self) -> CustomerSupportBootstrapManifest:
+    def exact_policy(self) -> PdfDocumentReviewBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
-            raise ValueError("customer-support bootstrap timestamp must use UTC")
-        if self.compatible_workflow_protocols != ("workflow-role/1.22.0",):
-            raise ValueError("customer-support bootstrap protocol must be exact")
+            raise ValueError("PDF document-review bootstrap timestamp must use UTC")
+        if self.compatible_workflow_protocols != ("workflow-role/1.25.0",):
+            raise ValueError("PDF document-review bootstrap protocol must be exact")
         return self
 
 
-class CustomerSupportBootstrapResult(BaseModel):
+class PdfDocumentReviewBootstrapResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     preset_id: str
@@ -99,9 +99,9 @@ class CustomerSupportBootstrapResult(BaseModel):
     source_commit: str
 
 
-def load_customer_support_bootstrap_manifest(
+def load_pdf_document_review_bootstrap_manifest(
     config_directory: Path,
-) -> CustomerSupportBootstrapManifest:
+) -> PdfDocumentReviewBootstrapManifest:
     root = _safe_root(config_directory)
     raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
     try:
@@ -109,30 +109,30 @@ def load_customer_support_bootstrap_manifest(
         if isinstance(value, dict) and isinstance(value.get("created_at"), datetime):
             value = dict(value)
             value["created_at"] = value["created_at"].isoformat().replace("+00:00", "Z")
-        validate_control_contract("customer-support-control-bootstrap", value)
-        return CustomerSupportBootstrapManifest.model_validate(value)
+        validate_control_contract("pdf-document-review-control-bootstrap", value)
+        return PdfDocumentReviewBootstrapManifest.model_validate(value)
     except (UnicodeError, yaml.YAMLError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID",
-            "customer-support bootstrap manifest is invalid",
+            "PDF document-review bootstrap manifest is invalid",
         ) from exc
 
 
-def bootstrap_customer_support_control_plane(
+def bootstrap_pdf_document_review_control_plane(
     engine: Engine,
     *,
     config_directory: Path,
     source_commit: str,
     actor_id: str,
     settings: Settings | None = None,
-) -> CustomerSupportBootstrapResult:
-    """Publish the slot06 support policy without starting a Codex process."""
+) -> PdfDocumentReviewBootstrapResult:
+    """Publish the reviewed slot06 PDF policy without starting a worker."""
 
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "source commit is invalid")
     if not actor_id or len(actor_id) > 128:
         raise ControlPlaneError("CONTROL_BOOTSTRAP_INVALID", "bootstrap actor is invalid")
-    manifest = load_customer_support_bootstrap_manifest(config_directory)
+    manifest = load_pdf_document_review_bootstrap_manifest(config_directory)
     actual_settings = settings or Settings.from_environment()
     sessions = build_session_factory(engine)
     publisher = ControlArtifactPublisher(engine, actual_settings)
@@ -151,12 +151,12 @@ def bootstrap_customer_support_control_plane(
             )
         ensure_protocol_version(
             session,
-            "workflow-role/1.22.0",
-            role_schema_bundle_hash("workflow-role/1.22.0"),
+            "workflow-role/1.25.0",
+            role_schema_bundle_hash("workflow-role/1.25.0"),
         )
         definition = session.scalar(
             select(WorkflowDefinitionRecord).where(
-                WorkflowDefinitionRecord.definition_key == "customer-support",
+                WorkflowDefinitionRecord.definition_key == "pdf-document-review",
                 WorkflowDefinitionRecord.definition_version == "1.0.0",
                 WorkflowDefinitionRecord.active.is_(True),
             )
@@ -164,7 +164,7 @@ def bootstrap_customer_support_control_plane(
         if definition is None:
             raise ControlPlaneError(
                 "CONTROL_WORKFLOW_NOT_PUBLISHED",
-                "customer-support Workflow definition is not active",
+                "PDF document-review Workflow definition is not active",
             )
         compiled = compile_definition_data(
             definition.canonical_definition,
@@ -176,10 +176,10 @@ def bootstrap_customer_support_control_plane(
             for step in compiled.definition.steps
             if isinstance(step, AgentStep)
         }
-        if protocols != {"workflow-role/1.22.0"}:
+        if protocols != {"workflow-role/1.25.0"}:
             raise ControlPlaneError(
                 "CONTROL_WORKFLOW_PROTOCOL_INVALID",
-                "customer-support Workflow protocol differs",
+                "PDF document-review Workflow protocol differs",
             )
 
     capacity_revision_id = publish_fixed_host_capacity_v4(
@@ -192,44 +192,38 @@ def bootstrap_customer_support_control_plane(
         slots=slots,
         observed_at=manifest.created_at,
     )
-    platform_payload = _read_member(config_directory, manifest.platform_instruction_path)
-    role_payload = _read_member(config_directory, manifest.role_instruction_path)
     platform_artifact = _publish_markdown(
         publisher,
-        payload=platform_payload,
+        payload=_read_member(config_directory, manifest.platform_instruction_path),
         logical_name="platform.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="customer-support-platform-v1",
+        key="pdf-document-review-platform-v1",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
     role_artifact = _publish_markdown(
         publisher,
-        payload=role_payload,
-        logical_name="customer-support.md",
+        payload=_read_member(config_directory, manifest.role_instruction_path),
+        logical_name="pdf-document-review.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="customer-support-role-v1",
+        key="pdf-document-review-role-v1",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
-    _require_artifact_source_commit(
-        sessions,
-        pointer=platform_artifact,
-        source_commit=source_commit,
-    )
-    _require_artifact_source_commit(
-        sessions,
-        pointer=role_artifact,
-        source_commit=source_commit,
-    )
+    for pointer in (platform_artifact, role_artifact):
+        _require_artifact_source_commit(
+            sessions,
+            pointer=pointer,
+            source_commit=source_commit,
+        )
     instruction = _publish_instruction_bundle(
         publisher,
         sessions,
         role="support",
         platform_artifact=platform_artifact,
         role_artifact=role_artifact,
-        identity_key="customer-support:support",
-        bundle_key="customer-support-support",
+        identity_key="pdf-document-review:support",
+        bundle_key="pdf-document-review-support",
         role_relative_path=manifest.role_instruction_path,
         source_commit=source_commit,
         actor_id=actor_id,
@@ -275,7 +269,7 @@ def bootstrap_customer_support_control_plane(
             if evaluation is None:
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_HISTORY_INVALID",
-                    "released customer-support preset lacks evaluation evidence",
+                    "released PDF document-review preset lacks evaluation evidence",
                 )
         released = draft_or_release
     else:
@@ -287,12 +281,12 @@ def bootstrap_customer_support_control_plane(
         payload = canonical_json_bytes(report) + b"\n"
         report_artifact = publisher.publish_bytes(
             payload=payload,
-            logical_name="customer-support-preset-evaluation.json",
+            logical_name="pdf-document-review-preset-evaluation.json",
             schema_ref="eom://schemas/workflow/execution-preset-evaluation-report/1.0",
             media_type="application/json",
             artifact_type="control_preset_evaluation",
             idempotency_key=(
-                "control-bootstrap:customer-support-evaluation:"
+                "control-bootstrap:pdf-document-review-evaluation:"
                 f"{hashlib.sha256(payload).hexdigest()}"
             ),
             created_at=manifest.created_at + timedelta(minutes=1),
@@ -317,9 +311,9 @@ def bootstrap_customer_support_control_plane(
         if capacity is None or bundle is None:
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_HISTORY_INVALID",
-                "customer-support control records are missing",
+                "PDF document-review control records are missing",
             )
-        return CustomerSupportBootstrapResult(
+        return PdfDocumentReviewBootstrapResult(
             preset_id=released.preset_id,
             preset_revision_id=released.preset_revision_id,
             preset_content_sha256=released.content_sha256,
@@ -337,7 +331,7 @@ def bootstrap_customer_support_control_plane(
 def _find_or_create_exact_preset(
     sessions: sessionmaker[Session],
     *,
-    manifest: CustomerSupportBootstrapManifest,
+    manifest: PdfDocumentReviewBootstrapManifest,
     role_policies: list[dict[str, object]],
     capacity_policy_revision_id: str,
     actor_id: str,
@@ -379,30 +373,24 @@ def _find_or_create_exact_preset(
             else ()
         )
         if logical is not None and logical.state != "ACTIVE":
-            raise ControlPlaneError(
-                "CONTROL_PRESET_RETIRED",
-                "customer-support preset is retired",
-            )
+            raise ControlPlaneError("CONTROL_PRESET_RETIRED", "PDF review preset is retired")
         if logical is not None and logical.current_revision_id is not None:
-            current = session.get(
-                ExecutionPresetRevisionRecord,
-                logical.current_revision_id,
-            )
+            current = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
             if current is None or current.state != "RELEASED":
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_CONFLICT",
-                    "customer-support released preset pointer differs",
+                    "PDF review released preset pointer differs",
                 )
             if execution_preset_policy_sha256(current.canonical_document) == expected_policy_hash:
                 return current
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
-                "customer-support released preset policy differs",
+                "PDF review released preset policy differs",
             )
         if any(revision.state == "RELEASED" for revision in revisions):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
-                "customer-support released preset lacks its current pointer",
+                "PDF review released preset lacks its current pointer",
             )
         matching_drafts = [
             revision
@@ -413,19 +401,19 @@ def _find_or_create_exact_preset(
         if len(matching_drafts) > 1:
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
-                "customer-support preset draft policy is duplicated",
+                "PDF review preset draft policy is duplicated",
             )
         if matching_drafts:
             if any(revision.state != "DRAFT" for revision in revisions):
                 raise ControlPlaneError(
                     "CONTROL_BOOTSTRAP_CONFLICT",
-                    "customer-support preset history differs",
+                    "PDF review preset history differs",
                 )
             return matching_drafts[0]
         if revisions:
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
-                "customer-support preset already has a different policy",
+                "PDF review preset already has a different policy",
             )
         return create_execution_preset_draft(
             session,
@@ -456,7 +444,6 @@ def _evaluation_report(
         "summary_code": "CONTRACT_VALIDATION",
         "cases_total": 1,
         "cases_passed": 1,
-        # Contract validation proves compatibility, not support-answer quality.
         "quality_score_permille": None,
         "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
         "report_sha256": "sha256:" + "0" * 64,

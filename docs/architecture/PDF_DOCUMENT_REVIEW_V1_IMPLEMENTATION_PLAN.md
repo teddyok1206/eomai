@@ -44,6 +44,10 @@ renderer failure, and partial-commit tests pass in a disposable environment.
 Exit: missing/stale/hash/media/lifecycle/permission negatives, exact replay, concurrent creation,
 lease recovery, and no-binary-in-DB persistence tests pass.
 
+Current implementation checkpoint: resolved plan V13, the dedicated reviewed preset bootstrap,
+and exact page/image-manifest materialization are implemented. The authenticated public upload
+intent and workflow-start application boundary remain before Slice C can be declared complete.
+
 ### Slice D — Scientific Studio
 
 - add a PDF upload control, preset selector, optional additional-guidance field, and progress state;

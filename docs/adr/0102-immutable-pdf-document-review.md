@@ -219,3 +219,11 @@ the optional user text is additive untrusted guidance and never replaces it.
 - V1 requires an intake/render adapter and Studio overlay UI before it is live.
 - Future textbook review may add Graph retrieval through a successor contract without changing V1
   history or weakening source-page identity.
+
+## Implementation checkpoint
+
+The executable control slice includes resolved plan V13, exact page staging, the bounded Codex
+image manifest, and a dedicated `pdf-document-review` preset bootstrap. It reuses the authoritative
+fixed-host capacity V4 and therefore serializes with customer support on slot06; it adds no queue,
+slot, worker-to-worker channel, or database migration. The public upload and Studio slices remain
+inactive until their own contracts and tests are complete.

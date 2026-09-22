@@ -71,6 +71,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:a9b3f83818b5d0e6b585b357867c254105a029d9a9917e6fe3f5f05587b97cbb",
         ),
+        "pdf-document-review-control-bootstrap": ControlSchemaResource(
+            "schemas/workflow/control-plane/pdf-document-review-control-bootstrap-v1.schema.json",
+            "resources/control-plane/pdf-document-review-control-bootstrap-v1.schema.json",
+            "1.0",
+            "sha256:2f3941ac593d3adef67ecbed4214129037c7198560ce4a0abfcce3d10dcc2147",
+        ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
             "resources/control-plane/knowledge-item-control-bootstrap-v1.schema.json",

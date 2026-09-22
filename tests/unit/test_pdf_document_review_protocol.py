@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 from eom_identifiers import content_sha256
+from eom_orchestrator.pdf_document_review_bootstrap import (
+    load_pdf_document_review_bootstrap_manifest,
+)
 from eom_workflow import (
     PdfDocumentReviewRequest,
     PdfDocumentReviewRoleResult,
@@ -227,6 +230,31 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
     assert load_role_result_schema("pdf-document-review-result@1.0")["$schema"].endswith(
         "2020-12/schema"
     )
+
+    bootstrap_schema = "pdf-document-review-control-bootstrap-v1.schema.json"
+    canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
+    packaged = ROOT / "packages/workflow/eom_workflow/resources/control-plane" / bootstrap_schema
+    assert canonical.read_bytes() == packaged.read_bytes()
+    Draft202012Validator.check_schema(json.loads(canonical.read_text(encoding="utf-8")))
+
+
+def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
+    config = ROOT / "config/control-plane/pdf-document-review-v1"
+    manifest = load_pdf_document_review_bootstrap_manifest(config)
+
+    assert manifest.preset_key == "pdf-document-review"
+    assert manifest.compatible_workflow_protocols == ("workflow-role/1.25.0",)
+    assert manifest.model == "gpt-5.6-terra"
+    assert manifest.reasoning_effort == "xhigh"
+    assert manifest.slot_key == "slot06"
+    assert manifest.worker_pool_key == "customer-support"
+    assert manifest.timeout_seconds == 3600
+    platform = (config / manifest.platform_instruction_path).read_text(encoding="utf-8")
+    role = (config / manifest.role_instruction_path).read_text(encoding="utf-8")
+    assert "NAS" in platform
+    assert "원본 PDF를 수정" in platform
+    assert "parts-per-million" in role
+    assert "CONFIRMED·DEMOTED·UNCERTAIN" in role
 
 
 def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:
