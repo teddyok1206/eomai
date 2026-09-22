@@ -49,6 +49,11 @@ from eom_api_contracts.customer_support import (
     CustomerSupportCaseView,
 )
 from eom_api_contracts.deliverables import DeliverableView
+from eom_api_contracts.document_review import (
+    PdfDocumentReviewPageView,
+    PdfDocumentReviewResultArtifactView,
+    PdfDocumentReviewView,
+)
 from eom_api_contracts.events import EventView
 from eom_api_contracts.hwpx import HwpxBuildView
 from eom_api_contracts.item_bank import (
@@ -166,8 +171,15 @@ from eom_workflow import (
 )
 from eom_workflow import (
     CustomerSupportRoleResult,
+    PdfDocumentReviewRequest,
+    PdfDocumentReviewRoleResult,
+    PdfDocumentReviewWorkerRequest,
+    PdfReviewDocumentPointer,
+    PdfReviewPagePointer,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    RoleWorkerInput,
+    validate_pdf_document_review_output_against_request,
 )
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
@@ -2777,6 +2789,456 @@ class QueryAdapter:
             ),
             needs_operator=output.needs_operator if output is not None else False,
             failure_code=workflow.failure_code,
+            created_at=workflow.created_at,
+            updated_at=workflow.updated_at,
+            resource_version=workflow.lock_version,
+        )
+
+    def list_pdf_document_reviews(
+        self,
+        *,
+        actor_id: str,
+        limit: int,
+        cursor: str | None,
+    ) -> PageResult[PdfDocumentReviewView]:
+        """List the authenticated operator's PDF review Workflows with batched results."""
+
+        with self.sessions() as session:
+            statement = select(WorkflowInstanceRecord).where(
+                WorkflowInstanceRecord.definition_key == "pdf-document-review",
+                WorkflowInstanceRecord.created_actor_type == "human",
+                WorkflowInstanceRecord.created_actor_id == actor_id,
+            )
+            if cursor:
+                timestamp, resource_id = self.cursors.decode(cursor, "pdf-document-review")
+                statement = statement.where(
+                    or_(
+                        WorkflowInstanceRecord.created_at < timestamp,
+                        and_(
+                            WorkflowInstanceRecord.created_at == timestamp,
+                            WorkflowInstanceRecord.workflow_id < resource_id,
+                        ),
+                    )
+                )
+            workflows = list(
+                session.scalars(
+                    statement.order_by(
+                        WorkflowInstanceRecord.created_at.desc(),
+                        WorkflowInstanceRecord.workflow_id.desc(),
+                    ).limit(limit + 1)
+                )
+            )
+            more = len(workflows) > limit
+            workflows = workflows[:limit]
+            results = self._pdf_document_review_results(session, workflows)
+            next_cursor = (
+                self.cursors.encode(
+                    "pdf-document-review",
+                    workflows[-1].created_at,
+                    workflows[-1].workflow_id,
+                )
+                if more and workflows
+                else None
+            )
+            return PageResult(
+                tuple(
+                    self._pdf_document_review(workflow, results.get(workflow.workflow_id))
+                    for workflow in workflows
+                ),
+                next_cursor,
+                more,
+            )
+
+    def pdf_document_review(
+        self,
+        *,
+        actor_id: str,
+        workflow_id: str,
+    ) -> PdfDocumentReviewView:
+        """Resolve one owned PDF review without exposing another operator's document."""
+
+        with self.sessions() as session:
+            workflow = self._owned_pdf_document_review(session, actor_id, workflow_id)
+            results = self._pdf_document_review_results(session, [workflow])
+            return self._pdf_document_review(workflow, results.get(workflow.workflow_id))
+
+    def pdf_document_review_page_pointer(
+        self,
+        *,
+        actor_id: str,
+        workflow_id: str,
+        page_number: int,
+    ) -> tuple[PdfReviewDocumentPointer, PdfReviewPagePointer]:
+        """Resolve a browser page number to its owned immutable Catalog pointer."""
+
+        with self.sessions() as session:
+            workflow = self._owned_pdf_document_review(session, actor_id, workflow_id)
+            request = self._pdf_document_review_request(workflow)
+            if not 1 <= page_number <= request.document.page_count:
+                self._not_found("PDF_DOCUMENT_REVIEW_PAGE_NOT_FOUND")
+            page = request.document.pages[page_number - 1]
+            if page.page_number != page_number:
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_REQUEST_INVALID",
+                    "PDF document review request invalid",
+                    "The stored PDF page order differs from its immutable request.",
+                )
+            return request.document, page
+
+    @staticmethod
+    def _owned_pdf_document_review(
+        session: Session,
+        actor_id: str,
+        workflow_id: str,
+    ) -> WorkflowInstanceRecord:
+        workflow = session.scalar(
+            select(WorkflowInstanceRecord).where(
+                WorkflowInstanceRecord.workflow_id == workflow_id,
+                WorkflowInstanceRecord.definition_key == "pdf-document-review",
+                WorkflowInstanceRecord.created_actor_type == "human",
+                WorkflowInstanceRecord.created_actor_id == actor_id,
+            )
+        )
+        if workflow is None:
+            QueryAdapter._not_found("PDF_DOCUMENT_REVIEW_NOT_FOUND")
+        return workflow
+
+    @staticmethod
+    def _pdf_document_review_request(
+        workflow: WorkflowInstanceRecord,
+    ) -> PdfDocumentReviewRequest:
+        try:
+            request = load_persisted_workflow_request(workflow.initial_request)
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "PDF_DOCUMENT_REVIEW_REQUEST_INVALID",
+                "PDF document review request invalid",
+                "The stored PDF review request does not match its contract.",
+            ) from exc
+        review_request = request.pdf_document_review_request
+        if request.request_name != "PDF_DOCUMENT_REVIEW_REQUEST" or review_request is None:
+            raise ApiError(
+                500,
+                "PDF_DOCUMENT_REVIEW_REQUEST_INVALID",
+                "PDF document review request invalid",
+                "The stored Workflow is not a PDF document review.",
+            )
+        return review_request
+
+    @staticmethod
+    def _pdf_document_review_results(
+        session: Session,
+        workflows: list[WorkflowInstanceRecord],
+    ) -> dict[str, PdfDocumentReviewRoleResult]:
+        if not workflows:
+            return {}
+        workflow_by_id = {workflow.workflow_id: workflow for workflow in workflows}
+        step_rows = list(
+            session.scalars(
+                select(WorkflowStepRunRecord)
+                .where(
+                    WorkflowStepRunRecord.workflow_id.in_(tuple(workflow_by_id)),
+                    WorkflowStepRunRecord.step_key == "review_document",
+                    WorkflowStepRunRecord.state != "SUPERSEDED",
+                )
+                .order_by(
+                    WorkflowStepRunRecord.workflow_id,
+                    WorkflowStepRunRecord.attempt.desc(),
+                )
+            )
+        )
+        step_by_workflow: dict[str, WorkflowStepRunRecord] = {}
+        for step in step_rows:
+            step_by_workflow.setdefault(step.workflow_id, step)
+        pointers: dict[str, WorkflowArtifactPointer] = {}
+        for workflow_id, step in step_by_workflow.items():
+            if step.output_pointer_manifest is None:
+                continue
+            try:
+                pointer = WorkflowArtifactPointer.model_validate(step.output_pointer_manifest)
+            except ValueError as exc:
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_RESULT_INVALID",
+                    "PDF document review result invalid",
+                    "The stored PDF review result pointer is invalid.",
+                ) from exc
+            if (
+                pointer.step_key != "review_document"
+                or pointer.attempt != step.attempt
+                or pointer.job_id != step.platform_job_id
+                or pointer.result_schema != "pdf-document-review-result@1.0"
+            ):
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_RESULT_INVALID",
+                    "PDF document review result invalid",
+                    "The stored result pointer differs from its Workflow step.",
+                )
+            pointers[workflow_id] = pointer
+        revision_ids = tuple(pointer.revision_id for pointer in pointers.values())
+        revisions = (
+            {
+                revision.revision_id: revision
+                for revision in session.scalars(
+                    select(ArtifactRevisionRecord).where(
+                        ArtifactRevisionRecord.revision_id.in_(revision_ids)
+                    )
+                )
+            }
+            if revision_ids
+            else {}
+        )
+        job_ids = tuple(pointer.job_id for pointer in pointers.values())
+        jobs = (
+            {
+                job.job_id: job
+                for job in session.scalars(select(JobRecord).where(JobRecord.job_id.in_(job_ids)))
+            }
+            if job_ids
+            else {}
+        )
+        artifact_ids = tuple(pointer.logical_artifact_id for pointer in pointers.values())
+        artifacts = (
+            {
+                artifact.logical_artifact_id: artifact
+                for artifact in session.scalars(
+                    select(ArtifactRecord).where(
+                        ArtifactRecord.logical_artifact_id.in_(artifact_ids)
+                    )
+                )
+            }
+            if artifact_ids
+            else {}
+        )
+        events_by_job: dict[str, list[JobEventRecord]] = {}
+        if job_ids:
+            for event in session.scalars(
+                select(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id.in_(job_ids),
+                    JobEventRecord.event == "ARTIFACT_COMMITTED",
+                )
+                .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
+            ):
+                events_by_job.setdefault(event.job_id, []).append(event)
+        results: dict[str, PdfDocumentReviewRoleResult] = {}
+        for workflow_id, pointer in pointers.items():
+            step = step_by_workflow[workflow_id]
+            events = events_by_job.get(pointer.job_id, [])
+            review_request = QueryAdapter._pdf_document_review_request(workflow_by_id[workflow_id])
+            results[workflow_id] = QueryAdapter._validated_pdf_document_review_result(
+                workflow_id=workflow_id,
+                review_request=review_request,
+                step=step,
+                pointer=pointer,
+                job=jobs.get(pointer.job_id),
+                artifact=artifacts.get(pointer.logical_artifact_id),
+                revision=revisions.get(pointer.revision_id),
+                event=events[0] if len(events) == 1 else None,
+            )
+        for workflow in workflows:
+            if workflow.state == "COMPLETED" and workflow.workflow_id not in results:
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_RESULT_MISSING",
+                    "PDF document review result missing",
+                    "The completed PDF review has no validated result Artifact.",
+                )
+        return results
+
+    @staticmethod
+    def _validated_pdf_document_review_result(
+        *,
+        workflow_id: str,
+        review_request: PdfDocumentReviewRequest,
+        step: WorkflowStepRunRecord,
+        pointer: WorkflowArtifactPointer,
+        job: JobRecord | None,
+        artifact: ArtifactRecord | None,
+        revision: ArtifactRevisionRecord | None,
+        event: JobEventRecord | None,
+    ) -> PdfDocumentReviewRoleResult:
+        try:
+            manifest = (
+                ArtifactManifest.model_validate(revision.manifest) if revision is not None else None
+            )
+            result = (
+                PdfDocumentReviewRoleResult.model_validate(revision.result)
+                if revision is not None
+                else None
+            )
+            worker_input = RoleWorkerInput.model_validate(job.request) if job is not None else None
+            if result is not None:
+                validate_pdf_document_review_output_against_request(
+                    result.output,
+                    review_request,
+                )
+        except ValueError as exc:
+            raise ApiError(
+                500,
+                "PDF_DOCUMENT_REVIEW_RESULT_INVALID",
+                "PDF document review result invalid",
+                "The stored PDF review result contract or manifest is invalid.",
+            ) from exc
+        expected_event_data = {
+            "logical_artifact_id": pointer.logical_artifact_id,
+            "revision_id": pointer.revision_id,
+            "content_hash": pointer.content_hash,
+        }
+        worker_request = worker_input.request if worker_input is not None else None
+        expected_request_hash = (
+            content_sha256(
+                {
+                    "protocol_version": job.protocol_version,
+                    "task_type": job.task_type,
+                    "request": job.request,
+                }
+            )
+            if job is not None
+            else None
+        )
+        if (
+            job is None
+            or artifact is None
+            or revision is None
+            or manifest is None
+            or result is None
+            or worker_input is None
+            or event is None
+            or not isinstance(worker_request, PdfDocumentReviewWorkerRequest)
+            or worker_request.review_request != review_request
+            or step.workflow_id != workflow_id
+            or step.step_key != "review_document"
+            or step.worker_role != "support"
+            or step.result_schema != "pdf-document-review-result@1.0"
+            or step.state != "SUCCEEDED"
+            or step.platform_job_id != pointer.job_id
+            or pointer.step_key != "review_document"
+            or pointer.attempt != step.attempt
+            or pointer.result_schema != "pdf-document-review-result@1.0"
+            or job.job_id != pointer.job_id
+            or job.status != "SUCCEEDED"
+            or job.completed_at is None
+            or job.protocol_version != "workflow-role/1.25.0"
+            or job.task_type != "workflow_support"
+            or job.request_hash != expected_request_hash
+            or job.logical_artifact_id != pointer.logical_artifact_id
+            or job.revision_id != pointer.revision_id
+            or job.worker_slot_id != "06"
+            or worker_input.protocol_version != job.protocol_version
+            or worker_input.workflow_id != workflow_id
+            or worker_input.step_run_id != step.step_run_id
+            or worker_input.attempt != step.attempt
+            or worker_input.job_id != pointer.job_id
+            or worker_input.role != "support"
+            or worker_input.artifact.logical_artifact_id != pointer.logical_artifact_id
+            or worker_input.artifact.revision_id != pointer.revision_id
+            or artifact.logical_artifact_id != pointer.logical_artifact_id
+            or artifact.job_id != pointer.job_id
+            or artifact.artifact_type != "workflow_support"
+            or not artifact.approved
+            or revision.revision_id != pointer.revision_id
+            or revision.logical_artifact_id != pointer.logical_artifact_id
+            or revision.job_id != pointer.job_id
+            or revision.content_hash != pointer.content_hash
+            or revision.content_hash != content_sha256(revision.result)
+            or revision.manifest_hash != content_sha256(revision.manifest)
+            or revision.content_bytes != len(canonical_json_bytes(revision.result))
+            or revision.content_bytes != manifest.content_bytes
+            or not revision.approved
+            or manifest.job_id != pointer.job_id
+            or manifest.logical_artifact_id != pointer.logical_artifact_id
+            or manifest.revision_id != pointer.revision_id
+            or manifest.content_hash != pointer.content_hash
+            or manifest.file_name != "result.json"
+            or manifest.media_type != "application/json"
+            or manifest.worker_slot != "06"
+            or event.job_id != pointer.job_id
+            or event.from_state != "COMMITTING"
+            or event.to_state != "SUCCEEDED"
+            or event.event != "ARTIFACT_COMMITTED"
+            or event.data != expected_event_data
+            or result.workflow_id != workflow_id
+            or result.step_run_id != step.step_run_id
+            or result.job_id != pointer.job_id
+            or result.artifact.logical_artifact_id != pointer.logical_artifact_id
+            or result.artifact.revision_id != pointer.revision_id
+            or result.artifact.file_name != "result.json"
+            or result.artifact.media_type != "application/json"
+        ):
+            raise ApiError(
+                500,
+                "PDF_DOCUMENT_REVIEW_RESULT_INVALID",
+                "PDF document review result invalid",
+                "The stored PDF review pointer, lifecycle, or Artifact differs.",
+            )
+        return result
+
+    @staticmethod
+    def _pdf_document_review(
+        workflow: WorkflowInstanceRecord,
+        result: PdfDocumentReviewRoleResult | None,
+    ) -> PdfDocumentReviewView:
+        request = QueryAdapter._pdf_document_review_request(workflow)
+        state_by_workflow: dict[str, Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]] = {
+            "REQUESTED": "SUBMITTED",
+            "RUNNING": "REVIEWING",
+            "COMPLETED": "COMPLETED",
+            "FAILED": "FAILED",
+            "CANCELLED": "FAILED",
+        }
+        try:
+            state = state_by_workflow[workflow.state]
+        except KeyError as exc:
+            raise ApiError(
+                500,
+                "PDF_DOCUMENT_REVIEW_STATE_INVALID",
+                "PDF document review state invalid",
+                "The PDF review Workflow entered an unsupported state.",
+            ) from exc
+        exposed_result = result.output if state == "COMPLETED" and result is not None else None
+        result_artifact = (
+            PdfDocumentReviewResultArtifactView(
+                artifact_id=result.artifact.logical_artifact_id,
+                artifact_revision_id=result.artifact.revision_id,
+                sha256=content_sha256(result.model_dump(mode="json")),
+            )
+            if state == "COMPLETED" and result is not None
+            else None
+        )
+        failure_code = workflow.failure_code or "WORKFLOW_CANCELLED" if state == "FAILED" else None
+        return PdfDocumentReviewView(
+            workflow_id=workflow.workflow_id,
+            state=state,
+            document_id=request.document.document_id,
+            document_revision_id=request.document.document_revision_id,
+            original_filename=request.document.original_filename,
+            source_pdf_sha256=request.document.source_pdf.sha256,
+            page_count=request.document.page_count,
+            pages=tuple(
+                PdfDocumentReviewPageView(
+                    page_number=page.page_number,
+                    width_px=page.width_px,
+                    height_px=page.height_px,
+                    rotation_degrees=page.rotation_degrees,
+                    image_sha256=page.page_image.sha256,
+                    image_content_length=page.page_image.content_length,
+                    image_url=(
+                        f"/api/v1/pdf-document-reviews/{workflow.workflow_id}/pages/"
+                        f"{page.page_number}/image"
+                    ),
+                )
+                for page in request.document.pages
+            ),
+            preset_key=request.preset.preset_key,
+            preset_display_name=request.preset.display_name,
+            additional_guidance_sha256=request.additional_guidance_sha256,
+            result_artifact=result_artifact,
+            result=exposed_result,
+            failure_code=failure_code,
             created_at=workflow.created_at,
             updated_at=workflow.updated_at,
             resource_version=workflow.lock_version,

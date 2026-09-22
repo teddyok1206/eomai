@@ -263,3 +263,33 @@ def test_customer_support_exposes_cursor_pagination_without_duplicate_rows() -> 
         '$("#support-more").addEventListener("click", () => loadCustomerSupportCases(true))'
         in javascript
     )
+
+
+def test_pdf_document_review_ui_keeps_immutable_upload_and_anchor_contracts() -> None:
+    javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    html = Path("apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
+
+    assert 'data-view-target="pdf-review"' in html
+    assert 'id="pdf-review-form"' in html
+    assert 'accept="application/pdf,.pdf"' in html
+    assert 'value="PROBLEM_SET"' in html
+    assert 'value="WEEKLY_WORKBOOK"' in html
+    assert 'value="MOCK_EXAM"' in html
+    assert 'id="pdf-review-page-stage"' in html
+    assert "pdfDocumentReviewPendingSubmission: null" in javascript
+    assert "studio:pdf-review:intent:${crypto.randomUUID()}" in javascript
+    assert "studio:pdf-review:content:${crypto.randomUUID()}" in javascript
+    assert '"Content-Type": "application/pdf"' in javascript
+    assert "marker.style.left = `${anchor.region.x_ppm / 10000}%`" in javascript
+    assert "finding.recommendation.instruction" in javascript
+    assert "mutation_performed" not in html
+    assert "PDF 수정" not in html
+
+
+def test_pdf_document_review_ignores_stale_detail_responses() -> None:
+    javascript = Path("apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+
+    assert "pdfDocumentReviewRequestSequence: 0" in javascript
+    assert "const requestSequence = ++state.pdfDocumentReviewRequestSequence;" in javascript
+    assert "state.pdfDocumentReviewSelectedId !== workflowId" in javascript
+    assert "requestSequence !== state.pdfDocumentReviewRequestSequence" in javascript

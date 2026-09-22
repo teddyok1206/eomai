@@ -32,6 +32,10 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchStatus,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PdfDocumentReviewPageView,
+    PdfDocumentReviewSubmission,
+    PdfDocumentReviewUploadIntentView,
+    PdfDocumentReviewView,
     PreviewChoice,
     PreviewEquationBlock,
     PreviewImageBlockV3,
@@ -63,6 +67,8 @@ ITEM_ID = "item_test000000000000000000000000000001"
 REVISION_ID = "itemrev_test00000000000000000000000001"
 INTAKE_ID = "intake_00000000000000000000000000000001"
 SUPPORT_WORKFLOW_ID = "workflow_" + "9" * 32
+PDF_REVIEW_WORKFLOW_ID = "workflow_" + "7" * 32
+PDF_REVIEW_INTENT_ID = "pdfreviewintent_" + "6" * 32
 
 
 def structured_item_content() -> dict[str, object]:
@@ -213,6 +219,8 @@ class FakeGateway:
         self.customer_support_inquiry_ids: list[str] = []
         self.customer_support_cursors: list[str | None] = []
         self.customer_support_case_values: list[CustomerSupportCaseView] = []
+        self.pdf_review_create_calls = 0
+        self.pdf_review_uploaded_bytes = b""
         self.last_start_payload: dict[str, object] | None = None
 
     async def health(self) -> dict[str, str]:
@@ -397,6 +405,111 @@ class FakeGateway:
         del session
         assert workflow_id == SUPPORT_WORKFLOW_ID
         return self.customer_support_case_values[0]
+
+    @staticmethod
+    def _pdf_upload_intent(*, started: bool) -> PdfDocumentReviewUploadIntentView:
+        return PdfDocumentReviewUploadIntentView(
+            upload_intent_id=PDF_REVIEW_INTENT_ID,
+            state="STARTED" if started else "AWAITING_UPLOAD",
+            original_filename="review.pdf",
+            content_length=12,
+            preset_key="MOCK_EXAM",
+            upload_sha256="sha256:" + "5" * 64 if started else None,
+            workflow_id=PDF_REVIEW_WORKFLOW_ID if started else None,
+            upload_url=(
+                f"/api/v1/pdf-document-reviews/upload-intents/{PDF_REVIEW_INTENT_ID}/content"
+            ),
+            review_url=(
+                f"/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}" if started else None
+            ),
+            created_at=NOW,
+            updated_at=NOW,
+            expires_at=NOW + timedelta(hours=1),
+            resource_version=2 if started else 1,
+        )
+
+    async def create_pdf_document_review_upload_intent(
+        self, session: WebSession, value: PdfDocumentReviewSubmission
+    ) -> PdfDocumentReviewUploadIntentView:
+        del session
+        assert value.original_filename == "review.pdf"
+        assert value.content_length == 12
+        self.pdf_review_create_calls += 1
+        return self._pdf_upload_intent(started=False)
+
+    async def pdf_document_review_upload_intent(
+        self, session: WebSession, upload_intent_id: str
+    ) -> PdfDocumentReviewUploadIntentView:
+        del session
+        assert upload_intent_id == PDF_REVIEW_INTENT_ID
+        return self._pdf_upload_intent(started=bool(self.pdf_review_uploaded_bytes))
+
+    async def upload_pdf_document_review_content(
+        self,
+        session: WebSession,
+        upload_intent_id: str,
+        *,
+        content_length: int,
+        content: Any,
+        idempotency_key: str,
+    ) -> PdfDocumentReviewUploadIntentView:
+        del session, idempotency_key
+        assert upload_intent_id == PDF_REVIEW_INTENT_ID
+        self.pdf_review_uploaded_bytes = b"".join([chunk async for chunk in content])
+        assert len(self.pdf_review_uploaded_bytes) == content_length
+        return self._pdf_upload_intent(started=True)
+
+    @staticmethod
+    def _pdf_review() -> PdfDocumentReviewView:
+        return PdfDocumentReviewView(
+            workflow_id=PDF_REVIEW_WORKFLOW_ID,
+            state="REVIEWING",
+            document_id="document_" + "1" * 32,
+            document_revision_id="documentrev_" + "2" * 32,
+            original_filename="review.pdf",
+            source_pdf_sha256="sha256:" + "3" * 64,
+            page_count=1,
+            pages=(
+                PdfDocumentReviewPageView(
+                    page_number=1,
+                    width_px=1200,
+                    height_px=1600,
+                    rotation_degrees=0,
+                    image_sha256="sha256:" + "4" * 64,
+                    image_content_length=12,
+                    image_url=(
+                        f"/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/pages/1/image"
+                    ),
+                ),
+            ),
+            preset_key="MOCK_EXAM",
+            preset_display_name="모의고사",
+            created_at=NOW,
+            updated_at=NOW,
+            resource_version=2,
+        )
+
+    async def pdf_document_reviews(
+        self, session: WebSession, *, cursor: str | None
+    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]:
+        del session, cursor
+        return (self._pdf_review(),), None, False
+
+    async def pdf_document_review(
+        self, session: WebSession, workflow_id: str
+    ) -> PdfDocumentReviewView:
+        del session
+        assert workflow_id == PDF_REVIEW_WORKFLOW_ID
+        return self._pdf_review()
+
+    async def pdf_document_review_page_media(
+        self, session: WebSession, workflow_id: str, page_number: int
+    ) -> ItemMedia:
+        del session
+        assert workflow_id == PDF_REVIEW_WORKFLOW_ID and page_number == 1
+        content = b"\x89PNG\r\n\x1a\nTEST"
+        digest = "sha256:" + __import__("hashlib").sha256(content).hexdigest()
+        return ItemMedia(content=content, content_type="image/png", etag=f'"{digest}"')
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         del session

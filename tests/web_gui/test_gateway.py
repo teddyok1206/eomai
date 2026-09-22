@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from eom_web_gui.contracts import (
     ExplorerQuery,
     HwpxBuildRequest,
     MockExamHwpxBuildRequest,
+    PdfDocumentReviewSubmission,
     PlannedMockExamAssemblySubmission,
 )
 from eom_web_gui.gateways import (
@@ -124,6 +126,39 @@ def _hwpx_build_data(build_id: str) -> dict[str, object]:
     }
 
 
+def _pdf_review_data(*, state: str = "REVIEWING") -> dict[str, object]:
+    workflow_id = "workflow_" + "7" * 32
+    return {
+        "workflow_id": workflow_id,
+        "state": state,
+        "document_id": "document_" + "1" * 32,
+        "document_revision_id": "documentrev_" + "2" * 32,
+        "original_filename": "review.pdf",
+        "source_pdf_sha256": "sha256:" + "3" * 64,
+        "page_count": 1,
+        "pages": [
+            {
+                "page_number": 1,
+                "width_px": 1200,
+                "height_px": 1600,
+                "rotation_degrees": 0,
+                "image_sha256": "sha256:" + "4" * 64,
+                "image_content_length": 12,
+                "image_url": f"/api/v1/pdf-document-reviews/{workflow_id}/pages/1/image",
+            }
+        ],
+        "preset_key": "MOCK_EXAM",
+        "preset_display_name": "모의고사",
+        "additional_guidance_sha256": None,
+        "result_artifact": None,
+        "result": None,
+        "failure_code": None,
+        "created_at": NOW.isoformat(),
+        "updated_at": NOW.isoformat(),
+        "resource_version": 2,
+    }
+
+
 def _session(access: str = "eom_at_TEST_ONLY_ACCESS") -> WebSession:
     return WebSession(
         session_id="websession_test",
@@ -138,6 +173,127 @@ def _session(access: str = "eom_at_TEST_ONLY_ACCESS") -> WebSession:
         created_at=NOW,
         expires_at=NOW + timedelta(hours=1),
     )
+
+
+@pytest.mark.anyio
+async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity() -> None:
+    intent_id = "pdfreviewintent_" + "6" * 32
+    workflow_id = "workflow_" + "7" * 32
+    uploaded = False
+    page_content = b"\x89PNG\r\n\x1a\nTEST"
+    page_sha256 = "sha256:" + hashlib.sha256(page_content).hexdigest()
+
+    def intent() -> dict[str, object]:
+        return {
+            "upload_intent_id": intent_id,
+            "state": "STARTED" if uploaded else "AWAITING_UPLOAD",
+            "original_filename": "review.pdf",
+            "content_length": 12,
+            "preset_key": "MOCK_EXAM",
+            "additional_guidance_sha256": None,
+            "upload_sha256": "sha256:" + "5" * 64 if uploaded else None,
+            "workflow_id": workflow_id if uploaded else None,
+            "failure_code": None,
+            "upload_url": f"/api/v1/pdf-document-reviews/upload-intents/{intent_id}/content",
+            "review_url": f"/api/v1/pdf-document-reviews/{workflow_id}" if uploaded else None,
+            "created_at": NOW.isoformat(),
+            "updated_at": NOW.isoformat(),
+            "expires_at": (NOW + timedelta(hours=1)).isoformat(),
+            "resource_version": 2 if uploaded else 1,
+        }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal uploaded
+        if (
+            request.url.path == "/api/v1/pdf-document-reviews/upload-intents"
+            and request.method == "POST"
+        ):
+            assert request.headers["idempotency-key"] == "studio:pdf-review:intent:test"
+            return httpx.Response(
+                201,
+                json=_single(
+                    {
+                        "command_id": "apicmd_" + "1" * 32,
+                        "resource_type": "pdf_document_review_upload_intent",
+                        "resource_id": intent_id,
+                        "status": "COMPLETED",
+                        "resource_version": 1,
+                        "status_url": f"/api/v1/pdf-document-reviews/upload-intents/{intent_id}",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/pdf-document-reviews/upload-intents/{intent_id}":
+            return httpx.Response(200, json=_single(intent()))
+        if request.url.path.endswith(f"/{intent_id}/content"):
+            assert request.content == b"%PDF-test!!!"
+            uploaded = True
+            return httpx.Response(
+                202,
+                json=_single(
+                    {
+                        "command_id": "wfcmd_" + "2" * 32,
+                        "resource_type": "pdf_document_review",
+                        "resource_id": workflow_id,
+                        "status": "ACCEPTED",
+                        "resource_version": 2,
+                        "status_url": f"/api/v1/pdf-document-reviews/{workflow_id}",
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/pdf-document-reviews":
+            return httpx.Response(200, json=_list([_pdf_review_data()]))
+        if request.url.path == f"/api/v1/pdf-document-reviews/{workflow_id}":
+            return httpx.Response(200, json=_single(_pdf_review_data()))
+        if request.url.path.endswith("/pages/1/image"):
+            return httpx.Response(
+                200,
+                content=page_content,
+                headers={
+                    "Content-Type": "image/png",
+                    "Content-Length": str(len(page_content)),
+                    "ETag": f'"{page_sha256}"',
+                },
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    session = _session()
+    created = await gateway.create_pdf_document_review_upload_intent(
+        session,
+        PdfDocumentReviewSubmission(
+            original_filename="review.pdf",
+            content_length=12,
+            preset_key="MOCK_EXAM",
+            idempotency_key="studio:pdf-review:intent:test",
+        ),
+    )
+    assert created.state == "AWAITING_UPLOAD"
+
+    async def content() -> AsyncIterator[bytes]:
+        yield b"%PDF-test!!!"
+
+    started = await gateway.upload_pdf_document_review_content(
+        session,
+        intent_id,
+        content_length=12,
+        content=content(),
+        idempotency_key="studio:pdf-review:content:test",
+    )
+    assert started.workflow_id == workflow_id
+    reviews, cursor, has_more = await gateway.pdf_document_reviews(session, cursor=None)
+    assert [review.workflow_id for review in reviews] == [workflow_id]
+    assert cursor is None and has_more is False
+    assert (await gateway.pdf_document_review(session, workflow_id)).state == "REVIEWING"
+    assert (
+        await gateway.pdf_document_review_page_media(session, workflow_id, 1)
+    ).content == page_content
+    await gateway.close()
 
 
 @pytest.mark.anyio

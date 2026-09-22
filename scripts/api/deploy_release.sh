@@ -1172,6 +1172,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json",
         "eom_api_contracts/schemas/operators.schema.json",
         "eom_api_contracts/schemas/pdf-document-review-v1.schema.json",
+        "eom_api_contracts/schemas/pdf-document-review-result-view-v1.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
         "eom_api_contracts/schemas/resources.schema.json",
@@ -1181,7 +1182,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 35 packaged API schemas including customer support, PDF document review, release identity, Workflow-start, "
+            "expected exactly 36 packaged API schemas including customer support, PDF document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1191,6 +1192,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/__init__.py",
         "eom_api_contracts/assessment_assemblies.py",
         "eom_api_contracts/customer_support.py",
+        "eom_api_contracts/document_review.py",
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
@@ -1554,6 +1556,8 @@ catalog_resources = {
     "catalog-application/catalog-assessment-page-list-response-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-list-response-v1.schema.json",
     "catalog-application/catalog-assessment-page-media-request-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-media-request-v1.schema.json",
     "catalog-application/catalog-assessment-page-media-response-v1.schema.json": "schemas/catalog-application/catalog-assessment-page-media-response-v1.schema.json",
+    "catalog-application/pdf-document-review-page-media-request-v1.schema.json": "schemas/catalog-application/pdf-document-review-page-media-request-v1.schema.json",
+    "catalog-application/pdf-document-review-page-media-response-v1.schema.json": "schemas/catalog-application/pdf-document-review-page-media-response-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -39,6 +40,9 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PdfDocumentReviewSubmission,
+    PdfDocumentReviewUploadIntentView,
+    PdfDocumentReviewView,
     PlannedMockExamAssemblySubmission,
     RequestDraft,
     RequestDraftInput,
@@ -46,7 +50,13 @@ from eom_web_gui.contracts import (
     StructuredItemImportRequest,
     WorkflowApproval,
 )
-from eom_web_gui.gateways import ApplicationGateway, GatewayError, ItemBankPage, LoginResult
+from eom_web_gui.gateways import (
+    ApplicationGateway,
+    GatewayError,
+    ItemBankPage,
+    ItemMedia,
+    LoginResult,
+)
 from eom_web_gui.knowledge_quality import build_knowledge_quality_report
 from eom_web_gui.request_drafts import normalize_request, update_draft, workflow_start_payload
 from eom_web_gui.sessions import SessionStore, WebSession, utc_now
@@ -213,6 +223,43 @@ class WebServices:
         self, session: WebSession, workflow_id: str
     ) -> CustomerSupportCaseView:
         return await self.gateway.customer_support_case(session, workflow_id)
+
+    async def create_pdf_document_review_upload_intent(
+        self, session: WebSession, value: PdfDocumentReviewSubmission
+    ) -> PdfDocumentReviewUploadIntentView:
+        return await self.gateway.create_pdf_document_review_upload_intent(session, value)
+
+    async def upload_pdf_document_review_content(
+        self,
+        session: WebSession,
+        upload_intent_id: str,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> PdfDocumentReviewUploadIntentView:
+        return await self.gateway.upload_pdf_document_review_content(
+            session,
+            upload_intent_id,
+            content_length=content_length,
+            content=content,
+            idempotency_key=idempotency_key,
+        )
+
+    async def pdf_document_reviews(
+        self, session: WebSession, *, cursor: str | None
+    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]:
+        return await self.gateway.pdf_document_reviews(session, cursor=cursor)
+
+    async def pdf_document_review(
+        self, session: WebSession, workflow_id: str
+    ) -> PdfDocumentReviewView:
+        return await self.gateway.pdf_document_review(session, workflow_id)
+
+    async def pdf_document_review_page_media(
+        self, session: WebSession, workflow_id: str, page_number: int
+    ) -> ItemMedia:
+        return await self.gateway.pdf_document_review_page_media(session, workflow_id, page_number)
 
     async def workflow(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         value = await self.gateway.workflow_bundle(session, workflow_id)

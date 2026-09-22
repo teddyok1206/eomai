@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator
 from tests.web_gui.helpers import (
     INTAKE_ID,
     ITEM_ID,
+    PDF_REVIEW_INTENT_ID,
+    PDF_REVIEW_WORKFLOW_ID,
     REVISION_ID,
     SUPPORT_WORKFLOW_ID,
     WORKFLOW_ID,
@@ -20,6 +22,64 @@ from tests.web_gui.helpers import (
     make_client,
     structured_item_content,
 )
+
+
+def test_pdf_document_review_upload_list_detail_and_page_use_authenticated_bff() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        intent = client.post(
+            "/studio/api/v1/pdf-document-reviews/upload-intents",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "original_filename": "review.pdf",
+                "content_length": 12,
+                "preset_key": "MOCK_EXAM",
+                "additional_guidance": "과학적 정확성과 편집 품질을 함께 검토해 주세요.",
+                "idempotency_key": "studio:pdf-review:test-intent-0001",
+            },
+        )
+        assert intent.status_code == 201
+        assert intent.json()["upload_intent_id"] == PDF_REVIEW_INTENT_ID
+        assert gateway.pdf_review_create_calls == 1
+
+        denied = client.put(
+            f"/studio/api/v1/pdf-document-reviews/upload-intents/{PDF_REVIEW_INTENT_ID}/content",
+            headers={
+                "Content-Type": "application/pdf",
+                "Idempotency-Key": "studio:pdf-review:test-content-0001",
+            },
+            content=b"%PDF-test!!!",
+        )
+        assert denied.status_code == 403
+
+        uploaded = client.put(
+            f"/studio/api/v1/pdf-document-reviews/upload-intents/{PDF_REVIEW_INTENT_ID}/content",
+            headers={
+                "Content-Type": "application/pdf",
+                "Idempotency-Key": "studio:pdf-review:test-content-0001",
+                "X-CSRF-Token": session["csrf_token"],
+            },
+            content=b"%PDF-test!!!",
+        )
+        assert uploaded.status_code == 202
+        assert uploaded.json()["workflow_id"] == PDF_REVIEW_WORKFLOW_ID
+        assert gateway.pdf_review_uploaded_bytes == b"%PDF-test!!!"
+
+        listing = client.get("/studio/api/v1/pdf-document-reviews")
+        assert listing.status_code == 200
+        assert listing.json()["values"][0]["workflow_id"] == PDF_REVIEW_WORKFLOW_ID
+
+        detail = client.get(f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}")
+        assert detail.status_code == 200
+        assert detail.json()["state"] == "REVIEWING"
+
+        page = client.get(
+            f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/pages/1/image"
+        )
+        assert page.status_code == 200
+        assert page.headers["content-type"] == "image/png"
+        assert page.content.startswith(b"\x89PNG")
 
 
 def test_customer_support_create_list_and_read_use_authenticated_bff() -> None:

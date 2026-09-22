@@ -132,6 +132,243 @@ class CustomerSupportCaseView(WebModel):
         return self
 
 
+PdfReviewPresetKey = Literal["PROBLEM_SET", "WEEKLY_WORKBOOK", "MOCK_EXAM"]
+
+
+class PdfDocumentReviewSubmission(WebModel):
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.[Pp][Dd][Ff]$",
+    )
+    content_length: int = Field(ge=8, le=256 * 1024 * 1024)
+    preset_key: PdfReviewPresetKey
+    additional_guidance: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=8000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+
+class PdfDocumentReviewUploadIntentView(WebModel):
+    upload_intent_id: str = Field(pattern=r"^pdfreviewintent_[0-9a-f]{32}$")
+    state: Literal["AWAITING_UPLOAD", "PROCESSING", "STARTED", "FAILED_RETRYABLE", "FAILED_FINAL"]
+    original_filename: str = Field(min_length=5, max_length=240)
+    content_length: int = Field(ge=8, le=256 * 1024 * 1024)
+    preset_key: PdfReviewPresetKey
+    additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    upload_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    workflow_id: str | None = Field(default=None, pattern=r"^workflow_[0-9a-f]{32}$")
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    upload_url: str = Field(pattern=r"^/api/v1/pdf-document-reviews/upload-intents/.+/content$")
+    review_url: str | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    expires_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_upload_intent(self) -> PdfDocumentReviewUploadIntentView:
+        expected_upload_url = (
+            f"/api/v1/pdf-document-reviews/upload-intents/{self.upload_intent_id}/content"
+        )
+        if self.upload_url != expected_upload_url:
+            raise ValueError("PDF review upload URL differs from its intent")
+        started = self.state == "STARTED"
+        failed = self.state in {"FAILED_RETRYABLE", "FAILED_FINAL"}
+        if started:
+            if (
+                self.upload_sha256 is None
+                or self.workflow_id is None
+                or self.failure_code is not None
+                or self.review_url != f"/api/v1/pdf-document-reviews/{self.workflow_id}"
+            ):
+                raise ValueError("started PDF review upload is inconsistent")
+        elif failed:
+            if (
+                self.upload_sha256 is None
+                or self.workflow_id is not None
+                or self.failure_code is None
+            ):
+                raise ValueError("failed PDF review upload is inconsistent")
+        elif self.state == "PROCESSING":
+            if self.upload_sha256 is None or any(
+                value is not None
+                for value in (self.workflow_id, self.failure_code, self.review_url)
+            ):
+                raise ValueError("processing PDF review upload is inconsistent")
+        elif any(
+            value is not None
+            for value in (self.upload_sha256, self.workflow_id, self.failure_code, self.review_url)
+        ):
+            raise ValueError("awaiting PDF review upload exposes completed state")
+        return self
+
+
+class PdfReviewRegion(WebModel):
+    x_ppm: int = Field(ge=0, le=999999)
+    y_ppm: int = Field(ge=0, le=999999)
+    width_ppm: int = Field(ge=1, le=1000000)
+    height_ppm: int = Field(ge=1, le=1000000)
+
+    @model_validator(mode="after")
+    def bounded_region(self) -> PdfReviewRegion:
+        if self.x_ppm + self.width_ppm > 1_000_000 or self.y_ppm + self.height_ppm > 1_000_000:
+            raise ValueError("PDF review region exceeds its page")
+        return self
+
+
+class PdfReviewAnchor(WebModel):
+    anchor_id: str = Field(pattern=r"^reviewanchor_[0-9a-f]{32}$")
+    page_number: int = Field(ge=1, le=32)
+    page_image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    region: PdfReviewRegion
+    quote: str | None = Field(default=None, min_length=1, max_length=1000)
+    quote_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def quote_hash_matches_quote(self) -> PdfReviewAnchor:
+        if (self.quote is None) != (self.quote_sha256 is None):
+            raise ValueError("PDF review quote and hash must be present together")
+        return self
+
+
+class PdfReviewVerificationTarget(WebModel):
+    target_id: str = Field(pattern=r"^reviewtarget_[0-9a-f]{32}$")
+    axis: str = Field(min_length=1, max_length=64)
+    page_numbers: tuple[int, ...] = Field(min_length=1, max_length=32)
+    anchors: tuple[PdfReviewAnchor, ...] = Field(max_length=16)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+
+class PdfReviewCandidate(WebModel):
+    candidate_id: str = Field(pattern=r"^reviewcandidate_[0-9a-f]{32}$")
+    finding_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    category: str = Field(min_length=1, max_length=64)
+    severity: Literal["BLOCKER", "HIGH", "MEDIUM", "LOW", "NOTE"]
+    title: str = Field(min_length=1, max_length=160)
+    anchors: tuple[PdfReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    disposition: Literal["CONFIRMED", "DEMOTED", "UNCERTAIN"]
+    rationale: str = Field(min_length=1, max_length=4000)
+
+
+class PdfReviewRecommendation(WebModel):
+    operation: Literal["REPLACE", "INSERT", "DELETE", "MOVE", "REDRAW", "VERIFY", "NONE"]
+    instruction: str = Field(min_length=1, max_length=4000)
+    before_text: str | None = Field(default=None, max_length=2000)
+    after_text: str | None = Field(default=None, max_length=2000)
+
+
+class PdfReviewFinding(WebModel):
+    finding_id: str = Field(pattern=r"^reviewfinding_[0-9a-f]{32}$")
+    candidate_id: str = Field(pattern=r"^reviewcandidate_[0-9a-f]{32}$")
+    ordinal: int = Field(ge=1, le=512)
+    finding_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    category: str = Field(min_length=1, max_length=64)
+    severity: Literal["BLOCKER", "HIGH", "MEDIUM", "LOW", "NOTE"]
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(min_length=1, max_length=4000)
+    anchors: tuple[PdfReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    recommendation: PdfReviewRecommendation
+
+
+class PdfDocumentReviewOutputView(WebModel):
+    review_request_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    preset_key: PdfReviewPresetKey
+    preset_revision_id: str = Field(pattern=r"^reviewpresetrev_[0-9a-f]{32}$")
+    preset_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    review_status: Literal["COMPLETE", "NEEDS_HUMAN_DECISION"]
+    summary: str = Field(min_length=1, max_length=4000)
+    verification_targets: tuple[PdfReviewVerificationTarget, ...] = Field(
+        min_length=1, max_length=256
+    )
+    candidate_findings: tuple[PdfReviewCandidate, ...] = Field(max_length=512)
+    findings: tuple[PdfReviewFinding, ...] = Field(max_length=512)
+    mutation_performed: Literal[False] = False
+
+
+class PdfDocumentReviewPageView(WebModel):
+    page_number: int = Field(ge=1, le=32)
+    width_px: int = Field(ge=64, le=16384)
+    height_px: int = Field(ge=64, le=16384)
+    rotation_degrees: Literal[0, 90, 180, 270]
+    image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    image_content_length: int = Field(ge=1, le=16 * 1024 * 1024)
+    image_url: str = Field(pattern=r"^/api/v1/pdf-document-reviews/.+/pages/[0-9]+/image$")
+
+
+class PdfDocumentReviewArtifactView(WebModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class PdfDocumentReviewView(WebModel):
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    state: Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    original_filename: str = Field(min_length=5, max_length=240)
+    source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    page_count: int = Field(ge=1, le=32)
+    pages: tuple[PdfDocumentReviewPageView, ...] = Field(min_length=1, max_length=32)
+    preset_key: PdfReviewPresetKey
+    preset_display_name: Literal["N제", "주간지", "모의고사"]
+    additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    result_artifact: PdfDocumentReviewArtifactView | None = None
+    result: PdfDocumentReviewOutputView | None = None
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_review(self) -> PdfDocumentReviewView:
+        if len(self.pages) != self.page_count:
+            raise ValueError("PDF review page count differs from its page projection")
+        if tuple(page.page_number for page in self.pages) != tuple(range(1, self.page_count + 1)):
+            raise ValueError("PDF review pages must be complete and ordered")
+        for page in self.pages:
+            if page.image_url != (
+                f"/api/v1/pdf-document-reviews/{self.workflow_id}/pages/{page.page_number}/image"
+            ):
+                raise ValueError("PDF review page URL differs from its Workflow")
+        expected_display = {
+            "PROBLEM_SET": "N제",
+            "WEEKLY_WORKBOOK": "주간지",
+            "MOCK_EXAM": "모의고사",
+        }[self.preset_key]
+        if self.preset_display_name != expected_display:
+            raise ValueError("PDF review preset display differs from its key")
+        if self.state == "COMPLETED":
+            if self.result is None or self.result_artifact is None or self.failure_code is not None:
+                raise ValueError("completed PDF review requires its immutable result")
+            if (
+                self.result.document_id != self.document_id
+                or self.result.document_revision_id != self.document_revision_id
+                or self.result.source_pdf_sha256 != self.source_pdf_sha256
+                or self.result.preset_key != self.preset_key
+                or self.result.additional_guidance_sha256 != self.additional_guidance_sha256
+            ):
+                raise ValueError("PDF review result differs from its immutable request")
+        elif self.result is not None or self.result_artifact is not None:
+            raise ValueError("non-completed PDF review cannot expose result bytes")
+        if (self.state == "FAILED") != (self.failure_code is not None):
+            raise ValueError("PDF review failure state is inconsistent")
+        return self
+
+
 class QualityProfile(StrEnum):
     FAST = "fast"
     BALANCED = "balanced"

@@ -71,6 +71,16 @@ const state = {
   customerSupportPollTimer: null,
   customerSupportRequestSequence: 0,
   customerSupportPendingSubmission: null,
+  pdfDocumentReviews: [],
+  pdfDocumentReviewNextCursor: null,
+  pdfDocumentReviewHasMore: false,
+  pdfDocumentReviewSelectedId: null,
+  pdfDocumentReviewSelected: null,
+  pdfDocumentReviewPage: 1,
+  pdfDocumentReviewFindingId: null,
+  pdfDocumentReviewPollTimer: null,
+  pdfDocumentReviewRequestSequence: 0,
+  pdfDocumentReviewPendingSubmission: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -88,6 +98,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   knowledge: "engine",
   explorer: "engine",
   support: "human",
+  "pdf-review": "human",
   dashboard: "human",
 });
 
@@ -284,6 +295,11 @@ function showView(name) {
   if (name !== "support") {
     stopCustomerSupportPolling();
     state.customerSupportRequestSequence += 1;
+  }
+  if (name === "pdf-review") loadPdfDocumentReviews();
+  if (name !== "pdf-review") {
+    stopPdfDocumentReviewPolling();
+    state.pdfDocumentReviewRequestSequence += 1;
   }
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -3396,6 +3412,298 @@ function installCustomerSupport() {
   $("#support-more").addEventListener("click", () => loadCustomerSupportCases(true));
 }
 
+function pdfReviewState(value) {
+  return {
+    SUBMITTED: {label: "접수", tone: "neutral", icon: "■"},
+    REVIEWING: {label: "검토 중", tone: "warning", icon: "◆"},
+    COMPLETED: {label: "검토 완료", tone: "success", icon: "✓"},
+    FAILED: {label: "검토 실패", tone: "danger", icon: "!"},
+  }[value] || {label: "상태 확인 필요", tone: "neutral", icon: "■"};
+}
+
+function renderPdfDocumentReviewList() {
+  const root = $("#pdf-review-list");
+  root.replaceChildren();
+  if (!state.pdfDocumentReviews.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "아직 접수된 PDF 검토가 없습니다.";
+    root.append(empty);
+  }
+  state.pdfDocumentReviews.forEach((review) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `pdf-review-list-item${review.workflow_id === state.pdfDocumentReviewSelectedId ? " selected" : ""}`;
+    const name = document.createElement("strong");
+    name.textContent = review.original_filename;
+    const meta = document.createElement("span");
+    meta.className = "pdf-review-list-meta";
+    const preset = document.createElement("span");
+    preset.textContent = review.preset_display_name;
+    const status = document.createElement("span");
+    status.textContent = pdfReviewState(review.state).label;
+    meta.append(preset, status);
+    button.append(name, meta);
+    button.addEventListener("click", () => selectPdfDocumentReview(review.workflow_id));
+    root.append(button);
+  });
+  $("#pdf-review-more").hidden = !state.pdfDocumentReviewHasMore;
+}
+
+async function loadPdfDocumentReviews(append = false) {
+  const cursor = append ? state.pdfDocumentReviewNextCursor : null;
+  const path = cursor
+    ? `/pdf-document-reviews?cursor=${encodeURIComponent(cursor)}`
+    : "/pdf-document-reviews";
+  try {
+    const page = await api(path);
+    const incoming = Array.isArray(page.values) ? page.values : [];
+    const byId = new Map((append ? state.pdfDocumentReviews : []).map((value) => [value.workflow_id, value]));
+    incoming.forEach((value) => byId.set(value.workflow_id, value));
+    state.pdfDocumentReviews = Array.from(byId.values());
+    state.pdfDocumentReviewNextCursor = typeof page.next_cursor === "string" ? page.next_cursor : null;
+    state.pdfDocumentReviewHasMore = page.has_more === true && state.pdfDocumentReviewNextCursor !== null;
+    renderPdfDocumentReviewList();
+  } catch (failure) {
+    showMessage($("#pdf-review-form-message"), `검토 목록 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function selectedPdfReviewFinding() {
+  const findings = state.pdfDocumentReviewSelected?.result?.findings;
+  if (!Array.isArray(findings)) return null;
+  return findings.find((value) => value.finding_id === state.pdfDocumentReviewFindingId) || null;
+}
+
+function renderPdfDocumentReviewPage() {
+  const review = state.pdfDocumentReviewSelected;
+  const pageNumber = state.pdfDocumentReviewPage;
+  const stage = $("#pdf-review-page-stage");
+  stage.replaceChildren();
+  if (!review || !review.pages?.some((page) => page.page_number === pageNumber)) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "표시할 문서 페이지가 없습니다.";
+    stage.append(empty);
+    return;
+  }
+  const image = document.createElement("img");
+  image.alt = `${review.original_filename} ${pageNumber}쪽`;
+  image.src = `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/pages/${pageNumber}/image`;
+  image.addEventListener("load", () => {
+    const allAnchors = new Map();
+    (review.result?.findings || []).forEach((finding) => {
+      finding.anchors
+        .filter((anchor) => anchor.page_number === pageNumber)
+        .forEach((anchor) => allAnchors.set(anchor.anchor_id, anchor));
+    });
+    const activeIds = new Set((selectedPdfReviewFinding()?.anchors || []).map((anchor) => anchor.anchor_id));
+    allAnchors.forEach((anchor) => {
+      const marker = document.createElement("span");
+      marker.className = `pdf-review-anchor${activeIds.has(anchor.anchor_id) ? " active" : ""}`;
+      marker.setAttribute("aria-hidden", "true");
+      marker.style.left = `${anchor.region.x_ppm / 10000}%`;
+      marker.style.top = `${anchor.region.y_ppm / 10000}%`;
+      marker.style.width = `${anchor.region.width_ppm / 10000}%`;
+      marker.style.height = `${anchor.region.height_ppm / 10000}%`;
+      stage.append(marker);
+    });
+  });
+  stage.append(image);
+  $("#pdf-review-page-number").textContent = `${pageNumber} / ${review.page_count}`;
+  $("#pdf-review-page-prev").disabled = pageNumber <= 1;
+  $("#pdf-review-page-next").disabled = pageNumber >= review.page_count;
+}
+
+function selectPdfReviewFinding(findingId) {
+  state.pdfDocumentReviewFindingId = findingId;
+  const finding = selectedPdfReviewFinding();
+  if (finding?.anchors?.length) state.pdfDocumentReviewPage = finding.anchors[0].page_number;
+  renderPdfDocumentReviewDetail();
+}
+
+function renderPdfDocumentReviewDetail() {
+  const review = state.pdfDocumentReviewSelected;
+  if (!review) return;
+  const status = pdfReviewState(review.state);
+  setStatus($("#pdf-review-state"), status.tone, status.icon, status.label);
+  $("#pdf-review-document-name").textContent = review.original_filename;
+  const summary = $("#pdf-review-summary");
+  const findingsRoot = $("#pdf-review-findings");
+  summary.replaceChildren();
+  findingsRoot.replaceChildren();
+  if (review.state === "COMPLETED" && review.result) {
+    const heading = document.createElement("h3");
+    heading.textContent = `검토 요약 · 지적 ${review.result.findings.length}건`;
+    const text = document.createElement("p");
+    text.textContent = review.result.summary;
+    summary.append(heading, text);
+    review.result.findings.forEach((finding) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `pdf-review-finding${finding.finding_id === state.pdfDocumentReviewFindingId ? " selected" : ""}`;
+      const head = document.createElement("span");
+      head.className = "pdf-review-finding-head";
+      const title = document.createElement("strong");
+      title.textContent = `${finding.ordinal}. ${finding.title}`;
+      const severity = document.createElement("span");
+      severity.className = `pdf-review-severity severity-${finding.severity.toLowerCase()}`;
+      severity.textContent = finding.severity;
+      head.append(title, severity);
+      const description = document.createElement("p");
+      description.textContent = finding.description;
+      const quote = document.createElement("p");
+      quote.className = "pdf-review-quote";
+      quote.textContent = finding.anchors.find((anchor) => anchor.quote)?.quote || "표시된 영역을 확인하세요.";
+      const recommendation = document.createElement("p");
+      recommendation.className = "pdf-review-recommendation";
+      recommendation.textContent = `권고: ${finding.recommendation.instruction}`;
+      button.append(head, description, quote, recommendation);
+      button.addEventListener("click", () => selectPdfReviewFinding(finding.finding_id));
+      findingsRoot.append(button);
+    });
+  } else {
+    const message = document.createElement("p");
+    message.className = "empty-state";
+    message.textContent = review.state === "FAILED"
+      ? `검토를 완료하지 못했습니다. 기술 코드: ${review.failure_code}`
+      : "문서를 검토하고 있습니다. 완료되면 위치가 표시된 검토사항을 확인할 수 있습니다.";
+    summary.append(message);
+  }
+  const inspectorValues = [
+    review.workflow_id,
+    review.document_revision_id,
+    review.result_artifact?.sha256 || "결과 생성 전",
+  ];
+  $$("#pdf-review-inspector dd").forEach((element, index) => { element.textContent = inspectorValues[index]; });
+  renderPdfDocumentReviewList();
+  renderPdfDocumentReviewPage();
+}
+
+async function selectPdfDocumentReview(workflowId) {
+  stopPdfDocumentReviewPolling();
+  state.pdfDocumentReviewSelectedId = workflowId;
+  state.pdfDocumentReviewFindingId = null;
+  const requestSequence = ++state.pdfDocumentReviewRequestSequence;
+  try {
+    const review = await api(`/pdf-document-reviews/${encodeURIComponent(workflowId)}`);
+    if (requestSequence !== state.pdfDocumentReviewRequestSequence || state.pdfDocumentReviewSelectedId !== workflowId) return;
+    state.pdfDocumentReviewSelected = review;
+    state.pdfDocumentReviewPage = 1;
+    renderPdfDocumentReviewDetail();
+    if (["SUBMITTED", "REVIEWING"].includes(review.state)) startPdfDocumentReviewPolling();
+  } catch (failure) {
+    if (requestSequence !== state.pdfDocumentReviewRequestSequence) return;
+    showMessage($("#pdf-review-form-message"), `검토 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function startPdfDocumentReviewPolling() {
+  stopPdfDocumentReviewPolling();
+  if (!state.pdfDocumentReviewSelectedId || !$('[data-view="pdf-review"].active')) return;
+  state.pdfDocumentReviewPollTimer = window.setTimeout(async () => {
+    state.pdfDocumentReviewPollTimer = null;
+    if (state.pdfDocumentReviewSelectedId) await selectPdfDocumentReview(state.pdfDocumentReviewSelectedId);
+  }, 8000);
+}
+
+function stopPdfDocumentReviewPolling() {
+  if (state.pdfDocumentReviewPollTimer) window.clearTimeout(state.pdfDocumentReviewPollTimer);
+  state.pdfDocumentReviewPollTimer = null;
+}
+
+async function uploadPdfDocumentReviewContent(intentId, file, idempotencyKey) {
+  const response = await fetch(`${API}/pdf-document-reviews/upload-intents/${encodeURIComponent(intentId)}/content`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/pdf",
+      "Idempotency-Key": idempotencyKey,
+      "X-CSRF-Token": state.csrf,
+    },
+    body: file,
+  });
+  if (response.status === 401) {
+    window.location.replace("/studio/login");
+    throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
+  }
+  if (!response.ok) {
+    let code = `HTTP_${response.status}`;
+    try {
+      const problem = await response.json();
+      if (typeof problem.error_code === "string") code = problem.error_code;
+    } catch (_) {
+      // Keep the bounded status-based fallback.
+    }
+    throw new StudioApiError(code, response.headers.get("X-Request-ID"));
+  }
+  return response.json();
+}
+
+async function submitPdfDocumentReview(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const file = form.elements.file.files[0];
+  const message = $("#pdf-review-form-message");
+  if (!file || !file.name.toLowerCase().endsWith(".pdf") || (file.type && file.type !== "application/pdf")) {
+    return showMessage(message, "PDF 파일만 선택할 수 있습니다.", "error");
+  }
+  if (file.size < 8 || file.size > 256 * 1024 * 1024) {
+    return showMessage(message, "PDF 파일 크기는 256 MiB 이하여야 합니다.", "error");
+  }
+  const guidance = form.elements.additional_guidance.value.trim();
+  const businessInput = {
+    original_filename: file.name,
+    content_length: file.size,
+    preset_key: form.elements.preset_key.value,
+    additional_guidance: guidance || null,
+  };
+  const fingerprint = JSON.stringify({...businessInput, last_modified: file.lastModified});
+  if (state.pdfDocumentReviewPendingSubmission?.fingerprint !== fingerprint) {
+    state.pdfDocumentReviewPendingSubmission = {
+      fingerprint,
+      intentKey: `studio:pdf-review:intent:${crypto.randomUUID()}`,
+      contentKey: `studio:pdf-review:content:${crypto.randomUUID()}`,
+    };
+  }
+  const pending = state.pdfDocumentReviewPendingSubmission;
+  $("#pdf-review-submit").disabled = true;
+  showMessage(message, "PDF를 안전하게 등록하고 검토를 시작하고 있습니다.");
+  try {
+    const intent = await api("/pdf-document-reviews/upload-intents", {
+      method: "POST",
+      mutation: true,
+      body: {...businessInput, idempotency_key: pending.intentKey},
+    });
+    const started = await uploadPdfDocumentReviewContent(intent.upload_intent_id, file, pending.contentKey);
+    if (typeof started.workflow_id !== "string") throw new StudioApiError("APPLICATION_API_RESPONSE_INVALID");
+    state.pdfDocumentReviewPendingSubmission = null;
+    form.reset();
+    showMessage(message, "PDF 검토가 시작되었습니다.", "success");
+    await loadPdfDocumentReviews();
+    await selectPdfDocumentReview(started.workflow_id);
+  } catch (failure) {
+    showMessage(message, `PDF 검토 시작 실패: ${failure.message}`, "error");
+  } finally {
+    $("#pdf-review-submit").disabled = false;
+  }
+}
+
+function installPdfDocumentReview() {
+  $("#pdf-review-form").addEventListener("submit", submitPdfDocumentReview);
+  $("#pdf-review-refresh").addEventListener("click", () => loadPdfDocumentReviews());
+  $("#pdf-review-more").addEventListener("click", () => loadPdfDocumentReviews(true));
+  $("#pdf-review-page-prev").addEventListener("click", () => {
+    if (state.pdfDocumentReviewPage > 1) state.pdfDocumentReviewPage -= 1;
+    renderPdfDocumentReviewPage();
+  });
+  $("#pdf-review-page-next").addEventListener("click", () => {
+    if (state.pdfDocumentReviewSelected && state.pdfDocumentReviewPage < state.pdfDocumentReviewSelected.page_count) state.pdfDocumentReviewPage += 1;
+    renderPdfDocumentReviewPage();
+  });
+}
+
 async function logout() {
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
@@ -3416,6 +3724,7 @@ async function boot() {
   installKnowledgeQuality();
   installExplorer();
   installCustomerSupport();
+  installPdfDocumentReview();
   $("#logout").addEventListener("click", logout);
   await initializeSession();
   await loadCurriculumOutline();

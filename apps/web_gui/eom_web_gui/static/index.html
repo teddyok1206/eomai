@@ -23,6 +23,7 @@
           <button type="button" class="nav-item" data-view-target="item-bank"><span aria-hidden="true">⌗</span> Graph 문항은행</button>
           <button type="button" class="nav-item" data-view-target="approval"><span aria-hidden="true">◆</span> 승인 대기</button>
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
+          <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> PDF 검토</button>
           <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><span aria-hidden="true">◇</span> 관리자 설정</button>
@@ -306,6 +307,55 @@
             <div class="page-heading"><h1 id="explorer-title">운영 데이터 조회</h1><span class="status-badge tone-success"><span class="status-icon">✓</span> 조회 전용</span></div>
             <section class="panel explorer-panel"><form id="explorer-form" class="explorer-filters"><label>조회 대상<select name="entity"><option value="workflows">문항 제작 진행</option><option value="workflow_events">문항 제작 이력</option><option value="step_runs">단계 실행</option><option value="jobs">작업</option><option value="artifacts">결과 파일</option><option value="artifact_revisions">결과 파일 버전</option><option value="items">문항</option><option value="item_revisions">문항 버전</option><option value="content_pack_releases">제작 기준 버전</option><option value="usage_plans">사용 계획</option><option value="usage_records">사용 기록</option><option value="hwpx_builds">HWPX 제작</option></select></label><label>정확한 ID<input name="exact_id" placeholder="선택 사항"></label><label>상태<select name="status"><option value="">모든 상태</option><option value="RUNNING">처리 중</option><option value="COMPLETED">완료</option><option value="SUCCEEDED">성공</option><option value="APPROVED">승인됨</option><option value="FAILED">실패</option><option value="BLOCKED">진행 중단</option></select></label><label>시작 시각<input name="date_from" type="datetime-local"></label><label>종료 시각<input name="date_to" type="datetime-local"></label><label>정렬<select name="sort"><option value="created_desc">최근 생성 순</option><option value="created_asc">오래된 생성 순</option><option value="updated_desc">최근 변경 순</option><option value="updated_asc">오래된 변경 순</option></select></label><label>표시 수<input name="limit" type="number" min="1" max="100" value="50"></label><button class="button primary" type="submit">조회</button></form><div class="explorer-result"><div class="table-toolbar"><span id="explorer-capability">조회 전용</span><div><button id="explorer-next" class="button quiet" type="button" disabled>다음 페이지</button><button id="density-toggle" class="button quiet" type="button">조밀하게</button></div></div><div class="data-table-wrap"><table id="explorer-table"><thead></thead><tbody><tr><td class="empty-state">조회 조건을 선택하세요.</td></tr></tbody></table></div><p id="explorer-message" class="form-message" aria-live="polite"></p></div></section>
             <aside id="json-drawer" class="json-drawer" hidden><div class="panel-heading"><h2>상세 정보</h2><div><button id="json-copy" class="button quiet" type="button">ID 복사</button><button id="json-close" class="icon-button" type="button" aria-label="닫기">×</button></div></div><pre id="json-detail"></pre></aside>
+          </section>
+
+          <section class="view" data-view="pdf-review" aria-labelledby="pdf-review-title">
+            <div class="page-heading">
+              <h1 id="pdf-review-title">PDF 검토</h1>
+              <button id="pdf-review-refresh" class="button quiet" type="button">검토 목록 새로고침</button>
+            </div>
+            <div class="pdf-review-layout">
+              <div class="pdf-review-sidebar">
+                <section class="panel pdf-review-compose">
+                  <div class="panel-heading"><h2>새 검토</h2></div>
+                  <form id="pdf-review-form" class="pdf-review-form">
+                    <label>PDF 파일<input id="pdf-review-file" name="file" type="file" accept="application/pdf,.pdf" required></label>
+                    <label>문서 유형<select name="preset_key" required><option value="PROBLEM_SET">N제</option><option value="WEEKLY_WORKBOOK">주간지</option><option value="MOCK_EXAM">모의고사</option></select></label>
+                    <label>추가 검토 지시<textarea name="additional_guidance" rows="5" maxlength="8000" placeholder="기본 검토 기준에 더해 확인할 내용을 입력하세요."></textarea></label>
+                    <p id="pdf-review-form-message" class="form-message" aria-live="polite"></p>
+                    <button id="pdf-review-submit" class="button primary" type="submit">검토 시작</button>
+                  </form>
+                </section>
+                <section class="panel pdf-review-history">
+                  <div class="panel-heading"><h2>최근 검토</h2></div>
+                  <div id="pdf-review-list" class="pdf-review-list"><p class="empty-state">검토 내역을 불러오는 중입니다.</p></div>
+                  <button id="pdf-review-more" class="button quiet" type="button" hidden>이전 검토 더 보기</button>
+                </section>
+              </div>
+              <section class="panel pdf-review-document">
+                <div class="panel-heading">
+                  <h2 id="pdf-review-document-name">문서 페이지</h2>
+                  <span id="pdf-review-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 검토 선택 필요</span>
+                </div>
+                <div class="pdf-review-page-toolbar">
+                  <button id="pdf-review-page-prev" class="button quiet" type="button" disabled>이전</button>
+                  <strong id="pdf-review-page-number">- / -</strong>
+                  <button id="pdf-review-page-next" class="button quiet" type="button" disabled>다음</button>
+                </div>
+                <div id="pdf-review-page-stage" class="pdf-review-page-stage">
+                  <p class="empty-state">검토를 선택하면 문서 페이지가 표시됩니다.</p>
+                </div>
+              </section>
+              <section class="panel pdf-review-result">
+                <div class="panel-heading"><h2>검토 결과</h2></div>
+                <div id="pdf-review-summary" class="pdf-review-summary"><p class="empty-state">완료된 검토를 선택하세요.</p></div>
+                <div id="pdf-review-findings" class="pdf-review-findings"></div>
+                <details class="technical-details pdf-review-technical">
+                  <summary>고정 문서·결과 정보</summary>
+                  <dl id="pdf-review-inspector" class="inspector-list"><dt>진행 ID</dt><dd>-</dd><dt>문서 버전</dt><dd>-</dd><dt>결과 검증값</dt><dd>-</dd></dl>
+                </details>
+              </section>
+            </div>
           </section>
 
           <section class="view" data-view="support" aria-labelledby="support-title">

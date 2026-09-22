@@ -43,6 +43,8 @@ from eom_catalog_contracts import (
     ItemMediaQuery,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
+    PdfDocumentReviewPageMediaQuery,
+    PdfDocumentReviewPageMediaResponse,
     PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
@@ -132,6 +134,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._ingest_pdf_document_review_source(intake_request)
+                return
+            if raw_operation == "GET_PDF_DOCUMENT_REVIEW_PAGE_IMAGE":
+                try:
+                    validate_contract("pdf-document-review-page-media-request", value)
+                    review_page_request = PdfDocumentReviewPageMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_pdf_document_review_page_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_pdf_document_review_page(review_page_request)
                 return
             if raw_operation == "GET_ITEM_MEDIA":
                 try:
@@ -411,6 +425,40 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             CatalogItemMediaResponse(
                 status="OK",
                 media_type=media.media_type,
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
+    def _stream_pdf_document_review_page(
+        self,
+        request: PdfDocumentReviewPageMediaQuery,
+    ) -> None:
+        try:
+            media = self.server.registry.load_pdf_document_review_page_media(request)
+        except RegistryError as exc:
+            self.server.write_pdf_document_review_page_media_error(
+                self.wfile,
+                exc.code.value,
+            )
+            return
+        except Exception:
+            self.server.write_pdf_document_review_page_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_pdf_document_review_page_media_header(
+            self.wfile,
+            PdfDocumentReviewPageMediaResponse(
+                status="OK",
+                media_type="image/png",
                 content_length=media.content_length,
                 sha256=media.sha256,
             ),
@@ -737,6 +785,29 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls.write_pdf_document_review_intake_response(
             stream,
             PdfDocumentReviewIntakeResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_pdf_document_review_page_media_header(
+        stream: Any,
+        response: PdfDocumentReviewPageMediaResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        validate_contract("pdf-document-review-page-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("PDF document-review page header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_pdf_document_review_page_media_error(
+        cls,
+        stream: Any,
+        error_code: str,
+    ) -> None:
+        cls.write_pdf_document_review_page_media_header(
+            stream,
+            PdfDocumentReviewPageMediaResponse(status="ERROR", error_code=error_code),
         )
 
     @classmethod

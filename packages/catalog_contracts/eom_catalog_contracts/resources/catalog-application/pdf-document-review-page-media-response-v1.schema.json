@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/pdf-document-review-page-media-response/1.0",
+  "title": "EOM PDF Document Review Page Media Response V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "media_type",
+        "content_length",
+        "sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "pdf-document-review-page-media-response/1.0"},
+        "operation": {"const": "GET_PDF_DOCUMENT_REVIEW_PAGE_IMAGE"},
+        "status": {"const": "OK"},
+        "media_type": {"const": "image/png"},
+        "content_length": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "error_code"],
+      "properties": {
+        "schema_version": {"const": "pdf-document-review-page-media-response/1.0"},
+        "operation": {"const": "GET_PDF_DOCUMENT_REVIEW_PAGE_IMAGE"},
+        "status": {"const": "ERROR"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$"}
+      }
+    }
+  ]
+}

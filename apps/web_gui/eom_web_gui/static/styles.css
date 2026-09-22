@@ -489,6 +489,37 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .support-actions li + li { margin-top: 9px; }
 .support-actions strong { display: block; }
 .support-escalation { margin-top: 18px; padding: 12px; border-radius: 9px; background: #fff8e9; color: #70450c; }
+.pdf-review-layout { display: grid; grid-template-columns: minmax(260px, .72fr) minmax(440px, 1.28fr) minmax(340px, .9fr); gap: 15px; align-items: start; }
+.pdf-review-sidebar { display: grid; gap: 15px; }
+.pdf-review-form { display: grid; gap: 13px; padding: 18px; }
+.pdf-review-form label { display: grid; gap: 6px; color: var(--eom-graphite); font-size: var(--eom-type-label); font-weight: 700; }
+.pdf-review-form input, .pdf-review-form select, .pdf-review-form textarea { width: 100%; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); padding: 10px 12px; background: white; color: var(--eom-text); font: inherit; }
+.pdf-review-form textarea { resize: vertical; }
+.pdf-review-list { display: grid; gap: 2px; padding: 8px; }
+.pdf-review-more { margin: 0 12px 12px; }
+.pdf-review-list-item { width: 100%; display: grid; gap: 5px; padding: 12px; border: 0; border-radius: 10px; background: transparent; color: var(--eom-text); text-align: left; }
+.pdf-review-list-item:hover, .pdf-review-list-item.selected { background: var(--eom-blue-50); }
+.pdf-review-list-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-review-list-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--eom-text-muted); }
+.pdf-review-document { overflow: hidden; }
+.pdf-review-page-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--eom-border); }
+.pdf-review-page-stage { position: relative; min-height: 520px; margin: 16px; overflow: hidden; border: 1px solid var(--eom-border); border-radius: 8px; background: #eef0f3; box-shadow: inset 0 1px 2px rgb(0 0 0 / 5%); }
+.pdf-review-page-stage > img { display: block; width: 100%; height: auto; background: white; }
+.pdf-review-anchor { position: absolute; border: 2px solid #ff8a00; border-radius: 4px; background: rgb(255 183 76 / 18%); box-shadow: 0 0 0 1px rgb(255 255 255 / 75%); pointer-events: none; }
+.pdf-review-anchor.active { border-color: #d70015; background: rgb(215 0 21 / 16%); }
+.pdf-review-summary { padding: 18px; border-bottom: 1px solid var(--eom-border); white-space: pre-wrap; }
+.pdf-review-summary h3 { margin: 0 0 10px; font-size: 1.02rem; }
+.pdf-review-findings { display: grid; gap: 8px; padding: 10px; max-height: 680px; overflow: auto; }
+.pdf-review-finding { width: 100%; display: grid; gap: 8px; padding: 14px; border: 1px solid var(--eom-border); border-radius: 12px; background: white; color: var(--eom-text); text-align: left; }
+.pdf-review-finding:hover, .pdf-review-finding.selected { border-color: var(--eom-blue); box-shadow: 0 0 0 3px var(--eom-blue-50); }
+.pdf-review-finding-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pdf-review-severity { padding: 3px 7px; border-radius: 999px; background: #eef1f5; font-size: var(--eom-type-caption); font-weight: 700; }
+.pdf-review-severity.severity-blocker, .pdf-review-severity.severity-high { color: #a30010; background: #fff0f1; }
+.pdf-review-severity.severity-medium { color: #7a4700; background: #fff6e5; }
+.pdf-review-finding p { margin: 0; white-space: pre-wrap; }
+.pdf-review-recommendation { padding-top: 8px; border-top: 1px solid var(--eom-border); color: var(--eom-graphite); }
+.pdf-review-quote { color: var(--eom-text-muted); }
+.pdf-review-technical { margin: 10px 14px 16px; }
 .toast { position: fixed; z-index: 80; right: 22px; bottom: 22px; max-width: 420px; padding: 12px 15px; border: 1px solid var(--eom-border); border-left: 4px solid var(--eom-primary); border-radius: 10px; background: white; box-shadow: 0 12px 34px rgba(0, 0, 0, .14); font-size: var(--eom-type-label); }
 
 .login-page { background: var(--eom-surface-muted); }
@@ -570,6 +601,8 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .explorer-filters { grid-template-columns: 1fr; }
   .metric-grid, .dashboard-grid { grid-template-columns: 1fr; }
   .support-layout { grid-template-columns: 1fr; }
+  .pdf-review-layout { grid-template-columns: 1fr; }
+  .pdf-review-page-stage { min-height: 360px; }
   .workbench-context-heading { display: block; }
   .workbench-context-heading > p { margin-top: 8px; text-align: left; }
   .production-map { grid-template-columns: repeat(2, 1fr); }

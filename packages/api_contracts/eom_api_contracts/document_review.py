@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from eom_workflow import PdfDocumentReviewOutput
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, UtcDatetime
@@ -16,6 +17,7 @@ PdfReviewUploadState = Literal[
     "FAILED_RETRYABLE",
     "FAILED_FINAL",
 ]
+PdfDocumentReviewState = Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]
 
 
 class CreatePdfDocumentReviewUploadIntentRequest(ApiModel):
@@ -110,4 +112,93 @@ class PdfDocumentReviewUploadIntentView(ApiModel):
             raise ValueError("failed PDF review upload has inconsistent state")
         if self.updated_at < self.created_at or self.expires_at <= self.created_at:
             raise ValueError("PDF review upload intent timestamps are inconsistent")
+        return self
+
+
+class PdfDocumentReviewPageView(ApiModel):
+    page_number: int = Field(ge=1, le=32)
+    width_px: int = Field(ge=64, le=16384)
+    height_px: int = Field(ge=64, le=16384)
+    rotation_degrees: Literal[0, 90, 180, 270]
+    image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    image_content_length: int = Field(ge=1, le=16 * 1024 * 1024)
+    image_url: str = Field(
+        pattern=(
+            r"^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}/pages/"
+            r"(?:[1-9]|[12][0-9]|3[0-2])/image$"
+        )
+    )
+
+
+class PdfDocumentReviewResultArtifactView(ApiModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class PdfDocumentReviewView(ApiModel):
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    state: PdfDocumentReviewState
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.[Pp][Dd][Ff]$",
+    )
+    source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    page_count: int = Field(ge=1, le=32)
+    pages: tuple[PdfDocumentReviewPageView, ...] = Field(min_length=1, max_length=32)
+    preset_key: PdfReviewPresetKey
+    preset_display_name: Literal["N제", "주간지", "모의고사"]
+    additional_guidance_sha256: str | None = Field(
+        default=None,
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    )
+    result_artifact: PdfDocumentReviewResultArtifactView | None = None
+    result: PdfDocumentReviewOutput | None = None
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_exact_review_projection(self) -> PdfDocumentReviewView:
+        if len(self.pages) != self.page_count:
+            raise ValueError("PDF review page count differs from its view pages")
+        if tuple(page.page_number for page in self.pages) != tuple(range(1, self.page_count + 1)):
+            raise ValueError("PDF review pages must be complete and ordered")
+        for page in self.pages:
+            expected_url = (
+                f"/api/v1/pdf-document-reviews/{self.workflow_id}/pages/{page.page_number}/image"
+            )
+            if page.image_url != expected_url:
+                raise ValueError("PDF review page URL differs from its Workflow and page")
+        display_names = {
+            "PROBLEM_SET": "N제",
+            "WEEKLY_WORKBOOK": "주간지",
+            "MOCK_EXAM": "모의고사",
+        }
+        if self.preset_display_name != display_names[self.preset_key]:
+            raise ValueError("PDF review preset display name differs from its key")
+        if self.state == "COMPLETED":
+            if (
+                self.result_artifact is None
+                or self.result is None
+                or self.failure_code is not None
+                or self.result.document_id != self.document_id
+                or self.result.document_revision_id != self.document_revision_id
+                or self.result.source_pdf_sha256 != self.source_pdf_sha256
+                or self.result.preset_key != self.preset_key
+                or self.result.additional_guidance_sha256 != self.additional_guidance_sha256
+            ):
+                raise ValueError("completed PDF review has an inconsistent result projection")
+        elif self.result_artifact is not None or self.result is not None:
+            raise ValueError("non-completed PDF review cannot expose a result")
+        if self.state == "FAILED" and self.failure_code is None:
+            raise ValueError("failed PDF review requires a stable failure code")
+        if self.state != "FAILED" and self.failure_code is not None:
+            raise ValueError("non-failed PDF review cannot expose a failure code")
+        if self.updated_at < self.created_at:
+            raise ValueError("PDF review timestamps are inconsistent")
         return self

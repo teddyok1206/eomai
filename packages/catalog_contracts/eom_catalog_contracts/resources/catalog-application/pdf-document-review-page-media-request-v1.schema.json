@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/pdf-document-review-page-media-request/1.0",
+  "title": "EOM PDF Document Review Page Media Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "document_id",
+    "document_revision_id",
+    "page_number",
+    "page_image"
+  ],
+  "properties": {
+    "schema_version": {"const": "pdf-document-review-page-media-request/1.0"},
+    "operation": {"const": "GET_PDF_DOCUMENT_REVIEW_PAGE_IMAGE"},
+    "document_id": {"type": "string", "pattern": "^document_[0-9a-f]{32}$"},
+    "document_revision_id": {"type": "string", "pattern": "^documentrev_[0-9a-f]{32}$"},
+    "page_number": {"type": "integer", "minimum": 1, "maximum": 2000},
+    "page_image": {"$ref": "#/$defs/page_image"}
+  },
+  "$defs": {
+    "page_image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "content_length"
+      ],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "pattern": "^pages/page-[0-9]{4}\\.png$"},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "schema_ref": {"const": "eom://schemas/document-review/pdf-page-render/1.0"},
+        "media_type": {"const": "image/png"},
+        "content_length": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    }
+  }
+}

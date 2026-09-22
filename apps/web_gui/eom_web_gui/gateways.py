@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -41,6 +42,9 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PdfDocumentReviewSubmission,
+    PdfDocumentReviewUploadIntentView,
+    PdfDocumentReviewView,
     PlannedMockExamAssemblySubmission,
     RecentItemOption,
     StructuredItemImportRequest,
@@ -294,6 +298,36 @@ class ApplicationGateway(Protocol):
     async def customer_support_case(
         self, session: WebSession, workflow_id: str
     ) -> CustomerSupportCaseView: ...
+
+    async def create_pdf_document_review_upload_intent(
+        self, session: WebSession, value: PdfDocumentReviewSubmission
+    ) -> PdfDocumentReviewUploadIntentView: ...
+
+    async def pdf_document_review_upload_intent(
+        self, session: WebSession, upload_intent_id: str
+    ) -> PdfDocumentReviewUploadIntentView: ...
+
+    async def upload_pdf_document_review_content(
+        self,
+        session: WebSession,
+        upload_intent_id: str,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> PdfDocumentReviewUploadIntentView: ...
+
+    async def pdf_document_reviews(
+        self, session: WebSession, *, cursor: str | None
+    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]: ...
+
+    async def pdf_document_review(
+        self, session: WebSession, workflow_id: str
+    ) -> PdfDocumentReviewView: ...
+
+    async def pdf_document_review_page_media(
+        self, session: WebSession, workflow_id: str, page_number: int
+    ) -> ItemMedia: ...
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]: ...
 
@@ -856,6 +890,143 @@ class HttpApplicationGateway:
             return CustomerSupportCaseView.model_validate(self._data(response))
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def create_pdf_document_review_upload_intent(
+        self, session: WebSession, value: PdfDocumentReviewSubmission
+    ) -> PdfDocumentReviewUploadIntentView:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/pdf-document-reviews/upload-intents",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}, exclude_none=True),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        command = self._data(response)
+        upload_intent_id = command.get("resource_id")
+        if (
+            command.get("resource_type") != "pdf_document_review_upload_intent"
+            or not isinstance(upload_intent_id, str)
+            or re.fullmatch(r"pdfreviewintent_[0-9a-f]{32}", upload_intent_id) is None
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return await self.pdf_document_review_upload_intent(session, upload_intent_id)
+
+    async def pdf_document_review_upload_intent(
+        self, session: WebSession, upload_intent_id: str
+    ) -> PdfDocumentReviewUploadIntentView:
+        _require_id(upload_intent_id, "pdfreviewintent_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}",
+        )
+        try:
+            return PdfDocumentReviewUploadIntentView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def upload_pdf_document_review_content(
+        self,
+        session: WebSession,
+        upload_intent_id: str,
+        *,
+        content_length: int,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> PdfDocumentReviewUploadIntentView:
+        _require_id(upload_intent_id, "pdfreviewintent_")
+        if not 8 <= content_length <= 256 * 1024 * 1024:
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
+        response = await self._authorized(
+            session,
+            "PUT",
+            f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}/content",
+            content=content,
+            headers={
+                "Content-Type": "application/pdf",
+                "Content-Length": str(content_length),
+                "Idempotency-Key": idempotency_key,
+            },
+            timeout=self._workflow_start_timeout,
+        )
+        command = self._data(response)
+        if (
+            command.get("resource_type") != "pdf_document_review"
+            or command.get("status") != "ACCEPTED"
+            or not isinstance(command.get("resource_id"), str)
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        intent = await self.pdf_document_review_upload_intent(session, upload_intent_id)
+        if intent.state != "STARTED" or intent.workflow_id != command["resource_id"]:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return intent
+
+    async def pdf_document_reviews(
+        self, session: WebSession, *, cursor: str | None
+    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/pdf-document-reviews",
+            params={"limit": 25, "cursor": cursor},
+        )
+        document = self._document(response)
+        values = document.get("data")
+        page = document.get("page")
+        if (
+            not isinstance(values, list)
+            or not isinstance(page, dict)
+            or not isinstance(page.get("has_more"), bool)
+            or (page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str))
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            reviews = tuple(PdfDocumentReviewView.model_validate(value) for value in values)
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        return reviews, page.get("next_cursor"), page["has_more"]
+
+    async def pdf_document_review(
+        self, session: WebSession, workflow_id: str
+    ) -> PdfDocumentReviewView:
+        _require_id(workflow_id, "workflow_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/{workflow_id}",
+        )
+        try:
+            return PdfDocumentReviewView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def pdf_document_review_page_media(
+        self, session: WebSession, workflow_id: str, page_number: int
+    ) -> ItemMedia:
+        _require_id(workflow_id, "workflow_")
+        if not 1 <= page_number <= 32:
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_PAGE_INVALID")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/pages/{page_number}/image",
+            headers={"Accept": "image/png"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        content_length = response.headers.get("content-length", "")
+        etag = response.headers.get("etag", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type != "image/png"
+            or response.headers.get("content-disposition") is not None
+            or not content_length.isascii()
+            or not content_length.isdigit()
+            or int(content_length) != len(response.content)
+            or not 0 < len(response.content) <= 16 * 1024 * 1024
+            or etag != f'"{actual_sha256}"'
+        ):
+            raise GatewayError(status=502, code="PDF_DOCUMENT_REVIEW_PAGE_RESPONSE_INVALID")
+        return ItemMedia(content=response.content, content_type=content_type, etag=etag)
 
     async def codex_accounts(self, session: WebSession) -> tuple[dict[str, Any], ...]:
         response = await self._authorized(session, "GET", "/api/v1/codex-accounts")
@@ -2079,6 +2250,7 @@ class HttpApplicationGateway:
         path: str,
         *,
         json: dict[str, object] | None = None,
+        content: AsyncIterator[bytes] | None = None,
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool | None] | None = None,
         timeout: float | None = None,
@@ -2097,6 +2269,7 @@ class HttpApplicationGateway:
             method,
             path,
             json=json,
+            content=content,
             params=request_params,
             headers={
                 "Authorization": f"Bearer {used_access_token}",
@@ -2109,6 +2282,11 @@ class HttpApplicationGateway:
             if response.status_code >= 400:
                 raise _gateway_error(response)
             return response
+        if content is not None:
+            # Request streams are single-consumer.  The browser can safely replay
+            # the same idempotency key after re-authentication; never send a
+            # partially consumed stream a second time here.
+            raise GatewayError(status=401, code="AUTH_REAUTHENTICATION_REQUIRED")
         async with session.refresh_lock:
             if session.tokens.access_token == used_access_token:
                 refresh = await self._request(
@@ -2150,6 +2328,7 @@ class HttpApplicationGateway:
         path: str,
         *,
         json: dict[str, object] | None = None,
+        content: AsyncIterator[bytes] | None = None,
         headers: dict[str, str] | None = None,
         params: dict[str, str | int | float | bool] | None = None,
         timeout: float | None = None,
@@ -2160,6 +2339,7 @@ class HttpApplicationGateway:
                     method,
                     path,
                     json=json,
+                    content=content,
                     headers=headers,
                     params=params,
                 )
@@ -2168,6 +2348,7 @@ class HttpApplicationGateway:
                     method,
                     path,
                     json=json,
+                    content=content,
                     headers=headers,
                     params=params,
                     timeout=timeout,

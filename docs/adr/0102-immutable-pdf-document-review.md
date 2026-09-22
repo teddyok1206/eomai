@@ -206,6 +206,13 @@ use cases, validation, idempotency, and transactions. PostgreSQL, NAS, PDF rende
 and Codex execution remain infrastructure adapters. Scientific Studio calls application endpoints;
 it does not resolve NAS paths or implement review invariants.
 
+The browser uploads through the authenticated same-origin Studio BFF. JSON intent creation remains
+small, while the raw `application/pdf` body is streamed through the BFF to the Application API
+without base64 encoding or a PostgreSQL copy. The normal Studio JSON-body limit remains in force
+for every other route. A single-consumer PDF stream is never transparently sent twice after an
+authentication failure; the browser may re-authenticate and replay the same frozen idempotency
+keys.
+
 No external LLM API is introduced. Workers continue to run through the orchestrator and cannot
 write NAS.
 
@@ -247,14 +254,21 @@ the optional user text is additive untrusted guidance and never replaces it.
 - Users can see exactly which page regions a finding concerns.
 - Preset policy and user emphasis are reproducible and independently auditable.
 - The original PDF remains byte-for-byte immutable.
-- V1 requires an intake/render adapter and Studio overlay UI before it is live.
+- V1 has repository-complete intake, application, and Studio overlay slices, but still requires a
+  compatible release deployment and bounded live canary before it is called live.
 - Future textbook review may add Graph retrieval through a successor contract without changing V1
   history or weakening source-page identity.
 
 ## Implementation checkpoint
 
-The executable control slice includes resolved plan V13, exact page staging, the bounded Codex
-image manifest, and a dedicated `pdf-document-review` preset bootstrap. It reuses the authoritative
-fixed-host capacity V4 and therefore serializes with customer support on slot06; it adds no queue,
-slot, worker-to-worker channel, or database migration. The public upload and Studio slices remain
-inactive until their own contracts and tests are complete.
+The repository implementation now includes resolved plan V13, exact page staging, the bounded
+Codex image manifest, a dedicated `pdf-document-review` preset bootstrap, durable upload intents,
+raw PDF streaming, owner-scoped list/detail projection, private Catalog page-media resolution, and
+the Scientific Studio anchored-review view. Studio exposes preset selection plus additive natural
+language guidance, keeps internal identities behind an expandable detail, and draws every selected
+finding rectangle over the exact immutable page PNG. It exposes no PDF mutation action.
+
+The workflow reuses the authoritative fixed-host capacity V4 and therefore serializes with customer
+support on slot06; it adds no queue, slot, worker-to-worker channel, external LLM API, or PDF/PNG
+database payload. Repository completion is not runtime activation: deployment, authenticated media
+smoke, and one non-sensitive human visual canary remain separate gates.

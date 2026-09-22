@@ -44,7 +44,11 @@ from eom_api_contracts.customer_support import (
 )
 from eom_api_contracts.document_review import (
     CreatePdfDocumentReviewUploadIntentRequest,
+    PdfDocumentReviewPageView,
+    PdfDocumentReviewResultArtifactView,
+    PdfDocumentReviewState,
     PdfDocumentReviewUploadIntentView,
+    PdfDocumentReviewView,
     PdfReviewPresetKey,
     PdfReviewUploadState,
 )
@@ -209,7 +213,11 @@ __all__ = [
     "MockExamReviewEligibilityObservationV2",
     "MockExamReviewEligibilityObservationV3",
     "PageMeta",
+    "PdfDocumentReviewPageView",
+    "PdfDocumentReviewResultArtifactView",
+    "PdfDocumentReviewState",
     "PdfDocumentReviewUploadIntentView",
+    "PdfDocumentReviewView",
     "PdfReviewPresetKey",
     "PdfReviewUploadState",
     "PreviewMockExamAssemblyPlanRequest",

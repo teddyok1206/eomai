@@ -170,8 +170,11 @@ from eom_catalog_contracts.document_review import (
     PdfReviewPagePointer,
 )
 from eom_catalog_contracts.document_review_application import (
+    PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
+    PdfDocumentReviewPageMediaQuery,
+    PdfDocumentReviewPageMediaResponse,
 )
 from eom_catalog_contracts.educational_document import (
     EducationalDocumentIdentity,
@@ -762,6 +765,7 @@ __all__ = [
     "MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA",
     "MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V3_SCHEMA",
     "PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION",
+    "PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES",
     "SOLUTION_REFERENCE_NODE_TYPES",
     "WORKER_KNOWLEDGE_EDGE_ENDPOINT_COMPATIBILITY",
     "AcceptedCoverageItem",
@@ -1216,6 +1220,8 @@ __all__ = [
     "PdfDocumentReviewIntakeCommand",
     "PdfDocumentReviewIntakeManifest",
     "PdfDocumentReviewIntakeResponse",
+    "PdfDocumentReviewPageMediaQuery",
+    "PdfDocumentReviewPageMediaResponse",
     "PdfDocumentReviewPageMember",
     "PdfDocumentReviewRendererIdentity",
     "PdfLearningCompletionReceipt",

@@ -293,6 +293,8 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-assessment-page-list-response-v1.schema.json",
         "catalog-application/catalog-assessment-page-media-request-v1.schema.json",
         "catalog-application/catalog-assessment-page-media-response-v1.schema.json",
+        "catalog-application/pdf-document-review-page-media-request-v1.schema.json",
+        "catalog-application/pdf-document-review-page-media-response-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v1.schema.json",
         "knowledge/knowledge-analysis-batch-request-v2.schema.json",
         "knowledge/knowledge-analysis-batch-request-v3.schema.json",
@@ -651,7 +653,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 35 packaged API schemas" in deployment
+    assert "expected exactly 36 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -681,6 +683,9 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/hwpx-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/pdf-document-review-v1.schema.json"' in deployment
+    assert (
+        '"eom_api_contracts/schemas/pdf-document-review-result-view-v1.schema.json"' in deployment
+    )
     assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v3.schema.json"' in deployment
     assert '"eom_api_contracts/mock_exam_execution.py"' in deployment

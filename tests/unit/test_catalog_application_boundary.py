@@ -54,6 +54,8 @@ from eom_catalog_contracts import (
     MockExamReviewFindingCounts,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
+    PdfDocumentReviewPageMediaQuery,
+    PdfDocumentReviewPageMediaResponse,
     PreviewMockExamAssemblyPlanCommand,
     PublishMockExamItemReviewCommand,
     ReviewedItemContentImportCommand,
@@ -167,6 +169,29 @@ class FakeRegistry:
             iter_chunks=iter_chunks,
         )
 
+    def load_pdf_document_review_page_media(
+        self,
+        request: PdfDocumentReviewPageMediaQuery,
+    ) -> SimpleNamespace:
+        document = _pdf_review_document_pointer()
+        assert request.document_id == document.document_id
+        assert request.document_revision_id == document.document_revision_id
+        assert request.page_number == 1
+        assert request.page_image == document.pages[0].page_image
+
+        def iter_chunks() -> object:
+            yield PDF_REVIEW_PAGE
+
+        return SimpleNamespace(
+            media_type="image/png",
+            content_length=len(PDF_REVIEW_PAGE),
+            sha256="sha256:" + hashlib.sha256(PDF_REVIEW_PAGE).hexdigest(),
+            iter_chunks=iter_chunks,
+        )
+
+
+PDF_REVIEW_PAGE = b"\x89PNG\r\n\x1a\nPDF_REVIEW_PAGE"
+
 
 def _pdf_review_document_pointer() -> PdfReviewDocumentPointer:
     artifact_id = "artifact_" + "a" * 32
@@ -195,10 +220,10 @@ def _pdf_review_document_pointer() -> PdfReviewDocumentPointer:
                     artifact_id=artifact_id,
                     artifact_revision_id=revision_id,
                     member_path="pages/page-0001.png",
-                    sha256="sha256:" + "f" * 64,
+                    sha256="sha256:" + hashlib.sha256(PDF_REVIEW_PAGE).hexdigest(),
                     schema_ref="eom://schemas/document-review/pdf-page-render/1.0",
                     media_type="image/png",
-                    content_length=128,
+                    content_length=len(PDF_REVIEW_PAGE),
                 ),
                 text_layer=None,
             ),
@@ -830,6 +855,49 @@ def test_pdf_document_review_client_rejects_hardlinked_upload(tmp_path: Path) ->
             idempotency_key="pdf-review-private-stream-hardlink",
         )
     assert error.value.code == str(CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE)
+
+
+def test_pdf_document_review_page_streams_only_its_exact_pinned_member(
+    tmp_path: Path,
+) -> None:
+    document = _pdf_review_document_pointer()
+    page = document.pages[0]
+    command = PdfDocumentReviewPageMediaQuery(
+        document_id=document.document_id,
+        document_revision_id=document.document_revision_id,
+        page_number=page.page_number,
+        page_image=page.page_image,
+    )
+    validate_contract(
+        "pdf-document-review-page-media-request",
+        command.model_dump(mode="json"),
+    )
+    success = PdfDocumentReviewPageMediaResponse(
+        status="OK",
+        media_type="image/png",
+        content_length=len(PDF_REVIEW_PAGE),
+        sha256=page.page_image.sha256,
+    )
+    validate_contract(
+        "pdf-document-review-page-media-response",
+        success.model_dump(mode="json", exclude_none=True),
+    )
+
+    server = _server(tmp_path)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        media = _client(server).download_pdf_document_review_page(
+            document_id=document.document_id,
+            document_revision_id=document.document_revision_id,
+            page_number=page.page_number,
+            page_image=page.page_image,
+        )
+        assert b"".join(media.iter_chunks()) == PDF_REVIEW_PAGE
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_catalog_application_contract_validates_schema_and_typed_models() -> None:

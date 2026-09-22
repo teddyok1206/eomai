@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_PATH,
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
+    PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApprovedItemGraphPublicationResult,
     AssessmentItemContentContract,
     AssessmentPageImagePointer,
@@ -56,6 +57,9 @@ from eom_catalog_contracts import (
     MockExamReviewEligibilityResult,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
+    PdfDocumentReviewPageMediaQuery,
+    PdfDocumentReviewPageMediaResponse,
+    PdfReviewArtifactMemberPointer,
     PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
@@ -251,6 +255,70 @@ class CatalogApplicationClient:
             if descriptor >= 0:
                 os.close(descriptor)
             connection.close()
+
+    def download_pdf_document_review_page(
+        self,
+        *,
+        document_id: str,
+        document_revision_id: str,
+        page_number: int,
+        page_image: PdfReviewArtifactMemberPointer,
+    ) -> ProxiedItemMedia:
+        command = PdfDocumentReviewPageMediaQuery(
+            document_id=document_id,
+            document_revision_id=document_revision_id,
+            page_number=page_number,
+            page_image=page_image,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("pdf-document-review-page-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError
+            validate_contract("pdf-document-review-page-media-response", value)
+            response = PdfDocumentReviewPageMediaResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if (
+                response.content_length > PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES
+                or response.content_length != page_image.content_length
+                or response.sha256 != page_image.sha256
+            ):
+                raise ValueError("Catalog PDF review page differs from its pinned pointer")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog PDF document-review page boundary is unavailable",
+            ) from exc
 
     def load_item_content(self, item_revision_id: str) -> AssessmentItemContentContract:
         command = ItemContentQuery(item_revision_id=item_revision_id)

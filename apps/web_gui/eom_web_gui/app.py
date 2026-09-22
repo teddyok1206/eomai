@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -30,6 +31,7 @@ from eom_web_gui.contracts import (
     ItemPreview,
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
+    PdfDocumentReviewSubmission,
     PlannedMockExamAssemblySubmission,
     RequestDraftInput,
     RequestDraftUpdate,
@@ -46,6 +48,11 @@ from eom_web_gui.settings import WebSecrets, WebSettings, load_secrets, load_set
 COOKIE_NAME = "eom_studio_session"
 API_PREFIX = "/studio/api/v1"
 MAX_BODY_BYTES = 262_144
+MAX_PDF_REVIEW_BODY_BYTES = 256 * 1024 * 1024
+PDF_REVIEW_CONTENT_PATH = re.compile(
+    r"^/studio/api/v1/pdf-document-reviews/upload-intents/"
+    r"pdfreviewintent_[0-9a-f]{32}/content$"
+)
 
 
 class LoginPayload(BaseModel):
@@ -104,7 +111,12 @@ def create_app(
             response: Response = _problem(400, "WEB_HOST_INVALID", request_id)
         else:
             content_length = request.headers.get("content-length")
-            if content_length and content_length.isdigit() and int(content_length) > MAX_BODY_BYTES:
+            body_limit = (
+                MAX_PDF_REVIEW_BODY_BYTES
+                if request.method == "PUT" and PDF_REVIEW_CONTENT_PATH.fullmatch(request.url.path)
+                else MAX_BODY_BYTES
+            )
+            if content_length and content_length.isdigit() and int(content_length) > body_limit:
                 response = _problem(413, "WEB_BODY_TOO_LARGE", request_id)
             else:
                 response = await call_next(request)
@@ -262,6 +274,83 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return (await actual.customer_support_case(session, workflow_id)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews")
+    async def pdf_document_reviews(
+        session: Annotated[WebSession, Depends(require_session)],
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, object]:
+        values, next_cursor, has_more = await actual.pdf_document_reviews(session, cursor=cursor)
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in values),
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+        }
+
+    @app.post(f"{API_PREFIX}/pdf-document-reviews/upload-intents", status_code=201)
+    async def create_pdf_document_review_upload_intent(
+        value: PdfDocumentReviewSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        result = await actual.create_pdf_document_review_upload_intent(session, value)
+        return result.model_dump(mode="json")
+
+    @app.put(
+        f"{API_PREFIX}/pdf-document-reviews/upload-intents/{{upload_intent_id}}/content",
+        status_code=202,
+    )
+    async def upload_pdf_document_review_content(
+        request: Request,
+        upload_intent_id: str,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> dict[str, Any]:
+        content_type = request.headers.get("content-type", "").split(";", 1)[0]
+        content_length = request.headers.get("content-length", "")
+        if content_type != "application/pdf":
+            raise GatewayError(status=415, code="PDF_DOCUMENT_REVIEW_MEDIA_TYPE_INVALID")
+        if (
+            not content_length.isdigit()
+            or not 8 <= int(content_length) <= MAX_PDF_REVIEW_BODY_BYTES
+        ):
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
+        if (
+            idempotency_key is None
+            or re.fullmatch(r"[A-Za-z0-9_.:-]{16,128}", idempotency_key) is None
+        ):
+            raise GatewayError(status=422, code="IDEMPOTENCY_KEY_INVALID")
+        result = await actual.upload_pdf_document_review_content(
+            session,
+            upload_intent_id,
+            content_length=int(content_length),
+            content=request.stream(),
+            idempotency_key=idempotency_key,
+        )
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}")
+    async def pdf_document_review(
+        workflow_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.pdf_document_review(session, workflow_id)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/pages/{{page_number}}/image")
+    async def pdf_document_review_page_media(
+        workflow_id: str,
+        page_number: int,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.pdf_document_review_page_media(session, workflow_id, page_number)
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.get(f"{API_PREFIX}/curriculum/editorial-outline")
     async def curriculum_editorial_outline(

@@ -44,9 +44,11 @@ renderer failure, and partial-commit tests pass in a disposable environment.
 Exit: missing/stale/hash/media/lifecycle/permission negatives, exact replay, concurrent creation,
 lease recovery, and no-binary-in-DB persistence tests pass.
 
-Current implementation checkpoint: resolved plan V13, the dedicated reviewed preset bootstrap,
-and exact page/image-manifest materialization are implemented. The authenticated public upload
-intent and workflow-start application boundary remain before Slice C can be declared complete.
+Current repository checkpoint: Slice C is implemented. Durable owner-scoped upload intents use a
+leased transition table and stable domain idempotency; accepted uploads create exactly one pinned
+Workflow. Owner-scoped list/detail projections validate the exact worker input, Job, step, Artifact,
+revision, manifest, commit event, and request hash before exposing a terminal result. Page images
+resolve through a typed private Catalog media command and never disclose NAS paths.
 
 ### Slice D — Scientific Studio
 
@@ -59,6 +61,13 @@ intent and workflow-start application boundary remain before Slice C can be decl
 
 Exit: upload/review/list/detail/refresh, A→B stale-response prevention, session expiry, permission
 denial, and responsive overlay alignment tests pass in a real browser.
+
+Current repository checkpoint: Slice D is implemented through the same-origin Studio BFF. The UI
+offers the three fixed presets plus optional additive guidance, streams raw PDF bytes with bounded
+idempotent intent/content commands, paginates review history, ignores stale A→B detail responses,
+and maps a selected finding's parts-per-million anchors onto the exact authenticated page image.
+Internal IDs remain in an expandable detail and no PDF correction action exists. Source and BFF
+tests are complete; installed-release and real-browser evidence belongs to Slice E.
 
 ### Slice E — bounded live canary
 
@@ -100,9 +109,12 @@ PNG pages with root-owned Poppler executables, and commits the source, pages, an
 the existing Artifact owner. Exact replay verifies every committed member hash. The private
 Application API→Catalog streaming protocol is also implemented: JSON Schema validates a bounded
 header, the PDF remains raw streamed bytes, both endpoints verify stable file identity and SHA-256,
-and the Catalog receiver rejects truncation, excess bytes, and hash drift before intake. The public
-authenticated upload-intent route remains pending and therefore browser upload is not yet active.
+and the Catalog receiver rejects truncation, excess bytes, and hash drift before intake.
 
-Slices C–D must consume these frozen contracts rather than inventing local dictionaries or
-prompt-only semantics. This ordering is a protocol gate, not a claim that PDF review is already
-available in Scientific Studio.
+The public authenticated upload-intent, orchestration, query, private page-media, BFF, and Studio
+overlay slices now consume those frozen contracts. The generated OpenAPI document is refreshed from
+the same Application API routes. This is repository completion, not a claim of live activation.
+
+Slice E remains: build and deploy one compatible release set, run authenticated upload/media/result
+smoke with a non-sensitive PDF, and record human confirmation that page highlights identify the
+intended source regions. No broader activation follows automatically from source tests.

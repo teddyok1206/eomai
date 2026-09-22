@@ -9,7 +9,17 @@ from typing import Any
 from eom_api.app import create_app
 from eom_api.dependencies import get_authentication
 from eom_api.services.pdf_upload_stager import PdfUploadStager
-from eom_api_contracts.document_review import PdfDocumentReviewUploadIntentView
+from eom_api.services.query_adapter import PageResult
+from eom_api_contracts.document_review import (
+    PdfDocumentReviewPageView,
+    PdfDocumentReviewUploadIntentView,
+    PdfDocumentReviewView,
+)
+from eom_catalog_contracts import (
+    PdfReviewArtifactMemberPointer,
+    PdfReviewDocumentPointer,
+    PdfReviewPagePointer,
+)
 from eom_identity_service.tokens import AccessAuthentication
 from eom_operator_identity import OperatorProjection, PermissionKey, RoleKey
 from fastapi import Request
@@ -89,11 +99,123 @@ class FakePdfDocumentReviews:
         return "wfcmd_" + "6" * 32, _intent(started=True)
 
 
-def _client(tmp_path: Path) -> tuple[TestClient, Any, FakePdfDocumentReviews]:
+def _document_pointer() -> PdfReviewDocumentPointer:
+    source = PdfReviewArtifactMemberPointer(
+        artifact_id="artifact_" + "7" * 32,
+        artifact_revision_id="rev_" + "8" * 32,
+        member_path="source/original.pdf",
+        sha256="sha256:" + "9" * 64,
+        schema_ref="eom://schemas/document-review/pdf-source/1.0",
+        media_type="application/pdf",
+        content_length=4096,
+    )
+    page_image = PdfReviewArtifactMemberPointer(
+        artifact_id=source.artifact_id,
+        artifact_revision_id=source.artifact_revision_id,
+        member_path="pages/page-0001.png",
+        sha256="sha256:" + "a" * 64,
+        schema_ref="eom://schemas/document-review/pdf-page-render/1.0",
+        media_type="image/png",
+        content_length=16,
+    )
+    return PdfReviewDocumentPointer(
+        document_id="document_" + "b" * 32,
+        document_revision_id="documentrev_" + "c" * 32,
+        original_filename="검토 문서.pdf",
+        source_pdf=source,
+        page_count=1,
+        pages=(
+            PdfReviewPagePointer(
+                page_number=1,
+                width_px=1200,
+                height_px=1600,
+                rotation_degrees=0,
+                page_image=page_image,
+                text_layer=None,
+            ),
+        ),
+    )
+
+
+def _review() -> PdfDocumentReviewView:
+    document = _document_pointer()
+    return PdfDocumentReviewView(
+        workflow_id=WORKFLOW_ID,
+        state="REVIEWING",
+        document_id=document.document_id,
+        document_revision_id=document.document_revision_id,
+        original_filename=document.original_filename,
+        source_pdf_sha256=document.source_pdf.sha256,
+        page_count=1,
+        pages=(
+            PdfDocumentReviewPageView(
+                page_number=1,
+                width_px=1200,
+                height_px=1600,
+                rotation_degrees=0,
+                image_sha256=document.pages[0].page_image.sha256,
+                image_content_length=16,
+                image_url=(f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/pages/1/image"),
+            ),
+        ),
+        preset_key="WEEKLY_WORKBOOK",
+        preset_display_name="주간지",
+        created_at=NOW,
+        updated_at=NOW,
+        resource_version=4,
+    )
+
+
+class FakeQueries:
+    def __init__(self) -> None:
+        self.actor_ids: list[str] = []
+
+    def list_pdf_document_reviews(self, **values: Any) -> PageResult[PdfDocumentReviewView]:
+        self.actor_ids.append(values["actor_id"])
+        return PageResult((_review(),), None, False)
+
+    def pdf_document_review(self, **values: Any) -> PdfDocumentReviewView:
+        self.actor_ids.append(values["actor_id"])
+        assert values["workflow_id"] == WORKFLOW_ID
+        return _review()
+
+    def pdf_document_review_page_pointer(
+        self, **values: Any
+    ) -> tuple[PdfReviewDocumentPointer, PdfReviewPagePointer]:
+        self.actor_ids.append(values["actor_id"])
+        assert values["workflow_id"] == WORKFLOW_ID
+        assert values["page_number"] == 1
+        document = _document_pointer()
+        return document, document.pages[0]
+
+
+class FakeCatalogApplication:
+    def download_pdf_document_review_page(self, **values: Any) -> Any:
+        document = _document_pointer()
+        assert values["document_id"] == document.document_id
+        assert values["document_revision_id"] == document.document_revision_id
+        assert values["page_image"] == document.pages[0].page_image
+        return type(
+            "Media",
+            (),
+            {
+                "content_length": 16,
+                "sha256": document.pages[0].page_image.sha256,
+                "iter_chunks": lambda self: iter((b"\x89PNG\r\n\x1a\nPAGEPNG!",)),
+            },
+        )()
+
+
+def _client(
+    tmp_path: Path,
+) -> tuple[TestClient, Any, FakePdfDocumentReviews, FakeQueries]:
     os.chmod(tmp_path, 0o700)
     services = disconnected_services()
     pdf_reviews = FakePdfDocumentReviews()
+    queries = FakeQueries()
     services.pdf_document_reviews = pdf_reviews  # type: ignore[assignment]
+    services.queries = queries  # type: ignore[assignment]
+    services.catalog_application = FakeCatalogApplication()  # type: ignore[assignment]
     services.pdf_review_upload_stager = PdfUploadStager(  # type: ignore[assignment]
         tmp_path,
         maximum_bytes=256 * 1024 * 1024,
@@ -108,11 +230,11 @@ def _client(tmp_path: Path) -> tuple[TestClient, Any, FakePdfDocumentReviews]:
         return value
 
     app.dependency_overrides[get_authentication] = authenticated
-    return TestClient(app, base_url="http://localhost"), services, pdf_reviews
+    return TestClient(app, base_url="http://localhost"), services, pdf_reviews, queries
 
 
 def test_pdf_review_upload_intent_and_raw_pdf_endpoints(tmp_path: Path) -> None:
-    client, services, reviews = _client(tmp_path)
+    client, services, reviews, _queries = _client(tmp_path)
     try:
         with client:
             created = client.post(
@@ -150,7 +272,7 @@ def test_pdf_review_upload_intent_and_raw_pdf_endpoints(tmp_path: Path) -> None:
 
 
 def test_pdf_review_raw_upload_transport_fails_closed(tmp_path: Path) -> None:
-    client, services, reviews = _client(tmp_path)
+    client, services, reviews, _queries = _client(tmp_path)
     try:
         with client:
             wrong_media = client.put(
@@ -175,5 +297,22 @@ def test_pdf_review_raw_upload_transport_fails_closed(tmp_path: Path) -> None:
         assert wrong_signature.json()["error_code"] == "PDF_DOCUMENT_REVIEW_SIGNATURE_INVALID"
         assert reviews.uploads == []
         assert not tuple(tmp_path.iterdir())
+    finally:
+        services.engine.dispose()
+
+
+def test_pdf_review_list_detail_and_owned_page_stream(tmp_path: Path) -> None:
+    client, services, _reviews, queries = _client(tmp_path)
+    try:
+        with client:
+            listed = client.get("/api/v1/pdf-document-reviews")
+            detail = client.get(f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}")
+            page = client.get(f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/pages/1/image")
+        assert listed.status_code == detail.status_code == page.status_code == 200
+        assert listed.json()["data"][0]["state"] == "REVIEWING"
+        assert detail.headers["etag"] == '"v4"'
+        assert page.content == b"\x89PNG\r\n\x1a\nPAGEPNG!"
+        assert page.headers["etag"] == f'"{"sha256:" + "a" * 64}"'
+        assert queries.actor_ids == [OPERATOR_ID, OPERATOR_ID, OPERATOR_ID]
     finally:
         services.engine.dispose()

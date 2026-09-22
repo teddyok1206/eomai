@@ -17,6 +17,7 @@ from typing import Any, BinaryIO, Literal, cast
 from eom_catalog_contracts import (
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
+    PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     AssessmentItemContent,
     AssessmentItemContentContract,
     AssessmentItemContentV2,
@@ -25,6 +26,8 @@ from eom_catalog_contracts import (
     AssessmentPageImagePointer,
     ImageBlock,
     MediaArtifactPointer,
+    PdfDocumentReviewIntakeManifest,
+    PdfDocumentReviewPageMediaQuery,
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
@@ -42,7 +45,7 @@ from eom_item_registry import (
     new_item_revision_id,
 )
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from jsonschema import Draft202012Validator
 from sqlalchemy import Engine, and_, or_, select
@@ -70,6 +73,9 @@ from eom_catalog_service.models import (
     UsageRecord,
 )
 from eom_catalog_service.pack_resources import PackResourceResolver
+from eom_catalog_service.pdf_document_review_intake import (
+    PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.staging import stage_registry_manifest
 
@@ -616,6 +622,99 @@ class RegistryService:
                 path,
                 pointer,
                 maximum_bytes=CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
+            )
+
+    def load_pdf_document_review_page_media(
+        self,
+        request: PdfDocumentReviewPageMediaQuery,
+    ) -> ResolvedItemMedia:
+        """Open one page only after revalidating its full immutable intake lineage."""
+
+        with self.sessions() as session:
+            pointer = request.page_image
+            artifact = session.get(ArtifactRecord, pointer.artifact_id)
+            revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+            job = session.get(JobRecord, revision.job_id) if revision is not None else None
+            try:
+                manifest_path = (
+                    self._artifact_primary_file(revision) if revision is not None else None
+                )
+                raw_manifest: object = (
+                    json.loads(manifest_path.read_text(encoding="utf-8"))
+                    if manifest_path is not None
+                    else None
+                )
+                if not isinstance(raw_manifest, dict):
+                    raise ValueError("PDF review intake manifest is not an object")
+                validate_contract("pdf-document-review-intake-manifest", raw_manifest)
+                manifest = PdfDocumentReviewIntakeManifest.model_validate(raw_manifest)
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "PDF review intake manifest is invalid",
+                ) from exc
+            page_matches = tuple(
+                page for page in manifest.pages if page.page_number == request.page_number
+            )
+            expected_request = job.request if job is not None else None
+            expected_result = revision.result if revision is not None else None
+            if (
+                artifact is None
+                or revision is None
+                or job is None
+                or not artifact.approved
+                or not revision.approved
+                or artifact.artifact_type != "pdf-document-review-source"
+                or artifact.job_id != job.job_id
+                or revision.logical_artifact_id != artifact.logical_artifact_id
+                or revision.job_id != job.job_id
+                or revision.content_hash != content_sha256(raw_manifest)
+                or job.status != "SUCCEEDED"
+                or job.completed_at is None
+                or job.protocol_version != PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION
+                or job.task_type != "pdf-document-review-source"
+                or job.logical_artifact_id != pointer.artifact_id
+                or job.revision_id != pointer.artifact_revision_id
+                or not isinstance(expected_request, dict)
+                or expected_request.get("document_id") != request.document_id
+                or expected_request.get("document_revision_id") != request.document_revision_id
+                or expected_request.get("source_pdf_sha256") != manifest.source_pdf_sha256
+                or expected_request.get("original_filename") != manifest.original_filename
+                or expected_request.get("renderer") != manifest.renderer.model_dump(mode="json")
+                or not isinstance(expected_result, dict)
+                or expected_result.get("document_id") != request.document_id
+                or expected_result.get("document_revision_id") != request.document_revision_id
+                or expected_result.get("source_pdf_sha256") != manifest.source_pdf_sha256
+                or expected_result.get("page_count") != manifest.page_count
+                or expected_result.get("manifest_sha256") != manifest.manifest_sha256
+                or manifest.document_id != request.document_id
+                or manifest.document_revision_id != request.document_revision_id
+                or len(page_matches) != 1
+                or page_matches[0].member_path != pointer.member_path
+                or page_matches[0].sha256 != pointer.sha256
+                or page_matches[0].content_length != pointer.content_length
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "PDF review page pointer does not resolve through its intake lineage",
+                )
+            media_pointer = MediaArtifactPointer(
+                artifact_id=pointer.artifact_id,
+                artifact_revision_id=pointer.artifact_revision_id,
+                artifact_member=pointer.member_path,
+                sha256=pointer.sha256,
+                media_type="image/png",
+            )
+            path = self._resolve_media_file(session, media_pointer)
+            if path.lstat().st_size != pointer.content_length:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                    "PDF review page length differs from its pinned pointer",
+                )
+            return self._open_validated_media(
+                path,
+                media_pointer,
+                maximum_bytes=PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
             )
 
     @staticmethod

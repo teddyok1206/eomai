@@ -876,6 +876,21 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:6a1e60af2d8d5fca8ff0c58014bfed2cb1121fb4e2346068f4db30f8f59b3021",
         ),
+        "pdf-document-review-page-media-request": CatalogSchemaResource(
+            ("schemas/catalog-application/pdf-document-review-page-media-request-v1.schema.json"),
+            ("resources/catalog-application/pdf-document-review-page-media-request-v1.schema.json"),
+            "1.0",
+            "sha256:a3397524644b13fd0271c86bb7acb51a60570a260363d051ff4732390a5bc051",
+        ),
+        "pdf-document-review-page-media-response": CatalogSchemaResource(
+            ("schemas/catalog-application/pdf-document-review-page-media-response-v1.schema.json"),
+            (
+                "resources/catalog-application/"
+                "pdf-document-review-page-media-response-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:535e7f96436bc7da31d0070b292d8c4b2a4f0f29e6ebdec887095e42415f3a43",
+        ),
         "knowledge-types": CatalogSchemaResource(
             "schemas/knowledge/knowledge-types-v1.schema.json",
             "resources/knowledge/knowledge-types-v1.schema.json",
