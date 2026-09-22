@@ -644,6 +644,25 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         assert f'"catalog-application/{resource}": ' in deployment
         assert f'"schemas/catalog-application/{resource}"' in deployment
 
+    for resource in (
+        "pdf-document-review-intake-request-v1.schema.json",
+        "pdf-document-review-intake-response-v1.schema.json",
+        "pdf-document-review-page-media-request-v1.schema.json",
+        "pdf-document-review-page-media-response-v1.schema.json",
+    ):
+        assert f'"catalog-application/{resource}": ' in deployment
+        assert f'"schemas/catalog/catalog-application/{resource}"' in deployment
+    assert '"document-review/pdf-document-review-intake-manifest-v1.schema.json": ' in deployment
+    assert (
+        '"schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json"' in deployment
+    )
+    for runtime in (
+        "eom_catalog_contracts/document_review.py",
+        "eom_catalog_contracts/document_review_application.py",
+        "eom_catalog_service/pdf_document_review_intake.py",
+    ):
+        assert f'"{runtime}"' in deployment
+
     recovery_resource = "legacy-item-extraction-validation-recovery-v1.schema.json"
     assert f'"legacy-assessment/{recovery_resource}": ' in deployment
     assert f'"schemas/legacy-assessment/{recovery_resource}"' in deployment
