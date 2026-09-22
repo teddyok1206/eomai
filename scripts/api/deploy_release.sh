@@ -1888,8 +1888,15 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/customer-support.v1.yaml"
         ).read_bytes()
     )
-    pdf_document_review_definition = root / "pdf-document-review.v1.1.yaml"
-    pdf_document_review_definition.write_bytes(
+    pdf_document_review_definition_v1 = root / "pdf-document-review.v1.yaml"
+    pdf_document_review_definition_v1.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/pdf-document-review.v1.yaml"
+        ).read_bytes()
+    )
+    pdf_document_review_definition_v1_1 = root / "pdf-document-review.v1.1.yaml"
+    pdf_document_review_definition_v1_1.write_bytes(
         (
             Path(os.environ["REPOSITORY_ROOT"])
             / "config/workflows/pdf-document-review.v1.1.yaml"
@@ -1944,7 +1951,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2247,13 +2254,13 @@ if (
     or customer_support.definition_version != "1.0.0"
 ):
     raise SystemExit("customer-support workflow definition mismatch")
-pdf_document_review = compile_definition(
-    Path(pdf_document_review_definition), {"support"}
-).definition
-if (
-    pdf_document_review.definition_key != "pdf-document-review"
-    or pdf_document_review.definition_version != "1.1.0"
-):
+pdf_document_reviews = tuple(
+    compile_definition(Path(path), {"support"}).definition
+    for path in (pdf_document_review_definition_v1, pdf_document_review_definition_v1_1)
+)
+if tuple(
+    (value.definition_key, value.definition_version) for value in pdf_document_reviews
+) != (("pdf-document-review", "1.0.0"), ("pdf-document-review", "1.1.0")):
     raise SystemExit("PDF document review workflow definition mismatch")
 admitted_definitions = (
     compile_definition(Path(definition_v1_8), {"authoring", "image", "review", "item_management"}),
@@ -2270,7 +2277,8 @@ admitted_definitions = (
     compile_definition(Path(legacy_definition), {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
-    compile_definition(Path(pdf_document_review_definition), {"support"}),
+    compile_definition(Path(pdf_document_review_definition_v1), {"support"}),
+    compile_definition(Path(pdf_document_review_definition_v1_1), {"support"}),
 )
 if {
     (compiled.definition.definition_key, compiled.definition.definition_version): next(iter({
@@ -2318,7 +2326,8 @@ validate_contract(
             str(legacy_definition),
             str(editorial_definition),
             str(customer_support_definition),
-            str(pdf_document_review_definition),
+            str(pdf_document_review_definition_v1),
+            str(pdf_document_review_definition_v1_1),
             str(worker_config),
             str(staging),
             str(workspace_root),
