@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/pdf-document-review/1.0",
+  "title": "EOM PDF Document Review API V1",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/CreatePdfDocumentReviewUploadIntentRequest" },
+    { "$ref": "#/$defs/PdfDocumentReviewUploadIntentView" }
+  ],
+  "$defs": {
+    "CreatePdfDocumentReviewUploadIntentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_filename",
+        "content_length",
+        "preset_key",
+        "locale"
+      ],
+      "properties": {
+        "original_filename": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 240,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.[Pp][Dd][Ff]$"
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 268435456
+        },
+        "preset_key": {
+          "enum": ["PROBLEM_SET", "WEEKLY_WORKBOOK", "MOCK_EXAM"]
+        },
+        "additional_guidance": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 8000,
+          "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]+$"
+        },
+        "locale": { "const": "ko-KR" }
+      }
+    },
+    "PdfDocumentReviewUploadIntentView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upload_intent_id",
+        "state",
+        "original_filename",
+        "content_length",
+        "preset_key",
+        "upload_url",
+        "created_at",
+        "updated_at",
+        "expires_at",
+        "resource_version"
+      ],
+      "properties": {
+        "upload_intent_id": {
+          "type": "string",
+          "pattern": "^pdfreviewintent_[0-9a-f]{32}$"
+        },
+        "state": {
+          "enum": [
+            "AWAITING_UPLOAD",
+            "PROCESSING",
+            "STARTED",
+            "FAILED_RETRYABLE",
+            "FAILED_FINAL"
+          ]
+        },
+        "original_filename": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 240,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.[Pp][Dd][Ff]$"
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 268435456
+        },
+        "preset_key": {
+          "enum": ["PROBLEM_SET", "WEEKLY_WORKBOOK", "MOCK_EXAM"]
+        },
+        "additional_guidance_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "upload_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "workflow_id": {
+          "type": ["string", "null"],
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "failure_code": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+        },
+        "upload_url": {
+          "type": "string",
+          "pattern": "^/api/v1/pdf-document-reviews/upload-intents/pdfreviewintent_[0-9a-f]{32}/content$"
+        },
+        "review_url": {
+          "type": ["string", "null"],
+          "pattern": "^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}$"
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "resource_version": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "AWAITING_UPLOAD" } } },
+          "then": {
+            "properties": {
+              "upload_sha256": { "type": "null" },
+              "workflow_id": { "type": "null" },
+              "failure_code": { "type": "null" },
+              "review_url": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "PROCESSING" } } },
+          "then": {
+            "properties": {
+              "upload_sha256": { "type": "string" },
+              "workflow_id": { "type": "null" },
+              "failure_code": { "type": "null" },
+              "review_url": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "STARTED" } } },
+          "then": {
+            "properties": {
+              "upload_sha256": { "type": "string" },
+              "workflow_id": { "type": "string" },
+              "failure_code": { "type": "null" },
+              "review_url": { "type": "string" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": { "enum": ["FAILED_RETRYABLE", "FAILED_FINAL"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "upload_sha256": { "type": "string" },
+              "workflow_id": { "type": "null" },
+              "failure_code": { "type": "string" },
+              "review_url": { "type": "null" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

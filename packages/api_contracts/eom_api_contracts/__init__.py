@@ -42,6 +42,12 @@ from eom_api_contracts.customer_support import (
     CustomerSupportActionView,
     CustomerSupportCaseView,
 )
+from eom_api_contracts.document_review import (
+    CreatePdfDocumentReviewUploadIntentRequest,
+    PdfDocumentReviewUploadIntentView,
+    PdfReviewPresetKey,
+    PdfReviewUploadState,
+)
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
@@ -147,6 +153,7 @@ __all__ = [
     "CreateKnowledgeAnalysisBatchRequest",
     "CreateKnowledgeAnalysisRequest",
     "CreateMockExamAssemblyRequest",
+    "CreatePdfDocumentReviewUploadIntentRequest",
     "CreatePlannedMockExamAssemblyRequest",
     "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
@@ -202,6 +209,9 @@ __all__ = [
     "MockExamReviewEligibilityObservationV2",
     "MockExamReviewEligibilityObservationV3",
     "PageMeta",
+    "PdfDocumentReviewUploadIntentView",
+    "PdfReviewPresetKey",
+    "PdfReviewUploadState",
     "PreviewMockExamAssemblyPlanRequest",
     "ProblemDetails",
     "ProductionContentProfile",

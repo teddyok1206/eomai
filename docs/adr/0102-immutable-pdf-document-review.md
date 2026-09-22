@@ -157,6 +157,37 @@ and uses `O(1)` streaming memory. The later public upload intent is indexed by o
 idempotency identity; it is not a second document registry. No raw PDF or PNG bytes enter
 PostgreSQL.
 
+The public boundary is intentionally two-step. An authenticated JSON command creates a bounded
+upload intent containing only the original filename, declared byte count, preset key, normalized
+optional guidance, hashes, state, and timestamps. A second authenticated `application/pdf` PUT
+materializes the declared bytes once in an API-private mode-0600 file. The API verifies exact byte
+count, `%PDF-` signature, regular-file/single-link identity, and SHA-256 before Catalog intake. The
+file is removed after the application command finishes; it is never canonical storage.
+
+The upload-intent state machine is an explicit lookup table:
+
+```text
+AWAITING_UPLOAD -> PROCESSING -> STARTED
+                            \-> FAILED_RETRYABLE -> PROCESSING
+                            \-> FAILED_FINAL
+```
+
+An intent belongs to one operator. Its first accepted upload pins `upload_sha256`; subsequent
+attempts must use the same byte count and hash. `STARTED` pins one Workflow ID. Key lookup is by the
+primary intent ID; owner list order uses the B-tree `(operator_id, created_at DESC,
+upload_intent_id)`; claim recovery uses a partial B-tree on processing lease expiry. These are O(1)
+indexed identity lookups and O(log n + page-size) owner listings at a scale of thousands of intents,
+not PDF-byte storage or a document search index.
+
+The intent claim uses a fresh server-generated 128-bit lease token for every acquisition and a
+compare-and-set finalization. A stale uploader cannot finalize after takeover. Catalog intake and
+Workflow creation use stable domain idempotency keys derived from the immutable intent identity,
+so a timeout or crash may replay the same effects but cannot create a second document or Workflow.
+The intent transaction never spans socket upload/rendering. The simpler alternative—holding a
+PostgreSQL row lock during PDF rendering—would cause long transactions and connection starvation;
+using only the HTTP idempotency receipt would not expose durable upload state or fence a process
+that dies between Catalog commit and Workflow creation.
+
 ### Transactions, concurrency, retry, and idempotency
 
 Intake commits the PDF and derived page manifest atomically through the existing authoritative
