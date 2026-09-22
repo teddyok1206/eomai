@@ -36,6 +36,8 @@ renderer failure, and partial-commit tests pass in a disposable environment.
 - resolve an immutable preset snapshot and normalize/hash additional guidance;
 - create an actor-scoped idempotent review workflow pinned to one intake revision;
 - materialize exact page members and `request.json` into the worker workspace;
+- bound the single-worker V1 to 32 pages, 16 MiB per page PNG, and 128 MiB of PNG payload; retain
+  larger intake revisions but require a future chunked successor for their review;
 - validate the result against source pages and commit only through the orchestrator;
 - expose bounded list/detail application views.
 

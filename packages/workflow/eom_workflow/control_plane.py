@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     KnowledgeSourceClass,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
+    PdfReviewDocumentPointer,
 )
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -989,6 +990,51 @@ class ResolvedExecutionPlanV10(FrozenModel):
         body = self.model_dump(mode="json", exclude={"plan_sha256"})
         if content_sha256(body) != self.plan_sha256:
             raise ValueError("customer support plan hash does not match canonical content")
+        return self
+
+
+class ResolvedExecutionPlanV13(FrozenModel):
+    """One exact immutable PDF review pinned to the serial slot-06 support capacity."""
+
+    schema_version: Literal["resolved-execution-plan/13.0"] = "resolved-execution-plan/13.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["CODEX"] = "CODEX"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["pdf-document-review"] = "pdf-document-review"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    review_request_sha256: Sha256
+    document: PdfReviewDocumentPointer
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["13.0.0"] = "13.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_pdf_document_review_step_and_exact_hash(self) -> ResolvedExecutionPlanV13:
+        step = self.steps[0]
+        if (
+            step.step_key != "review_document"
+            or step.role != WorkerRole.SUPPORT
+            or step.model != "gpt-5.6-terra"
+            or step.reasoning_effort != "xhigh"
+            or step.worker_pool_key != "customer-support"
+            or step.reference_bundle is not None
+            or step.timeout_seconds != 3600
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "ALLOWED_WITH_PROVENANCE"
+        ):
+            raise ValueError("PDF document review plan requires its isolated support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("PDF document review plan hash does not match canonical content")
         return self
 
 

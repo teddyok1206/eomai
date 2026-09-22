@@ -271,6 +271,150 @@ def _workspace(tmp_path: Path, name: str) -> Path:
     return path
 
 
+def _pdf_review_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    previous = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    instruction_pointer = previous.canonical_document["steps"][0]["instruction_bundle"]
+    instruction_record = session.records[
+        (ExecutionBundleRevisionRecord, instruction_pointer["bundle_revision_id"])
+    ]
+    instruction_record.manifest_artifact_revision_id = instruction_pointer["manifest_artifact"][
+        "artifact_revision_id"
+    ]
+
+    artifact_id = "artifact_" + "d" * 32
+    revision_id = "rev_" + "e" * 32
+    revision_root = fixture["artifact_root"] / artifact_id / revision_id
+    revision_root.mkdir(parents=True)
+    source = b"%PDF-1.7\nreview fixture\n"
+    source_path = revision_root / "source/original.pdf"
+    source_path.parent.mkdir()
+    source_path.write_bytes(source)
+    files: list[dict[str, object]] = [
+        {
+            "file_name": "source/original.pdf",
+            "sha256": sha256_bytes(source),
+            "bytes": len(source),
+            "media_type": "application/pdf",
+            "schema_ref": "eom://schemas/document-review/pdf-source/1.0",
+        }
+    ]
+    pages: list[dict[str, object]] = []
+    for page_number in (1, 2):
+        width, height = 1200, 1800
+        payload = (
+            b"\x89PNG\r\n\x1a\n"
+            + b"\x00\x00\x00\rIHDR"
+            + width.to_bytes(4, "big")
+            + height.to_bytes(4, "big")
+            + bytes([page_number])
+        )
+        member_path = f"pages/page-{page_number:04d}.png"
+        target = revision_root / member_path
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(payload)
+        digest = sha256_bytes(payload)
+        files.append(
+            {
+                "file_name": member_path,
+                "sha256": digest,
+                "bytes": len(payload),
+                "media_type": "image/png",
+                "schema_ref": "eom://schemas/document-review/pdf-page-render/1.0",
+            }
+        )
+        pages.append(
+            {
+                "page_number": page_number,
+                "width_px": width,
+                "height_px": height,
+                "rotation_degrees": 0,
+                "page_image": {
+                    "artifact_id": artifact_id,
+                    "artifact_revision_id": revision_id,
+                    "member_path": member_path,
+                    "sha256": digest,
+                    "schema_ref": "eom://schemas/document-review/pdf-page-render/1.0",
+                    "media_type": "image/png",
+                    "content_length": len(payload),
+                },
+                "text_layer": None,
+            }
+        )
+    session.records[(ArtifactRecord, artifact_id)] = SimpleNamespace(approved=True)
+    session.records[(ArtifactRevisionRecord, revision_id)] = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=artifact_id,
+        nas_path=str(revision_root),
+        manifest={"files": files},
+    )
+    document = {
+        "document_id": "document_" + "1" * 32,
+        "document_revision_id": "documentrev_" + "2" * 32,
+        "original_filename": "review.pdf",
+        "source_pdf": {
+            "artifact_id": artifact_id,
+            "artifact_revision_id": revision_id,
+            "member_path": "source/original.pdf",
+            "sha256": sha256_bytes(source),
+            "schema_ref": "eom://schemas/document-review/pdf-source/1.0",
+            "media_type": "application/pdf",
+            "content_length": len(source),
+        },
+        "page_count": 2,
+        "pages": pages,
+    }
+    plan: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/13.0",
+        "plan_id": fixture["plan_id"],
+        "workflow_id": "workflow_" + "3" * 32,
+        "workload_class": "CODEX",
+        "preset_id": "execpreset_" + "4" * 32,
+        "preset_revision_id": "execpresetrev_" + "5" * 32,
+        "preset_sha256": "sha256:" + "6" * 64,
+        "workflow_definition_key": "pdf-document-review",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": "sha256:" + "7" * 64,
+        "review_request_sha256": "sha256:" + "8" * 64,
+        "document": document,
+        "capacity_policy_revision_id": "capacityrev_" + "9" * 32,
+        "steps": [
+            {
+                "step_key": "review_document",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "xhigh",
+                "instruction_bundle": instruction_pointer,
+                "reference_bundle": None,
+                "worker_pool_key": "customer-support",
+                "timeout_seconds": 3600,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "ALLOWED_WITH_PROVENANCE",
+            }
+        ],
+        "resolver_version": "13.0.0",
+        "resolved_at": "2026-09-22T12:00:00Z",
+        "plan_sha256": ZERO_SHA,
+    }
+    plan["plan_sha256"] = compute_control_document_hash(plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))] = SimpleNamespace(
+        canonical_document=plan,
+        plan_sha256=plan["plan_sha256"],
+    )
+    fixture.update(
+        {
+            "document_revision_id": revision_id,
+            "page_payloads": tuple(
+                (revision_root / f"pages/page-{page:04d}.png").read_bytes() for page in (1, 2)
+            ),
+        }
+    )
+    return fixture
+
+
 def _assessment_pointer(
     fixture: dict[str, Any],
     *,
@@ -1023,6 +1167,68 @@ def test_knowledge_materializer_rejects_manifest_hash_drift_before_context_copy(
         )
     assert captured.value.code in {"CONTROL_POINTER_FILE_INVALID", "CONTROL_POINTER_HASH_MISMATCH"}
     assert not (workspace / "references/evidence/context.md").exists()
+
+
+def test_pdf_review_materializer_stages_exact_pages_and_image_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _pdf_review_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="review_document",
+    )
+    assert fixture["document_revision_id"] in authorized
+    workspace = _workspace(tmp_path, "pdf-review")
+
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="review_document",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=authorized,
+    )
+
+    for page_number, payload in enumerate(fixture["page_payloads"], start=1):
+        assert (
+            workspace / f"source/document/images/page-{page_number:06d}.png"
+        ).read_bytes() == payload
+    image_manifest = json.loads((workspace / "codex-image-inputs.json").read_text())
+    assert [entry["physical_page"] for entry in image_manifest["images"]] == [1, 2]
+    assert result.source_artifact_revision_id == fixture["document_revision_id"]
+    assert result.image_input_manifest_sha256 == image_manifest["manifest_sha256"]
+    assert result.materialized_member_count == 5
+
+
+def test_pdf_review_materializer_rejects_page_hash_drift_before_worker_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _pdf_review_fixture(tmp_path, monkeypatch)
+    authorized = authorized_execution_artifact_revisions(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="review_document",
+    )
+    revision = fixture["session"].records[(ArtifactRevisionRecord, fixture["document_revision_id"])]
+    target = Path(revision.nas_path) / "pages/page-0002.png"
+    target.write_bytes(b"x" * target.stat().st_size)
+    workspace = _workspace(tmp_path, "pdf-review-drift")
+
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="review_document",
+            workspace=workspace,
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=authorized,
+        )
+
+    assert captured.value.code == "CONTROL_POINTER_HASH_MISMATCH"
+    assert not (workspace / "codex-image-inputs.json").exists()
     assert not (workspace / "references/evidence/manifest.json").exists()
 
 

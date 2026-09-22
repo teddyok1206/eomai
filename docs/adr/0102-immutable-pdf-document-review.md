@@ -36,6 +36,11 @@ The first implementation is split into explicit boundaries:
 
 There is no corrected-PDF endpoint, field, Artifact type, or workflow step.
 
+The first executable review protocol is intentionally bounded to one worker invocation: at most 32
+ordered page PNGs, at most 16 MiB per PNG, and at most 128 MiB of PNG payload. Catalog intake may
+retain larger immutable PDFs, but those documents require a future chunked successor workflow; V1
+fails closed instead of claiming that one Codex invocation can review 2,000 pages.
+
 The Catalog intake Artifact uses the otherwise unused immutable protocol identity `catalog/1.16`;
 it does not reuse the existing `catalog/1.14` item-review publication or `catalog/1.15` solution
 analysis identities.

@@ -87,6 +87,13 @@ class PdfDocumentReviewRequest(FrozenModel):
 
     @model_validator(mode="after")
     def validate_request_hashes(self) -> PdfDocumentReviewRequest:
+        if self.document.page_count > 32:
+            raise ValueError("PDF document review V1 supports at most 32 pages")
+        page_image_bytes = tuple(page.page_image.content_length for page in self.document.pages)
+        if any(byte_count > 16 * 1024 * 1024 for byte_count in page_image_bytes):
+            raise ValueError("PDF document review page image exceeds 16 MiB")
+        if sum(page_image_bytes) > 128 * 1024 * 1024:
+            raise ValueError("PDF document review page images exceed 128 MiB")
         expected_guidance_hash = (
             content_sha256(self.additional_guidance)
             if self.additional_guidance is not None

@@ -42,6 +42,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV10,
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV13,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -167,6 +168,7 @@ def materialize_execution_step(
         "resolved-execution-plan/7.0",
         "resolved-execution-plan/8.0",
         "resolved-execution-plan/9.0",
+        "resolved-execution-plan/13.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -181,6 +183,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV10
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
+        | ResolvedExecutionPlanV13
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -204,6 +207,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/12.0":
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/13.0":
+        plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -388,6 +393,20 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV13):
+        document_bytes, document_members = _materialize_pdf_review_document(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += document_bytes
+        member_count += document_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.document.source_pdf.artifact_revision_id
+        source_sha256 = plan.document.source_pdf.sha256
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -487,6 +506,43 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = assessment_image_manifest.manifest_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV13):
+        image_manifest_document = {
+            "schema_version": "codex-image-input-manifest/1.0",
+            "plan_id": plan.plan_id,
+            "images": [
+                {
+                    "physical_page": page.page_number,
+                    "relative_path": (f"source/document/images/page-{page.page_number:06d}.png"),
+                    "media_type": "image/png",
+                    "sha256": page.page_image.sha256,
+                    "bytes": page.page_image.content_length,
+                    "width_pixels": page.width_px,
+                    "height_pixels": page.height_px,
+                }
+                for page in plan.document.pages
+            ],
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        image_manifest_document["manifest_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in image_manifest_document.items()
+                if key != "manifest_sha256"
+            }
+        )
+        validate_control_contract("codex-image-input-manifest", image_manifest_document)
+        image_manifest = CodexImageInputManifest.model_validate(image_manifest_document)
+        image_manifest_bytes = canonical_json_bytes(image_manifest) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = image_manifest.manifest_sha256
 
     invocation_document: dict[str, object] = {
         "schema_version": "codex-invocation/1.0",
@@ -560,6 +616,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV10
             | ResolvedExecutionPlanV11
             | ResolvedExecutionPlanV12
+            | ResolvedExecutionPlanV13
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -581,6 +638,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV11.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/13.0":
+        plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -652,6 +711,8 @@ def authorized_execution_artifact_revisions(
                     ),
                 }
             )
+    elif isinstance(plan, ResolvedExecutionPlanV13):
+        revision_ids.add(plan.document.source_pdf.artifact_revision_id)
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -1376,6 +1437,82 @@ def _materialize_base_analysis(
                 "base analysis member count differs from its accepted result",
             )
     return sum(len(payload) for payload in payloads.values()), len(payloads)
+
+
+def _materialize_pdf_review_document(
+    session: Session,
+    *,
+    plan: ResolvedExecutionPlanV13,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Stage exact reviewed page images and optional text without exposing NAS."""
+
+    document = plan.document
+    total_bytes = 0
+    member_count = 0
+    for page in document.pages:
+        image_pointer = OriginArtifactMemberPointer(
+            artifact_id=page.page_image.artifact_id,
+            artifact_revision_id=page.page_image.artifact_revision_id,
+            member_path=page.page_image.member_path,
+            schema_ref=page.page_image.schema_ref,
+            media_type=page.page_image.media_type,
+            sha256=page.page_image.sha256,
+        )
+        image = _materialize_assessment_member(
+            session,
+            pointer=image_pointer,
+            relative_path=(f"source/document/images/page-{page.page_number:06d}.png"),
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=16 * 1024 * 1024,
+        )
+        if len(image) != page.page_image.content_length:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH",
+                "PDF review page byte count differs from its pointer",
+            )
+        _validate_png_payload(
+            image,
+            expected_width=page.width_px,
+            expected_height=page.height_px,
+        )
+        total_bytes += len(image)
+        member_count += 1
+
+        if page.text_layer is not None:
+            text_pointer = OriginArtifactMemberPointer(
+                artifact_id=page.text_layer.artifact_id,
+                artifact_revision_id=page.text_layer.artifact_revision_id,
+                member_path=page.text_layer.member_path,
+                schema_ref=page.text_layer.schema_ref,
+                media_type=page.text_layer.media_type,
+                sha256=page.text_layer.sha256,
+            )
+            text_payload = _materialize_assessment_member(
+                session,
+                pointer=text_pointer,
+                relative_path=(f"source/document/text/page-{page.page_number:06d}.json"),
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+                maximum_bytes=2 * 1024 * 1024,
+            )
+            if len(text_payload) != page.text_layer.content_length:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_MANIFEST_MISMATCH",
+                    "PDF review text byte count differs from its pointer",
+                )
+            _json_object(text_payload, "PDF review page text")
+            total_bytes += len(text_payload)
+            member_count += 1
+    return total_bytes, member_count
 
 
 def _json_object(payload: bytes, label: str) -> dict[str, object]:

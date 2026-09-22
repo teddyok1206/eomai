@@ -365,6 +365,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "12.0",
             "sha256:c2b72c2db90635f7a17bd3efcc083f3b1c8f795f93e4739b54b61de792ed008c",
         ),
+        "resolved-execution-plan-v13": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v13.schema.json",
+            "resources/control-plane/resolved-execution-plan-v13.schema.json",
+            "13.0",
+            "sha256:d2b27e8072604383f25038d6b9480637ffe4066ff42da70c539418796d28c40c",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",

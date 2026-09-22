@@ -98,6 +98,17 @@ class PdfReviewDocumentPointer(FrozenModel):
         page_numbers = tuple(page.page_number for page in self.pages)
         if page_numbers != tuple(range(1, self.page_count + 1)):
             raise ValueError("PDF page pointers must be complete and ordered from one")
+        source_identity = (
+            self.source_pdf.artifact_id,
+            self.source_pdf.artifact_revision_id,
+        )
+        if any(
+            (member.artifact_id, member.artifact_revision_id) != source_identity
+            for page in self.pages
+            for member in (page.page_image, page.text_layer)
+            if member is not None
+        ):
+            raise ValueError("PDF review members must belong to the exact source Artifact revision")
         member_keys = [
             (page.page_image.artifact_revision_id, page.page_image.member_path)
             for page in self.pages

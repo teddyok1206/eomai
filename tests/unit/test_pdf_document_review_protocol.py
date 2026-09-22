@@ -12,10 +12,12 @@ from eom_workflow import (
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewWorkerRequest,
     PdfReviewDocumentPointer,
+    ResolvedExecutionPlanV13,
     build_pdf_document_review_request,
     compile_definition,
     load_pdf_review_preset,
     normalize_pdf_review_guidance,
+    validate_control_contract,
     validate_pdf_document_review_output_against_request,
 )
 from eom_workflow.models import ArtifactSpec, RoleWorkerInput
@@ -225,6 +227,75 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
     assert load_role_result_schema("pdf-document-review-result@1.0")["$schema"].endswith(
         "2020-12/schema"
     )
+
+
+def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:
+    request = _request()
+    instruction = {
+        "bundle_id": "instrbundle_" + "a" * 32,
+        "bundle_revision_id": "instrrev_" + "b" * 32,
+        "manifest_artifact": {
+            "artifact_id": "artifact_" + "c" * 32,
+            "artifact_revision_id": "rev_" + "d" * 32,
+            "sha256": "sha256:" + "e" * 64,
+            "schema_ref": "eom://schemas/workflow/bundle-manifest/1.0",
+            "media_type": "application/json",
+            "logical_name": "manifest.json",
+        },
+        "manifest_sha256": "sha256:" + "f" * 64,
+    }
+    plan: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/13.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "workflow_id": WORKFLOW_ID,
+        "workload_class": "CODEX",
+        "preset_id": "execpreset_" + "2" * 32,
+        "preset_revision_id": "execpresetrev_" + "3" * 32,
+        "preset_sha256": "sha256:" + "4" * 64,
+        "workflow_definition_key": "pdf-document-review",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": "sha256:" + "5" * 64,
+        "review_request_sha256": request.request_sha256,
+        "document": request.document.model_dump(mode="json"),
+        "capacity_policy_revision_id": "capacityrev_" + "6" * 32,
+        "steps": [
+            {
+                "step_key": "review_document",
+                "role": "support",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "xhigh",
+                "instruction_bundle": instruction,
+                "reference_bundle": None,
+                "worker_pool_key": "customer-support",
+                "timeout_seconds": 3600,
+                "sandbox": "read-only",
+                "network": "disabled",
+                "general_knowledge_mode": "ALLOWED_WITH_PROVENANCE",
+            }
+        ],
+        "resolver_version": "13.0.0",
+        "resolved_at": NOW.isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    plan["plan_sha256"] = content_sha256(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
+
+    validate_control_contract("resolved-execution-plan-v13", plan)
+    parsed = ResolvedExecutionPlanV13.model_validate(plan)
+    assert parsed.document == request.document
+    assert parsed.steps[0].worker_pool_key == "customer-support"
+
+
+def test_pdf_document_review_v1_rejects_page_payload_beyond_worker_boundary() -> None:
+    value = _request().model_dump(mode="json")
+    value["document"]["pages"][0]["page_image"]["content_length"] = 16 * 1024 * 1024 + 1
+    value["request_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "request_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="exceeds 16 MiB"):
+        PdfDocumentReviewRequest.model_validate(value)
 
 
 def test_pdf_document_review_typed_input_result_and_request_binding() -> None:
