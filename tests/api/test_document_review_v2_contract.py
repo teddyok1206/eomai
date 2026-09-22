@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
+    CreateDocumentReviewAnnotationRequest,
     CreateDocumentReviewUploadIntentRequestV2,
+    DocumentReviewAnnotationOutputView,
+    DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionView,
     DocumentReviewUploadIntentViewV2,
@@ -165,3 +168,58 @@ def test_hwpx_correction_contract_rejects_duplicates_and_false_availability() ->
     ):
         with pytest.raises(ValidationError):
             model.model_validate(value)
+
+
+def test_document_review_annotation_contract_is_exact_and_role_addressed() -> None:
+    _, validator = _schema("document-review-annotation-v1.schema.json")
+    request = CreateDocumentReviewAnnotationRequest()
+    validator.validate(request.model_dump(mode="json"))
+    annotation_id = "docannotation_" + "6" * 32
+    view = DocumentReviewAnnotationView(
+        annotation_id=annotation_id,
+        workflow_id=WORKFLOW_ID,
+        outputs=(
+            DocumentReviewAnnotationOutputView(
+                document_role="QUESTION",
+                sha256=SHA256,
+                content_length=8192,
+                download_url=(
+                    f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations/"
+                    f"{annotation_id}/documents/QUESTION/download"
+                ),
+            ),
+            DocumentReviewAnnotationOutputView(
+                document_role="SOLUTION",
+                sha256="sha256:" + "7" * 64,
+                content_length=4096,
+                download_url=(
+                    f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations/"
+                    f"{annotation_id}/documents/SOLUTION/download"
+                ),
+            ),
+        ),
+        created_at=NOW,
+        resource_version=1,
+    )
+    validator.validate(view.model_dump(mode="json"))
+
+
+def test_document_review_annotation_contract_rejects_partial_paired_output() -> None:
+    with pytest.raises(ValidationError, match="output roles"):
+        DocumentReviewAnnotationView(
+            annotation_id="docannotation_" + "6" * 32,
+            workflow_id=WORKFLOW_ID,
+            outputs=(
+                DocumentReviewAnnotationOutputView(
+                    document_role="QUESTION",
+                    sha256=SHA256,
+                    content_length=8192,
+                    download_url=(
+                        f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations/"
+                        f"docannotation_{'6' * 32}/documents/QUESTION/download"
+                    ),
+                ),
+            ),
+            created_at=NOW,
+            resource_version=1,
+        )

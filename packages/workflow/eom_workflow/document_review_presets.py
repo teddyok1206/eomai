@@ -11,6 +11,8 @@ from eom_catalog_contracts import PdfReviewDocumentPointer
 from eom_identifiers import content_sha256
 
 from eom_workflow.document_review import (
+    PairedDocumentReviewRequest,
+    PairedReviewDocument,
     PdfDocumentReviewRequest,
     PdfReviewPresetSnapshot,
     normalize_pdf_review_guidance,
@@ -70,3 +72,33 @@ def build_pdf_document_review_request(
     }
     value["request_sha256"] = content_sha256(value)
     return PdfDocumentReviewRequest.model_validate(value)
+
+
+def build_paired_document_review_request(
+    *,
+    question_document: PdfReviewDocumentPointer,
+    solution_document: PdfReviewDocumentPointer,
+    preset_key: PdfReviewPresetKey,
+    additional_guidance: str | None,
+) -> PairedDocumentReviewRequest:
+    """Pin two role-addressed documents and one preset into an immutable request."""
+
+    normalized_guidance = (
+        None if additional_guidance is None else normalize_pdf_review_guidance(additional_guidance)
+    )
+    documents = (
+        PairedReviewDocument(role="QUESTION", document=question_document),
+        PairedReviewDocument(role="SOLUTION", document=solution_document),
+    )
+    value: dict[str, object] = {
+        "schema_version": "paired-document-review-request/1.0",
+        "documents": [document.model_dump(mode="json") for document in documents],
+        "preset": load_pdf_review_preset(preset_key).model_dump(mode="json"),
+        "additional_guidance": normalized_guidance,
+        "additional_guidance_sha256": (
+            None if normalized_guidance is None else content_sha256(normalized_guidance)
+        ),
+        "locale": "ko-KR",
+    }
+    value["request_sha256"] = content_sha256(value)
+    return PairedDocumentReviewRequest.model_validate(value)

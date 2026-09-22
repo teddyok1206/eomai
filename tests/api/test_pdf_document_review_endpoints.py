@@ -11,6 +11,8 @@ from eom_api.dependencies import get_authentication
 from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.query_adapter import PageResult
 from eom_api_contracts.document_review import (
+    DocumentReviewAnnotationOutputView,
+    DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionView,
     DocumentReviewUploadIntentViewV2,
@@ -207,6 +209,53 @@ class FakeDocumentReviewCorrections:
         )()
 
 
+class FakeDocumentReviewAnnotations:
+    annotation_id = "docannotation_" + "0" * 32
+    content = b"%PDF-marked!"
+    sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
+
+    def create(self, workflow_id: str, **values: Any) -> Any:
+        assert workflow_id == WORKFLOW_ID
+        assert values["actor_id"] == OPERATOR_ID
+        assert values["idempotency_key"].startswith("api:")
+        return self.annotation(workflow_id, self.annotation_id, actor_id=values["actor_id"])
+
+    def annotation(self, workflow_id: str, annotation_id: str, **values: Any) -> Any:
+        assert workflow_id == WORKFLOW_ID
+        assert annotation_id == self.annotation_id
+        assert values["actor_id"] == OPERATOR_ID
+        return DocumentReviewAnnotationView(
+            annotation_id=annotation_id,
+            workflow_id=workflow_id,
+            outputs=(
+                DocumentReviewAnnotationOutputView(
+                    document_role="DOCUMENT",
+                    sha256=self.sha256,
+                    content_length=len(self.content),
+                    download_url=(
+                        f"/api/v1/pdf-document-reviews/{workflow_id}/annotations/"
+                        f"{annotation_id}/documents/DOCUMENT/download"
+                    ),
+                ),
+            ),
+            created_at=NOW,
+            resource_version=1,
+        )
+
+    def download(self, workflow_id: str, annotation_id: str, role: str, **values: Any) -> Any:
+        self.annotation(workflow_id, annotation_id, **values)
+        assert role == "DOCUMENT"
+        return type(
+            "Media",
+            (),
+            {
+                "content_length": len(self.content),
+                "sha256": self.sha256,
+                "iter_chunks": lambda _: iter((self.content,)),
+            },
+        )()
+
+
 def _document_pointer() -> PdfReviewDocumentPointer:
     source = PdfReviewArtifactMemberPointer(
         artifact_id="artifact_" + "7" * 32,
@@ -323,6 +372,7 @@ def _client(
     queries = FakeQueries()
     services.pdf_document_reviews = pdf_reviews  # type: ignore[assignment]
     services.document_review_corrections = FakeDocumentReviewCorrections()  # type: ignore[attr-defined]
+    services.document_review_annotations = FakeDocumentReviewAnnotations()  # type: ignore[attr-defined]
     services.queries = queries  # type: ignore[assignment]
     services.catalog_application = FakeCatalogApplication()  # type: ignore[assignment]
     services.pdf_review_upload_stager = PdfUploadStager(  # type: ignore[assignment]
@@ -481,5 +531,35 @@ def test_hwpx_upload_correction_and_authenticated_download(tmp_path: Path) -> No
         assert downloaded.status_code == 200
         assert downloaded.content == b"PK\x03\x04redline"
         assert downloaded.headers["content-type"] == "application/vnd.hancom.hwpx"
+    finally:
+        services.engine.dispose()
+
+
+def test_document_review_annotation_create_read_and_authenticated_download(tmp_path: Path) -> None:
+    client, services, _reviews, _queries = _client(tmp_path)
+    annotations = cast(FakeDocumentReviewAnnotations, services.document_review_annotations)
+    try:
+        with client:
+            created = client.post(
+                f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations",
+                headers={"Idempotency-Key": "document-review-annotation-test-0001"},
+                json={"include_all_findings": True},
+            )
+            detail = client.get(
+                f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations/"
+                f"{annotations.annotation_id}"
+            )
+            downloaded = client.get(
+                f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations/"
+                f"{annotations.annotation_id}/documents/DOCUMENT/download"
+            )
+        assert created.status_code == 201
+        assert created.json()["data"]["resource_id"] == annotations.annotation_id
+        assert detail.status_code == 200
+        assert detail.json()["data"]["outputs"][0]["document_role"] == "DOCUMENT"
+        assert downloaded.status_code == 200
+        assert downloaded.content == annotations.content
+        assert downloaded.headers["content-type"] == "application/pdf"
+        assert downloaded.headers["etag"] == f'"{annotations.sha256}"'
     finally:
         services.engine.dispose()

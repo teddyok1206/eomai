@@ -56,7 +56,10 @@ from eom_orchestrator.settings import Settings
 class PdfDocumentReviewBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["pdf-document-review-control-bootstrap/1.0"]
+    schema_version: Literal[
+        "pdf-document-review-control-bootstrap/1.0",
+        "pdf-document-review-control-bootstrap/2.0",
+    ]
     preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -64,9 +67,11 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     model: Literal["gpt-5.6-terra"]
     reasoning_effort: Literal["xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
-    compatible_workflow_protocols: tuple[Literal["workflow-role/1.25.0"], ...] = Field(
+    compatible_workflow_protocols: tuple[
+        Literal["workflow-role/1.25.0", "workflow-role/1.26.0"], ...
+    ] = Field(
         min_length=1,
-        max_length=1,
+        max_length=2,
     )
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/pdf-document-review.md"]
@@ -78,7 +83,12 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     def exact_policy(self) -> PdfDocumentReviewBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("PDF document-review bootstrap timestamp must use UTC")
-        if self.compatible_workflow_protocols != ("workflow-role/1.25.0",):
+        expected = (
+            ("workflow-role/1.25.0",)
+            if self.schema_version == "pdf-document-review-control-bootstrap/1.0"
+            else ("workflow-role/1.25.0", "workflow-role/1.26.0")
+        )
+        if self.compatible_workflow_protocols != expected:
             raise ValueError("PDF document-review bootstrap protocol must be exact")
         return self
 
@@ -109,7 +119,13 @@ def load_pdf_document_review_bootstrap_manifest(
         if isinstance(value, dict) and isinstance(value.get("created_at"), datetime):
             value = dict(value)
             value["created_at"] = value["created_at"].isoformat().replace("+00:00", "Z")
-        validate_control_contract("pdf-document-review-control-bootstrap", value)
+        schema_key = (
+            "pdf-document-review-control-bootstrap-v2"
+            if isinstance(value, dict)
+            and value.get("schema_version") == "pdf-document-review-control-bootstrap/2.0"
+            else "pdf-document-review-control-bootstrap"
+        )
+        validate_control_contract(schema_key, value)
         return PdfDocumentReviewBootstrapManifest.model_validate(value)
     except (UnicodeError, yaml.YAMLError, ValueError) as exc:
         raise ControlPlaneError(
@@ -149,15 +165,21 @@ def bootstrap_pdf_document_review_control_plane(
                 enabled=slot.enabled,
                 gpu=slot.gpu,
             )
-        ensure_protocol_version(
-            session,
-            "workflow-role/1.25.0",
-            role_schema_bundle_hash("workflow-role/1.25.0"),
+        for protocol in manifest.compatible_workflow_protocols:
+            ensure_protocol_version(
+                session,
+                protocol,
+                role_schema_bundle_hash(protocol),
+            )
+        definition_version = (
+            "1.1.0"
+            if manifest.schema_version == "pdf-document-review-control-bootstrap/2.0"
+            else "1.0.0"
         )
         definition = session.scalar(
             select(WorkflowDefinitionRecord).where(
                 WorkflowDefinitionRecord.definition_key == "pdf-document-review",
-                WorkflowDefinitionRecord.definition_version == "1.0.0",
+                WorkflowDefinitionRecord.definition_version == definition_version,
                 WorkflowDefinitionRecord.active.is_(True),
             )
         )
@@ -176,7 +198,10 @@ def bootstrap_pdf_document_review_control_plane(
             for step in compiled.definition.steps
             if isinstance(step, AgentStep)
         }
-        if protocols != {"workflow-role/1.25.0"}:
+        expected_protocol = (
+            "workflow-role/1.26.0" if definition_version == "1.1.0" else "workflow-role/1.25.0"
+        )
+        if protocols != {expected_protocol}:
             raise ControlPlaneError(
                 "CONTROL_WORKFLOW_PROTOCOL_INVALID",
                 "PDF document-review Workflow protocol differs",

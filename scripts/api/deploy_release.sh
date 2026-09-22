@@ -1030,7 +1030,9 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/mock_exam_production_runner.py",
         "eom_api/services/control_plane_adapter.py",
         "eom_api/services/document_review_correction_service.py",
+        "eom_api/services/document_review_annotation_service.py",
         "eom_api/services/pdf_document_review_service.py",
+        "eom_api/services/paired_document_review_service.py",
         "eom_api/services/pdf_upload_stager.py",
         "eom_api/routers/pdf_document_reviews.py",
         "eom_api/pdf_document_review_models.py",
@@ -1155,6 +1157,9 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
         "eom_api_contracts/schemas/customer-support-v1.schema.json",
         "eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-annotation-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-set-create-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-set-view-v1.schema.json",
         "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
@@ -1176,6 +1181,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/operators.schema.json",
         "eom_api_contracts/schemas/pdf-document-review-v1.schema.json",
         "eom_api_contracts/schemas/pdf-document-review-result-view-v1.schema.json",
+        "eom_api_contracts/schemas/paired-document-review-view-v1.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
         "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
         "eom_api_contracts/schemas/resources.schema.json",
@@ -1185,7 +1191,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 42 packaged API schemas including customer support, Office document review, release identity, Workflow-start, "
+            "expected exactly 46 packaged API schemas including paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1346,6 +1352,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/mock_exam_item_review_publication_service.py",
         "eom_catalog_service/document_review_hwpx.py",
         "eom_catalog_service/document_review_hwpx_correction_service.py",
+        "eom_catalog_service/document_review_pdf_annotation.py",
+        "eom_catalog_service/document_review_pdf_annotation_service.py",
         "eom_catalog_service/office_converter_worker.py",
         "eom_catalog_service/office_document_converter.py",
         "eom_catalog_service/office_document_review_intake.py",
@@ -1581,6 +1589,12 @@ catalog_resources = {
     "catalog-application/document-review-hwpx-correction-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-media-response-v1.schema.json",
     "document-review/document-review-hwpx-correction-plan-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
     "document-review/document-review-hwpx-correction-result-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-media-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-request-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-response-v1.schema.json",
+    "document-review/document-review-pdf-annotation-manifest-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-manifest-v1.schema.json",
+    "document-review/document-review-pdf-annotation-result-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",
@@ -1874,11 +1888,11 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/customer-support.v1.yaml"
         ).read_bytes()
     )
-    pdf_document_review_definition = root / "pdf-document-review.v1.yaml"
+    pdf_document_review_definition = root / "pdf-document-review.v1.1.yaml"
     pdf_document_review_definition.write_bytes(
         (
             Path(os.environ["REPOSITORY_ROOT"])
-            / "config/workflows/pdf-document-review.v1.yaml"
+            / "config/workflows/pdf-document-review.v1.1.yaml"
         ).read_bytes()
     )
     worker_config = root / "worker-slots.yaml"
@@ -2085,7 +2099,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20260922_0040":
+if CURRENT_MIGRATION_REVISION != "20260922_0042":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
@@ -2138,6 +2152,7 @@ load_role_input_schema("support", "workflow-role/1.18.0")
 load_role_input_schema("support", "workflow-role/1.21.0")
 load_role_input_schema("support", "workflow-role/1.22.0")
 load_role_input_schema("support", "workflow-role/1.25.0")
+load_role_input_schema("support", "workflow-role/1.26.0")
 load_role_input_schema("authoring", "workflow-role/1.19.0")
 load_role_input_schema("image", "workflow-role/1.19.0")
 load_role_input_schema("review", "workflow-role/1.19.0")
@@ -2177,6 +2192,8 @@ if not {
     "knowledge-item-control-bootstrap-v14",
     "customer-support-control-bootstrap",
     "pdf-document-review-control-bootstrap",
+    "pdf-document-review-control-bootstrap-v2",
+    "resolved-execution-plan-v14",
     "resolved-execution-plan-v10",
     "resolved-execution-plan-v13",
     "worker-capacity-policy-v4",
@@ -2235,7 +2252,7 @@ pdf_document_review = compile_definition(
 ).definition
 if (
     pdf_document_review.definition_key != "pdf-document-review"
-    or pdf_document_review.definition_version != "1.0.0"
+    or pdf_document_review.definition_version != "1.1.0"
 ):
     raise SystemExit("PDF document review workflow definition mismatch")
 admitted_definitions = (

@@ -456,3 +456,198 @@ class DocumentReviewHwpxCorrectionResult(FrozenModel):
         ):
             raise ValueError("HWPX correction result hash differs")
         return self
+
+
+DocumentReviewAnnotationRole = Literal["DOCUMENT", "QUESTION", "SOLUTION"]
+
+
+class DocumentReviewResultMemberPointer(FrozenModel):
+    artifact_id: ArtifactId
+    artifact_revision_id: ArtifactRevisionId
+    member_path: Literal["result.json"] = "result.json"
+    sha256: Sha256
+    content_length: int = Field(ge=1, le=16 * 1024 * 1024)
+    media_type: Literal["application/json"] = "application/json"
+    schema_ref: Literal[
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+    ]
+
+
+class DocumentReviewAnnotationRegion(FrozenModel):
+    x_ppm: int = Field(ge=0, le=999999)
+    y_ppm: int = Field(ge=0, le=999999)
+    width_ppm: int = Field(ge=1, le=1000000)
+    height_ppm: int = Field(ge=1, le=1000000)
+
+    @model_validator(mode="after")
+    def require_bounded_region(self) -> DocumentReviewAnnotationRegion:
+        if self.x_ppm + self.width_ppm > 1_000_000:
+            raise ValueError("annotation region exceeds page width")
+        if self.y_ppm + self.height_ppm > 1_000_000:
+            raise ValueError("annotation region exceeds page height")
+        return self
+
+
+class DocumentReviewAnnotationPage(FrozenModel):
+    page_number: int = Field(ge=1, le=2000)
+    page_image: PdfReviewArtifactMemberPointer
+
+    @model_validator(mode="after")
+    def require_page_image(self) -> DocumentReviewAnnotationPage:
+        if (
+            self.page_image.member_path != f"pages/page-{self.page_number:04d}.png"
+            or self.page_image.media_type != "image/png"
+            or self.page_image.schema_ref != "eom://schemas/document-review/pdf-page-render/1.0"
+        ):
+            raise ValueError("annotation page image differs from its page number")
+        return self
+
+
+class DocumentReviewAnnotationSource(FrozenModel):
+    role: DocumentReviewAnnotationRole
+    document_id: DocumentId
+    document_revision_id: DocumentRevisionId
+    source_pdf: PdfReviewArtifactMemberPointer
+    page_count: int = Field(ge=1, le=2000)
+    pages: tuple[DocumentReviewAnnotationPage, ...] = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_exact_source(self) -> DocumentReviewAnnotationSource:
+        if (
+            self.source_pdf.member_path != "source/original.pdf"
+            or self.source_pdf.media_type != "application/pdf"
+            or self.source_pdf.schema_ref != "eom://schemas/document-review/pdf-source/1.0"
+        ):
+            raise ValueError("annotation source PDF pointer differs")
+        if len(self.pages) != self.page_count:
+            raise ValueError("annotation source page count differs")
+        if tuple(value.page_number for value in self.pages) != tuple(range(1, self.page_count + 1)):
+            raise ValueError("annotation source pages must be complete and ordered")
+        source_identity = (
+            self.source_pdf.artifact_id,
+            self.source_pdf.artifact_revision_id,
+        )
+        if any(
+            (value.page_image.artifact_id, value.page_image.artifact_revision_id) != source_identity
+            for value in self.pages
+        ):
+            raise ValueError("annotation source pages differ from the source Artifact")
+        return self
+
+
+class DocumentReviewPdfAnnotationMark(FrozenModel):
+    finding_id: Annotated[str, Field(pattern=r"^reviewfinding_[0-9a-f]{32}$")]
+    anchor_id: Annotated[str, Field(pattern=r"^reviewanchor_[0-9a-f]{32}$")]
+    ordinal: int = Field(ge=1, le=512)
+    document_role: DocumentReviewAnnotationRole
+    page_number: int = Field(ge=1, le=2000)
+    page_image_sha256: Sha256
+    region: DocumentReviewAnnotationRegion
+
+
+class DocumentReviewPdfAnnotationRenderer(FrozenModel):
+    renderer_key: Literal["qpdf-rsvg-document-review-annotation"] = (
+        "qpdf-rsvg-document-review-annotation"
+    )
+    qpdf_version: str = Field(min_length=1, max_length=128)
+    qpdf_sha256: Sha256
+    rsvg_convert_version: str = Field(min_length=1, max_length=128)
+    rsvg_convert_sha256: Sha256
+    pdfinfo_version: str = Field(min_length=1, max_length=128)
+    pdfinfo_sha256: Sha256
+    stroke_color: Literal["#D70015"] = "#D70015"
+
+
+class DocumentReviewAnnotatedPdfMember(FrozenModel):
+    document_role: DocumentReviewAnnotationRole
+    member_path: Literal[
+        "annotated/document.pdf",
+        "annotated/question.pdf",
+        "annotated/solution.pdf",
+    ]
+    sha256: Sha256
+    content_length: int = Field(ge=1, le=512 * 1024 * 1024)
+    media_type: Literal["application/pdf"] = "application/pdf"
+    schema_ref: Literal["eom://schemas/document-review/annotated-pdf/1.0"] = (
+        "eom://schemas/document-review/annotated-pdf/1.0"
+    )
+
+    @model_validator(mode="after")
+    def require_role_path(self) -> DocumentReviewAnnotatedPdfMember:
+        expected = {
+            "DOCUMENT": "annotated/document.pdf",
+            "QUESTION": "annotated/question.pdf",
+            "SOLUTION": "annotated/solution.pdf",
+        }[self.document_role]
+        if self.member_path != expected:
+            raise ValueError("annotated PDF path differs from its document role")
+        return self
+
+
+class DocumentReviewAnnotatedPdfPointer(DocumentReviewAnnotatedPdfMember):
+    artifact_id: ArtifactId
+    artifact_revision_id: ArtifactRevisionId
+
+
+class DocumentReviewPdfAnnotationManifest(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-manifest/1.0"] = (
+        "document-review-pdf-annotation-manifest/1.0"
+    )
+    annotation_id: Annotated[str, Field(pattern=r"^docannotation_[0-9a-f]{32}$")]
+    workflow_id: Annotated[str, Field(pattern=r"^workflow_[0-9a-f]{32}$")]
+    request_sha256: Sha256
+    review_result_sha256: Sha256
+    sources: tuple[DocumentReviewAnnotationSource, ...] = Field(min_length=1, max_length=2)
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...] = Field(
+        min_length=1,
+        max_length=4096,
+    )
+    annotation_set_sha256: Sha256
+    renderer: DocumentReviewPdfAnnotationRenderer
+    outputs: tuple[DocumentReviewAnnotatedPdfMember, ...] = Field(min_length=1, max_length=2)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_manifest(self) -> DocumentReviewPdfAnnotationManifest:
+        source_roles = tuple(value.role for value in self.sources)
+        if source_roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("annotation manifest source roles are invalid")
+        if tuple(value.document_role for value in self.outputs) != source_roles:
+            raise ValueError("annotation manifest outputs differ from source roles")
+        if content_sha256([value.model_dump(mode="json") for value in self.annotations]) != (
+            self.annotation_set_sha256
+        ):
+            raise ValueError("annotation manifest set hash differs")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
+            != self.manifest_sha256
+        ):
+            raise ValueError("annotation manifest self-hash differs")
+        return self
+
+
+class DocumentReviewPdfAnnotationResult(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-result/1.0"] = (
+        "document-review-pdf-annotation-result/1.0"
+    )
+    annotation_id: Annotated[str, Field(pattern=r"^docannotation_[0-9a-f]{32}$")]
+    workflow_id: Annotated[str, Field(pattern=r"^workflow_[0-9a-f]{32}$")]
+    request_sha256: Sha256
+    review_result_sha256: Sha256
+    annotation_set_sha256: Sha256
+    outputs: tuple[DocumentReviewAnnotatedPdfMember, ...] = Field(min_length=1, max_length=2)
+    manifest_sha256: Sha256
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_result(self) -> DocumentReviewPdfAnnotationResult:
+        roles = tuple(value.document_role for value in self.outputs)
+        if roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("annotation result output roles are invalid")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+            != self.result_sha256
+        ):
+            raise ValueError("annotation result self-hash differs")
+        return self

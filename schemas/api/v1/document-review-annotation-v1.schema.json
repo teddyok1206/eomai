@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/document-review-annotation-v1.schema.json",
+  "title": "EOM Document Review Annotation V1",
+  "$defs": {
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_role",
+        "sha256",
+        "content_length",
+        "download_url"
+      ],
+      "properties": {
+        "document_role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "download_url": {
+          "type": "string",
+          "pattern": "^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}/annotations/docannotation_[0-9a-f]{32}/documents/(DOCUMENT|QUESTION|SOLUTION)/download$"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "title": "Create request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "include_all_findings"
+      ],
+      "properties": {
+        "include_all_findings": {
+          "const": true
+        }
+      }
+    },
+    {
+      "title": "Annotation view",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "annotation_id",
+        "workflow_id",
+        "outputs",
+        "created_at",
+        "resource_version"
+      ],
+      "properties": {
+        "annotation_id": {
+          "type": "string",
+          "pattern": "^docannotation_[0-9a-f]{32}$"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/output"
+          }
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  ]
+}

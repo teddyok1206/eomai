@@ -42,13 +42,14 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV13,
+    ResolvedExecutionPlanV14,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     WorkerRole,
 )
 from eom_workflow.control_schemas import validate_control_contract
-from eom_workflow.document_review import PdfDocumentReviewRequest
+from eom_workflow.document_review import PairedDocumentReviewRequest, PdfDocumentReviewRequest
 from eom_workflow.models import CustomerSupportCase
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -801,6 +802,182 @@ def resolve_pdf_document_review_plan(
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
     validate_control_contract("resolved-execution-plan-v13", document)
     model = ResolvedExecutionPlanV13.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=model.plan_id,
+            workflow_id=model.workflow_id,
+            preset_id=model.preset_id,
+            preset_revision_id=model.preset_revision_id,
+            capacity_policy_revision_id=model.capacity_policy_revision_id,
+            graph_snapshot_revision_id=None,
+            evidence_bundle_revision_id=None,
+            plan_sha256=model.plan_sha256,
+            resolver_version=model.resolver_version,
+            canonical_document=model.model_dump(mode="json"),
+            resolved_at=model.resolved_at,
+        )
+    )
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=model.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return model
+
+
+def resolve_paired_document_review_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    review_request: PairedDocumentReviewRequest,
+    resolved_at: datetime | None = None,
+) -> ResolvedExecutionPlanV14:
+    """Resolve one immutable problem/solution pair onto isolated slot-06 capacity."""
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        try:
+            existing_plan = ResolvedExecutionPlanV14.model_validate(existing.canonical_document)
+        except ValueError as exc:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_INVALID",
+                "stored paired document review plan is invalid",
+            ) from exc
+        if (
+            existing.plan_sha256 != existing_plan.plan_sha256
+            or existing_plan.workflow_id != workflow_id
+            or existing_plan.workflow_definition_version != workflow_definition_version
+            or existing_plan.workflow_definition_sha256 != workflow_definition_sha256
+            or existing_plan.review_request_sha256 != review_request.request_sha256
+            or existing_plan.documents != review_request.documents
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_BINDING_MISMATCH",
+                "stored paired document review plan differs from its Workflow",
+            )
+        return existing_plan
+
+    if workflow_role_schema_version != "workflow-role/1.26.0":
+        raise ControlPlaneError(
+            "CONTROL_WORKFLOW_PROTOCOL_INVALID",
+            "paired document review requires workflow-role/1.26.0",
+        )
+    logical = session.scalar(
+        select(ExecutionPresetRecord).where(
+            ExecutionPresetRecord.preset_key == "pdf-document-review"
+        )
+    )
+    revision = (
+        session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+        if logical is not None and logical.current_revision_id is not None
+        else None
+    )
+    if (
+        logical is None
+        or logical.state != "ACTIVE"
+        or revision is None
+        or revision.preset_id != logical.preset_id
+        or revision.state != "RELEASED"
+        or workflow_role_schema_version not in revision.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_NOT_PUBLISHED",
+            "paired document review preset is not published",
+        )
+    preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
+    if (
+        preset.content_sha256 != revision.content_sha256
+        or compute_control_document_hash(revision.canonical_document, "content_sha256")
+        != preset.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_HASH_MISMATCH",
+            "paired document review preset content is stale",
+        )
+    support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
+    if len(support_policies) != 1 or len(preset.role_policies) != 1:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_ROLE_MISSING",
+            "paired document review preset needs one support policy",
+        )
+    policy = support_policies[0]
+    if (
+        policy.worker_pool_key != "customer-support"
+        or policy.reference_bundle is not None
+        or policy.timeout_seconds != 3600
+        or policy.sandbox != "read-only"
+        or policy.network != "disabled"
+        or preset.general_knowledge_policy != "ALLOW_WITH_PROVENANCE"
+        or len(policy.model_candidates) != 1
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "paired document review policy differs from its isolated policy",
+        )
+    candidate = policy.model_candidates[0]
+    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh":
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID",
+            "paired document review requires its reviewed model policy",
+        )
+    step = ResolvedStepExecution(
+        step_key="review_document",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key="customer-support",
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="ALLOWED_WITH_PROVENANCE",
+    )
+    actual_resolved_at = resolved_at or datetime.now(UTC)
+    if actual_resolved_at.tzinfo is None or actual_resolved_at.utcoffset() != timedelta(0):
+        raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/14.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "CODEX",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "pdf-document-review",
+        "workflow_definition_version": workflow_definition_version,
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "review_request_sha256": review_request.request_sha256,
+        "documents": [value.model_dump(mode="json") for value in review_request.documents],
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "14.0.0",
+        "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v14", document)
+    model = ResolvedExecutionPlanV14.model_validate(document)
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=model.plan_id,

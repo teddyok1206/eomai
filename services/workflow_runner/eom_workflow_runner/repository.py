@@ -279,6 +279,10 @@ def workflow_request_storage_document(request: WorkflowRequest) -> dict[str, Any
         document["pdf_document_review_request"] = request.pdf_document_review_request.model_dump(
             mode="json"
         )
+    if request.paired_document_review_request is not None:
+        document["paired_document_review_request"] = (
+            request.paired_document_review_request.model_dump(mode="json")
+        )
     if isinstance(request.item_brief, ContentTeamItemBriefV4):
         stored_brief = request.item_brief.model_dump(mode="json", exclude_none=True)
         stored_material = dict(stored_brief["material_requirement"])
@@ -335,6 +339,41 @@ def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest
             normalized_pdf_review = dict(pdf_review)
             normalized_pdf_review["document"] = normalized_document
             normalized["pdf_document_review_request"] = normalized_pdf_review
+    paired_review = normalized.get("paired_document_review_request")
+    if normalized.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST" and isinstance(
+        paired_review, dict
+    ):
+        documents = paired_review.get("documents")
+        if isinstance(documents, list):
+            normalized_documents: list[object] = []
+            for value in documents:
+                paired_document = value.get("document") if isinstance(value, dict) else None
+                paired_pages = (
+                    paired_document.get("pages") if isinstance(paired_document, dict) else None
+                )
+                if (
+                    isinstance(value, dict)
+                    and isinstance(paired_document, dict)
+                    and isinstance(paired_pages, list)
+                ):
+                    paired_normalized_pages: list[object] = []
+                    for page in paired_pages:
+                        if isinstance(page, dict):
+                            normalized_page = dict(page)
+                            normalized_page.setdefault("text_layer", None)
+                            paired_normalized_pages.append(normalized_page)
+                        else:
+                            paired_normalized_pages.append(page)
+                    normalized_document = dict(paired_document)
+                    normalized_document["pages"] = paired_normalized_pages
+                    normalized_value = dict(value)
+                    normalized_value["document"] = normalized_document
+                    normalized_documents.append(normalized_value)
+                else:
+                    normalized_documents.append(value)
+            normalized_paired_review = dict(paired_review)
+            normalized_paired_review["documents"] = normalized_documents
+            normalized["paired_document_review_request"] = normalized_paired_review
     return WorkflowRequest.model_validate(normalized)
 
 
@@ -443,7 +482,8 @@ def create_workflow_instance(
         state=WorkflowState.REQUESTED.value,
         stage=(
             WorkflowStage.DOCUMENT_REVIEW.value
-            if request.request_name == "PDF_DOCUMENT_REVIEW_REQUEST"
+            if request.request_name
+            in {"PDF_DOCUMENT_REVIEW_REQUEST", "PAIRED_DOCUMENT_REVIEW_REQUEST"}
             else WorkflowStage.CUSTOMER_SUPPORT.value
             if request.request_name == "CUSTOMER_SUPPORT_REQUEST"
             else WorkflowStage.KNOWLEDGE_ANALYSIS.value

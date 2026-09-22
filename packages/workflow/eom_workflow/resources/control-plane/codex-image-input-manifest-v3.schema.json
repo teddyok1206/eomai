@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/codex-image-input-manifest/3.0",
+  "title": "EOM Codex Paired Review Image Input Manifest V3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "images", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "codex-image-input-manifest/3.0"},
+    "plan_id": {"type": "string", "pattern": "^execplan_[0-9a-f]{32}$"},
+    "images": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/image"}
+    },
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_role", "physical_page", "relative_path", "media_type", "sha256", "bytes",
+        "width_pixels", "height_pixels"
+      ],
+      "properties": {
+        "document_role": {"enum": ["QUESTION", "SOLUTION"]},
+        "physical_page": {"type": "integer", "minimum": 1, "maximum": 2000},
+        "relative_path": {
+          "type": "string",
+          "maxLength": 72,
+          "pattern": "^source/(question|solution)/images/page-[0-9]{6}\\.png$"
+        },
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "width_pixels": {"type": "integer", "minimum": 1, "maximum": 16384},
+        "height_pixels": {"type": "integer", "minimum": 1, "maximum": 16384}
+      }
+    }
+  }
+}

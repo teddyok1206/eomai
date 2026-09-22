@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/document-review-set-create-v1.schema.json",
+  "title": "EOM Paired Document Review Set Create V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "documents",
+    "preset_key",
+    "additional_guidance",
+    "locale"
+  ],
+  "properties": {
+    "documents": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "original_filename",
+            "source_format",
+            "media_type",
+            "content_length"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "QUESTION"
+              ]
+            },
+            "original_filename": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 240,
+              "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$"
+            },
+            "source_format": {
+              "enum": [
+                "PDF",
+                "HWP",
+                "HWPX"
+              ]
+            },
+            "media_type": {
+              "enum": [
+                "application/pdf",
+                "application/vnd.hancom.hwp",
+                "application/vnd.hancom.hwpx"
+              ]
+            },
+            "content_length": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 268435456
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "original_filename",
+            "source_format",
+            "media_type",
+            "content_length"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "SOLUTION"
+              ]
+            },
+            "original_filename": {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 240,
+              "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$"
+            },
+            "source_format": {
+              "enum": [
+                "PDF",
+                "HWP",
+                "HWPX"
+              ]
+            },
+            "media_type": {
+              "enum": [
+                "application/pdf",
+                "application/vnd.hancom.hwp",
+                "application/vnd.hancom.hwpx"
+              ]
+            },
+            "content_length": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 268435456
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "preset_key": {
+      "enum": [
+        "PROBLEM_SET",
+        "WEEKLY_WORKBOOK",
+        "MOCK_EXAM"
+      ]
+    },
+    "additional_guidance": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 8000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]+$"
+    },
+    "locale": {
+      "const": "ko-KR"
+    }
+  }
+}

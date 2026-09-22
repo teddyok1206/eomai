@@ -34,6 +34,7 @@ from eom_catalog_contracts import (
     CatalogAssessmentPageMediaResponse,
     CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
+    CreateDocumentReviewAnnotatedPdfs,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -44,6 +45,9 @@ from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
     DocumentReviewHwpxCorrectionResponse,
+    DocumentReviewPdfAnnotationMediaQuery,
+    DocumentReviewPdfAnnotationMediaResponse,
+    DocumentReviewPdfAnnotationResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -447,6 +451,75 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog corrected HWPX media boundary is unavailable",
+            ) from exc
+
+    def create_document_review_annotated_pdfs(
+        self,
+        command: CreateDocumentReviewAnnotatedPdfs,
+    ) -> DocumentReviewPdfAnnotationResponse:
+        payload = command.model_dump(mode="json")
+        validate_contract("document-review-pdf-annotation-request", payload)
+        value = self._raw_request(
+            payload,
+            timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS,
+        )
+        validate_contract("document-review-pdf-annotation-response", value)
+        response = DocumentReviewPdfAnnotationResponse.model_validate(value)
+        if response.status == "ERROR":
+            self._raise_remote_error(response.error_code)
+        return response
+
+    def download_document_review_annotated_pdf(
+        self,
+        query: DocumentReviewPdfAnnotationMediaQuery,
+    ) -> ProxiedItemMedia:
+        payload = query.model_dump(mode="json")
+        validate_contract("document-review-pdf-annotation-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("PDF annotation media header is not an object")
+            validate_contract("document-review-pdf-annotation-media-response", value)
+            response = DocumentReviewPdfAnnotationMediaResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if (
+                response.content_length != query.output.content_length
+                or response.sha256 != query.output.sha256
+            ):
+                raise ValueError("Catalog annotated PDF bytes differ from their pinned pointer")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog annotated PDF media boundary is unavailable",
             ) from exc
 
     def download_pdf_document_review_page(

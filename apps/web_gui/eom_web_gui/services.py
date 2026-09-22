@@ -26,9 +26,13 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
+    DocumentReviewAnnotationSubmission,
+    DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionSubmission,
     DocumentReviewCorrectionView,
+    DocumentReviewSetView,
+    DocumentReviewView,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
@@ -43,9 +47,9 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PairedDocumentReviewSubmission,
     PdfDocumentReviewSubmission,
     PdfDocumentReviewUploadIntentView,
-    PdfDocumentReviewView,
     PlannedMockExamAssemblySubmission,
     RequestDraft,
     RequestDraftInput,
@@ -251,20 +255,62 @@ class WebServices:
             idempotency_key=idempotency_key,
         )
 
+    async def create_paired_document_review_set(
+        self,
+        session: WebSession,
+        value: PairedDocumentReviewSubmission,
+    ) -> DocumentReviewSetView:
+        return await self.gateway.create_paired_document_review_set(session, value)
+
+    async def upload_paired_document_review_member(
+        self,
+        session: WebSession,
+        review_set_id: str,
+        document_role: str,
+        *,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> DocumentReviewSetView:
+        return await self.gateway.upload_paired_document_review_member(
+            session,
+            review_set_id,
+            document_role,
+            content_length=content_length,
+            media_type=media_type,
+            content=content,
+            idempotency_key=idempotency_key,
+        )
+
     async def pdf_document_reviews(
         self, session: WebSession, *, cursor: str | None
-    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]:
+    ) -> tuple[tuple[DocumentReviewView, ...], str | None, bool]:
         return await self.gateway.pdf_document_reviews(session, cursor=cursor)
 
     async def pdf_document_review(
         self, session: WebSession, workflow_id: str
-    ) -> PdfDocumentReviewView:
+    ) -> DocumentReviewView:
         return await self.gateway.pdf_document_review(session, workflow_id)
 
     async def pdf_document_review_page_media(
         self, session: WebSession, workflow_id: str, page_number: int
     ) -> ItemMedia:
         return await self.gateway.pdf_document_review_page_media(session, workflow_id, page_number)
+
+    async def paired_document_review_page_media(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        document_role: str,
+        page_number: int,
+    ) -> ItemMedia:
+        return await self.gateway.paired_document_review_page_media(
+            session,
+            workflow_id,
+            document_role,
+            page_number,
+        )
 
     async def document_review_correction_eligibility(
         self, session: WebSession, workflow_id: str
@@ -289,6 +335,30 @@ class WebServices:
             session,
             workflow_id,
             correction_id,
+        )
+
+    async def create_document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewAnnotationSubmission,
+    ) -> DocumentReviewAnnotationView:
+        return await self.gateway.create_document_review_annotation(
+            session,
+            workflow_id,
+            value,
+        )
+
+    async def document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        annotation_id: str,
+    ) -> DocumentReviewAnnotationView:
+        return await self.gateway.document_review_annotation(
+            session,
+            workflow_id,
+            annotation_id,
         )
 
     async def workflow(self, session: WebSession, workflow_id: str) -> dict[str, Any]:

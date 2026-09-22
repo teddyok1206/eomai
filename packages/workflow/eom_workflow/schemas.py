@@ -42,7 +42,10 @@ from jsonschema.exceptions import SchemaError
 from pydantic import ValidationError
 
 from eom_workflow.control_plane import ResolvedExecutionPlanV3
-from eom_workflow.document_review import PdfDocumentReviewWorkerRequest
+from eom_workflow.document_review import (
+    PairedDocumentReviewWorkerRequest,
+    PdfDocumentReviewWorkerRequest,
+)
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -105,6 +108,7 @@ from eom_workflow.models import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
+    PairedDocumentReviewRoleResult,
     PdfDocumentReviewRoleResult,
     RegistrationRoleResult,
     ReviewRoleResult,
@@ -209,6 +213,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
+            "pdf-document-review-result@2.0",
         }
     ),
 }
@@ -278,6 +283,7 @@ RESULT_SCHEMA_FILES = {
     ),
     "customer-support-result@1.0": "customer-support-result-v1.schema.json",
     "pdf-document-review-result@1.0": "pdf-document-review-result-v1.schema.json",
+    "pdf-document-review-result@2.0": "paired-document-review-result-v2.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -310,6 +316,7 @@ INPUT_SCHEMA_FILES_V1_22 = {"support": "customer-support-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_23 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_24 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_25 = {"support": "pdf-document-review-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_26 = {"support": "paired-document-review-input-v2.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -339,6 +346,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "knowledge-analysis-proposal-result@10.0": "workflow-role/1.21.0",
     "customer-support-result@1.0": "workflow-role/1.22.0",
     "pdf-document-review-result@1.0": "workflow-role/1.25.0",
+    "pdf-document-review-result@2.0": "workflow-role/1.26.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -400,6 +408,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.23.0": INPUT_SCHEMA_FILES_V1_23,
     "workflow-role/1.24.0": INPUT_SCHEMA_FILES_V1_24,
     "workflow-role/1.25.0": INPUT_SCHEMA_FILES_V1_25,
+    "workflow-role/1.26.0": INPUT_SCHEMA_FILES_V1_26,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -428,6 +437,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.23.0",
     "workflow-role/1.24.0",
     "workflow-role/1.25.0",
+    "workflow-role/1.26.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -454,6 +464,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_23.values(),
             *INPUT_SCHEMA_FILES_V1_24.values(),
             *INPUT_SCHEMA_FILES_V1_25.values(),
+            *INPUT_SCHEMA_FILES_V1_26.values(),
         }
     )
 )
@@ -847,7 +858,14 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
-    elif schema_id == "pdf-document-review-result@1.0" and role == "support":
+    elif (
+        schema_id
+        in {
+            "pdf-document-review-result@1.0",
+            "pdf-document-review-result@2.0",
+        }
+        and role == "support"
+    ):
         canonical_value = _canonicalize_pdf_document_review_result(value)
     if (
         schema_id
@@ -985,6 +1003,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return CustomerSupportRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@1.0" and role == "support":
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
+        if schema_id == "pdf-document-review-result@2.0" and role == "support":
+            return PairedDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -1427,6 +1447,22 @@ def _canonicalize_pdf_document_review_result(value: object) -> object:
                     anchor["quote_sha256"] = None
                 elif isinstance(quote, str):
                     anchor["quote_sha256"] = content_sha256(quote)
+    cross_checks = canonical_output.get("cross_document_checks")
+    if isinstance(cross_checks, list):
+        for check in cross_checks:
+            if not isinstance(check, dict):
+                continue
+            for anchor_key in ("question_anchors", "solution_anchors"):
+                anchors = check.get(anchor_key)
+                if not isinstance(anchors, list):
+                    continue
+                for anchor in anchors:
+                    if not isinstance(anchor, dict) or "quote_sha256" in anchor:
+                        continue
+                    quote = anchor.get("quote")
+                    anchor["quote_sha256"] = (
+                        content_sha256(quote) if isinstance(quote, str) else None
+                    )
     return canonical
 
 
@@ -1904,6 +1940,57 @@ def constrained_result_schema(
             {
                 "type": "string",
                 "enum": [page.page_image.sha256 for page in pdf_request.document.pages],
+            }
+        )
+    if schema_id == "pdf-document-review-result@2.0":
+        if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequest):
+            raise WorkflowSchemaError("paired document review result requires its typed request")
+        paired_request = worker_input.request.review_request
+        output_properties = _mapping(_mapping(definitions, "output"), "properties")
+        for field_name, value in (
+            ("review_request_sha256", paired_request.request_sha256),
+            ("preset_key", paired_request.preset.preset_key),
+            ("preset_revision_id", paired_request.preset.preset_revision_id),
+            ("preset_sha256", paired_request.preset.preset_sha256),
+        ):
+            field = _mapping(output_properties, field_name)
+            field.clear()
+            field.update({"type": "string", "const": value})
+        guidance_hash = _mapping(output_properties, "additional_guidance_sha256")
+        guidance_hash.clear()
+        if paired_request.additional_guidance_sha256 is None:
+            guidance_hash["type"] = "null"
+        else:
+            guidance_hash.update(
+                {"type": "string", "const": paired_request.additional_guidance_sha256}
+            )
+        anchor_properties = _mapping(_mapping(definitions, "anchor"), "properties")
+        page_numbers = _mapping(anchor_properties, "page_number")
+        page_numbers.clear()
+        page_numbers.update(
+            {
+                "type": "integer",
+                "enum": sorted(
+                    {
+                        page.page_number
+                        for document in paired_request.documents
+                        for page in document.document.pages
+                    }
+                ),
+            }
+        )
+        image_hashes = _mapping(anchor_properties, "page_image_sha256")
+        image_hashes.clear()
+        image_hashes.update(
+            {
+                "type": "string",
+                "enum": sorted(
+                    {
+                        page.page_image.sha256
+                        for document in paired_request.documents
+                        for page in document.document.pages
+                    }
+                ),
             }
         )
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
@@ -2773,7 +2860,10 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "customer-support-result@1.0":
         output = _mapping(_mapping(schema, "$defs"), "output")
         output.pop("allOf", None)
-    if schema_id == "pdf-document-review-result@1.0":
+    if schema_id in {
+        "pdf-document-review-result@1.0",
+        "pdf-document-review-result@2.0",
+    }:
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
         anchor_properties = _mapping(anchor, "properties")

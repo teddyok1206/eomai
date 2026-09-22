@@ -29,9 +29,13 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
+    DocumentReviewAnnotationSubmission,
+    DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionSubmission,
     DocumentReviewCorrectionView,
+    DocumentReviewSetView,
+    DocumentReviewView,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -45,6 +49,8 @@ from eom_web_gui.contracts import (
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     MockExamHwpxBuildView,
+    PairedDocumentReviewSubmission,
+    PairedDocumentReviewView,
     PdfDocumentReviewSubmission,
     PdfDocumentReviewUploadIntentView,
     PdfDocumentReviewView,
@@ -66,6 +72,14 @@ INTEGRATED_SCIENCE_OUTLINE_SHA256 = (
     "sha256:f11389c8ab26c2bd5b93acf66fe92d30fea9c1d0bc7e6b91a6b6751fdccb5108"
 )
 INTEGRATED_SCIENCE_CORPUS_KEY = "integrated-science-textbooks"
+
+
+def _document_review_view(value: object) -> DocumentReviewView:
+    if not isinstance(value, dict):
+        raise ValueError("document-review response must be an object")
+    if "documents" in value:
+        return PairedDocumentReviewView.model_validate(value)
+    return PdfDocumentReviewView.model_validate(value)
 
 
 def _verified_curriculum_graph_corpus_key(capability: dict[str, Any]) -> str | None:
@@ -246,6 +260,13 @@ class ItemMedia:
 
 
 @dataclass(frozen=True)
+class DocumentReviewPdfDownload:
+    content: bytes
+    content_type: str
+    content_disposition: str
+
+
+@dataclass(frozen=True)
 class KnowledgeAnalysisRangePage:
     values: tuple[KnowledgeAnalysisBatchRangeStatus, ...]
     next_cursor: str | None
@@ -321,16 +342,48 @@ class ApplicationGateway(Protocol):
         idempotency_key: str,
     ) -> PdfDocumentReviewUploadIntentView: ...
 
+    async def create_paired_document_review_set(
+        self,
+        session: WebSession,
+        value: PairedDocumentReviewSubmission,
+    ) -> DocumentReviewSetView: ...
+
+    async def paired_document_review_set(
+        self,
+        session: WebSession,
+        review_set_id: str,
+    ) -> DocumentReviewSetView: ...
+
+    async def upload_paired_document_review_member(
+        self,
+        session: WebSession,
+        review_set_id: str,
+        document_role: str,
+        *,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> DocumentReviewSetView: ...
+
     async def pdf_document_reviews(
         self, session: WebSession, *, cursor: str | None
-    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]: ...
+    ) -> tuple[tuple[DocumentReviewView, ...], str | None, bool]: ...
 
     async def pdf_document_review(
         self, session: WebSession, workflow_id: str
-    ) -> PdfDocumentReviewView: ...
+    ) -> DocumentReviewView: ...
 
     async def pdf_document_review_page_media(
         self, session: WebSession, workflow_id: str, page_number: int
+    ) -> ItemMedia: ...
+
+    async def paired_document_review_page_media(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        document_role: str,
+        page_number: int,
     ) -> ItemMedia: ...
 
     async def document_review_correction_eligibility(
@@ -356,6 +409,27 @@ class ApplicationGateway(Protocol):
         session: WebSession,
         value: DocumentReviewCorrectionView,
     ) -> HwpxDownload: ...
+
+    async def create_document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewAnnotationSubmission,
+    ) -> DocumentReviewAnnotationView: ...
+
+    async def document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        annotation_id: str,
+    ) -> DocumentReviewAnnotationView: ...
+
+    async def document_review_annotation_download(
+        self,
+        session: WebSession,
+        value: DocumentReviewAnnotationView,
+        document_role: str,
+    ) -> DocumentReviewPdfDownload: ...
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]: ...
 
@@ -990,6 +1064,94 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return intent
 
+    async def create_paired_document_review_set(
+        self,
+        session: WebSession,
+        value: PairedDocumentReviewSubmission,
+    ) -> DocumentReviewSetView:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/pdf-document-reviews/sets",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}, exclude_none=True),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        command = self._data(response)
+        review_set_id = command.get("resource_id")
+        if (
+            command.get("resource_type") != "paired_document_review_set"
+            or command.get("status") != "COMPLETED"
+            or not isinstance(review_set_id, str)
+            or re.fullmatch(r"docreviewset_[0-9a-f]{32}", review_set_id) is None
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return await self.paired_document_review_set(session, review_set_id)
+
+    async def paired_document_review_set(
+        self,
+        session: WebSession,
+        review_set_id: str,
+    ) -> DocumentReviewSetView:
+        _require_id(review_set_id, "docreviewset_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/sets/{review_set_id}",
+        )
+        try:
+            return DocumentReviewSetView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def upload_paired_document_review_member(
+        self,
+        session: WebSession,
+        review_set_id: str,
+        document_role: str,
+        *,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> DocumentReviewSetView:
+        _require_id(review_set_id, "docreviewset_")
+        if document_role not in {"QUESTION", "SOLUTION"}:
+            raise GatewayError(status=422, code="PAIRED_DOCUMENT_REVIEW_ROLE_INVALID")
+        if not 8 <= content_length <= 256 * 1024 * 1024:
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
+        response = await self._authorized(
+            session,
+            "PUT",
+            (
+                f"/api/v1/pdf-document-reviews/sets/{review_set_id}/documents/"
+                f"{document_role}/content"
+            ),
+            content=content,
+            headers={
+                "Content-Type": media_type,
+                "Content-Length": str(content_length),
+                "Idempotency-Key": idempotency_key,
+            },
+            timeout=self._workflow_start_timeout,
+        )
+        command = self._data(response)
+        resource_type = command.get("resource_type")
+        resource_id = command.get("resource_id")
+        valid_set_result = (
+            resource_type == "paired_document_review_set"
+            and command.get("status") == "COMPLETED"
+            and resource_id == review_set_id
+        )
+        valid_workflow_result = (
+            resource_type == "pdf_document_review"
+            and command.get("status") == "ACCEPTED"
+            and isinstance(resource_id, str)
+            and re.fullmatch(r"workflow_[0-9a-f]{32}", resource_id) is not None
+        )
+        if not valid_set_result and not valid_workflow_result:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return await self.paired_document_review_set(session, review_set_id)
+
     async def document_review_correction_eligibility(
         self, session: WebSession, workflow_id: str
     ) -> DocumentReviewCorrectionEligibilityView:
@@ -1078,9 +1240,86 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
         return HwpxDownload(response.content, content_type, disposition)
 
+    async def create_document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewAnnotationSubmission,
+    ) -> DocumentReviewAnnotationView:
+        _require_id(workflow_id, "workflow_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/annotations",
+            json={"include_all_findings": value.include_all_findings},
+            headers={"Idempotency-Key": value.idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        command = self._data(response)
+        annotation_id = command.get("resource_id")
+        if (
+            command.get("resource_type") != "document_review_pdf_annotation"
+            or command.get("status") != "COMPLETED"
+            or not isinstance(annotation_id, str)
+            or re.fullmatch(r"docannotation_[0-9a-f]{32}", annotation_id) is None
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return await self.document_review_annotation(session, workflow_id, annotation_id)
+
+    async def document_review_annotation(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        annotation_id: str,
+    ) -> DocumentReviewAnnotationView:
+        _require_id(workflow_id, "workflow_")
+        _require_id(annotation_id, "docannotation_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/annotations/{annotation_id}",
+        )
+        try:
+            return DocumentReviewAnnotationView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def document_review_annotation_download(
+        self,
+        session: WebSession,
+        value: DocumentReviewAnnotationView,
+        document_role: str,
+    ) -> DocumentReviewPdfDownload:
+        output = next(
+            (item for item in value.outputs if item.document_role == document_role),
+            None,
+        )
+        if output is None:
+            raise GatewayError(status=404, code="DOCUMENT_REVIEW_ANNOTATION_NOT_FOUND")
+        response = await self._authorized(
+            session,
+            "GET",
+            (
+                f"/api/v1/pdf-document-reviews/{value.workflow_id}/annotations/"
+                f"{value.annotation_id}/documents/{document_role}/download"
+            ),
+            headers={"Accept": "application/pdf"},
+        )
+        content_type = response.headers.get("content-type", "")
+        disposition = response.headers.get("content-disposition", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type.split(";", 1)[0] != "application/pdf"
+            or not disposition.startswith('attachment; filename="')
+            or len(response.content) != output.content_length
+            or actual_sha256 != output.sha256
+        ):
+            raise GatewayError(status=502, code="PDF_DOWNLOAD_RESPONSE_INVALID")
+        return DocumentReviewPdfDownload(response.content, content_type, disposition)
+
     async def pdf_document_reviews(
         self, session: WebSession, *, cursor: str | None
-    ) -> tuple[tuple[PdfDocumentReviewView, ...], str | None, bool]:
+    ) -> tuple[tuple[DocumentReviewView, ...], str | None, bool]:
         response = await self._authorized(
             session,
             "GET",
@@ -1098,14 +1337,14 @@ class HttpApplicationGateway:
         ):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         try:
-            reviews = tuple(PdfDocumentReviewView.model_validate(value) for value in values)
+            reviews = tuple(_document_review_view(value) for value in values)
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
         return reviews, page.get("next_cursor"), page["has_more"]
 
     async def pdf_document_review(
         self, session: WebSession, workflow_id: str
-    ) -> PdfDocumentReviewView:
+    ) -> DocumentReviewView:
         _require_id(workflow_id, "workflow_")
         response = await self._authorized(
             session,
@@ -1113,7 +1352,7 @@ class HttpApplicationGateway:
             f"/api/v1/pdf-document-reviews/{workflow_id}",
         )
         try:
-            return PdfDocumentReviewView.model_validate(self._data(response))
+            return _document_review_view(self._data(response))
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
@@ -1127,6 +1366,43 @@ class HttpApplicationGateway:
             session,
             "GET",
             f"/api/v1/pdf-document-reviews/{workflow_id}/pages/{page_number}/image",
+            headers={"Accept": "image/png"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        content_length = response.headers.get("content-length", "")
+        etag = response.headers.get("etag", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type != "image/png"
+            or response.headers.get("content-disposition") is not None
+            or not content_length.isascii()
+            or not content_length.isdigit()
+            or int(content_length) != len(response.content)
+            or not 0 < len(response.content) <= 16 * 1024 * 1024
+            or etag != f'"{actual_sha256}"'
+        ):
+            raise GatewayError(status=502, code="PDF_DOCUMENT_REVIEW_PAGE_RESPONSE_INVALID")
+        return ItemMedia(content=response.content, content_type=content_type, etag=etag)
+
+    async def paired_document_review_page_media(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        document_role: str,
+        page_number: int,
+    ) -> ItemMedia:
+        _require_id(workflow_id, "workflow_")
+        if document_role not in {"QUESTION", "SOLUTION"}:
+            raise GatewayError(status=422, code="PAIRED_DOCUMENT_REVIEW_ROLE_INVALID")
+        if not 1 <= page_number <= 64:
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_PAGE_INVALID")
+        response = await self._authorized(
+            session,
+            "GET",
+            (
+                f"/api/v1/pdf-document-reviews/{workflow_id}/documents/"
+                f"{document_role}/pages/{page_number}/image"
+            ),
             headers={"Accept": "image/png"},
         )
         content_type = response.headers.get("content-type", "").split(";", 1)[0]

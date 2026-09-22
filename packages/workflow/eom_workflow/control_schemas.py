@@ -77,6 +77,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.0",
             "sha256:2f3941ac593d3adef67ecbed4214129037c7198560ce4a0abfcce3d10dcc2147",
         ),
+        "pdf-document-review-control-bootstrap-v2": ControlSchemaResource(
+            "schemas/workflow/control-plane/pdf-document-review-control-bootstrap-v2.schema.json",
+            "resources/control-plane/pdf-document-review-control-bootstrap-v2.schema.json",
+            "2.0",
+            "sha256:9d1c84d8e9553f79838563caf374b50753ed1629989415c41b3357a202365632",
+        ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
             "resources/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
@@ -377,6 +383,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "13.0",
             "sha256:d2b27e8072604383f25038d6b9480637ffe4066ff42da70c539418796d28c40c",
         ),
+        "resolved-execution-plan-v14": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v14.schema.json",
+            "resources/control-plane/resolved-execution-plan-v14.schema.json",
+            "14.0",
+            "sha256:ee7400501e8a0c7f2273d68bff4c8b463ad96e6564bd19417fece90b27295a7d",
+        ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",
             "resources/control-plane/codex-invocation-v1.schema.json",
@@ -394,6 +406,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/codex-image-input-manifest-v2.schema.json",
             "2.0",
             "sha256:b11c648682f67884f23c38d76348accfd657a62d5b1cb220405b8580cc3d53c7",
+        ),
+        "codex-image-input-manifest-v3": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-image-input-manifest-v3.schema.json",
+            "resources/control-plane/codex-image-input-manifest-v3.schema.json",
+            "3.0",
+            "sha256:4e9152149de3899fe85bd75df2e582cd36f821a2f4f8049939bce0db0def6cea",
         ),
         "codex-auth-health-view": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-auth-health-view-v1.schema.json",

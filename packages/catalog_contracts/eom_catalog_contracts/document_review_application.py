@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from eom_identifiers import content_sha256
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.document_review import (
+    DocumentReviewAnnotatedPdfPointer,
+    DocumentReviewAnnotationSource,
     DocumentReviewHwpxCorrectionResult,
+    DocumentReviewPdfAnnotationMark,
+    DocumentReviewPdfAnnotationResult,
+    DocumentReviewResultMemberPointer,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
     PdfDocumentReviewResultMemberPointer,
@@ -376,4 +382,160 @@ class DocumentReviewHwpxCorrectionMediaResponse(FrozenModel):
                 raise ValueError("successful HWPX media response requires stream metadata")
         elif any(value is not None for value in success) or self.error_code is None:
             raise ValueError("failed HWPX media response requires only one stable error code")
+        return self
+
+
+class CreateDocumentReviewAnnotatedPdfs(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-request/1.0"] = (
+        "document-review-pdf-annotation-request/1.0"
+    )
+    operation: Literal["CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS"] = (
+        "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS"
+    )
+    actor_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=256,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
+    )
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    review_result: DocumentReviewResultMemberPointer
+    sources: tuple[DocumentReviewAnnotationSource, ...] = Field(min_length=1, max_length=2)
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...] = Field(
+        min_length=1,
+        max_length=4096,
+    )
+    annotation_set_sha256: Sha256
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_request(self) -> CreateDocumentReviewAnnotatedPdfs:
+        source_roles = tuple(value.role for value in self.sources)
+        if source_roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("annotation request source roles are invalid")
+        source_pages = {
+            (source.role, page.page_number): page.page_image.sha256
+            for source in self.sources
+            for page in source.pages
+        }
+        annotation_keys = tuple(
+            (
+                value.document_role,
+                value.page_number,
+                value.ordinal,
+                value.anchor_id,
+            )
+            for value in self.annotations
+        )
+        if annotation_keys != tuple(sorted(set(annotation_keys))):
+            raise ValueError("annotation marks must be sorted and unique")
+        if any(
+            source_pages.get((value.document_role, value.page_number)) != value.page_image_sha256
+            for value in self.annotations
+        ):
+            raise ValueError("annotation mark differs from its pinned page")
+        dumped_annotations = [value.model_dump(mode="json") for value in self.annotations]
+        if content_sha256(dumped_annotations) != self.annotation_set_sha256:
+            raise ValueError("annotation set hash differs")
+        if (
+            content_sha256(
+                self.model_dump(
+                    mode="json",
+                    exclude={"idempotency_key", "request_sha256"},
+                )
+            )
+            != self.request_sha256
+        ):
+            raise ValueError("annotation request self-hash differs")
+        return self
+
+
+class DocumentReviewPdfAnnotationResponse(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-response/1.0"] = (
+        "document-review-pdf-annotation-response/1.0"
+    )
+    operation: Literal["CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS"] = (
+        "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS"
+    )
+    status: Literal["OK", "ERROR"]
+    outputs: tuple[DocumentReviewAnnotatedPdfPointer, ...] | None = None
+    manifest: OfficeDocumentReviewMemberPointer | None = None
+    result: DocumentReviewPdfAnnotationResult | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def require_one_response_variant(self) -> DocumentReviewPdfAnnotationResponse:
+        if self.status == "OK":
+            if (
+                self.outputs is None
+                or self.manifest is None
+                or self.result is None
+                or self.error_code is not None
+            ):
+                raise ValueError("successful annotation response requires immutable outputs")
+            if tuple(value.document_role for value in self.outputs) != tuple(
+                value.document_role for value in self.result.outputs
+            ):
+                raise ValueError("annotation response output roles differ from its result")
+            if any(
+                pointer.member_path != descriptor.member_path
+                or pointer.sha256 != descriptor.sha256
+                or pointer.content_length != descriptor.content_length
+                for pointer, descriptor in zip(self.outputs, self.result.outputs, strict=True)
+            ):
+                raise ValueError("annotation response output pointers differ from its result")
+            if (
+                self.manifest.member_path != "manifest.json"
+                or self.manifest.media_type != "application/json"
+                or self.manifest.schema_ref
+                != "eom://schemas/document-review/document-review-pdf-annotation-manifest/1.0"
+            ):
+                raise ValueError("annotation response manifest pointer differs")
+        elif any(value is not None for value in (self.outputs, self.manifest, self.result)) or (
+            self.error_code is None
+        ):
+            raise ValueError("failed annotation response requires only one stable error code")
+        return self
+
+
+class DocumentReviewPdfAnnotationMediaQuery(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-media-request/1.0"] = (
+        "document-review-pdf-annotation-media-request/1.0"
+    )
+    operation: Literal["GET_DOCUMENT_REVIEW_ANNOTATED_PDF"] = "GET_DOCUMENT_REVIEW_ANNOTATED_PDF"
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    annotation_id: str = Field(pattern=r"^docannotation_[0-9a-f]{32}$")
+    document_role: Literal["DOCUMENT", "QUESTION", "SOLUTION"]
+    output: DocumentReviewAnnotatedPdfPointer
+
+    @model_validator(mode="after")
+    def require_exact_output(self) -> DocumentReviewPdfAnnotationMediaQuery:
+        if self.output.document_role != self.document_role:
+            raise ValueError("annotation media role differs from its output pointer")
+        return self
+
+
+class DocumentReviewPdfAnnotationMediaResponse(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-media-response/1.0"] = (
+        "document-review-pdf-annotation-media-response/1.0"
+    )
+    operation: Literal["GET_DOCUMENT_REVIEW_ANNOTATED_PDF"] = "GET_DOCUMENT_REVIEW_ANNOTATED_PDF"
+    status: Literal["OK", "ERROR"]
+    media_type: Literal["application/pdf"] | None = None
+    content_length: int | None = Field(default=None, ge=1, le=512 * 1024 * 1024)
+    sha256: Sha256 | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+
+    @model_validator(mode="after")
+    def require_one_response_variant(self) -> DocumentReviewPdfAnnotationMediaResponse:
+        success = (self.media_type, self.content_length, self.sha256)
+        if self.status == "OK":
+            if any(value is None for value in success) or self.error_code is not None:
+                raise ValueError("successful annotation media response requires stream metadata")
+        elif any(value is not None for value in success) or self.error_code is None:
+            raise ValueError("failed annotation media response requires only one stable error code")
         return self

@@ -59,6 +59,17 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "pdf_document_review_upload_intents" in READ_TABLES
     assert "pdf_document_review_upload_intents" in INSERT_TABLES
     assert "pdf_document_review_upload_intents" in UPDATE_TABLES
+    for table_name in ("document_review_sets", "document_review_set_members"):
+        assert table_name in READ_TABLES
+        assert table_name in INSERT_TABLES
+        assert table_name in UPDATE_TABLES
+    for table_name in (
+        "document_review_pdf_annotations",
+        "document_review_pdf_annotation_outputs",
+    ):
+        assert table_name in READ_TABLES
+        assert table_name in INSERT_TABLES
+        assert table_name not in UPDATE_TABLES
 
 
 def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> None:

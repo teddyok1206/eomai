@@ -23,11 +23,17 @@ from eom_api.services.audit_service import AuditService
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.control_plane_adapter import ControlPlaneAdapter
+from eom_api.services.document_review_annotation_service import (
+    DocumentReviewAnnotationApplicationService,
+)
 from eom_api.services.document_review_correction_service import (
     DocumentReviewCorrectionApplicationService,
 )
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
+from eom_api.services.paired_document_review_service import (
+    PairedDocumentReviewApplicationService,
+)
 from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplicationService
 from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.query_adapter import QueryAdapter
@@ -79,7 +85,19 @@ class AppServices:
             intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
             processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
         )
+        self.paired_document_reviews = PairedDocumentReviewApplicationService(
+            engine,
+            catalog=self.catalog_application,
+            commands=self.commands,
+            intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
+            processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
+        )
         self.document_review_corrections = DocumentReviewCorrectionApplicationService(
+            engine,
+            catalog=self.catalog_application,
+            queries=self.queries,
+        )
+        self.document_review_annotations = DocumentReviewAnnotationApplicationService(
             engine,
             catalog=self.catalog_application,
             queries=self.queries,

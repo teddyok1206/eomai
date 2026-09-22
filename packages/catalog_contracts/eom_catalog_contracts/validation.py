@@ -295,6 +295,63 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:a99384585c6d6d9b42082733bd4a3d482fad15b166582d688366442696ff0dd2",
         ),
+        "document-review-pdf-annotation-request": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-request-v1.schema.json"
+            ),
+            ("resources/catalog-application/document-review-pdf-annotation-request-v1.schema.json"),
+            "1.0",
+            "sha256:bf4bffe7f5ce2030d7403000fc9f354a25a4d03cc86a211cd5ae80bf941c16d8",
+        ),
+        "document-review-pdf-annotation-response": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-response-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-pdf-annotation-response-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:688036a8101999d62414ebee4445f48d4acf8c78f9f46dbaaf38ceba52b662fe",
+        ),
+        "document-review-pdf-annotation-media-request": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-media-request-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-pdf-annotation-media-request-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:64ebdb48209bd3021c3f80335cddd811897569ba299b04f12398a2a4c09f9f50",
+        ),
+        "document-review-pdf-annotation-media-response": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-media-response-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-pdf-annotation-media-response-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:437cbe2367c7e58dff5ee0c695890faefedd5484ad7c8b342f42c394fef48f9f",
+        ),
+        "document-review-pdf-annotation-manifest": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-manifest-v1.schema.json",
+            "resources/document-review/document-review-pdf-annotation-manifest-v1.schema.json",
+            "1.0",
+            "sha256:442e77ce1bcebc0306d020c7cffcf288074799a32bb4798d5a1f212ba815e083",
+        ),
+        "document-review-pdf-annotation-result": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
+            "resources/document-review/document-review-pdf-annotation-result-v1.schema.json",
+            "1.0",
+            "sha256:426be96da09053ef3b716f19f64e2d87e7ff5c178d63ce39f88cabf710232567",
+        ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",
             "resources/content-intake/mapping-proposal-v1.schema.json",

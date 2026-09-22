@@ -26,6 +26,8 @@ from eom_catalog_contracts import (
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from eom_workflow.document_review import PairedReviewDocument
+
 
 def _require_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() != timedelta(0):
@@ -1038,6 +1040,53 @@ class ResolvedExecutionPlanV13(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV14(FrozenModel):
+    """Exact paired document review pinned to two role-addressed revisions."""
+
+    schema_version: Literal["resolved-execution-plan/14.0"] = "resolved-execution-plan/14.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["CODEX"] = "CODEX"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["pdf-document-review"] = "pdf-document-review"
+    workflow_definition_version: str = Field(
+        pattern=r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
+    )
+    workflow_definition_sha256: Sha256
+    review_request_sha256: Sha256
+    documents: tuple[PairedReviewDocument, PairedReviewDocument] = Field(min_length=2, max_length=2)
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["14.0.0"] = "14.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def one_paired_document_review_step_and_exact_hash(self) -> ResolvedExecutionPlanV14:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review plan requires QUESTION then SOLUTION")
+        step = self.steps[0]
+        if (
+            step.step_key != "review_document"
+            or step.role != WorkerRole.SUPPORT
+            or step.model != "gpt-5.6-terra"
+            or step.reasoning_effort != "xhigh"
+            or step.worker_pool_key != "customer-support"
+            or step.reference_bundle is not None
+            or step.timeout_seconds != 3600
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "ALLOWED_WITH_PROVENANCE"
+        ):
+            raise ValueError("paired review plan requires its isolated support step")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("paired review plan hash does not match canonical content")
+        return self
+
+
 class CodexInvocation(FrozenModel):
     """Bounded job-local CLI selection derived from one resolved plan step."""
 
@@ -1140,6 +1189,56 @@ class CodexAssessmentImageInputManifest(FrozenModel):
         body = self.model_dump(mode="json", exclude={"manifest_sha256"})
         if content_sha256(body) != self.manifest_sha256:
             raise ValueError("assessment image-input manifest hash differs")
+        return self
+
+
+class CodexPairedReviewImageInput(FrozenModel):
+    """One role-addressed page image from a paired document review."""
+
+    document_role: Literal["QUESTION", "SOLUTION"]
+    physical_page: int = Field(ge=1, le=2000)
+    relative_path: str = Field(
+        pattern=r"^source/(question|solution)/images/page-[0-9]{6}\.png$",
+        max_length=72,
+    )
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    width_pixels: int = Field(ge=1, le=16384)
+    height_pixels: int = Field(ge=1, le=16384)
+
+    @model_validator(mode="after")
+    def path_matches_role_and_page(self) -> CodexPairedReviewImageInput:
+        role_path = self.document_role.lower()
+        expected = f"source/{role_path}/images/page-{self.physical_page:06d}.png"
+        if self.relative_path != expected:
+            raise ValueError("paired review image path differs from its role and page")
+        return self
+
+
+class CodexPairedReviewImageInputManifest(FrozenModel):
+    """Exact ordered page set for both role-addressed review documents."""
+
+    schema_version: Literal["codex-image-input-manifest/3.0"] = "codex-image-input-manifest/3.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    images: tuple[CodexPairedReviewImageInput, ...] = Field(min_length=2, max_length=128)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_role_order_and_hash(self) -> CodexPairedReviewImageInputManifest:
+        positions = tuple((image.document_role, image.physical_page) for image in self.images)
+        expected = tuple(
+            sorted(
+                positions, key=lambda value: ({"QUESTION": 0, "SOLUTION": 1}[value[0]], value[1])
+            )
+        )
+        if positions != expected or len(positions) != len(set(positions)):
+            raise ValueError("paired review image inputs must be unique and role-page ordered")
+        if {image.document_role for image in self.images} != {"QUESTION", "SOLUTION"}:
+            raise ValueError("paired review image inputs must cover both document roles")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("paired review image-input manifest hash differs")
         return self
 
 

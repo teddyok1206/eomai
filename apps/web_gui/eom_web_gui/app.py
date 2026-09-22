@@ -9,7 +9,7 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -23,6 +23,7 @@ from eom_web_gui.contracts import (
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
     CustomerSupportSubmission,
+    DocumentReviewAnnotationSubmission,
     DocumentReviewCorrectionSubmission,
     DraftSubmission,
     ExecutionPresetDraftSubmission,
@@ -32,6 +33,7 @@ from eom_web_gui.contracts import (
     ItemPreview,
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
+    PairedDocumentReviewSubmission,
     PdfDocumentReviewSubmission,
     PlannedMockExamAssemblySubmission,
     RequestDraftInput,
@@ -51,8 +53,10 @@ API_PREFIX = "/studio/api/v1"
 MAX_BODY_BYTES = 262_144
 MAX_PDF_REVIEW_BODY_BYTES = 256 * 1024 * 1024
 PDF_REVIEW_CONTENT_PATH = re.compile(
-    r"^/studio/api/v1/pdf-document-reviews/upload-intents/"
-    r"pdfreviewintent_[0-9a-f]{32}/content$"
+    r"^/studio/api/v1/pdf-document-reviews/(?:"
+    r"upload-intents/pdfreviewintent_[0-9a-f]{32}/content|"
+    r"sets/docreviewset_[0-9a-f]{32}/documents/(?:QUESTION|SOLUTION)/content"
+    r")$"
 )
 
 
@@ -334,6 +338,57 @@ def create_app(
         )
         return result.model_dump(mode="json")
 
+    @app.post(f"{API_PREFIX}/pdf-document-reviews/sets", status_code=201)
+    async def create_paired_document_review_set(
+        value: PairedDocumentReviewSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        result = await actual.create_paired_document_review_set(session, value)
+        return result.model_dump(mode="json")
+
+    @app.put(
+        (
+            f"{API_PREFIX}/pdf-document-reviews/sets/{{review_set_id}}/documents/"
+            "{document_role}/content"
+        ),
+        status_code=202,
+    )
+    async def upload_paired_document_review_member(
+        request: Request,
+        review_set_id: str,
+        document_role: Literal["QUESTION", "SOLUTION"],
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> dict[str, Any]:
+        content_type = request.headers.get("content-type", "").split(";", 1)[0]
+        content_length = request.headers.get("content-length", "")
+        if content_type not in {
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+        }:
+            raise GatewayError(status=415, code="PDF_DOCUMENT_REVIEW_MEDIA_TYPE_INVALID")
+        if (
+            not content_length.isdigit()
+            or not 8 <= int(content_length) <= MAX_PDF_REVIEW_BODY_BYTES
+        ):
+            raise GatewayError(status=422, code="PDF_DOCUMENT_REVIEW_UPLOAD_LENGTH_INVALID")
+        if (
+            idempotency_key is None
+            or re.fullmatch(r"[A-Za-z0-9_.:-]{16,128}", idempotency_key) is None
+        ):
+            raise GatewayError(status=422, code="IDEMPOTENCY_KEY_INVALID")
+        result = await actual.upload_paired_document_review_member(
+            session,
+            review_set_id,
+            document_role,
+            content_length=int(content_length),
+            media_type=content_type,
+            content=request.stream(),
+            idempotency_key=idempotency_key,
+        )
+        return result.model_dump(mode="json")
+
     @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}")
     async def pdf_document_review(
         workflow_id: str,
@@ -397,6 +452,59 @@ def create_app(
             headers={"Content-Disposition": value.content_disposition},
         )
 
+    @app.post(
+        f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/annotations",
+        status_code=201,
+    )
+    async def create_document_review_annotation(
+        workflow_id: str,
+        value: DocumentReviewAnnotationSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.create_document_review_annotation(session, workflow_id, value)
+        ).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/annotations/{{annotation_id}}")
+    async def document_review_annotation(
+        workflow_id: str,
+        annotation_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.document_review_annotation(
+                session,
+                workflow_id,
+                annotation_id,
+            )
+        ).model_dump(mode="json")
+
+    @app.get(
+        f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/annotations/{{annotation_id}}/"
+        "documents/{document_role}/download"
+    )
+    async def document_review_annotation_download(
+        workflow_id: str,
+        annotation_id: str,
+        document_role: Literal["DOCUMENT", "QUESTION", "SOLUTION"],
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        annotation = await actual.document_review_annotation(
+            session,
+            workflow_id,
+            annotation_id,
+        )
+        value = await actual.gateway.document_review_annotation_download(
+            session,
+            annotation,
+            document_role,
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={"Content-Disposition": value.content_disposition},
+        )
+
     @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/pages/{{page_number}}/image")
     async def pdf_document_review_page_media(
         workflow_id: str,
@@ -404,6 +512,32 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> Response:
         value = await actual.pdf_document_review_page_media(session, workflow_id, page_number)
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Cache-Control": "private, no-store",
+                "ETag": value.etag,
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @app.get(
+        f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/documents/"
+        "{document_role}/pages/{page_number}/image"
+    )
+    async def paired_document_review_page_media(
+        workflow_id: str,
+        document_role: Literal["QUESTION", "SOLUTION"],
+        page_number: int,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        value = await actual.paired_document_review_page_media(
+            session,
+            workflow_id,
+            document_role,
+            page_number,
+        )
         return Response(
             content=value.content,
             media_type=value.content_type,

@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
+    CreateDocumentReviewAnnotationRequest,
+    CreateDocumentReviewSetRequest,
     CreateDocumentReviewUploadIntentRequestV2,
     CreatePdfDocumentReviewUploadIntentRequest,
+    DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionView,
+    DocumentReviewSetView,
     DocumentReviewUploadIntentViewV2,
+    PairedDocumentReviewView,
     PdfDocumentReviewUploadIntentView,
     PdfDocumentReviewView,
 )
@@ -31,7 +37,7 @@ router = APIRouter(prefix="/pdf-document-reviews", tags=["pdf-document-reviews"]
 @router.get(
     "",
     operation_id="pdf_document_review_list",
-    response_model=ListResponse[PdfDocumentReviewView],
+    response_model=ListResponse[PdfDocumentReviewView | PairedDocumentReviewView],
     dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
 )
 def list_pdf_document_reviews(
@@ -39,7 +45,7 @@ def list_pdf_document_reviews(
     authentication: Auth,
     limit: int = Query(default=25, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=1024),
-) -> ListResponse[PdfDocumentReviewView]:
+) -> ListResponse[PdfDocumentReviewView | PairedDocumentReviewView]:
     page = request.app.state.services.queries.list_pdf_document_reviews(
         actor_id=authentication.operator.operator_id,
         limit=limit,
@@ -134,6 +140,169 @@ def create_document_review_upload_intent_v2(
             response_status=201,
         ),
     )
+
+
+@router.post(
+    "/sets",
+    operation_id="paired_document_review_set_create",
+    status_code=201,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+)
+def create_paired_document_review_set(
+    request: Request,
+    body: CreateDocumentReviewSetRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[CommandResult]:
+    def execute() -> CommandResult:
+        view = request.app.state.services.paired_document_reviews.create_set(
+            body,
+            actor_id=authentication.operator.operator_id,
+            observed_at=datetime.now(UTC),
+        )
+        return CommandResult(
+            command_id=new_api_command_id(),
+            resource_type="paired_document_review_set",
+            resource_id=view.review_set_id,
+            status="COMPLETED",
+            resource_version=view.resource_version,
+            status_url=f"/api/v1/pdf-document-reviews/sets/{view.review_set_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="paired_document_review_set",
+            callback=execute,
+            response_status=201,
+        ),
+    )
+
+
+@router.get(
+    "/sets/{review_set_id}",
+    operation_id="paired_document_review_set_get",
+    response_model=SingleResponse[DocumentReviewSetView],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_paired_document_review_set(
+    request: Request,
+    authentication: Auth,
+    response: Response,
+    review_set_id: str = Path(pattern=r"^docreviewset_[0-9a-f]{32}$"),
+) -> SingleResponse[DocumentReviewSetView]:
+    value = request.app.state.services.paired_document_reviews.review_set(
+        review_set_id,
+        actor_id=authentication.operator.operator_id,
+    )
+    response.headers["ETag"] = etag(value.resource_version)
+    return one(request, value)
+
+
+@router.put(
+    "/sets/{review_set_id}/documents/{document_role}/content",
+    operation_id="paired_document_review_member_upload",
+    status_code=202,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                media_type: {"schema": {"type": "string", "format": "binary"}}
+                for media_type in (
+                    "application/pdf",
+                    "application/vnd.hancom.hwp",
+                    "application/vnd.hancom.hwpx",
+                )
+            },
+        }
+    },
+)
+async def upload_paired_document_review_member(
+    request: Request,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    review_set_id: str = Path(pattern=r"^docreviewset_[0-9a-f]{32}$"),
+    document_role: Literal["QUESTION", "SOLUTION"] = Path(pattern=r"^(?:QUESTION|SOLUTION)$"),
+) -> SingleResponse[CommandResult]:
+    review_set = request.app.state.services.paired_document_reviews.review_set(
+        review_set_id,
+        actor_id=authentication.operator.operator_id,
+    )
+    member = next(value for value in review_set.documents if value.role == document_role)
+    raw_length = request.headers.get("content-length", "")
+    if not raw_length.isdigit() or int(raw_length) != member.content_length:
+        raise ApiError(
+            422,
+            "PAIRED_DOCUMENT_REVIEW_UPLOAD_LENGTH_MISMATCH",
+            "Document upload length differs",
+            "The Content-Length must exactly match the declared review-set member.",
+        )
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != member.media_type:
+        raise ApiError(
+            422,
+            "PAIRED_DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPE_MISMATCH",
+            "Document upload media type differs",
+            "The Content-Type must exactly match the declared review-set member.",
+        )
+    async with request.app.state.services.pdf_review_upload_stager.stage(
+        request,
+        declared_length=int(raw_length),
+        source_format=member.source_format,
+        media_type=member.media_type,
+    ) as upload:
+
+        def execute() -> CommandResult:
+            command_id, view = (
+                request.app.state.services.paired_document_reviews.accept_member_upload(
+                    review_set_id,
+                    document_role,
+                    upload,
+                    actor=request.state.request_context.actor(),
+                    observed_at=datetime.now(UTC),
+                )
+            )
+            if view.workflow_id is not None:
+                if command_id is None:
+                    raise RuntimeError("started paired review set lost its command pointer")
+                return CommandResult(
+                    command_id=command_id,
+                    resource_type="pdf_document_review",
+                    resource_id=view.workflow_id,
+                    status="ACCEPTED",
+                    resource_version=view.resource_version,
+                    status_url=view.review_url,
+                )
+            return CommandResult(
+                command_id=new_api_command_id(),
+                resource_type="paired_document_review_set",
+                resource_id=view.review_set_id,
+                status="COMPLETED",
+                resource_version=view.resource_version,
+                status_url=f"/api/v1/pdf-document-reviews/sets/{view.review_set_id}",
+            )
+
+        result = await run_in_threadpool(
+            run_command,
+            request,
+            raw_key=idempotency_key,
+            body={
+                "review_set_id": review_set_id,
+                "document_role": document_role,
+                "content_length": upload.content_length,
+                "sha256": upload.sha256,
+            },
+            resource_type="paired_document_review_member",
+            callback=execute,
+            response_status=202,
+        )
+    return one(request, result)
 
 
 @router.get(
@@ -397,10 +566,128 @@ def download_document_review_hwpx_correction(
     )
 
 
+@router.post(
+    "/{workflow_id}/annotations",
+    operation_id="document_review_annotation_create",
+    status_code=201,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+)
+def create_document_review_annotation(
+    request: Request,
+    body: CreateDocumentReviewAnnotationRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+) -> SingleResponse[CommandResult]:
+    operation_id = "document_review_annotation_create"
+    domain_key = request.app.state.services.idempotency.submission_key(
+        operator_id=authentication.operator.operator_id,
+        endpoint_key=operation_id,
+        raw_key=idempotency_key,
+    )
+
+    def execute() -> CommandResult:
+        view = request.app.state.services.document_review_annotations.create(
+            workflow_id,
+            actor_id=authentication.operator.operator_id,
+            idempotency_key=domain_key,
+        )
+        return CommandResult(
+            command_id=new_api_command_id(),
+            resource_type="document_review_pdf_annotation",
+            resource_id=view.annotation_id,
+            status="COMPLETED",
+            resource_version=view.resource_version,
+            status_url=(
+                f"/api/v1/pdf-document-reviews/{workflow_id}/annotations/{view.annotation_id}"
+            ),
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="document_review_pdf_annotation",
+            callback=execute,
+            response_status=201,
+        ),
+    )
+
+
+@router.get(
+    "/{workflow_id}/annotations/{annotation_id}",
+    operation_id="document_review_annotation_get",
+    response_model=SingleResponse[DocumentReviewAnnotationView],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_document_review_annotation(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+    annotation_id: str = Path(pattern=r"^docannotation_[0-9a-f]{32}$"),
+) -> SingleResponse[DocumentReviewAnnotationView]:
+    return one(
+        request,
+        request.app.state.services.document_review_annotations.annotation(
+            workflow_id,
+            annotation_id,
+            actor_id=authentication.operator.operator_id,
+        ),
+    )
+
+
+@router.get(
+    "/{workflow_id}/annotations/{annotation_id}/documents/{document_role}/download",
+    operation_id="document_review_annotation_download",
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def download_document_review_annotation(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+    annotation_id: str = Path(pattern=r"^docannotation_[0-9a-f]{32}$"),
+    document_role: Literal["DOCUMENT", "QUESTION", "SOLUTION"] = Path(),
+) -> StreamingResponse:
+    value = request.app.state.services.document_review_annotations.download(
+        workflow_id,
+        annotation_id,
+        document_role,
+        actor_id=authentication.operator.operator_id,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="DOCUMENT_REVIEW_ANNOTATED_PDF_READ_AUTHORIZED",
+        operation_id="document_review_annotation_download",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="document_review_pdf_annotation",
+        target_id=annotation_id,
+    )
+    filename = {
+        "DOCUMENT": "document-review-annotated.pdf",
+        "QUESTION": "question-document-annotated.pdf",
+        "SOLUTION": "solution-document-annotated.pdf",
+    }[document_role]
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="application/pdf",
+        headers={
+            "Content-Length": str(value.content_length),
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
+
+
 @router.get(
     "/{workflow_id}",
     operation_id="pdf_document_review_get",
-    response_model=SingleResponse[PdfDocumentReviewView],
+    response_model=SingleResponse[PdfDocumentReviewView | PairedDocumentReviewView],
     dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
 )
 def get_pdf_document_review(
@@ -408,13 +695,58 @@ def get_pdf_document_review(
     authentication: Auth,
     response: Response,
     workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
-) -> SingleResponse[PdfDocumentReviewView]:
+) -> SingleResponse[PdfDocumentReviewView | PairedDocumentReviewView]:
     value = request.app.state.services.queries.pdf_document_review(
         actor_id=authentication.operator.operator_id,
         workflow_id=workflow_id,
     )
     response.headers["ETag"] = etag(value.resource_version)
     return one(request, value)
+
+
+@router.get(
+    "/{workflow_id}/documents/{document_role}/pages/{page_number}/image",
+    operation_id="paired_document_review_page_image_get",
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_paired_document_review_page_image(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+    document_role: Literal["QUESTION", "SOLUTION"] = Path(pattern=r"^(?:QUESTION|SOLUTION)$"),
+    page_number: int = Path(ge=1, le=64),
+) -> StreamingResponse:
+    document, page = request.app.state.services.queries.paired_document_review_page_pointer(
+        actor_id=authentication.operator.operator_id,
+        workflow_id=workflow_id,
+        document_role=document_role,
+        page_number=page_number,
+    )
+    value = request.app.state.services.catalog_application.download_pdf_document_review_page(
+        document_id=document.document_id,
+        document_revision_id=document.document_revision_id,
+        page_number=page.page_number,
+        page_image=page.page_image,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="PAIRED_DOCUMENT_REVIEW_PAGE_READ_AUTHORIZED",
+        operation_id="paired_document_review_page_image_get",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="pdf_document_review",
+        target_id=workflow_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="image/png",
+        headers={
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
 
 
 @router.get(

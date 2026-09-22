@@ -30,6 +30,7 @@ from eom_catalog_contracts import (
     CatalogAssessmentPageMediaResponse,
     CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
+    CreateDocumentReviewAnnotatedPdfs,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -40,6 +41,9 @@ from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
     DocumentReviewHwpxCorrectionResponse,
+    DocumentReviewPdfAnnotationMediaQuery,
+    DocumentReviewPdfAnnotationMediaResponse,
+    DocumentReviewPdfAnnotationResponse,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
@@ -72,6 +76,10 @@ from eom_catalog_service.approved_item_graph_publication_service import (
 from eom_catalog_service.document_review_hwpx_correction_service import (
     DocumentReviewHwpxCorrectionService,
     DocumentReviewHwpxCorrectionServiceError,
+)
+from eom_catalog_service.document_review_pdf_annotation_service import (
+    DocumentReviewPdfAnnotationService,
+    DocumentReviewPdfAnnotationServiceError,
 )
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
@@ -160,6 +168,32 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._apply_document_review_hwpx_corrections(correction_request)
+                return
+            if raw_operation == "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS":
+                try:
+                    validate_contract("document-review-pdf-annotation-request", value)
+                    annotation_request = CreateDocumentReviewAnnotatedPdfs.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_pdf_annotation_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._create_document_review_annotated_pdfs(annotation_request)
+                return
+            if raw_operation == "GET_DOCUMENT_REVIEW_ANNOTATED_PDF":
+                try:
+                    validate_contract("document-review-pdf-annotation-media-request", value)
+                    annotation_media_request = DocumentReviewPdfAnnotationMediaQuery.model_validate(
+                        value
+                    )
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_pdf_annotation_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_document_review_annotated_pdf(annotation_media_request)
                 return
             if raw_operation == "GET_DOCUMENT_REVIEW_CORRECTED_HWPX":
                 try:
@@ -671,6 +705,68 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
         finally:
             chunks.close()
 
+    def _create_document_review_annotated_pdfs(
+        self,
+        request: CreateDocumentReviewAnnotatedPdfs,
+    ) -> None:
+        annotations = self.server.document_review_pdf_annotations
+        if annotations is None:
+            self.server.write_document_review_pdf_annotation_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            response = annotations.create(request)
+        except DocumentReviewPdfAnnotationServiceError as exc:
+            self.server.write_document_review_pdf_annotation_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_document_review_pdf_annotation_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_document_review_pdf_annotation_response(self.wfile, response)
+
+    def _stream_document_review_annotated_pdf(
+        self,
+        request: DocumentReviewPdfAnnotationMediaQuery,
+    ) -> None:
+        annotations = self.server.document_review_pdf_annotations
+        if annotations is None:
+            self.server.write_document_review_pdf_annotation_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            media = annotations.load_output(request)
+        except DocumentReviewPdfAnnotationServiceError as exc:
+            self.server.write_document_review_pdf_annotation_media_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_document_review_pdf_annotation_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_document_review_pdf_annotation_media_header(
+            self.wfile,
+            DocumentReviewPdfAnnotationMediaResponse(
+                status="OK",
+                media_type="application/pdf",
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
     def _ingest_pdf_document_review_source(
         self,
         request: PdfDocumentReviewIntakeCommand,
@@ -856,6 +952,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         pdf_document_review_intake: PdfDocumentReviewIntakeService | None = None,
         office_document_review_intake: OfficeDocumentReviewIntakeService | None = None,
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
+        document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -872,6 +969,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.pdf_document_review_intake = pdf_document_review_intake
         self.office_document_review_intake = office_document_review_intake
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
+        self.document_review_pdf_annotations = document_review_pdf_annotations
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -1049,6 +1147,52 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls.write_document_review_hwpx_media_header(
             stream,
             DocumentReviewHwpxCorrectionMediaResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_document_review_pdf_annotation_response(
+        stream: Any,
+        response: DocumentReviewPdfAnnotationResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        validate_contract("document-review-pdf-annotation-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("PDF annotation response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_document_review_pdf_annotation_error(
+        cls,
+        stream: Any,
+        error_code: str,
+    ) -> None:
+        cls.write_document_review_pdf_annotation_response(
+            stream,
+            DocumentReviewPdfAnnotationResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_document_review_pdf_annotation_media_header(
+        stream: Any,
+        response: DocumentReviewPdfAnnotationMediaResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        validate_contract("document-review-pdf-annotation-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("PDF annotation media response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_document_review_pdf_annotation_media_error(
+        cls,
+        stream: Any,
+        error_code: str,
+    ) -> None:
+        cls.write_document_review_pdf_annotation_media_header(
+            stream,
+            DocumentReviewPdfAnnotationMediaResponse(status="ERROR", error_code=error_code),
         )
 
     @classmethod

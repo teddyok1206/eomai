@@ -77,6 +77,7 @@ const state = {
   pdfDocumentReviewSelectedId: null,
   pdfDocumentReviewSelected: null,
   pdfDocumentReviewPage: 1,
+  pdfDocumentReviewRole: "QUESTION",
   pdfDocumentReviewFindingId: null,
   pdfDocumentReviewPollTimer: null,
   pdfDocumentReviewRequestSequence: 0,
@@ -85,6 +86,8 @@ const state = {
   pdfDocumentReviewCorrectionFindingIds: new Set(),
   pdfDocumentReviewCorrection: null,
   pdfDocumentReviewPendingCorrection: null,
+  pdfDocumentReviewAnnotation: null,
+  pdfDocumentReviewPendingAnnotation: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -3425,6 +3428,23 @@ function pdfReviewState(value) {
   }[value] || {label: "상태 확인 필요", tone: "neutral", icon: "■"};
 }
 
+function isPairedDocumentReview(review) {
+  return Array.isArray(review?.documents) && review.documents.length === 2;
+}
+
+function pairedReviewDocument(review, role = state.pdfDocumentReviewRole) {
+  return isPairedDocumentReview(review)
+    ? review.documents.find((value) => value.role === role) || null
+    : null;
+}
+
+function pdfReviewDisplayName(review) {
+  if (!isPairedDocumentReview(review)) return review.original_filename;
+  const question = pairedReviewDocument(review, "QUESTION");
+  const solution = pairedReviewDocument(review, "SOLUTION");
+  return `${question?.original_filename || "문제지"} + ${solution?.original_filename || "해설지"}`;
+}
+
 function renderPdfDocumentReviewList() {
   const root = $("#pdf-review-list");
   root.replaceChildren();
@@ -3439,7 +3459,7 @@ function renderPdfDocumentReviewList() {
     button.type = "button";
     button.className = `pdf-review-list-item${review.workflow_id === state.pdfDocumentReviewSelectedId ? " selected" : ""}`;
     const name = document.createElement("strong");
-    name.textContent = review.original_filename;
+    name.textContent = pdfReviewDisplayName(review);
     const meta = document.createElement("span");
     meta.className = "pdf-review-list-meta";
     const preset = document.createElement("span");
@@ -3482,9 +3502,13 @@ function selectedPdfReviewFinding() {
 function renderPdfDocumentReviewPage() {
   const review = state.pdfDocumentReviewSelected;
   const pageNumber = state.pdfDocumentReviewPage;
+  const pairedDocument = pairedReviewDocument(review);
+  const pages = pairedDocument?.pages || review?.pages;
+  const pageCount = pairedDocument?.page_count || review?.page_count;
+  const filename = pairedDocument?.original_filename || review?.original_filename;
   const stage = $("#pdf-review-page-stage");
   stage.replaceChildren();
-  if (!review || !review.pages?.some((page) => page.page_number === pageNumber)) {
+  if (!review || !pages?.some((page) => page.page_number === pageNumber)) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
     empty.textContent = "표시할 문서 페이지가 없습니다.";
@@ -3492,13 +3516,20 @@ function renderPdfDocumentReviewPage() {
     return;
   }
   const image = document.createElement("img");
-  image.alt = `${review.original_filename} ${pageNumber}쪽`;
-  image.src = `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/pages/${pageNumber}/image`;
+  image.alt = `${filename} ${pageNumber}쪽`;
+  image.src = isPairedDocumentReview(review)
+    ? `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/documents/${state.pdfDocumentReviewRole}/pages/${pageNumber}/image`
+    : `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/pages/${pageNumber}/image`;
   image.addEventListener("load", () => {
     const allAnchors = new Map();
     (review.result?.findings || []).forEach((finding) => {
       finding.anchors
-        .filter((anchor) => anchor.page_number === pageNumber)
+        .filter((anchor) => anchor.page_number === pageNumber && (!anchor.document_role || anchor.document_role === state.pdfDocumentReviewRole))
+        .forEach((anchor) => allAnchors.set(anchor.anchor_id, anchor));
+    });
+    (review.result?.cross_document_checks || []).forEach((check) => {
+      [...(check.question_anchors || []), ...(check.solution_anchors || [])]
+        .filter((anchor) => anchor.page_number === pageNumber && anchor.document_role === state.pdfDocumentReviewRole)
         .forEach((anchor) => allAnchors.set(anchor.anchor_id, anchor));
     });
     const activeIds = new Set((selectedPdfReviewFinding()?.anchors || []).map((anchor) => anchor.anchor_id));
@@ -3514,15 +3545,18 @@ function renderPdfDocumentReviewPage() {
     });
   });
   stage.append(image);
-  $("#pdf-review-page-number").textContent = `${pageNumber} / ${review.page_count}`;
+  $("#pdf-review-page-number").textContent = `${pageNumber} / ${pageCount}`;
   $("#pdf-review-page-prev").disabled = pageNumber <= 1;
-  $("#pdf-review-page-next").disabled = pageNumber >= review.page_count;
+  $("#pdf-review-page-next").disabled = pageNumber >= pageCount;
 }
 
 function selectPdfReviewFinding(findingId) {
   state.pdfDocumentReviewFindingId = findingId;
   const finding = selectedPdfReviewFinding();
-  if (finding?.anchors?.length) state.pdfDocumentReviewPage = finding.anchors[0].page_number;
+  if (finding?.anchors?.length) {
+    state.pdfDocumentReviewRole = finding.anchors[0].document_role || "QUESTION";
+    state.pdfDocumentReviewPage = finding.anchors[0].page_number;
+  }
   renderPdfDocumentReviewDetail();
 }
 
@@ -3532,7 +3566,9 @@ function renderDocumentReviewCorrection() {
   const submit = $("#pdf-review-correction-submit");
   const download = $("#pdf-review-correction-download");
   const eligibility = state.pdfDocumentReviewCorrectionEligibility;
-  root.hidden = !eligibility || eligibility.source_format === "PDF";
+  root.hidden = isPairedDocumentReview(state.pdfDocumentReviewSelected)
+    || !eligibility
+    || eligibility.source_format === "PDF";
   download.hidden = true;
   download.removeAttribute("href");
   if (root.hidden) return;
@@ -3562,16 +3598,95 @@ function renderDocumentReviewCorrection() {
   }
 }
 
+function renderDocumentReviewAnnotation() {
+  const root = $("#pdf-review-annotation");
+  const message = $("#pdf-review-annotation-message");
+  const actions = $("#pdf-review-annotation-actions");
+  const review = state.pdfDocumentReviewSelected;
+  const findings = review?.result?.findings;
+  root.hidden = review?.state !== "COMPLETED" || !Array.isArray(findings) || findings.length === 0;
+  if (root.hidden) return;
+  actions.querySelectorAll("a").forEach((value) => value.remove());
+  const submit = $("#pdf-review-annotation-submit");
+  submit.disabled = false;
+  showMessage(message, "검토 위치를 빨간 번호 상자로 표시한 별도 PDF를 만들 수 있습니다. 원본은 바뀌지 않습니다.");
+  const annotation = state.pdfDocumentReviewAnnotation;
+  if (!annotation) return;
+  annotation.outputs.forEach((output) => {
+    const link = document.createElement("a");
+    link.className = "button quiet";
+    link.href = `${API}/pdf-document-reviews/${encodeURIComponent(annotation.workflow_id)}/annotations/${encodeURIComponent(annotation.annotation_id)}/documents/${encodeURIComponent(output.document_role)}/download`;
+    link.textContent = output.document_role === "QUESTION"
+      ? "문제지 주석 PDF"
+      : output.document_role === "SOLUTION"
+        ? "해설지 주석 PDF"
+        : "주석 PDF 다운로드";
+    actions.append(link);
+  });
+  showMessage(message, "주석 PDF를 만들었습니다. 상세 검토 문구는 화면에서 확인하고 PDF에는 번호와 위치만 표시됩니다.", "success");
+}
+
+function navigatePairedReviewAnchor(anchor) {
+  state.pdfDocumentReviewRole = anchor.document_role;
+  state.pdfDocumentReviewPage = anchor.page_number;
+  state.pdfDocumentReviewFindingId = null;
+  renderPdfDocumentReviewDetail();
+}
+
+function renderPairedDocumentReviewCrossChecks(review) {
+  const root = $("#pdf-review-cross-checks");
+  const list = $("#pdf-review-cross-check-list");
+  list.replaceChildren();
+  const checks = review.result?.cross_document_checks;
+  root.hidden = !isPairedDocumentReview(review) || !Array.isArray(checks) || checks.length === 0;
+  if (root.hidden) return;
+  checks.forEach((check, index) => {
+    const card = document.createElement("article");
+    card.className = "pdf-review-cross-check";
+    const heading = document.createElement("strong");
+    heading.textContent = `${index + 1}. ${check.status}`;
+    const conclusion = document.createElement("p");
+    conclusion.textContent = check.conclusion;
+    card.append(heading, conclusion);
+    const questionAnchor = check.question_anchors?.[0];
+    const solutionAnchor = check.solution_anchors?.[0];
+    if (questionAnchor) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button quiet";
+      button.textContent = `문제지 ${questionAnchor.page_number}쪽 보기`;
+      button.addEventListener("click", () => navigatePairedReviewAnchor(questionAnchor));
+      card.append(button);
+    }
+    if (solutionAnchor) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "button quiet";
+      button.textContent = `해설지 ${solutionAnchor.page_number}쪽 보기`;
+      button.addEventListener("click", () => navigatePairedReviewAnchor(solutionAnchor));
+      card.append(button);
+    }
+    list.append(card);
+  });
+}
+
 function renderPdfDocumentReviewDetail() {
   const review = state.pdfDocumentReviewSelected;
   if (!review) return;
   const status = pdfReviewState(review.state);
   setStatus($("#pdf-review-state"), status.tone, status.icon, status.label);
-  $("#pdf-review-document-name").textContent = review.original_filename;
+  const activeDocument = pairedReviewDocument(review);
+  $("#pdf-review-document-name").textContent = activeDocument?.original_filename || review.original_filename;
+  const roleTabs = $("#pdf-review-role-tabs");
+  roleTabs.hidden = !isPairedDocumentReview(review);
+  $$('[data-document-role]').forEach((button) => {
+    button.classList.toggle("selected", button.dataset.documentRole === state.pdfDocumentReviewRole);
+  });
   const summary = $("#pdf-review-summary");
   const findingsRoot = $("#pdf-review-findings");
   summary.replaceChildren();
   findingsRoot.replaceChildren();
+  renderPairedDocumentReviewCrossChecks(review);
   if (review.state === "COMPLETED" && review.result) {
     const heading = document.createElement("h3");
     heading.textContent = `검토 요약 · 지적 ${review.result.findings.length}건`;
@@ -3632,23 +3747,29 @@ function renderPdfDocumentReviewDetail() {
   }
   const inspectorValues = [
     review.workflow_id,
-    review.document_revision_id,
+    isPairedDocumentReview(review)
+      ? review.documents.map((value) => `${value.role}: ${value.document_revision_id}`).join(" · ")
+      : review.document_revision_id,
     review.result_artifact?.sha256 || "결과 생성 전",
   ];
   $$("#pdf-review-inspector dd").forEach((element, index) => { element.textContent = inspectorValues[index]; });
   renderPdfDocumentReviewList();
   renderPdfDocumentReviewPage();
   renderDocumentReviewCorrection();
+  renderDocumentReviewAnnotation();
 }
 
 async function selectPdfDocumentReview(workflowId) {
   stopPdfDocumentReviewPolling();
   state.pdfDocumentReviewSelectedId = workflowId;
   state.pdfDocumentReviewFindingId = null;
+  state.pdfDocumentReviewRole = "QUESTION";
   state.pdfDocumentReviewCorrectionEligibility = null;
   state.pdfDocumentReviewCorrectionFindingIds = new Set();
   state.pdfDocumentReviewCorrection = null;
   state.pdfDocumentReviewPendingCorrection = null;
+  state.pdfDocumentReviewAnnotation = null;
+  state.pdfDocumentReviewPendingAnnotation = null;
   const requestSequence = ++state.pdfDocumentReviewRequestSequence;
   try {
     const review = await api(`/pdf-document-reviews/${encodeURIComponent(workflowId)}`);
@@ -3656,7 +3777,7 @@ async function selectPdfDocumentReview(workflowId) {
     state.pdfDocumentReviewSelected = review;
     state.pdfDocumentReviewPage = 1;
     renderPdfDocumentReviewDetail();
-    if (review.state === "COMPLETED") {
+    if (review.state === "COMPLETED" && !isPairedDocumentReview(review)) {
       try {
         const eligibility = await api(`/pdf-document-reviews/${encodeURIComponent(workflowId)}/corrections/eligibility`);
         if (requestSequence !== state.pdfDocumentReviewRequestSequence || state.pdfDocumentReviewSelectedId !== workflowId) return;
@@ -3721,6 +3842,34 @@ async function uploadPdfDocumentReviewContent(intentId, file, mediaType, idempot
   return response.json();
 }
 
+async function uploadPairedDocumentReviewContent(reviewSetId, role, file, mediaType, idempotencyKey) {
+  const response = await fetch(`${API}/pdf-document-reviews/sets/${encodeURIComponent(reviewSetId)}/documents/${role}/content`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": mediaType,
+      "Idempotency-Key": idempotencyKey,
+      "X-CSRF-Token": state.csrf,
+    },
+    body: file,
+  });
+  if (response.status === 401) {
+    window.location.replace("/studio/login");
+    throw new StudioApiError("AUTH_REAUTHENTICATION_REQUIRED");
+  }
+  if (!response.ok) {
+    let code = `HTTP_${response.status}`;
+    try {
+      const problem = await response.json();
+      if (typeof problem.error_code === "string") code = problem.error_code;
+    } catch (_) {
+      // Keep the bounded status-based fallback.
+    }
+    throw new StudioApiError(code, response.headers.get("X-Request-ID"));
+  }
+  return response.json();
+}
+
 function documentReviewSource(file) {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".hwpx")) return {source_format: "HWPX", media_type: "application/vnd.hancom.hwpx"};
@@ -3734,12 +3883,21 @@ async function submitPdfDocumentReview(event) {
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const file = form.elements.file.files[0];
+  const solutionFile = form.elements.solution_file.files[0] || null;
   const message = $("#pdf-review-form-message");
   const source = file ? documentReviewSource(file) : null;
+  const solutionSource = solutionFile ? documentReviewSource(solutionFile) : null;
   if (!file || !source) {
     return showMessage(message, "PDF, HWP 또는 HWPX 파일을 선택하세요.", "error");
   }
-  if (file.size < 8 || file.size > 256 * 1024 * 1024) {
+  if (solutionFile && !solutionSource) {
+    return showMessage(message, "해설지는 PDF, HWP 또는 HWPX 파일이어야 합니다.", "error");
+  }
+  if (
+    file.size < 8
+    || file.size > 256 * 1024 * 1024
+    || (solutionFile && (solutionFile.size < 8 || solutionFile.size > 256 * 1024 * 1024))
+  ) {
     return showMessage(message, "문서 파일 크기는 256 MiB 이하여야 합니다.", "error");
   }
   const guidance = form.elements.additional_guidance.value.trim();
@@ -3751,25 +3909,80 @@ async function submitPdfDocumentReview(event) {
     preset_key: form.elements.preset_key.value,
     additional_guidance: guidance || null,
   };
-  const fingerprint = JSON.stringify({...businessInput, last_modified: file.lastModified});
+  const pairedBusinessInput = solutionFile ? {
+    documents: [
+      {
+        role: "QUESTION",
+        original_filename: file.name,
+        source_format: source.source_format,
+        media_type: source.media_type,
+        content_length: file.size,
+      },
+      {
+        role: "SOLUTION",
+        original_filename: solutionFile.name,
+        source_format: solutionSource.source_format,
+        media_type: solutionSource.media_type,
+        content_length: solutionFile.size,
+      },
+    ],
+    preset_key: form.elements.preset_key.value,
+    additional_guidance: guidance || null,
+    locale: "ko-KR",
+  } : null;
+  const fingerprint = JSON.stringify(solutionFile
+    ? {
+      ...pairedBusinessInput,
+      question_last_modified: file.lastModified,
+      solution_last_modified: solutionFile.lastModified,
+    }
+    : {...businessInput, last_modified: file.lastModified});
   if (state.pdfDocumentReviewPendingSubmission?.fingerprint !== fingerprint) {
     state.pdfDocumentReviewPendingSubmission = {
       fingerprint,
       intentKey: `studio:pdf-review:intent:${crypto.randomUUID()}`,
       contentKey: `studio:pdf-review:content:${crypto.randomUUID()}`,
+      setKey: `studio:paired-review:set:${crypto.randomUUID()}`,
+      questionKey: `studio:paired-review:question:${crypto.randomUUID()}`,
+      solutionKey: `studio:paired-review:solution:${crypto.randomUUID()}`,
     };
   }
   const pending = state.pdfDocumentReviewPendingSubmission;
   $("#pdf-review-submit").disabled = true;
   showMessage(message, "문서를 안전하게 등록하고 검토를 시작하고 있습니다.");
   try {
-    const intent = await api("/pdf-document-reviews/upload-intents", {
-      method: "POST",
-      mutation: true,
-      body: {...businessInput, idempotency_key: pending.intentKey},
-    });
-    const started = await uploadPdfDocumentReviewContent(intent.upload_intent_id, file, source.media_type, pending.contentKey);
-    if (typeof started.workflow_id !== "string") throw new StudioApiError("APPLICATION_API_RESPONSE_INVALID");
+    let started;
+    if (solutionFile) {
+      const reviewSet = await api("/pdf-document-reviews/sets", {
+        method: "POST",
+        mutation: true,
+        body: {...pairedBusinessInput, idempotency_key: pending.setKey},
+      });
+      await uploadPairedDocumentReviewContent(
+        reviewSet.review_set_id,
+        "QUESTION",
+        file,
+        source.media_type,
+        pending.questionKey,
+      );
+      started = await uploadPairedDocumentReviewContent(
+        reviewSet.review_set_id,
+        "SOLUTION",
+        solutionFile,
+        solutionSource.media_type,
+        pending.solutionKey,
+      );
+    } else {
+      const intent = await api("/pdf-document-reviews/upload-intents", {
+        method: "POST",
+        mutation: true,
+        body: {...businessInput, idempotency_key: pending.intentKey},
+      });
+      started = await uploadPdfDocumentReviewContent(intent.upload_intent_id, file, source.media_type, pending.contentKey);
+    }
+    if (typeof started.workflow_id !== "string") {
+      throw new StudioApiError("APPLICATION_API_RESPONSE_INVALID");
+    }
     state.pdfDocumentReviewPendingSubmission = null;
     form.reset();
     showMessage(message, "문서 검토가 시작되었습니다.", "success");
@@ -3813,6 +4026,34 @@ async function applyDocumentReviewCorrection() {
   }
 }
 
+async function createDocumentReviewAnnotation() {
+  const review = state.pdfDocumentReviewSelected;
+  if (!review || review.state !== "COMPLETED") return;
+  if (!state.pdfDocumentReviewPendingAnnotation) {
+    state.pdfDocumentReviewPendingAnnotation = {
+      idempotencyKey: `studio:document-review-annotation:${crypto.randomUUID()}`,
+    };
+  }
+  const submit = $("#pdf-review-annotation-submit");
+  submit.disabled = true;
+  showMessage($("#pdf-review-annotation-message"), "원본을 보존한 채 위치 표시 PDF를 만들고 있습니다.");
+  try {
+    state.pdfDocumentReviewAnnotation = await api(`/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/annotations`, {
+      method: "POST",
+      mutation: true,
+      body: {
+        include_all_findings: true,
+        idempotency_key: state.pdfDocumentReviewPendingAnnotation.idempotencyKey,
+      },
+    });
+    renderDocumentReviewAnnotation();
+  } catch (failure) {
+    showMessage($("#pdf-review-annotation-message"), `주석 PDF 생성 실패: ${failure.message}`, "error");
+  } finally {
+    submit.disabled = false;
+  }
+}
+
 function installPdfDocumentReview() {
   $("#pdf-review-form").addEventListener("submit", submitPdfDocumentReview);
   $("#pdf-review-refresh").addEventListener("click", () => loadPdfDocumentReviews());
@@ -3822,10 +4063,21 @@ function installPdfDocumentReview() {
     renderPdfDocumentReviewPage();
   });
   $("#pdf-review-page-next").addEventListener("click", () => {
-    if (state.pdfDocumentReviewSelected && state.pdfDocumentReviewPage < state.pdfDocumentReviewSelected.page_count) state.pdfDocumentReviewPage += 1;
+    const review = state.pdfDocumentReviewSelected;
+    const pageCount = pairedReviewDocument(review)?.page_count || review?.page_count || 0;
+    if (review && state.pdfDocumentReviewPage < pageCount) state.pdfDocumentReviewPage += 1;
     renderPdfDocumentReviewPage();
   });
+  $$('[data-document-role]').forEach((button) => {
+    button.addEventListener("click", () => {
+      state.pdfDocumentReviewRole = button.dataset.documentRole;
+      state.pdfDocumentReviewPage = 1;
+      state.pdfDocumentReviewFindingId = null;
+      renderPdfDocumentReviewDetail();
+    });
+  });
   $("#pdf-review-correction-submit").addEventListener("click", applyDocumentReviewCorrection);
+  $("#pdf-review-annotation-submit").addEventListener("click", createDocumentReviewAnnotation);
 }
 
 async function logout() {

@@ -1,0 +1,287 @@
+"""Deterministic, fail-closed PDF overlays for document-review findings."""
+
+from __future__ import annotations
+
+import re
+import stat
+import subprocess
+from collections import defaultdict
+from pathlib import Path
+
+from eom_catalog_contracts import (
+    DocumentReviewAnnotationRole,
+    DocumentReviewPdfAnnotationMark,
+    DocumentReviewPdfAnnotationRenderer,
+)
+from eom_identifiers import sha256_file
+
+QPDF = Path("/usr/bin/qpdf")
+RSVG_CONVERT = Path("/usr/bin/rsvg-convert")
+PDFINFO = Path("/usr/bin/pdfinfo")
+MAX_ANNOTATED_PDF_BYTES = 512 * 1024 * 1024
+_PAGE_SIZE = re.compile(
+    r"^Page\s+[0-9]+\s+size:\s+([0-9]+(?:\.[0-9]+)?)\s+x\s+"
+    r"([0-9]+(?:\.[0-9]+)?)\s+pts(?:\s+\([^)]*\))?\s*$",
+    re.MULTILINE,
+)
+_PAGE_COUNT = re.compile(r"^Pages:\s+([0-9]+)\s*$", re.MULTILINE)
+_SAFE_ENV = {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "SOURCE_DATE_EPOCH": "946684800",
+}
+
+
+class DocumentReviewPdfAnnotationError(RuntimeError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def renderer_identity() -> DocumentReviewPdfAnnotationRenderer:
+    for executable in (QPDF, RSVG_CONVERT, PDFINFO):
+        try:
+            metadata = executable.stat()
+        except OSError as exc:
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_RENDERER_UNAVAILABLE",
+                "A required PDF annotation renderer is unavailable",
+            ) from exc
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != 0
+            or metadata.st_gid != 0
+            or metadata.st_nlink != 1
+            or metadata.st_mode & 0o022
+        ):
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_RENDERER_UNTRUSTED",
+                "A required PDF annotation renderer has unsafe metadata",
+            )
+    qpdf_version = _run((str(QPDF), "--version"), timeout=10).stdout.splitlines()[0]
+    rsvg_version = _run((str(RSVG_CONVERT), "--version"), timeout=10).stdout.splitlines()[0]
+    pdfinfo_version = _run((str(PDFINFO), "-v"), timeout=10).stderr.splitlines()[0]
+    if (
+        not qpdf_version.startswith("qpdf version 11.9.")
+        or not rsvg_version.startswith("rsvg-convert version 2.58.")
+        or not pdfinfo_version.startswith("pdfinfo version 24.02.")
+    ):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_RENDERER_VERSION_UNSUPPORTED",
+            "The installed PDF annotation renderer version is unsupported",
+        )
+    return DocumentReviewPdfAnnotationRenderer(
+        qpdf_version=qpdf_version,
+        qpdf_sha256=sha256_file(QPDF),
+        rsvg_convert_version=rsvg_version,
+        rsvg_convert_sha256=sha256_file(RSVG_CONVERT),
+        pdfinfo_version=pdfinfo_version,
+        pdfinfo_sha256=sha256_file(PDFINFO),
+    )
+
+
+def annotate_pdf(
+    source: Path,
+    destination: Path,
+    *,
+    role: DocumentReviewAnnotationRole,
+    page_count: int,
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+) -> DocumentReviewPdfAnnotationRenderer:
+    """Render role-local numbered rectangles and return the exact tool identity."""
+
+    identity = renderer_identity()
+    _require_regular_bounded_pdf(source)
+    if any(value.document_role != role for value in annotations):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_ROLE_MISMATCH",
+            "An annotation belongs to another document role",
+        )
+    metadata = _run((str(PDFINFO), str(source)), timeout=30).stdout
+    match = _PAGE_COUNT.search(metadata)
+    if match is None or int(match.group(1)) != page_count:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_PAGE_COUNT_MISMATCH",
+            "The source PDF page count differs from its immutable pointer",
+        )
+    by_page: dict[int, list[DocumentReviewPdfAnnotationMark]] = defaultdict(list)
+    for annotation in annotations:
+        if not 1 <= annotation.page_number <= page_count:
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_PAGE_INVALID",
+                "An annotation page is outside the source PDF",
+            )
+        by_page[annotation.page_number].append(annotation)
+    overlay_pages: list[Path] = []
+    overlay_root = destination.parent / f".{destination.stem}.overlays"
+    overlay_root.mkdir(mode=0o700, parents=False, exist_ok=False)
+    try:
+        for page_number in range(1, page_count + 1):
+            width, height = _pdf_page_size(source, page_number)
+            svg = overlay_root / f"page-{page_number:04d}.svg"
+            overlay = overlay_root / f"page-{page_number:04d}.pdf"
+            svg.write_text(
+                _overlay_svg(width, height, tuple(by_page.get(page_number, ()))),
+                encoding="utf-8",
+            )
+            svg.chmod(0o600)
+            _run(
+                (
+                    str(RSVG_CONVERT),
+                    "--format=pdf",
+                    f"--output={overlay}",
+                    str(svg),
+                ),
+                timeout=30,
+            )
+            overlay.chmod(0o600)
+            overlay_pages.append(overlay)
+        combined = overlay_root / "combined.pdf"
+        command = [str(QPDF), "--empty", "--pages"]
+        for overlay in overlay_pages:
+            command.extend((str(overlay), "1"))
+        command.extend(("--", str(combined)))
+        _run(tuple(command), timeout=60)
+        combined.chmod(0o600)
+        destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _run(
+            (
+                str(QPDF),
+                "--deterministic-id",
+                str(source),
+                "--overlay",
+                str(combined),
+                "--",
+                str(destination),
+            ),
+            timeout=120,
+        )
+        destination.chmod(0o600)
+        _require_regular_bounded_pdf(destination)
+        _run((str(QPDF), "--check", str(destination)), timeout=60)
+        sanitized = overlay_root / "sanitized.qdf.pdf"
+        _run(
+            (
+                str(QPDF),
+                "--qdf",
+                "--object-streams=disable",
+                str(destination),
+                str(sanitized),
+            ),
+            timeout=120,
+        )
+        payload = sanitized.read_bytes()
+        forbidden_tokens = (b"/Filespec", b"/EmbeddedFile", b"/GoToR", b"/Launch")
+        if any(token in payload for token in forbidden_tokens):
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_EXTERNAL_REFERENCE_REJECTED",
+                "The annotated PDF contains an external or embedded file reference",
+            )
+    finally:
+        for child in overlay_root.iterdir() if overlay_root.exists() else ():
+            child.unlink(missing_ok=True)
+        overlay_root.rmdir()
+    return identity
+
+
+def _pdf_page_size(source: Path, page_number: int) -> tuple[float, float]:
+    result = _run(
+        (str(PDFINFO), "-f", str(page_number), "-l", str(page_number), str(source)),
+        timeout=30,
+    )
+    match = _PAGE_SIZE.search(result.stdout)
+    if match is None:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_PAGE_GEOMETRY_INVALID",
+            "The source PDF page geometry could not be resolved",
+        )
+    width, height = float(match.group(1)), float(match.group(2))
+    if not 36 <= width <= 20_000 or not 36 <= height <= 20_000:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_PAGE_GEOMETRY_INVALID",
+            "The source PDF page geometry is outside the supported bound",
+        )
+    return width, height
+
+
+def _overlay_svg(
+    width: float,
+    height: float,
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+) -> str:
+    shapes: list[str] = []
+    for value in annotations:
+        x = width * value.region.x_ppm / 1_000_000
+        y = height * value.region.y_ppm / 1_000_000
+        box_width = width * value.region.width_ppm / 1_000_000
+        box_height = height * value.region.height_ppm / 1_000_000
+        label_width = max(18.0, 9.0 + 7.0 * len(str(value.ordinal)))
+        label_height = 16.0
+        label_x = min(max(0.0, x), max(0.0, width - label_width))
+        label_y = min(max(0.0, y - label_height), max(0.0, height - label_height))
+        shapes.extend(
+            (
+                (
+                    f'<rect x="{x:.4f}" y="{y:.4f}" width="{box_width:.4f}" '
+                    f'height="{box_height:.4f}" fill="none" stroke="#D70015" '
+                    'stroke-width="2.5"/>'
+                ),
+                (
+                    f'<rect x="{label_x:.4f}" y="{label_y:.4f}" width="{label_width:.4f}" '
+                    f'height="{label_height:.4f}" rx="3" fill="#D70015"/>'
+                ),
+                (
+                    f'<text x="{label_x + label_width / 2:.4f}" y="{label_y + 12:.4f}" '
+                    'font-family="DejaVu Sans" font-size="10" font-weight="bold" '
+                    f'fill="#FFFFFF" text-anchor="middle">{value.ordinal}</text>'
+                ),
+            )
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.4f}pt" '
+        f'height="{height:.4f}pt" viewBox="0 0 {width:.4f} {height:.4f}">'
+        + "".join(shapes)
+        + "</svg>\n"
+    )
+
+
+def _require_regular_bounded_pdf(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+        with path.open("rb") as stream:
+            header = stream.read(5)
+    except OSError as exc:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_PDF_INVALID",
+            "The PDF could not be read safely",
+        ) from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or not 8 <= metadata.st_size <= MAX_ANNOTATED_PDF_BYTES
+        or header != b"%PDF-"
+    ):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_PDF_INVALID",
+            "The PDF is not a bounded regular file",
+        )
+
+
+def _run(command: tuple[str, ...], *, timeout: int) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={**_SAFE_ENV, "HOME": "/nonexistent"},
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_RENDER_FAILED",
+            "The PDF annotation renderer failed",
+        ) from exc

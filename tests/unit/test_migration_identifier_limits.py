@@ -22,6 +22,8 @@ MIGRATION_MODULES = (
     "migrations.versions.20260922_0038_pdf_document_review_stage",
     "migrations.versions.20260922_0039_pdf_document_review_upload_intents",
     "migrations.versions.20260922_0040_office_document_review_corrections",
+    "migrations.versions.20260922_0041_paired_document_review_sets",
+    "migrations.versions.20260922_0042_document_review_pdf_annotations",
 )
 
 

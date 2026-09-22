@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_web_gui.contracts import (
+    DocumentReviewAnnotationSubmission,
     DocumentReviewCorrectionSubmission,
     ExplorerEntity,
     ExplorerQuery,
@@ -297,6 +298,83 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
     assert (
         await gateway.pdf_document_review_page_media(session, workflow_id, 1)
     ).content == page_content
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_document_review_annotation_gateway_verifies_role_download_hash() -> None:
+    workflow_id = "workflow_" + "7" * 32
+    annotation_id = "docannotation_" + "9" * 32
+    content = b"%PDF-annotated"
+    output_sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
+    annotation = {
+        "annotation_id": annotation_id,
+        "workflow_id": workflow_id,
+        "outputs": [
+            {
+                "document_role": "DOCUMENT",
+                "sha256": output_sha256,
+                "content_length": len(content),
+                "download_url": (
+                    f"/api/v1/pdf-document-reviews/{workflow_id}/annotations/"
+                    f"{annotation_id}/documents/DOCUMENT/download"
+                ),
+            }
+        ],
+        "created_at": NOW.isoformat(),
+        "resource_version": 1,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/annotations") and request.method == "POST":
+            assert request.headers["idempotency-key"] == "studio:annotation:test-key"
+            assert json.loads(request.content) == {"include_all_findings": True}
+            return httpx.Response(
+                201,
+                json=_single(
+                    {
+                        "command_id": "apicmd_" + "1" * 32,
+                        "resource_type": "document_review_pdf_annotation",
+                        "resource_id": annotation_id,
+                        "status": "COMPLETED",
+                        "resource_version": 1,
+                        "status_url": (
+                            f"/api/v1/pdf-document-reviews/{workflow_id}/annotations/"
+                            f"{annotation_id}"
+                        ),
+                    }
+                ),
+            )
+        if request.url.path.endswith(f"/annotations/{annotation_id}"):
+            return httpx.Response(200, json=_single(annotation))
+        if request.url.path.endswith("/documents/DOCUMENT/download"):
+            return httpx.Response(
+                200,
+                content=content,
+                headers={
+                    "content-type": "application/pdf",
+                    "content-disposition": 'attachment; filename="annotated.pdf"',
+                },
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    session = _session()
+    value = await gateway.create_document_review_annotation(
+        session,
+        workflow_id,
+        DocumentReviewAnnotationSubmission(
+            idempotency_key="studio:annotation:test-key",
+        ),
+    )
+    downloaded = await gateway.document_review_annotation_download(session, value, "DOCUMENT")
+    assert downloaded.content == content
     await gateway.close()
 
 

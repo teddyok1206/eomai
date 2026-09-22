@@ -502,6 +502,8 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .pdf-review-list-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pdf-review-list-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--eom-text-muted); }
 .pdf-review-document { overflow: hidden; }
+.pdf-review-role-tabs { display: flex; gap: 8px; padding: 10px 14px 0; }
+.pdf-review-role-tabs .selected { color: var(--eom-primary); background: var(--eom-blue-50); }
 .pdf-review-page-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--eom-border); }
 .pdf-review-page-stage { position: relative; min-height: 520px; margin: 16px; overflow: hidden; border: 1px solid var(--eom-border); border-radius: 8px; background: #eef0f3; box-shadow: inset 0 1px 2px rgb(0 0 0 / 5%); }
 .pdf-review-page-stage > img { display: block; width: 100%; height: auto; background: white; }
@@ -509,6 +511,12 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .pdf-review-anchor.active { border-color: #d70015; background: rgb(215 0 21 / 16%); }
 .pdf-review-summary { padding: 18px; border-bottom: 1px solid var(--eom-border); white-space: pre-wrap; }
 .pdf-review-summary h3 { margin: 0 0 10px; font-size: 1.02rem; }
+.pdf-review-cross-checks { margin: 10px; border: 1px solid var(--eom-border); border-radius: 12px; background: var(--eom-surface-muted); }
+.pdf-review-cross-checks .panel-heading { padding: 12px 14px 6px; }
+#pdf-review-cross-check-list { display: grid; gap: 8px; padding: 6px 10px 12px; }
+.pdf-review-cross-check { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--eom-border); border-radius: 10px; background: white; }
+.pdf-review-cross-check button { justify-self: start; }
+.pdf-review-cross-check p { margin: 0; white-space: pre-wrap; }
 .pdf-review-findings { display: grid; gap: 8px; padding: 10px; max-height: 680px; overflow: auto; }
 .pdf-review-finding-row { display: grid; gap: 6px; }
 .pdf-review-correction-choice { display: flex; align-items: center; gap: 7px; width: fit-content; color: var(--eom-graphite); font-size: var(--eom-type-label); font-weight: 700; }

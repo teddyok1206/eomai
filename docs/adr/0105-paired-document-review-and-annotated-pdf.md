@@ -35,8 +35,10 @@ successor pair:
 The request contains an ordered tuple with exactly two members: `QUESTION`, then `SOLUTION`.  Each
 member points to one immutable Catalog document revision and its PDF projection.  Every review
 anchor carries its document role, physical page number, page-image hash, normalized parts-per-million
-rectangle, and optional short quote/hash.  Cross-document checks carry separate non-empty question
-and solution anchor sets and an explicit `MATCHED`, `MISMATCH`, `MISSING`, or `INSUFFICIENT` outcome.
+rectangle, and optional short quote/hash.  Cross-document checks always carry a non-empty question
+anchor set.  They carry a non-empty solution anchor set for `MATCHED`, `MISMATCH`, and
+`INSUFFICIENT`; `MISSING` carries no solution anchor so the protocol cannot invent a location for
+absent content.
 
 ### Canonical source and identity
 
@@ -101,6 +103,15 @@ validated as a bounded PDF with no external-file reference before Catalog commit
 is idempotent on source revision + review-result revision + canonical annotation-set hash + renderer
 identity.  Original source bytes and document revisions are never changed.
 
+The annotation request hash is a semantic hash and deliberately excludes the HTTP/Catalog
+idempotency key.  The transport key controls claim and replay of one submission; it is not product
+identity.  Catalog derives the annotation ID and Artifact commit key from the semantic request hash
+and pinned renderer identity, so equivalent requests with different transport keys converge on one
+canonical Artifact.  The API keeps an indexed unique key on owner + Workflow + semantic request
+hash and stores role-addressed output pointers in a child relation keyed by annotation ID + role.
+Sequential lookup is O(log n), fixed one-or-two-role assembly is O(1), and concurrent creation is
+closed by both the database unique constraint and the Catalog semantic commit key.
+
 ### Graph knowledge
 
 This successor does not fabricate a broad or relevance-free Graph bundle.  Existing review behavior
@@ -128,4 +139,3 @@ Concatenating PDFs would destroy independent page identity.  Storing files in Po
 duplicate canonical Artifact bytes.  Letting the worker annotate or write the PDF would bypass
 orchestrator validation and NAS ownership.  Client-only canvas markings would not create a portable,
 hash-pinned review deliverable.
-

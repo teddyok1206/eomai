@@ -27,6 +27,10 @@ def new_pdf_review_upload_intent_id() -> str:
     return f"pdfreviewintent_{uuid4().hex}"
 
 
+def new_document_review_set_id() -> str:
+    return f"docreviewset_{uuid4().hex}"
+
+
 def new_hwpx_template_id() -> str:
     return f"hwpxtpl_{uuid4().hex}"
 

@@ -31,7 +31,9 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV12,
 )
 from eom_workflow.document_review import (
+    PairedDocumentReviewWorkerRequest,
     PdfDocumentReviewWorkerRequest,
+    validate_paired_document_review_output_against_request,
     validate_pdf_document_review_output_against_request,
 )
 from eom_workflow.models import (
@@ -52,6 +54,7 @@ from eom_workflow.models import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
+    PairedDocumentReviewRoleResult,
     PdfDocumentReviewRoleResult,
     RoleWorkerInput,
     WorkerRequest,
@@ -138,6 +141,7 @@ WorkflowRoleRequest = (
     | LegacyItemExtractionWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
+    | PairedDocumentReviewWorkerRequest
     | PdfDocumentReviewWorkerRequest
 )
 
@@ -689,6 +693,22 @@ class Orchestrator:
                     raise PlatformError(
                         ErrorCode.WORKER_RESULT_INVALID,
                         "PDF document review result differs from its immutable request",
+                    ) from exc
+            if isinstance(result, PairedDocumentReviewRoleResult):
+                if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequest):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "paired document review result has no typed immutable request",
+                    )
+                try:
+                    validate_paired_document_review_output_against_request(
+                        result.output,
+                        worker_input.request.review_request,
+                    )
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "paired document review result differs from its immutable request",
                     ) from exc
             result_document = result.model_dump(mode="json")
             evidence_receipt = None

@@ -21,6 +21,9 @@ from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.document_review_hwpx_correction_service import (
     DocumentReviewHwpxCorrectionService,
 )
+from eom_catalog_service.document_review_pdf_annotation_service import (
+    DocumentReviewPdfAnnotationService,
+)
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_models import (
     KnowledgeAnalysisBatchRangeRecord,
@@ -245,6 +248,7 @@ def serve() -> int:
             pdf_document_review_intake=PdfDocumentReviewIntakeService(engine),
             office_document_review_intake=OfficeDocumentReviewIntakeService(engine),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
+            document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
         )
         thread = threading.Thread(
             target=server.serve_forever,

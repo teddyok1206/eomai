@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     KnowledgeArtifactMemberPointer,
     KnowledgeProposalArtifactMember,
     OriginArtifactMemberPointer,
+    PdfReviewDocumentPointer,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -28,6 +29,7 @@ from eom_workflow import (
     CodexAssessmentImageInputManifest,
     CodexImageInputManifest,
     CodexInvocation,
+    CodexPairedReviewImageInputManifest,
     InstructionBundleManifest,
     ReferenceBundleManifest,
     ResolvedExecutionPlan,
@@ -43,6 +45,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV13,
+    ResolvedExecutionPlanV14,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -169,6 +172,7 @@ def materialize_execution_step(
         "resolved-execution-plan/8.0",
         "resolved-execution-plan/9.0",
         "resolved-execution-plan/13.0",
+        "resolved-execution-plan/14.0",
     }
     plan: (
         ResolvedExecutionPlan
@@ -184,6 +188,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV13
+        | ResolvedExecutionPlanV14
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -209,6 +214,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/13.0":
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/14.0":
+        plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -396,7 +403,8 @@ def materialize_execution_step(
     elif isinstance(plan, ResolvedExecutionPlanV13):
         document_bytes, document_members = _materialize_pdf_review_document(
             session,
-            plan=plan,
+            document=plan.document,
+            document_role=None,
             workspace=workspace,
             artifact_root=artifact_root,
             worker_group_id=worker_group_id,
@@ -407,6 +415,20 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.document.source_pdf.artifact_revision_id
         source_sha256 = plan.document.source_pdf.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV14):
+        for review_document in plan.documents:
+            document_bytes, document_members = _materialize_pdf_review_document(
+                session,
+                document=review_document.document,
+                document_role=review_document.role,
+                workspace=workspace,
+                artifact_root=artifact_root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            total_bytes += document_bytes
+            member_count += document_members
+        _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
     total_bytes += len(agents_bytes)
@@ -543,6 +565,50 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV14):
+        image_manifest_document = {
+            "schema_version": "codex-image-input-manifest/3.0",
+            "plan_id": plan.plan_id,
+            "images": [
+                {
+                    "document_role": review_document.role,
+                    "physical_page": page.page_number,
+                    "relative_path": (
+                        f"source/{review_document.role.lower()}/images/"
+                        f"page-{page.page_number:06d}.png"
+                    ),
+                    "media_type": "image/png",
+                    "sha256": page.page_image.sha256,
+                    "bytes": page.page_image.content_length,
+                    "width_pixels": page.width_px,
+                    "height_pixels": page.height_px,
+                }
+                for review_document in plan.documents
+                for page in review_document.document.pages
+            ],
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        image_manifest_document["manifest_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in image_manifest_document.items()
+                if key != "manifest_sha256"
+            }
+        )
+        validate_control_contract("codex-image-input-manifest-v3", image_manifest_document)
+        paired_image_manifest = CodexPairedReviewImageInputManifest.model_validate(
+            image_manifest_document
+        )
+        image_manifest_bytes = canonical_json_bytes(paired_image_manifest) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = paired_image_manifest.manifest_sha256
 
     invocation_document: dict[str, object] = {
         "schema_version": "codex-invocation/1.0",
@@ -617,6 +683,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV11
             | ResolvedExecutionPlanV12
             | ResolvedExecutionPlanV13
+            | ResolvedExecutionPlanV14
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -640,6 +707,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/13.0":
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
+        plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -713,6 +782,10 @@ def authorized_execution_artifact_revisions(
             )
     elif isinstance(plan, ResolvedExecutionPlanV13):
         revision_ids.add(plan.document.source_pdf.artifact_revision_id)
+    elif isinstance(plan, ResolvedExecutionPlanV14):
+        revision_ids.update(
+            value.document.source_pdf.artifact_revision_id for value in plan.documents
+        )
     bundles: list[tuple[BundleRevisionPointer, str]] = [(step.instruction_bundle, "INSTRUCTION")]
     if step.reference_bundle is not None:
         bundles.append((step.reference_bundle, "REFERENCE"))
@@ -1442,7 +1515,8 @@ def _materialize_base_analysis(
 def _materialize_pdf_review_document(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV13,
+    document: PdfReviewDocumentPointer,
+    document_role: str | None,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -1450,7 +1524,7 @@ def _materialize_pdf_review_document(
 ) -> tuple[int, int]:
     """Stage exact reviewed page images and optional text without exposing NAS."""
 
-    document = plan.document
+    role_path = "document" if document_role is None else document_role.lower()
     total_bytes = 0
     member_count = 0
     for page in document.pages:
@@ -1465,7 +1539,7 @@ def _materialize_pdf_review_document(
         image = _materialize_assessment_member(
             session,
             pointer=image_pointer,
-            relative_path=(f"source/document/images/page-{page.page_number:06d}.png"),
+            relative_path=(f"source/{role_path}/images/page-{page.page_number:06d}.png"),
             workspace=workspace,
             artifact_root=artifact_root,
             worker_group_id=worker_group_id,
@@ -1497,7 +1571,7 @@ def _materialize_pdf_review_document(
             text_payload = _materialize_assessment_member(
                 session,
                 pointer=text_pointer,
-                relative_path=(f"source/document/text/page-{page.page_number:06d}.json"),
+                relative_path=(f"source/{role_path}/text/page-{page.page_number:06d}.json"),
                 workspace=workspace,
                 artifact_root=artifact_root,
                 worker_group_id=worker_group_id,

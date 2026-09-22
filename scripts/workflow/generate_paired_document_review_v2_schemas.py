@@ -45,9 +45,7 @@ def input_schema() -> dict[str, Any]:
         "request_sha256",
     ]
     review_request["properties"].pop("document")
-    review_request["properties"]["schema_version"] = {
-        "const": "paired-document-review-request/1.0"
-    }
+    review_request["properties"]["schema_version"] = {"const": "paired-document-review-request/1.0"}
     review_request["properties"]["documents"] = {
         "type": "array",
         "minItems": 2,
@@ -69,9 +67,7 @@ def input_schema() -> dict[str, Any]:
         "items": False,
     }
     worker_request = defs["worker_request"]
-    worker_request["properties"]["request_name"] = {
-        "const": "PAIRED_DOCUMENT_REVIEW_REQUEST"
-    }
+    worker_request["properties"]["request_name"] = {"const": "PAIRED_DOCUMENT_REVIEW_REQUEST"}
     return value
 
 
@@ -144,7 +140,6 @@ def result_schema() -> dict[str, Any]:
             },
             "solution_anchors": {
                 "type": "array",
-                "minItems": 1,
                 "maxItems": 16,
                 "items": {"$ref": "#/$defs/anchor"},
             },

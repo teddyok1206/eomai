@@ -133,6 +133,13 @@ class CustomerSupportCaseView(WebModel):
 
 
 PdfReviewPresetKey = Literal["PROBLEM_SET", "WEEKLY_WORKBOOK", "MOCK_EXAM"]
+DocumentReviewRole = Literal["QUESTION", "SOLUTION"]
+DocumentReviewSourceFormat = Literal["PDF", "HWP", "HWPX"]
+DocumentReviewSourceMediaType = Literal[
+    "application/pdf",
+    "application/vnd.hancom.hwp",
+    "application/vnd.hancom.hwpx",
+]
 
 
 class PdfDocumentReviewSubmission(WebModel):
@@ -234,6 +241,161 @@ class PdfDocumentReviewUploadIntentView(WebModel):
         return self
 
 
+class PairedDocumentReviewSourceSubmission(WebModel):
+    role: DocumentReviewRole
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
+    )
+    source_format: DocumentReviewSourceFormat
+    media_type: DocumentReviewSourceMediaType
+    content_length: int = Field(ge=8, le=256 * 1024 * 1024)
+
+    @model_validator(mode="after")
+    def coherent_source(self) -> PairedDocumentReviewSourceSubmission:
+        suffix, media_type = {
+            "PDF": (".pdf", "application/pdf"),
+            "HWP": (".hwp", "application/vnd.hancom.hwp"),
+            "HWPX": (".hwpx", "application/vnd.hancom.hwpx"),
+        }[self.source_format]
+        if not self.original_filename.lower().endswith(suffix) or self.media_type != media_type:
+            raise ValueError("paired document-review source identity differs")
+        return self
+
+
+class PairedDocumentReviewSubmission(WebModel):
+    documents: tuple[
+        PairedDocumentReviewSourceSubmission,
+        PairedDocumentReviewSourceSubmission,
+    ] = Field(min_length=2, max_length=2)
+    preset_key: PdfReviewPresetKey
+    additional_guidance: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=8000,
+        pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f]+$",
+    )
+    locale: Literal["ko-KR"] = "ko-KR"
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+    @model_validator(mode="after")
+    def question_then_solution(self) -> PairedDocumentReviewSubmission:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review submission requires QUESTION then SOLUTION")
+        return self
+
+
+class DocumentReviewSetMemberView(PairedDocumentReviewSourceSubmission):
+    state: Literal[
+        "AWAITING_UPLOAD",
+        "PROCESSING",
+        "COMMITTED",
+        "FAILED_RETRYABLE",
+        "FAILED_FINAL",
+    ]
+    upload_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    document_id: str | None = Field(default=None, pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str | None = Field(
+        default=None,
+        pattern=r"^documentrev_[0-9a-f]{32}$",
+    )
+    source_pdf_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    page_count: int | None = Field(default=None, ge=1, le=2000)
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    upload_url: str = Field(
+        pattern=(
+            r"^/api/v1/pdf-document-reviews/sets/docreviewset_[0-9a-f]{32}/"
+            r"documents/(?:QUESTION|SOLUTION)/content$"
+        )
+    )
+
+    @model_validator(mode="after")
+    def coherent_member_state(self) -> DocumentReviewSetMemberView:
+        pointers = (
+            self.document_id,
+            self.document_revision_id,
+            self.source_pdf_sha256,
+            self.page_count,
+        )
+        if self.state == "AWAITING_UPLOAD":
+            if self.upload_sha256 is not None or any(value is not None for value in pointers):
+                raise ValueError("awaiting paired review member exposes processed state")
+            if self.failure_code is not None:
+                raise ValueError("awaiting paired review member exposes a failure")
+        elif self.state == "PROCESSING":
+            if self.upload_sha256 is None or any(value is not None for value in pointers):
+                raise ValueError("processing paired review member has inconsistent state")
+            if self.failure_code is not None:
+                raise ValueError("processing paired review member exposes a failure")
+        elif self.state == "COMMITTED":
+            if self.upload_sha256 is None or any(value is None for value in pointers):
+                raise ValueError("committed paired review member lacks immutable pointers")
+            if self.failure_code is not None:
+                raise ValueError("committed paired review member exposes a failure")
+        elif self.upload_sha256 is None or self.failure_code is None:
+            raise ValueError("failed paired review member lacks its hash or failure code")
+        return self
+
+
+class DocumentReviewSetView(WebModel):
+    review_set_id: str = Field(pattern=r"^docreviewset_[0-9a-f]{32}$")
+    state: Literal[
+        "AWAITING_UPLOADS",
+        "STARTING",
+        "STARTED",
+        "FAILED_RETRYABLE",
+        "FAILED_FINAL",
+    ]
+    documents: tuple[DocumentReviewSetMemberView, DocumentReviewSetMemberView] = Field(
+        min_length=2,
+        max_length=2,
+    )
+    preset_key: PdfReviewPresetKey
+    additional_guidance_sha256: str | None = Field(
+        default=None,
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    )
+    workflow_id: str | None = Field(default=None, pattern=r"^workflow_[0-9a-f]{32}$")
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    review_url: str | None = None
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    expires_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_set(self) -> DocumentReviewSetView:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review set requires QUESTION then SOLUTION")
+        expected_urls = tuple(
+            f"/api/v1/pdf-document-reviews/sets/{self.review_set_id}/documents/{value.role}/content"
+            for value in self.documents
+        )
+        if tuple(value.upload_url for value in self.documents) != expected_urls:
+            raise ValueError("paired review member URL differs from set identity")
+        if self.state == "STARTED":
+            if (
+                self.workflow_id is None
+                or self.failure_code is not None
+                or self.review_url != f"/api/v1/pdf-document-reviews/{self.workflow_id}"
+                or any(value.state != "COMMITTED" for value in self.documents)
+            ):
+                raise ValueError("started paired review set has inconsistent state")
+        elif self.state in {"AWAITING_UPLOADS", "STARTING"}:
+            if self.workflow_id is not None or self.failure_code is not None or self.review_url:
+                raise ValueError("non-started paired review set exposes terminal state")
+        elif self.workflow_id is not None or self.failure_code is None or self.review_url:
+            raise ValueError("failed paired review set has inconsistent state")
+        if self.updated_at < self.created_at or self.expires_at <= self.created_at:
+            raise ValueError("paired review set timestamps are inconsistent")
+        return self
+
+
 class DocumentReviewCorrectionEligibilityView(WebModel):
     workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
     source_format: Literal["PDF", "HWP", "HWPX"]
@@ -306,6 +468,47 @@ class DocumentReviewCorrectionView(WebModel):
         )
         if self.download_url != expected:
             raise ValueError("document-review correction download URL differs")
+        return self
+
+
+class DocumentReviewAnnotationSubmission(WebModel):
+    include_all_findings: Literal[True] = True
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+
+class DocumentReviewAnnotationOutputView(WebModel):
+    document_role: Literal["DOCUMENT", "QUESTION", "SOLUTION"]
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    content_length: int = Field(ge=1, le=512 * 1024 * 1024)
+    download_url: str
+
+
+class DocumentReviewAnnotationView(WebModel):
+    annotation_id: str = Field(pattern=r"^docannotation_[0-9a-f]{32}$")
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    outputs: tuple[DocumentReviewAnnotationOutputView, ...] = Field(
+        min_length=1,
+        max_length=2,
+    )
+    created_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def exact_annotation(self) -> DocumentReviewAnnotationView:
+        roles = tuple(value.document_role for value in self.outputs)
+        if roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("document-review annotation output roles are invalid")
+        for output in self.outputs:
+            expected = (
+                f"/api/v1/pdf-document-reviews/{self.workflow_id}/annotations/"
+                f"{self.annotation_id}/documents/{output.document_role}/download"
+            )
+            if output.download_url != expected:
+                raise ValueError("document-review annotation download URL differs")
         return self
 
 
@@ -412,6 +615,210 @@ class PdfDocumentReviewArtifactView(WebModel):
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+class PairedReviewAnchor(PdfReviewAnchor):
+    document_role: DocumentReviewRole
+    page_number: int = Field(ge=1, le=64)
+
+
+class PairedReviewPageRef(WebModel):
+    document_role: DocumentReviewRole
+    page_number: int = Field(ge=1, le=2000)
+
+
+class PairedReviewVerificationTarget(WebModel):
+    target_id: str = Field(pattern=r"^reviewtarget_[0-9a-f]{32}$")
+    axis: str = Field(min_length=1, max_length=64)
+    page_refs: tuple[PairedReviewPageRef, ...] = Field(min_length=1, max_length=4000)
+    anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=16)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+
+class PairedReviewCandidate(WebModel):
+    candidate_id: str = Field(pattern=r"^reviewcandidate_[0-9a-f]{32}$")
+    finding_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    category: str = Field(min_length=1, max_length=64)
+    severity: Literal["BLOCKER", "HIGH", "MEDIUM", "LOW", "NOTE"]
+    title: str = Field(min_length=1, max_length=160)
+    anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    disposition: Literal["CONFIRMED", "DEMOTED", "UNCERTAIN"]
+    rationale: str = Field(min_length=1, max_length=4000)
+
+
+class PairedReviewFinding(WebModel):
+    finding_id: str = Field(pattern=r"^reviewfinding_[0-9a-f]{32}$")
+    candidate_id: str = Field(pattern=r"^reviewcandidate_[0-9a-f]{32}$")
+    ordinal: int = Field(ge=1, le=512)
+    finding_code: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    category: str = Field(min_length=1, max_length=64)
+    severity: Literal["BLOCKER", "HIGH", "MEDIUM", "LOW", "NOTE"]
+    title: str = Field(min_length=1, max_length=160)
+    description: str = Field(min_length=1, max_length=4000)
+    anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    recommendation: PdfReviewRecommendation
+
+
+class PairedReviewDocumentIdentity(WebModel):
+    role: DocumentReviewRole
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class PairedReviewCrossDocumentCheck(WebModel):
+    check_id: str = Field(pattern=r"^reviewcross_[0-9a-f]{32}$")
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=16)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=16)
+    status: Literal["MATCHED", "MISMATCH", "MISSING", "INSUFFICIENT"]
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def exact_roles(self) -> PairedReviewCrossDocumentCheck:
+        if any(anchor.document_role != "QUESTION" for anchor in self.question_anchors):
+            raise ValueError("question cross-check anchors address another document")
+        if any(anchor.document_role != "SOLUTION" for anchor in self.solution_anchors):
+            raise ValueError("solution cross-check anchors address another document")
+        if self.status == "MISSING":
+            if self.solution_anchors:
+                raise ValueError("missing solution check cannot invent a solution location")
+        elif not self.solution_anchors:
+            raise ValueError("cross-document check requires a solution location")
+        return self
+
+
+class PairedDocumentReviewOutputView(WebModel):
+    review_request_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    documents: tuple[PairedReviewDocumentIdentity, PairedReviewDocumentIdentity] = Field(
+        min_length=2,
+        max_length=2,
+    )
+    preset_key: PdfReviewPresetKey
+    preset_revision_id: str = Field(pattern=r"^reviewpresetrev_[0-9a-f]{32}$")
+    preset_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    review_status: Literal["COMPLETE", "NEEDS_HUMAN_DECISION"]
+    summary: str = Field(min_length=1, max_length=4000)
+    verification_targets: tuple[PairedReviewVerificationTarget, ...] = Field(
+        min_length=1,
+        max_length=256,
+    )
+    candidate_findings: tuple[PairedReviewCandidate, ...] = Field(max_length=512)
+    findings: tuple[PairedReviewFinding, ...] = Field(max_length=512)
+    cross_document_checks: tuple[PairedReviewCrossDocumentCheck, ...] = Field(
+        min_length=1,
+        max_length=512,
+    )
+    mutation_performed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def coherent_output(self) -> PairedDocumentReviewOutputView:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review output requires QUESTION then SOLUTION")
+        finding_ids = tuple(value.finding_id for value in self.findings)
+        if len(finding_ids) != len(set(finding_ids)):
+            raise ValueError("paired review finding IDs must be unique")
+        check_ids = tuple(value.check_id for value in self.cross_document_checks)
+        if check_ids != tuple(sorted(set(check_ids))):
+            raise ValueError("paired review cross-check IDs must be sorted and unique")
+        return self
+
+
+class PairedDocumentReviewPageView(WebModel):
+    document_role: DocumentReviewRole
+    page_number: int = Field(ge=1, le=64)
+    width_px: int = Field(ge=64, le=16384)
+    height_px: int = Field(ge=64, le=16384)
+    rotation_degrees: Literal[0, 90, 180, 270]
+    image_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    image_content_length: int = Field(ge=1, le=16 * 1024 * 1024)
+    image_url: str = Field(
+        pattern=(
+            r"^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}/documents/"
+            r"(?:QUESTION|SOLUTION)/pages/(?:[1-9]|[1-5][0-9]|6[0-4])/image$"
+        )
+    )
+
+
+class PairedDocumentReviewDocumentView(WebModel):
+    role: DocumentReviewRole
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    original_filename: str = Field(min_length=5, max_length=240)
+    source_format: DocumentReviewSourceFormat
+    source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    page_count: int = Field(ge=1, le=64)
+    pages: tuple[PairedDocumentReviewPageView, ...] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def coherent_document(self) -> PairedDocumentReviewDocumentView:
+        suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[self.source_format]
+        if not self.original_filename.lower().endswith(suffix):
+            raise ValueError("paired review filename differs from its source format")
+        if len(self.pages) != self.page_count:
+            raise ValueError("paired review page count differs from its pages")
+        if tuple(value.page_number for value in self.pages) != tuple(range(1, self.page_count + 1)):
+            raise ValueError("paired review pages must be complete and ordered")
+        if any(value.document_role != self.role for value in self.pages):
+            raise ValueError("paired review page role differs from its document")
+        return self
+
+
+class PairedDocumentReviewView(WebModel):
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    state: Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]
+    documents: tuple[PairedDocumentReviewDocumentView, PairedDocumentReviewDocumentView] = Field(
+        min_length=2,
+        max_length=2,
+    )
+    preset_key: PdfReviewPresetKey
+    preset_display_name: Literal["N제", "주간지", "모의고사"]
+    additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    result_artifact: PdfDocumentReviewArtifactView | None = None
+    result: PairedDocumentReviewOutputView | None = None
+    failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def coherent_review(self) -> PairedDocumentReviewView:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review view requires QUESTION then SOLUTION")
+        for document in self.documents:
+            for page in document.pages:
+                expected = (
+                    f"/api/v1/pdf-document-reviews/{self.workflow_id}/documents/"
+                    f"{document.role}/pages/{page.page_number}/image"
+                )
+                if page.image_url != expected:
+                    raise ValueError("paired review page URL differs from its document role")
+        expected_display = {
+            "PROBLEM_SET": "N제",
+            "WEEKLY_WORKBOOK": "주간지",
+            "MOCK_EXAM": "모의고사",
+        }[self.preset_key]
+        if self.preset_display_name != expected_display:
+            raise ValueError("paired review preset display differs from its key")
+        if self.state == "COMPLETED":
+            if self.result is None or self.result_artifact is None or self.failure_code is not None:
+                raise ValueError("completed paired review requires its immutable result")
+            expected_documents = tuple(
+                (value.role, value.document_id, value.document_revision_id)
+                for value in self.documents
+            )
+            result_documents = tuple(
+                (value.role, value.document_id, value.document_revision_id)
+                for value in self.result.documents
+            )
+            if expected_documents != result_documents or self.result.preset_key != self.preset_key:
+                raise ValueError("paired review result differs from its immutable request")
+        elif self.result is not None or self.result_artifact is not None:
+            raise ValueError("non-completed paired review cannot expose result bytes")
+        if (self.state == "FAILED") != (self.failure_code is not None):
+            raise ValueError("paired review failure state is inconsistent")
+        return self
+
+
 class PdfDocumentReviewView(WebModel):
     workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
     state: Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]
@@ -469,6 +876,9 @@ class PdfDocumentReviewView(WebModel):
         if (self.state == "FAILED") != (self.failure_code is not None):
             raise ValueError("PDF review failure state is inconsistent")
         return self
+
+
+DocumentReviewView = PdfDocumentReviewView | PairedDocumentReviewView
 
 
 class QualityProfile(StrEnum):
