@@ -1,0 +1,453 @@
+{
+  "$defs": {
+    "request": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "PDF"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/pdf"
+              },
+              "original_filename": {
+                "pattern": "\\.[Pp][Dd][Ff]$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWP"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/vnd.hancom.hwp"
+              },
+              "original_filename": {
+                "pattern": "\\.[Hh][Ww][Pp]$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWPX"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/vnd.hancom.hwpx"
+              },
+              "original_filename": {
+                "pattern": "\\.[Hh][Ww][Pp][Xx]$"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "additional_guidance": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]+$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "locale": {
+          "const": "ko-KR"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx"
+          ]
+        },
+        "original_filename": {
+          "maxLength": 240,
+          "minLength": 5,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
+          "type": "string"
+        },
+        "preset_key": {
+          "enum": [
+            "PROBLEM_SET",
+            "WEEKLY_WORKBOOK",
+            "MOCK_EXAM"
+          ]
+        },
+        "source_format": {
+          "enum": [
+            "PDF",
+            "HWP",
+            "HWPX"
+          ]
+        }
+      },
+      "required": [
+        "original_filename",
+        "source_format",
+        "media_type",
+        "content_length",
+        "preset_key",
+        "locale"
+      ],
+      "type": "object"
+    },
+    "view": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "PDF"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/pdf"
+              },
+              "original_filename": {
+                "pattern": "\\.[Pp][Dd][Ff]$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWP"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/vnd.hancom.hwp"
+              },
+              "original_filename": {
+                "pattern": "\\.[Hh][Ww][Pp]$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWPX"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "application/vnd.hancom.hwpx"
+              },
+              "original_filename": {
+                "pattern": "\\.[Hh][Ww][Pp][Xx]$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "AWAITING_UPLOAD"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure_code": {
+                "type": "null"
+              },
+              "review_url": {
+                "type": "null"
+              },
+              "upload_sha256": {
+                "type": "null"
+              },
+              "workflow_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "PROCESSING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure_code": {
+                "type": "null"
+              },
+              "review_url": {
+                "type": "null"
+              },
+              "upload_sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "workflow_id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "upload_sha256"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "STARTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure_code": {
+                "type": "null"
+              },
+              "review_url": {
+                "pattern": "^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "upload_sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "workflow_id": {
+                "pattern": "^workflow_[0-9a-f]{32}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "upload_sha256",
+              "workflow_id",
+              "review_url"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "FAILED_RETRYABLE",
+                  "FAILED_FINAL"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure_code": {
+                "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                "type": "string"
+              },
+              "review_url": {
+                "type": "null"
+              },
+              "upload_sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "workflow_id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "upload_sha256",
+              "failure_code"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "additional_guidance_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "failure_code": {
+          "oneOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx"
+          ]
+        },
+        "original_filename": {
+          "maxLength": 240,
+          "minLength": 5,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
+          "type": "string"
+        },
+        "preset_key": {
+          "enum": [
+            "PROBLEM_SET",
+            "WEEKLY_WORKBOOK",
+            "MOCK_EXAM"
+          ]
+        },
+        "resource_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "review_url": {
+          "oneOf": [
+            {
+              "pattern": "^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_format": {
+          "enum": [
+            "PDF",
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "state": {
+          "enum": [
+            "AWAITING_UPLOAD",
+            "PROCESSING",
+            "STARTED",
+            "FAILED_RETRYABLE",
+            "FAILED_FINAL"
+          ]
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "upload_intent_id": {
+          "pattern": "^pdfreviewintent_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "upload_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upload_url": {
+          "pattern": "^/api/v1/pdf-document-reviews/upload-intents/pdfreviewintent_[0-9a-f]{32}/content$",
+          "type": "string"
+        },
+        "workflow_id": {
+          "oneOf": [
+            {
+              "pattern": "^workflow_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "upload_intent_id",
+        "state",
+        "original_filename",
+        "source_format",
+        "media_type",
+        "content_length",
+        "preset_key",
+        "upload_url",
+        "created_at",
+        "updated_at",
+        "expires_at",
+        "resource_version"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/api/document-review-upload/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/view"
+    }
+  ],
+  "title": "EOM Office Document Review Upload API V2",
+  "type": "object"
+}

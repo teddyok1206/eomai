@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "eligibility": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "unavailable_reason": {
+                "enum": [
+                  "SOURCE_NOT_HWPX",
+                  "REVIEW_NOT_COMPLETED",
+                  "NO_SAFE_REPLACEMENTS"
+                ]
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "correction_available": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "eligible_finding_ids": {
+                "minItems": 1
+              },
+              "source_format": {
+                "const": "HWPX"
+              },
+              "unavailable_reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "correction_available": {
+          "type": "boolean"
+        },
+        "eligible_finding_ids": {
+          "items": {
+            "pattern": "^reviewfinding_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_format": {
+          "enum": [
+            "PDF",
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "unavailable_reason": {
+          "oneOf": [
+            {
+              "enum": [
+                "SOURCE_NOT_HWPX",
+                "REVIEW_NOT_COMPLETED",
+                "NO_SAFE_REPLACEMENTS"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "source_format",
+        "correction_available",
+        "eligible_finding_ids",
+        "unavailable_reason"
+      ],
+      "type": "object"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_ids": {
+          "items": {
+            "pattern": "^reviewfinding_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "finding_ids"
+      ],
+      "type": "object"
+    },
+    "view": {
+      "additionalProperties": false,
+      "properties": {
+        "applied_finding_ids": {
+          "items": {
+            "pattern": "^reviewfinding_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "correction_id": {
+          "pattern": "^doccorrection_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "download_url": {
+          "pattern": "^/api/v1/pdf-document-reviews/workflow_[0-9a-f]{32}/corrections/doccorrection_[0-9a-f]{32}/download$",
+          "type": "string"
+        },
+        "output_content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "output_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "resource_version": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "state": {
+          "const": "COMPLETED"
+        },
+        "text_color": {
+          "const": "#FF0000"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "correction_id",
+        "workflow_id",
+        "state",
+        "applied_finding_ids",
+        "text_color",
+        "output_sha256",
+        "output_content_length",
+        "download_url",
+        "created_at",
+        "resource_version"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/api/document-review-hwpx-correction/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/eligibility"
+    },
+    {
+      "$ref": "#/$defs/view"
+    }
+  ],
+  "title": "EOM Document Review HWPX Correction API V1",
+  "type": "object"
+}
