@@ -48,7 +48,7 @@ def _hwpx_manifest() -> dict[str, Any]:
     source = _member(
         "source/original.hwpx",
         media_type="application/vnd.hancom.hwpx",
-        schema_ref="eom://schemas/document-review/original-source/2.0",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
     )
     value: dict[str, Any] = {
         "schema_version": "document-review-intake-manifest/2.0",
@@ -60,7 +60,7 @@ def _hwpx_manifest() -> dict[str, Any]:
         "review_pdf": _member(
             "source/original.pdf",
             media_type="application/pdf",
-            schema_ref="eom://schemas/document-review/review-pdf/2.0",
+            schema_ref="eom://schemas/document-review/pdf-source/1.0",
             sha256=SHA_B,
         ),
         "editable_hwpx": deepcopy(source),
@@ -179,6 +179,7 @@ def test_office_intake_manifest_rejects_editable_hwp_source() -> None:
     value["original_source"].update(
         member_path="source/original.hwp",
         media_type="application/vnd.hancom.hwp",
+        schema_ref="eom://schemas/document-review/hwp-source/2.0",
     )
     value["manifest_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "manifest_sha256"}

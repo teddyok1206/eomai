@@ -275,20 +275,24 @@ class OfficeDocumentReviewIntakeManifest(FrozenModel):
             "HWP": "application/vnd.hancom.hwp",
             "HWPX": "application/vnd.hancom.hwpx",
         }
+        schema_by_format = {
+            "PDF": "eom://schemas/document-review/pdf-source/1.0",
+            "HWP": "eom://schemas/document-review/hwp-source/2.0",
+            "HWPX": "eom://schemas/document-review/editable-hwpx/1.0",
+        }
         source_suffix = suffix_by_format[self.source_format]
         if not self.original_filename.lower().endswith(source_suffix):
             raise ValueError("Office review source filename differs from its declared format")
         if (
             self.original_source.member_path != f"source/original{source_suffix}"
             or self.original_source.media_type != media_by_format[self.source_format]
-            or self.original_source.schema_ref
-            != "eom://schemas/document-review/original-source/2.0"
+            or self.original_source.schema_ref != schema_by_format[self.source_format]
         ):
             raise ValueError("Office review original source differs from its exact member contract")
         if (
             self.review_pdf.member_path != "source/original.pdf"
             or self.review_pdf.media_type != "application/pdf"
-            or self.review_pdf.schema_ref != "eom://schemas/document-review/review-pdf/2.0"
+            or self.review_pdf.schema_ref != "eom://schemas/document-review/pdf-source/1.0"
             or self.review_pdf.sha256 != self.conversion.review_pdf_sha256
         ):
             raise ValueError("Office review PDF differs from its exact projection contract")
@@ -297,11 +301,8 @@ class OfficeDocumentReviewIntakeManifest(FrozenModel):
                 raise ValueError(
                     "PDF review source must use identity conversion without HWPX editing"
                 )
-            if (
-                self.original_source.sha256 != self.review_pdf.sha256
-                or self.original_source.content_length != self.review_pdf.content_length
-            ):
-                raise ValueError("PDF identity projection must preserve exact source bytes")
+            if self.original_source != self.review_pdf:
+                raise ValueError("PDF identity projection must reuse the exact source member")
         else:
             if self.conversion.conversion_kind != "LIBREOFFICE_H2ORESTART_PDF":
                 raise ValueError("Office review source requires the pinned Office PDF converter")

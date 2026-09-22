@@ -214,11 +214,24 @@ class OfficeDocumentReviewSourcePointer(FrozenModel):
         ):
             raise ValueError("Office review intake manifest pointer differs")
         expected_source = {
-            "PDF": (".pdf", "application/pdf", None, "IDENTITY_PDF"),
-            "HWP": (".hwp", "application/vnd.hancom.hwp", None, "LIBREOFFICE_H2ORESTART_PDF"),
+            "PDF": (
+                ".pdf",
+                "application/pdf",
+                "eom://schemas/document-review/pdf-source/1.0",
+                None,
+                "IDENTITY_PDF",
+            ),
+            "HWP": (
+                ".hwp",
+                "application/vnd.hancom.hwp",
+                "eom://schemas/document-review/hwp-source/2.0",
+                None,
+                "LIBREOFFICE_H2ORESTART_PDF",
+            ),
             "HWPX": (
                 ".hwpx",
                 "application/vnd.hancom.hwpx",
+                "eom://schemas/document-review/editable-hwpx/1.0",
                 self.original_source,
                 "LIBREOFFICE_H2ORESTART_PDF",
             ),
@@ -227,10 +240,9 @@ class OfficeDocumentReviewSourcePointer(FrozenModel):
             not self.original_filename.lower().endswith(expected_source[0])
             or self.original_source.member_path != f"source/original{expected_source[0]}"
             or self.original_source.media_type != expected_source[1]
-            or self.original_source.schema_ref
-            != "eom://schemas/document-review/original-source/2.0"
-            or self.editable_hwpx != expected_source[2]
-            or self.conversion.conversion_kind != expected_source[3]
+            or self.original_source.schema_ref != expected_source[2]
+            or self.editable_hwpx != expected_source[3]
+            or self.conversion.conversion_kind != expected_source[4]
         ):
             raise ValueError("Office review source pointer differs from its declared format")
         return self

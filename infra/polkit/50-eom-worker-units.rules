@@ -11,6 +11,7 @@ polkit.addRule(function(action, subject) {
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
     var contentTeamUnit = /^eom-hwpx-content-team@hwpxbuild_[0-9a-f]{32}\.service$/;
     var localImageUnit = /^eom-image-provider@imgreq_[0-9a-f]{32}\.service$/;
+    var officeConverterUnit = /^eom-office-converter@officeconv_[0-9a-f]{32}\.service$/;
 
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
         return polkit.Result.NOT_HANDLED;
@@ -30,11 +31,16 @@ polkit.addRule(function(action, subject) {
             || contentTeamUnit.test(unit))) {
         return polkit.Result.YES;
     }
+    if (verb === "start" && subject.user === "eom-catalog-manager"
+        && officeConverterUnit.test(unit)) {
+        return polkit.Result.YES;
+    }
     if (verb === "start" && subject.user === "eom"
         && (probeUnit.test(unit) || authUnit.test(unit))) {
         return polkit.Result.YES;
     }
-    if (["eom", "eom-workflow-runner", "eom-hwpx-manager"].indexOf(subject.user) !== -1) {
+    if (["eom", "eom-workflow-runner", "eom-hwpx-manager", "eom-catalog-manager"]
+        .indexOf(subject.user) !== -1) {
         return polkit.Result.NO;
     }
     return polkit.Result.NOT_HANDLED;
