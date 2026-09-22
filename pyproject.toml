@@ -82,6 +82,7 @@ eom_catalog_contracts = [
   "resources/item-origin/*.json",
   "resources/legacy-knowledge/*.json",
   "resources/legacy-usage/*.json",
+  "resources/document-review/*.json",
 ]
 eom_image_contracts = ["schemas/*.json"]
 

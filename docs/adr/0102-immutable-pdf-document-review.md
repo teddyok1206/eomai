@@ -36,6 +36,10 @@ The first implementation is split into explicit boundaries:
 
 There is no corrected-PDF endpoint, field, Artifact type, or workflow step.
 
+The Catalog intake Artifact uses the otherwise unused immutable protocol identity `catalog/1.16`;
+it does not reuse the existing `catalog/1.14` item-review publication or `catalog/1.15` solution
+analysis identities.
+
 ### Canonical source, logical entities, and revisions
 
 The original uploaded PDF Artifact Revision is the canonical document source. Page PNG and text

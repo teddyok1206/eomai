@@ -161,6 +161,11 @@ from eom_catalog_contracts.curriculum import (
     resolve_integrated_science_curriculum_scope,
     validate_integrated_science_curriculum_scope,
 )
+from eom_catalog_contracts.document_review import (
+    PdfDocumentReviewIntakeManifest,
+    PdfDocumentReviewPageMember,
+    PdfDocumentReviewRendererIdentity,
+)
 from eom_catalog_contracts.educational_document import (
     EducationalDocumentIdentity,
     EducationalDocumentRegistrationReceipt,
@@ -1201,6 +1206,9 @@ __all__ = [
     "OriginArtifactMemberPointer",
     "OriginItemRevisionPointer",
     "ParagraphBlock",
+    "PdfDocumentReviewIntakeManifest",
+    "PdfDocumentReviewPageMember",
+    "PdfDocumentReviewRendererIdentity",
     "PdfLearningCompletionReceipt",
     "PdfLearningItemCompletionShard",
     "PdfLearningItemCompletionShardPointer",

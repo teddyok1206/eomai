@@ -193,6 +193,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5f3b9dcd459988143491557ccf5f220a53c0467d461235ba22de587d0c8b63f0",
         ),
+        "pdf-document-review-intake-manifest": CatalogSchemaResource(
+            "schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json",
+            "resources/document-review/pdf-document-review-intake-manifest-v1.schema.json",
+            "1.0",
+            "sha256:32c2ccf98930d6e865aaeefe31abbf37e5749f21851bfbf9446d64ecb70683d6",
+        ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",
             "resources/content-intake/mapping-proposal-v1.schema.json",

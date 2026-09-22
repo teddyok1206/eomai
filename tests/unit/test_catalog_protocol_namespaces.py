@@ -25,6 +25,9 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
     ITEM_REVIEW_PROTOCOL_VERSION_V2,
     ITEM_REVIEW_PROTOCOL_VERSION_V3,
 )
+from eom_catalog_service.pdf_document_review_intake import (
+    PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+)
 from eom_orchestrator.models import Base, ProtocolVersionRecord
 from eom_orchestrator.repository import ensure_protocol_version
 from sqlalchemy.orm import Session
@@ -63,11 +66,13 @@ def test_catalog_contract_bundles_have_unique_immutable_protocol_versions() -> N
         ITEM_REVIEW_PROTOCOL_VERSION,
         ITEM_REVIEW_PROTOCOL_VERSION_V2,
         ITEM_REVIEW_PROTOCOL_VERSION_V3,
+        PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION,
     )
 
     assert CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION == "catalog/1.2"
     assert CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION == "catalog/1.13"
     assert ITEM_REVIEW_PROTOCOL_VERSION_V3 == "catalog/1.14"
+    assert PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION == "catalog/1.16"
     assert CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH == (
         "sha256:4e5fe407e576b68a4162c9105e8cf31f765cfd8fea21982f36be49503505f797"
     )
