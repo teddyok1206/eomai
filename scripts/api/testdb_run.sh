@@ -11,8 +11,10 @@ fail() {
 }
 
 if (($# != 2)) || \
-  [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && "$1" != "tests" ]]; then
-  printf '%s\n' "usage: $0 {verify|migrate|hwpx-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+  [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
+    "$1" != "pdf-review-tests" && "$1" != "tests" ]]; then
+  printf '%s\n' \
+    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -157,6 +159,23 @@ if [[ "${action}" == "hwpx-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   "${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py
   printf 'Disposable HWPX persistence integration tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "pdf-review-tests" ]]; then
+  runtime_environment="${state_directory}/runtime.env"
+  [[ ! -L "${runtime_environment}" && -f "${runtime_environment}" ]] || \
+    fail "reconciled runtime environment is unavailable"
+  [[ "$(stat -Lc '%U:%G:%a' "${runtime_environment}")" == "eom:eom:600" ]] || \
+    fail "runtime environment metadata mismatch"
+  export EOM_API_TEST_RUNTIME_ENV="${runtime_environment}"
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_RUN_INTEGRATION=1
+  "${PYTHON}" -m pytest -q \
+    tests/api/test_runtime_role_live.py \
+    tests/api/test_pdf_document_review_upload_service.py::test_pdf_review_upload_claim_is_serialized_by_postgresql \
+    tests/api/test_pdf_document_review_upload_intent_persistence.py::test_pdf_review_migration_matches_authoritative_models
+  printf 'Disposable PDF document-review persistence tests passed.\n'
   exit 0
 fi
 

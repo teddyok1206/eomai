@@ -15,6 +15,9 @@ from sqlalchemy.engine import Connection
 
 
 def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
+    assert "pdf_document_review_upload_intents" in READ_TABLES
+    assert "pdf_document_review_upload_intents" in INSERT_TABLES
+    assert "pdf_document_review_upload_intents" in UPDATE_TABLES
     assert "workflow_instances" in READ_TABLES
     assert "workflow_instances" in UPDATE_TABLES
     assert "workflow_commands" in READ_TABLES

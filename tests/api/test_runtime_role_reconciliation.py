@@ -56,6 +56,9 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "hwpx_assessment_assembly_builds" in READ_TABLES
     assert "hwpx_assessment_assembly_builds" in INSERT_TABLES
     assert "hwpx_assessment_assembly_builds" in UPDATE_TABLES
+    assert "pdf_document_review_upload_intents" in READ_TABLES
+    assert "pdf_document_review_upload_intents" in INSERT_TABLES
+    assert "pdf_document_review_upload_intents" in UPDATE_TABLES
 
 
 def test_disposable_reconciliation_proves_idempotency_and_removes_drift() -> None:
@@ -280,17 +283,28 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
 def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliation() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert "{verify|migrate|hwpx-tests|tests}" in source
+    assert "{verify|migrate|hwpx-tests|pdf-review-tests|tests}" in source
     hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
     runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
     assert hwpx_branch < runtime_environment
     assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in source
 
 
+def test_disposable_database_runs_pdf_review_persistence_after_runtime_reconciliation() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    pdf_branch = source.index('if [[ "${action}" == "pdf-review-tests" ]]')
+    runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
+    assert pdf_branch < runtime_environment
+    assert "tests/api/test_runtime_role_live.py" in source
+    assert "test_pdf_review_upload_claim_is_serialized_by_postgresql" in source
+    assert "test_pdf_review_migration_matches_authoritative_models" in source
+
+
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert "{verify|migrate|hwpx-tests|tests}" in source
+    assert "{verify|migrate|hwpx-tests|pdf-review-tests|tests}" in source
     assert "validate_application_schema_metadata" in source
     assert "SELECT version_num FROM app.alembic_version" in source
     assert "app.reject_identity_key_change()" in source

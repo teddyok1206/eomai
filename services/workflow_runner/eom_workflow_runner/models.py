@@ -112,6 +112,15 @@ class WorkflowInstanceRecord(Base):
             ),
         ),
         Index(
+            "ix_workflow_pdf_document_review_owner",
+            "created_actor_id",
+            "created_at",
+            "workflow_id",
+            postgresql_where=text(
+                "definition_key = 'pdf-document-review' AND created_actor_type = 'human'"
+            ),
+        ),
+        Index(
             "uq_workflow_active_request_hash",
             "request_hash",
             unique=True,

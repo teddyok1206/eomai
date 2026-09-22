@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from threading import Barrier
+from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 from eom_api.errors import ApiError
 from eom_api.pdf_document_review_models import PdfDocumentReviewUploadIntentRecord
 from eom_api.services.catalog_application_client import CatalogApplicationClientError
-from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplicationService
+from eom_api.services.pdf_document_review_service import (
+    PdfDocumentReviewApplicationService,
+    PdfReviewUploadClaim,
+)
 from eom_api.services.pdf_upload_stager import StagedPdfUpload
 from eom_api_contracts.document_review import CreatePdfDocumentReviewUploadIntentRequest
 from eom_catalog_contracts import (
@@ -17,9 +24,11 @@ from eom_catalog_contracts import (
     PdfReviewPagePointer,
 )
 from eom_identity_service import models as identity_models  # noqa: F401
+from eom_identity_service.models import OperatorRecord
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
+from eom_orchestrator.database import build_engine, build_session_factory, transaction
 from eom_workflow_runner import models as workflow_models  # noqa: F401
-from sqlalchemy import create_engine, select
+from sqlalchemy import Table, create_engine, select
 
 NOW = datetime(2026, 9, 22, 1, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
@@ -101,7 +110,7 @@ def _actor() -> ActorContext:
 
 def _service() -> tuple[PdfDocumentReviewApplicationService, Any, FakeCatalog, FakeCommands]:
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    PdfDocumentReviewUploadIntentRecord.__table__.create(engine)
+    cast(Table, PdfDocumentReviewUploadIntentRecord.__table__).create(engine)
     catalog = FakeCatalog()
     commands = FakeCommands()
     service = PdfDocumentReviewApplicationService(
@@ -271,3 +280,97 @@ def test_pdf_review_upload_rejects_different_bytes_after_first_claim(tmp_path: P
         )
     assert mismatch.value.error_code == "PDF_DOCUMENT_REVIEW_UPLOAD_HASH_MISMATCH"
     engine.dispose()
+
+
+@pytest.mark.integration
+@pytest.mark.api_integration
+def test_pdf_review_upload_claim_is_serialized_by_postgresql(tmp_path: Path) -> None:
+    if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
+        pytest.skip("run through the guarded disposable PostgreSQL database")
+    engine = build_engine(os.environ["EOM_DATABASE_URL"])
+    sessions = build_session_factory(engine)
+    actor_id = "operator_" + uuid4().hex
+    username = "pdf-review-" + uuid4().hex
+    with transaction(sessions) as session:
+        session.add(
+            OperatorRecord(
+                operator_id=actor_id,
+                username=username,
+                normalized_username=username,
+                display_name="PDF Review Integration",
+                status="ACTIVE",
+                must_change_password=False,
+                role_version=1,
+                created_at=NOW,
+                created_by="pdf-review-integration",
+                updated_at=NOW,
+                lock_version=1,
+            )
+        )
+    service = PdfDocumentReviewApplicationService(
+        engine,
+        catalog=FakeCatalog(),  # type: ignore[arg-type]
+        commands=FakeCommands(),  # type: ignore[arg-type]
+        intent_ttl_seconds=86_400,
+        processing_lease_seconds=300,
+    )
+    intent = service.create_upload_intent(
+        CreatePdfDocumentReviewUploadIntentRequest(
+            original_filename="문제지.pdf",
+            content_length=8,
+            preset_key="PROBLEM_SET",
+            additional_guidance=None,
+        ),
+        actor_id=actor_id,
+        observed_at=NOW,
+    )
+    source = tmp_path / "upload.pdf"
+    source.write_bytes(b"%PDF-1.7")
+    upload = StagedPdfUpload(source, 8, "sha256:" + "c" * 64)
+    barrier = Barrier(2)
+
+    def claim() -> PdfReviewUploadClaim | ApiError:
+        barrier.wait(timeout=5)
+        try:
+            return service._claim_upload(
+                intent.upload_intent_id,
+                upload,
+                actor_id=actor_id,
+                observed_at=NOW + timedelta(seconds=1),
+            )
+        except ApiError as exc:
+            return exc
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = tuple(executor.map(lambda _index: claim(), range(2)))
+        owned = tuple(value for value in outcomes if isinstance(value, PdfReviewUploadClaim))
+        rejected = tuple(value for value in outcomes if isinstance(value, ApiError))
+        assert len(owned) == len(rejected) == 1
+        assert rejected[0].error_code == "PDF_DOCUMENT_REVIEW_UPLOAD_IN_PROGRESS"
+
+        takeover = service._claim_upload(
+            intent.upload_intent_id,
+            upload,
+            actor_id=actor_id,
+            observed_at=NOW + timedelta(seconds=302),
+        )
+        assert takeover.lease_owner is not None
+        assert takeover.lease_owner != owned[0].lease_owner
+        service._fail_claim(
+            owned[0],
+            error_code="STALE_FAILURE",
+            retryable=False,
+            document=None,
+        )
+        service._fail_claim(
+            takeover,
+            error_code="CURRENT_FAILURE",
+            retryable=True,
+            document=None,
+        )
+        view = service.upload_intent(intent.upload_intent_id, actor_id=actor_id)
+        assert view.state == "FAILED_RETRYABLE"
+        assert view.failure_code == "CURRENT_FAILURE"
+    finally:
+        engine.dispose()

@@ -98,6 +98,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "operator_role_assignments",
     "operators",
     "permissions",
+    "pdf_document_review_upload_intents",
     "protocol_versions",
     "resolved_execution_plan_steps",
     "resolved_execution_plans",
@@ -147,6 +148,7 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
     "operator_events",
     "operator_role_assignments",
     "operators",
+    "pdf_document_review_upload_intents",
     "resolved_execution_plan_steps",
     "resolved_execution_plans",
     "usage_plans",
@@ -178,6 +180,7 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
     "operator_credentials",
     "operator_role_assignments",
     "operators",
+    "pdf_document_review_upload_intents",
     "usage_plans",
     # PostgreSQL requires UPDATE privilege for SELECT ... FOR UPDATE. Workflow
     # actions lock this row before checking the ETag and enqueueing a command.
