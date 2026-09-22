@@ -373,7 +373,6 @@ def test_pdf_document_review_worker_omits_server_derived_quote_hashes() -> None:
         "support",
         "pdf-document-review-result@1.0",
     )
-
     parsed_anchors = (
         anchor
         for collection in (
@@ -395,6 +394,15 @@ def test_pdf_document_review_worker_omits_server_derived_quote_hashes() -> None:
         else anchor.quote_sha256 is None
         for anchor in parsed_anchors
     )
+
+
+def test_paired_document_review_codex_projection_preserves_documents_as_bounded_array() -> None:
+    worker_schema = load_codex_result_schema("pdf-document-review-result@2.0")
+    documents = worker_schema["$defs"]["output"]["properties"]["documents"]
+
+    assert documents["minItems"] == documents["maxItems"] == 2
+    assert documents["items"] == {"$ref": "#/$defs/document_identity"}
+    assert "prefixItems" not in json.dumps(worker_schema, sort_keys=True)
 
 
 def test_pdf_document_review_rejects_supplied_incorrect_quote_hash() -> None:

@@ -162,21 +162,10 @@ def result_schema() -> dict[str, Any]:
         "type": "array",
         "minItems": 2,
         "maxItems": 2,
-        "prefixItems": [
-            {
-                "allOf": [
-                    {"$ref": "#/$defs/document_identity"},
-                    {"properties": {"role": {"const": "QUESTION"}}},
-                ]
-            },
-            {
-                "allOf": [
-                    {"$ref": "#/$defs/document_identity"},
-                    {"properties": {"role": {"const": "SOLUTION"}}},
-                ]
-            },
-        ],
-        "items": False,
+        "items": {"$ref": "#/$defs/document_identity"},
+        "description": (
+            "Exactly QUESTION then SOLUTION. Canonical validation enforces role order."
+        ),
     }
     output["properties"]["cross_document_checks"] = {
         "type": "array",
