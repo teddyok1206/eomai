@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "memberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+            "image/png",
+            "application/json"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/document-review/[a-z0-9-]+/[12]\\.0$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/document-review/document-review-hwpx-correction-plan/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "base_hwpx": {
+      "$ref": "#/$defs/memberPointer"
+    },
+    "correction_id": {
+      "pattern": "^doccorrection_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "edits": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "additionalProperties": false,
+            "properties": {
+              "end_offset": {
+                "maximum": 10000000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "paragraph_ordinal": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "paragraph_sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "section_member": {
+                "pattern": "^Contents/section[0-9]+\\.xml$",
+                "type": "string"
+              },
+              "source_char_property_id": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start_offset": {
+                "maximum": 10000000,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "section_member",
+              "paragraph_ordinal",
+              "paragraph_sha256",
+              "start_offset",
+              "end_offset",
+              "source_char_property_id"
+            ],
+            "type": "object"
+          },
+          "after_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "after_text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "before_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "before_text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "finding_code": {
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+            "type": "string"
+          },
+          "finding_id": {
+            "pattern": "^reviewfinding_[0-9a-f]{32}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "finding_code",
+          "before_text",
+          "before_sha256",
+          "after_text",
+          "after_sha256",
+          "address"
+        ],
+        "type": "object"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_result": {
+      "$ref": "#/$defs/memberPointer"
+    },
+    "schema_version": {
+      "const": "document-review-hwpx-correction-plan/1.0"
+    },
+    "text_color": {
+      "const": "#FF0000"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "correction_id",
+    "workflow_id",
+    "review_result",
+    "base_hwpx",
+    "text_color",
+    "edits",
+    "plan_sha256"
+  ],
+  "title": "EOM Document Review HWPX Correction Plan V1",
+  "type": "object"
+}

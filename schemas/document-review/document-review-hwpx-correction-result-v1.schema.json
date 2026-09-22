@@ -1,0 +1,83 @@
+{
+  "$id": "eom://schemas/document-review/document-review-hwpx-correction-result/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "applied_finding_ids": {
+      "items": {
+        "pattern": "^reviewfinding_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "base_hwpx_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "correction_id": {
+      "pattern": "^doccorrection_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "output_member": {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "const": "application/vnd.hancom.hwpx"
+        },
+        "member_path": {
+          "const": "corrected/document-review-redline.hwpx"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type"
+      ],
+      "type": "object"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "document-review-hwpx-correction-result/1.0"
+    },
+    "text_color": {
+      "const": "#FF0000"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "correction_id",
+    "workflow_id",
+    "plan_sha256",
+    "base_hwpx_sha256",
+    "output_member",
+    "applied_finding_ids",
+    "text_color",
+    "result_sha256"
+  ],
+  "title": "EOM Document Review HWPX Correction Result V1",
+  "type": "object"
+}
