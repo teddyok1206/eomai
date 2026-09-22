@@ -89,7 +89,9 @@ only when an operator installs the reviewed unit, helper, and polkit sources.
 
 The six root-owned standard templates are `eom-worker-01@.service` through
 `eom-worker-06@.service`. Slot 06 also has the reviewed 900-second
-`eom-worker-support-06@.service` contract; it shares the same slot lease and cannot add capacity.
+`eom-worker-support-06@.service` and 3,600-second
+`eom-worker-document-review-06@.service` contracts; they share the same slot lease and cannot add
+capacity.
 The instance is a canonical `job_[0-9a-f]{32}` ID. The runner can request
 only `systemctl --no-ask-password --wait start <fixed-instance>`; it cannot choose a user, group,
 command, environment, capability, path, or systemd property. The installed
@@ -115,7 +117,7 @@ root-owned Codex executable before invoking the fixed Codex CLI.
 | `MemoryMax=6G` | `MemoryMax=6G` | retained |
 | `CPUQuota=200%` | `CPUQuota=200%` | retained |
 | `TasksMax=256` | `TasksMax=256` | retained |
-| client timeout and `systemctl stop` | standard server `TimeoutStartSec=1800`, client guard at 1830s | changed; no `stop` authorization is required |
+| client timeout and `systemctl stop` | reviewed fixed server timeout per template plus a 30-second client guard | changed; no `stop` authorization is required |
 | `--pipe` capture | bounded workspace stdout/stderr files | changed; correctness depends only on result/status protocols |
 | `--collect` | oneshot process ends; status remains queryable | changed; no process lingers and exit metadata remains available |
 | implicit capability/address policy | empty capabilities, kernel-module/control-group/SUID/personality/realtime/device/host/clock guards, fixed address families, nested-sandbox-owned proc/sys boundary | strengthened without blocking Codex sandbox construction or network access |

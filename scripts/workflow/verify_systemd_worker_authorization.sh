@@ -9,6 +9,8 @@ AUTH_HELPER_SOURCE="${REPOSITORY_ROOT}/services/orchestrator/eom_orchestrator/wo
 AUTH_HELPER_INSTALLED="/usr/local/libexec/eom-worker-auth-status"
 SUPPORT_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-support-06@.service"
 SUPPORT_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-support-06@.service"
+DOCUMENT_REVIEW_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-document-review-06@.service"
+DOCUMENT_REVIEW_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-document-review-06@.service"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -31,6 +33,10 @@ cmp --silent "${SUPPORT_WORKER_SOURCE}" "${SUPPORT_WORKER_INSTALLED}" || \
   fail "customer-support worker template source drift"
 [[ "$(stat -c '%U:%G:%a' "${SUPPORT_WORKER_INSTALLED}")" == "root:root:644" ]] || \
   fail "customer-support worker template ownership or mode is invalid"
+cmp --silent "${DOCUMENT_REVIEW_WORKER_SOURCE}" "${DOCUMENT_REVIEW_WORKER_INSTALLED}" || \
+  fail "PDF document-review worker template source drift"
+[[ "$(stat -c '%U:%G:%a' "${DOCUMENT_REVIEW_WORKER_INSTALLED}")" == "root:root:644" ]] || \
+  fail "PDF document-review worker template ownership or mode is invalid"
 
 for slot in 01 02 03 04 05 06; do
   worker_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${slot}@.service"
@@ -72,6 +78,10 @@ fi
 if /usr/bin/systemctl --no-ask-password --wait restart \
   "eom-worker-support-06@job_0123456789abcdef0123456789abcdef.service"; then
   fail "customer-support worker restart authorization was unexpectedly granted"
+fi
+if /usr/bin/systemctl --no-ask-password --wait restart \
+  "eom-worker-document-review-06@job_0123456789abcdef0123456789abcdef.service"; then
+  fail "PDF document-review worker restart authorization was unexpectedly granted"
 fi
 if /usr/bin/systemd-run --no-ask-password --wait --collect \
   --uid=root --gid=root /usr/bin/true; then

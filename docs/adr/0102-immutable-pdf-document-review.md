@@ -199,6 +199,21 @@ Existing atomic command claim, lease, workflow step-attempt, Job, Artifact Revis
 constraints remain authoritative. Retry preserves the exact document/preset/guidance identity.
 Timeout does not authorize a new key or a duplicate review.
 
+### Fixed worker execution ceiling
+
+The released PDF-review preset pins a 3,600-second execution ceiling because one invocation may
+inspect up to 32 ordered page images. Slot 06 therefore has a dedicated root-owned
+`eom-worker-document-review-06@.service` template fixed at exactly 3,600 seconds. Runtime selection
+is an O(1) lookup by the validated `(slot ID, role, timeout)` tuple. The existing 900-second
+customer-support and 7,200-second analysis templates remain distinct and immutable.
+
+All three templates share the same slot-06 Linux identity and the same unique capacity lease, so
+the additional template adds no capacity or concurrent execution path. Readiness checks its exact
+root ownership, mode, and SHA-256; polkit permits only `start` for a canonical job instance; and
+recovery inspects every reviewed template for the job and fails closed if observations are
+ambiguous. Rewriting the already-pinned preset to fit another template is insufficient because it
+would invalidate reproducible history and could shorten a document review after admission.
+
 ### Dependency direction and adapters
 
 JSON Schema and frozen value models define the contract. Application services own intake/review

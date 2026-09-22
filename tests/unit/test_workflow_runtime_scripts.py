@@ -63,6 +63,7 @@ def test_systemd_authorization_verifier_is_nonprivileged_and_negative_by_default
     assert "eom-worker-auth-status" in source
     assert "eom-worker-auth-${slot}.service" in source
     assert "eom-worker-support-06@.service" in source
+    assert "eom-worker-document-review-06@.service" in source
 
 
 def test_worker_runtime_deployer_installs_exact_customer_support_template() -> None:
@@ -71,6 +72,14 @@ def test_worker_runtime_deployer_installs_exact_customer_support_template() -> N
     assert '"${REPOSITORY}/infra/systemd/eom-worker-support-06@.service"' in source
     assert '"${UNIT_ROOT}/eom-worker-support-06@.service"' in source
     assert "customer-support worker unit source drift" in source
+
+
+def test_worker_runtime_deployer_installs_exact_pdf_document_review_template() -> None:
+    source = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
+
+    assert '"${REPOSITORY}/infra/systemd/eom-worker-document-review-06@.service"' in source
+    assert '"${UNIT_ROOT}/eom-worker-document-review-06@.service"' in source
+    assert "PDF document-review worker unit source drift" in source
 
 
 def test_runtime_scripts_have_valid_shell_syntax() -> None:

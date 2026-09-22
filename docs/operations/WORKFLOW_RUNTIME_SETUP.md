@@ -21,6 +21,7 @@ An operator installs these reviewed sources as root-owned files; normal job exec
 ```text
 infra/systemd/eom-worker-01@.service ... eom-worker-06@.service
 infra/systemd/eom-worker-support-06@.service
+infra/systemd/eom-worker-document-review-06@.service
 infra/systemd/eom-worker-probe-01@.service ... eom-worker-probe-06@.service
 infra/systemd/eom-worker-auth-01.service ... eom-worker-auth-06.service
 infra/polkit/50-eom-worker-units.rules

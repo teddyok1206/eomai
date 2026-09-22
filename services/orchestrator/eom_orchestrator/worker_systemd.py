@@ -8,6 +8,7 @@ import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from uuid import uuid4
 
 from eom_protocol import ErrorCode
@@ -39,7 +40,16 @@ AUTHORIZATION_DENIED_MARKERS = (
 FIXED_WORKER_TIMEOUT_SECONDS = 1800
 FIXED_ANALYSIS_WORKER_TIMEOUT_SECONDS = 7200
 FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS = 900
+FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS = 3600
 FIXED_WORKER_CLIENT_GUARD_SECONDS = 30
+SPECIALIZED_WORKER_UNIT_BY_CONTRACT = MappingProxyType(
+    {
+        ("06", "support", FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS): ("eom-worker-support-06"),
+        ("06", "support", FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS): (
+            "eom-worker-document-review-06"
+        ),
+    }
+)
 
 
 def fixed_worker_timeout_seconds(slot: WorkerSlot) -> int:
@@ -64,6 +74,9 @@ WORKER_TEMPLATE_SHA256 = {
 }
 CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256 = (
     "1c8672c001c0670b405dba697e7d6e91ea89e97a783ef98c8f4829a81d553ce2"
+)
+PDF_DOCUMENT_REVIEW_WORKER_TEMPLATE_SHA256 = (
+    "794f997ed1770212fc93d46dc4f028a6ecef98fb966f7e178b28da363a9f089a"
 )
 PROBE_TEMPLATE_SHA256 = {
     "01": "6d74599b84b8ac243656fb1cef1ffb459261ff23195428cd47be4da86134d4e4",
@@ -196,12 +209,11 @@ def worker_unit_name_for_execution(slot: WorkerSlot, job_id: str, *, timeout_sec
 
     slot_id = validate_slot(slot)
     canonical_job_id = validate_job_id(job_id)
-    if (
-        slot_id == "06"
-        and slot.role == "support"
-        and timeout_seconds == FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS
-    ):
-        return f"eom-worker-support-06@{canonical_job_id}.service"
+    specialized_unit = SPECIALIZED_WORKER_UNIT_BY_CONTRACT.get(
+        (slot_id, slot.role, timeout_seconds)
+    )
+    if specialized_unit is not None:
+        return f"{specialized_unit}@{canonical_job_id}.service"
     if timeout_seconds == fixed_worker_timeout_seconds(slot):
         return f"eom-worker-{slot_id}@{canonical_job_id}.service"
     raise ValueError("worker timeout does not match a fixed unit contract")
@@ -420,6 +432,11 @@ def inspect_worker_systemd_contract(slot: WorkerSlot) -> WorkerSystemdReadiness:
                 expected_mode=0o644,
                 expected_sha256=CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
             )
+            _validate_root_owned_artifact(
+                SYSTEMD_UNIT_ROOT / "eom-worker-document-review-06@.service",
+                expected_mode=0o644,
+                expected_sha256=PDF_DOCUMENT_REVIEW_WORKER_TEMPLATE_SHA256,
+            )
         _validate_root_owned_artifact(
             SYSTEMD_UNIT_ROOT / f"eom-worker-probe-{slot_id}@.service",
             expected_mode=0o644,
@@ -592,6 +609,7 @@ def inspect_worker_unit_activity(slot: WorkerSlot, job_id: str) -> WorkerUnitAct
     unit_names = [standard_unit]
     if validate_slot(slot) == "06":
         unit_names.append(f"eom-worker-support-06@{validate_job_id(job_id)}.service")
+        unit_names.append(f"eom-worker-document-review-06@{validate_job_id(job_id)}.service")
     observations = tuple(_inspect_exact_worker_unit(unit_name) for unit_name in unit_names)
     if any(observation.state == "UNKNOWN" for observation in observations):
         return WorkerUnitActivity("UNKNOWN", standard_unit, None)
