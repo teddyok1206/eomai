@@ -25,6 +25,8 @@ from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.control_plane_adapter import ControlPlaneAdapter
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
+from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplicationService
+from eom_api.services.pdf_upload_stager import PdfUploadStager
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api.settings import ApiSecrets, ApiSettings, load_secrets, load_settings
 
@@ -63,6 +65,17 @@ class AppServices:
         )
         self.registry = RegistryService(engine)
         self.commands = CommandAdapter(engine, catalog_application=self.catalog_application)
+        self.pdf_review_upload_stager = PdfUploadStager(
+            settings.pdf_document_review.upload_staging_root,
+            maximum_bytes=settings.pdf_document_review.max_upload_bytes,
+        )
+        self.pdf_document_reviews = PdfDocumentReviewApplicationService(
+            engine,
+            catalog=self.catalog_application,
+            commands=self.commands,
+            intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
+            processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
+        )
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)

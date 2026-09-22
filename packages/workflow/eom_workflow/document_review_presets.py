@@ -7,11 +7,11 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Literal, cast
 
+from eom_catalog_contracts import PdfReviewDocumentPointer
 from eom_identifiers import content_sha256
 
 from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
-    PdfReviewDocumentPointer,
     PdfReviewPresetSnapshot,
     normalize_pdf_review_guidance,
 )

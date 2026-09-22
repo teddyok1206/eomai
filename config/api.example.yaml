@@ -36,3 +36,9 @@ pagination:
 
 openapi:
   version: "1"
+
+pdf_document_review:
+  upload_staging_root: "/var/lib/eom-api/pdf-review-uploads"
+  max_upload_bytes: 268435456
+  intent_ttl_seconds: 86400
+  processing_lease_seconds: 300

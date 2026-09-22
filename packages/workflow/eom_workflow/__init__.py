@@ -110,6 +110,7 @@ from eom_workflow.document_review import (
     validate_pdf_document_review_output_against_request,
 )
 from eom_workflow.document_review_presets import (
+    PdfReviewPresetKey,
     build_pdf_document_review_request,
     load_pdf_review_preset,
     pdf_review_preset_keys,
@@ -256,6 +257,7 @@ __all__ = [
     "PdfReviewDocumentPointer",
     "PdfReviewFinding",
     "PdfReviewPagePointer",
+    "PdfReviewPresetKey",
     "PdfReviewPresetSnapshot",
     "PdfReviewRecommendation",
     "PdfReviewRegion",

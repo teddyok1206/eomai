@@ -72,6 +72,20 @@ class OpenApiSettings(StrictSettings):
     version: str = Field(default="1", pattern=r"^1$")
 
 
+class PdfDocumentReviewSettings(StrictSettings):
+    upload_staging_root: Path = Path("/var/lib/eom-api/pdf-review-uploads")
+    max_upload_bytes: int = Field(default=256 * 1024 * 1024, ge=8, le=256 * 1024 * 1024)
+    intent_ttl_seconds: int = Field(default=86_400, ge=3600, le=604_800)
+    processing_lease_seconds: int = Field(default=300, ge=60, le=3600)
+
+    @field_validator("upload_staging_root")
+    @classmethod
+    def absolute_private_staging_root(cls, value: Path) -> Path:
+        if not value.is_absolute() or ".." in value.parts:
+            raise ValueError("PDF review upload staging root must be an absolute normalized path")
+        return value
+
+
 class ApiSettings(StrictSettings):
     schema_version: int = Field(default=1, ge=1, le=1)
     server: ServerSettings = ServerSettings()
@@ -80,6 +94,7 @@ class ApiSettings(StrictSettings):
     rate_limit: RateLimitSettings = RateLimitSettings()
     pagination: PaginationSettings = PaginationSettings()
     openapi: OpenApiSettings = OpenApiSettings()
+    pdf_document_review: PdfDocumentReviewSettings = PdfDocumentReviewSettings()
 
 
 class ApiSecrets(StrictSettings):

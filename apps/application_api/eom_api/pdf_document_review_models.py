@@ -35,6 +35,10 @@ class PdfDocumentReviewUploadIntentRecord(Base):
             name="ck_pdf_review_upload_intents_bounds",
         ),
         CheckConstraint(
+            "preset_key IN ('PROBLEM_SET','WEEKLY_WORKBOOK','MOCK_EXAM')",
+            name="ck_pdf_review_upload_intents_preset",
+        ),
+        CheckConstraint(
             "(additional_guidance IS NULL AND additional_guidance_sha256 IS NULL) OR "
             "(additional_guidance IS NOT NULL AND additional_guidance_sha256 IS NOT NULL)",
             name="ck_pdf_review_upload_intents_guidance",
@@ -55,15 +59,17 @@ class PdfDocumentReviewUploadIntentRecord(Base):
         ),
         CheckConstraint(
             "(state = 'AWAITING_UPLOAD' AND upload_sha256 IS NULL AND workflow_id IS NULL "
-            "AND failure_code IS NULL AND lease_owner IS NULL AND attempts = 0) OR "
+            "AND workflow_command_id IS NULL AND failure_code IS NULL AND lease_owner IS NULL "
+            "AND attempts = 0) OR "
             "(state = 'PROCESSING' AND upload_sha256 IS NOT NULL AND workflow_id IS NULL "
-            "AND failure_code IS NULL AND lease_owner IS NOT NULL AND attempts >= 1) OR "
-            "(state = 'STARTED' AND upload_sha256 IS NOT NULL AND workflow_id IS NOT NULL "
-            "AND failure_code IS NULL AND lease_owner IS NULL AND document_id IS NOT NULL "
+            "AND workflow_command_id IS NULL AND failure_code IS NULL AND lease_owner IS NOT NULL "
             "AND attempts >= 1) OR "
+            "(state = 'STARTED' AND upload_sha256 IS NOT NULL AND workflow_id IS NOT NULL "
+            "AND workflow_command_id IS NOT NULL AND failure_code IS NULL AND lease_owner IS NULL "
+            "AND document_id IS NOT NULL AND attempts >= 1) OR "
             "(state IN ('FAILED_RETRYABLE','FAILED_FINAL') AND upload_sha256 IS NOT NULL "
-            "AND workflow_id IS NULL AND failure_code IS NOT NULL AND lease_owner IS NULL "
-            "AND attempts >= 1)",
+            "AND workflow_id IS NULL AND workflow_command_id IS NULL AND failure_code IS NOT NULL "
+            "AND lease_owner IS NULL AND attempts >= 1)",
             name="ck_pdf_review_upload_intents_payload",
         ),
         Index(
@@ -95,6 +101,7 @@ class PdfDocumentReviewUploadIntentRecord(Base):
         nullable=True,
         unique=True,
     )
+    workflow_command_id: Mapped[str | None] = mapped_column(String(38), nullable=True)
     document_id: Mapped[str | None] = mapped_column(String(41), nullable=True)
     document_revision_id: Mapped[str | None] = mapped_column(String(44), nullable=True)
     source_artifact_id: Mapped[str | None] = mapped_column(String(41), nullable=True)

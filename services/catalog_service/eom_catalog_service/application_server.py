@@ -435,6 +435,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             return
         descriptor = -1
         source: Path | None = None
+        response: PdfDocumentReviewIntakeResponse | None = None
+        error_code: str | None = None
         try:
             descriptor, raw_path = tempfile.mkstemp(
                 prefix="pdf-document-review-upload.",
@@ -482,17 +484,11 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 actor_id=request.actor_id,
                 idempotency_key=request.idempotency_key,
             )
-            self.server.write_pdf_document_review_intake_response(
-                self.wfile,
-                PdfDocumentReviewIntakeResponse(status="OK", document=document),
-            )
+            response = PdfDocumentReviewIntakeResponse(status="OK", document=document)
         except PdfDocumentReviewIntakeError as exc:
-            self.server.write_pdf_document_review_intake_error(self.wfile, exc.code)
+            error_code = exc.code
         except Exception:
-            self.server.write_pdf_document_review_intake_error(
-                self.wfile,
-                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
-            )
+            error_code = CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
@@ -503,6 +499,13 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         source.unlink()
                 except OSError:
                     pass
+        if response is not None:
+            self.server.write_pdf_document_review_intake_response(self.wfile, response)
+        else:
+            self.server.write_pdf_document_review_intake_error(
+                self.wfile,
+                error_code or CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
 
     def _stream_item_component_media(self, request: ItemComponentMediaQuery) -> None:
         try:

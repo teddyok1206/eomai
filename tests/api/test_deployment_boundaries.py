@@ -688,6 +688,10 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/mock_exam_retirement.py"' in deployment
     assert '"eom_api_contracts/workflows.py"' in deployment
     assert '"eom_api/routers/item_bank.py"' in deployment
+    assert '"eom_api/routers/pdf_document_reviews.py"' in deployment
+    assert '"eom_api/services/pdf_document_review_service.py"' in deployment
+    assert '"eom_api/services/pdf_upload_stager.py"' in deployment
+    assert "/var/lib/eom-api/pdf-review-uploads" in deployment
     assert "API schema resource drift" in deployment
     assert "API schema resource missing from RECORD" in deployment
     assert "packaged OpenAPI differs from canonical release artifacts" in deployment

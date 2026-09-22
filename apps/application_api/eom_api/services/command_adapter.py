@@ -50,12 +50,14 @@ from eom_orchestrator.execution_resolver import (
     resolve_customer_support_plan,
     resolve_execution_plan,
     resolve_knowledge_backed_execution_plan,
+    resolve_pdf_document_review_plan,
     validate_educational_retrieval_policy,
 )
 from eom_workflow import (
     AgentStep,
     CustomerSupportCase,
     CustomerSupportDiagnostics,
+    PdfDocumentReviewRequest,
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
     WorkflowRequest,
@@ -546,7 +548,7 @@ class CommandAdapter:
                     idempotency_key=f"start:{workflow.workflow_id}",
                 )
             else:
-                command = session.scalar(
+                existing_command = session.scalar(
                     select(WorkflowCommandRecord)
                     .where(
                         WorkflowCommandRecord.workflow_id == workflow.workflow_id,
@@ -558,7 +560,7 @@ class CommandAdapter:
                     )
                     .limit(1)
                 )
-                if command is None:
+                if existing_command is None:
                     raise WorkflowError(
                         WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                         "existing workflow occurrence has no start command",
@@ -696,6 +698,125 @@ class CommandAdapter:
                     raise WorkflowError(
                         WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                         "existing customer-support workflow has no start command",
+                    )
+                command = existing_command
+            return command.command_id, workflow.workflow_id, workflow.lock_version
+
+    def start_pdf_document_review(
+        self,
+        review_request: PdfDocumentReviewRequest,
+        actor: ActorContext,
+        *,
+        idempotency_key: str,
+    ) -> tuple[str, str, int]:
+        """Create one PDF review Workflow pinned to its immutable document and preset."""
+
+        workflow_request = WorkflowRequest(
+            request_name="PDF_DOCUMENT_REVIEW_REQUEST",
+            image_mode="skip",
+            execution_preset_key="pdf-document-review",
+            pdf_document_review_request=review_request,
+        )
+        replay = self._workflow_start_replay(
+            workflow_request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            definition_key="pdf-document-review",
+            definition_version="1.0.0",
+        )
+        if replay is not None:
+            return replay
+        with transaction(self.sessions) as session:
+            definition = admitted_workflow_definition(
+                session,
+                definition_key="pdf-document-review",
+                definition_version="1.0.0",
+            )
+            if definition is None:
+                raise ApiError(
+                    503,
+                    "PDF_DOCUMENT_REVIEW_NOT_READY",
+                    "PDF document review is unavailable",
+                    "The PDF document-review workflow is not active.",
+                )
+            compiled = compile_definition_data(
+                definition.canonical_definition,
+                definition.source_path,
+                {"support"},
+            )
+            protocols = {
+                result_schema_protocol(step.result_schema)
+                for step in compiled.definition.steps
+                if isinstance(step, AgentStep)
+            }
+            if protocols != {"workflow-role/1.25.0"}:
+                raise ApiError(
+                    503,
+                    "PDF_DOCUMENT_REVIEW_CONTRACT_INVALID",
+                    "PDF document review is unavailable",
+                    "The PDF document-review workflow contract is not installed correctly.",
+                )
+            workflow, created = create_workflow_instance(
+                session,
+                definition=definition,
+                request=workflow_request,
+                idempotency_key=idempotency_key,
+                actor_type="human",
+                actor_id=actor.actor_id,
+                runtime_context={},
+            )
+            if created:
+                try:
+                    plan = resolve_pdf_document_review_plan(
+                        session,
+                        workflow_id=workflow.workflow_id,
+                        workflow_definition_version=definition.definition_version,
+                        workflow_definition_sha256=definition.definition_hash,
+                        workflow_role_schema_version=workflow.role_schema_version,
+                        review_request=review_request,
+                    )
+                except ControlPlaneError as exc:
+                    raise ApiError(
+                        503,
+                        exc.code,
+                        "PDF document review is unavailable",
+                        "The PDF document-review execution policy is not published.",
+                    ) from exc
+                context = dict(workflow.runtime_context)
+                context["execution_plan"] = {
+                    "plan_id": plan.plan_id,
+                    "plan_sha256": plan.plan_sha256,
+                    "preset_id": plan.preset_id,
+                    "preset_revision_id": plan.preset_revision_id,
+                }
+                workflow.runtime_context = context
+                command, _ = enqueue_command(
+                    session,
+                    workflow_id=workflow.workflow_id,
+                    command_type=CommandType.START_WORKFLOW,
+                    payload={},
+                    actor_type="human",
+                    actor_id=actor.actor_id,
+                    source="application_api",
+                    idempotency_key=f"start:{workflow.workflow_id}",
+                )
+            else:
+                existing_command = session.scalar(
+                    select(WorkflowCommandRecord)
+                    .where(
+                        WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                        WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                    )
+                    .order_by(
+                        WorkflowCommandRecord.created_at,
+                        WorkflowCommandRecord.command_id,
+                    )
+                    .limit(1)
+                )
+                if existing_command is None:
+                    raise WorkflowError(
+                        WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                        "existing PDF document-review Workflow has no start command",
                     )
                 command = existing_command
             return command.command_id, workflow.workflow_id, workflow.lock_version

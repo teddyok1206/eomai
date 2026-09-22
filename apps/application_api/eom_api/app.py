@@ -30,6 +30,7 @@ from eom_api.routers import (
     knowledge_analysis_batches,
     knowledge_retrieval,
     operators,
+    pdf_document_reviews,
     system,
     usage,
     workflows,
@@ -81,6 +82,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
         content_packs,
         control_plane,
         customer_support,
+        pdf_document_reviews,
         curriculum,
         workflows,
         item_bank,
@@ -100,6 +102,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     app.add_middleware(
         RequestBoundaryMiddleware,
         body_limit=actual.settings.server.request_body_limit_bytes,
+        pdf_review_upload_limit=actual.settings.pdf_document_review.max_upload_bytes,
         fingerprint_key=actual.fingerprint_key,
         allowed_hosts=actual.settings.security.allowed_hosts,
     )

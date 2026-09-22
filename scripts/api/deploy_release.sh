@@ -1029,6 +1029,10 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/mock_exam_production_release_resolver.py",
         "eom_api/services/mock_exam_production_runner.py",
         "eom_api/services/control_plane_adapter.py",
+        "eom_api/services/pdf_document_review_service.py",
+        "eom_api/services/pdf_upload_stager.py",
+        "eom_api/routers/pdf_document_reviews.py",
+        "eom_api/pdf_document_review_models.py",
         "eom_api/openapi/eom-api-v1.openapi.json",
         "eom_api/openapi/eom-api-v1.sha256",
     }
@@ -2620,6 +2624,8 @@ require_no_staged_workflow_runner_accelerator() {
 
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
+  sudo -n install -d -o eom-api -g eom-api -m 0700 \
+    /var/lib/eom-api/pdf-review-uploads
   systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
   install_workflow_runner_hold_release_boundary
   sudo -n install -o root -g root -m 0755 \
