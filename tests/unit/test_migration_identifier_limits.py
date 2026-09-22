@@ -20,6 +20,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260917_0036_customer_support_workflow_index",
     "migrations.versions.20260917_0037_customer_support_rbac",
     "migrations.versions.20260922_0038_pdf_document_review_stage",
+    "migrations.versions.20260922_0039_pdf_document_review_upload_intents",
 )
 
 
