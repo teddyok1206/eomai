@@ -246,11 +246,16 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
         "2020-12/schema"
     )
 
-    bootstrap_schema = "pdf-document-review-control-bootstrap-v1.schema.json"
-    canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
-    packaged = ROOT / "packages/workflow/eom_workflow/resources/control-plane" / bootstrap_schema
-    assert canonical.read_bytes() == packaged.read_bytes()
-    Draft202012Validator.check_schema(json.loads(canonical.read_text(encoding="utf-8")))
+    for bootstrap_schema in (
+        "pdf-document-review-control-bootstrap-v1.schema.json",
+        "pdf-document-review-control-bootstrap-v2.schema.json",
+    ):
+        canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
+        packaged = (
+            ROOT / "packages/workflow/eom_workflow/resources/control-plane" / bootstrap_schema
+        )
+        assert canonical.read_bytes() == packaged.read_bytes()
+        Draft202012Validator.check_schema(json.loads(canonical.read_text(encoding="utf-8")))
 
 
 def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
@@ -271,6 +276,25 @@ def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
     assert "parts-per-million" in role
     assert "CONFIRMED·DEMOTED·UNCERTAIN" in role
     assert "quote_sha256는 출력하지 않는다" in role
+
+    successor = load_pdf_document_review_bootstrap_manifest(
+        ROOT / "config/control-plane/pdf-document-review-v2"
+    )
+    assert successor.compatible_workflow_protocols == (
+        "workflow-role/1.25.0",
+        "workflow-role/1.26.0",
+    )
+    assert successor.instruction_revision_number == 2
+    assert successor.predecessor is not None
+    assert (
+        successor.predecessor.preset_revision_id == "execpresetrev_311db616eb604ff7876071db91b001f5"
+    )
+    assert successor.predecessor.preset_policy_sha256 == (
+        "sha256:2526c5190014f76476241cd4531c5d2b1f8448b875f5b0e686be58c56e6348dc"
+    )
+    assert successor.predecessor.instruction_bundle_revision_id == (
+        "instrrev_d477627a5325b57fb452808c9c2af04b"
+    )
 
 
 def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:

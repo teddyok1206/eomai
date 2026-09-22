@@ -121,6 +121,22 @@ keys, then ask Catalog for an exact Evidence Bundle and require evidence-use rec
 attaching unrelated top-ranked corpus entries would weaken review quality and is rejected as an
 alternative.
 
+### Control-plane succession
+
+The V2 PDF-review control bootstrap is a successor of the released V1 preset and instruction
+bundle, not an independent bootstrap that may replace current pointers opportunistically.  Before
+publishing any successor control revision it pins and validates the exact current V1 preset
+revision and policy hash plus the V1 instruction-bundle revision, manifest hash, and control
+document hash.  The changed platform and role instructions use new control Artifact identities;
+the shared logical instruction bundle advances through adjacent revision 2 with compare-and-swap.
+The shared logical preset appends a new DRAFT and RELEASED pair and retains all V1 revisions.
+
+Replay accepts either the exact V1 predecessor as current (first publication) or the already
+released exact V2 successor as current.  An unrelated current revision, stale predecessor, changed
+hash, skipped bundle revision, or unresolved competing draft fails closed.  The V2 bootstrap had
+not been released before these predecessor fields were added; the released V1 schema, control
+records, and instruction bytes remain unchanged.
+
 ## Failure, retry, and rollback
 
 - Missing, stale, unauthorized, wrong-media, wrong-schema, or hash-mismatched pointers fail closed.

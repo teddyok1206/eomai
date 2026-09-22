@@ -14,6 +14,7 @@ from eom_workflow import AgentStep, ExecutionPresetRevision, compile_definition_
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.schemas import result_schema_protocol, role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowDefinitionRecord
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -30,13 +31,18 @@ from eom_orchestrator.control_bootstrap import (
     _safe_root,
 )
 from eom_orchestrator.control_models import (
+    ExecutionBundleRecord,
     ExecutionBundleRevisionRecord,
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
     WorkerCapacityPolicyRevisionRecord,
 )
-from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
+from eom_orchestrator.control_service import (
+    BundleRevisionCAS,
+    ControlPlaneError,
+    compute_control_document_hash,
+)
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.fixed_host_capacity_bootstrap import (
     publish_fixed_host_capacity_v4,
@@ -51,6 +57,18 @@ from eom_orchestrator.preset_lifecycle import (
 from eom_orchestrator.repository import ensure_protocol_version, upsert_worker_slot
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
+
+
+class PdfDocumentReviewBootstrapPredecessor(BaseModel):
+    """Exact V1 control identities required before publishing the V2 successor."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    instruction_bundle_revision_id: str = Field(pattern=r"^instrrev_[0-9a-f]{32}$")
+    instruction_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    instruction_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class PdfDocumentReviewBootstrapManifest(BaseModel):
@@ -78,6 +96,8 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
     timeout_seconds: Literal[3600]
+    instruction_revision_number: Literal[2] | None = None
+    predecessor: PdfDocumentReviewBootstrapPredecessor | None = None
 
     @model_validator(mode="after")
     def exact_policy(self) -> PdfDocumentReviewBootstrapManifest:
@@ -90,6 +110,9 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         )
         if self.compatible_workflow_protocols != expected:
             raise ValueError("PDF document-review bootstrap protocol must be exact")
+        successor = self.schema_version == "pdf-document-review-control-bootstrap/2.0"
+        if successor != (self.instruction_revision_number == 2 and self.predecessor is not None):
+            raise ValueError("PDF document-review successor pins must be exact")
         return self
 
 
@@ -127,11 +150,105 @@ def load_pdf_document_review_bootstrap_manifest(
         )
         validate_control_contract(schema_key, value)
         return PdfDocumentReviewBootstrapManifest.model_validate(value)
-    except (UnicodeError, yaml.YAMLError, ValueError) as exc:
+    except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID",
             "PDF document-review bootstrap manifest is invalid",
         ) from exc
+
+
+def _require_exact_predecessor(
+    session: Session,
+    manifest: PdfDocumentReviewBootstrapManifest,
+) -> None:
+    """Reject successor publication unless both current control pointers are exact."""
+
+    predecessor = manifest.predecessor
+    if predecessor is None:
+        return
+    preset = session.scalar(
+        select(ExecutionPresetRecord).where(ExecutionPresetRecord.preset_key == manifest.preset_key)
+    )
+    preset_revision = session.get(
+        ExecutionPresetRevisionRecord,
+        predecessor.preset_revision_id,
+    )
+    if (
+        preset is None
+        or preset.state != "ACTIVE"
+        or preset_revision is None
+        or preset_revision.preset_id != preset.preset_id
+        or preset_revision.state != "RELEASED"
+        or execution_preset_policy_sha256(preset_revision.canonical_document)
+        != predecessor.preset_policy_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review preset predecessor differs",
+        )
+    bundle = session.scalar(
+        select(ExecutionBundleRecord).where(
+            ExecutionBundleRecord.bundle_key == "pdf-document-review-support"
+        )
+    )
+    bundle_revision = session.get(
+        ExecutionBundleRevisionRecord,
+        predecessor.instruction_bundle_revision_id,
+    )
+    if (
+        bundle is None
+        or bundle.state != "ACTIVE"
+        or bundle_revision is None
+        or bundle_revision.bundle_id != bundle.bundle_id
+        or bundle_revision.state != "RELEASED"
+        or bundle_revision.manifest_sha256 != predecessor.instruction_manifest_sha256
+        or bundle_revision.content_sha256 != predecessor.instruction_content_sha256
+        or bundle_revision.revision_number + 1 != manifest.instruction_revision_number
+    ):
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review instruction predecessor differs",
+        )
+    current_preset = session.get(ExecutionPresetRevisionRecord, preset.current_revision_id)
+    current_bundle = session.get(ExecutionBundleRevisionRecord, bundle.current_revision_id)
+    if current_preset is None or current_bundle is None:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review current control pointer is missing",
+        )
+    initial = (
+        current_preset.preset_revision_id == predecessor.preset_revision_id
+        and current_bundle.bundle_revision_id == predecessor.instruction_bundle_revision_id
+    )
+    replay = (
+        current_preset.state == "RELEASED"
+        and tuple(current_preset.compatible_workflow_protocols)
+        == manifest.compatible_workflow_protocols
+        and current_bundle.state == "RELEASED"
+        and current_bundle.bundle_id == bundle.bundle_id
+        and current_bundle.revision_number == manifest.instruction_revision_number
+    )
+    if not initial and not replay:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review current control revisions are unrelated",
+        )
+    policies = current_preset.canonical_document.get("role_policies")
+    if not isinstance(policies, list) or len(policies) != 1:
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review predecessor policy shape differs",
+        )
+    instruction = policies[0].get("instruction_bundle")
+    if not isinstance(instruction, dict) or (
+        instruction.get("bundle_id") != bundle.bundle_id
+        or instruction.get("bundle_revision_id") != current_bundle.bundle_revision_id
+        or instruction.get("manifest_sha256") != current_bundle.manifest_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH",
+            "PDF review preset and instruction predecessors differ",
+        )
 
 
 def bootstrap_pdf_document_review_control_plane(
@@ -206,6 +323,7 @@ def bootstrap_pdf_document_review_control_plane(
                 "CONTROL_WORKFLOW_PROTOCOL_INVALID",
                 "PDF document-review Workflow protocol differs",
             )
+        _require_exact_predecessor(session, manifest)
 
     capacity_revision_id = publish_fixed_host_capacity_v4(
         sessions,
@@ -217,12 +335,13 @@ def bootstrap_pdf_document_review_control_plane(
         slots=slots,
         observed_at=manifest.created_at,
     )
+    successor = manifest.predecessor is not None
     platform_artifact = _publish_markdown(
         publisher,
         payload=_read_member(config_directory, manifest.platform_instruction_path),
         logical_name="platform.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="pdf-document-review-platform-v1",
+        key="pdf-document-review-platform-v2" if successor else "pdf-document-review-platform-v1",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -231,7 +350,7 @@ def bootstrap_pdf_document_review_control_plane(
         payload=_read_member(config_directory, manifest.role_instruction_path),
         logical_name="pdf-document-review.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="pdf-document-review-role-v1",
+        key="pdf-document-review-role-v2" if successor else "pdf-document-review-role-v1",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -253,6 +372,16 @@ def bootstrap_pdf_document_review_control_plane(
         source_commit=source_commit,
         actor_id=actor_id,
         created_at=manifest.created_at,
+        revision_number=manifest.instruction_revision_number or 1,
+        predecessor=(
+            BundleRevisionCAS(
+                bundle_revision_id=manifest.predecessor.instruction_bundle_revision_id,
+                manifest_sha256=manifest.predecessor.instruction_manifest_sha256,
+                content_sha256=manifest.predecessor.instruction_content_sha256,
+            )
+            if manifest.predecessor is not None
+            else None
+        ),
     )
     role_policies: list[dict[str, object]] = [
         {
@@ -408,14 +537,34 @@ def _find_or_create_exact_preset(
                 )
             if execution_preset_policy_sha256(current.canonical_document) == expected_policy_hash:
                 return current
-            raise ControlPlaneError(
-                "CONTROL_BOOTSTRAP_CONFLICT",
-                "PDF review released preset policy differs",
-            )
-        if any(revision.state == "RELEASED" for revision in revisions):
+            predecessor = manifest.predecessor
+            if (
+                predecessor is None
+                or current.preset_revision_id != predecessor.preset_revision_id
+                or execution_preset_policy_sha256(current.canonical_document)
+                != predecessor.preset_policy_sha256
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_BOOTSTRAP_CONFLICT",
+                    "PDF review released preset policy differs",
+                )
+        if any(revision.state == "RELEASED" for revision in revisions) and (
+            logical is None or logical.current_revision_id is None
+        ):
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
                 "PDF review released preset lacks its current pointer",
+            )
+        released_matching = [
+            revision
+            for revision in revisions
+            if revision.state == "RELEASED"
+            and execution_preset_policy_sha256(revision.canonical_document) == expected_policy_hash
+        ]
+        if released_matching:
+            raise ControlPlaneError(
+                "CONTROL_BOOTSTRAP_CONFLICT",
+                "matching released PDF review policy is not current",
             )
         matching_drafts = [
             revision
@@ -428,18 +577,26 @@ def _find_or_create_exact_preset(
                 "CONTROL_BOOTSTRAP_CONFLICT",
                 "PDF review preset draft policy is duplicated",
             )
-        if matching_drafts:
-            if any(revision.state != "DRAFT" for revision in revisions):
-                raise ControlPlaneError(
-                    "CONTROL_BOOTSTRAP_CONFLICT",
-                    "PDF review preset history differs",
-                )
-            return matching_drafts[0]
-        if revisions:
+        released_policy_hashes = {
+            execution_preset_policy_sha256(revision.canonical_document)
+            for revision in revisions
+            if revision.state == "RELEASED"
+        }
+        unresolved_other_drafts = [
+            revision
+            for revision in revisions
+            if revision.state == "DRAFT"
+            and revision not in matching_drafts
+            and execution_preset_policy_sha256(revision.canonical_document)
+            not in released_policy_hashes
+        ]
+        if unresolved_other_drafts:
             raise ControlPlaneError(
                 "CONTROL_BOOTSTRAP_CONFLICT",
-                "PDF review preset already has a different policy",
+                "PDF review preset draft history differs",
             )
+        if matching_drafts:
+            return matching_drafts[0]
         return create_execution_preset_draft(
             session,
             preset_key=manifest.preset_key,

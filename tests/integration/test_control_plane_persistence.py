@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,6 +22,7 @@ import eom_orchestrator.legacy_item_editorial_compatibility_bootstrap as editori
 import eom_orchestrator.legacy_item_extraction_bootstrap as legacy_extraction_bootstrap
 import eom_workflow_runner.models  # noqa: F401
 import pytest
+import yaml
 from alembic.autogenerate import compare_metadata
 from alembic.runtime.migration import MigrationContext
 from eom_identifiers import (
@@ -91,6 +93,7 @@ from eom_orchestrator.control_models import (
     CodexCapabilityEntryRecord,
     CodexCapabilitySnapshotRecord,
     CodexControlCommandRecord,
+    ExecutionBundleRecord,
     ExecutionBundleRevisionRecord,
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
@@ -149,6 +152,10 @@ from eom_orchestrator.models import (
     JobRecord,
     ProtocolVersionRecord,
     WorkerSlotRecord,
+)
+from eom_orchestrator.pdf_document_review_bootstrap import (
+    PdfDocumentReviewBootstrapResult,
+    bootstrap_pdf_document_review_control_plane,
 )
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
@@ -3812,6 +3819,159 @@ def test_customer_support_bootstrap_is_idempotent_and_preserves_capacity_v3(
             ).scalars()
         )
         assert any("ix_workflow_customer_support_owner" in row for row in query_plan)
+
+
+def test_pdf_document_review_v2_bootstrap_advances_exact_v1_predecessor(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    staging_root = tmp_path / "staging"
+    nas_root = tmp_path / "nas"
+    staging_root.mkdir()
+    nas_root.mkdir()
+    settings = Settings(
+        worker_config=Path("config/worker-slots.example.yaml").resolve(),
+        staging_root=staging_root,
+        workspace_root=tmp_path / "worker-workspaces",
+        worker_home_root=tmp_path / "worker-homes",
+        nas_artifact_root=nas_root.resolve(),
+        codex_binary=Path("/usr/local/bin/codex"),
+        codex_capability_policy=Path("config/codex-capabilities.example.yaml").resolve(),
+        worker_timeout_seconds=1800,
+    )
+    sessions = build_session_factory(integration_engine)
+    slots = resolve_worker_configuration(settings).registry.config.slots
+    with transaction(sessions) as session:
+        for slot in slots:
+            upsert_worker_slot(
+                session,
+                slot_id=slot.slot_id,
+                linux_user=slot.linux_user,
+                role=slot.role,
+                enabled=slot.enabled,
+                gpu=slot.gpu,
+            )
+        for definition_path in (
+            Path("config/workflows/pdf-document-review.v1.yaml"),
+            Path("config/workflows/pdf-document-review.v1.1.yaml"),
+        ):
+            import_workflow_definition(
+                session,
+                compile_definition(definition_path, {"support"}),
+            )
+    predecessor_capacity_id = editorial_bootstrap._stable_id("capacityrev_", "fixed-host:v3")
+    with sessions() as session:
+        predecessor_capacity = session.get(
+            WorkerCapacityPolicyRevisionRecord,
+            predecessor_capacity_id,
+        )
+    if predecessor_capacity is None:
+        editorial_bootstrap._publish_editorial_compatibility_capacity_policy(
+            sessions,
+            slots=slots,
+            actor_id="pdf-review-integration",
+        )
+
+    first = bootstrap_pdf_document_review_control_plane(
+        integration_engine,
+        config_directory=Path("config/control-plane/pdf-document-review-v1").resolve(),
+        source_commit="a" * 40,
+        actor_id="pdf-review-integration",
+        settings=settings,
+    )
+    with sessions() as session:
+        preset = session.get(ExecutionPresetRevisionRecord, first.preset_revision_id)
+        bundle = session.get(
+            ExecutionBundleRevisionRecord,
+            first.instruction_bundle_revision_id,
+        )
+        assert preset is not None and bundle is not None
+        predecessor = {
+            "preset_revision_id": preset.preset_revision_id,
+            "preset_policy_sha256": execution_preset_policy_sha256(preset.canonical_document),
+            "instruction_bundle_revision_id": bundle.bundle_revision_id,
+            "instruction_manifest_sha256": bundle.manifest_sha256,
+            "instruction_content_sha256": bundle.content_sha256,
+        }
+
+    successor_root = tmp_path / "pdf-document-review-v2"
+    shutil.copytree(Path("config/control-plane/pdf-document-review-v2"), successor_root)
+    manifest_path = successor_root / "bootstrap.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    def bootstrap_successor() -> PdfDocumentReviewBootstrapResult:
+        return bootstrap_pdf_document_review_control_plane(
+            integration_engine,
+            config_directory=successor_root,
+            source_commit="b" * 40,
+            actor_id="pdf-review-integration",
+            settings=settings,
+        )
+
+    tampered_predecessor = dict(predecessor)
+    tampered_predecessor["instruction_manifest_sha256"] = "sha256:" + "0" * 64
+    manifest["predecessor"] = tampered_predecessor
+    manifest_path.write_text(
+        yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    with pytest.raises(ControlPlaneError) as captured:
+        bootstrap_successor()
+    assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH"
+    with sessions() as session:
+        preset_logical = session.get(ExecutionPresetRecord, first.preset_id)
+        bundle_logical = session.get(ExecutionBundleRecord, first.instruction_bundle_id)
+        assert preset_logical is not None
+        assert preset_logical.current_revision_id == first.preset_revision_id
+        assert bundle_logical is not None
+        assert bundle_logical.current_revision_id == first.instruction_bundle_revision_id
+
+    manifest["predecessor"] = predecessor
+    manifest_path.write_text(
+        yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    second = bootstrap_successor()
+    assert bootstrap_successor() == second
+    assert second.preset_id == first.preset_id
+    assert second.preset_revision_id != first.preset_revision_id
+    assert second.instruction_bundle_id == first.instruction_bundle_id
+    assert second.instruction_bundle_revision_id != first.instruction_bundle_revision_id
+
+    with sessions() as session:
+        preset_logical = session.get(ExecutionPresetRecord, first.preset_id)
+        bundle_logical = session.get(ExecutionBundleRecord, first.instruction_bundle_id)
+        preset_revisions = tuple(
+            session.scalars(
+                select(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == first.preset_id)
+                .order_by(ExecutionPresetRevisionRecord.revision_number)
+            )
+        )
+        bundle_revisions = tuple(
+            session.scalars(
+                select(ExecutionBundleRevisionRecord)
+                .where(ExecutionBundleRevisionRecord.bundle_id == first.instruction_bundle_id)
+                .order_by(ExecutionBundleRevisionRecord.revision_number)
+            )
+        )
+        assert preset_logical is not None
+        assert preset_logical.current_revision_id == second.preset_revision_id
+        assert tuple(value.state for value in preset_revisions) == (
+            "DRAFT",
+            "RELEASED",
+            "DRAFT",
+            "RELEASED",
+        )
+        assert preset_revisions[1].content_sha256 == first.preset_content_sha256
+        assert tuple(preset_revisions[-1].compatible_workflow_protocols) == (
+            "workflow-role/1.25.0",
+            "workflow-role/1.26.0",
+        )
+        assert bundle_logical is not None
+        assert bundle_logical.current_revision_id == second.instruction_bundle_revision_id
+        assert tuple(value.revision_number for value in bundle_revisions) == (1, 2)
+        assert bundle_revisions[0].manifest_sha256 == first.instruction_manifest_sha256
 
 
 def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: Engine) -> None:
