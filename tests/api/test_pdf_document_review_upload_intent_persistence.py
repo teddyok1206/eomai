@@ -4,7 +4,10 @@ import os
 from typing import cast
 
 import pytest
-from eom_api.pdf_document_review_models import PdfDocumentReviewUploadIntentRecord
+from eom_api.pdf_document_review_models import (
+    DocumentReviewHwpxCorrectionRecord,
+    PdfDocumentReviewUploadIntentRecord,
+)
 from eom_identifiers import new_pdf_review_upload_intent_id
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
@@ -47,7 +50,17 @@ def test_pdf_review_upload_intent_identifier_and_migration_head_are_exact() -> N
     value = new_pdf_review_upload_intent_id()
     assert value.startswith("pdfreviewintent_")
     assert len(value) == 48
-    assert CURRENT_MIGRATION_REVISION == "20260922_0039"
+    assert CURRENT_MIGRATION_REVISION == "20260922_0040"
+
+
+def test_document_review_correction_persists_only_small_indexed_pointers() -> None:
+    table = cast(Table, DocumentReviewHwpxCorrectionRecord.__table__)
+    assert tuple(column.name for column in table.primary_key.columns) == ("correction_id",)
+    assert not any(isinstance(column.type, LargeBinary) for column in table.columns)
+    assert set(_indexes_by_name(table)) == {
+        "ix_document_review_hwpx_correction_owner",
+        "ix_document_review_hwpx_correction_workflow",
+    }
 
 
 def test_pdf_review_owner_index_is_part_of_authoritative_workflow_metadata() -> None:
@@ -103,6 +116,7 @@ def test_pdf_review_migration_matches_authoritative_models() -> None:
             "ck_pdf_review_upload_intents_lease",
             "ck_pdf_review_upload_intents_payload",
             "ck_pdf_review_upload_intents_preset",
+            "ck_pdf_review_upload_intents_source_format",
             "ck_pdf_review_upload_intents_state",
         }
         foreign_keys = {
@@ -122,5 +136,47 @@ def test_pdf_review_migration_matches_authoritative_models() -> None:
             value["name"] for value in inspector.get_indexes("workflow_instances", schema="app")
         }
         assert "ix_workflow_pdf_document_review_owner" in workflow_indexes
+
+        correction_table = cast(Table, DocumentReviewHwpxCorrectionRecord.__table__)
+        assert tuple(
+            value["name"]
+            for value in inspector.get_columns(
+                "document_review_hwpx_corrections",
+                schema="app",
+            )
+        ) == tuple(correction_table.columns.keys())
+        assert {
+            value["name"]
+            for value in inspector.get_indexes(
+                "document_review_hwpx_corrections",
+                schema="app",
+            )
+        } == {
+            "ix_document_review_hwpx_correction_owner",
+            "ix_document_review_hwpx_correction_workflow",
+        }
+        assert {
+            value["name"]
+            for value in inspector.get_check_constraints(
+                "document_review_hwpx_corrections",
+                schema="app",
+            )
+        } == {
+            "ck_document_review_hwpx_corrections_bounds",
+            "ck_document_review_hwpx_corrections_output_contract",
+        }
+        assert {
+            tuple(value["constrained_columns"]): (
+                value["referred_table"],
+                tuple(value["referred_columns"]),
+            )
+            for value in inspector.get_foreign_keys(
+                "document_review_hwpx_corrections",
+                schema="app",
+            )
+        } == {
+            ("operator_id",): ("operators", ("operator_id",)),
+            ("workflow_id",): ("workflow_instances", ("workflow_id",)),
+        }
     finally:
         engine.dispose()

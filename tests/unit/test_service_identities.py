@@ -57,6 +57,8 @@ def test_identity_deployer_verifies_mount_and_polkit_boundaries() -> None:
     assert '--gid "${primary_group}" "${user}"' in source
     assert "for _attempt in $(seq 1 50)" in source
     assert "POLKIT_CROSS_START=DENIED" in source
+    assert "infra/systemd/eom-office-converter@.service" in source
+    assert "eom-office-converter@officeconv_0123456789abcdef0123456789abcdef.service" in source
     assert "--allow-user-interaction" not in source
     assert "pip install" not in source
     assert "conda install" not in source

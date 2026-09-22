@@ -5,6 +5,7 @@ from typing import Literal
 
 import pytest
 from eom_api.errors import ApiError
+from eom_api.pdf_document_review_models import PdfDocumentReviewUploadIntentRecord
 from eom_api.services.query_adapter import QueryAdapter
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.models import (
@@ -180,6 +181,19 @@ def test_pdf_review_projection_resolves_exact_worker_request_and_artifact() -> N
     assert view.result is not None
     assert view.result_artifact is not None
     assert view.pages[0].image_url.endswith("/pages/1/image")
+
+
+def test_office_review_projection_uses_original_upload_identity() -> None:
+    source = PdfDocumentReviewUploadIntentRecord(
+        original_filename="검토 문서.hwpx",
+        source_format="HWPX",
+    )
+
+    view = QueryAdapter._pdf_document_review(_workflow("RUNNING"), None, source)
+
+    assert view.original_filename == "검토 문서.hwpx"
+    assert view.source_format == "HWPX"
+    assert view.source_pdf_sha256 == _request().document.source_pdf.sha256
 
 
 def test_pdf_review_projection_recovers_legacy_omitted_nullable_text_layer() -> None:

@@ -139,8 +139,14 @@ class PdfDocumentReviewSubmission(WebModel):
     original_filename: str = Field(
         min_length=5,
         max_length=240,
-        pattern=r"^[^/\\\x00-\x1f]+\.[Pp][Dd][Ff]$",
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
     )
+    source_format: Literal["PDF", "HWP", "HWPX"] = "PDF"
+    media_type: Literal[
+        "application/pdf",
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx",
+    ] = "application/pdf"
     content_length: int = Field(ge=8, le=256 * 1024 * 1024)
     preset_key: PdfReviewPresetKey
     additional_guidance: str | None = Field(
@@ -155,11 +161,28 @@ class PdfDocumentReviewSubmission(WebModel):
         pattern=r"^[A-Za-z0-9_.:-]+$",
     )
 
+    @model_validator(mode="after")
+    def coherent_source(self) -> PdfDocumentReviewSubmission:
+        suffix, media_type = {
+            "PDF": (".pdf", "application/pdf"),
+            "HWP": (".hwp", "application/vnd.hancom.hwp"),
+            "HWPX": (".hwpx", "application/vnd.hancom.hwpx"),
+        }[self.source_format]
+        if not self.original_filename.lower().endswith(suffix) or self.media_type != media_type:
+            raise ValueError("document review source identity differs")
+        return self
+
 
 class PdfDocumentReviewUploadIntentView(WebModel):
     upload_intent_id: str = Field(pattern=r"^pdfreviewintent_[0-9a-f]{32}$")
     state: Literal["AWAITING_UPLOAD", "PROCESSING", "STARTED", "FAILED_RETRYABLE", "FAILED_FINAL"]
     original_filename: str = Field(min_length=5, max_length=240)
+    source_format: Literal["PDF", "HWP", "HWPX"] = "PDF"
+    media_type: Literal[
+        "application/pdf",
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx",
+    ] = "application/pdf"
     content_length: int = Field(ge=8, le=256 * 1024 * 1024)
     preset_key: PdfReviewPresetKey
     additional_guidance_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
@@ -208,6 +231,81 @@ class PdfDocumentReviewUploadIntentView(WebModel):
             for value in (self.upload_sha256, self.workflow_id, self.failure_code, self.review_url)
         ):
             raise ValueError("awaiting PDF review upload exposes completed state")
+        return self
+
+
+class DocumentReviewCorrectionEligibilityView(WebModel):
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    source_format: Literal["PDF", "HWP", "HWPX"]
+    correction_available: bool
+    eligible_finding_ids: tuple[str, ...] = Field(max_length=32)
+    unavailable_reason: (
+        Literal[
+            "SOURCE_NOT_HWPX",
+            "REVIEW_NOT_COMPLETED",
+            "NO_SAFE_REPLACEMENTS",
+        ]
+        | None
+    )
+
+    @model_validator(mode="after")
+    def coherent_availability(self) -> DocumentReviewCorrectionEligibilityView:
+        if len(self.eligible_finding_ids) != len(set(self.eligible_finding_ids)):
+            raise ValueError("eligible document-review findings must be unique")
+        expected = (
+            self.source_format == "HWPX"
+            and bool(self.eligible_finding_ids)
+            and self.unavailable_reason is None
+        )
+        if self.correction_available != expected:
+            raise ValueError("document-review correction availability is inconsistent")
+        if not self.correction_available and self.unavailable_reason is None:
+            raise ValueError("unavailable document-review correction requires a reason")
+        return self
+
+
+class DocumentReviewCorrectionSubmission(WebModel):
+    finding_ids: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=32,
+    )
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+    @model_validator(mode="after")
+    def unique_findings(self) -> DocumentReviewCorrectionSubmission:
+        if any(
+            re.fullmatch(r"reviewfinding_[0-9a-f]{32}", value) is None for value in self.finding_ids
+        ) or len(self.finding_ids) != len(set(self.finding_ids)):
+            raise ValueError("document-review correction finding IDs are invalid")
+        return self
+
+
+class DocumentReviewCorrectionView(WebModel):
+    correction_id: str = Field(pattern=r"^doccorrection_[0-9a-f]{32}$")
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    state: Literal["COMPLETED"]
+    applied_finding_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    text_color: Literal["#FF0000"]
+    output_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    output_content_length: int = Field(ge=1, le=256 * 1024 * 1024)
+    download_url: str
+    created_at: UtcDatetime
+    resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def exact_correction(self) -> DocumentReviewCorrectionView:
+        if len(self.applied_finding_ids) != len(set(self.applied_finding_ids)):
+            raise ValueError("applied document-review findings must be unique")
+        expected = (
+            f"/api/v1/pdf-document-reviews/{self.workflow_id}/corrections/"
+            f"{self.correction_id}/download"
+        )
+        if self.download_url != expected:
+            raise ValueError("document-review correction download URL differs")
         return self
 
 
@@ -320,6 +418,7 @@ class PdfDocumentReviewView(WebModel):
     document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
     document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
     original_filename: str = Field(min_length=5, max_length=240)
+    source_format: Literal["PDF", "HWP", "HWPX"] = "PDF"
     source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     page_count: int = Field(ge=1, le=32)
     pages: tuple[PdfDocumentReviewPageView, ...] = Field(min_length=1, max_length=32)
@@ -335,6 +434,9 @@ class PdfDocumentReviewView(WebModel):
 
     @model_validator(mode="after")
     def coherent_review(self) -> PdfDocumentReviewView:
+        expected_suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[self.source_format]
+        if not self.original_filename.lower().endswith(expected_suffix):
+            raise ValueError("document-review filename differs from its source format")
         if len(self.pages) != self.page_count:
             raise ValueError("PDF review page count differs from its page projection")
         if tuple(page.page_number for page in self.pages) != tuple(range(1, self.page_count + 1)):

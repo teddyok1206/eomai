@@ -65,10 +65,12 @@ draft 결속 검증을 받습니다. 교정 가능한 확정 finding은 정확�
 typed directive로 최대 세 번 다시 작성·검토하며, 불확실성·근거 변경·정책 판단과 소진된 개선 횟수는
 사람 게이트로 보냅니다. 사람 최종 승인은 그대로 유지됩니다.
 
-이 검토 구조는 향후 PDF 교재 검토가 사용할 수 있는 검증 계획·후보 판정·불변 근거 pointer·receipt의
-기반을 제공합니다. 그러나 문항 draft와 교재 문서는 수명주기와 출력 계약이 다르므로 PDF 검토를
-현재 Item result schema에 끼워 넣지 않습니다. 실제 기능을 추가할 때는 문서 Revision, 페이지/영역
-anchor, 주장·검증 대상과 review report를 정의한 별도 additive protocol을 먼저 설계합니다.
+문서 검토는 Item result schema와 분리된 additive protocol입니다. PDF·HWP·HWPX 원본을 불변
+Artifact Revision으로 보존하고, HWP/HWPX는 격리된 LibreOffice/H2Orestart adapter가 만든 PDF
+projection을 기존 페이지/영역 anchor 검토 Workflow에 전달합니다. PDF와 HWP는 검토 전용입니다.
+HWPX에서 worker가 확정한 정확한 `REPLACE` 지적만 사용자가 선택하면 원본을 덮어쓰지 않고 새
+HWPX 교정본을 만들며, 바뀐 글자만 빨간색으로 표시합니다. 교정 출력은 HWPX만 제공하고 PDF/HWP
+수정본을 만들지 않습니다. 자세한 불변식과 격리 경계는 ADR 0104에 기록돼 있습니다.
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.

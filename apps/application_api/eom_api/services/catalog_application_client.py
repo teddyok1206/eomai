@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
+    ApplyDocumentReviewHwpxCorrections,
     ApprovedItemGraphPublicationResult,
     AssessmentItemContentContract,
     AssessmentPageImagePointer,
@@ -40,6 +41,9 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    DocumentReviewHwpxCorrectionMediaQuery,
+    DocumentReviewHwpxCorrectionMediaResponse,
+    DocumentReviewHwpxCorrectionResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -55,6 +59,9 @@ from eom_catalog_contracts import (
     MockExamAssemblyPlanContract,
     MockExamItemReviewPublicationResult,
     MockExamReviewEligibilityResult,
+    OfficeDocumentReviewIntakeCommand,
+    OfficeDocumentReviewIntakeResponse,
+    OfficeDocumentReviewSourcePointer,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
     PdfDocumentReviewPageMediaQuery,
@@ -255,6 +262,192 @@ class CatalogApplicationClient:
             if descriptor >= 0:
                 os.close(descriptor)
             connection.close()
+
+    def ingest_office_document_review_source(
+        self,
+        source: Path,
+        *,
+        actor_id: str,
+        original_filename: str,
+        source_format: Literal["PDF", "HWP", "HWPX"],
+        media_type: Literal[
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+        ],
+        idempotency_key: str,
+    ) -> OfficeDocumentReviewSourcePointer:
+        """Stream one stable document to Catalog and return its immutable PDF projection."""
+
+        descriptor = -1
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            descriptor = os.open(
+                source,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
+            before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or not 8 <= before.st_size <= 256 * 1024 * 1024
+            ):
+                raise ValueError("Document review upload is not one bounded regular file")
+            digest = hashlib.sha256()
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("Document review upload ended before its opened size")
+                digest.update(chunk)
+                remaining -= len(chunk)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            command = OfficeDocumentReviewIntakeCommand(
+                actor_id=actor_id,
+                original_filename=original_filename,
+                source_format=source_format,
+                media_type=media_type,
+                idempotency_key=idempotency_key,
+                content_length=before.st_size,
+                sha256="sha256:" + digest.hexdigest(),
+            )
+            payload = command.model_dump(mode="json")
+            validate_contract("document-review-intake-request-v2", payload)
+            self._validate_socket()
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            header = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            if len(header) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+                raise ValueError("Document review intake header exceeds its fixed bound")
+            connection.settimeout(PDF_DOCUMENT_REVIEW_UPLOAD_TIMEOUT_SECONDS)
+            connection.sendall(header + b"\n")
+            sent_digest = hashlib.sha256()
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("Document review upload changed while streaming")
+                connection.sendall(chunk)
+                sent_digest.update(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(descriptor)
+            if (
+                before.st_dev,
+                before.st_ino,
+                before.st_mode,
+                before.st_uid,
+                before.st_gid,
+                before.st_nlink,
+                before.st_size,
+                before.st_mtime_ns,
+            ) != (
+                after.st_dev,
+                after.st_ino,
+                after.st_mode,
+                after.st_uid,
+                after.st_gid,
+                after.st_nlink,
+                after.st_size,
+                after.st_mtime_ns,
+            ) or "sha256:" + sent_digest.hexdigest() != command.sha256:
+                raise ValueError("Document review upload identity changed while streaming")
+            connection.shutdown(socket.SHUT_WR)
+            connection.settimeout(PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_response(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("Document review intake response is not an object")
+            validate_contract("document-review-intake-response-v2", value)
+            response = OfficeDocumentReviewIntakeResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.document is not None
+            return response.document
+        except CatalogApplicationClientError:
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            JsonSchemaValidationError,
+            ValidationError,
+        ) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog Office document-review intake boundary is unavailable",
+            ) from exc
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            connection.close()
+
+    def apply_document_review_hwpx_corrections(
+        self,
+        command: ApplyDocumentReviewHwpxCorrections,
+    ) -> DocumentReviewHwpxCorrectionResponse:
+        payload = command.model_dump(mode="json")
+        validate_contract("document-review-hwpx-correction-request", payload)
+        value = self._raw_request(
+            payload, timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS
+        )
+        validate_contract("document-review-hwpx-correction-response", value)
+        response = DocumentReviewHwpxCorrectionResponse.model_validate(value)
+        if response.status == "ERROR":
+            self._raise_remote_error(response.error_code)
+        return response
+
+    def download_document_review_corrected_hwpx(
+        self,
+        query: DocumentReviewHwpxCorrectionMediaQuery,
+    ) -> ProxiedItemMedia:
+        payload = query.model_dump(mode="json")
+        validate_contract("document-review-hwpx-correction-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("HWPX correction media header is not an object")
+            validate_contract("document-review-hwpx-correction-media-response", value)
+            response = DocumentReviewHwpxCorrectionMediaResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if (
+                response.content_length != query.output.content_length
+                or response.sha256 != query.output.sha256
+            ):
+                raise ValueError("Catalog HWPX bytes differ from their pinned pointer")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeError,
+            ValidationError,
+            JsonSchemaValidationError,
+        ) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog corrected HWPX media boundary is unavailable",
+            ) from exc
 
     def download_pdf_document_review_page(
         self,
@@ -676,6 +869,47 @@ class CatalogApplicationClient:
                 "Catalog knowledge analysis response is invalid",
             )
         return response.analysis
+
+    def _raw_request(
+        self,
+        payload: dict[str, object],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if len(encoded) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+                raise ValueError("Catalog application request exceeds its fixed bound")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(timeout_seconds)
+            raw = self._read_response(connection)
+            value: object = json.loads(raw)
+            if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+                raise ValueError("Catalog application response is not an object")
+            return value
+        except CatalogApplicationClientError:
+            raise
+        except (
+            OSError,
+            UnicodeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog application boundary is unavailable",
+            ) from exc
+        finally:
+            connection.close()
 
     def _request(
         self,

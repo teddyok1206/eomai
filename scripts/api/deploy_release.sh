@@ -1029,6 +1029,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/mock_exam_production_release_resolver.py",
         "eom_api/services/mock_exam_production_runner.py",
         "eom_api/services/control_plane_adapter.py",
+        "eom_api/services/document_review_correction_service.py",
         "eom_api/services/pdf_document_review_service.py",
         "eom_api/services/pdf_upload_stager.py",
         "eom_api/routers/pdf_document_reviews.py",
@@ -1153,6 +1154,8 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/common.schema.json",
         "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
         "eom_api_contracts/schemas/customer-support-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
         "eom_api_contracts/schemas/hwpx-v2.schema.json",
@@ -1182,7 +1185,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 36 packaged API schemas including customer support, PDF document review, release identity, Workflow-start, "
+            "expected exactly 42 packaged API schemas including customer support, Office document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1341,6 +1344,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_catalog_service/mock_exam_assembly_service.py",
         "eom_catalog_service/mock_exam_candidate_repository.py",
         "eom_catalog_service/mock_exam_item_review_publication_service.py",
+        "eom_catalog_service/document_review_hwpx.py",
+        "eom_catalog_service/document_review_hwpx_correction_service.py",
+        "eom_catalog_service/office_converter_worker.py",
+        "eom_catalog_service/office_document_converter.py",
+        "eom_catalog_service/office_document_review_intake.py",
         "eom_catalog_service/pdf_document_review_intake.py",
         "eom_catalog_service/legacy_usage_models.py",
         "eom_catalog_service/legacy_usage_service.py",
@@ -1564,6 +1572,15 @@ catalog_resources = {
     "catalog-application/pdf-document-review-page-media-request-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-page-media-request-v1.schema.json",
     "catalog-application/pdf-document-review-page-media-response-v1.schema.json": "schemas/catalog/catalog-application/pdf-document-review-page-media-response-v1.schema.json",
     "document-review/pdf-document-review-intake-manifest-v1.schema.json": "schemas/document-review/pdf-document-review-intake-manifest-v1.schema.json",
+    "catalog-application/document-review-intake-request-v2.schema.json": "schemas/catalog/catalog-application/document-review-intake-request-v2.schema.json",
+    "catalog-application/document-review-intake-response-v2.schema.json": "schemas/catalog/catalog-application/document-review-intake-response-v2.schema.json",
+    "document-review/document-review-intake-manifest-v2.schema.json": "schemas/document-review/document-review-intake-manifest-v2.schema.json",
+    "catalog-application/document-review-hwpx-correction-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-request-v1.schema.json",
+    "catalog-application/document-review-hwpx-correction-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-response-v1.schema.json",
+    "catalog-application/document-review-hwpx-correction-media-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-media-request-v1.schema.json",
+    "catalog-application/document-review-hwpx-correction-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-hwpx-correction-media-response-v1.schema.json",
+    "document-review/document-review-hwpx-correction-plan-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
+    "document-review/document-review-hwpx-correction-result-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",
@@ -2068,7 +2085,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20260922_0039":
+if CURRENT_MIGRATION_REVISION != "20260922_0040":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():

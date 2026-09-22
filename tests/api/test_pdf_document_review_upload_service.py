@@ -17,8 +17,14 @@ from eom_api.services.pdf_document_review_service import (
     PdfReviewUploadClaim,
 )
 from eom_api.services.pdf_upload_stager import StagedPdfUpload
-from eom_api_contracts.document_review import CreatePdfDocumentReviewUploadIntentRequest
+from eom_api_contracts.document_review import (
+    CreateDocumentReviewUploadIntentRequestV2,
+    CreatePdfDocumentReviewUploadIntentRequest,
+)
 from eom_catalog_contracts import (
+    OfficeDocumentReviewConversionIdentity,
+    OfficeDocumentReviewMemberPointer,
+    OfficeDocumentReviewSourcePointer,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
@@ -85,6 +91,94 @@ class FakeCatalog:
             self.failure = None
             raise failure
         return _document()
+
+    def ingest_office_document_review_source(self, source: Path, **values: Any) -> Any:
+        self.calls.append({"source": source, **values})
+        if self.failure is not None:
+            failure = self.failure
+            self.failure = None
+            raise failure
+        document = _document()
+        source_format = values["source_format"]
+        source_suffix = {"PDF": "pdf", "HWP": "hwp", "HWPX": "hwpx"}[source_format]
+        source_media_type = values["media_type"]
+        source_schema = {
+            "PDF": "eom://schemas/document-review/pdf-source/1.0",
+            "HWP": "eom://schemas/document-review/hwp-source/2.0",
+            "HWPX": "eom://schemas/document-review/editable-hwpx/1.0",
+        }[source_format]
+        source_sha256 = (
+            document.source_pdf.sha256
+            if source_format == "PDF"
+            else "sha256:" + __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+        )
+        original_artifact_id = (
+            document.source_pdf.artifact_id if source_format == "PDF" else "artifact_" + "e" * 32
+        )
+        original_revision_id = (
+            document.source_pdf.artifact_revision_id
+            if source_format == "PDF"
+            else "rev_" + "f" * 32
+        )
+        if source_format != "PDF":
+            source_pdf = document.source_pdf.model_copy(
+                update={
+                    "artifact_id": original_artifact_id,
+                    "artifact_revision_id": original_revision_id,
+                    "member_path": "source/original.pdf",
+                }
+            )
+            pages = tuple(
+                page.model_copy(
+                    update={
+                        "page_image": page.page_image.model_copy(
+                            update={
+                                "artifact_id": original_artifact_id,
+                                "artifact_revision_id": original_revision_id,
+                            }
+                        )
+                    }
+                )
+                for page in document.pages
+            )
+            document = document.model_copy(update={"source_pdf": source_pdf, "pages": pages})
+        original = OfficeDocumentReviewMemberPointer(
+            artifact_id=original_artifact_id,
+            artifact_revision_id=original_revision_id,
+            member_path=f"source/original.{source_suffix}",
+            sha256=source_sha256,
+            content_length=source.stat().st_size,
+            media_type=source_media_type,
+            schema_ref=source_schema,
+        )
+        manifest = OfficeDocumentReviewMemberPointer(
+            artifact_id=original.artifact_id,
+            artifact_revision_id=original.artifact_revision_id,
+            member_path="manifest.json",
+            sha256="sha256:" + "d" * 64,
+            content_length=1024,
+            media_type="application/json",
+            schema_ref=("eom://schemas/document-review/document-review-intake-manifest/2.0"),
+        )
+        return OfficeDocumentReviewSourcePointer(
+            document_id=document.document_id,
+            document_revision_id=document.document_revision_id,
+            original_filename=values["original_filename"],
+            source_format=source_format,
+            original_source=original,
+            review_document=document,
+            editable_hwpx=original if source_format == "HWPX" else None,
+            intake_manifest=manifest,
+            conversion=OfficeDocumentReviewConversionIdentity(
+                conversion_kind=(
+                    "IDENTITY_PDF" if source_format == "PDF" else "LIBREOFFICE_H2ORESTART_PDF"
+                ),
+                review_pdf_sha256=document.source_pdf.sha256,
+                libreoffice_version=None if source_format == "PDF" else "LibreOffice 24.2.7.2",
+                libreoffice_sha256=None if source_format == "PDF" else "sha256:" + "a" * 64,
+                h2orestart_sha256=None if source_format == "PDF" else "sha256:" + "b" * 64,
+            ),
+        )
 
 
 class FakeCommands:
@@ -172,6 +266,49 @@ def test_pdf_review_upload_service_starts_once_and_replays_exact_identity(tmp_pa
         assert record.document_revision_id == "documentrev_" + "7" * 32
         assert record.source_artifact_revision_id == "rev_" + "3" * 32
         assert record.workflow_command_id == command_id
+    engine.dispose()
+
+
+def test_hwpx_review_pins_original_source_separately_from_derived_review_pdf(
+    tmp_path: Path,
+) -> None:
+    service, engine, _catalog, _commands = _service()
+    source = tmp_path / "upload.hwpx"
+    source.write_bytes(b"PK\x03\x04HWPX")
+    source_sha256 = "sha256:" + __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+    intent = service.create_document_upload_intent(
+        CreateDocumentReviewUploadIntentRequestV2(
+            original_filename="문제지.hwpx",
+            source_format="HWPX",
+            media_type="application/vnd.hancom.hwpx",
+            content_length=8,
+            preset_key="PROBLEM_SET",
+        ),
+        actor_id=OPERATOR_ID,
+        observed_at=NOW,
+    )
+
+    _, started = service.accept_document_upload(
+        intent.upload_intent_id,
+        StagedPdfUpload(
+            source,
+            8,
+            source_sha256,
+            source_format="HWPX",
+            media_type="application/vnd.hancom.hwpx",
+        ),
+        actor=_actor(),
+        observed_at=NOW + timedelta(seconds=1),
+    )
+
+    assert started.state == "STARTED"
+    with service.sessions() as session:
+        record = session.get(PdfDocumentReviewUploadIntentRecord, intent.upload_intent_id)
+        assert record is not None
+        assert record.source_artifact_id == "artifact_" + "e" * 32
+        assert record.source_artifact_revision_id == "rev_" + "f" * 32
+        assert record.source_sha256 == source_sha256
+        assert record.source_sha256 != _document().source_pdf.sha256
     engine.dispose()
 
 

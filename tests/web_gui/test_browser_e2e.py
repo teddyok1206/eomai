@@ -271,7 +271,9 @@ def test_pdf_document_review_ui_keeps_immutable_upload_and_anchor_contracts() ->
 
     assert 'data-view-target="pdf-review"' in html
     assert 'id="pdf-review-form"' in html
-    assert 'accept="application/pdf,.pdf"' in html
+    assert "application/vnd.hancom.hwp" in html
+    assert "application/vnd.hancom.hwpx" in html
+    assert ".pdf,.hwp,.hwpx" in html
     assert 'value="PROBLEM_SET"' in html
     assert 'value="WEEKLY_WORKBOOK"' in html
     assert 'value="MOCK_EXAM"' in html
@@ -279,11 +281,13 @@ def test_pdf_document_review_ui_keeps_immutable_upload_and_anchor_contracts() ->
     assert "pdfDocumentReviewPendingSubmission: null" in javascript
     assert "studio:pdf-review:intent:${crypto.randomUUID()}" in javascript
     assert "studio:pdf-review:content:${crypto.randomUUID()}" in javascript
-    assert '"Content-Type": "application/pdf"' in javascript
+    assert '"Content-Type": mediaType' in javascript
+    assert "documentReviewSource(file)" in javascript
     assert "marker.style.left = `${anchor.region.x_ppm / 10000}%`" in javascript
     assert "finding.recommendation.instruction" in javascript
     assert "mutation_performed" not in html
-    assert "PDF 수정" not in html
+    assert "원본 보존 · 수정 글자 빨간색" in html
+    assert "pdfDocumentReviewCorrectionFindingIds: new Set()" in javascript
 
 
 def test_pdf_document_review_ignores_stale_detail_responses() -> None:

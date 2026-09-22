@@ -96,6 +96,7 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     InspectMockExamAssemblyQuery,
+    PdfDocumentReviewResultMemberPointer,
     PreviewMockExamAssemblyPlanCommand,
     load_integrated_science_mock_exam_policy,
 )
@@ -191,6 +192,7 @@ from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
+from eom_api.pdf_document_review_models import PdfDocumentReviewUploadIntentRecord
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.hwpx_projection import project_hwpx_build
 
@@ -2831,6 +2833,16 @@ class QueryAdapter:
             more = len(workflows) > limit
             workflows = workflows[:limit]
             results = self._pdf_document_review_results(session, workflows)
+            workflow_ids = tuple(workflow.workflow_id for workflow in workflows)
+            sources = {
+                row.workflow_id: row
+                for row in session.scalars(
+                    select(PdfDocumentReviewUploadIntentRecord).where(
+                        PdfDocumentReviewUploadIntentRecord.workflow_id.in_(workflow_ids)
+                    )
+                )
+                if row.workflow_id is not None
+            }
             next_cursor = (
                 self.cursors.encode(
                     "pdf-document-review",
@@ -2842,7 +2854,11 @@ class QueryAdapter:
             )
             return PageResult(
                 tuple(
-                    self._pdf_document_review(workflow, results.get(workflow.workflow_id))
+                    self._pdf_document_review(
+                        workflow,
+                        results.get(workflow.workflow_id),
+                        sources.get(workflow.workflow_id),
+                    )
                     for workflow in workflows
                 ),
                 next_cursor,
@@ -2860,7 +2876,55 @@ class QueryAdapter:
         with self.sessions() as session:
             workflow = self._owned_pdf_document_review(session, actor_id, workflow_id)
             results = self._pdf_document_review_results(session, [workflow])
-            return self._pdf_document_review(workflow, results.get(workflow.workflow_id))
+            source = session.scalar(
+                select(PdfDocumentReviewUploadIntentRecord).where(
+                    PdfDocumentReviewUploadIntentRecord.workflow_id == workflow.workflow_id
+                )
+            )
+            return self._pdf_document_review(
+                workflow,
+                results.get(workflow.workflow_id),
+                source,
+            )
+
+    def pdf_document_review_result_pointer(
+        self,
+        *,
+        actor_id: str,
+        workflow_id: str,
+    ) -> PdfDocumentReviewResultMemberPointer:
+        """Return the exact validated role-result member for a completed owned review."""
+
+        with self.sessions() as session:
+            workflow = self._owned_pdf_document_review(session, actor_id, workflow_id)
+            result = self._pdf_document_review_results(session, [workflow]).get(workflow_id)
+            if workflow.state != "COMPLETED" or result is None:
+                raise ApiError(
+                    409,
+                    "REVIEW_NOT_COMPLETED",
+                    "Document review result is unavailable",
+                    "The immutable review result has not completed and committed yet.",
+                )
+            revision = session.get(ArtifactRevisionRecord, result.artifact.revision_id)
+            expected_sha256 = content_sha256(result.model_dump(mode="json"))
+            if (
+                revision is None
+                or revision.logical_artifact_id != result.artifact.logical_artifact_id
+                or revision.content_hash != expected_sha256
+                or not revision.approved
+            ):
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_RESULT_INVALID",
+                    "Document review result pointer is invalid",
+                    "The committed review result differs from its immutable Artifact revision.",
+                )
+            return PdfDocumentReviewResultMemberPointer(
+                artifact_id=result.artifact.logical_artifact_id,
+                artifact_revision_id=result.artifact.revision_id,
+                sha256=expected_sha256,
+                content_length=revision.content_bytes,
+            )
 
     def pdf_document_review_page_pointer(
         self,
@@ -3181,6 +3245,7 @@ class QueryAdapter:
     def _pdf_document_review(
         workflow: WorkflowInstanceRecord,
         result: PdfDocumentReviewRoleResult | None,
+        source: PdfDocumentReviewUploadIntentRecord | None = None,
     ) -> PdfDocumentReviewView:
         request = QueryAdapter._pdf_document_review_request(workflow)
         state_by_workflow: dict[str, Literal["SUBMITTED", "REVIEWING", "COMPLETED", "FAILED"]] = {
@@ -3215,7 +3280,16 @@ class QueryAdapter:
             state=state,
             document_id=request.document.document_id,
             document_revision_id=request.document.document_revision_id,
-            original_filename=request.document.original_filename,
+            original_filename=(
+                source.original_filename
+                if source is not None
+                else request.document.original_filename
+            ),
+            source_format=(
+                cast(Literal["PDF", "HWP", "HWPX"], source.source_format)
+                if source is not None
+                else "PDF"
+            ),
             source_pdf_sha256=request.document.source_pdf.sha256,
             page_count=request.document.page_count,
             pages=tuple(

@@ -23,7 +23,7 @@
           <button type="button" class="nav-item" data-view-target="item-bank"><span aria-hidden="true">⌗</span> Graph 문항은행</button>
           <button type="button" class="nav-item" data-view-target="approval"><span aria-hidden="true">◆</span> 승인 대기</button>
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX</button>
-          <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> PDF 검토</button>
+          <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> 문서 검토</button>
           <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><span aria-hidden="true">◇</span> 관리자 설정</button>
@@ -311,7 +311,7 @@
 
           <section class="view" data-view="pdf-review" aria-labelledby="pdf-review-title">
             <div class="page-heading">
-              <h1 id="pdf-review-title">PDF 검토</h1>
+              <h1 id="pdf-review-title">문서 검토</h1>
               <button id="pdf-review-refresh" class="button quiet" type="button">검토 목록 새로고침</button>
             </div>
             <div class="pdf-review-layout">
@@ -319,7 +319,7 @@
                 <section class="panel pdf-review-compose">
                   <div class="panel-heading"><h2>새 검토</h2></div>
                   <form id="pdf-review-form" class="pdf-review-form">
-                    <label>PDF 파일<input id="pdf-review-file" name="file" type="file" accept="application/pdf,.pdf" required></label>
+                    <label>검토 파일<input id="pdf-review-file" name="file" type="file" accept="application/pdf,application/vnd.hancom.hwp,application/vnd.hancom.hwpx,.pdf,.hwp,.hwpx" required></label>
                     <label>문서 유형<select name="preset_key" required><option value="PROBLEM_SET">N제</option><option value="WEEKLY_WORKBOOK">주간지</option><option value="MOCK_EXAM">모의고사</option></select></label>
                     <label>추가 검토 지시<textarea name="additional_guidance" rows="5" maxlength="8000" placeholder="기본 검토 기준에 더해 확인할 내용을 입력하세요."></textarea></label>
                     <p id="pdf-review-form-message" class="form-message" aria-live="polite"></p>
@@ -350,6 +350,14 @@
                 <div class="panel-heading"><h2>검토 결과</h2></div>
                 <div id="pdf-review-summary" class="pdf-review-summary"><p class="empty-state">완료된 검토를 선택하세요.</p></div>
                 <div id="pdf-review-findings" class="pdf-review-findings"></div>
+                <section id="pdf-review-correction" class="pdf-review-correction" hidden>
+                  <div class="panel-heading"><h3>HWPX 교정본</h3><span class="muted-label">원본 보존 · 수정 글자 빨간색</span></div>
+                  <p id="pdf-review-correction-message" class="form-message" aria-live="polite"></p>
+                  <div class="pdf-review-correction-actions">
+                    <button id="pdf-review-correction-submit" class="button primary" type="button">선택한 검토사항 적용</button>
+                    <a id="pdf-review-correction-download" class="button quiet" href="#" hidden>새 HWPX 다운로드</a>
+                  </div>
+                </section>
                 <details class="technical-details pdf-review-technical">
                   <summary>고정 문서·결과 정보</summary>
                   <dl id="pdf-review-inspector" class="inspector-list"><dt>진행 ID</dt><dd>-</dd><dt>문서 버전</dt><dd>-</dd><dt>결과 검증값</dt><dd>-</dd></dl>

@@ -1,4 +1,4 @@
-"""Small API-owned persistence records for PDF review upload coordination."""
+"""Small API-owned persistence records for document-review coordination."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from datetime import datetime
 
 from eom_orchestrator.models import Base
 from sqlalchemy import (
+    JSON,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -37,6 +38,12 @@ class PdfDocumentReviewUploadIntentRecord(Base):
         CheckConstraint(
             "preset_key IN ('PROBLEM_SET','WEEKLY_WORKBOOK','MOCK_EXAM')",
             name="ck_pdf_review_upload_intents_preset",
+        ),
+        CheckConstraint(
+            "(source_format = 'PDF' AND source_media_type = 'application/pdf') OR "
+            "(source_format = 'HWP' AND source_media_type = 'application/vnd.hancom.hwp') OR "
+            "(source_format = 'HWPX' AND source_media_type = 'application/vnd.hancom.hwpx')",
+            name="ck_pdf_review_upload_intents_source_format",
         ),
         CheckConstraint(
             "(additional_guidance IS NULL AND additional_guidance_sha256 IS NULL) OR "
@@ -91,6 +98,10 @@ class PdfDocumentReviewUploadIntentRecord(Base):
     )
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(240), nullable=False)
+    source_format: Mapped[str] = mapped_column(String(8), nullable=False, default="PDF")
+    source_media_type: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="application/pdf"
+    )
     content_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
     preset_key: Mapped[str] = mapped_column(String(32), nullable=False)
     additional_guidance: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -122,3 +133,58 @@ class PdfDocumentReviewUploadIntentRecord(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DocumentReviewHwpxCorrectionRecord(Base):
+    """API authorization pointer to one immutable Catalog-owned corrected HWPX."""
+
+    __tablename__ = "document_review_hwpx_corrections"
+    __table_args__ = (
+        CheckConstraint(
+            "output_content_length BETWEEN 1 AND 268435456 AND lock_version >= 1",
+            name="ck_document_review_hwpx_corrections_bounds",
+        ),
+        CheckConstraint(
+            "output_member_path = 'corrected/document-review-redline.hwpx' AND "
+            "output_media_type = 'application/vnd.hancom.hwpx' AND "
+            "output_schema_ref = 'eom://schemas/document-review/corrected-hwpx/1.0'",
+            name="ck_document_review_hwpx_corrections_output_contract",
+        ),
+        Index(
+            "ix_document_review_hwpx_correction_owner",
+            "operator_id",
+            text("created_at DESC"),
+            "correction_id",
+        ),
+        Index(
+            "ix_document_review_hwpx_correction_workflow",
+            "workflow_id",
+            text("created_at DESC"),
+            "correction_id",
+        ),
+    )
+
+    correction_id: Mapped[str] = mapped_column(String(46), primary_key=True)
+    operator_id: Mapped[str] = mapped_column(
+        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+    )
+    workflow_id: Mapped[str] = mapped_column(
+        ForeignKey("workflow_instances.workflow_id", ondelete="RESTRICT"), nullable=False
+    )
+    applied_finding_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    finding_set_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    review_result_artifact_id: Mapped[str] = mapped_column(String(41), nullable=False)
+    review_result_artifact_revision_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    review_result_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    base_hwpx_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    output_artifact_id: Mapped[str] = mapped_column(String(41), nullable=False)
+    output_artifact_revision_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    output_member_path: Mapped[str] = mapped_column(String(240), nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    output_content_length: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    output_media_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_schema_ref: Mapped[str] = mapped_column(String(160), nullable=False)
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

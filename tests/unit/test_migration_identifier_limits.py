@@ -21,6 +21,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260917_0037_customer_support_rbac",
     "migrations.versions.20260922_0038_pdf_document_review_stage",
     "migrations.versions.20260922_0039_pdf_document_review_upload_intents",
+    "migrations.versions.20260922_0040_office_document_review_corrections",
 )
 
 
@@ -63,6 +64,10 @@ class _MigrationOperationRecorder:
     def add_column(self, table_name: str, column: sa.Column[object]) -> None:
         self._record("table", table_name)
         self._record("column", column.name)
+
+    def alter_column(self, table_name: str, column_name: str, **_: object) -> None:
+        self._record("table", table_name)
+        self._record("column", column_name)
 
     def drop_index(self, name: str, *_: object, **__: object) -> None:
         self._record("index", name)

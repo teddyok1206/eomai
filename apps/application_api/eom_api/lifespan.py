@@ -23,6 +23,9 @@ from eom_api.services.audit_service import AuditService
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.control_plane_adapter import ControlPlaneAdapter
+from eom_api.services.document_review_correction_service import (
+    DocumentReviewCorrectionApplicationService,
+)
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
 from eom_api.services.pdf_document_review_service import PdfDocumentReviewApplicationService
@@ -75,6 +78,11 @@ class AppServices:
             commands=self.commands,
             intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
             processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
+        )
+        self.document_review_corrections = DocumentReviewCorrectionApplicationService(
+            engine,
+            catalog=self.catalog_application,
+            queries=self.queries,
         )
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)

@@ -23,6 +23,13 @@ JSON_METHODS = frozenset({"POST", "PUT", "PATCH"})
 PDF_REVIEW_UPLOAD_PATH = re.compile(
     r"^/api/v1/pdf-document-reviews/upload-intents/pdfreviewintent_[0-9a-f]{32}/content$"
 )
+DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx",
+    }
+)
 
 
 class RequestBoundaryMiddleware:
@@ -94,7 +101,7 @@ class RequestBoundaryMiddleware:
                 return
             if (
                 headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                != "application/pdf"
+                not in DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES
             ):
                 await self._send_problem(
                     scope, receive, secured_send, 415, "API_CONTENT_TYPE_UNSUPPORTED"

@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Request
 from starlette.concurrency import run_in_threadpool
@@ -19,6 +20,14 @@ from eom_api.errors import ApiError
 
 _PDF_PREFIX_LENGTH = 8
 _PDF_SIGNATURE = re.compile(rb"^%PDF-[12]\.[0-9]$")
+_HWP_SIGNATURE = bytes.fromhex("d0cf11e0a1b11ae1")
+_HWPX_SIGNATURES = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+DocumentSourceFormat = Literal["PDF", "HWP", "HWPX"]
+DocumentSourceMediaType = Literal[
+    "application/pdf",
+    "application/vnd.hancom.hwp",
+    "application/vnd.hancom.hwpx",
+]
 
 
 @dataclass(frozen=True)
@@ -26,6 +35,8 @@ class StagedPdfUpload:
     path: Path
     content_length: int
     sha256: str
+    source_format: DocumentSourceFormat = "PDF"
+    media_type: DocumentSourceMediaType = "application/pdf"
 
 
 class PdfUploadStager:
@@ -41,7 +52,21 @@ class PdfUploadStager:
         request: Request,
         *,
         declared_length: int,
+        source_format: DocumentSourceFormat = "PDF",
+        media_type: DocumentSourceMediaType = "application/pdf",
     ) -> AsyncIterator[StagedPdfUpload]:
+        expected_media_type, suffix = {
+            "PDF": ("application/pdf", ".pdf"),
+            "HWP": ("application/vnd.hancom.hwp", ".hwp"),
+            "HWPX": ("application/vnd.hancom.hwpx", ".hwpx"),
+        }[source_format]
+        if media_type != expected_media_type:
+            raise ApiError(
+                422,
+                "DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPE_MISMATCH",
+                "Document upload media type differs",
+                "The upload media type must match its immutable source format.",
+            )
         if not 8 <= declared_length <= self.maximum_bytes:
             raise ApiError(
                 413,
@@ -51,7 +76,7 @@ class PdfUploadStager:
             )
         root_descriptor = self._open_root()
         file_descriptor = -1
-        name = f"upload-{secrets.token_hex(16)}.pdf"
+        name = f"upload-{secrets.token_hex(16)}{suffix}"
         staged_path = self.root / name
         identity: tuple[int, ...] | None = None
         try:
@@ -91,12 +116,17 @@ class PdfUploadStager:
                     "PDF upload length differs",
                     "The uploaded PDF does not match the byte count declared by its intent.",
                 )
-            if _PDF_SIGNATURE.fullmatch(bytes(prefix)) is None:
+            if not self._valid_signature(source_format, bytes(prefix)):
+                error_code = (
+                    "PDF_DOCUMENT_REVIEW_SIGNATURE_INVALID"
+                    if source_format == "PDF"
+                    else "DOCUMENT_REVIEW_SOURCE_SIGNATURE_INVALID"
+                )
                 raise ApiError(
                     422,
-                    "PDF_DOCUMENT_REVIEW_SIGNATURE_INVALID",
-                    "PDF signature is invalid",
-                    "The uploaded file is not a supported PDF document.",
+                    error_code,
+                    "Document signature is invalid",
+                    "The uploaded bytes do not match the declared document format.",
                 )
             await run_in_threadpool(os.fsync, file_descriptor)
             metadata = os.fstat(file_descriptor)
@@ -119,6 +149,8 @@ class PdfUploadStager:
                 path=staged_path,
                 content_length=received,
                 sha256="sha256:" + digest.hexdigest(),
+                source_format=source_format,
+                media_type=media_type,
             )
         finally:
             if file_descriptor >= 0:
@@ -162,6 +194,14 @@ class PdfUploadStager:
                 "The private PDF upload area has an unsafe identity.",
             )
         return descriptor
+
+    @staticmethod
+    def _valid_signature(source_format: DocumentSourceFormat, prefix: bytes) -> bool:
+        if source_format == "PDF":
+            return _PDF_SIGNATURE.fullmatch(prefix) is not None
+        if source_format == "HWP":
+            return prefix == _HWP_SIGNATURE
+        return prefix.startswith(_HWPX_SIGNATURES)
 
     @staticmethod
     def _write_all(descriptor: int, chunk: bytes) -> None:

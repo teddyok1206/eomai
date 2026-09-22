@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_web_gui.contracts import (
+    DocumentReviewCorrectionSubmission,
     ExplorerEntity,
     ExplorerQuery,
     HwpxBuildRequest,
@@ -188,6 +189,8 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
             "upload_intent_id": intent_id,
             "state": "STARTED" if uploaded else "AWAITING_UPLOAD",
             "original_filename": "review.pdf",
+            "source_format": "PDF",
+            "media_type": "application/pdf",
             "content_length": 12,
             "preset_key": "MOCK_EXAM",
             "additional_guidance_sha256": None,
@@ -205,7 +208,7 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal uploaded
         if (
-            request.url.path == "/api/v1/pdf-document-reviews/upload-intents"
+            request.url.path == "/api/v1/pdf-document-reviews/upload-intents-v2"
             and request.method == "POST"
         ):
             assert request.headers["idempotency-key"] == "studio:pdf-review:intent:test"
@@ -214,7 +217,7 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
                 json=_single(
                     {
                         "command_id": "apicmd_" + "1" * 32,
-                        "resource_type": "pdf_document_review_upload_intent",
+                        "resource_type": "document_review_upload_intent",
                         "resource_id": intent_id,
                         "status": "COMPLETED",
                         "resource_version": 1,
@@ -222,7 +225,7 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
                     }
                 ),
             )
-        if request.url.path == f"/api/v1/pdf-document-reviews/upload-intents/{intent_id}":
+        if request.url.path == f"/api/v1/pdf-document-reviews/upload-intents-v2/{intent_id}":
             return httpx.Response(200, json=_single(intent()))
         if request.url.path.endswith(f"/{intent_id}/content"):
             assert request.content == b"%PDF-test!!!"
@@ -282,6 +285,7 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
         session,
         intent_id,
         content_length=12,
+        media_type="application/pdf",
         content=content(),
         idempotency_key="studio:pdf-review:content:test",
     )
@@ -293,6 +297,98 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
     assert (
         await gateway.pdf_document_review_page_media(session, workflow_id, 1)
     ).content == page_content
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_document_review_correction_gateway_verifies_pointer_and_download_hash() -> None:
+    workflow_id = "workflow_" + "7" * 32
+    correction_id = "doccorrection_" + "8" * 32
+    finding_id = "reviewfinding_" + "a" * 32
+    content = b"corrected-hwpx"
+    output_sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
+
+    correction = {
+        "correction_id": correction_id,
+        "workflow_id": workflow_id,
+        "state": "COMPLETED",
+        "applied_finding_ids": [finding_id],
+        "text_color": "#FF0000",
+        "output_sha256": output_sha256,
+        "output_content_length": len(content),
+        "download_url": (
+            f"/api/v1/pdf-document-reviews/{workflow_id}/corrections/{correction_id}/download"
+        ),
+        "created_at": NOW.isoformat(),
+        "resource_version": 1,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/corrections/eligibility"):
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "workflow_id": workflow_id,
+                        "source_format": "HWPX",
+                        "correction_available": True,
+                        "eligible_finding_ids": [finding_id],
+                        "unavailable_reason": None,
+                    }
+                ),
+            )
+        if request.url.path.endswith("/corrections") and request.method == "POST":
+            assert request.headers["idempotency-key"] == "studio:correction:test-key"
+            assert json.loads(request.content) == {"finding_ids": [finding_id]}
+            return httpx.Response(
+                201,
+                json=_single(
+                    {
+                        "command_id": "apicmd_" + "1" * 32,
+                        "resource_type": "document_review_hwpx_correction",
+                        "resource_id": correction_id,
+                        "status": "COMPLETED",
+                        "resource_version": 1,
+                        "status_url": (
+                            f"/api/v1/pdf-document-reviews/{workflow_id}/corrections/"
+                            f"{correction_id}"
+                        ),
+                    }
+                ),
+            )
+        if request.url.path.endswith(f"/corrections/{correction_id}"):
+            return httpx.Response(200, json=_single(correction))
+        if request.url.path.endswith(f"/corrections/{correction_id}/download"):
+            return httpx.Response(
+                200,
+                content=content,
+                headers={
+                    "Content-Type": "application/vnd.hancom.hwpx",
+                    "Content-Disposition": 'attachment; filename="document-review-corrected.hwpx"',
+                },
+            )
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    session = _session()
+    eligibility = await gateway.document_review_correction_eligibility(session, workflow_id)
+    assert eligibility.eligible_finding_ids == (finding_id,)
+    value = await gateway.apply_document_review_correction(
+        session,
+        workflow_id,
+        DocumentReviewCorrectionSubmission(
+            finding_ids=(finding_id,),
+            idempotency_key="studio:correction:test-key",
+        ),
+    )
+    downloaded = await gateway.document_review_correction_download(session, value)
+    assert downloaded.content == content
     await gateway.close()
 
 

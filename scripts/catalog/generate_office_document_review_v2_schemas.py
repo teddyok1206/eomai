@@ -70,8 +70,7 @@ def review_result_pointer() -> dict[str, Any]:
     value["properties"]["media_type"] = {"const": "application/json"}
     value["properties"]["schema_ref"] = {
         "const": (
-            "https://eom.local/schemas/workflow/roles/"
-            "pdf-document-review-result-v1.schema.json"
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
         )
     }
     return value

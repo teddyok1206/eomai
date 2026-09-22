@@ -133,3 +133,18 @@ def test_office_converter_unit_and_polkit_are_fixed_and_nas_is_inaccessible() ->
     assert "eom_catalog_service.office_converter_worker %i" in unit
     assert "^eom-office-converter@officeconv_[0-9a-f]{32}\\.service$" in polkit
     assert 'subject.user === "eom-catalog-manager"' in polkit
+
+
+def test_office_converter_installer_pins_reviewed_ubuntu_packages() -> None:
+    root = Path(__file__).resolve().parents[2]
+    installer = (root / "scripts/catalog/install_office_document_converter.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "libreoffice-writer" in installer
+    assert "libreoffice-h2orestart" in installer
+    assert '"${VERSION_ID:-}" == "24.04"' in installer
+    assert '"${libreoffice_version}" == 4:24.2.*' in installer
+    assert '"${h2orestart_version}" == 0.6.*' in installer
+    assert "--no-install-recommends" in installer
+    assert "curl" not in installer and "wget" not in installer

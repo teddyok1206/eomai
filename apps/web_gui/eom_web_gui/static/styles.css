@@ -510,6 +510,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .pdf-review-summary { padding: 18px; border-bottom: 1px solid var(--eom-border); white-space: pre-wrap; }
 .pdf-review-summary h3 { margin: 0 0 10px; font-size: 1.02rem; }
 .pdf-review-findings { display: grid; gap: 8px; padding: 10px; max-height: 680px; overflow: auto; }
+.pdf-review-finding-row { display: grid; gap: 6px; }
+.pdf-review-correction-choice { display: flex; align-items: center; gap: 7px; width: fit-content; color: var(--eom-graphite); font-size: var(--eom-type-label); font-weight: 700; }
+.pdf-review-correction-choice input { margin: 0; accent-color: var(--eom-primary); }
 .pdf-review-finding { width: 100%; display: grid; gap: 8px; padding: 14px; border: 1px solid var(--eom-border); border-radius: 12px; background: white; color: var(--eom-text); text-align: left; }
 .pdf-review-finding:hover, .pdf-review-finding.selected { border-color: var(--eom-blue); box-shadow: 0 0 0 3px var(--eom-blue-50); }
 .pdf-review-finding-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -519,6 +522,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .pdf-review-finding p { margin: 0; white-space: pre-wrap; }
 .pdf-review-recommendation { padding-top: 8px; border-top: 1px solid var(--eom-border); color: var(--eom-graphite); }
 .pdf-review-quote { color: var(--eom-text-muted); }
+.pdf-review-correction { margin: 10px; padding: 12px; border: 1px solid var(--eom-border); border-radius: 12px; background: var(--eom-surface-muted); }
+.pdf-review-correction .panel-heading { padding: 0 0 8px; }
+.pdf-review-correction-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .pdf-review-technical { margin: 10px 14px 16px; }
 .toast { position: fixed; z-index: 80; right: 22px; bottom: 22px; max-width: 420px; padding: 12px 15px; border: 1px solid var(--eom-border); border-left: 4px solid var(--eom-primary); border-radius: 10px; background: white; box-shadow: 0 12px 34px rgba(0, 0, 0, .14); font-size: var(--eom-type-label); }
 

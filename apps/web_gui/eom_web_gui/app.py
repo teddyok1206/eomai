@@ -23,6 +23,7 @@ from eom_web_gui.contracts import (
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
     CustomerSupportSubmission,
+    DocumentReviewCorrectionSubmission,
     DraftSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
@@ -307,7 +308,11 @@ def create_app(
     ) -> dict[str, Any]:
         content_type = request.headers.get("content-type", "").split(";", 1)[0]
         content_length = request.headers.get("content-length", "")
-        if content_type != "application/pdf":
+        if content_type not in {
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+        }:
             raise GatewayError(status=415, code="PDF_DOCUMENT_REVIEW_MEDIA_TYPE_INVALID")
         if (
             not content_length.isdigit()
@@ -323,6 +328,7 @@ def create_app(
             session,
             upload_intent_id,
             content_length=int(content_length),
+            media_type=content_type,
             content=request.stream(),
             idempotency_key=idempotency_key,
         )
@@ -334,6 +340,62 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return (await actual.pdf_document_review(session, workflow_id)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/corrections/eligibility")
+    async def document_review_correction_eligibility(
+        workflow_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.document_review_correction_eligibility(session, workflow_id)
+        ).model_dump(mode="json")
+
+    @app.post(
+        f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/corrections",
+        status_code=201,
+    )
+    async def apply_document_review_correction(
+        workflow_id: str,
+        value: DocumentReviewCorrectionSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.apply_document_review_correction(session, workflow_id, value)
+        ).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/corrections/{{correction_id}}")
+    async def document_review_correction(
+        workflow_id: str,
+        correction_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.document_review_correction(
+                session,
+                workflow_id,
+                correction_id,
+            )
+        ).model_dump(mode="json")
+
+    @app.get(
+        f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/corrections/{{correction_id}}/download"
+    )
+    async def document_review_correction_download(
+        workflow_id: str,
+        correction_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        correction = await actual.document_review_correction(
+            session,
+            workflow_id,
+            correction_id,
+        )
+        value = await actual.gateway.document_review_correction_download(session, correction)
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={"Content-Disposition": value.content_disposition},
+        )
 
     @app.get(f"{API_PREFIX}/pdf-document-reviews/{{workflow_id}}/pages/{{page_number}}/image")
     async def pdf_document_review_page_media(

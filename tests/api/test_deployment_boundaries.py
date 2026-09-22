@@ -659,9 +659,31 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     for runtime in (
         "eom_catalog_contracts/document_review.py",
         "eom_catalog_contracts/document_review_application.py",
+        "eom_catalog_service/document_review_hwpx.py",
+        "eom_catalog_service/document_review_hwpx_correction_service.py",
+        "eom_catalog_service/office_converter_worker.py",
+        "eom_catalog_service/office_document_converter.py",
+        "eom_catalog_service/office_document_review_intake.py",
         "eom_catalog_service/pdf_document_review_intake.py",
     ):
         assert f'"{runtime}"' in deployment
+    for resource in (
+        "document-review-intake-request-v2.schema.json",
+        "document-review-intake-response-v2.schema.json",
+        "document-review-hwpx-correction-request-v1.schema.json",
+        "document-review-hwpx-correction-response-v1.schema.json",
+        "document-review-hwpx-correction-media-request-v1.schema.json",
+        "document-review-hwpx-correction-media-response-v1.schema.json",
+    ):
+        assert f'"catalog-application/{resource}": ' in deployment
+        assert f'"schemas/catalog/catalog-application/{resource}"' in deployment
+    for resource in (
+        "document-review-intake-manifest-v2.schema.json",
+        "document-review-hwpx-correction-plan-v1.schema.json",
+        "document-review-hwpx-correction-result-v1.schema.json",
+    ):
+        assert f'"document-review/{resource}": ' in deployment
+        assert f'"schemas/document-review/{resource}"' in deployment
 
     recovery_resource = "legacy-item-extraction-validation-recovery-v1.schema.json"
     assert f'"legacy-assessment/{recovery_resource}": ' in deployment
@@ -672,7 +694,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 36 packaged API schemas" in deployment
+    assert "expected exactly 42 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -680,6 +702,10 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/document-review-upload-v2.schema.json"' in deployment
+    assert (
+        '"eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json"' in deployment
+    )
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
@@ -724,7 +750,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "mock-exam terminal-state contract export is incomplete" in deployment
     assert "mock-exam retirement contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20260922_0039"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20260922_0040"' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:

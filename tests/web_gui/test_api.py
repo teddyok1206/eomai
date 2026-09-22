@@ -10,6 +10,7 @@ from eom_web_gui.contracts import CustomerSupportCaseView, StudioProblem
 from jsonschema import Draft202012Validator
 
 from tests.web_gui.helpers import (
+    DOCUMENT_REVIEW_CORRECTION_ID,
     INTAKE_ID,
     ITEM_ID,
     PDF_REVIEW_INTENT_ID,
@@ -73,6 +74,30 @@ def test_pdf_document_review_upload_list_detail_and_page_use_authenticated_bff()
         detail = client.get(f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}")
         assert detail.status_code == 200
         assert detail.json()["state"] == "REVIEWING"
+
+        eligibility = client.get(
+            f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/corrections/eligibility"
+        )
+        assert eligibility.status_code == 200
+        assert eligibility.json()["unavailable_reason"] == "SOURCE_NOT_HWPX"
+
+        correction = client.post(
+            f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/corrections",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "finding_ids": ["reviewfinding_" + "a" * 32],
+                "idempotency_key": "studio:document-review:correction:0001",
+            },
+        )
+        assert correction.status_code == 201
+        assert correction.json()["correction_id"] == DOCUMENT_REVIEW_CORRECTION_ID
+        downloaded = client.get(
+            f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/corrections/"
+            f"{DOCUMENT_REVIEW_CORRECTION_ID}/download"
+        )
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"corrected-hwpx"
+        assert downloaded.headers["content-type"] == "application/vnd.hancom.hwpx"
 
         page = client.get(
             f"/studio/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/pages/1/image"

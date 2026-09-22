@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_RUNTIME_DIRECTORY_MODE,
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
+    ApplyDocumentReviewHwpxCorrections,
     AssessmentPageListQuery,
     AssessmentPageMediaQuery,
     CatalogApplicationErrorCode,
@@ -36,11 +37,16 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    DocumentReviewHwpxCorrectionMediaQuery,
+    DocumentReviewHwpxCorrectionMediaResponse,
+    DocumentReviewHwpxCorrectionResponse,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
+    OfficeDocumentReviewIntakeCommand,
+    OfficeDocumentReviewIntakeResponse,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
     PdfDocumentReviewPageMediaQuery,
@@ -63,6 +69,10 @@ from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
     ApprovedItemGraphPublicationService,
 )
+from eom_catalog_service.document_review_hwpx_correction_service import (
+    DocumentReviewHwpxCorrectionService,
+    DocumentReviewHwpxCorrectionServiceError,
+)
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
 from eom_catalog_service.knowledge_analysis_batch_service import (
@@ -84,6 +94,10 @@ from eom_catalog_service.mock_exam_assembly_service import (
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
     MockExamItemReviewPublicationService,
+)
+from eom_catalog_service.office_document_review_intake import (
+    OfficeDocumentReviewIntakeError,
+    OfficeDocumentReviewIntakeService,
 )
 from eom_catalog_service.pdf_document_review_intake import (
     PdfDocumentReviewIntakeError,
@@ -123,6 +137,44 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError
             raw_operation = value.get("operation")
+            if raw_operation == "INGEST_DOCUMENT_REVIEW_SOURCE":
+                try:
+                    validate_contract("document-review-intake-request-v2", value)
+                    office_intake_request = OfficeDocumentReviewIntakeCommand.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_office_document_review_intake_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._ingest_office_document_review_source(office_intake_request)
+                return
+            if raw_operation == "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS":
+                try:
+                    validate_contract("document-review-hwpx-correction-request", value)
+                    correction_request = ApplyDocumentReviewHwpxCorrections.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_hwpx_correction_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._apply_document_review_hwpx_corrections(correction_request)
+                return
+            if raw_operation == "GET_DOCUMENT_REVIEW_CORRECTED_HWPX":
+                try:
+                    validate_contract("document-review-hwpx-correction-media-request", value)
+                    correction_media_request = (
+                        DocumentReviewHwpxCorrectionMediaQuery.model_validate(value)
+                    )
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_hwpx_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_document_review_corrected_hwpx(correction_media_request)
+                return
             if raw_operation == "INGEST_PDF_DOCUMENT_REVIEW_SOURCE":
                 try:
                     validate_contract("pdf-document-review-intake-request", value)
@@ -470,6 +522,155 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
         finally:
             chunks.close()
 
+    def _ingest_office_document_review_source(
+        self,
+        request: OfficeDocumentReviewIntakeCommand,
+    ) -> None:
+        intake = self.server.office_document_review_intake
+        if intake is None:
+            self.server.write_office_document_review_intake_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        descriptor = -1
+        source: Path | None = None
+        response: OfficeDocumentReviewIntakeResponse | None = None
+        error_code: str | None = None
+        suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[request.source_format]
+        try:
+            descriptor, raw_path = tempfile.mkstemp(
+                prefix="office-document-review-upload.",
+                suffix=suffix,
+                dir=intake.settings.staging_root,
+            )
+            source = Path(raw_path)
+            os.fchmod(descriptor, 0o600)
+            digest = hashlib.sha256()
+            remaining = request.content_length
+            while remaining:
+                chunk = self.rfile.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise OfficeDocumentReviewIntakeError(
+                        "DOCUMENT_REVIEW_UPLOAD_TRUNCATED",
+                        "Document upload ended before its declared size",
+                    )
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written < 1:
+                        raise OfficeDocumentReviewIntakeError(
+                            "DOCUMENT_REVIEW_UPLOAD_WRITE_FAILED",
+                            "Document upload could not be staged",
+                        )
+                    view = view[written:]
+                digest.update(chunk)
+                remaining -= len(chunk)
+            if self.rfile.read(1):
+                raise OfficeDocumentReviewIntakeError(
+                    "DOCUMENT_REVIEW_UPLOAD_EXCEEDED",
+                    "Document upload exceeded its declared size",
+                )
+            os.fsync(descriptor)
+            os.close(descriptor)
+            descriptor = -1
+            if "sha256:" + digest.hexdigest() != request.sha256:
+                raise OfficeDocumentReviewIntakeError(
+                    "DOCUMENT_REVIEW_UPLOAD_HASH_MISMATCH",
+                    "Document upload differs from its declared hash",
+                )
+            document = intake.ingest(
+                source,
+                original_filename=request.original_filename,
+                source_format=request.source_format,
+                actor_id=request.actor_id,
+                idempotency_key=request.idempotency_key,
+            )
+            response = OfficeDocumentReviewIntakeResponse(status="OK", document=document)
+        except OfficeDocumentReviewIntakeError as exc:
+            error_code = exc.code
+        except Exception:
+            error_code = CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if source is not None:
+                try:
+                    metadata = source.lstat()
+                    if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
+                        source.unlink()
+                except OSError:
+                    pass
+        if response is not None:
+            self.server.write_office_document_review_intake_response(self.wfile, response)
+        else:
+            self.server.write_office_document_review_intake_error(
+                self.wfile,
+                error_code or CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+
+    def _apply_document_review_hwpx_corrections(
+        self,
+        request: ApplyDocumentReviewHwpxCorrections,
+    ) -> None:
+        corrections = self.server.document_review_hwpx_corrections
+        if corrections is None:
+            self.server.write_document_review_hwpx_correction_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            response = corrections.apply(request)
+        except DocumentReviewHwpxCorrectionServiceError as exc:
+            self.server.write_document_review_hwpx_correction_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_document_review_hwpx_correction_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_document_review_hwpx_correction_response(self.wfile, response)
+
+    def _stream_document_review_corrected_hwpx(
+        self,
+        request: DocumentReviewHwpxCorrectionMediaQuery,
+    ) -> None:
+        corrections = self.server.document_review_hwpx_corrections
+        if corrections is None:
+            self.server.write_document_review_hwpx_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            media = corrections.load_output(request)
+        except DocumentReviewHwpxCorrectionServiceError as exc:
+            self.server.write_document_review_hwpx_media_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_document_review_hwpx_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_document_review_hwpx_media_header(
+            self.wfile,
+            DocumentReviewHwpxCorrectionMediaResponse(
+                status="OK",
+                media_type="application/vnd.hancom.hwpx",
+                content_length=media.content_length,
+                sha256=media.sha256,
+            ),
+        )
+        chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
     def _ingest_pdf_document_review_source(
         self,
         request: PdfDocumentReviewIntakeCommand,
@@ -653,6 +854,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         mock_exam_item_reviews: MockExamItemReviewPublicationService | None = None,
         mock_exam_assemblies: MockExamAssemblyService | None = None,
         pdf_document_review_intake: PdfDocumentReviewIntakeService | None = None,
+        office_document_review_intake: OfficeDocumentReviewIntakeService | None = None,
+        document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -667,6 +870,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.mock_exam_item_reviews = mock_exam_item_reviews
         self.mock_exam_assemblies = mock_exam_assemblies
         self.pdf_document_review_intake = pdf_document_review_intake
+        self.office_document_review_intake = office_document_review_intake
+        self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -779,6 +984,72 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("PDF document-review intake response exceeded its fixed bound")
         stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_office_document_review_intake_response(
+        stream: Any,
+        response: OfficeDocumentReviewIntakeResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json")
+        payload.pop("error_code" if response.status == "OK" else "document")
+        validate_contract("document-review-intake-response-v2", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Office document-review intake response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_office_document_review_intake_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_office_document_review_intake_response(
+            stream,
+            OfficeDocumentReviewIntakeResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_document_review_hwpx_correction_response(
+        stream: Any,
+        response: DocumentReviewHwpxCorrectionResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        validate_contract("document-review-hwpx-correction-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("HWPX correction response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_document_review_hwpx_correction_error(
+        cls,
+        stream: Any,
+        error_code: str,
+    ) -> None:
+        cls.write_document_review_hwpx_correction_response(
+            stream,
+            DocumentReviewHwpxCorrectionResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_document_review_hwpx_media_header(
+        stream: Any,
+        response: DocumentReviewHwpxCorrectionMediaResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        validate_contract("document-review-hwpx-correction-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("HWPX correction media response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_document_review_hwpx_media_error(
+        cls,
+        stream: Any,
+        error_code: str,
+    ) -> None:
+        cls.write_document_review_hwpx_media_header(
+            stream,
+            DocumentReviewHwpxCorrectionMediaResponse(status="ERROR", error_code=error_code),
+        )
 
     @classmethod
     def write_pdf_document_review_intake_error(cls, stream: Any, error_code: str) -> None:

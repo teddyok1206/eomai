@@ -20,6 +20,9 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
+    DocumentReviewCorrectionEligibilityView,
+    DocumentReviewCorrectionSubmission,
+    DocumentReviewCorrectionView,
     ExplorerQuery,
     ExplorerResult,
     HwpxBuildRequest,
@@ -69,6 +72,7 @@ INTAKE_ID = "intake_00000000000000000000000000000001"
 SUPPORT_WORKFLOW_ID = "workflow_" + "9" * 32
 PDF_REVIEW_WORKFLOW_ID = "workflow_" + "7" * 32
 PDF_REVIEW_INTENT_ID = "pdfreviewintent_" + "6" * 32
+DOCUMENT_REVIEW_CORRECTION_ID = "doccorrection_" + "8" * 32
 
 
 def structured_item_content() -> dict[str, object]:
@@ -450,11 +454,13 @@ class FakeGateway:
         upload_intent_id: str,
         *,
         content_length: int,
+        media_type: str,
         content: Any,
         idempotency_key: str,
     ) -> PdfDocumentReviewUploadIntentView:
         del session, idempotency_key
         assert upload_intent_id == PDF_REVIEW_INTENT_ID
+        assert media_type == "application/pdf"
         self.pdf_review_uploaded_bytes = b"".join([chunk async for chunk in content])
         assert len(self.pdf_review_uploaded_bytes) == content_length
         return self._pdf_upload_intent(started=True)
@@ -510,6 +516,71 @@ class FakeGateway:
         content = b"\x89PNG\r\n\x1a\nTEST"
         digest = "sha256:" + __import__("hashlib").sha256(content).hexdigest()
         return ItemMedia(content=content, content_type="image/png", etag=f'"{digest}"')
+
+    async def document_review_correction_eligibility(
+        self, session: WebSession, workflow_id: str
+    ) -> DocumentReviewCorrectionEligibilityView:
+        del session
+        assert workflow_id == PDF_REVIEW_WORKFLOW_ID
+        return DocumentReviewCorrectionEligibilityView(
+            workflow_id=workflow_id,
+            source_format="PDF",
+            correction_available=False,
+            eligible_finding_ids=(),
+            unavailable_reason="SOURCE_NOT_HWPX",
+        )
+
+    async def apply_document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewCorrectionSubmission,
+    ) -> DocumentReviewCorrectionView:
+        del session, value
+        assert workflow_id == PDF_REVIEW_WORKFLOW_ID
+        return self._document_review_correction()
+
+    @staticmethod
+    def _document_review_correction() -> DocumentReviewCorrectionView:
+        return DocumentReviewCorrectionView(
+            correction_id=DOCUMENT_REVIEW_CORRECTION_ID,
+            workflow_id=PDF_REVIEW_WORKFLOW_ID,
+            state="COMPLETED",
+            applied_finding_ids=("reviewfinding_" + "a" * 32,),
+            text_color="#FF0000",
+            output_sha256="sha256:" + "4" * 64,
+            output_content_length=14,
+            download_url=(
+                f"/api/v1/pdf-document-reviews/{PDF_REVIEW_WORKFLOW_ID}/corrections/"
+                f"{DOCUMENT_REVIEW_CORRECTION_ID}/download"
+            ),
+            created_at=NOW,
+            resource_version=1,
+        )
+
+    async def document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        correction_id: str,
+    ) -> DocumentReviewCorrectionView:
+        del session
+        assert workflow_id == PDF_REVIEW_WORKFLOW_ID
+        assert correction_id == DOCUMENT_REVIEW_CORRECTION_ID
+        return self._document_review_correction()
+
+    async def document_review_correction_download(
+        self,
+        session: WebSession,
+        value: DocumentReviewCorrectionView,
+    ) -> HwpxDownload:
+        del session
+        assert value.correction_id == DOCUMENT_REVIEW_CORRECTION_ID
+        return HwpxDownload(
+            content=b"corrected-hwpx",
+            content_type="application/vnd.hancom.hwpx",
+            content_disposition='attachment; filename="document-review-corrected.hwpx"',
+        )
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         del session

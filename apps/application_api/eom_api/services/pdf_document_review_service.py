@@ -9,10 +9,12 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 
 from eom_api_contracts.document_review import (
+    CreateDocumentReviewUploadIntentRequestV2,
     CreatePdfDocumentReviewUploadIntentRequest,
+    DocumentReviewUploadIntentViewV2,
     PdfDocumentReviewUploadIntentView,
 )
-from eom_catalog_contracts import PdfReviewDocumentPointer
+from eom_catalog_contracts import OfficeDocumentReviewSourcePointer
 from eom_identifiers import content_sha256, new_pdf_review_upload_intent_id
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
@@ -53,10 +55,12 @@ class PdfReviewUploadClaim:
     upload_intent_id: str
     lease_owner: str | None
     original_filename: str
+    source_format: str
+    source_media_type: str
     preset_key: str
     additional_guidance: str | None
     replayed_command_id: str | None = None
-    replayed_view: PdfDocumentReviewUploadIntentView | None = None
+    replayed_view: DocumentReviewUploadIntentViewV2 | None = None
 
     @property
     def replayed(self) -> bool:
@@ -88,6 +92,41 @@ class PdfDocumentReviewApplicationService:
         actor_id: str,
         observed_at: datetime | None = None,
     ) -> PdfDocumentReviewUploadIntentView:
+        value = self._create_upload_intent(
+            CreateDocumentReviewUploadIntentRequestV2(
+                original_filename=request.original_filename,
+                source_format="PDF",
+                media_type="application/pdf",
+                content_length=request.content_length,
+                preset_key=request.preset_key,
+                additional_guidance=request.additional_guidance,
+                locale=request.locale,
+            ),
+            actor_id=actor_id,
+            observed_at=observed_at,
+        )
+        return self._legacy_view_from_v2(value)
+
+    def create_document_upload_intent(
+        self,
+        request: CreateDocumentReviewUploadIntentRequestV2,
+        *,
+        actor_id: str,
+        observed_at: datetime | None = None,
+    ) -> DocumentReviewUploadIntentViewV2:
+        return self._create_upload_intent(
+            request,
+            actor_id=actor_id,
+            observed_at=observed_at,
+        )
+
+    def _create_upload_intent(
+        self,
+        request: CreateDocumentReviewUploadIntentRequestV2,
+        *,
+        actor_id: str,
+        observed_at: datetime | None,
+    ) -> DocumentReviewUploadIntentViewV2:
         now = observed_at or datetime.now(UTC)
         normalized_guidance = (
             None
@@ -99,6 +138,8 @@ class PdfDocumentReviewApplicationService:
             operator_id=actor_id,
             state="AWAITING_UPLOAD",
             original_filename=request.original_filename,
+            source_format=request.source_format,
+            source_media_type=request.media_type,
             content_length=request.content_length,
             preset_key=request.preset_key,
             additional_guidance=normalized_guidance,
@@ -114,7 +155,7 @@ class PdfDocumentReviewApplicationService:
         with transaction(self.sessions) as session:
             session.add(record)
             session.flush()
-        return self._view(record)
+        return self._view_v2(record)
 
     def upload_intent(
         self,
@@ -122,6 +163,30 @@ class PdfDocumentReviewApplicationService:
         *,
         actor_id: str,
     ) -> PdfDocumentReviewUploadIntentView:
+        record = self._owned_intent(upload_intent_id, actor_id=actor_id)
+        if record.source_format != "PDF":
+            raise ApiError(
+                409,
+                "DOCUMENT_REVIEW_UPLOAD_V2_REQUIRED",
+                "Office document upload requires the V2 endpoint",
+                "Read this HWP or HWPX upload intent through the Office review endpoint.",
+            )
+        return self._view_v1(record)
+
+    def document_upload_intent(
+        self,
+        upload_intent_id: str,
+        *,
+        actor_id: str,
+    ) -> DocumentReviewUploadIntentViewV2:
+        return self._view_v2(self._owned_intent(upload_intent_id, actor_id=actor_id))
+
+    def _owned_intent(
+        self,
+        upload_intent_id: str,
+        *,
+        actor_id: str,
+    ) -> PdfDocumentReviewUploadIntentRecord:
         with self.sessions() as session:
             record = session.scalar(
                 select(PdfDocumentReviewUploadIntentRecord).where(
@@ -131,7 +196,8 @@ class PdfDocumentReviewApplicationService:
             )
             if record is None:
                 raise self._not_found()
-            return self._view(record)
+            session.expunge(record)
+            return record
 
     def accept_upload(
         self,
@@ -141,6 +207,44 @@ class PdfDocumentReviewApplicationService:
         actor: ActorContext,
         observed_at: datetime | None = None,
     ) -> tuple[str, PdfDocumentReviewUploadIntentView]:
+        if upload.source_format != "PDF" or upload.media_type != "application/pdf":
+            raise ApiError(
+                422,
+                "PDF_DOCUMENT_REVIEW_UPLOAD_FORMAT_MISMATCH",
+                "PDF upload format differs",
+                "The legacy PDF endpoint accepts only PDF bytes.",
+            )
+        command_id, _ = self._accept_document_upload(
+            upload_intent_id,
+            upload,
+            actor=actor,
+            observed_at=observed_at,
+        )
+        return command_id, self.upload_intent(upload_intent_id, actor_id=actor.actor_id)
+
+    def accept_document_upload(
+        self,
+        upload_intent_id: str,
+        upload: StagedPdfUpload,
+        *,
+        actor: ActorContext,
+        observed_at: datetime | None = None,
+    ) -> tuple[str, DocumentReviewUploadIntentViewV2]:
+        return self._accept_document_upload(
+            upload_intent_id,
+            upload,
+            actor=actor,
+            observed_at=observed_at,
+        )
+
+    def _accept_document_upload(
+        self,
+        upload_intent_id: str,
+        upload: StagedPdfUpload,
+        *,
+        actor: ActorContext,
+        observed_at: datetime | None,
+    ) -> tuple[str, DocumentReviewUploadIntentViewV2]:
         now = observed_at or datetime.now(UTC)
         claim = self._claim_upload(
             upload_intent_id,
@@ -153,18 +257,21 @@ class PdfDocumentReviewApplicationService:
             assert claim.replayed_view is not None
             return claim.replayed_command_id, claim.replayed_view
         assert claim.lease_owner is not None
-        document: PdfReviewDocumentPointer | None = None
+        source_document: OfficeDocumentReviewSourcePointer | None = None
         try:
-            resolved_document = self.catalog.ingest_pdf_document_review_source(
+            resolved_source = self.catalog.ingest_office_document_review_source(
                 upload.path,
                 actor_id=actor.actor_id,
                 original_filename=claim.original_filename,
-                idempotency_key=f"pdf-review-intake:{claim.upload_intent_id}",
+                source_format=claim.source_format,  # type: ignore[arg-type]
+                media_type=claim.source_media_type,  # type: ignore[arg-type]
+                idempotency_key=f"document-review-intake:{claim.upload_intent_id}",
             )
             if (
-                resolved_document.original_filename != claim.original_filename
-                or resolved_document.source_pdf.sha256 != upload.sha256
-                or resolved_document.source_pdf.content_length != upload.content_length
+                resolved_source.original_filename != claim.original_filename
+                or resolved_source.source_format != claim.source_format
+                or resolved_source.original_source.sha256 != upload.sha256
+                or resolved_source.original_source.content_length != upload.content_length
             ):
                 raise ApiError(
                     503,
@@ -172,9 +279,9 @@ class PdfDocumentReviewApplicationService:
                     "PDF document intake pointer differs",
                     "Catalog did not return the exact immutable source that was uploaded.",
                 )
-            document = resolved_document
+            source_document = resolved_source
             review_request = build_pdf_document_review_request(
-                document=document,
+                document=resolved_source.review_document,
                 preset_key=cast(PdfReviewPresetKey, claim.preset_key),
                 additional_guidance=claim.additional_guidance,
             )
@@ -189,7 +296,7 @@ class PdfDocumentReviewApplicationService:
                 claim,
                 error_code=exc.code,
                 retryable=retryable,
-                document=document,
+                document=source_document,
             )
             raise ApiError(
                 503 if retryable else 422,
@@ -202,7 +309,7 @@ class PdfDocumentReviewApplicationService:
                 claim,
                 error_code=str(exc.error_code),
                 retryable=exc.status >= 500,
-                document=document,
+                document=source_document,
             )
             raise
         except WorkflowError as exc:
@@ -211,7 +318,7 @@ class PdfDocumentReviewApplicationService:
                 claim,
                 error_code=code,
                 retryable=False,
-                document=document,
+                document=source_document,
             )
             raise ApiError(
                 409,
@@ -224,7 +331,7 @@ class PdfDocumentReviewApplicationService:
                 claim,
                 error_code="PDF_DOCUMENT_REVIEW_REQUEST_UNSUPPORTED",
                 retryable=False,
-                document=document,
+                document=source_document,
             )
             raise ApiError(
                 422,
@@ -237,7 +344,7 @@ class PdfDocumentReviewApplicationService:
                 claim,
                 error_code="PDF_DOCUMENT_REVIEW_PROCESSING_FAILED",
                 retryable=True,
-                document=document,
+                document=source_document,
             )
             raise ApiError(
                 500,
@@ -249,7 +356,7 @@ class PdfDocumentReviewApplicationService:
             claim,
             command_id=command_id,
             workflow_id=workflow_id,
-            document=document,
+            document=source_document,
         )
         return command_id, view
 
@@ -280,6 +387,16 @@ class PdfDocumentReviewApplicationService:
                     "PDF upload length differs",
                     "The uploaded bytes do not match the declared upload intent.",
                 )
+            if (
+                record.source_format != upload.source_format
+                or record.source_media_type != upload.media_type
+            ):
+                raise ApiError(
+                    422,
+                    "DOCUMENT_REVIEW_UPLOAD_FORMAT_MISMATCH",
+                    "Document upload format differs",
+                    "The uploaded bytes must use the exact format and media type in the intent.",
+                )
             if record.upload_sha256 is not None and not hmac.compare_digest(
                 record.upload_sha256, upload.sha256
             ):
@@ -299,7 +416,9 @@ class PdfDocumentReviewApplicationService:
                     preset_key=record.preset_key,
                     additional_guidance=record.additional_guidance,
                     replayed_command_id=record.workflow_command_id,
-                    replayed_view=self._view(record),
+                    source_format=record.source_format,
+                    source_media_type=record.source_media_type,
+                    replayed_view=self._view_v2(record),
                 )
             if self._as_utc(record.expires_at) <= observed_at:
                 raise ApiError(
@@ -344,6 +463,8 @@ class PdfDocumentReviewApplicationService:
                 upload_intent_id=record.upload_intent_id,
                 lease_owner=lease_owner,
                 original_filename=record.original_filename,
+                source_format=record.source_format,
+                source_media_type=record.source_media_type,
                 preset_key=record.preset_key,
                 additional_guidance=record.additional_guidance,
             )
@@ -354,8 +475,8 @@ class PdfDocumentReviewApplicationService:
         *,
         command_id: str,
         workflow_id: str,
-        document: PdfReviewDocumentPointer,
-    ) -> PdfDocumentReviewUploadIntentView:
+        document: OfficeDocumentReviewSourcePointer,
+    ) -> DocumentReviewUploadIntentViewV2:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
             record = session.get(
@@ -373,19 +494,20 @@ class PdfDocumentReviewApplicationService:
             record.state = "STARTED"
             record.workflow_id = workflow_id
             record.workflow_command_id = command_id
-            record.document_id = document.document_id
-            record.document_revision_id = document.document_revision_id
-            record.source_artifact_id = document.source_pdf.artifact_id
-            record.source_artifact_revision_id = document.source_pdf.artifact_revision_id
-            record.source_sha256 = document.source_pdf.sha256
-            record.page_count = document.page_count
+            review = document.review_document
+            record.document_id = review.document_id
+            record.document_revision_id = review.document_revision_id
+            record.source_artifact_id = document.original_source.artifact_id
+            record.source_artifact_revision_id = document.original_source.artifact_revision_id
+            record.source_sha256 = document.original_source.sha256
+            record.page_count = review.page_count
             record.failure_code = None
             record.lease_owner = None
             record.lease_expires_at = None
             record.lock_version += 1
             record.updated_at = now
             session.flush()
-            return self._view(record)
+            return self._view_v2(record)
 
     def _fail_claim(
         self,
@@ -393,7 +515,7 @@ class PdfDocumentReviewApplicationService:
         *,
         error_code: str,
         retryable: bool,
-        document: PdfReviewDocumentPointer | None,
+        document: OfficeDocumentReviewSourcePointer | None,
     ) -> None:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
@@ -409,12 +531,13 @@ class PdfDocumentReviewApplicationService:
             record.lease_owner = None
             record.lease_expires_at = None
             if document is not None:
-                record.document_id = document.document_id
-                record.document_revision_id = document.document_revision_id
-                record.source_artifact_id = document.source_pdf.artifact_id
-                record.source_artifact_revision_id = document.source_pdf.artifact_revision_id
-                record.source_sha256 = document.source_pdf.sha256
-                record.page_count = document.page_count
+                review = document.review_document
+                record.document_id = review.document_id
+                record.document_revision_id = review.document_revision_id
+                record.source_artifact_id = document.original_source.artifact_id
+                record.source_artifact_revision_id = document.original_source.artifact_revision_id
+                record.source_sha256 = document.original_source.sha256
+                record.page_count = review.page_count
             record.lock_version += 1
             record.updated_at = now
 
@@ -431,18 +554,20 @@ class PdfDocumentReviewApplicationService:
         )
 
     @staticmethod
-    def _view(
+    def _view_v2(
         record: PdfDocumentReviewUploadIntentRecord,
-    ) -> PdfDocumentReviewUploadIntentView:
+    ) -> DocumentReviewUploadIntentViewV2:
         review_url = (
             f"/api/v1/pdf-document-reviews/{record.workflow_id}"
             if record.workflow_id is not None
             else None
         )
-        return PdfDocumentReviewUploadIntentView(
+        return DocumentReviewUploadIntentViewV2(
             upload_intent_id=record.upload_intent_id,
             state=record.state,  # type: ignore[arg-type]
             original_filename=record.original_filename,
+            source_format=record.source_format,  # type: ignore[arg-type]
+            media_type=record.source_media_type,  # type: ignore[arg-type]
             content_length=record.content_length,
             preset_key=record.preset_key,  # type: ignore[arg-type]
             additional_guidance_sha256=record.additional_guidance_sha256,
@@ -457,6 +582,22 @@ class PdfDocumentReviewApplicationService:
             updated_at=PdfDocumentReviewApplicationService._as_utc(record.updated_at),
             expires_at=PdfDocumentReviewApplicationService._as_utc(record.expires_at),
             resource_version=record.lock_version,
+        )
+
+    @staticmethod
+    def _view_v1(
+        record: PdfDocumentReviewUploadIntentRecord,
+    ) -> PdfDocumentReviewUploadIntentView:
+        return PdfDocumentReviewApplicationService._legacy_view_from_v2(
+            PdfDocumentReviewApplicationService._view_v2(record)
+        )
+
+    @staticmethod
+    def _legacy_view_from_v2(
+        value: DocumentReviewUploadIntentViewV2,
+    ) -> PdfDocumentReviewUploadIntentView:
+        return PdfDocumentReviewUploadIntentView.model_validate(
+            value.model_dump(mode="json", exclude={"source_format", "media_type"})
         )
 
     @staticmethod

@@ -343,8 +343,9 @@ class PdfDocumentReviewView(ApiModel):
     original_filename: str = Field(
         min_length=5,
         max_length=240,
-        pattern=r"^[^/\\\x00-\x1f]+\.[Pp][Dd][Ff]$",
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
     )
+    source_format: DocumentReviewSourceFormat = "PDF"
     source_pdf_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     page_count: int = Field(ge=1, le=32)
     pages: tuple[PdfDocumentReviewPageView, ...] = Field(min_length=1, max_length=32)
@@ -363,6 +364,9 @@ class PdfDocumentReviewView(ApiModel):
 
     @model_validator(mode="after")
     def require_exact_review_projection(self) -> PdfDocumentReviewView:
+        expected_suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[self.source_format]
+        if not self.original_filename.lower().endswith(expected_suffix):
+            raise ValueError("document-review filename differs from its source format")
         if len(self.pages) != self.page_count:
             raise ValueError("PDF review page count differs from its view pages")
         if tuple(page.page_number for page in self.pages) != tuple(range(1, self.page_count + 1)):

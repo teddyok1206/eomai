@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.document_review import (
+    ApplyDocumentReviewCorrectionRequest,
+    CreateDocumentReviewUploadIntentRequestV2,
     CreatePdfDocumentReviewUploadIntentRequest,
+    DocumentReviewCorrectionEligibilityView,
+    DocumentReviewCorrectionView,
+    DocumentReviewUploadIntentViewV2,
     PdfDocumentReviewUploadIntentView,
     PdfDocumentReviewView,
 )
@@ -90,6 +95,47 @@ def create_pdf_document_review_upload_intent(
     )
 
 
+@router.post(
+    "/upload-intents-v2",
+    operation_id="document_review_upload_intent_v2_create",
+    status_code=201,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+)
+def create_document_review_upload_intent_v2(
+    request: Request,
+    body: CreateDocumentReviewUploadIntentRequestV2,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> SingleResponse[CommandResult]:
+    def execute() -> CommandResult:
+        view = request.app.state.services.pdf_document_reviews.create_document_upload_intent(
+            body,
+            actor_id=authentication.operator.operator_id,
+            observed_at=datetime.now(UTC),
+        )
+        return CommandResult(
+            command_id=new_api_command_id(),
+            resource_type="document_review_upload_intent",
+            resource_id=view.upload_intent_id,
+            status="COMPLETED",
+            resource_version=view.resource_version,
+            status_url=(f"/api/v1/pdf-document-reviews/upload-intents-v2/{view.upload_intent_id}"),
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="document_review_upload_intent",
+            callback=execute,
+            response_status=201,
+        ),
+    )
+
+
 @router.get(
     "/upload-intents/{upload_intent_id}",
     operation_id="pdf_document_review_upload_intent_get",
@@ -110,6 +156,26 @@ def get_pdf_document_review_upload_intent(
     return one(request, value)
 
 
+@router.get(
+    "/upload-intents-v2/{upload_intent_id}",
+    operation_id="document_review_upload_intent_v2_get",
+    response_model=SingleResponse[DocumentReviewUploadIntentViewV2],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_document_review_upload_intent_v2(
+    request: Request,
+    upload_intent_id: str,
+    authentication: Auth,
+    response: Response,
+) -> SingleResponse[DocumentReviewUploadIntentViewV2]:
+    value = request.app.state.services.pdf_document_reviews.document_upload_intent(
+        upload_intent_id,
+        actor_id=authentication.operator.operator_id,
+    )
+    response.headers["ETag"] = etag(value.resource_version)
+    return one(request, value)
+
+
 @router.put(
     "/upload-intents/{upload_intent_id}/content",
     operation_id="pdf_document_review_upload_content",
@@ -119,7 +185,14 @@ def get_pdf_document_review_upload_intent(
     openapi_extra={
         "requestBody": {
             "required": True,
-            "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}},
+            "content": {
+                media_type: {"schema": {"type": "string", "format": "binary"}}
+                for media_type in (
+                    "application/pdf",
+                    "application/vnd.hancom.hwp",
+                    "application/vnd.hancom.hwpx",
+                )
+            },
         }
     },
 )
@@ -129,7 +202,7 @@ async def upload_pdf_document_review_content(
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CommandResult]:
-    intent = request.app.state.services.pdf_document_reviews.upload_intent(
+    intent = request.app.state.services.pdf_document_reviews.document_upload_intent(
         upload_intent_id,
         actor_id=authentication.operator.operator_id,
     )
@@ -141,17 +214,29 @@ async def upload_pdf_document_review_content(
             "PDF upload length differs",
             "The Content-Length must exactly match the upload intent.",
         )
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != intent.media_type:
+        raise ApiError(
+            422,
+            "DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPE_MISMATCH",
+            "Document upload media type differs",
+            "The Content-Type must exactly match the immutable upload intent.",
+        )
     async with request.app.state.services.pdf_review_upload_stager.stage(
         request,
         declared_length=int(raw_length),
+        source_format=intent.source_format,
+        media_type=intent.media_type,
     ) as upload:
 
         def execute() -> CommandResult:
-            command_id, view = request.app.state.services.pdf_document_reviews.accept_upload(
-                upload_intent_id,
-                upload,
-                actor=request.state.request_context.actor(),
-                observed_at=datetime.now(UTC),
+            command_id, view = (
+                request.app.state.services.pdf_document_reviews.accept_document_upload(
+                    upload_intent_id,
+                    upload,
+                    actor=request.state.request_context.actor(),
+                    observed_at=datetime.now(UTC),
+                )
             )
             assert view.workflow_id is not None
             assert view.review_url is not None
@@ -178,6 +263,138 @@ async def upload_pdf_document_review_content(
             response_status=202,
         )
     return one(request, result)
+
+
+@router.get(
+    "/{workflow_id}/corrections/eligibility",
+    operation_id="document_review_hwpx_correction_eligibility_get",
+    response_model=SingleResponse[DocumentReviewCorrectionEligibilityView],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_document_review_hwpx_correction_eligibility(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+) -> SingleResponse[DocumentReviewCorrectionEligibilityView]:
+    return one(
+        request,
+        request.app.state.services.document_review_corrections.eligibility(
+            workflow_id,
+            actor_id=authentication.operator.operator_id,
+        ),
+    )
+
+
+@router.post(
+    "/{workflow_id}/corrections",
+    operation_id="document_review_hwpx_correction_apply",
+    status_code=201,
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START))],
+)
+def apply_document_review_hwpx_corrections(
+    request: Request,
+    body: ApplyDocumentReviewCorrectionRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+) -> SingleResponse[CommandResult]:
+    operation_id = "document_review_hwpx_correction_apply"
+    domain_key = request.app.state.services.idempotency.submission_key(
+        operator_id=authentication.operator.operator_id,
+        endpoint_key=operation_id,
+        raw_key=idempotency_key,
+    )
+
+    def execute() -> CommandResult:
+        view = request.app.state.services.document_review_corrections.apply(
+            workflow_id,
+            actor_id=authentication.operator.operator_id,
+            finding_ids=body.finding_ids,
+            idempotency_key=domain_key,
+        )
+        return CommandResult(
+            command_id=new_api_command_id(),
+            resource_type="document_review_hwpx_correction",
+            resource_id=view.correction_id,
+            status="COMPLETED",
+            resource_version=view.resource_version,
+            status_url=(
+                f"/api/v1/pdf-document-reviews/{workflow_id}/corrections/{view.correction_id}"
+            ),
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json"),
+            resource_type="document_review_hwpx_correction",
+            callback=execute,
+            response_status=201,
+        ),
+    )
+
+
+@router.get(
+    "/{workflow_id}/corrections/{correction_id}",
+    operation_id="document_review_hwpx_correction_get",
+    response_model=SingleResponse[DocumentReviewCorrectionView],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def get_document_review_hwpx_correction(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+    correction_id: str = Path(pattern=r"^doccorrection_[0-9a-f]{32}$"),
+) -> SingleResponse[DocumentReviewCorrectionView]:
+    return one(
+        request,
+        request.app.state.services.document_review_corrections.correction(
+            workflow_id,
+            correction_id,
+            actor_id=authentication.operator.operator_id,
+        ),
+    )
+
+
+@router.get(
+    "/{workflow_id}/corrections/{correction_id}/download",
+    operation_id="document_review_hwpx_correction_download",
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_READ))],
+)
+def download_document_review_hwpx_correction(
+    request: Request,
+    authentication: Auth,
+    workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
+    correction_id: str = Path(pattern=r"^doccorrection_[0-9a-f]{32}$"),
+) -> StreamingResponse:
+    value = request.app.state.services.document_review_corrections.download(
+        workflow_id,
+        correction_id,
+        actor_id=authentication.operator.operator_id,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="DOCUMENT_REVIEW_CORRECTED_HWPX_READ_AUTHORIZED",
+        operation_id="document_review_hwpx_correction_download",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="document_review_hwpx_correction",
+        target_id=correction_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="application/vnd.hancom.hwpx",
+        headers={
+            "Content-Length": str(value.content_length),
+            "Content-Disposition": 'attachment; filename="document-review-corrected.hwpx"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
 
 
 @router.get(

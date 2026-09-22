@@ -29,6 +29,9 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
+    DocumentReviewCorrectionEligibilityView,
+    DocumentReviewCorrectionSubmission,
+    DocumentReviewCorrectionView,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -313,6 +316,7 @@ class ApplicationGateway(Protocol):
         upload_intent_id: str,
         *,
         content_length: int,
+        media_type: str,
         content: AsyncIterator[bytes],
         idempotency_key: str,
     ) -> PdfDocumentReviewUploadIntentView: ...
@@ -328,6 +332,30 @@ class ApplicationGateway(Protocol):
     async def pdf_document_review_page_media(
         self, session: WebSession, workflow_id: str, page_number: int
     ) -> ItemMedia: ...
+
+    async def document_review_correction_eligibility(
+        self, session: WebSession, workflow_id: str
+    ) -> DocumentReviewCorrectionEligibilityView: ...
+
+    async def apply_document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewCorrectionSubmission,
+    ) -> DocumentReviewCorrectionView: ...
+
+    async def document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        correction_id: str,
+    ) -> DocumentReviewCorrectionView: ...
+
+    async def document_review_correction_download(
+        self,
+        session: WebSession,
+        value: DocumentReviewCorrectionView,
+    ) -> HwpxDownload: ...
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]: ...
 
@@ -897,14 +925,14 @@ class HttpApplicationGateway:
         response = await self._authorized(
             session,
             "POST",
-            "/api/v1/pdf-document-reviews/upload-intents",
+            "/api/v1/pdf-document-reviews/upload-intents-v2",
             json=value.model_dump(mode="json", exclude={"idempotency_key"}, exclude_none=True),
             headers={"Idempotency-Key": value.idempotency_key},
         )
         command = self._data(response)
         upload_intent_id = command.get("resource_id")
         if (
-            command.get("resource_type") != "pdf_document_review_upload_intent"
+            command.get("resource_type") != "document_review_upload_intent"
             or not isinstance(upload_intent_id, str)
             or re.fullmatch(r"pdfreviewintent_[0-9a-f]{32}", upload_intent_id) is None
         ):
@@ -918,7 +946,7 @@ class HttpApplicationGateway:
         response = await self._authorized(
             session,
             "GET",
-            f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}",
+            f"/api/v1/pdf-document-reviews/upload-intents-v2/{upload_intent_id}",
         )
         try:
             return PdfDocumentReviewUploadIntentView.model_validate(self._data(response))
@@ -931,6 +959,7 @@ class HttpApplicationGateway:
         upload_intent_id: str,
         *,
         content_length: int,
+        media_type: str,
         content: AsyncIterator[bytes],
         idempotency_key: str,
     ) -> PdfDocumentReviewUploadIntentView:
@@ -943,7 +972,7 @@ class HttpApplicationGateway:
             f"/api/v1/pdf-document-reviews/upload-intents/{upload_intent_id}/content",
             content=content,
             headers={
-                "Content-Type": "application/pdf",
+                "Content-Type": media_type,
                 "Content-Length": str(content_length),
                 "Idempotency-Key": idempotency_key,
             },
@@ -960,6 +989,94 @@ class HttpApplicationGateway:
         if intent.state != "STARTED" or intent.workflow_id != command["resource_id"]:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return intent
+
+    async def document_review_correction_eligibility(
+        self, session: WebSession, workflow_id: str
+    ) -> DocumentReviewCorrectionEligibilityView:
+        _require_id(workflow_id, "workflow_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/corrections/eligibility",
+        )
+        try:
+            return DocumentReviewCorrectionEligibilityView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def apply_document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewCorrectionSubmission,
+    ) -> DocumentReviewCorrectionView:
+        _require_id(workflow_id, "workflow_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/corrections",
+            json={"finding_ids": list(value.finding_ids)},
+            headers={"Idempotency-Key": value.idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        command = self._data(response)
+        correction_id = command.get("resource_id")
+        if (
+            command.get("resource_type") != "document_review_hwpx_correction"
+            or command.get("status") != "COMPLETED"
+            or not isinstance(correction_id, str)
+            or re.fullmatch(r"doccorrection_[0-9a-f]{32}", correction_id) is None
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return await self.document_review_correction(
+            session,
+            workflow_id,
+            correction_id,
+        )
+
+    async def document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        correction_id: str,
+    ) -> DocumentReviewCorrectionView:
+        _require_id(workflow_id, "workflow_")
+        _require_id(correction_id, "doccorrection_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/pdf-document-reviews/{workflow_id}/corrections/{correction_id}",
+        )
+        try:
+            return DocumentReviewCorrectionView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def document_review_correction_download(
+        self,
+        session: WebSession,
+        value: DocumentReviewCorrectionView,
+    ) -> HwpxDownload:
+        response = await self._authorized(
+            session,
+            "GET",
+            (
+                f"/api/v1/pdf-document-reviews/{value.workflow_id}/corrections/"
+                f"{value.correction_id}/download"
+            ),
+            headers={"Accept": "application/vnd.hancom.hwpx"},
+        )
+        content_type = response.headers.get("content-type", "")
+        disposition = response.headers.get("content-disposition", "")
+        actual_sha256 = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type.split(";", 1)[0] != "application/vnd.hancom.hwpx"
+            or not disposition.startswith('attachment; filename="')
+            or len(response.content) != value.output_content_length
+            or actual_sha256 != value.output_sha256
+        ):
+            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+        return HwpxDownload(response.content, content_type, disposition)
 
     async def pdf_document_reviews(
         self, session: WebSession, *, cursor: str | None

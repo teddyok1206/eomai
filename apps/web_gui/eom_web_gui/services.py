@@ -26,6 +26,9 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
+    DocumentReviewCorrectionEligibilityView,
+    DocumentReviewCorrectionSubmission,
+    DocumentReviewCorrectionView,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
@@ -235,6 +238,7 @@ class WebServices:
         upload_intent_id: str,
         *,
         content_length: int,
+        media_type: str,
         content: AsyncIterator[bytes],
         idempotency_key: str,
     ) -> PdfDocumentReviewUploadIntentView:
@@ -242,6 +246,7 @@ class WebServices:
             session,
             upload_intent_id,
             content_length=content_length,
+            media_type=media_type,
             content=content,
             idempotency_key=idempotency_key,
         )
@@ -260,6 +265,31 @@ class WebServices:
         self, session: WebSession, workflow_id: str, page_number: int
     ) -> ItemMedia:
         return await self.gateway.pdf_document_review_page_media(session, workflow_id, page_number)
+
+    async def document_review_correction_eligibility(
+        self, session: WebSession, workflow_id: str
+    ) -> DocumentReviewCorrectionEligibilityView:
+        return await self.gateway.document_review_correction_eligibility(session, workflow_id)
+
+    async def apply_document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        value: DocumentReviewCorrectionSubmission,
+    ) -> DocumentReviewCorrectionView:
+        return await self.gateway.apply_document_review_correction(session, workflow_id, value)
+
+    async def document_review_correction(
+        self,
+        session: WebSession,
+        workflow_id: str,
+        correction_id: str,
+    ) -> DocumentReviewCorrectionView:
+        return await self.gateway.document_review_correction(
+            session,
+            workflow_id,
+            correction_id,
+        )
 
     async def workflow(self, session: WebSession, workflow_id: str) -> dict[str, Any]:
         value = await self.gateway.workflow_bundle(session, workflow_id)
