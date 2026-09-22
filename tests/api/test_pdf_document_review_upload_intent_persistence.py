@@ -6,6 +6,10 @@ from typing import cast
 import pytest
 from eom_api.pdf_document_review_models import (
     DocumentReviewHwpxCorrectionRecord,
+    DocumentReviewPdfAnnotationOutputRecord,
+    DocumentReviewPdfAnnotationRecord,
+    DocumentReviewSetMemberRecord,
+    DocumentReviewSetRecord,
     PdfDocumentReviewUploadIntentRecord,
 )
 from eom_identifiers import new_pdf_review_upload_intent_id
@@ -62,6 +66,23 @@ def test_document_review_correction_persists_only_small_indexed_pointers() -> No
         "ix_document_review_hwpx_correction_owner",
         "ix_document_review_hwpx_correction_workflow",
     }
+
+
+def test_paired_review_and_annotation_records_keep_only_metadata_and_typed_pointers() -> None:
+    for model in (
+        DocumentReviewSetRecord,
+        DocumentReviewSetMemberRecord,
+        DocumentReviewPdfAnnotationRecord,
+        DocumentReviewPdfAnnotationOutputRecord,
+    ):
+        table = cast(Table, model.__table__)
+        assert not any(isinstance(column.type, LargeBinary) for column in table.columns)
+
+    output_table = cast(Table, DocumentReviewPdfAnnotationOutputRecord.__table__)
+    assert tuple(column.name for column in output_table.primary_key.columns) == (
+        "annotation_id",
+        "document_role",
+    )
 
 
 def test_pdf_review_owner_index_is_part_of_authoritative_workflow_metadata() -> None:
@@ -132,6 +153,59 @@ def test_pdf_review_migration_matches_authoritative_models() -> None:
         assert foreign_keys == {
             ("operator_id",): ("operators", ("operator_id",)),
             ("workflow_id",): ("workflow_instances", ("workflow_id",)),
+        }
+
+        expected_tables = {
+            "document_review_sets": cast(Table, DocumentReviewSetRecord.__table__),
+            "document_review_set_members": cast(Table, DocumentReviewSetMemberRecord.__table__),
+            "document_review_pdf_annotations": cast(
+                Table, DocumentReviewPdfAnnotationRecord.__table__
+            ),
+            "document_review_pdf_annotation_outputs": cast(
+                Table, DocumentReviewPdfAnnotationOutputRecord.__table__
+            ),
+        }
+        for table_name, authoritative in expected_tables.items():
+            assert tuple(
+                value["name"] for value in inspector.get_columns(table_name, schema="app")
+            ) == tuple(authoritative.columns.keys())
+
+        assert {
+            (value["name"], tuple(value["column_names"]))
+            for value in inspector.get_unique_constraints(
+                "document_review_sets",
+                schema="app",
+            )
+        } == {("uq_document_review_sets_workflow", ("workflow_id",))}
+        assert {
+            (value["name"], tuple(value["column_names"]))
+            for value in inspector.get_unique_constraints(
+                "document_review_pdf_annotations",
+                schema="app",
+            )
+        } == {
+            (
+                "uq_document_review_pdf_annotations_request",
+                ("operator_id", "workflow_id", "request_sha256"),
+            )
+        }
+        assert {
+            value["name"] for value in inspector.get_indexes("document_review_sets", schema="app")
+        } == {
+            "ix_document_review_set_lease",
+            "ix_document_review_set_owner",
+            "uq_document_review_sets_workflow",
+        }
+        assert {
+            value["name"]
+            for value in inspector.get_indexes(
+                "document_review_pdf_annotations",
+                schema="app",
+            )
+        } == {
+            "ix_document_review_pdf_annotation_owner",
+            "ix_document_review_pdf_annotation_workflow",
+            "uq_document_review_pdf_annotations_request",
         }
         workflow_indexes = {
             value["name"] for value in inspector.get_indexes("workflow_instances", schema="app")
