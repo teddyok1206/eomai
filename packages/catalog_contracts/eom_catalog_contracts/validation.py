@@ -217,6 +217,48 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:78901a218555b0f9de62f4bf9ac303032cfa7ded812e63c804d33a69775da24a",
         ),
+        "document-review-intake-manifest-v2": CatalogSchemaResource(
+            "schemas/document-review/document-review-intake-manifest-v2.schema.json",
+            "resources/document-review/document-review-intake-manifest-v2.schema.json",
+            "2.0",
+            "sha256:2db5aec370f13028383de3d68f2713828b84c2107331cd7f520894b5509d3169",
+        ),
+        "document-review-intake-request-v2": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-intake-request-v2.schema.json",
+            "resources/catalog-application/document-review-intake-request-v2.schema.json",
+            "2.0",
+            "sha256:acf9bc93b25318cf304c85cbb63598a619956f3d7207ab66eb6127128c082977",
+        ),
+        "document-review-intake-response-v2": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-intake-response-v2.schema.json",
+            "resources/catalog-application/document-review-intake-response-v2.schema.json",
+            "2.0",
+            "sha256:982cbba5d9ce69f95cbda32a5fe5a7dfedf4d828d49b4e0c2228a6a1f4b435e5",
+        ),
+        "document-review-hwpx-correction-request": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-hwpx-correction-request-v1.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-hwpx-correction-request-v1.schema.json"
+            ),
+            "1.0",
+            "sha256:63aab6087f882b4b111c727f03f8e44ffe82a9ac64f043587d133457314bee39",
+        ),
+        "document-review-hwpx-correction-plan": CatalogSchemaResource(
+            "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
+            "resources/document-review/document-review-hwpx-correction-plan-v1.schema.json",
+            "1.0",
+            "sha256:b8b3c7c3b149823a13aa8d56446c20812f156041df9d37a38e14c7fc0de09e27",
+        ),
+        "document-review-hwpx-correction-result": CatalogSchemaResource(
+            "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",
+            "resources/document-review/document-review-hwpx-correction-result-v1.schema.json",
+            "1.0",
+            "sha256:a99384585c6d6d9b42082733bd4a3d482fad15b166582d688366442696ff0dd2",
+        ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",
             "resources/content-intake/mapping-proposal-v1.schema.json",
@@ -877,13 +919,19 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "sha256:6a1e60af2d8d5fca8ff0c58014bfed2cb1121fb4e2346068f4db30f8f59b3021",
         ),
         "pdf-document-review-page-media-request": CatalogSchemaResource(
-            ("schemas/catalog-application/pdf-document-review-page-media-request-v1.schema.json"),
+            (
+                "schemas/catalog/catalog-application/"
+                "pdf-document-review-page-media-request-v1.schema.json"
+            ),
             ("resources/catalog-application/pdf-document-review-page-media-request-v1.schema.json"),
             "1.0",
             "sha256:a3397524644b13fd0271c86bb7acb51a60570a260363d051ff4732390a5bc051",
         ),
         "pdf-document-review-page-media-response": CatalogSchemaResource(
-            ("schemas/catalog-application/pdf-document-review-page-media-response-v1.schema.json"),
+            (
+                "schemas/catalog/catalog-application/"
+                "pdf-document-review-page-media-response-v1.schema.json"
+            ),
             (
                 "resources/catalog-application/"
                 "pdf-document-review-page-media-response-v1.schema.json"
