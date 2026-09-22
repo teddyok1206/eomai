@@ -7,7 +7,7 @@
     "schema_version", "preset_key", "display_name", "description", "created_at", "model",
     "reasoning_effort", "general_knowledge_policy", "compatible_workflow_protocols",
     "platform_instruction_path", "role_instruction_path", "slot_key", "worker_pool_key",
-    "timeout_seconds"
+    "timeout_seconds", "instruction_revision_number", "predecessor"
   ],
   "properties": {
     "schema_version": { "const": "pdf-document-review-control-bootstrap/2.0" },
@@ -32,6 +32,37 @@
     "role_instruction_path": { "const": "instructions/pdf-document-review.md" },
     "slot_key": { "const": "slot06" },
     "worker_pool_key": { "const": "customer-support" },
-    "timeout_seconds": { "const": 3600 }
+    "timeout_seconds": { "const": 3600 },
+    "instruction_revision_number": { "const": 2 },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_revision_id", "preset_policy_sha256", "instruction_bundle_revision_id",
+        "instruction_manifest_sha256", "instruction_content_sha256"
+      ],
+      "properties": {
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^instrrev_[0-9a-f]{32}$"
+        },
+        "instruction_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_content_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
   }
 }

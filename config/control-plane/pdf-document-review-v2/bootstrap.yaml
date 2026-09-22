@@ -14,3 +14,10 @@ role_instruction_path: instructions/pdf-document-review.md
 slot_key: slot06
 worker_pool_key: customer-support
 timeout_seconds: 3600
+instruction_revision_number: 2
+predecessor:
+  preset_revision_id: execpresetrev_311db616eb604ff7876071db91b001f5
+  preset_policy_sha256: sha256:2526c5190014f76476241cd4531c5d2b1f8448b875f5b0e686be58c56e6348dc
+  instruction_bundle_revision_id: instrrev_d477627a5325b57fb452808c9c2af04b
+  instruction_manifest_sha256: sha256:0b4a075bfeb4cda4263c9a4d71cd6ef6b4f4e2a841b6ecc451703493433452e4
+  instruction_content_sha256: sha256:c3532985b6070717e281879d9a5d1ef1837abf5f3200414e8c5510d7bbf16817
