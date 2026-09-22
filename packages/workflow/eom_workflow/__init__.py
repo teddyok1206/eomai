@@ -1,5 +1,11 @@
 """Domain-neutral workflow contracts and compiler."""
 
+from eom_catalog_contracts import (
+    PdfReviewArtifactMemberPointer,
+    PdfReviewDocumentPointer,
+    PdfReviewPagePointer,
+)
+
 from eom_workflow.admission import (
     MANAGED_WORKFLOW_DEFINITION_KEYS,
     WORKFLOW_ADMISSION_BY_IDENTITY,
@@ -93,11 +99,8 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
     PdfReviewAnchor,
-    PdfReviewArtifactMemberPointer,
     PdfReviewCandidateFinding,
-    PdfReviewDocumentPointer,
     PdfReviewFinding,
-    PdfReviewPagePointer,
     PdfReviewPresetSnapshot,
     PdfReviewRecommendation,
     PdfReviewRegion,

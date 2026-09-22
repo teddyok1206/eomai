@@ -199,6 +199,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:32c2ccf98930d6e865aaeefe31abbf37e5749f21851bfbf9446d64ecb70683d6",
         ),
+        "pdf-document-review-intake-request": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "pdf-document-review-intake-request-v1.schema.json"
+            ),
+            ("resources/catalog-application/pdf-document-review-intake-request-v1.schema.json"),
+            "1.0",
+            "sha256:c9bc0a613b321ad7a4e1b6f5f4deba19f86615841af9de8c6ab28a30b0f5b390",
+        ),
+        "pdf-document-review-intake-response": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "pdf-document-review-intake-response-v1.schema.json"
+            ),
+            ("resources/catalog-application/pdf-document-review-intake-response-v1.schema.json"),
+            "1.0",
+            "sha256:78901a218555b0f9de62f4bf9ac303032cfa7ded812e63c804d33a69775da24a",
+        ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",
             "resources/content-intake/mapping-proposal-v1.schema.json",

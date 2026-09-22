@@ -5,6 +5,7 @@ from __future__ import annotations
 import grp
 import hashlib
 import json
+import os
 import pwd
 import socket
 import stat
@@ -53,6 +54,8 @@ from eom_catalog_contracts import (
     MockExamAssemblyPlanContract,
     MockExamItemReviewPublicationResult,
     MockExamReviewEligibilityResult,
+    PdfDocumentReviewIntakeCommand,
+    PdfDocumentReviewIntakeResponse,
     PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
@@ -64,6 +67,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_item_registry import RegistryError, RegistryErrorCode
+from eom_workflow import PdfReviewDocumentPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
@@ -78,6 +82,8 @@ EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 120.0
 # Keep this privileged Catalog/NAS work off the API process and give the bounded socket operation
 # the same reviewed idle-response window as evidence construction.
 ASSEMBLY_RESPONSE_TIMEOUT_SECONDS = 120.0
+PDF_DOCUMENT_REVIEW_UPLOAD_TIMEOUT_SECONDS = 300.0
+PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS = 1800.0
 
 
 @dataclass(frozen=True)
@@ -135,6 +141,116 @@ class CatalogApplicationClient:
                 "Catalog application import response is invalid",
             )
         return response.result
+
+    def ingest_pdf_document_review_source(
+        self,
+        source: Path,
+        *,
+        actor_id: str,
+        original_filename: str,
+        idempotency_key: str,
+    ) -> PdfReviewDocumentPointer:
+        """Stream one stable local PDF to Catalog and return its immutable pointer."""
+
+        descriptor = -1
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            descriptor = os.open(
+                source,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
+            before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or not 8 <= before.st_size <= 256 * 1024 * 1024
+            ):
+                raise ValueError("PDF review upload is not one bounded regular file")
+            digest = hashlib.sha256()
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("PDF review upload ended before its opened size")
+                digest.update(chunk)
+                remaining -= len(chunk)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            command = PdfDocumentReviewIntakeCommand(
+                actor_id=actor_id,
+                original_filename=original_filename,
+                idempotency_key=idempotency_key,
+                content_length=before.st_size,
+                sha256="sha256:" + digest.hexdigest(),
+            )
+            payload = command.model_dump(mode="json")
+            validate_contract("pdf-document-review-intake-request", payload)
+            self._validate_socket()
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            header = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            if len(header) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+                raise ValueError("PDF review intake header exceeds its fixed bound")
+            connection.settimeout(PDF_DOCUMENT_REVIEW_UPLOAD_TIMEOUT_SECONDS)
+            connection.sendall(header + b"\n")
+            sent_digest = hashlib.sha256()
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("PDF review upload changed while streaming")
+                connection.sendall(chunk)
+                sent_digest.update(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(descriptor)
+            if (
+                before.st_dev,
+                before.st_ino,
+                before.st_mode,
+                before.st_uid,
+                before.st_gid,
+                before.st_nlink,
+                before.st_size,
+                before.st_mtime_ns,
+            ) != (
+                after.st_dev,
+                after.st_ino,
+                after.st_mode,
+                after.st_uid,
+                after.st_gid,
+                after.st_nlink,
+                after.st_size,
+                after.st_mtime_ns,
+            ) or "sha256:" + sent_digest.hexdigest() != command.sha256:
+                raise ValueError("PDF review upload identity changed while streaming")
+            connection.shutdown(socket.SHUT_WR)
+            connection.settimeout(PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_response(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("PDF review intake response is not an object")
+            validate_contract("pdf-document-review-intake-response", value)
+            response = PdfDocumentReviewIntakeResponse.model_validate(value)
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.document is not None
+            return response.document
+        except CatalogApplicationClientError:
+            raise
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            JsonSchemaValidationError,
+            ValidationError,
+        ) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog PDF document-review intake boundary is unavailable",
+            ) from exc
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            connection.close()
 
     def load_item_content(self, item_revision_id: str) -> AssessmentItemContentContract:
         command = ItemContentQuery(item_revision_id=item_revision_id)
@@ -713,6 +829,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog mock-exam assembly operation failed",
+                    ) from None
+                if error_code.startswith("PDF_DOCUMENT_REVIEW_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog PDF document-review intake failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

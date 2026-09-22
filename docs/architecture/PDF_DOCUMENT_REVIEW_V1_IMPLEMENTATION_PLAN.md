@@ -91,8 +91,11 @@ present and tested.
 Slice B now has its Catalog-owned core: `catalog/1.16` validates an immutable intake manifest,
 safe-opens and hashes one bounded PDF, rejects encryption and invalid page counts, renders ordered
 PNG pages with root-owned Poppler executables, and commits the source, pages, and manifest through
-the existing Artifact owner. Exact replay verifies every committed member hash. The authenticated
-HTTP streaming adapter remains pending and therefore browser upload is not yet active.
+the existing Artifact owner. Exact replay verifies every committed member hash. The private
+Application API→Catalog streaming protocol is also implemented: JSON Schema validates a bounded
+header, the PDF remains raw streamed bytes, both endpoints verify stable file identity and SHA-256,
+and the Catalog receiver rejects truncation, excess bytes, and hash drift before intake. The public
+authenticated upload-intent route remains pending and therefore browser upload is not yet active.
 
 Slices C–D must consume these frozen contracts rather than inventing local dictionaries or
 prompt-only semantics. This ordering is a protocol gate, not a claim that PDF review is already

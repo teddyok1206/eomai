@@ -57,6 +57,7 @@ from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyServi
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationService,
 )
+from eom_catalog_service.pdf_document_review_intake import PdfDocumentReviewIntakeService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
 
@@ -237,6 +238,7 @@ def serve() -> int:
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),
+            pdf_document_review_intake=PdfDocumentReviewIntakeService(engine),
         )
         thread = threading.Thread(
             target=server.serve_forever,

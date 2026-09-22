@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import socket
 import threading
 import time
 from datetime import UTC, datetime
@@ -50,6 +52,8 @@ from eom_catalog_contracts import (
     MockExamItemReviewPublicationResultV2,
     MockExamReviewEligibilityResultV2,
     MockExamReviewFindingCounts,
+    PdfDocumentReviewIntakeCommand,
+    PdfDocumentReviewIntakeResponse,
     PreviewMockExamAssemblyPlanCommand,
     PublishMockExamItemReviewCommand,
     ReviewedItemContentImportCommand,
@@ -61,6 +65,11 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_identifiers import content_sha256
+from eom_workflow import (
+    PdfReviewArtifactMemberPointer,
+    PdfReviewDocumentPointer,
+    PdfReviewPagePointer,
+)
 from jsonschema import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_assessment_item_content import item_content
@@ -157,6 +166,62 @@ class FakeRegistry:
             sha256="sha256:" + hashlib.sha256(content).hexdigest(),
             iter_chunks=iter_chunks,
         )
+
+
+def _pdf_review_document_pointer() -> PdfReviewDocumentPointer:
+    artifact_id = "artifact_" + "a" * 32
+    revision_id = "rev_" + "b" * 32
+    return PdfReviewDocumentPointer(
+        document_id="document_" + "c" * 32,
+        document_revision_id="documentrev_" + "d" * 32,
+        original_filename="review.pdf",
+        source_pdf=PdfReviewArtifactMemberPointer(
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+            member_path="source/original.pdf",
+            sha256="sha256:" + "e" * 64,
+            schema_ref="eom://schemas/document-review/pdf-source/1.0",
+            media_type="application/pdf",
+            content_length=16,
+        ),
+        page_count=1,
+        pages=(
+            PdfReviewPagePointer(
+                page_number=1,
+                width_px=1200,
+                height_px=1600,
+                rotation_degrees=0,
+                page_image=PdfReviewArtifactMemberPointer(
+                    artifact_id=artifact_id,
+                    artifact_revision_id=revision_id,
+                    member_path="pages/page-0001.png",
+                    sha256="sha256:" + "f" * 64,
+                    schema_ref="eom://schemas/document-review/pdf-page-render/1.0",
+                    media_type="image/png",
+                    content_length=128,
+                ),
+                text_layer=None,
+            ),
+        ),
+    )
+
+
+class FakePdfDocumentReviewIntake:
+    def __init__(self, staging_root: Path) -> None:
+        staging_root.mkdir(mode=0o700)
+        self.settings = SimpleNamespace(staging_root=staging_root)
+        self.calls: list[tuple[bytes, str, str, str]] = []
+
+    def ingest(
+        self,
+        source: Path,
+        *,
+        original_filename: str,
+        actor_id: str,
+        idempotency_key: str,
+    ) -> PdfReviewDocumentPointer:
+        self.calls.append((source.read_bytes(), original_filename, actor_id, idempotency_key))
+        return _pdf_review_document_pointer()
 
 
 class FakeContentTeamRegistry(FakeRegistry):
@@ -596,6 +661,7 @@ def _server(
     item_reviews: FakeItemReviews | None = None,
     knowledge_retrieval: FakeKnowledgeRetrieval | None = None,
     assemblies: FakeAssemblies | None = None,
+    pdf_intake: FakePdfDocumentReviewIntake | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -608,6 +674,7 @@ def _server(
         knowledge_retrieval or FakeKnowledgeRetrieval(),
         mock_exam_item_reviews=item_reviews,  # type: ignore[arg-type]
         mock_exam_assemblies=assemblies or FakeAssemblies(),  # type: ignore[arg-type]
+        pdf_document_review_intake=pdf_intake,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -676,6 +743,95 @@ def test_catalog_evidence_response_window_is_applied_to_the_unix_socket(
         thread.join(timeout=5)
 
 
+def test_pdf_document_review_intake_streams_exact_bytes_over_private_socket(
+    tmp_path: Path,
+) -> None:
+    payload = b"%PDF-1.7\nEOM immutable review source\n"
+    source = tmp_path / "source.pdf"
+    source.write_bytes(payload)
+    source.chmod(0o600)
+    intake = FakePdfDocumentReviewIntake(tmp_path / "catalog-staging")
+    server = _server(tmp_path, pdf_intake=intake)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = _client(server).ingest_pdf_document_review_source(
+            source,
+            actor_id="operator_test_admin",
+            original_filename="review.pdf",
+            idempotency_key="pdf-review-private-stream-round-trip",
+        )
+        assert result == _pdf_review_document_pointer()
+        assert intake.calls == [
+            (
+                payload,
+                "review.pdf",
+                "operator_test_admin",
+                "pdf-review-private-stream-round-trip",
+            )
+        ]
+        assert not tuple((tmp_path / "catalog-staging").iterdir())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_pdf_document_review_intake_rejects_stream_hash_mismatch(tmp_path: Path) -> None:
+    payload = b"%PDF-1.7\nwrong declared hash\n"
+    intake = FakePdfDocumentReviewIntake(tmp_path / "catalog-staging")
+    server = _server(tmp_path, pdf_intake=intake)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        connection.connect(str(server.socket_path))
+        command = PdfDocumentReviewIntakeCommand(
+            actor_id="operator_test_admin",
+            original_filename="review.pdf",
+            idempotency_key="pdf-review-private-stream-wrong-hash",
+            content_length=len(payload),
+            sha256="sha256:" + "0" * 64,
+        )
+        connection.sendall(
+            json.dumps(
+                command.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+            + b"\n"
+            + payload
+        )
+        connection.shutdown(socket.SHUT_WR)
+        response = PdfDocumentReviewIntakeResponse.model_validate(
+            json.loads(CatalogApplicationClient._read_response(connection))
+        )
+        assert response.status == "ERROR"
+        assert response.error_code == "PDF_DOCUMENT_REVIEW_UPLOAD_HASH_MISMATCH"
+        assert intake.calls == []
+        assert not tuple((tmp_path / "catalog-staging").iterdir())
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_pdf_document_review_client_rejects_hardlinked_upload(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.7\nhardlink\n")
+    source.chmod(0o600)
+    os.link(source, tmp_path / "alias.pdf")
+    with pytest.raises(CatalogApplicationClientError) as error:
+        CatalogApplicationClient(tmp_path / "absent.sock").ingest_pdf_document_review_source(
+            source,
+            actor_id="operator_test_admin",
+            original_filename="review.pdf",
+            idempotency_key="pdf-review-private-stream-hardlink",
+        )
+    assert error.value.code == str(CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE)
+
+
 def test_catalog_application_contract_validates_schema_and_typed_models() -> None:
     command = ReviewedItemContentImportCommand(
         base_revision_id="itemrev_" + "6" * 32,
@@ -692,6 +848,28 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
         content=AssessmentItemContent.model_validate(item_content()),
     ).model_dump(mode="json", exclude_none=True)
     validate_contract("catalog-application-response", response)
+
+    pdf_command = PdfDocumentReviewIntakeCommand(
+        actor_id="operator_test_admin",
+        original_filename="review.pdf",
+        idempotency_key="pdf-review-intake-contract-key",
+        content_length=16,
+        sha256="sha256:" + "1" * 64,
+    )
+    validate_contract(
+        "pdf-document-review-intake-request",
+        pdf_command.model_dump(mode="json"),
+    )
+    pdf_response = PdfDocumentReviewIntakeResponse(
+        status="OK",
+        document=_pdf_review_document_pointer(),
+    )
+    pdf_response_value = pdf_response.model_dump(mode="json")
+    pdf_response_value.pop("error_code")
+    validate_contract(
+        "pdf-document-review-intake-response",
+        pdf_response_value,
+    )
 
     analysis_command = CreateKnowledgeAnalysisCommand(
         source={

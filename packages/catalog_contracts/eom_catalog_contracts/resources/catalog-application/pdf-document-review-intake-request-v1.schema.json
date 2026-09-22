@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/pdf-document-review-intake-request/1.0",
+  "title": "EOM PDF Document Review Intake Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "actor_id",
+    "original_filename",
+    "idempotency_key",
+    "content_length",
+    "sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "pdf-document-review-intake-request/1.0" },
+    "operation": { "const": "INGEST_PDF_DOCUMENT_REVIEW_SOURCE" },
+    "actor_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "original_filename": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 240,
+      "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.[Pp][Dd][Ff]$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$"
+    },
+    "content_length": { "type": "integer", "minimum": 8, "maximum": 268435456 },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

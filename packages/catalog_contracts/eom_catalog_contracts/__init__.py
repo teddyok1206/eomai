@@ -165,6 +165,13 @@ from eom_catalog_contracts.document_review import (
     PdfDocumentReviewIntakeManifest,
     PdfDocumentReviewPageMember,
     PdfDocumentReviewRendererIdentity,
+    PdfReviewArtifactMemberPointer,
+    PdfReviewDocumentPointer,
+    PdfReviewPagePointer,
+)
+from eom_catalog_contracts.document_review_application import (
+    PdfDocumentReviewIntakeCommand,
+    PdfDocumentReviewIntakeResponse,
 )
 from eom_catalog_contracts.educational_document import (
     EducationalDocumentIdentity,
@@ -1206,7 +1213,9 @@ __all__ = [
     "OriginArtifactMemberPointer",
     "OriginItemRevisionPointer",
     "ParagraphBlock",
+    "PdfDocumentReviewIntakeCommand",
     "PdfDocumentReviewIntakeManifest",
+    "PdfDocumentReviewIntakeResponse",
     "PdfDocumentReviewPageMember",
     "PdfDocumentReviewRendererIdentity",
     "PdfLearningCompletionReceipt",
@@ -1214,6 +1223,9 @@ __all__ = [
     "PdfLearningItemCompletionShardPointer",
     "PdfPageRangeMaterialization",
     "PdfPageRangeMaterializationManifest",
+    "PdfReviewArtifactMemberPointer",
+    "PdfReviewDocumentPointer",
+    "PdfReviewPagePointer",
     "PdfSource",
     "PreviewMockExamAssemblyPlan",
     "PreviewMockExamAssemblyPlanCommand",

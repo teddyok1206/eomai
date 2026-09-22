@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import grp
+import hashlib
 import json
 import os
 import pwd
@@ -10,6 +11,7 @@ import socket
 import socketserver
 import stat
 import struct
+import tempfile
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -39,6 +41,8 @@ from eom_catalog_contracts import (
     ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
+    PdfDocumentReviewIntakeCommand,
+    PdfDocumentReviewIntakeResponse,
     PreviewMockExamAssemblyPlanCommand,
     PublishApprovedItemAnalysesCommand,
     PublishMockExamItemReviewCommand,
@@ -79,6 +83,10 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
     MockExamItemReviewPublicationService,
 )
+from eom_catalog_service.pdf_document_review_intake import (
+    PdfDocumentReviewIntakeError,
+    PdfDocumentReviewIntakeService,
+)
 from eom_catalog_service.registry_service import RegistryService
 
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
@@ -113,6 +121,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError
             raw_operation = value.get("operation")
+            if raw_operation == "INGEST_PDF_DOCUMENT_REVIEW_SOURCE":
+                try:
+                    validate_contract("pdf-document-review-intake-request", value)
+                    intake_request = PdfDocumentReviewIntakeCommand.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_pdf_document_review_intake_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._ingest_pdf_document_review_source(intake_request)
+                return
             if raw_operation == "GET_ITEM_MEDIA":
                 try:
                     validate_contract("catalog-item-media-request", value)
@@ -402,6 +422,88 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
         finally:
             chunks.close()
 
+    def _ingest_pdf_document_review_source(
+        self,
+        request: PdfDocumentReviewIntakeCommand,
+    ) -> None:
+        intake = self.server.pdf_document_review_intake
+        if intake is None:
+            self.server.write_pdf_document_review_intake_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        descriptor = -1
+        source: Path | None = None
+        try:
+            descriptor, raw_path = tempfile.mkstemp(
+                prefix="pdf-document-review-upload.",
+                suffix=".pdf",
+                dir=intake.settings.staging_root,
+            )
+            source = Path(raw_path)
+            os.fchmod(descriptor, 0o600)
+            digest = hashlib.sha256()
+            remaining = request.content_length
+            while remaining:
+                chunk = self.rfile.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise PdfDocumentReviewIntakeError(
+                        "PDF_DOCUMENT_REVIEW_UPLOAD_TRUNCATED",
+                        "PDF upload ended before its declared size",
+                    )
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written < 1:
+                        raise PdfDocumentReviewIntakeError(
+                            "PDF_DOCUMENT_REVIEW_UPLOAD_WRITE_FAILED",
+                            "PDF upload could not be staged",
+                        )
+                    view = view[written:]
+                digest.update(chunk)
+                remaining -= len(chunk)
+            if self.rfile.read(1):
+                raise PdfDocumentReviewIntakeError(
+                    "PDF_DOCUMENT_REVIEW_UPLOAD_EXCEEDED",
+                    "PDF upload exceeded its declared size",
+                )
+            os.fsync(descriptor)
+            os.close(descriptor)
+            descriptor = -1
+            if "sha256:" + digest.hexdigest() != request.sha256:
+                raise PdfDocumentReviewIntakeError(
+                    "PDF_DOCUMENT_REVIEW_UPLOAD_HASH_MISMATCH",
+                    "PDF upload differs from its declared hash",
+                )
+            document = intake.ingest(
+                source,
+                original_filename=request.original_filename,
+                actor_id=request.actor_id,
+                idempotency_key=request.idempotency_key,
+            )
+            self.server.write_pdf_document_review_intake_response(
+                self.wfile,
+                PdfDocumentReviewIntakeResponse(status="OK", document=document),
+            )
+        except PdfDocumentReviewIntakeError as exc:
+            self.server.write_pdf_document_review_intake_error(self.wfile, exc.code)
+        except Exception:
+            self.server.write_pdf_document_review_intake_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if source is not None:
+                try:
+                    metadata = source.lstat()
+                    if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
+                        source.unlink()
+                except OSError:
+                    pass
+
     def _stream_item_component_media(self, request: ItemComponentMediaQuery) -> None:
         try:
             media = self.server.registry.load_item_component_media(
@@ -499,6 +601,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         approved_item_graph_publication: ApprovedItemGraphPublicationService | None = None,
         mock_exam_item_reviews: MockExamItemReviewPublicationService | None = None,
         mock_exam_assemblies: MockExamAssemblyService | None = None,
+        pdf_document_review_intake: PdfDocumentReviewIntakeService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -512,6 +615,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.approved_item_graph_publication = approved_item_graph_publication
         self.mock_exam_item_reviews = mock_exam_item_reviews
         self.mock_exam_assemblies = mock_exam_assemblies
+        self.pdf_document_review_intake = pdf_document_review_intake
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -609,6 +713,28 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog assessment page response exceeded its fixed bound")
         stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_pdf_document_review_intake_response(
+        stream: Any,
+        response: PdfDocumentReviewIntakeResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json")
+        # Keep nested nullable members such as page text layers explicit. Only the inactive
+        # top-level discriminated response field is absent from the wire contract.
+        payload.pop("error_code" if response.status == "OK" else "document")
+        validate_contract("pdf-document-review-intake-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("PDF document-review intake response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_pdf_document_review_intake_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_pdf_document_review_intake_response(
+            stream,
+            PdfDocumentReviewIntakeResponse(status="ERROR", error_code=error_code),
+        )
 
     @classmethod
     def write_assessment_page_list_error(cls, stream: Any, error_code: str) -> None:

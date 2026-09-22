@@ -40,6 +40,14 @@ The Catalog intake Artifact uses the otherwise unused immutable protocol identit
 it does not reuse the existing `catalog/1.14` item-review publication or `catalog/1.15` solution
 analysis identities.
 
+The Application API does not base64-encode a PDF into JSON. Its authenticated upload boundary
+spools a bounded stream to private local state, then sends a small schema-validated header followed
+by exactly the declared raw bytes over the existing private Catalog Unix socket. The receiver
+hashes while writing a fresh mode-0600, single-link staging file, requires EOF at the exact declared
+length, and only then calls the Catalog intake service. The response is a typed immutable document
+pointer, not the PDF or page bytes. This is an explicit materialization boundary between the API
+transport and the Catalog Artifact owner.
+
 ### Canonical source, logical entities, and revisions
 
 The original uploaded PDF Artifact Revision is the canonical document source. Page PNG and text
@@ -138,6 +146,11 @@ For `P` pages, `T` verification targets, `C` candidates, `F` findings, and `A` a
 is `O(P + T + C + F + A)` time and linear bounded memory. V1 bounds are 2,000 pages, 256 targets,
 512 candidates/findings, eight anchors per candidate/finding, and 256 MiB for an uploaded PDF.
 No repeated list membership scans or N+1 page lookups are permitted.
+
+The private upload transport performs `O(n)` sequential read/hash/write work in the PDF byte length
+and uses `O(1)` streaming memory. The later public upload intent is indexed by owner/time and unique
+idempotency identity; it is not a second document registry. No raw PDF or PNG bytes enter
+PostgreSQL.
 
 ### Transactions, concurrency, retry, and idempotency
 
