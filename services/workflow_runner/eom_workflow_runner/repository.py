@@ -415,7 +415,9 @@ def create_workflow_instance(
         role_schema_version=role_schema_version,
         state=WorkflowState.REQUESTED.value,
         stage=(
-            WorkflowStage.CUSTOMER_SUPPORT.value
+            WorkflowStage.DOCUMENT_REVIEW.value
+            if request.request_name == "PDF_DOCUMENT_REVIEW_REQUEST"
+            else WorkflowStage.CUSTOMER_SUPPORT.value
             if request.request_name == "CUSTOMER_SUPPORT_REQUEST"
             else WorkflowStage.KNOWLEDGE_ANALYSIS.value
             if request.request_name

@@ -66,6 +66,7 @@ eom_workflow = [
   "resources/*.json",
   "resources/control-plane/*.json",
   "resources/roles/*.json",
+  "resources/document-review-presets/*.json",
 ]
 eom_catalog_contracts = [
   "resources/assessment-assembly/*.json",

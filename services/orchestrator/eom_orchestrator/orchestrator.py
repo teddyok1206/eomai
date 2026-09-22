@@ -30,6 +30,10 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
 )
+from eom_workflow.document_review import (
+    PdfDocumentReviewWorkerRequest,
+    validate_pdf_document_review_output_against_request,
+)
 from eom_workflow.models import (
     ArtifactPointer,
     CustomerSupportWorkerRequest,
@@ -48,6 +52,7 @@ from eom_workflow.models import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
+    PdfDocumentReviewRoleResult,
     RoleWorkerInput,
     WorkerRequest,
 )
@@ -133,6 +138,7 @@ WorkflowRoleRequest = (
     | LegacyItemExtractionWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
+    | PdfDocumentReviewWorkerRequest
 )
 
 
@@ -668,6 +674,22 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            if isinstance(result, PdfDocumentReviewRoleResult):
+                if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "PDF document review result has no typed immutable request",
+                    )
+                try:
+                    validate_pdf_document_review_output_against_request(
+                        result.output,
+                        worker_input.request.review_request,
+                    )
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "PDF document review result differs from its immutable request",
+                    ) from exc
             result_document = result.model_dump(mode="json")
             evidence_receipt = None
             evidence_event_data: dict[str, object] = {}

@@ -5,6 +5,7 @@ from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
+    PdfDocumentReviewWorkerRequest,
     WorkerRequest,
 )
 from eom_workflow_runner.engine import _capacity_resume_target, _prompt_name_for_request
@@ -73,6 +74,18 @@ def test_customer_support_capacity_reconciliation_preserves_its_domain_stage() -
     assert _capacity_resume_target("support", "customer-support") == (
         WorkflowState.RUNNING,
         WorkflowStage.CUSTOMER_SUPPORT,
+    )
+
+
+def test_pdf_document_review_uses_immutable_document_prompt_and_stage() -> None:
+    request = PdfDocumentReviewWorkerRequest.model_construct(review_request=None)
+
+    assert _prompt_name_for_request(worker_role="support", request=request) == (
+        "pdf-document-review"
+    )
+    assert _capacity_resume_target("support", "pdf-document-review") == (
+        WorkflowState.RUNNING,
+        WorkflowStage.DOCUMENT_REVIEW,
     )
 
 

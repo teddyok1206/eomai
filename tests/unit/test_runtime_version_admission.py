@@ -30,6 +30,7 @@ ROLES = {"authoring", "image", "review", "item_management", "support"}
 
 ADMITTED_DEFINITIONS = {
     ("customer-support", "1.0.0"): "customer-support.v1.yaml",
+    ("pdf-document-review", "1.0.0"): "pdf-document-review.v1.yaml",
     ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
     ("generic-item-development", "1.9.0"): "generic-item-development.v1.9.yaml",
     ("generic-item-development", "1.10.0"): "generic-item-development.v1.10.yaml",

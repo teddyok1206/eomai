@@ -34,6 +34,9 @@ def test_customer_support_stage_has_only_terminal_success_or_failure_targets() -
     assert STAGE_TRANSITIONS[WorkflowStage.CUSTOMER_SUPPORT] == frozenset(
         {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
     )
+    assert STAGE_TRANSITIONS[WorkflowStage.DOCUMENT_REVIEW] == frozenset(
+        {WorkflowStage.COMPLETED, WorkflowStage.FAILED, WorkflowStage.CANCELLED}
+    )
 
 
 @pytest.mark.parametrize(

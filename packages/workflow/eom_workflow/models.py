@@ -63,6 +63,12 @@ from pydantic import (
     model_validator,
 )
 
+from eom_workflow.document_review import (
+    PdfDocumentReviewOutput,
+    PdfDocumentReviewRequest,
+    PdfDocumentReviewWorkerRequest,
+)
+
 
 def _require_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() != timedelta(0):
@@ -429,6 +435,7 @@ class WorkflowRequest(FrozenModel):
         "LEGACY_ITEM_EXTRACTION_REQUEST",
         "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
         "CUSTOMER_SUPPORT_REQUEST",
+        "PDF_DOCUMENT_REVIEW_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
@@ -458,9 +465,15 @@ class WorkflowRequest(FrozenModel):
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
     customer_support_case: CustomerSupportCase | None = None
+    pdf_document_review_request: PdfDocumentReviewRequest | None = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
+        if (
+            self.request_name != "PDF_DOCUMENT_REVIEW_REQUEST"
+            and self.pdf_document_review_request is not None
+        ):
+            raise ValueError("only PDF document review may include a PDF document review request")
         if (self.production_occurrence is None) != (self.expected_resolution is None):
             raise ValueError(
                 "production occurrence and expected resolution must be supplied together"
@@ -485,7 +498,7 @@ class WorkflowRequest(FrozenModel):
         if (
             self.execution_preset_key is not None
             and self.content_pack is None
-            and self.request_name != "CUSTOMER_SUPPORT_REQUEST"
+            and self.request_name not in {"CUSTOMER_SUPPORT_REQUEST", "PDF_DOCUMENT_REVIEW_REQUEST"}
         ):
             raise ValueError("execution preset requires a pinned Content Pack workflow")
         if self.educational_retrieval is not None and (
@@ -658,12 +671,42 @@ class WorkflowRequest(FrozenModel):
                 )
             if self.execution_preset_key != "customer-support":
                 raise ValueError("customer support requires its exact execution preset")
+        elif self.request_name == "PDF_DOCUMENT_REVIEW_REQUEST":
+            if (
+                self.pdf_document_review_request is None
+                or self.analysis_request is not None
+                or self.legacy_extraction_request is not None
+                or self.legacy_editorial_compatibility_request is not None
+                or self.customer_support_case is not None
+                or self.image_mode != "skip"
+                or any(
+                    value is not None
+                    for value in (
+                        self.content_pack,
+                        self.profiles,
+                        self.source_intake,
+                        self.registry_intent,
+                        self.item_brief,
+                        self.stimulus_asset,
+                        self.educational_retrieval,
+                        self.production_occurrence,
+                        self.expected_resolution,
+                    )
+                )
+            ):
+                raise ValueError(
+                    "PDF document review requires one immutable review request, skip image mode, "
+                    "and no item or analysis fields"
+                )
+            if self.execution_preset_key != "pdf-document-review":
+                raise ValueError("PDF document review requires its exact execution preset")
         else:
             if (
                 self.analysis_request is not None
                 or self.legacy_extraction_request is not None
                 or self.legacy_editorial_compatibility_request is not None
                 or self.customer_support_case is not None
+                or self.pdf_document_review_request is not None
             ):
                 raise ValueError("non-analysis workflow cannot include an analysis request")
             if self.item_brief is not None or self.stimulus_asset is not None:
@@ -682,7 +725,10 @@ class WorkflowRequest(FrozenModel):
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
+        | PdfDocumentReviewWorkerRequest
     ):
+        if self.pdf_document_review_request is not None:
+            return PdfDocumentReviewWorkerRequest(review_request=self.pdf_document_review_request)
         if self.customer_support_case is not None:
             return CustomerSupportWorkerRequest(case=self.customer_support_case)
         if self.legacy_editorial_compatibility_request is not None:
@@ -703,6 +749,8 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("editorial compatibility worker request is missing its pinned request")
         if self.request_name == "CUSTOMER_SUPPORT_REQUEST":
             raise ValueError("customer support worker request is missing its bounded case")
+        if self.request_name == "PDF_DOCUMENT_REVIEW_REQUEST":
+            raise ValueError("PDF document review worker request is missing its pinned request")
         return WorkerRequest(request_name=self.request_name, image_mode=self.image_mode)
 
 
@@ -881,6 +929,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.22.0",
         "workflow-role/1.23.0",
         "workflow-role/1.24.0",
+        "workflow-role/1.25.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -893,6 +942,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
+        | PdfDocumentReviewWorkerRequest
     )
     upstream_artifacts: tuple[ArtifactPointer, ...]
     artifact: ArtifactSpec
@@ -907,6 +957,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
+        | PdfDocumentReviewWorkerRequest
     ):
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
@@ -920,6 +971,8 @@ class RoleWorkerInput(FrozenModel):
             return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
         if value.get("request_name") == "CUSTOMER_SUPPORT_REQUEST":
             return CustomerSupportWorkerRequest.model_validate(value)
+        if value.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST":
+            return PdfDocumentReviewWorkerRequest.model_validate(value)
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
         )
@@ -995,6 +1048,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.22.0",
         "workflow-role/1.23.0",
         "workflow-role/1.24.0",
+        "workflow-role/1.25.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2645,6 +2699,12 @@ class CustomerSupportRoleResult(RoleResultBase):
     output: CustomerSupportOutput
 
 
+class PdfDocumentReviewRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.25.0"] = "workflow-role/1.25.0"
+    role: Literal["support"] = "support"
+    output: PdfDocumentReviewOutput
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -2706,4 +2766,5 @@ RoleResult = (
     | LegacyItemExtractionRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
+    | PdfDocumentReviewRoleResult
 )

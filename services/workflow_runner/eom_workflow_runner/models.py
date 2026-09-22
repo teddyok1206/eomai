@@ -38,6 +38,7 @@ WORKFLOW_STATES = (
 WORKFLOW_STAGES = (
     "KNOWLEDGE_ANALYSIS",
     "CUSTOMER_SUPPORT",
+    "DOCUMENT_REVIEW",
     "AUTHORING",
     "IMAGE_REQUIRED",
     "IMAGE_SKIPPED",
@@ -93,7 +94,8 @@ class WorkflowInstanceRecord(Base):
             name="ck_workflow_instances_state",
         ),
         CheckConstraint(
-            "stage IN ('KNOWLEDGE_ANALYSIS','CUSTOMER_SUPPORT','AUTHORING','IMAGE_REQUIRED',"
+            "stage IN ('KNOWLEDGE_ANALYSIS','CUSTOMER_SUPPORT','DOCUMENT_REVIEW',"
+            "'AUTHORING','IMAGE_REQUIRED',"
             "'IMAGE_SKIPPED',"
             "'REVIEWING','AWAITING_HUMAN_APPROVAL','REGISTERING','COMPLETED','FAILED',"
             "'CANCELLED')",

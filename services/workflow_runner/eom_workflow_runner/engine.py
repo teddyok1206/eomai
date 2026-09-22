@@ -37,6 +37,7 @@ from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
+    PdfDocumentReviewWorkerRequest,
     ResolvedExecutionPlanV12,
     ResolvedStepExecutionV12,
     TerminalStep,
@@ -194,6 +195,7 @@ def _prompt_name_for_request(
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
+        | PdfDocumentReviewWorkerRequest
     ),
 ) -> str:
     """Select the fixed prompt without conflating support workloads."""
@@ -206,6 +208,8 @@ def _prompt_name_for_request(
         return "legacy-item-editorial-compatibility"
     if worker_role == "support" and isinstance(request, CustomerSupportWorkerRequest):
         return "customer-support"
+    if worker_role == "support" and isinstance(request, PdfDocumentReviewWorkerRequest):
+        return "pdf-document-review"
     if worker_role == "item_management":
         return "registration"
     return worker_role
@@ -246,6 +250,7 @@ class RoleJobExecutor(Protocol):
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
+            | PdfDocumentReviewWorkerRequest
         ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
@@ -286,6 +291,7 @@ class PlatformRoleJobExecutor:
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
+            | PdfDocumentReviewWorkerRequest
         ),
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
@@ -2650,6 +2656,8 @@ def _capacity_resume_target(
         return WorkflowState.REGISTERING, WorkflowStage.REGISTERING
     if worker_role == "support" and definition_key == "customer-support":
         return WorkflowState.RUNNING, WorkflowStage.CUSTOMER_SUPPORT
+    if worker_role == "support" and definition_key == "pdf-document-review":
+        return WorkflowState.RUNNING, WorkflowStage.DOCUMENT_REVIEW
     if worker_role == "support" and definition_key in {
         "knowledge-analysis",
         "legacy-item-extraction",
