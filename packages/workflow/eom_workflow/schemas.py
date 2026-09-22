@@ -847,6 +847,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
+    elif schema_id == "pdf-document-review-result@1.0" and role == "support":
+        canonical_value = _canonicalize_pdf_document_review_result(value)
     if (
         schema_id
         in {
@@ -1386,6 +1388,45 @@ def _canonicalize_legacy_editorial_compatibility_result(value: object) -> object
     canonical_proposal["proposal_sha256"] = content_sha256(
         {key: item for key, item in canonical_proposal.items() if key != "proposal_sha256"}
     )
+    return canonical
+
+
+def _canonicalize_pdf_document_review_result(value: object) -> object:
+    """Derive omitted quote hashes without repairing a supplied mismatch.
+
+    The worker authors the exact quote and page location.  The orchestrator owns the canonical
+    serialization hash, so the worker-only schema omits ``quote_sha256``.  A caller that supplies
+    the field remains accountable for it: an incorrect supplied digest is left untouched and the
+    canonical Pydantic boundary rejects it.
+    """
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    if not isinstance(output, dict):
+        return value
+
+    canonical = copy.deepcopy(value)
+    canonical_output = _mapping(canonical, "output")
+    collection_names = ("verification_targets", "candidate_findings", "findings")
+    for collection_name in collection_names:
+        collection = canonical_output.get(collection_name)
+        if not isinstance(collection, list):
+            continue
+        for item in collection:
+            if not isinstance(item, dict):
+                continue
+            anchors = item.get("anchors")
+            if not isinstance(anchors, list):
+                continue
+            for anchor in anchors:
+                if not isinstance(anchor, dict) or "quote_sha256" in anchor:
+                    continue
+                quote = anchor.get("quote")
+                if quote is None:
+                    anchor["quote_sha256"] = None
+                elif isinstance(quote, str):
+                    anchor["quote_sha256"] = content_sha256(quote)
     return canonical
 
 
@@ -2735,6 +2776,13 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "pdf-document-review-result@1.0":
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
+        anchor_properties = _mapping(anchor, "properties")
+        if anchor_properties.pop("quote_sha256", None) is None:
+            raise WorkflowSchemaError("PDF document review quote hash is not projectable")
+        anchor_required = anchor.get("required")
+        if not isinstance(anchor_required, list) or "quote_sha256" not in anchor_required:
+            raise WorkflowSchemaError("PDF document review quote hash requirement is invalid")
+        anchor_required.remove("quote_sha256")
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema

@@ -9,6 +9,8 @@
 4. 먼저 verification target과 candidate를 만들고, 후보를 다시 확인해 CONFIRMED·DEMOTED·UNCERTAIN으로
    판정한다. CONFIRMED만 finding으로 남긴다.
 5. 모든 지적은 실제 페이지의 parts-per-million 좌표와 정확한 page image hash에 결속한다.
+   quote는 화면의 정확한 짧은 문구만 기록하고 quote_sha256는 출력하지 않는다. 오케스트레이터가
+   검증 경계에서 quote의 canonical JSON SHA-256을 계산한다.
 6. 수정 제안은 recommendation일 뿐 적용하지 않는다. 위치나 사실을 확정할 수 없으면 임의로 채우지
    말고 UNCERTAIN 또는 사람 판단 필요로 남긴다.
 7. 숨은 사고 전문은 출력하지 않고, 검증 가능한 짧은 근거와 권고만 기록한다.

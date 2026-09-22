@@ -30,7 +30,8 @@ pdf-document-review-result@1.0 JSON 객체 하나로만 반환한다.
 ## 위치와 권고
 
 - 모든 target/candidate/finding은 실제 page PNG의 위치를 parts-per-million 정수 좌표로 표시한다.
-- quote가 있으면 화면에 실제 보이는 정확한 짧은 문구만 사용하고 quote_sha256를 맞춘다.
+- quote가 있으면 화면에 실제 보이는 정확한 짧은 문구만 사용한다. quote_sha256는 출력하지 않는다.
+  오케스트레이터가 검증 경계에서 quote의 canonical JSON SHA-256을 계산한다.
 - 한 finding이 여러 위치의 관계를 말하면 anchors를 여러 개 쓴다.
 - “A를 B로 수정”은 REPLACE 추천일 뿐이며 before_text/after_text를 제공한다. 그림 재제작은 REDRAW,
   추가 확인은 VERIFY다. 권고를 실제 문서에 적용하지 않는다.
