@@ -670,6 +670,8 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     for resource in (
         "document-review-intake-request-v2.schema.json",
         "document-review-intake-response-v2.schema.json",
+        "document-review-intake-request-v3.schema.json",
+        "document-review-intake-response-v3.schema.json",
         "document-review-hwpx-correction-request-v1.schema.json",
         "document-review-hwpx-correction-response-v1.schema.json",
         "document-review-hwpx-correction-media-request-v1.schema.json",
@@ -679,6 +681,9 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         assert f'"schemas/catalog/catalog-application/{resource}"' in deployment
     for resource in (
         "document-review-intake-manifest-v2.schema.json",
+        "document-review-source-upload-manifest-v1.schema.json",
+        "document-review-intake-manifest-v3.schema.json",
+        "office-document-conversion-outcome-v1.schema.json",
         "document-review-hwpx-correction-plan-v1.schema.json",
         "document-review-hwpx-correction-result-v1.schema.json",
     ):
