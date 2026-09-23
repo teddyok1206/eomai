@@ -10,10 +10,14 @@ from typing import Any, cast
 
 import pytest
 from eom_catalog_contracts import (
+    OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewIntakeManifest,
     OfficeDocumentReviewIntakeManifestV3,
+    OfficeDocumentReviewIntakeResponseV3,
+    validate_contract,
 )
+from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.artifacts import CatalogArtifact
 from eom_catalog_service.office_document_converter import OfficeDocumentConversionError
 from eom_catalog_service.office_document_review_intake import (
@@ -23,6 +27,9 @@ from eom_catalog_service.office_document_review_intake import (
 )
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import sha256_file
+from eom_orchestrator.artifacts import stage_file_set_artifact
+from eom_orchestrator.errors import PlatformError
+from eom_protocol import ErrorCode
 from sqlalchemy import create_engine
 
 
@@ -49,13 +56,26 @@ class _ArtifactRecorder:
         files = cast(dict[str, Path], values["files"])
         expected = cast(dict[str, str], values["expected_file_sha256"])
         assert {name: sha256_file(path) for name, path in files.items()} == expected
-        raw_manifest: object = json.loads(files["manifest.json"].read_text(encoding="utf-8"))
+        raw_manifest: object = json.loads(
+            files[OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER].read_text(encoding="utf-8")
+        )
         self.manifest = OfficeDocumentReviewIntakeManifest.model_validate(raw_manifest)
+        stage_file_set_artifact(
+            files=files,
+            primary_file=values["primary_file"],
+            job_id="job_" + "1" * 32,
+            logical_artifact_id="artifact_" + "2" * 32,
+            revision_id="rev_" + "3" * 32,
+            artifact_type=values["artifact_type"],
+            staging=files[values["primary_file"]].parent / "real-artifact-stage",
+            manifest_version=values["manifest_version"],
+            file_metadata=values["file_metadata"],
+        )
         return CatalogArtifact(
             job_id="job_" + "1" * 32,
             artifact_id="artifact_" + "2" * 32,
             revision_id="rev_" + "3" * 32,
-            content_hash=expected["manifest.json"],
+            content_hash=expected[OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER],
             manifest_hash="sha256:" + "4" * 64,
             content_bytes=sum(path.stat().st_size for path in files.values()),
             nas_path="/non-live/document-review",
@@ -111,6 +131,17 @@ class _MultiArtifactRecorder:
         primary = cast(str, values["primary_file"])
         assert {name: sha256_file(path) for name, path in files.items()} == expected
         self.primary_values.append(json.loads(files[primary].read_text(encoding="utf-8")))
+        stage_file_set_artifact(
+            files=files,
+            primary_file=primary,
+            job_id="job_" + str(ordinal) * 32,
+            logical_artifact_id="artifact_" + str(ordinal) * 32,
+            revision_id="rev_" + str(ordinal) * 32,
+            artifact_type=values["artifact_type"],
+            staging=files[primary].parent / f"real-artifact-stage-{ordinal}",
+            manifest_version=values["manifest_version"],
+            file_metadata=values["file_metadata"],
+        )
         return CatalogArtifact(
             job_id="job_" + str(ordinal) * 32,
             artifact_id="artifact_" + str(ordinal) * 32,
@@ -140,6 +171,13 @@ class _FailOfficeConverter(_FakeOfficeConverter):
             "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
             "typed converter failure",
         )
+
+
+class _FailProjectionCommitter(_MultiArtifactRecorder):
+    def commit_file_set(self, **values: Any) -> CatalogArtifact:
+        if self.calls:
+            raise PlatformError(ErrorCode.ARTIFACT_COMMIT_FAILED, "synthetic commit failure")
+        return super().commit_file_set(**values)
 
 
 def _service(
@@ -230,8 +268,9 @@ def test_office_intake_preserves_source_and_projects_one_review_pdf(
     assert recorder.values is not None
     assert recorder.values["protocol_version"] == "catalog/1.17"
     assert recorder.values["artifact_type"] == "document-review-source-v2"
+    assert recorder.values["primary_file"] == OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER
     expected_files = {
-        "manifest.json",
+        OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
         expected_source_member,
         "pages/page-0001.png",
     }
@@ -312,9 +351,19 @@ def test_durable_office_intake_commits_source_before_separate_projection(
         "source/original.hwpx",
     }
     assert recorder.calls[1]["artifact_type"] == "document-review-projection-v3"
+    assert recorder.calls[1]["primary_file"] == OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER
     assert "source/original.hwpx" not in recorder.calls[1]["files"]
     manifest = OfficeDocumentReviewIntakeManifestV3.model_validate(recorder.primary_values[1])
     assert manifest.original_source == pointer.original_source
+    response = OfficeDocumentReviewIntakeResponseV3(status="OK", document=pointer)
+    stream = io.BytesIO()
+    CatalogApplicationServer.write_office_document_review_intake_response_v3(stream, response)
+    response_payload = json.loads(stream.getvalue())
+    validate_contract(
+        "document-review-intake-response-v3",
+        response_payload,
+    )
+    assert response_payload["document"]["review_document"]["pages"][0]["text_layer"] is None
 
 
 def test_durable_office_intake_returns_retained_source_on_conversion_failure(
@@ -377,6 +426,31 @@ def test_durable_office_intake_retains_source_on_projection_failure(
     assert error.value.retained_source.artifact_id == "artifact_" + "1" * 32
     assert len(recorder.calls) == 1
     assert recorder.calls[0]["artifact_type"] == "document-review-source-upload-v1"
+
+
+def test_durable_office_intake_normalizes_projection_artifact_commit_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _ = _service(tmp_path, monkeypatch)
+    recorder = _FailProjectionCommitter()
+    service.artifacts = cast(OfficeReviewArtifactCommitter, recorder)
+    source = tmp_path / "durable-commit-failure.hwpx"
+    source.write_bytes(_hwpx_bytes())
+
+    with pytest.raises(OfficeDocumentReviewIntakeError) as error:
+        service.ingest(
+            source,
+            original_filename="durable-commit-failure.hwpx",
+            source_format="HWPX",
+            actor_id="operator_" + "a" * 32,
+            idempotency_key="api:document-review:durable-commit-failure",
+            durable_source=True,
+        )
+
+    assert error.value.code == "CATALOG_ARTIFACT_COMMIT_FAILED"
+    assert error.value.retained_source is not None
+    assert error.value.retained_source.artifact_id == "artifact_" + "1" * 32
 
 
 def test_durable_office_intake_retains_source_before_converter_dependency_resolution(

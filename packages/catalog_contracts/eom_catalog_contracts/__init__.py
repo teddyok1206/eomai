@@ -162,6 +162,7 @@ from eom_catalog_contracts.curriculum import (
     validate_integrated_science_curriculum_scope,
 )
 from eom_catalog_contracts.document_review import (
+    DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
@@ -195,6 +196,7 @@ from eom_catalog_contracts.document_review import (
     PdfReviewPagePointer,
 )
 from eom_catalog_contracts.document_review_application import (
+    OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
     CreateDocumentReviewAnnotatedPdfs,
@@ -768,6 +770,7 @@ __all__ = [
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V4",
     "CONTENT_TEAM_ONE_ITEM_PACK_SOURCE_TREE_SHA256_V5",
     "CONTENT_TEAM_ROLE_SCHEMA_BUNDLE_SHA256_V3",
+    "DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER",
     "EOM_GUIDANCE_MARKDOWN_MAX_BYTES",
     "EOM_GUIDANCE_MARKDOWN_MEDIA_TYPE",
     "EOM_GUIDANCE_MARKDOWN_SCHEMA_VERSION",
@@ -803,6 +806,7 @@ __all__ = [
     "MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_SCHEMA",
     "MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V2_SCHEMA",
     "MOCK_EXAM_REVIEW_ELIGIBILITY_RESULT_V3_SCHEMA",
+    "OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER",
     "PAST_EXAM_VISUAL_ANALYSIS_REQUEST_SCHEMA_VERSION",
     "PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES",
     "SOLUTION_REFERENCE_NODE_TYPES",

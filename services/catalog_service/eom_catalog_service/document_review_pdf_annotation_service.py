@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import BinaryIO, Literal, Protocol, cast
 
 from eom_catalog_contracts import (
+    DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
@@ -321,7 +322,7 @@ class DocumentReviewPdfAnnotationService:
                     "document-review-pdf-annotation-result",
                     result.model_dump(mode="json"),
                 )
-                manifest_path = workspace / "manifest.json"
+                manifest_path = workspace / DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER
                 result_path = workspace / "result.json"
                 manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json"))
                 result_bytes = canonical_json_bytes(result.model_dump(mode="json"))
@@ -329,10 +330,15 @@ class DocumentReviewPdfAnnotationService:
                 result_path.write_bytes(result_bytes)
                 manifest_path.chmod(0o600)
                 result_path.chmod(0o600)
-                files.update({"manifest.json": manifest_path, "result.json": result_path})
+                files.update(
+                    {
+                        DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER: manifest_path,
+                        "result.json": result_path,
+                    }
+                )
                 expected = {name: sha256_file(path) for name, path in files.items()}
                 file_metadata = {
-                    "manifest.json": {
+                    DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER: {
                         "media_type": "application/json",
                         "schema_ref": (
                             "eom://schemas/document-review/"
@@ -382,8 +388,8 @@ class DocumentReviewPdfAnnotationService:
         manifest_pointer = OfficeDocumentReviewMemberPointer(
             artifact_id=artifact.artifact_id,
             artifact_revision_id=artifact.revision_id,
-            member_path="manifest.json",
-            sha256=expected["manifest.json"],
+            member_path=DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
+            sha256=expected[DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER],
             content_length=len(manifest_bytes),
             media_type="application/json",
             schema_ref=(

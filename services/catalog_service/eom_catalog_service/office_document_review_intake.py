@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from eom_catalog_contracts import (
+    OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewIntakeManifest,
     OfficeDocumentReviewIntakeManifestV3,
@@ -26,6 +27,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
+from eom_orchestrator.errors import PlatformError
 from sqlalchemy import Engine
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
@@ -442,17 +444,17 @@ class OfficeDocumentReviewIntakeService:
                 ),
                 manifest.model_dump(mode="json"),
             )
-            manifest_path = workspace / "manifest.json"
+            manifest_path = workspace / OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER
             manifest_path.write_bytes(canonical_json_bytes(manifest.model_dump(mode="json")))
             manifest_path.chmod(0o600)
             files = {
-                "manifest.json": manifest_path,
+                OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER: manifest_path,
                 **({f"source/original{suffix}": source_target} if retained_source is None else {}),
                 **({"source/original.pdf": review_pdf} if source_format != "PDF" else {}),
                 **{page.member_path: workspace / page.member_path for page in pages},
             }
             file_metadata = {
-                "manifest.json": {
+                OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER: {
                     "media_type": "application/json",
                     "schema_ref": (
                         "eom://schemas/document-review/document-review-intake-manifest/2.0"
@@ -489,7 +491,7 @@ class OfficeDocumentReviewIntakeService:
                 },
             }
             expected_hashes = {
-                "manifest.json": sha256_file(manifest_path),
+                OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER: sha256_file(manifest_path),
                 **({f"source/original{suffix}": source_hash} if retained_source is None else {}),
                 **(
                     {"source/original.pdf": conversion.review_pdf_sha256}
@@ -500,7 +502,7 @@ class OfficeDocumentReviewIntakeService:
             }
             artifact = self.artifacts.commit_file_set(
                 files=files,
-                primary_file="manifest.json",
+                primary_file=OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
                 artifact_type=(
                     "document-review-source-v2"
                     if retained_source is None
@@ -541,7 +543,11 @@ class OfficeDocumentReviewIntakeService:
                 ),
                 expected_file_sha256=expected_hashes,
             )
-            self._validate_committed_artifact(artifact, expected_hashes)
+            self._validate_committed_artifact(
+                artifact,
+                expected_hashes,
+                primary_file=OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
+            )
             if retained_source is None:
                 assert isinstance(manifest, OfficeDocumentReviewIntakeManifest)
                 return self._document_pointer(artifact, manifest)
@@ -553,6 +559,12 @@ class OfficeDocumentReviewIntakeService:
             raise OfficeDocumentReviewIntakeError(
                 exc.code,
                 str(exc),
+                retained_source=retained_source,
+            ) from exc
+        except PlatformError as exc:
+            raise OfficeDocumentReviewIntakeError(
+                "CATALOG_ARTIFACT_COMMIT_FAILED",
+                "Document-review projection Artifact could not be committed",
                 retained_source=retained_source,
             ) from exc
         except Exception as exc:
@@ -738,7 +750,7 @@ class OfficeDocumentReviewIntakeService:
             intake_manifest=OfficeDocumentReviewMemberPointerV2(
                 artifact_id=artifact.artifact_id,
                 artifact_revision_id=artifact.revision_id,
-                member_path="manifest.json",
+                member_path=OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
                 sha256=artifact.content_hash,
                 content_length=len(canonical_json_bytes(manifest.model_dump(mode="json"))),
                 media_type="application/json",
@@ -803,7 +815,7 @@ class OfficeDocumentReviewIntakeService:
             intake_manifest=OfficeDocumentReviewMemberPointer(
                 artifact_id=artifact.artifact_id,
                 artifact_revision_id=artifact.revision_id,
-                member_path="manifest.json",
+                member_path=OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
                 sha256=artifact.content_hash,
                 content_length=len(canonical_json_bytes(manifest.model_dump(mode="json"))),
                 media_type="application/json",

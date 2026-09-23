@@ -1155,11 +1155,14 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         stream: Any,
         response: OfficeDocumentReviewIntakeResponseV3,
     ) -> None:
-        payload = response.model_dump(mode="json", exclude_none=True)
-        if response.status == "ERROR":
-            payload.pop("document", None)
-            if "retained_source" not in payload:
-                payload["retained_source"] = None
+        # Nested nullable members such as page text layers are required by the
+        # wire schema. Remove only the inactive top-level response variant.
+        payload = response.model_dump(mode="json")
+        if response.status == "OK":
+            payload.pop("error_code")
+            payload.pop("retained_source")
+        else:
+            payload.pop("document")
         validate_contract("document-review-intake-response-v3", payload)
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:

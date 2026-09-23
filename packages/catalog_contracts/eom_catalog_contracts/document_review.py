@@ -10,6 +10,7 @@ from eom_identifiers import content_sha256
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER = "annotation-manifest.json"
 DocumentId = Annotated[str, Field(pattern=r"^document_[0-9a-f]{32}$")]
 DocumentRevisionId = Annotated[str, Field(pattern=r"^documentrev_[0-9a-f]{32}$")]
 ArtifactId = Annotated[str, Field(pattern=r"^artifact_[0-9a-f]{32}$")]

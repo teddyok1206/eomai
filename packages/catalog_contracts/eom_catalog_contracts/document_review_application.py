@@ -8,6 +8,7 @@ from eom_identifiers import content_sha256
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.document_review import (
+    DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationSource,
     DocumentReviewHwpxCorrectionResult,
@@ -24,6 +25,11 @@ from eom_catalog_contracts.document_review import (
 
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES = 16 * 1024 * 1024
+OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER = "document-manifest.json"
+_OFFICE_DOCUMENT_REVIEW_COMPATIBLE_INTAKE_MANIFEST_MEMBERS = (
+    "manifest.json",
+    OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
+)
 
 
 class FrozenModel(BaseModel):
@@ -257,7 +263,8 @@ class OfficeDocumentReviewSourcePointer(FrozenModel):
         ):
             raise ValueError("Office review PDF projection differs from conversion identity")
         if (
-            self.intake_manifest.member_path != "manifest.json"
+            self.intake_manifest.member_path
+            not in _OFFICE_DOCUMENT_REVIEW_COMPATIBLE_INTAKE_MANIFEST_MEMBERS
             or self.intake_manifest.media_type != "application/json"
             or self.intake_manifest.schema_ref
             != "eom://schemas/document-review/document-review-intake-manifest/2.0"
@@ -346,7 +353,8 @@ class OfficeDocumentReviewSourcePointerV2(FrozenModel):
             or self.document_revision_id != self.review_document.document_revision_id
             or self.review_document.source_pdf.sha256 != self.conversion.review_pdf_sha256
             or self.review_document.source_pdf.member_path != "source/original.pdf"
-            or self.intake_manifest.member_path != "manifest.json"
+            or self.intake_manifest.member_path
+            not in _OFFICE_DOCUMENT_REVIEW_COMPATIBLE_INTAKE_MANIFEST_MEMBERS
             or self.intake_manifest.media_type != "application/json"
             or self.intake_manifest.schema_ref
             != "eom://schemas/document-review/document-review-intake-manifest/3.0"
@@ -641,7 +649,8 @@ class DocumentReviewPdfAnnotationResponse(FrozenModel):
             ):
                 raise ValueError("annotation response output pointers differ from its result")
             if (
-                self.manifest.member_path != "manifest.json"
+                self.manifest.member_path
+                not in ("manifest.json", DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER)
                 or self.manifest.media_type != "application/json"
                 or self.manifest.schema_ref
                 != "eom://schemas/document-review/document-review-pdf-annotation-manifest/1.0"

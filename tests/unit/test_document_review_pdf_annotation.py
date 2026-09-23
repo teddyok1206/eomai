@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from eom_catalog_contracts import (
+    DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -20,6 +21,7 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
 )
 from eom_identifiers import content_sha256, sha256_bytes, sha256_file
+from eom_orchestrator.artifacts import stage_file_set_artifact
 from eom_workflow import PdfDocumentReviewRoleResult
 
 
@@ -139,6 +141,17 @@ class _Artifacts:
         expected = values["expected_file_sha256"]
         self.committed = {name: path.read_bytes() for name, path in files.items()}
         assert {name: sha256_bytes(payload) for name, payload in self.committed.items()} == expected
+        stage_file_set_artifact(
+            files=files,
+            primary_file=values["primary_file"],
+            job_id="job_" + "1" * 32,
+            logical_artifact_id="artifact_" + "2" * 32,
+            revision_id="rev_" + "3" * 32,
+            artifact_type=values["artifact_type"],
+            staging=files[values["primary_file"]].parent / "real-artifact-stage",
+            manifest_version=values["manifest_version"],
+            file_metadata=values["file_metadata"],
+        )
         return CatalogArtifact(
             job_id="job_" + "1" * 32,
             artifact_id="artifact_" + "2" * 32,
@@ -271,7 +284,10 @@ def test_catalog_annotation_service_commits_byte_and_semantic_hashes_separately(
 
     assert response.manifest is not None
     assert response.result is not None
-    assert response.manifest.sha256 == sha256_bytes(artifacts.committed["manifest.json"])
+    assert response.manifest.member_path == DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER
+    assert response.manifest.sha256 == sha256_bytes(
+        artifacts.committed[DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER]
+    )
     assert response.manifest.sha256 != response.result.manifest_sha256
     assert response.outputs is not None
     assert response.outputs[0].sha256 == sha256_bytes(artifacts.committed["annotated/document.pdf"])
