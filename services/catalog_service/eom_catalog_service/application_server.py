@@ -50,7 +50,12 @@ from eom_catalog_contracts import (
     ItemContentQuery,
     ItemMediaQuery,
     OfficeDocumentReviewIntakeCommand,
+    OfficeDocumentReviewIntakeCommandV3,
     OfficeDocumentReviewIntakeResponse,
+    OfficeDocumentReviewIntakeResponseV3,
+    OfficeDocumentReviewMemberPointerV2,
+    OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
     PdfDocumentReviewPageMediaQuery,
@@ -147,8 +152,19 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             raw_operation = value.get("operation")
             if raw_operation == "INGEST_DOCUMENT_REVIEW_SOURCE":
                 try:
-                    validate_contract("document-review-intake-request-v2", value)
-                    office_intake_request = OfficeDocumentReviewIntakeCommand.model_validate(value)
+                    office_intake_request: (
+                        OfficeDocumentReviewIntakeCommand | OfficeDocumentReviewIntakeCommandV3
+                    )
+                    if value.get("schema_version") == "document-review-intake-request/3.0":
+                        validate_contract("document-review-intake-request-v3", value)
+                        office_intake_request = OfficeDocumentReviewIntakeCommandV3.model_validate(
+                            value
+                        )
+                    else:
+                        validate_contract("document-review-intake-request-v2", value)
+                        office_intake_request = OfficeDocumentReviewIntakeCommand.model_validate(
+                            value
+                        )
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_office_document_review_intake_error(
                         self.wfile,
@@ -558,7 +574,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
 
     def _ingest_office_document_review_source(
         self,
-        request: OfficeDocumentReviewIntakeCommand,
+        request: OfficeDocumentReviewIntakeCommand | OfficeDocumentReviewIntakeCommandV3,
     ) -> None:
         intake = self.server.office_document_review_intake
         if intake is None:
@@ -569,8 +585,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             return
         descriptor = -1
         source: Path | None = None
-        response: OfficeDocumentReviewIntakeResponse | None = None
+        response: (
+            OfficeDocumentReviewIntakeResponse | OfficeDocumentReviewIntakeResponseV3 | None
+        ) = None
         error_code: str | None = None
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None
+        use_v3 = isinstance(request, OfficeDocumentReviewIntakeCommandV3)
         suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[request.source_format]
         try:
             descriptor, raw_path = tempfile.mkstemp(
@@ -619,10 +639,25 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 source_format=request.source_format,
                 actor_id=request.actor_id,
                 idempotency_key=request.idempotency_key,
+                durable_source=use_v3,
             )
-            response = OfficeDocumentReviewIntakeResponse(status="OK", document=document)
+            if use_v3:
+                if not isinstance(document, OfficeDocumentReviewSourcePointerV2):
+                    raise OfficeDocumentReviewIntakeError(
+                        "DOCUMENT_REVIEW_INTAKE_POINTER_INVALID",
+                        "Durable Office intake returned a legacy pointer",
+                    )
+                response = OfficeDocumentReviewIntakeResponseV3(status="OK", document=document)
+            else:
+                if not isinstance(document, OfficeDocumentReviewSourcePointer):
+                    raise OfficeDocumentReviewIntakeError(
+                        "DOCUMENT_REVIEW_INTAKE_POINTER_INVALID",
+                        "Legacy Office intake returned a successor pointer",
+                    )
+                response = OfficeDocumentReviewIntakeResponse(status="OK", document=document)
         except OfficeDocumentReviewIntakeError as exc:
             error_code = exc.code
+            retained_source = exc.retained_source
         except Exception:
             error_code = CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value
         finally:
@@ -636,12 +671,24 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 except OSError:
                     pass
         if response is not None:
-            self.server.write_office_document_review_intake_response(self.wfile, response)
+            if isinstance(response, OfficeDocumentReviewIntakeResponseV3):
+                self.server.write_office_document_review_intake_response_v3(self.wfile, response)
+            else:
+                self.server.write_office_document_review_intake_response(self.wfile, response)
         else:
-            self.server.write_office_document_review_intake_error(
-                self.wfile,
-                error_code or CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
-            )
+            if use_v3:
+                self.server.write_office_document_review_intake_error_v3(
+                    self.wfile,
+                    error_code
+                    or CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                    retained_source=retained_source,
+                )
+            else:
+                self.server.write_office_document_review_intake_error(
+                    self.wfile,
+                    error_code
+                    or CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
 
     def _apply_document_review_hwpx_corrections(
         self,
@@ -1101,6 +1148,39 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls.write_office_document_review_intake_response(
             stream,
             OfficeDocumentReviewIntakeResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_office_document_review_intake_response_v3(
+        stream: Any,
+        response: OfficeDocumentReviewIntakeResponseV3,
+    ) -> None:
+        payload = response.model_dump(mode="json", exclude_none=True)
+        if response.status == "ERROR":
+            payload.pop("document", None)
+            if "retained_source" not in payload:
+                payload["retained_source"] = None
+        validate_contract("document-review-intake-response-v3", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Office document-review V3 intake response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_office_document_review_intake_error_v3(
+        cls,
+        stream: Any,
+        error_code: str,
+        *,
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None,
+    ) -> None:
+        cls.write_office_document_review_intake_response_v3(
+            stream,
+            OfficeDocumentReviewIntakeResponseV3(
+                status="ERROR",
+                error_code=error_code,
+                retained_source=retained_source,
+            ),
         )
 
     @staticmethod

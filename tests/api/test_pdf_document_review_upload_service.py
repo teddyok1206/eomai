@@ -24,7 +24,9 @@ from eom_api_contracts.document_review import (
 from eom_catalog_contracts import (
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
+    OfficeDocumentReviewMemberPointerV2,
     OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
@@ -120,29 +122,12 @@ class FakeCatalog:
             if source_format == "PDF"
             else "rev_" + "f" * 32
         )
-        if source_format != "PDF":
-            source_pdf = document.source_pdf.model_copy(
-                update={
-                    "artifact_id": original_artifact_id,
-                    "artifact_revision_id": original_revision_id,
-                    "member_path": "source/original.pdf",
-                }
-            )
-            pages = tuple(
-                page.model_copy(
-                    update={
-                        "page_image": page.page_image.model_copy(
-                            update={
-                                "artifact_id": original_artifact_id,
-                                "artifact_revision_id": original_revision_id,
-                            }
-                        )
-                    }
-                )
-                for page in document.pages
-            )
-            document = document.model_copy(update={"source_pdf": source_pdf, "pages": pages})
-        original = OfficeDocumentReviewMemberPointer(
+        pointer_type = (
+            OfficeDocumentReviewMemberPointer
+            if source_format == "PDF"
+            else OfficeDocumentReviewMemberPointerV2
+        )
+        original = pointer_type(
             artifact_id=original_artifact_id,
             artifact_revision_id=original_revision_id,
             member_path=f"source/original.{source_suffix}",
@@ -151,16 +136,31 @@ class FakeCatalog:
             media_type=source_media_type,
             schema_ref=source_schema,
         )
-        manifest = OfficeDocumentReviewMemberPointer(
-            artifact_id=original.artifact_id,
-            artifact_revision_id=original.artifact_revision_id,
+        manifest = pointer_type(
+            artifact_id=(
+                original.artifact_id if source_format == "PDF" else document.source_pdf.artifact_id
+            ),
+            artifact_revision_id=(
+                original.artifact_revision_id
+                if source_format == "PDF"
+                else document.source_pdf.artifact_revision_id
+            ),
             member_path="manifest.json",
             sha256="sha256:" + "d" * 64,
             content_length=1024,
             media_type="application/json",
-            schema_ref=("eom://schemas/document-review/document-review-intake-manifest/2.0"),
+            schema_ref=(
+                "eom://schemas/document-review/document-review-intake-manifest/2.0"
+                if source_format == "PDF"
+                else "eom://schemas/document-review/document-review-intake-manifest/3.0"
+            ),
         )
-        return OfficeDocumentReviewSourcePointer(
+        source_pointer = (
+            OfficeDocumentReviewSourcePointer
+            if source_format == "PDF"
+            else OfficeDocumentReviewSourcePointerV2
+        )
+        return source_pointer(
             document_id=document.document_id,
             document_revision_id=document.document_revision_id,
             original_filename=values["original_filename"],
@@ -342,6 +342,66 @@ def test_pdf_review_upload_service_retries_transient_catalog_failure(tmp_path: P
     assert started.state == "STARTED"
     assert len(catalog.calls) == 2
     assert len(commands.calls) == 1
+    engine.dispose()
+
+
+def test_office_review_failure_persists_retained_source_before_projection(
+    tmp_path: Path,
+) -> None:
+    service, engine, catalog, commands = _service()
+    source = tmp_path / "upload.hwpx"
+    source.write_bytes(b"PK\x03\x04HWPX")
+    source_sha256 = "sha256:" + __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+    intent = service.create_document_upload_intent(
+        CreateDocumentReviewUploadIntentRequestV2(
+            original_filename="문제지.hwpx",
+            source_format="HWPX",
+            media_type="application/vnd.hancom.hwpx",
+            content_length=8,
+            preset_key="PROBLEM_SET",
+        ),
+        actor_id=OPERATOR_ID,
+        observed_at=NOW,
+    )
+    retained = OfficeDocumentReviewMemberPointerV2(
+        artifact_id="artifact_" + "e" * 32,
+        artifact_revision_id="rev_" + "f" * 32,
+        member_path="source/original.hwpx",
+        sha256=source_sha256,
+        content_length=8,
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+    )
+    catalog.failure = CatalogApplicationClientError(
+        "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+        "typed converter failure",
+        retained_source=retained,
+    )
+
+    with pytest.raises(ApiError) as failed:
+        service.accept_document_upload(
+            intent.upload_intent_id,
+            StagedPdfUpload(
+                source,
+                8,
+                source_sha256,
+                source_format="HWPX",
+                media_type="application/vnd.hancom.hwpx",
+            ),
+            actor=_actor(),
+            observed_at=NOW + timedelta(seconds=1),
+        )
+
+    assert failed.value.error_code == "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+    assert commands.calls == []
+    with service.sessions() as session:
+        record = session.get(PdfDocumentReviewUploadIntentRecord, intent.upload_intent_id)
+        assert record is not None
+        assert record.state == "FAILED_RETRYABLE"
+        assert record.document_id is None
+        assert record.source_artifact_id == retained.artifact_id
+        assert record.source_artifact_revision_id == retained.artifact_revision_id
+        assert record.source_sha256 == source_sha256
     engine.dispose()
 
 

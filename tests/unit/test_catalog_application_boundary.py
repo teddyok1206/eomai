@@ -52,6 +52,7 @@ from eom_catalog_contracts import (
     MockExamItemReviewPublicationResultV2,
     MockExamReviewEligibilityResultV2,
     MockExamReviewFindingCounts,
+    OfficeDocumentReviewMemberPointerV2,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
     PdfDocumentReviewPageMediaQuery,
@@ -66,6 +67,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.office_document_review_intake import OfficeDocumentReviewIntakeError
 from eom_identifiers import content_sha256
 from eom_workflow import (
     PdfReviewArtifactMemberPointer,
@@ -191,6 +193,48 @@ class FakeRegistry:
 
 
 PDF_REVIEW_PAGE = b"\x89PNG\r\n\x1a\nPDF_REVIEW_PAGE"
+
+
+class FakeOfficeDocumentReviewIntake:
+    def __init__(self, staging_root: Path) -> None:
+        staging_root.mkdir(mode=0o700)
+        self.settings = SimpleNamespace(staging_root=staging_root)
+        self.calls: list[tuple[bytes, str, str, str, str, bool]] = []
+        self.retained_source = OfficeDocumentReviewMemberPointerV2(
+            artifact_id="artifact_" + "7" * 32,
+            artifact_revision_id="rev_" + "8" * 32,
+            member_path="source/original.hwpx",
+            sha256="sha256:" + "9" * 64,
+            content_length=16,
+            media_type="application/vnd.hancom.hwpx",
+            schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+        )
+
+    def ingest(
+        self,
+        source: Path,
+        *,
+        original_filename: str,
+        source_format: str,
+        actor_id: str,
+        idempotency_key: str,
+        durable_source: bool,
+    ) -> object:
+        self.calls.append(
+            (
+                source.read_bytes(),
+                original_filename,
+                source_format,
+                actor_id,
+                idempotency_key,
+                durable_source,
+            )
+        )
+        raise OfficeDocumentReviewIntakeError(
+            "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+            "typed converter failure",
+            retained_source=self.retained_source,
+        )
 
 
 def _pdf_review_document_pointer() -> PdfReviewDocumentPointer:
@@ -687,6 +731,7 @@ def _server(
     knowledge_retrieval: FakeKnowledgeRetrieval | None = None,
     assemblies: FakeAssemblies | None = None,
     pdf_intake: FakePdfDocumentReviewIntake | None = None,
+    office_intake: FakeOfficeDocumentReviewIntake | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -700,6 +745,7 @@ def _server(
         mock_exam_item_reviews=item_reviews,  # type: ignore[arg-type]
         mock_exam_assemblies=assemblies or FakeAssemblies(),  # type: ignore[arg-type]
         pdf_document_review_intake=pdf_intake,  # type: ignore[arg-type]
+        office_document_review_intake=office_intake,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -837,6 +883,51 @@ def test_pdf_document_review_intake_rejects_stream_hash_mismatch(tmp_path: Path)
         assert not tuple((tmp_path / "catalog-staging").iterdir())
     finally:
         connection.close()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_office_document_review_v3_failure_returns_retained_source_pointer(
+    tmp_path: Path,
+) -> None:
+    payload = b"PK\x03\x04EOM-HWPX-V3"
+    source = tmp_path / "source.hwpx"
+    source.write_bytes(payload)
+    source.chmod(0o600)
+    intake = FakeOfficeDocumentReviewIntake(tmp_path / "office-staging")
+    intake.retained_source = intake.retained_source.model_copy(
+        update={
+            "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+            "content_length": len(payload),
+        }
+    )
+    server = _server(tmp_path, office_intake=intake)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(CatalogApplicationClientError) as error:
+            _client(server).ingest_office_document_review_source(
+                source,
+                actor_id="operator_test_admin",
+                original_filename="review.hwpx",
+                source_format="HWPX",
+                media_type="application/vnd.hancom.hwpx",
+                idempotency_key="office-review-v3-private-stream-failure",
+            )
+        assert error.value.code == "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+        assert error.value.retained_source == intake.retained_source
+        assert intake.calls == [
+            (
+                payload,
+                "review.hwpx",
+                "HWPX",
+                "operator_test_admin",
+                "office-review-v3-private-stream-failure",
+                True,
+            )
+        ]
+    finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)

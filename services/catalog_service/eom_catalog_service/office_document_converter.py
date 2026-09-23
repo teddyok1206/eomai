@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import stat
@@ -10,8 +11,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final, Protocol
 
-from eom_catalog_contracts import OfficeDocumentReviewConversionIdentity
+from eom_catalog_contracts import (
+    OfficeDocumentConversionOutcome,
+    OfficeDocumentReviewConversionIdentity,
+    validate_contract,
+)
 from eom_identifiers import sha256_file
+from jsonschema import ValidationError as JsonSchemaValidationError
 
 from eom_catalog_service.office_converter_worker import (
     H2ORESTART_BUNDLE,
@@ -23,6 +29,53 @@ from eom_catalog_service.office_converter_worker import (
 
 SYSTEMCTL: Final = Path("/usr/bin/systemctl")
 CONVERSION_DIRECTORY: Final = "office-conversion"
+MAX_OUTCOME_BYTES: Final = 64 * 1024
+
+
+def _stable_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    """Return fields that must not change during a bounded descriptor read.
+
+    Access time is deliberately excluded: a read can update it without changing
+    the file object or its bytes.
+    """
+
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def create_office_conversion_workspace(
+    staging_root: Path,
+    *,
+    token_hex: Callable[[int], str] = secrets.token_hex,
+) -> Path:
+    """Create one private converter workspace without resolving converter dependencies."""
+
+    root = staging_root / CONVERSION_DIRECTORY
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    metadata = root.lstat()
+    if root.is_symlink() or not stat.S_ISDIR(metadata.st_mode) or metadata.st_mode & 0o077:
+        raise OfficeDocumentConversionError(
+            "OFFICE_DOCUMENT_CONVERTER_WORKSPACE_INVALID",
+            "Office conversion root is unsafe",
+        )
+    instance = f"officeconv_{token_hex(16)}"
+    if INSTANCE_PATTERN.fullmatch(instance) is None:
+        raise OfficeDocumentConversionError(
+            "OFFICE_DOCUMENT_CONVERTER_INSTANCE_INVALID",
+            "Office conversion instance identity is invalid",
+        )
+    workspace = root / instance
+    workspace.mkdir(mode=0o700)
+    return workspace
 
 
 class OfficeDocumentConversionError(RuntimeError):
@@ -143,22 +196,10 @@ class SystemdOfficeDocumentConverter:
         self.token_hex = token_hex
 
     def create_workspace(self) -> Path:
-        root = self.staging_root / CONVERSION_DIRECTORY
-        root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if root.is_symlink() or root.stat().st_mode & 0o077:
-            raise OfficeDocumentConversionError(
-                "OFFICE_DOCUMENT_CONVERTER_WORKSPACE_INVALID",
-                "Office conversion root is unsafe",
-            )
-        instance = f"officeconv_{self.token_hex(16)}"
-        if INSTANCE_PATTERN.fullmatch(instance) is None:
-            raise OfficeDocumentConversionError(
-                "OFFICE_DOCUMENT_CONVERTER_INSTANCE_INVALID",
-                "Office conversion instance identity is invalid",
-            )
-        workspace = root / instance
-        workspace.mkdir(mode=0o700)
-        return workspace
+        return create_office_conversion_workspace(
+            self.staging_root,
+            token_hex=self.token_hex,
+        )
 
     def convert(
         self, workspace: Path, *, source_format: str
@@ -186,14 +227,21 @@ class SystemdOfficeDocumentConverter:
                 "OFFICE_DOCUMENT_CONVERSION_FAILED",
                 "Office conversion unit failed to execute",
             ) from exc
-        if (
-            completed.returncode != 0
-            or len(completed.stdout) > 64 * 1024
-            or len(completed.stderr) > 64 * 1024
-        ):
+        if len(completed.stdout) > 64 * 1024 or len(completed.stderr) > 64 * 1024:
             raise OfficeDocumentConversionError(
                 "OFFICE_DOCUMENT_CONVERSION_FAILED",
                 "Office conversion unit returned failure",
+            )
+        outcome = self._load_outcome(workspace, source_format=source_format)
+        if outcome.status == "ERROR":
+            raise OfficeDocumentConversionError(
+                outcome.error_code or "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "Office conversion failed at a typed converter stage",
+            )
+        if completed.returncode != 0:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "Office conversion unit status differs from its typed outcome",
             )
         output = workspace / "converted/original.pdf"
         try:
@@ -226,3 +274,76 @@ class SystemdOfficeDocumentConverter:
             libreoffice_sha256=sha256_file(self.libreoffice),
             h2orestart_sha256=sha256_file(self.h2orestart_bundle),
         )
+
+    def _load_outcome(
+        self,
+        workspace: Path,
+        *,
+        source_format: str,
+    ) -> OfficeDocumentConversionOutcome:
+        path = workspace / "conversion-outcome.json"
+        try:
+            descriptor = os.open(
+                path,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
+        except OSError as exc:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "Office converter did not produce a typed outcome",
+            ) from exc
+        try:
+            before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or not 2 <= before.st_size <= MAX_OUTCOME_BYTES
+            ):
+                raise ValueError("Office conversion outcome metadata is unsafe")
+            payload = os.read(descriptor, before.st_size + 1)
+            after = os.fstat(descriptor)
+            if len(payload) != before.st_size or _stable_file_identity(
+                before
+            ) != _stable_file_identity(after):
+                raise ValueError("Office conversion outcome changed while reading")
+            value = json.loads(payload)
+            if not isinstance(value, dict):
+                raise ValueError("Office conversion outcome is not an object")
+            validate_contract("office-document-conversion-outcome-v1", value)
+            outcome = OfficeDocumentConversionOutcome.model_validate(value)
+        except (OSError, ValueError, json.JSONDecodeError, JsonSchemaValidationError) as exc:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "Office converter outcome failed validation",
+            ) from exc
+        finally:
+            os.close(descriptor)
+        source = workspace / f"original.{source_format.casefold()}"
+        stdout = workspace / "libreoffice.stdout.log"
+        stderr = workspace / "libreoffice.stderr.log"
+        if (
+            outcome.instance_id != workspace.name
+            or outcome.source_format != source_format
+            or outcome.source_sha256 != sha256_file(source)
+            or outcome.source_bytes != source.stat().st_size
+            or outcome.h2orestart_sha256 != sha256_file(self.h2orestart_bundle)
+            or outcome.stdout_sha256 != sha256_file(stdout)
+            or outcome.stdout_bytes != stdout.stat().st_size
+            or outcome.stderr_sha256 != sha256_file(stderr)
+            or outcome.stderr_bytes != stderr.stat().st_size
+        ):
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "Office converter outcome differs from its exact files",
+            )
+        if outcome.status == "OK":
+            output = workspace / "converted/original.pdf"
+            if (
+                outcome.output_sha256 != sha256_file(output)
+                or outcome.output_bytes != output.stat().st_size
+            ):
+                raise OfficeDocumentConversionError(
+                    "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                    "Office converter success outcome differs from its exact output",
+                )
+        return outcome

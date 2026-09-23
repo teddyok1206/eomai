@@ -55,7 +55,7 @@ def test_pdf_review_upload_intent_identifier_and_migration_head_are_exact() -> N
     value = new_pdf_review_upload_intent_id()
     assert value.startswith("pdfreviewintent_")
     assert len(value) == 48
-    assert CURRENT_MIGRATION_REVISION == "20260922_0042"
+    assert CURRENT_MIGRATION_REVISION == "20260923_0043"
 
 
 def test_document_review_correction_persists_only_small_indexed_pointers() -> None:

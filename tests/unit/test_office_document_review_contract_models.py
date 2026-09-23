@@ -10,8 +10,13 @@ from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionPlan,
     DocumentReviewHwpxCorrectionResponse,
     DocumentReviewHwpxCorrectionResult,
+    OfficeDocumentConversionOutcome,
     OfficeDocumentReviewIntakeCommand,
+    OfficeDocumentReviewIntakeCommandV3,
     OfficeDocumentReviewIntakeManifest,
+    OfficeDocumentReviewIntakeManifestV3,
+    OfficeDocumentReviewIntakeResponseV3,
+    OfficeDocumentReviewSourceUploadManifest,
     validate_contract,
 )
 from eom_identifiers import content_sha256
@@ -97,6 +102,47 @@ def _hwpx_manifest() -> dict[str, Any]:
     return value
 
 
+def _conversion_outcome(*, status: str = "ERROR") -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "schema_version": "office-document-conversion-outcome/1.0",
+        "instance_id": "officeconv_" + "1" * 32,
+        "status": status,
+        "stage": "LIBREOFFICE_EXECUTION" if status == "ERROR" else "OUTPUT_VALIDATED",
+        "source_format": "HWPX",
+        "source_sha256": SHA_A,
+        "source_bytes": 1024,
+        "h2orestart_sha256": SHA_B,
+        "stdout_sha256": SHA_A,
+        "stdout_bytes": 0,
+        "stderr_sha256": SHA_B,
+        "stderr_bytes": 64,
+    }
+    if status == "ERROR":
+        value["error_code"] = "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+    else:
+        value["output_sha256"] = SHA_C
+        value["output_bytes"] = 2048
+    value["outcome_sha256"] = content_sha256(value)
+    return value
+
+
+def _hwpx_manifest_v3() -> dict[str, Any]:
+    source = _member(
+        "source/original.hwpx",
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+        with_identity=True,
+    )
+    value = _hwpx_manifest()
+    value["schema_version"] = "document-review-intake-manifest/3.0"
+    value["original_source"] = source
+    value["editable_hwpx"] = deepcopy(source)
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    return value
+
+
 def _correction_plan() -> dict[str, Any]:
     before = "바꾸기 전 문장"
     after = "바꾼 문장"
@@ -163,6 +209,103 @@ def test_office_intake_command_matches_schema_and_pydantic_semantics() -> None:
         validate_contract("document-review-intake-request-v2", invalid)
     with pytest.raises(ValidationError):
         OfficeDocumentReviewIntakeCommand.model_validate(invalid)
+
+
+def test_office_intake_v3_contract_excludes_pdf_and_retains_failed_source() -> None:
+    request = {
+        "schema_version": "document-review-intake-request/3.0",
+        "operation": "INGEST_DOCUMENT_REVIEW_SOURCE",
+        "actor_id": "operator_test",
+        "original_filename": "review.hwpx",
+        "source_format": "HWPX",
+        "media_type": "application/vnd.hancom.hwpx",
+        "idempotency_key": "office-review-v3-test-key",
+        "content_length": 1024,
+        "sha256": SHA_A,
+    }
+    validate_contract("document-review-intake-request-v3", request)
+    OfficeDocumentReviewIntakeCommandV3.model_validate(request)
+
+    invalid_pdf = dict(
+        request,
+        original_filename="review.pdf",
+        source_format="PDF",
+        media_type="application/pdf",
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("document-review-intake-request-v3", invalid_pdf)
+    with pytest.raises(ValidationError):
+        OfficeDocumentReviewIntakeCommandV3.model_validate(invalid_pdf)
+
+    retained = _member(
+        "source/original.hwpx",
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+        with_identity=True,
+    )
+    response = {
+        "schema_version": "document-review-intake-response/3.0",
+        "operation": "INGEST_DOCUMENT_REVIEW_SOURCE",
+        "status": "ERROR",
+        "error_code": "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+        "retained_source": retained,
+    }
+    validate_contract("document-review-intake-response-v3", response)
+    assert OfficeDocumentReviewIntakeResponseV3.model_validate(response).retained_source is not None
+
+
+def test_office_source_and_projection_v3_bind_hashes_and_exact_revision() -> None:
+    source_descriptor = _member(
+        "source/original.hwpx",
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+    )
+    source_manifest: dict[str, Any] = {
+        "schema_version": "document-review-source-upload-manifest/1.0",
+        "original_filename": "review.hwpx",
+        "source_format": "HWPX",
+        "original_source": source_descriptor,
+    }
+    source_manifest["manifest_sha256"] = content_sha256(source_manifest)
+    validate_contract("document-review-source-upload-manifest-v1", source_manifest)
+    OfficeDocumentReviewSourceUploadManifest.model_validate(source_manifest)
+
+    projection = _hwpx_manifest_v3()
+    validate_contract("document-review-intake-manifest-v3", projection)
+    manifest = OfficeDocumentReviewIntakeManifestV3.model_validate(projection)
+    assert manifest.original_source.artifact_revision_id == "rev_" + "2" * 32
+
+    tampered = deepcopy(projection)
+    tampered["original_source"]["artifact_revision_id"] = "rev_" + "9" * 32
+    tampered["editable_hwpx"]["artifact_revision_id"] = "rev_" + "9" * 32
+    with pytest.raises(ValidationError, match="manifest hash differs"):
+        OfficeDocumentReviewIntakeManifestV3.model_validate(tampered)
+
+
+def test_office_conversion_outcome_is_closed_and_self_hashed() -> None:
+    value = _conversion_outcome()
+    validate_contract("office-document-conversion-outcome-v1", value)
+    outcome = OfficeDocumentConversionOutcome.model_validate(value)
+    assert outcome.status == "ERROR"
+
+    repaired_by_worker_is_forbidden = dict(value, error_code="OFFICE_DOCUMENT_CONVERSION_FAILED")
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("office-document-conversion-outcome-v1", repaired_by_worker_is_forbidden)
+    with pytest.raises(ValidationError):
+        OfficeDocumentConversionOutcome.model_validate(repaired_by_worker_is_forbidden)
+
+    wrong_stage = dict(value, stage="OUTPUT_VALIDATION")
+    wrong_stage["outcome_sha256"] = content_sha256(
+        {key: item for key, item in wrong_stage.items() if key != "outcome_sha256"}
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("office-document-conversion-outcome-v1", wrong_stage)
+    with pytest.raises(ValidationError, match="error code and stage differ"):
+        OfficeDocumentConversionOutcome.model_validate(wrong_stage)
+
+    tampered = dict(value, stderr_bytes=65)
+    with pytest.raises(ValidationError, match="outcome hash differs"):
+        OfficeDocumentConversionOutcome.model_validate(tampered)
 
 
 def test_office_intake_manifest_binds_exact_hwpx_projection_and_self_hash() -> None:

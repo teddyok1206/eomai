@@ -10,8 +10,12 @@ import subprocess
 import sys
 import zipfile
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Final
+
+from eom_catalog_contracts import OfficeDocumentConversionOutcome
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 
 CONVERSION_ROOT: Final = Path("/var/lib/eom-catalog-api/staging/office-conversion")
 LIBREOFFICE: Final = Path("/usr/bin/libreoffice")
@@ -29,7 +33,16 @@ PDF_SIGNATURE: Final = re.compile(rb"^%PDF-[12]\.[0-9]")
 
 
 class OfficeConverterError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+        stage: str = "LIBREOFFICE_EXECUTION",
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.stage = stage
 
 
 def _require_regular(
@@ -117,7 +130,9 @@ def _validate_hwpx(path: Path) -> None:
         raise OfficeConverterError("HWPX package cannot be read safely") from exc
 
 
-def _validate_source(path: Path, source_format: str, owner_uid: int) -> None:
+def validate_office_source(path: Path, source_format: str, owner_uid: int) -> None:
+    """Validate one bounded Office source before admission or conversion."""
+
     _require_regular(path, minimum=8, maximum=MAX_SOURCE_BYTES, owner_uid=owner_uid)
     with path.open("rb") as stream:
         prefix = stream.read(8)
@@ -171,13 +186,31 @@ def convert_workspace(
         raise OfficeConverterError("Office conversion requires exactly one source")
     source = source_candidates[0]
     source_format = "HWPX" if source.suffix.casefold() == ".hwpx" else "HWP"
-    _validate_source(source, source_format, os.getuid())
-    actual_libreoffice = _require_tool(libreoffice, executable=True)
-    actual_unopkg = _require_tool(unopkg, executable=True)
-    actual_h2orestart_bundle = _require_tool(h2orestart_bundle, executable=False)
+    try:
+        validate_office_source(source, source_format, os.getuid())
+    except OfficeConverterError as exc:
+        raise OfficeConverterError(
+            str(exc),
+            code="OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID",
+            stage="SOURCE_VALIDATION",
+        ) from exc
+    try:
+        actual_libreoffice = _require_tool(libreoffice, executable=True)
+        actual_unopkg = _require_tool(unopkg, executable=True)
+        actual_h2orestart_bundle = _require_tool(h2orestart_bundle, executable=False)
+    except OfficeConverterError as exc:
+        raise OfficeConverterError(
+            str(exc),
+            code="OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID",
+            stage="DEPENDENCY_VALIDATION",
+        ) from exc
     with actual_h2orestart_bundle.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != h2orestart_bundle_sha256:
-            raise OfficeConverterError("H2Orestart bundle hash differs from the reviewed release")
+            raise OfficeConverterError(
+                "H2Orestart bundle hash differs from the reviewed release",
+                code="OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID",
+                stage="DEPENDENCY_VALIDATION",
+            )
     output_directory = workspace / "converted"
     profile_directory = workspace / "profile"
     home_directory = workspace / "home"
@@ -214,8 +247,19 @@ def convert_workspace(
                     "TZ": "UTC",
                 },
             )
-            if registered.returncode != 0:
-                raise OfficeConverterError("H2Orestart profile registration returned failure")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise OfficeConverterError(
+                "H2Orestart profile registration failed to execute",
+                code="OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED",
+                stage="EXTENSION_REGISTRATION",
+            ) from exc
+        if registered.returncode != 0:
+            raise OfficeConverterError(
+                "H2Orestart profile registration returned failure",
+                code="OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED",
+                stage="EXTENSION_REGISTRATION",
+            )
+        try:
             completed = run(
                 [
                     str(actual_libreoffice),
@@ -252,17 +296,118 @@ def convert_workspace(
                 },
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise OfficeConverterError("LibreOffice conversion failed to execute") from exc
+            raise OfficeConverterError(
+                "LibreOffice conversion failed to execute",
+                code="OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+                stage="LIBREOFFICE_EXECUTION",
+            ) from exc
     _bounded_log(stdout)
     _bounded_log(stderr)
     if completed.returncode != 0:
-        raise OfficeConverterError("LibreOffice conversion returned failure")
-    _require_regular(output, minimum=8, maximum=MAX_OUTPUT_BYTES, owner_uid=os.getuid())
+        raise OfficeConverterError(
+            "LibreOffice conversion returned failure",
+            code="OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+            stage="LIBREOFFICE_EXECUTION",
+        )
+    try:
+        _require_regular(output, minimum=8, maximum=MAX_OUTPUT_BYTES, owner_uid=os.getuid())
+    except OfficeConverterError as exc:
+        raise OfficeConverterError(
+            str(exc),
+            code=(
+                "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"
+                if not output.exists()
+                else "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID"
+            ),
+            stage="OUTPUT_VALIDATION",
+        ) from exc
     with output.open("rb") as stream:
         if PDF_SIGNATURE.fullmatch(stream.read(8)) is None:
-            raise OfficeConverterError("LibreOffice output is not a supported PDF")
+            raise OfficeConverterError(
+                "LibreOffice output is not a supported PDF",
+                code="OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID",
+                stage="OUTPUT_VALIDATION",
+            )
     output.chmod(0o600)
     return output
+
+
+def _write_outcome(
+    instance: str,
+    *,
+    error: OfficeConverterError | None,
+    conversion_root: Path = CONVERSION_ROOT,
+    h2orestart_bundle: Path = H2ORESTART_BUNDLE,
+) -> None:
+    workspace = conversion_root / instance
+    candidates = tuple(
+        path for path in (workspace / "original.hwp", workspace / "original.hwpx") if path.exists()
+    )
+    if len(candidates) != 1:
+        return
+    source = candidates[0]
+    source_metadata = _require_regular(
+        source,
+        minimum=8,
+        maximum=MAX_SOURCE_BYTES,
+        owner_uid=os.getuid(),
+    )
+    stdout = workspace / "libreoffice.stdout.log"
+    stderr = workspace / "libreoffice.stderr.log"
+    for log in (stdout, stderr):
+        if not log.exists():
+            descriptor = os.open(
+                log,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+                0o600,
+            )
+            os.close(descriptor)
+        _bounded_log(log)
+    output = workspace / "converted/original.pdf"
+    value: dict[str, object] = {
+        "schema_version": "office-document-conversion-outcome/1.0",
+        "instance_id": instance,
+        "status": "ERROR" if error is not None else "OK",
+        "stage": error.stage if error is not None else "OUTPUT_VALIDATED",
+        "source_format": "HWPX" if source.suffix.casefold() == ".hwpx" else "HWP",
+        "source_sha256": sha256_file(source),
+        "source_bytes": source_metadata.st_size,
+        "h2orestart_sha256": sha256_file(h2orestart_bundle),
+        "stdout_sha256": sha256_file(stdout),
+        "stdout_bytes": stdout.stat().st_size,
+        "stderr_sha256": sha256_file(stderr),
+        "stderr_bytes": stderr.stat().st_size,
+    }
+    if error is None:
+        output_metadata = _require_regular(
+            output,
+            minimum=8,
+            maximum=MAX_OUTPUT_BYTES,
+            owner_uid=os.getuid(),
+        )
+        value["output_sha256"] = sha256_file(output)
+        value["output_bytes"] = output_metadata.st_size
+    else:
+        value["error_code"] = error.code
+    value["outcome_sha256"] = content_sha256(value)
+    outcome = OfficeDocumentConversionOutcome.model_validate(value)
+    payload = canonical_json_bytes(outcome.model_dump(mode="json", exclude_none=True))
+    target = workspace / "conversion-outcome.json"
+    descriptor = os.open(
+        target,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+        0o600,
+    )
+    try:
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written < 1:
+                raise OfficeConverterError("conversion outcome write made no progress")
+            view = view[written:]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -271,7 +416,22 @@ def main(argv: list[str] | None = None) -> int:
         return 64
     try:
         convert_workspace(arguments[0])
-    except OfficeConverterError:
+    except OfficeConverterError as exc:
+        with suppress(OSError, ValueError, OfficeConverterError):
+            _write_outcome(arguments[0], error=exc)
+        return 1
+    except (OSError, RuntimeError, ValueError):
+        error = OfficeConverterError(
+            "Office conversion failed before a typed adapter result was available",
+            code="OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+            stage="LIBREOFFICE_EXECUTION",
+        )
+        with suppress(OSError, ValueError, OfficeConverterError):
+            _write_outcome(arguments[0], error=error)
+        return 1
+    try:
+        _write_outcome(arguments[0], error=None)
+    except (OSError, ValueError, OfficeConverterError):
         return 1
     return 0
 

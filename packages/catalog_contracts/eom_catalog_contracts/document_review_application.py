@@ -16,6 +16,7 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewResultMemberPointer,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
+    OfficeDocumentReviewMemberPointerV2,
     PdfDocumentReviewResultMemberPointer,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
@@ -174,6 +175,47 @@ class OfficeDocumentReviewIntakeCommand(FrozenModel):
         return self
 
 
+class OfficeDocumentReviewIntakeCommandV3(FrozenModel):
+    """Successor intake header that requires durable source admission."""
+
+    schema_version: Literal["document-review-intake-request/3.0"] = (
+        "document-review-intake-request/3.0"
+    )
+    operation: Literal["INGEST_DOCUMENT_REVIEW_SOURCE"] = "INGEST_DOCUMENT_REVIEW_SOURCE"
+    actor_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+    )
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+    )
+    source_format: Literal["HWP", "HWPX"]
+    media_type: Literal[
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx",
+    ]
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=256,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
+    )
+    content_length: int = Field(ge=8, le=256 * 1024 * 1024)
+    sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_format_media_and_suffix(self) -> OfficeDocumentReviewIntakeCommandV3:
+        suffix, media_type = {
+            "HWP": (".hwp", "application/vnd.hancom.hwp"),
+            "HWPX": (".hwpx", "application/vnd.hancom.hwpx"),
+        }[self.source_format]
+        if not self.original_filename.lower().endswith(suffix) or self.media_type != media_type:
+            raise ValueError("Office V3 review filename, format, and media type differ")
+        return self
+
+
 class OfficeDocumentReviewSourcePointer(FrozenModel):
     document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
     document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
@@ -256,6 +298,85 @@ class OfficeDocumentReviewSourcePointer(FrozenModel):
         return self
 
 
+class OfficeDocumentReviewSourcePointerV2(FrozenModel):
+    """Office source and a separately committed immutable PDF projection."""
+
+    document_id: str = Field(pattern=r"^document_[0-9a-f]{32}$")
+    document_revision_id: str = Field(pattern=r"^documentrev_[0-9a-f]{32}$")
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+    )
+    source_format: Literal["HWP", "HWPX"]
+    original_source: OfficeDocumentReviewMemberPointerV2
+    review_document: PdfReviewDocumentPointer
+    editable_hwpx: OfficeDocumentReviewMemberPointerV2 | None
+    intake_manifest: OfficeDocumentReviewMemberPointerV2
+    conversion: OfficeDocumentReviewConversionIdentity
+
+    @model_validator(mode="after")
+    def require_exact_split_source_document(self) -> OfficeDocumentReviewSourcePointerV2:
+        projection_identity = (
+            self.review_document.source_pdf.artifact_id,
+            self.review_document.source_pdf.artifact_revision_id,
+        )
+        projection_members: list[
+            OfficeDocumentReviewMemberPointerV2 | PdfReviewArtifactMemberPointer
+        ] = [
+            self.intake_manifest,
+        ]
+        projection_members.extend(page.page_image for page in self.review_document.pages)
+        projection_members.extend(
+            page.text_layer for page in self.review_document.pages if page.text_layer is not None
+        )
+        if any(
+            (member.artifact_id, member.artifact_revision_id) != projection_identity
+            for member in projection_members
+        ):
+            raise ValueError("Office review V3 projection pointers must share one revision")
+        source_identity = (
+            self.original_source.artifact_id,
+            self.original_source.artifact_revision_id,
+        )
+        if source_identity == projection_identity:
+            raise ValueError("Office review V3 source and projection revisions must be distinct")
+        if (
+            self.document_id != self.review_document.document_id
+            or self.document_revision_id != self.review_document.document_revision_id
+            or self.review_document.source_pdf.sha256 != self.conversion.review_pdf_sha256
+            or self.review_document.source_pdf.member_path != "source/original.pdf"
+            or self.intake_manifest.member_path != "manifest.json"
+            or self.intake_manifest.media_type != "application/json"
+            or self.intake_manifest.schema_ref
+            != "eom://schemas/document-review/document-review-intake-manifest/3.0"
+            or self.conversion.conversion_kind != "LIBREOFFICE_H2ORESTART_PDF"
+        ):
+            raise ValueError("Office review V3 projection identity differs")
+        suffix, media_type, schema_ref = {
+            "HWP": (
+                ".hwp",
+                "application/vnd.hancom.hwp",
+                "eom://schemas/document-review/hwp-source/2.0",
+            ),
+            "HWPX": (
+                ".hwpx",
+                "application/vnd.hancom.hwpx",
+                "eom://schemas/document-review/editable-hwpx/1.0",
+            ),
+        }[self.source_format]
+        expected_editable = self.original_source if self.source_format == "HWPX" else None
+        if (
+            not self.original_filename.lower().endswith(suffix)
+            or self.original_source.member_path != f"source/original{suffix}"
+            or self.original_source.media_type != media_type
+            or self.original_source.schema_ref != schema_ref
+            or self.editable_hwpx != expected_editable
+        ):
+            raise ValueError("Office review V3 source pointer differs from its format")
+        return self
+
+
 class OfficeDocumentReviewIntakeResponse(FrozenModel):
     schema_version: Literal["document-review-intake-response/2.0"] = (
         "document-review-intake-response/2.0"
@@ -272,6 +393,37 @@ class OfficeDocumentReviewIntakeResponse(FrozenModel):
                 raise ValueError("successful Office intake requires only a document pointer")
         elif self.document is not None or self.error_code is None:
             raise ValueError("failed Office intake requires only one stable error code")
+        return self
+
+
+class OfficeDocumentReviewIntakeResponseV3(FrozenModel):
+    schema_version: Literal["document-review-intake-response/3.0"] = (
+        "document-review-intake-response/3.0"
+    )
+    operation: Literal["INGEST_DOCUMENT_REVIEW_SOURCE"] = "INGEST_DOCUMENT_REVIEW_SOURCE"
+    status: Literal["OK", "ERROR"]
+    document: OfficeDocumentReviewSourcePointerV2 | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    retained_source: OfficeDocumentReviewMemberPointerV2 | None = None
+
+    @model_validator(mode="after")
+    def require_one_response_variant(self) -> OfficeDocumentReviewIntakeResponseV3:
+        if self.status == "OK":
+            if (
+                self.document is None
+                or self.error_code is not None
+                or self.retained_source is not None
+                or "error_code" in self.model_fields_set
+                or "retained_source" in self.model_fields_set
+            ):
+                raise ValueError("successful Office V3 intake requires only a document pointer")
+        elif (
+            self.document is not None
+            or "document" in self.model_fields_set
+            or self.error_code is None
+            or "retained_source" not in self.model_fields_set
+        ):
+            raise ValueError("failed Office V3 intake requires one stable error code")
         return self
 
 

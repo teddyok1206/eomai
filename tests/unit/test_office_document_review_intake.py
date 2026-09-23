@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 import struct
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -10,8 +12,10 @@ import pytest
 from eom_catalog_contracts import (
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewIntakeManifest,
+    OfficeDocumentReviewIntakeManifestV3,
 )
 from eom_catalog_service.artifacts import CatalogArtifact
+from eom_catalog_service.office_document_converter import OfficeDocumentConversionError
 from eom_catalog_service.office_document_review_intake import (
     OfficeDocumentReviewIntakeError,
     OfficeDocumentReviewIntakeService,
@@ -24,6 +28,16 @@ from sqlalchemy import create_engine
 
 def _png(width: int = 1200, height: int = 1800) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + struct.pack(">II", width, height)
+
+
+def _hwpx_bytes() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        mimetype = zipfile.ZipInfo("mimetype", date_time=(2026, 1, 1, 0, 0, 0))
+        mimetype.compress_type = zipfile.ZIP_STORED
+        archive.writestr(mimetype, b"application/hwp+zip")
+        archive.writestr("Contents/header.xml", b"<header/>")
+    return buffer.getvalue()
 
 
 class _ArtifactRecorder:
@@ -57,7 +71,7 @@ class _ArtifactRecorder:
 class _FakeOfficeConverter:
     def __init__(self, staging_root: Path) -> None:
         self.root = staging_root / "office-conversion"
-        self.root.mkdir(mode=0o700)
+        self.root.mkdir(mode=0o700, exist_ok=True)
 
     def create_workspace(self) -> Path:
         workspace = self.root / ("officeconv_" + "5" * 32)
@@ -81,6 +95,50 @@ class _FakeOfficeConverter:
             libreoffice_version="LibreOffice test",
             libreoffice_sha256="sha256:" + "6" * 64,
             h2orestart_sha256="sha256:" + "7" * 64,
+        )
+
+
+class _MultiArtifactRecorder:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self.primary_values: list[dict[str, Any]] = []
+
+    def commit_file_set(self, **values: Any) -> CatalogArtifact:
+        self.calls.append(values)
+        ordinal = len(self.calls)
+        files = cast(dict[str, Path], values["files"])
+        expected = cast(dict[str, str], values["expected_file_sha256"])
+        primary = cast(str, values["primary_file"])
+        assert {name: sha256_file(path) for name, path in files.items()} == expected
+        self.primary_values.append(json.loads(files[primary].read_text(encoding="utf-8")))
+        return CatalogArtifact(
+            job_id="job_" + str(ordinal) * 32,
+            artifact_id="artifact_" + str(ordinal) * 32,
+            revision_id="rev_" + str(ordinal) * 32,
+            content_hash=expected[primary],
+            manifest_hash="sha256:" + str(ordinal + 2) * 64,
+            content_bytes=sum(path.stat().st_size for path in files.values()),
+            nas_path=f"/non-live/document-review/{ordinal}",
+            manifest={
+                "files": [
+                    {"file_name": name, "sha256": digest}
+                    for name, digest in sorted(expected.items())
+                ]
+            },
+        )
+
+
+class _FailOfficeConverter(_FakeOfficeConverter):
+    def convert(
+        self,
+        workspace: Path,
+        *,
+        source_format: str,
+    ) -> OfficeDocumentReviewConversionIdentity:
+        del workspace, source_format
+        raise OfficeDocumentConversionError(
+            "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+            "typed converter failure",
         )
 
 
@@ -137,7 +195,7 @@ def _service(
             "source/original.hwp",
             False,
         ),
-        ("HWPX", "검토.hwpx", b"PK\x03\x04source", "source/original.hwpx", True),
+        ("HWPX", "검토.hwpx", _hwpx_bytes(), "source/original.hwpx", True),
     ],
 )
 def test_office_intake_preserves_source_and_projects_one_review_pdf(
@@ -224,3 +282,136 @@ def test_office_intake_does_not_offer_hwp_correction(
     )
 
     assert pointer.editable_hwpx is None
+
+
+def test_durable_office_intake_commits_source_before_separate_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _ = _service(tmp_path, monkeypatch)
+    recorder = _MultiArtifactRecorder()
+    service.artifacts = cast(OfficeReviewArtifactCommitter, recorder)
+    source = tmp_path / "durable.hwpx"
+    source.write_bytes(_hwpx_bytes())
+
+    pointer = service.ingest(
+        source,
+        original_filename="durable.hwpx",
+        source_format="HWPX",
+        actor_id="operator_" + "a" * 32,
+        idempotency_key="api:document-review:durable-success",
+        durable_source=True,
+    )
+
+    assert pointer.original_source.artifact_id == "artifact_" + "1" * 32
+    assert pointer.review_document.source_pdf.artifact_id == "artifact_" + "2" * 32
+    assert pointer.original_source.artifact_id != pointer.review_document.source_pdf.artifact_id
+    assert recorder.calls[0]["artifact_type"] == "document-review-source-upload-v1"
+    assert set(recorder.calls[0]["files"]) == {
+        "source-upload-manifest.json",
+        "source/original.hwpx",
+    }
+    assert recorder.calls[1]["artifact_type"] == "document-review-projection-v3"
+    assert "source/original.hwpx" not in recorder.calls[1]["files"]
+    manifest = OfficeDocumentReviewIntakeManifestV3.model_validate(recorder.primary_values[1])
+    assert manifest.original_source == pointer.original_source
+
+
+def test_durable_office_intake_returns_retained_source_on_conversion_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _ = _service(tmp_path, monkeypatch)
+    recorder = _MultiArtifactRecorder()
+    service.artifacts = cast(OfficeReviewArtifactCommitter, recorder)
+    service.converter = cast(Any, _FailOfficeConverter(service.settings.staging_root))
+    source = tmp_path / "durable-failure.hwpx"
+    source.write_bytes(_hwpx_bytes())
+
+    with pytest.raises(OfficeDocumentReviewIntakeError) as error:
+        service.ingest(
+            source,
+            original_filename="durable-failure.hwpx",
+            source_format="HWPX",
+            actor_id="operator_" + "a" * 32,
+            idempotency_key="api:document-review:durable-failure",
+            durable_source=True,
+        )
+
+    assert error.value.code == "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+    assert error.value.retained_source is not None
+    assert error.value.retained_source.artifact_id == "artifact_" + "1" * 32
+    assert len(recorder.calls) == 1
+    assert recorder.calls[0]["artifact_type"] == "document-review-source-upload-v1"
+
+
+def test_durable_office_intake_retains_source_on_projection_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _ = _service(tmp_path, monkeypatch)
+    recorder = _MultiArtifactRecorder()
+    service.artifacts = cast(OfficeReviewArtifactCommitter, recorder)
+    source = tmp_path / "durable-projection-failure.hwpx"
+    source.write_bytes(_hwpx_bytes())
+
+    def fail_page_count(_pdfinfo: Path, _source: Path) -> int:
+        raise RuntimeError("synthetic projection failure")
+
+    monkeypatch.setattr(
+        "eom_catalog_service.office_document_review_intake._pdf_page_count",
+        fail_page_count,
+    )
+    with pytest.raises(OfficeDocumentReviewIntakeError) as error:
+        service.ingest(
+            source,
+            original_filename="durable-projection-failure.hwpx",
+            source_format="HWPX",
+            actor_id="operator_" + "a" * 32,
+            idempotency_key="api:document-review:durable-projection-failure",
+            durable_source=True,
+        )
+
+    assert error.value.code == "DOCUMENT_REVIEW_PDF_INVALID"
+    assert error.value.retained_source is not None
+    assert error.value.retained_source.artifact_id == "artifact_" + "1" * 32
+    assert len(recorder.calls) == 1
+    assert recorder.calls[0]["artifact_type"] == "document-review-source-upload-v1"
+
+
+def test_durable_office_intake_retains_source_before_converter_dependency_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _ = _service(tmp_path, monkeypatch)
+    recorder = _MultiArtifactRecorder()
+    service.artifacts = cast(OfficeReviewArtifactCommitter, recorder)
+    service.converter = None
+    source = tmp_path / "durable-unavailable.hwpx"
+    source.write_bytes(_hwpx_bytes())
+
+    def unavailable_converter(_staging_root: Path) -> object:
+        raise OfficeDocumentConversionError(
+            "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE",
+            "synthetic missing dependency",
+        )
+
+    monkeypatch.setattr(
+        "eom_catalog_service.office_document_review_intake.SystemdOfficeDocumentConverter",
+        unavailable_converter,
+    )
+    with pytest.raises(OfficeDocumentReviewIntakeError) as error:
+        service.ingest(
+            source,
+            original_filename="durable-unavailable.hwpx",
+            source_format="HWPX",
+            actor_id="operator_" + "a" * 32,
+            idempotency_key="api:document-review:durable-unavailable",
+            durable_source=True,
+        )
+
+    assert error.value.code == "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE"
+    assert error.value.retained_source is not None
+    assert error.value.retained_source.artifact_id == "artifact_" + "1" * 32
+    assert len(recorder.calls) == 1
+    assert recorder.calls[0]["artifact_type"] == "document-review-source-upload-v1"

@@ -1,0 +1,330 @@
+{
+  "$defs": {
+    "conversion": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion_kind": {
+          "enum": [
+            "IDENTITY_PDF",
+            "LIBREOFFICE_H2ORESTART_PDF"
+          ]
+        },
+        "h2orestart_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_version": {
+          "oneOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_pdf_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversion_kind",
+        "review_pdf_sha256",
+        "libreoffice_version",
+        "libreoffice_sha256",
+        "h2orestart_sha256"
+      ],
+      "type": "object"
+    },
+    "memberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+            "image/png",
+            "application/json"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/document-review/[a-z0-9-]+/[123]\\.0$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "pagePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "height_px": {
+          "maximum": 16384,
+          "minimum": 64,
+          "type": "integer"
+        },
+        "page_image": {
+          "$ref": "#/$defs/memberPointer"
+        },
+        "page_number": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rotation_degrees": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
+        },
+        "text_layer": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/memberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width_px": {
+          "maximum": 16384,
+          "minimum": 64,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_number",
+        "width_px",
+        "height_px",
+        "rotation_degrees",
+        "page_image",
+        "text_layer"
+      ],
+      "type": "object"
+    },
+    "reviewDocumentPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "pattern": "^document_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "document_revision_id": {
+          "pattern": "^documentrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "original_filename": {
+          "maxLength": 240,
+          "minLength": 5,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.[Pp][Dd][Ff]$",
+          "type": "string"
+        },
+        "page_count": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/pagePointer"
+          },
+          "maxItems": 2000,
+          "minItems": 1,
+          "type": "array"
+        },
+        "source_pdf": {
+          "$ref": "#/$defs/memberPointer"
+        }
+      },
+      "required": [
+        "document_id",
+        "document_revision_id",
+        "original_filename",
+        "source_pdf",
+        "page_count",
+        "pages"
+      ],
+      "type": "object"
+    },
+    "sourceDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion": {
+          "$ref": "#/$defs/conversion"
+        },
+        "document_id": {
+          "pattern": "^document_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "document_revision_id": {
+          "pattern": "^documentrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "editable_hwpx": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/memberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "intake_manifest": {
+          "$ref": "#/$defs/memberPointer"
+        },
+        "original_filename": {
+          "maxLength": 240,
+          "minLength": 5,
+          "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+          "type": "string"
+        },
+        "original_source": {
+          "$ref": "#/$defs/memberPointer"
+        },
+        "review_document": {
+          "$ref": "#/$defs/reviewDocumentPointer"
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ]
+        }
+      },
+      "required": [
+        "document_id",
+        "document_revision_id",
+        "original_filename",
+        "source_format",
+        "original_source",
+        "review_document",
+        "editable_hwpx",
+        "intake_manifest",
+        "conversion"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/catalog/document-review-intake-response/3.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/sourceDocument"
+        },
+        "operation": {
+          "const": "INGEST_DOCUMENT_REVIEW_SOURCE"
+        },
+        "schema_version": {
+          "const": "document-review-intake-response/3.0"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "document"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "type": "string"
+        },
+        "operation": {
+          "const": "INGEST_DOCUMENT_REVIEW_SOURCE"
+        },
+        "retained_source": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/memberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "document-review-intake-response/3.0"
+        },
+        "status": {
+          "const": "ERROR"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "error_code",
+        "retained_source"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Office Document Review Intake Response V3"
+}

@@ -1,0 +1,105 @@
+{
+  "$id": "eom://schemas/catalog/document-review-intake-request/3.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_format": {
+            "const": "HWP"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "media_type": {
+            "const": "application/vnd.hancom.hwp"
+          },
+          "original_filename": {
+            "pattern": "\\.[Hh][Ww][Pp]$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_format": {
+            "const": "HWPX"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "media_type": {
+            "const": "application/vnd.hancom.hwpx"
+          },
+          "original_filename": {
+            "pattern": "\\.[Hh][Ww][Pp][Xx]$"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "actor_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "type": "string"
+    },
+    "content_length": {
+      "maximum": 268435456,
+      "minimum": 8,
+      "type": "integer"
+    },
+    "idempotency_key": {
+      "maxLength": 256,
+      "minLength": 16,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
+      "type": "string"
+    },
+    "media_type": {
+      "enum": [
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx"
+      ]
+    },
+    "operation": {
+      "const": "INGEST_DOCUMENT_REVIEW_SOURCE"
+    },
+    "original_filename": {
+      "maxLength": 240,
+      "minLength": 5,
+      "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "document-review-intake-request/3.0"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "source_format": {
+      "enum": [
+        "HWP",
+        "HWPX"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "actor_id",
+    "original_filename",
+    "source_format",
+    "media_type",
+    "idempotency_key",
+    "content_length",
+    "sha256"
+  ],
+  "title": "EOM Office Document Review Intake Request V3",
+  "type": "object"
+}

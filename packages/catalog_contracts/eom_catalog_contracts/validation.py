@@ -235,6 +235,36 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:982cbba5d9ce69f95cbda32a5fe5a7dfedf4d828d49b4e0c2228a6a1f4b435e5",
         ),
+        "document-review-source-upload-manifest-v1": CatalogSchemaResource(
+            "schemas/document-review/document-review-source-upload-manifest-v1.schema.json",
+            "resources/document-review/document-review-source-upload-manifest-v1.schema.json",
+            "1.0",
+            "sha256:3c9c3fed9c98d655e96c4372f6e4f0f68fdde094ff5289ff6985f12e7cbec60f",
+        ),
+        "document-review-intake-manifest-v3": CatalogSchemaResource(
+            "schemas/document-review/document-review-intake-manifest-v3.schema.json",
+            "resources/document-review/document-review-intake-manifest-v3.schema.json",
+            "3.0",
+            "sha256:31a48720f4d1802435c1f59a9b79b30392e230dd8d2311fb35c1542ef5ae1677",
+        ),
+        "office-document-conversion-outcome-v1": CatalogSchemaResource(
+            "schemas/document-review/office-document-conversion-outcome-v1.schema.json",
+            "resources/document-review/office-document-conversion-outcome-v1.schema.json",
+            "1.0",
+            "sha256:f20ee93d89d590b2885b2d19dcd64e6158df3f016611a17cc2d534f244dca007",
+        ),
+        "document-review-intake-request-v3": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-intake-request-v3.schema.json",
+            "resources/catalog-application/document-review-intake-request-v3.schema.json",
+            "3.0",
+            "sha256:0447ce890ffb482fa967c55e5652a66fe57023fd376fcc54250a2bd92503ae32",
+        ),
+        "document-review-intake-response-v3": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-intake-response-v3.schema.json",
+            "resources/catalog-application/document-review-intake-response-v3.schema.json",
+            "3.0",
+            "sha256:bda9770d17f7ce31199dab195c37ed3b6242f45f9af834fdaf632eb060e4b859",
+        ),
         "document-review-hwpx-correction-request": CatalogSchemaResource(
             (
                 "schemas/catalog/catalog-application/"

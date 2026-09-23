@@ -1,0 +1,313 @@
+{
+  "$defs": {
+    "conversion": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion_kind": {
+          "enum": [
+            "IDENTITY_PDF",
+            "LIBREOFFICE_H2ORESTART_PDF"
+          ]
+        },
+        "h2orestart_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_sha256": {
+          "oneOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_version": {
+          "oneOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_pdf_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversion_kind",
+        "review_pdf_sha256",
+        "libreoffice_version",
+        "libreoffice_sha256",
+        "h2orestart_sha256"
+      ],
+      "type": "object"
+    },
+    "memberDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+            "image/png",
+            "application/json"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/document-review/[a-z0-9-]+/[12]\\.0$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "memberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 268435456,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+            "image/png",
+            "application/json"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/document-review/[a-z0-9-]+/[12]\\.0$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "pageDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 67108864,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "height_px": {
+          "maximum": 2400,
+          "minimum": 64,
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^pages/page-[0-9]{4}\\.png$",
+          "type": "string"
+        },
+        "page_number": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "rotation_degrees": {
+          "const": 0
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "width_px": {
+          "maximum": 2400,
+          "minimum": 64,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_number",
+        "member_path",
+        "sha256",
+        "content_length",
+        "width_px",
+        "height_px",
+        "rotation_degrees"
+      ],
+      "type": "object"
+    },
+    "renderer": {
+      "additionalProperties": false,
+      "properties": {
+        "output_format": {
+          "const": "PNG"
+        },
+        "pdfinfo_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "pdftoppm_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "renderer_key": {
+          "const": "poppler-pdftoppm"
+        },
+        "scale_to_px": {
+          "const": 2400
+        }
+      },
+      "required": [
+        "renderer_key",
+        "pdfinfo_sha256",
+        "pdftoppm_sha256",
+        "scale_to_px",
+        "output_format"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/document-review/document-review-intake-manifest/3.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "conversion": {
+      "$ref": "#/$defs/conversion"
+    },
+    "document_id": {
+      "pattern": "^document_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "document_revision_id": {
+      "pattern": "^documentrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "editable_hwpx": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/memberPointer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "original_filename": {
+      "maxLength": 240,
+      "minLength": 5,
+      "pattern": "^[^/\\\\\\u0000-\\u001f]+\\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+      "type": "string"
+    },
+    "original_source": {
+      "$ref": "#/$defs/memberPointer"
+    },
+    "page_count": {
+      "maximum": 2000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/pageDescriptor"
+      },
+      "maxItems": 2000,
+      "minItems": 1,
+      "type": "array"
+    },
+    "renderer": {
+      "$ref": "#/$defs/renderer"
+    },
+    "review_pdf": {
+      "$ref": "#/$defs/memberDescriptor"
+    },
+    "schema_version": {
+      "const": "document-review-intake-manifest/3.0"
+    },
+    "source_format": {
+      "enum": [
+        "HWP",
+        "HWPX"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "document_revision_id",
+    "original_filename",
+    "source_format",
+    "original_source",
+    "review_pdf",
+    "editable_hwpx",
+    "conversion",
+    "renderer",
+    "page_count",
+    "pages",
+    "manifest_sha256"
+  ],
+  "title": "EOM Office Document Review Intake Manifest V3",
+  "type": "object"
+}

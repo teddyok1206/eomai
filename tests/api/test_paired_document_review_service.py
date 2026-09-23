@@ -13,6 +13,7 @@ from eom_api.pdf_document_review_models import (
     DocumentReviewSetMemberRecord,
     DocumentReviewSetRecord,
 )
+from eom_api.services.catalog_application_client import CatalogApplicationClientError
 from eom_api.services.paired_document_review_service import (
     PairedDocumentReviewApplicationService,
 )
@@ -21,6 +22,7 @@ from eom_api_contracts import CreateDocumentReviewSetRequest, DocumentReviewSetS
 from eom_catalog_contracts import (
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
+    OfficeDocumentReviewMemberPointerV2,
     OfficeDocumentReviewSourcePointer,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
@@ -259,6 +261,79 @@ def test_paired_review_rejects_different_bytes_after_member_commit(tmp_path: Pat
     engine.dispose()
 
 
+def test_paired_review_failure_retains_exact_source_pointer(tmp_path: Path) -> None:
+    service, engine, catalog, _commands = _service()
+    request = CreateDocumentReviewSetRequest(
+        documents=(
+            DocumentReviewSetSourceRequest(
+                role="QUESTION",
+                original_filename="문제지.hwpx",
+                source_format="HWPX",
+                media_type="application/vnd.hancom.hwpx",
+                content_length=8,
+            ),
+            DocumentReviewSetSourceRequest(
+                role="SOLUTION",
+                original_filename="해설지.hwp",
+                source_format="HWP",
+                media_type="application/vnd.hancom.hwp",
+                content_length=8,
+            ),
+        ),
+        preset_key="PROBLEM_SET",
+        additional_guidance=None,
+    )
+    review_set_id = service.create_set(
+        request,
+        actor_id=OPERATOR_ID,
+        observed_at=NOW,
+    ).review_set_id
+    source = tmp_path / "question.hwpx"
+    source.write_bytes(b"PK\x03\x04Q001")
+    retained = OfficeDocumentReviewMemberPointerV2(
+        artifact_id="artifact_" + "a" * 32,
+        artifact_revision_id="rev_" + "b" * 32,
+        member_path="source/original.hwpx",
+        sha256=_sha(source.read_bytes()),
+        content_length=8,
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+    )
+
+    def fail_ingest(_source: Path, **_values: Any) -> Any:
+        raise CatalogApplicationClientError(
+            "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+            "typed converter failure",
+            retained_source=retained,
+        )
+
+    catalog.ingest_office_document_review_source = fail_ingest  # type: ignore[method-assign]
+    with pytest.raises(ApiError) as failure:
+        service.accept_member_upload(
+            review_set_id,
+            "QUESTION",
+            StagedPdfUpload(
+                source,
+                8,
+                retained.sha256,
+                source_format="HWPX",
+                media_type="application/vnd.hancom.hwpx",
+            ),
+            actor=_actor(),
+            observed_at=NOW + timedelta(seconds=1),
+        )
+
+    assert failure.value.error_code == "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+    sessions = build_session_factory(engine)
+    with sessions() as session:
+        member = session.get(DocumentReviewSetMemberRecord, (review_set_id, "QUESTION"))
+        assert member is not None
+        assert member.state == "FAILED_RETRYABLE"
+        assert member.source_artifact_id == retained.artifact_id
+        assert member.source_artifact_revision_id == retained.artifact_revision_id
+    engine.dispose()
+
+
 @pytest.mark.integration
 @pytest.mark.api_integration
 def test_paired_review_set_persists_parent_before_members_on_postgresql() -> None:
@@ -331,6 +406,22 @@ def test_paired_review_set_persists_parent_before_members_on_postgresql() -> Non
                 )
                 == 2
             )
+        with sessions.begin() as session:
+            source_only = session.get(
+                DocumentReviewSetMemberRecord,
+                (value.review_set_id, "QUESTION"),
+            )
+            assert source_only is not None
+            source_only.source_artifact_id = "artifact_" + "c" * 32
+            source_only.source_artifact_revision_id = "rev_" + "d" * 32
+        with sessions() as session:
+            source_only = session.get(
+                DocumentReviewSetMemberRecord,
+                (value.review_set_id, "QUESTION"),
+            )
+            assert source_only is not None
+            assert source_only.source_artifact_revision_id == "rev_" + "d" * 32
+            assert source_only.document_revision_id is None
     finally:
         engine.dispose()
 

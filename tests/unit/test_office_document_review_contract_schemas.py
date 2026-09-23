@@ -11,8 +11,13 @@ from jsonschema import Draft202012Validator, ValidationError
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_NAMES = (
     "document-review-intake-manifest-v2.schema.json",
+    "document-review-intake-manifest-v3.schema.json",
+    "document-review-source-upload-manifest-v1.schema.json",
+    "office-document-conversion-outcome-v1.schema.json",
     "document-review-intake-request-v2.schema.json",
+    "document-review-intake-request-v3.schema.json",
     "document-review-intake-response-v2.schema.json",
+    "document-review-intake-response-v3.schema.json",
     "document-review-hwpx-correction-request-v1.schema.json",
     "document-review-hwpx-correction-response-v1.schema.json",
     "document-review-hwpx-correction-media-request-v1.schema.json",
@@ -158,6 +163,31 @@ def test_office_review_intake_manifest_keeps_hwp_non_editable() -> None:
         "manifest_sha256": SHA_A,
     }
     Draft202012Validator(_schema("document-review-intake-manifest-v2.schema.json")).validate(value)
+
+
+def test_office_review_v3_error_response_retains_exact_source_pointer() -> None:
+    retained_source = _member(
+        "source/original.hwpx",
+        media_type="application/vnd.hancom.hwpx",
+        schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
+    )
+    value = {
+        "schema_version": "document-review-intake-response/3.0",
+        "operation": "INGEST_DOCUMENT_REVIEW_SOURCE",
+        "status": "ERROR",
+        "error_code": "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+        "retained_source": retained_source,
+    }
+    validator = Draft202012Validator(_schema("document-review-intake-response-v3.schema.json"))
+    validator.validate(value)
+
+    missing_pointer = dict(value, retained_source=None)
+    validator.validate(missing_pointer)
+
+    mismatched = deepcopy(value)
+    mismatched["retained_source"]["artifact_revision_id"] = "revision_unsafe"
+    with pytest.raises(ValidationError):
+        validator.validate(mismatched)
 
 
 def test_hwpx_correction_request_rejects_duplicate_findings() -> None:

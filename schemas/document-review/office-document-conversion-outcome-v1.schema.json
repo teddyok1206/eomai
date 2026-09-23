@@ -1,0 +1,300 @@
+{
+  "$id": "eom://schemas/document-review/office-document-conversion-outcome/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "h2orestart_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "instance_id": {
+          "pattern": "^officeconv_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "outcome_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "output_bytes": {
+          "maximum": 268435456,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "output_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "office-document-conversion-outcome/1.0"
+        },
+        "source_bytes": {
+          "maximum": 268435456,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "source_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stage": {
+          "const": "OUTPUT_VALIDATED"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "stderr_bytes": {
+          "maximum": 262144,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stderr_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stdout_bytes": {
+          "maximum": 262144,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stdout_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "instance_id",
+        "status",
+        "stage",
+        "source_format",
+        "source_sha256",
+        "source_bytes",
+        "h2orestart_sha256",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stderr_sha256",
+        "stderr_bytes",
+        "output_sha256",
+        "output_bytes",
+        "outcome_sha256"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "DEPENDENCY_VALIDATION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "EXTENSION_REGISTRATION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "LIBREOFFICE_EXECUTION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "LIBREOFFICE_EXECUTION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "OUTPUT_VALIDATION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "OUTPUT_VALIDATION"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "error_code": {
+                "const": "OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "stage": {
+                "const": "SOURCE_VALIDATION"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "error_code": {
+          "enum": [
+            "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID",
+            "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+            "OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED",
+            "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID",
+            "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+            "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+            "OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID"
+          ]
+        },
+        "h2orestart_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "instance_id": {
+          "pattern": "^officeconv_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "outcome_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "office-document-conversion-outcome/1.0"
+        },
+        "source_bytes": {
+          "maximum": 268435456,
+          "minimum": 8,
+          "type": "integer"
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "source_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "DEPENDENCY_VALIDATION",
+            "EXTENSION_REGISTRATION",
+            "LIBREOFFICE_EXECUTION",
+            "OUTPUT_VALIDATION",
+            "SOURCE_VALIDATION"
+          ]
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "stderr_bytes": {
+          "maximum": 262144,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stderr_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "stdout_bytes": {
+          "maximum": 262144,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stdout_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "instance_id",
+        "status",
+        "stage",
+        "error_code",
+        "source_format",
+        "source_sha256",
+        "source_bytes",
+        "h2orestart_sha256",
+        "stdout_sha256",
+        "stdout_bytes",
+        "stderr_sha256",
+        "stderr_bytes",
+        "outcome_sha256"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Office Document Conversion Outcome V1"
+}

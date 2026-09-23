@@ -12,8 +12,12 @@ from typing import Protocol
 from eom_catalog_contracts import (
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewIntakeManifest,
+    OfficeDocumentReviewIntakeManifestV3,
     OfficeDocumentReviewMemberPointer,
+    OfficeDocumentReviewMemberPointerV2,
     OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
+    OfficeDocumentReviewSourceUploadManifest,
     PdfDocumentReviewPageMember,
     PdfDocumentReviewRendererIdentity,
     PdfReviewArtifactMemberPointer,
@@ -25,10 +29,15 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 from sqlalchemy import Engine
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
-from eom_catalog_service.office_converter_worker import HWP_SIGNATURE
+from eom_catalog_service.office_converter_worker import (
+    HWP_SIGNATURE,
+    OfficeConverterError,
+    validate_office_source,
+)
 from eom_catalog_service.office_document_converter import (
     OfficeDocumentConversionError,
     SystemdOfficeDocumentConverter,
+    create_office_conversion_workspace,
 )
 from eom_catalog_service.pdf_document_review_intake import (
     MAX_PAGE_BYTES,
@@ -55,14 +64,36 @@ OFFICE_DOCUMENT_REVIEW_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION = "catalog/1.20"
+OFFICE_DOCUMENT_REVIEW_V3_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-source-upload-manifest/1.0",
+            "document-review-intake-manifest/3.0",
+            "office-document-conversion-outcome/1.0",
+            "pdf-source/1.0",
+            "hwp-source/2.0",
+            "editable-hwpx/1.0",
+            "pdf-page-render/1.0",
+        ],
+    }
+)
 _PDF_SIGNATURE = b"%PDF-"
 _HWPX_SIGNATURE = b"PK\x03\x04"
 
 
 class OfficeDocumentReviewIntakeError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.retained_source = retained_source
 
 
 class OfficeReviewArtifactCommitter(Protocol):
@@ -176,14 +207,10 @@ class OfficeDocumentReviewIntakeService:
 
     def _workspace(self, source_format: str) -> Path:
         if source_format in {"HWP", "HWPX"}:
-            converter = self.converter
-            if converter is None:
-                try:
-                    converter = SystemdOfficeDocumentConverter(self.settings.staging_root)
-                except OfficeDocumentConversionError as exc:
-                    raise OfficeDocumentReviewIntakeError(exc.code, str(exc)) from exc
-                self.converter = converter
-            return converter.create_workspace()
+            try:
+                return create_office_conversion_workspace(self.settings.staging_root)
+            except OfficeDocumentConversionError as exc:
+                raise OfficeDocumentReviewIntakeError(exc.code, str(exc)) from exc
         return Path(
             tempfile.mkdtemp(prefix="office-document-review.", dir=self.settings.staging_root)
         )
@@ -196,13 +223,15 @@ class OfficeDocumentReviewIntakeService:
         source_format: str,
         actor_id: str,
         idempotency_key: str,
-    ) -> OfficeDocumentReviewSourcePointer:
+        durable_source: bool = False,
+    ) -> OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2:
         if source_format not in {"PDF", "HWP", "HWPX"}:
             raise OfficeDocumentReviewIntakeError(
                 "DOCUMENT_REVIEW_FORMAT_UNSUPPORTED",
                 "Document review source format is unsupported",
             )
         workspace = self._workspace(source_format)
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None
         try:
             suffix = {"PDF": ".pdf", "HWP": ".hwp", "HWPX": ".hwpx"}[source_format]
             source_target = workspace / f"original{suffix}"
@@ -210,6 +239,28 @@ class OfficeDocumentReviewIntakeService:
                 source,
                 source_target,
                 source_format=source_format,
+            )
+            if source_format in {"HWP", "HWPX"}:
+                try:
+                    validate_office_source(source_target, source_format, os.getuid())
+                except OfficeConverterError as exc:
+                    raise OfficeDocumentReviewIntakeError(
+                        "DOCUMENT_REVIEW_SOURCE_INVALID",
+                        "Office review source package failed bounded validation",
+                    ) from exc
+            retained_source = (
+                self._commit_source_upload(
+                    source_target,
+                    original_filename=original_filename,
+                    source_format=source_format,
+                    source_hash=source_hash,
+                    source_bytes=source_bytes,
+                    actor_id=actor_id,
+                    idempotency_key=idempotency_key,
+                    workspace=workspace,
+                )
+                if durable_source and source_format in {"HWP", "HWPX"}
+                else None
             )
             if source_format == "PDF":
                 review_pdf = source_target
@@ -220,14 +271,19 @@ class OfficeDocumentReviewIntakeService:
             else:
                 converter = self.converter
                 if converter is None:
-                    raise OfficeDocumentReviewIntakeError(
-                        "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE",
-                        "Office converter is unavailable",
-                    )
+                    try:
+                        converter = SystemdOfficeDocumentConverter(self.settings.staging_root)
+                    except OfficeDocumentConversionError as exc:
+                        raise OfficeDocumentReviewIntakeError(exc.code, str(exc)) from exc
+                    self.converter = converter
                 try:
                     conversion = converter.convert(workspace, source_format=source_format)
                 except OfficeDocumentConversionError as exc:
-                    raise OfficeDocumentReviewIntakeError(exc.code, str(exc)) from exc
+                    raise OfficeDocumentReviewIntakeError(
+                        exc.code,
+                        str(exc),
+                        retained_source=retained_source,
+                    ) from exc
                 review_pdf = workspace / "converted/original.pdf"
             identity_seed = {
                 "idempotency_key": idempotency_key,
@@ -340,14 +396,30 @@ class OfficeDocumentReviewIntakeService:
                 "schema_ref": "eom://schemas/document-review/pdf-source/1.0",
             }
             manifest_value: dict[str, object] = {
-                "schema_version": "document-review-intake-manifest/2.0",
+                "schema_version": (
+                    "document-review-intake-manifest/2.0"
+                    if retained_source is None
+                    else "document-review-intake-manifest/3.0"
+                ),
                 "document_id": document_id,
                 "document_revision_id": document_revision_id,
                 "original_filename": original_filename,
                 "source_format": source_format,
-                "original_source": source_member,
+                "original_source": (
+                    source_member
+                    if retained_source is None
+                    else retained_source.model_dump(mode="json")
+                ),
                 "review_pdf": review_pdf_member,
-                "editable_hwpx": source_member if source_format == "HWPX" else None,
+                "editable_hwpx": (
+                    source_member
+                    if retained_source is None and source_format == "HWPX"
+                    else (
+                        retained_source.model_dump(mode="json")
+                        if retained_source is not None and source_format == "HWPX"
+                        else None
+                    )
+                ),
                 "conversion": conversion.model_dump(mode="json"),
                 "renderer": PdfDocumentReviewRendererIdentity(
                     pdfinfo_sha256=sha256_file(self.pdfinfo),
@@ -357,9 +429,17 @@ class OfficeDocumentReviewIntakeService:
                 "pages": [page.model_dump(mode="json") for page in pages],
             }
             manifest_value["manifest_sha256"] = content_sha256(manifest_value)
-            manifest = OfficeDocumentReviewIntakeManifest.model_validate(manifest_value)
+            manifest = (
+                OfficeDocumentReviewIntakeManifest.model_validate(manifest_value)
+                if retained_source is None
+                else OfficeDocumentReviewIntakeManifestV3.model_validate(manifest_value)
+            )
             validate_contract(
-                "document-review-intake-manifest-v2",
+                (
+                    "document-review-intake-manifest-v2"
+                    if retained_source is None
+                    else "document-review-intake-manifest-v3"
+                ),
                 manifest.model_dump(mode="json"),
             )
             manifest_path = workspace / "manifest.json"
@@ -367,7 +447,7 @@ class OfficeDocumentReviewIntakeService:
             manifest_path.chmod(0o600)
             files = {
                 "manifest.json": manifest_path,
-                f"source/original{suffix}": source_target,
+                **({f"source/original{suffix}": source_target} if retained_source is None else {}),
                 **({"source/original.pdf": review_pdf} if source_format != "PDF" else {}),
                 **{page.member_path: workspace / page.member_path for page in pages},
             }
@@ -376,12 +456,20 @@ class OfficeDocumentReviewIntakeService:
                     "media_type": "application/json",
                     "schema_ref": (
                         "eom://schemas/document-review/document-review-intake-manifest/2.0"
+                        if retained_source is None
+                        else ("eom://schemas/document-review/document-review-intake-manifest/3.0")
                     ),
                 },
-                f"source/original{suffix}": {
-                    "media_type": source_media,
-                    "schema_ref": source_schema,
-                },
+                **(
+                    {
+                        f"source/original{suffix}": {
+                            "media_type": source_media,
+                            "schema_ref": source_schema,
+                        }
+                    }
+                    if retained_source is None
+                    else {}
+                ),
                 **(
                     {
                         "source/original.pdf": {
@@ -402,7 +490,7 @@ class OfficeDocumentReviewIntakeService:
             }
             expected_hashes = {
                 "manifest.json": sha256_file(manifest_path),
-                f"source/original{suffix}": source_hash,
+                **({f"source/original{suffix}": source_hash} if retained_source is None else {}),
                 **(
                     {"source/original.pdf": conversion.review_pdf_sha256}
                     if source_format != "PDF"
@@ -413,8 +501,16 @@ class OfficeDocumentReviewIntakeService:
             artifact = self.artifacts.commit_file_set(
                 files=files,
                 primary_file="manifest.json",
-                artifact_type="document-review-source-v2",
-                idempotency_key=f"document-review-source-v2:{idempotency_key}",
+                artifact_type=(
+                    "document-review-source-v2"
+                    if retained_source is None
+                    else "document-review-projection-v3"
+                ),
+                idempotency_key=(
+                    f"document-review-source-v2:{idempotency_key}"
+                    if retained_source is None
+                    else f"document-review-projection-v3:{idempotency_key}"
+                ),
                 request={
                     **identity_seed,
                     "conversion": conversion.model_dump(mode="json"),
@@ -428,20 +524,156 @@ class OfficeDocumentReviewIntakeService:
                     "manifest_sha256": manifest.manifest_sha256,
                 },
                 file_metadata=file_metadata,
-                manifest_version="document-review-file-set/2.0",
-                protocol_version=OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION,
-                protocol_schema_hash=OFFICE_DOCUMENT_REVIEW_SCHEMA_HASH,
+                manifest_version=(
+                    "document-review-file-set/2.0"
+                    if retained_source is None
+                    else "document-review-projection-file-set/3.0"
+                ),
+                protocol_version=(
+                    OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION
+                    if retained_source is None
+                    else OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION
+                ),
+                protocol_schema_hash=(
+                    OFFICE_DOCUMENT_REVIEW_SCHEMA_HASH
+                    if retained_source is None
+                    else OFFICE_DOCUMENT_REVIEW_V3_SCHEMA_HASH
+                ),
                 expected_file_sha256=expected_hashes,
             )
             self._validate_committed_artifact(artifact, expected_hashes)
-            return self._document_pointer(artifact, manifest)
+            if retained_source is None:
+                assert isinstance(manifest, OfficeDocumentReviewIntakeManifest)
+                return self._document_pointer(artifact, manifest)
+            assert isinstance(manifest, OfficeDocumentReviewIntakeManifestV3)
+            return self._document_pointer_v3(artifact, manifest)
+        except OfficeDocumentReviewIntakeError as exc:
+            if retained_source is None or exc.retained_source is not None:
+                raise
+            raise OfficeDocumentReviewIntakeError(
+                exc.code,
+                str(exc),
+                retained_source=retained_source,
+            ) from exc
+        except Exception as exc:
+            if retained_source is None:
+                raise
+            raise OfficeDocumentReviewIntakeError(
+                "DOCUMENT_REVIEW_PROJECTION_FAILED",
+                "Durable Office source was retained but its review projection failed",
+                retained_source=retained_source,
+            ) from exc
         finally:
             shutil.rmtree(workspace)
+
+    def _commit_source_upload(
+        self,
+        source: Path,
+        *,
+        original_filename: str,
+        source_format: str,
+        source_hash: str,
+        source_bytes: int,
+        actor_id: str,
+        idempotency_key: str,
+        workspace: Path,
+    ) -> OfficeDocumentReviewMemberPointerV2:
+        suffix = {"HWP": ".hwp", "HWPX": ".hwpx"}[source_format]
+        media_type = {
+            "HWP": "application/vnd.hancom.hwp",
+            "HWPX": "application/vnd.hancom.hwpx",
+        }[source_format]
+        schema_ref = {
+            "HWP": "eom://schemas/document-review/hwp-source/2.0",
+            "HWPX": "eom://schemas/document-review/editable-hwpx/1.0",
+        }[source_format]
+        member_path = f"source/original{suffix}"
+        descriptor = {
+            "member_path": member_path,
+            "sha256": source_hash,
+            "content_length": source_bytes,
+            "media_type": media_type,
+            "schema_ref": schema_ref,
+        }
+        manifest_value: dict[str, object] = {
+            "schema_version": "document-review-source-upload-manifest/1.0",
+            "original_filename": original_filename,
+            "source_format": source_format,
+            "original_source": descriptor,
+        }
+        manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+        manifest = OfficeDocumentReviewSourceUploadManifest.model_validate(manifest_value)
+        validate_contract(
+            "document-review-source-upload-manifest-v1",
+            manifest.model_dump(mode="json"),
+        )
+        manifest_path = workspace / "source-upload-manifest.json"
+        manifest_path.write_bytes(canonical_json_bytes(manifest.model_dump(mode="json")))
+        manifest_path.chmod(0o600)
+        expected_hashes = {
+            "source-upload-manifest.json": sha256_file(manifest_path),
+            member_path: source_hash,
+        }
+        artifact = self.artifacts.commit_file_set(
+            files={
+                "source-upload-manifest.json": manifest_path,
+                member_path: source,
+            },
+            primary_file="source-upload-manifest.json",
+            artifact_type="document-review-source-upload-v1",
+            idempotency_key=f"document-review-source-upload-v1:{idempotency_key}",
+            request={
+                "actor_id": actor_id,
+                "original_filename": original_filename,
+                "source_format": source_format,
+                "source_sha256": source_hash,
+                "source_bytes": source_bytes,
+            },
+            result={
+                "original_filename": original_filename,
+                "source_format": source_format,
+                "source_sha256": source_hash,
+                "source_bytes": source_bytes,
+                "manifest_sha256": manifest.manifest_sha256,
+            },
+            file_metadata={
+                "source-upload-manifest.json": {
+                    "media_type": "application/json",
+                    "schema_ref": (
+                        "eom://schemas/document-review/document-review-source-upload-manifest/1.0"
+                    ),
+                },
+                member_path: {
+                    "media_type": media_type,
+                    "schema_ref": schema_ref,
+                },
+            },
+            manifest_version="document-review-source-upload-file-set/1.0",
+            protocol_version=OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION,
+            protocol_schema_hash=OFFICE_DOCUMENT_REVIEW_V3_SCHEMA_HASH,
+            expected_file_sha256=expected_hashes,
+        )
+        self._validate_committed_artifact(
+            artifact,
+            expected_hashes,
+            primary_file="source-upload-manifest.json",
+        )
+        return OfficeDocumentReviewMemberPointerV2(
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            member_path=member_path,
+            sha256=source_hash,
+            content_length=source_bytes,
+            media_type=media_type,  # type: ignore[arg-type]
+            schema_ref=schema_ref,
+        )
 
     @staticmethod
     def _validate_committed_artifact(
         artifact: CatalogArtifact,
         expected_hashes: dict[str, str],
+        *,
+        primary_file: str = "manifest.json",
     ) -> None:
         raw_files = artifact.manifest.get("files")
         files = (
@@ -453,11 +685,67 @@ class OfficeDocumentReviewIntakeService:
             if isinstance(raw_files, list)
             else {}
         )
-        if files != expected_hashes or artifact.content_hash != expected_hashes["manifest.json"]:
+        if files != expected_hashes or artifact.content_hash != expected_hashes[primary_file]:
             raise OfficeDocumentReviewIntakeError(
                 "DOCUMENT_REVIEW_ARTIFACT_REPLAY_MISMATCH",
                 "Committed document-review Artifact differs from the exact intake",
             )
+
+    @staticmethod
+    def _document_pointer_v3(
+        artifact: CatalogArtifact,
+        manifest: OfficeDocumentReviewIntakeManifestV3,
+    ) -> OfficeDocumentReviewSourcePointerV2:
+        review_pdf = PdfReviewArtifactMemberPointer(
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.revision_id,
+            **manifest.review_pdf.model_dump(mode="json"),
+        )
+        review_document = PdfReviewDocumentPointer(
+            document_id=manifest.document_id,
+            document_revision_id=manifest.document_revision_id,
+            original_filename="review.pdf",
+            source_pdf=review_pdf,
+            page_count=manifest.page_count,
+            pages=tuple(
+                PdfReviewPagePointer(
+                    page_number=page.page_number,
+                    width_px=page.width_px,
+                    height_px=page.height_px,
+                    rotation_degrees=0,
+                    page_image=PdfReviewArtifactMemberPointer(
+                        artifact_id=artifact.artifact_id,
+                        artifact_revision_id=artifact.revision_id,
+                        member_path=page.member_path,
+                        sha256=page.sha256,
+                        schema_ref="eom://schemas/document-review/pdf-page-render/1.0",
+                        media_type="image/png",
+                        content_length=page.content_length,
+                    ),
+                    text_layer=None,
+                )
+                for page in manifest.pages
+            ),
+        )
+        return OfficeDocumentReviewSourcePointerV2(
+            document_id=manifest.document_id,
+            document_revision_id=manifest.document_revision_id,
+            original_filename=manifest.original_filename,
+            source_format=manifest.source_format,
+            original_source=manifest.original_source,
+            review_document=review_document,
+            editable_hwpx=manifest.editable_hwpx,
+            intake_manifest=OfficeDocumentReviewMemberPointerV2(
+                artifact_id=artifact.artifact_id,
+                artifact_revision_id=artifact.revision_id,
+                member_path="manifest.json",
+                sha256=artifact.content_hash,
+                content_length=len(canonical_json_bytes(manifest.model_dump(mode="json"))),
+                media_type="application/json",
+                schema_ref=("eom://schemas/document-review/document-review-intake-manifest/3.0"),
+            ),
+            conversion=manifest.conversion,
+        )
 
     @staticmethod
     def _document_pointer(

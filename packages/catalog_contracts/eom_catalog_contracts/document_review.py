@@ -222,6 +222,79 @@ class OfficeDocumentReviewMemberPointer(OfficeDocumentReviewMemberDescriptor):
     artifact_revision_id: ArtifactRevisionId
 
 
+class OfficeDocumentReviewMemberPointerV2(FrozenModel):
+    """Exact member pointer used by split-source Office review successors."""
+
+    artifact_id: ArtifactId
+    artifact_revision_id: ArtifactRevisionId
+    member_path: str = Field(
+        min_length=1,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9._/-]+$",
+    )
+    sha256: Sha256
+    content_length: int = Field(ge=1, le=256 * 1024 * 1024)
+    media_type: OfficeDocumentMediaType
+    schema_ref: str = Field(pattern=r"^eom://schemas/document-review/[a-z0-9-]+/[123]\.0$")
+
+    @field_validator("member_path")
+    @classmethod
+    def require_safe_member_path(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if path.is_absolute() or ".." in path.parts or value.startswith("/"):
+            raise ValueError("Office review Artifact member path is unsafe")
+        return value
+
+
+class OfficeDocumentReviewSourceUploadManifest(FrozenModel):
+    """Canonical exact source admitted independently of conversion success."""
+
+    schema_version: Literal["document-review-source-upload-manifest/1.0"] = (
+        "document-review-source-upload-manifest/1.0"
+    )
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Pp][Dd][Ff]|[Hh][Ww][Pp](?:[Xx])?)$",
+    )
+    source_format: Literal["HWP", "HWPX"]
+    original_source: OfficeDocumentReviewMemberDescriptor
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_source_and_hash(self) -> OfficeDocumentReviewSourceUploadManifest:
+        suffix, media_type, schema_ref = {
+            "PDF": (
+                ".pdf",
+                "application/pdf",
+                "eom://schemas/document-review/pdf-source/1.0",
+            ),
+            "HWP": (
+                ".hwp",
+                "application/vnd.hancom.hwp",
+                "eom://schemas/document-review/hwp-source/2.0",
+            ),
+            "HWPX": (
+                ".hwpx",
+                "application/vnd.hancom.hwpx",
+                "eom://schemas/document-review/editable-hwpx/1.0",
+            ),
+        }[self.source_format]
+        if (
+            not self.original_filename.lower().endswith(suffix)
+            or self.original_source.member_path != f"source/original{suffix}"
+            or self.original_source.media_type != media_type
+            or self.original_source.schema_ref != schema_ref
+        ):
+            raise ValueError("Office review upload manifest source identity differs")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
+            != self.manifest_sha256
+        ):
+            raise ValueError("Office review upload manifest hash differs")
+        return self
+
+
 class PdfDocumentReviewResultMemberPointer(FrozenModel):
     """Exact committed role result used as correction authority."""
 
@@ -337,6 +410,165 @@ class OfficeDocumentReviewIntakeManifest(FrozenModel):
             != self.manifest_sha256
         ):
             raise ValueError("Office document-review intake manifest hash differs")
+        return self
+
+
+class OfficeDocumentReviewIntakeManifestV3(FrozenModel):
+    """Derived PDF/page projection pinned to a separate canonical Office source."""
+
+    schema_version: Literal["document-review-intake-manifest/3.0"] = (
+        "document-review-intake-manifest/3.0"
+    )
+    document_id: DocumentId
+    document_revision_id: DocumentRevisionId
+    original_filename: str = Field(
+        min_length=5,
+        max_length=240,
+        pattern=r"^[^/\\\x00-\x1f]+\.(?:[Hh][Ww][Pp](?:[Xx])?)$",
+    )
+    source_format: Literal["HWP", "HWPX"]
+    original_source: OfficeDocumentReviewMemberPointerV2
+    review_pdf: OfficeDocumentReviewMemberDescriptor
+    editable_hwpx: OfficeDocumentReviewMemberPointerV2 | None
+    conversion: OfficeDocumentReviewConversionIdentity
+    renderer: PdfDocumentReviewRendererIdentity
+    page_count: int = Field(ge=1, le=2000)
+    pages: tuple[PdfDocumentReviewPageMember, ...] = Field(min_length=1, max_length=2000)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_projection_and_hash(self) -> OfficeDocumentReviewIntakeManifestV3:
+        suffix, media_type, schema_ref = {
+            "HWP": (
+                ".hwp",
+                "application/vnd.hancom.hwp",
+                "eom://schemas/document-review/hwp-source/2.0",
+            ),
+            "HWPX": (
+                ".hwpx",
+                "application/vnd.hancom.hwpx",
+                "eom://schemas/document-review/editable-hwpx/1.0",
+            ),
+        }[self.source_format]
+        if (
+            not self.original_filename.lower().endswith(suffix)
+            or self.original_source.member_path != f"source/original{suffix}"
+            or self.original_source.media_type != media_type
+            or self.original_source.schema_ref != schema_ref
+        ):
+            raise ValueError("Office review V3 source pointer differs from its format")
+        expected_editable = self.original_source if self.source_format == "HWPX" else None
+        if self.editable_hwpx != expected_editable:
+            raise ValueError("Office review V3 editable source pointer differs")
+        if (
+            self.review_pdf.member_path != "source/original.pdf"
+            or self.review_pdf.media_type != "application/pdf"
+            or self.review_pdf.schema_ref != "eom://schemas/document-review/pdf-source/1.0"
+            or self.review_pdf.sha256 != self.conversion.review_pdf_sha256
+            or self.conversion.conversion_kind != "LIBREOFFICE_H2ORESTART_PDF"
+        ):
+            raise ValueError("Office review V3 PDF projection differs")
+        if len(self.pages) != self.page_count or tuple(
+            page.page_number for page in self.pages
+        ) != tuple(range(1, self.page_count + 1)):
+            raise ValueError("Office review V3 pages must be complete and ordered")
+        paths = tuple(page.member_path for page in self.pages)
+        if len(paths) != len(set(paths)):
+            raise ValueError("Office review V3 page paths must be unique")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
+            != self.manifest_sha256
+        ):
+            raise ValueError("Office review V3 intake manifest hash differs")
+        return self
+
+
+OfficeDocumentConversionStage = Literal[
+    "SOURCE_VALIDATION",
+    "DEPENDENCY_VALIDATION",
+    "EXTENSION_REGISTRATION",
+    "LIBREOFFICE_EXECUTION",
+    "OUTPUT_VALIDATION",
+    "OUTPUT_VALIDATED",
+]
+OfficeDocumentConversionErrorCode = Literal[
+    "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID",
+    "OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED",
+    "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+    "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
+    "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+    "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID",
+    "OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID",
+]
+
+
+class OfficeDocumentConversionOutcome(FrozenModel):
+    """Bounded machine-readable result written by the isolated converter."""
+
+    schema_version: Literal["office-document-conversion-outcome/1.0"] = (
+        "office-document-conversion-outcome/1.0"
+    )
+    instance_id: str = Field(pattern=r"^officeconv_[0-9a-f]{32}$")
+    status: Literal["OK", "ERROR"]
+    stage: OfficeDocumentConversionStage
+    error_code: OfficeDocumentConversionErrorCode | None = None
+    source_format: Literal["HWP", "HWPX"]
+    source_sha256: Sha256
+    source_bytes: int = Field(ge=8, le=256 * 1024 * 1024)
+    h2orestart_sha256: Sha256
+    stdout_sha256: Sha256
+    stdout_bytes: int = Field(ge=0, le=256 * 1024)
+    stderr_sha256: Sha256
+    stderr_bytes: int = Field(ge=0, le=256 * 1024)
+    output_sha256: Sha256 | None = None
+    output_bytes: int | None = Field(default=None, ge=8, le=256 * 1024 * 1024)
+    outcome_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_terminal_variant_and_hash(self) -> OfficeDocumentConversionOutcome:
+        if self.status == "OK":
+            if (
+                self.stage != "OUTPUT_VALIDATED"
+                or self.error_code is not None
+                or "error_code" in self.model_fields_set
+                or self.output_sha256 is None
+                or self.output_bytes is None
+            ):
+                raise ValueError("successful Office conversion outcome is incomplete")
+        elif (
+            self.stage == "OUTPUT_VALIDATED"
+            or self.error_code is None
+            or self.output_sha256 is not None
+            or self.output_bytes is not None
+            or "output_sha256" in self.model_fields_set
+            or "output_bytes" in self.model_fields_set
+        ):
+            raise ValueError("failed Office conversion outcome is inconsistent")
+        if self.error_code is not None:
+            expected_stage: dict[
+                OfficeDocumentConversionErrorCode, OfficeDocumentConversionStage
+            ] = {
+                "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID": "DEPENDENCY_VALIDATION",
+                "OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED": "EXTENSION_REGISTRATION",
+                "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED": "LIBREOFFICE_EXECUTION",
+                "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE": "LIBREOFFICE_EXECUTION",
+                "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING": "OUTPUT_VALIDATION",
+                "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID": "OUTPUT_VALIDATION",
+                "OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID": "SOURCE_VALIDATION",
+            }
+            if self.stage != expected_stage[self.error_code]:
+                raise ValueError("Office conversion error code and stage differ")
+        if (
+            content_sha256(
+                self.model_dump(
+                    mode="json",
+                    exclude={"outcome_sha256"},
+                    exclude_none=True,
+                )
+            )
+            != self.outcome_sha256
+        ):
+            raise ValueError("Office conversion outcome hash differs")
         return self
 
 

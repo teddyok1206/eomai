@@ -57,12 +57,14 @@ class PdfDocumentReviewUploadIntentRecord(Base):
             name="ck_pdf_review_upload_intents_lease",
         ),
         CheckConstraint(
-            "(document_id IS NULL AND document_revision_id IS NULL "
-            "AND source_artifact_id IS NULL AND source_artifact_revision_id IS NULL "
-            "AND source_sha256 IS NULL AND page_count IS NULL) OR "
+            "((source_artifact_id IS NULL AND source_artifact_revision_id IS NULL "
+            "AND source_sha256 IS NULL) OR "
+            "(source_artifact_id IS NOT NULL AND source_artifact_revision_id IS NOT NULL "
+            "AND source_sha256 IS NOT NULL)) AND "
+            "((document_id IS NULL AND document_revision_id IS NULL AND page_count IS NULL) OR "
             "(document_id IS NOT NULL AND document_revision_id IS NOT NULL "
-            "AND source_artifact_id IS NOT NULL AND source_artifact_revision_id IS NOT NULL "
-            "AND source_sha256 IS NOT NULL AND page_count IS NOT NULL)",
+            "AND page_count IS NOT NULL)) AND "
+            "(document_id IS NULL OR source_artifact_id IS NOT NULL)",
             name="ck_pdf_review_upload_intents_document",
         ),
         CheckConstraint(
@@ -248,14 +250,15 @@ class DocumentReviewSetMemberRecord(Base):
             name="ck_document_review_set_members_lease",
         ),
         CheckConstraint(
-            "(document_id IS NULL AND document_revision_id IS NULL "
-            "AND source_artifact_id IS NULL AND source_artifact_revision_id IS NULL "
+            "((source_artifact_id IS NULL AND source_artifact_revision_id IS NULL) OR "
+            "(source_artifact_id IS NOT NULL AND source_artifact_revision_id IS NOT NULL)) AND "
+            "((document_id IS NULL AND document_revision_id IS NULL "
             "AND source_pdf_sha256 IS NULL AND page_count IS NULL "
             "AND review_document_pointer IS NULL) OR "
             "(document_id IS NOT NULL AND document_revision_id IS NOT NULL "
-            "AND source_artifact_id IS NOT NULL AND source_artifact_revision_id IS NOT NULL "
             "AND source_pdf_sha256 IS NOT NULL AND page_count IS NOT NULL "
-            "AND review_document_pointer IS NOT NULL)",
+            "AND review_document_pointer IS NOT NULL)) AND "
+            "(document_id IS NULL OR source_artifact_id IS NOT NULL)",
             name="ck_document_review_set_members_document",
         ),
         CheckConstraint(

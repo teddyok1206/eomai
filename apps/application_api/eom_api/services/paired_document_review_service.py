@@ -13,7 +13,12 @@ from eom_api_contracts import (
     DocumentReviewSetMemberView,
     DocumentReviewSetView,
 )
-from eom_catalog_contracts import OfficeDocumentReviewSourcePointer, PdfReviewDocumentPointer
+from eom_catalog_contracts import (
+    OfficeDocumentReviewMemberPointerV2,
+    OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
+    PdfReviewDocumentPointer,
+)
 from eom_identifiers import content_sha256, new_document_review_set_id
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
@@ -201,7 +206,12 @@ class PairedDocumentReviewApplicationService:
                 self._complete_member(claim, document=document)
             except CatalogApplicationClientError as exc:
                 retryable = exc.code in _RETRYABLE_CATALOG_CODES
-                self._fail_member(claim, error_code=exc.code, retryable=retryable)
+                self._fail_member(
+                    claim,
+                    error_code=exc.code,
+                    retryable=retryable,
+                    retained_source=exc.retained_source,
+                )
                 raise ApiError(
                     503 if retryable else 422,
                     exc.code,
@@ -415,7 +425,7 @@ class PairedDocumentReviewApplicationService:
         self,
         claim: PairedReviewMemberClaim,
         *,
-        document: OfficeDocumentReviewSourcePointer,
+        document: OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2,
     ) -> None:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
@@ -452,6 +462,7 @@ class PairedDocumentReviewApplicationService:
         *,
         error_code: str,
         retryable: bool,
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None,
     ) -> None:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
@@ -464,6 +475,9 @@ class PairedDocumentReviewApplicationService:
                 return
             member.state = "FAILED_RETRYABLE" if retryable else "FAILED_FINAL"
             member.failure_code = error_code[:64]
+            if retained_source is not None:
+                member.source_artifact_id = retained_source.artifact_id
+                member.source_artifact_revision_id = retained_source.artifact_revision_id
             member.lease_owner = None
             member.lease_expires_at = None
             member.lock_version += 1

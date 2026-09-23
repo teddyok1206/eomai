@@ -14,7 +14,11 @@ from eom_api_contracts.document_review import (
     DocumentReviewUploadIntentViewV2,
     PdfDocumentReviewUploadIntentView,
 )
-from eom_catalog_contracts import OfficeDocumentReviewSourcePointer
+from eom_catalog_contracts import (
+    OfficeDocumentReviewMemberPointerV2,
+    OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
+)
 from eom_identifiers import content_sha256, new_pdf_review_upload_intent_id
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
@@ -46,9 +50,16 @@ _RETRYABLE_CATALOG_CODES = frozenset(
         "PDF_DOCUMENT_REVIEW_RENDERER_FAILED",
         "PDF_DOCUMENT_REVIEW_PAGE_RENDER_FAILED",
         "PDF_DOCUMENT_REVIEW_UPLOAD_WRITE_FAILED",
+        "DOCUMENT_REVIEW_PROJECTION_FAILED",
         "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE",
         "OFFICE_DOCUMENT_CONVERSION_FAILED",
+        "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID",
+        "OFFICE_DOCUMENT_CONVERSION_EXTENSION_FAILED",
+        "OFFICE_DOCUMENT_CONVERSION_EXECUTION_FAILED",
+        "OFFICE_DOCUMENT_CONVERSION_RETURNED_FAILURE",
         "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+        "OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID",
+        "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
     }
 )
 
@@ -260,7 +271,9 @@ class PdfDocumentReviewApplicationService:
             assert claim.replayed_view is not None
             return claim.replayed_command_id, claim.replayed_view
         assert claim.lease_owner is not None
-        source_document: OfficeDocumentReviewSourcePointer | None = None
+        source_document: (
+            OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2 | None
+        ) = None
         try:
             resolved_source = self.catalog.ingest_office_document_review_source(
                 upload.path,
@@ -300,6 +313,7 @@ class PdfDocumentReviewApplicationService:
                 error_code=exc.code,
                 retryable=retryable,
                 document=source_document,
+                retained_source=exc.retained_source,
             )
             raise ApiError(
                 503 if retryable else 422,
@@ -478,7 +492,7 @@ class PdfDocumentReviewApplicationService:
         *,
         command_id: str,
         workflow_id: str,
-        document: OfficeDocumentReviewSourcePointer,
+        document: OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2,
     ) -> DocumentReviewUploadIntentViewV2:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
@@ -518,7 +532,8 @@ class PdfDocumentReviewApplicationService:
         *,
         error_code: str,
         retryable: bool,
-        document: OfficeDocumentReviewSourcePointer | None,
+        document: OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2 | None,
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None,
     ) -> None:
         now = datetime.now(UTC)
         with transaction(self.sessions) as session:
@@ -541,6 +556,10 @@ class PdfDocumentReviewApplicationService:
                 record.source_artifact_revision_id = document.original_source.artifact_revision_id
                 record.source_sha256 = document.original_source.sha256
                 record.page_count = review.page_count
+            elif retained_source is not None:
+                record.source_artifact_id = retained_source.artifact_id
+                record.source_artifact_revision_id = retained_source.artifact_revision_id
+                record.source_sha256 = retained_source.sha256
             record.lock_version += 1
             record.updated_at = now
 

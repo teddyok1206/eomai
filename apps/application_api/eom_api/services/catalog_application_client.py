@@ -12,7 +12,7 @@ import stat
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
@@ -64,8 +64,12 @@ from eom_catalog_contracts import (
     MockExamItemReviewPublicationResult,
     MockExamReviewEligibilityResult,
     OfficeDocumentReviewIntakeCommand,
+    OfficeDocumentReviewIntakeCommandV3,
     OfficeDocumentReviewIntakeResponse,
+    OfficeDocumentReviewIntakeResponseV3,
+    OfficeDocumentReviewMemberPointerV2,
     OfficeDocumentReviewSourcePointer,
+    OfficeDocumentReviewSourcePointerV2,
     PdfDocumentReviewIntakeCommand,
     PdfDocumentReviewIntakeResponse,
     PdfDocumentReviewPageMediaQuery,
@@ -128,9 +132,16 @@ class ProxiedItemMedia:
 
 
 class CatalogApplicationClientError(RuntimeError):
-    def __init__(self, code: str | CatalogApplicationErrorCode, message: str) -> None:
+    def __init__(
+        self,
+        code: str | CatalogApplicationErrorCode,
+        message: str,
+        *,
+        retained_source: OfficeDocumentReviewMemberPointerV2 | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = str(code)
+        self.retained_source = retained_source
 
 
 class CatalogApplicationClient:
@@ -280,7 +291,7 @@ class CatalogApplicationClient:
             "application/vnd.hancom.hwpx",
         ],
         idempotency_key: str,
-    ) -> OfficeDocumentReviewSourcePointer:
+    ) -> OfficeDocumentReviewSourcePointer | OfficeDocumentReviewSourcePointerV2:
         """Stream one stable document to Catalog and return its immutable PDF projection."""
 
         descriptor = -1
@@ -306,17 +317,42 @@ class CatalogApplicationClient:
                 digest.update(chunk)
                 remaining -= len(chunk)
             os.lseek(descriptor, 0, os.SEEK_SET)
-            command = OfficeDocumentReviewIntakeCommand(
-                actor_id=actor_id,
-                original_filename=original_filename,
-                source_format=source_format,
-                media_type=media_type,
-                idempotency_key=idempotency_key,
-                content_length=before.st_size,
-                sha256="sha256:" + digest.hexdigest(),
-            )
+            if source_format == "PDF":
+                command: OfficeDocumentReviewIntakeCommand | OfficeDocumentReviewIntakeCommandV3 = (
+                    OfficeDocumentReviewIntakeCommand(
+                        actor_id=actor_id,
+                        original_filename=original_filename,
+                        source_format=source_format,
+                        media_type=media_type,
+                        idempotency_key=idempotency_key,
+                        content_length=before.st_size,
+                        sha256="sha256:" + digest.hexdigest(),
+                    )
+                )
+            else:
+                command = OfficeDocumentReviewIntakeCommandV3(
+                    actor_id=actor_id,
+                    original_filename=original_filename,
+                    source_format=source_format,
+                    media_type=cast(
+                        Literal[
+                            "application/vnd.hancom.hwp",
+                            "application/vnd.hancom.hwpx",
+                        ],
+                        media_type,
+                    ),
+                    idempotency_key=idempotency_key,
+                    content_length=before.st_size,
+                    sha256="sha256:" + digest.hexdigest(),
+                )
             payload = command.model_dump(mode="json")
-            validate_contract("document-review-intake-request-v2", payload)
+            use_v3 = isinstance(command, OfficeDocumentReviewIntakeCommandV3)
+            validate_contract(
+                "document-review-intake-request-v3"
+                if use_v3
+                else "document-review-intake-request-v2",
+                payload,
+            )
             self._validate_socket()
             connection.settimeout(CONNECT_TIMEOUT_SECONDS)
             connection.connect(str(self.socket_path))
@@ -361,9 +397,24 @@ class CatalogApplicationClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError("Document review intake response is not an object")
-            validate_contract("document-review-intake-response-v2", value)
-            response = OfficeDocumentReviewIntakeResponse.model_validate(value)
+            validate_contract(
+                "document-review-intake-response-v3"
+                if use_v3
+                else "document-review-intake-response-v2",
+                value,
+            )
+            response = (
+                OfficeDocumentReviewIntakeResponseV3.model_validate(value)
+                if use_v3
+                else OfficeDocumentReviewIntakeResponse.model_validate(value)
+            )
             if response.status == "ERROR":
+                if isinstance(response, OfficeDocumentReviewIntakeResponseV3):
+                    raise CatalogApplicationClientError(
+                        response.error_code or "CATALOG_APPLICATION_INTERNAL_ERROR",
+                        "Catalog Office document-review intake failed",
+                        retained_source=response.retained_source,
+                    )
                 self._raise_remote_error(response.error_code)
             assert response.document is not None
             return response.document
