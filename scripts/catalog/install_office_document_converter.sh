@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly PACKAGES=(libreoffice-writer libreoffice-h2orestart unzip)
+readonly PACKAGES=(libreoffice-writer libreoffice-math libreoffice-h2orestart unzip)
 readonly LIBREOFFICE=/usr/bin/libreoffice
+readonly LIBREOFFICE_MATH_COMPONENT=/usr/lib/libreoffice/program/libsmlo.so
+readonly LIBREOFFICE_MATH_REGISTRY=/etc/libreoffice/registry/math.xcd
 readonly H2ORESTART_VERSION=0.7.14-eom.1
 readonly H2ORESTART_DECLARED_VERSION=0.7.14.1
 readonly H2ORESTART_SHA256=2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96
@@ -23,7 +25,14 @@ fail() {
 }
 
 [[ "$(id -u)" == "0" ]] || fail "Office converter installation requires root"
-(( $# <= 1 )) || fail "usage: $0 [/path/to/H2Orestart-0.7.14-eom.1.oxt]"
+verify_only=false
+if (($# > 0)) && [[ "$1" == "--verify" ]]; then
+  verify_only=true
+  shift
+fi
+(( $# <= 1 )) || fail "usage: $0 [--verify] [/path/to/H2Orestart-0.7.14-eom.1.oxt]"
+[[ "${verify_only}" == false || $# == 0 ]] || \
+  fail "--verify does not accept an extension bundle"
 [[ -r /etc/os-release ]] || fail "Ubuntu release metadata is unavailable"
 # shellcheck disable=SC1091
 source /etc/os-release
@@ -37,6 +46,8 @@ for package in "${PACKAGES[@]}"; do
   fi
 done
 if ((${#missing_packages[@]})); then
+  [[ "${verify_only}" == false ]] || \
+    fail "reviewed Office converter packages are not all installed"
   export DEBIAN_FRONTEND=noninteractive
   apt-get install --no-install-recommends --yes "${missing_packages[@]}"
 fi
@@ -71,6 +82,14 @@ libreoffice_resolved=$(readlink -f "${LIBREOFFICE}")
   fail "LibreOffice executable ownership is invalid"
 (( (8#$(stat -c '%a' "${libreoffice_resolved}") & 8#022) == 0 )) || \
   fail "LibreOffice executable is group/world writable"
+for dependency in "${LIBREOFFICE_MATH_COMPONENT}" "${LIBREOFFICE_MATH_REGISTRY}"; do
+  [[ -f "${dependency}" && ! -L "${dependency}" && -r "${dependency}" ]] || \
+    fail "LibreOffice Math runtime dependency is unavailable"
+  [[ "$(stat -c '%U:%G' "${dependency}")" == "root:root" ]] || \
+    fail "LibreOffice Math runtime dependency ownership is invalid"
+  (( (8#$(stat -c '%a' "${dependency}") & 8#022) == 0 )) || \
+    fail "LibreOffice Math runtime dependency is group/world writable"
+done
 [[ -f "${H2ORESTART}" && ! -L "${H2ORESTART}" && -r "${H2ORESTART}" ]] || \
   fail "reviewed H2Orestart release bundle is unavailable"
 [[ "$(stat -c '%U:%G' "${H2ORESTART}")" == "root:root" ]] || \
@@ -89,15 +108,19 @@ libreoffice_resolved=$(readlink -f "${LIBREOFFICE}")
   fail "installed H2Orestart compatibility provenance is unavailable"
 
 libreoffice_version=$(dpkg-query -W -f='${Version}' libreoffice-writer)
+libreoffice_math_version=$(dpkg-query -W -f='${Version}' libreoffice-math)
 distribution_h2orestart_version=$(dpkg-query -W -f='${Version}' libreoffice-h2orestart)
 [[ "${libreoffice_version}" == 4:24.2.* || "${libreoffice_version}" == 24.2.* ]] || \
   fail "LibreOffice version is outside the reviewed 24.2 family"
+[[ "${libreoffice_math_version}" == "${libreoffice_version}" ]] || \
+  fail "LibreOffice Writer and Math package versions differ"
 [[ "${distribution_h2orestart_version}" == 0.6.* ]] || \
   fail "H2Orestart version is outside the reviewed 0.6 family"
 "${LIBREOFFICE}" --headless --version >/dev/null
 
 printf 'office_document_converter=READY\n'
 printf 'libreoffice_writer_version=%s\n' "${libreoffice_version}"
+printf 'libreoffice_math_version=%s\n' "${libreoffice_math_version}"
 printf 'distribution_h2orestart_version=%s\n' "${distribution_h2orestart_version}"
 printf 'h2orestart_version=%s\n' "${H2ORESTART_VERSION}"
 printf 'h2orestart_declared_version=%s\n' "${H2ORESTART_DECLARED_VERSION}"

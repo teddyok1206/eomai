@@ -111,6 +111,15 @@ address the importer boundary or break source fidelity and reproducibility.
 The installer additionally requires the Ubuntu `unzip` package only to validate the OXT container
 and its declared version before installation; it is not part of the runtime document parser.
 
+H2Orestart maps HWP/HWPX equation controls to LibreOffice Math UNO objects, including equations
+inside table cells. `libreoffice-writer` alone can load ordinary documents but returns no Math
+property object when the separate `libreoffice-math` package is absent; the importer then aborts
+without producing a PDF. The reviewed dependency closure therefore includes the same-version
+`libreoffice-math` package. Installation and deployment verify the root-owned Math component and
+registry files, and the isolated worker rejects a missing component at dependency validation rather
+than reporting an ambiguous missing output. This adds no networked service or conversion path: Math
+is a local LibreOffice component used by the already selected H2Orestart adapter.
+
 Conversion uses a fresh mode-0700 workspace and a fresh LibreOffice user profile, no network, a
 bounded wall-clock timeout, bounded input/output, and no NAS access from the converter process. The
 Artifact-owning application validates the output PDF before commit. Macros, embedded executable

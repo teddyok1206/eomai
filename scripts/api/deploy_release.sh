@@ -30,6 +30,7 @@ METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metad
 METADATA_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-deployment-metadata"
 RUNTIME_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_runtime_isolation.sh"
 RUNTIME_VERIFIER_TARGET="/usr/local/libexec/eom-api/verify-runtime-isolation"
+OFFICE_CONVERTER_INSTALLER="${REPOSITORY_ROOT}/scripts/catalog/install_office_document_converter.sh"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_mock_exam_deployment_admission.py"
 MOCK_EXAM_DEPLOYMENT_ADMISSION_TARGET="/usr/local/libexec/eom-api/verify-mock-exam-deployment-admission"
 WORKFLOW_RUNNER_HOLD_LIBRARY="${REPOSITORY_ROOT}/scripts/api/workflow_runner_deployment_hold.sh"
@@ -2682,6 +2683,7 @@ require_no_staged_workflow_runner_accelerator() {
 
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
+  sudo -n "${OFFICE_CONVERTER_INSTALLER}"
   sudo -n install -d -o eom-api -g eom-api -m 0700 \
     /var/lib/eom-api/pdf-review-uploads
   systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
@@ -2715,6 +2717,7 @@ install_service() {
 
 verify_service() {
   local consumer
+  sudo -n "${OFFICE_CONVERTER_INSTALLER}" --verify
   # Standalone verification validates the embedded typed resource without
   # claiming that the checkout still denotes the installed release.
   verify_install_mode validated-resource-only

@@ -11,6 +11,7 @@ import pytest
 from eom_catalog_service.office_converter_worker import (
     H2ORESTART_BUNDLE,
     H2ORESTART_BUNDLE_SHA256,
+    LIBREOFFICE_MATH_COMPONENT,
     OfficeConverterError,
     _write_outcome,
     convert_workspace,
@@ -57,6 +58,7 @@ def test_fixed_workspace_worker_converts_hwpx_to_bounded_pdf(tmp_path: Path) -> 
         instance,
         conversion_root=tmp_path,
         libreoffice=Path("/bin/true"),
+        libreoffice_math_component=Path("/bin/true"),
         unopkg=Path("/bin/true"),
         h2orestart_bundle=Path("/bin/true"),
         h2orestart_bundle_sha256=hashlib.sha256(Path("/bin/true").read_bytes()).hexdigest(),
@@ -86,6 +88,7 @@ def test_fixed_workspace_worker_rejects_unreviewed_extension_bundle(tmp_path: Pa
             instance,
             conversion_root=tmp_path,
             libreoffice=Path("/bin/true"),
+            libreoffice_math_component=Path("/bin/true"),
             unopkg=Path("/bin/true"),
             h2orestart_bundle=Path("/bin/true"),
             h2orestart_bundle_sha256="0" * 64,
@@ -97,6 +100,28 @@ def test_fixed_workspace_worker_pins_compatibility_extension_identity() -> None:
     assert H2ORESTART_BUNDLE_SHA256 == (
         "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96"
     )
+    assert Path("/usr/lib/libreoffice/program/libsmlo.so") == LIBREOFFICE_MATH_COMPONENT
+
+
+def test_fixed_workspace_worker_requires_libreoffice_math_component(tmp_path: Path) -> None:
+    instance = "officeconv_" + "5" * 32
+    workspace = tmp_path / instance
+    workspace.mkdir(mode=0o700)
+    _write_minimal_hwpx(workspace / "original.hwpx")
+
+    with pytest.raises(OfficeConverterError, match="dependency is unavailable") as error:
+        convert_workspace(
+            instance,
+            conversion_root=tmp_path,
+            libreoffice=Path("/bin/true"),
+            libreoffice_math_component=tmp_path / "missing-libsmlo.so",
+            unopkg=Path("/bin/true"),
+            h2orestart_bundle=Path("/bin/true"),
+            h2orestart_bundle_sha256=hashlib.sha256(Path("/bin/true").read_bytes()).hexdigest(),
+        )
+
+    assert error.value.code == "OFFICE_DOCUMENT_CONVERSION_DEPENDENCY_INVALID"
+    assert error.value.stage == "DEPENDENCY_VALIDATION"
 
 
 def test_fixed_workspace_worker_rejects_unsafe_hwpx_member(tmp_path: Path) -> None:
@@ -114,6 +139,7 @@ def test_fixed_workspace_worker_rejects_unsafe_hwpx_member(tmp_path: Path) -> No
             instance,
             conversion_root=tmp_path,
             libreoffice=Path("/bin/true"),
+            libreoffice_math_component=Path("/bin/true"),
             unopkg=Path("/bin/true"),
             h2orestart_bundle=Path("/bin/true"),
             h2orestart_bundle_sha256=hashlib.sha256(Path("/bin/true").read_bytes()).hexdigest(),
@@ -264,7 +290,12 @@ def test_office_converter_installer_pins_reviewed_ubuntu_packages() -> None:
     )
 
     assert "libreoffice-writer" in installer
+    assert "libreoffice-math" in installer
     assert "libreoffice-h2orestart" in installer
+    assert "/usr/lib/libreoffice/program/libsmlo.so" in installer
+    assert "/etc/libreoffice/registry/math.xcd" in installer
+    assert '"${libreoffice_math_version}" == "${libreoffice_version}"' in installer
+    assert '"${verify_only}" == false' in installer
     assert '"${VERSION_ID:-}" == "24.04"' in installer
     assert '"${libreoffice_version}" == 4:24.2.*' in installer
     assert '"${distribution_h2orestart_version}" == 0.6.*' in installer
@@ -275,6 +306,16 @@ def test_office_converter_installer_pins_reviewed_ubuntu_packages() -> None:
     assert "ConvGraphics-crop-compatibility.patch" in installer
     assert "--no-install-recommends" in installer
     assert "curl" not in installer and "wget" not in installer
+
+
+def test_deployers_close_office_converter_dependency_set() -> None:
+    root = Path(__file__).resolve().parents[2]
+    release = (root / "scripts/api/deploy_release.sh").read_text(encoding="utf-8")
+    identities = (root / "scripts/infra/deploy_service_identities.sh").read_text(encoding="utf-8")
+
+    assert 'sudo -n "${OFFICE_CONVERTER_INSTALLER}"' in release
+    assert 'sudo -n "${OFFICE_CONVERTER_INSTALLER}" --verify' in release
+    assert '"${REPOSITORY}/scripts/catalog/install_office_document_converter.sh"' in identities
 
 
 def test_h2orestart_compatibility_patch_is_pinned_and_bounded() -> None:

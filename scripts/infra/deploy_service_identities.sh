@@ -163,6 +163,7 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
   "${REPOSITORY}/infra/systemd/eom-hwpx-content-team@.service" \
   /etc/systemd/system/eom-hwpx-content-team@.service
+"${REPOSITORY}/scripts/catalog/install_office_document_converter.sh"
 install -o root -g root -m 0644 \
   "${REPOSITORY}/infra/systemd/eom-office-converter@.service" \
   /etc/systemd/system/eom-office-converter@.service

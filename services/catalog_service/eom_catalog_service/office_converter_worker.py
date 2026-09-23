@@ -19,6 +19,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 
 CONVERSION_ROOT: Final = Path("/var/lib/eom-catalog-api/staging/office-conversion")
 LIBREOFFICE: Final = Path("/usr/bin/libreoffice")
+LIBREOFFICE_MATH_COMPONENT: Final = Path("/usr/lib/libreoffice/program/libsmlo.so")
 UNOPKG: Final = Path("/usr/bin/unopkg")
 H2ORESTART_BUNDLE: Final = Path("/srv/eom/vendor/h2orestart/0.7.14-eom.1/H2Orestart.oxt")
 H2ORESTART_BUNDLE_SHA256: Final = "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96"
@@ -158,6 +159,7 @@ def convert_workspace(
     *,
     conversion_root: Path = CONVERSION_ROOT,
     libreoffice: Path = LIBREOFFICE,
+    libreoffice_math_component: Path = LIBREOFFICE_MATH_COMPONENT,
     unopkg: Path = UNOPKG,
     h2orestart_bundle: Path = H2ORESTART_BUNDLE,
     h2orestart_bundle_sha256: str = H2ORESTART_BUNDLE_SHA256,
@@ -196,6 +198,7 @@ def convert_workspace(
         ) from exc
     try:
         actual_libreoffice = _require_tool(libreoffice, executable=True)
+        _require_tool(libreoffice_math_component, executable=False)
         actual_unopkg = _require_tool(unopkg, executable=True)
         actual_h2orestart_bundle = _require_tool(h2orestart_bundle, executable=False)
     except OfficeConverterError as exc:
