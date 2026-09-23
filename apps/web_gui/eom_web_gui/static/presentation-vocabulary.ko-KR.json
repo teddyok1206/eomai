@@ -147,7 +147,10 @@
     "APPLICATION_API_REQUEST_FAILED": {"label": "서비스 요청을 완료하지 못했습니다.", "audience": "USER", "action": "상태를 새로고침한 뒤 다시 확인하세요."},
     "CUSTOMER_SUPPORT_NOT_READY": {"label": "고객센터가 아직 준비되지 않았습니다.", "audience": "USER", "action": "기존 화면은 계속 사용할 수 있습니다. 잠시 후 다시 확인하거나 외부 운영 채널로 관리자에게 알려주세요."},
     "CUSTOMER_SUPPORT_CONTRACT_INVALID": {"label": "고객센터 실행 구성이 일치하지 않습니다.", "audience": "USER", "action": "중복 문의를 보내지 말고 외부 운영 채널로 관리자에게 알려주세요."},
-    "CONTROL_PRESET_NOT_PUBLISHED": {"label": "고객센터 실행 설정이 아직 활성화되지 않았습니다.", "audience": "USER", "action": "중복 문의를 보내지 말고 외부 운영 채널로 관리자에게 알려주세요."}
+    "CONTROL_PRESET_NOT_PUBLISHED": {"label": "고객센터 실행 설정이 아직 활성화되지 않았습니다.", "audience": "USER", "action": "중복 문의를 보내지 말고 외부 운영 채널로 관리자에게 알려주세요."},
+    "OFFICE_DOCUMENT_CONVERSION_FAILED": {"label": "이 HWP/HWPX 문서를 PDF 검토 화면으로 변환하지 못했습니다.", "audience": "USER", "action": "같은 파일을 반복 제출하지 말고, 가능하면 한글에서 PDF로 저장해 올리거나 문의 번호와 함께 관리자에게 알려주세요."},
+    "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING": {"label": "HWP/HWPX 변환 결과를 만들지 못했습니다.", "audience": "USER", "action": "같은 파일을 반복 제출하지 말고, 가능하면 한글에서 PDF로 저장해 올리거나 문의 번호와 함께 관리자에게 알려주세요."},
+    "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE": {"label": "문서 변환기를 일시적으로 사용할 수 없습니다.", "audience": "USER", "action": "잠시 후 다시 시도하거나 문의 번호와 함께 관리자에게 알려주세요."}
   },
   "terms": {
     "workflow_id": {"label": "문항 제작 진행 ID", "audience": "DIAGNOSTIC", "description": "한 번의 문항 제작 과정을 식별합니다."},

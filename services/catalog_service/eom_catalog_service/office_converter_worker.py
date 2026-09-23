@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import stat
@@ -14,7 +15,9 @@ from typing import Final
 
 CONVERSION_ROOT: Final = Path("/var/lib/eom-catalog-api/staging/office-conversion")
 LIBREOFFICE: Final = Path("/usr/bin/libreoffice")
-H2ORESTART_JAR: Final = Path("/usr/lib/libreoffice/share/extensions/h2orestart/H2Orestart.jar")
+UNOPKG: Final = Path("/usr/bin/unopkg")
+H2ORESTART_BUNDLE: Final = Path("/srv/eom/vendor/h2orestart/0.7.14/H2Orestart.oxt")
+H2ORESTART_BUNDLE_SHA256: Final = "cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8"
 MAX_SOURCE_BYTES: Final = 256 * 1024 * 1024
 MAX_OUTPUT_BYTES: Final = 256 * 1024 * 1024
 MAX_HWPX_MEMBERS: Final = 4096
@@ -51,7 +54,7 @@ def _require_regular(
     return metadata
 
 
-def _require_tool(path: Path) -> Path:
+def _require_tool(path: Path, *, executable: bool) -> Path:
     try:
         resolved = path.resolve(strict=True)
     except OSError as exc:
@@ -61,7 +64,7 @@ def _require_tool(path: Path) -> Path:
         metadata.st_uid != 0
         or metadata.st_gid != 0
         or metadata.st_mode & 0o022
-        or not os.access(resolved, os.X_OK if path.name == "libreoffice" else os.R_OK)
+        or not os.access(resolved, os.X_OK if executable else os.R_OK)
     ):
         raise OfficeConverterError("Office converter dependency identity is unsafe")
     return resolved
@@ -140,7 +143,9 @@ def convert_workspace(
     *,
     conversion_root: Path = CONVERSION_ROOT,
     libreoffice: Path = LIBREOFFICE,
-    h2orestart_jar: Path = H2ORESTART_JAR,
+    unopkg: Path = UNOPKG,
+    h2orestart_bundle: Path = H2ORESTART_BUNDLE,
+    h2orestart_bundle_sha256: str = H2ORESTART_BUNDLE_SHA256,
     run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
 ) -> Path:
     """Convert the one fixed source member in an already staged private workspace."""
@@ -167,8 +172,12 @@ def convert_workspace(
     source = source_candidates[0]
     source_format = "HWPX" if source.suffix.casefold() == ".hwpx" else "HWP"
     _validate_source(source, source_format, os.getuid())
-    actual_libreoffice = _require_tool(libreoffice)
-    _require_tool(h2orestart_jar)
+    actual_libreoffice = _require_tool(libreoffice, executable=True)
+    actual_unopkg = _require_tool(unopkg, executable=True)
+    actual_h2orestart_bundle = _require_tool(h2orestart_bundle, executable=False)
+    with actual_h2orestart_bundle.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != h2orestart_bundle_sha256:
+            raise OfficeConverterError("H2Orestart bundle hash differs from the reviewed release")
     output_directory = workspace / "converted"
     profile_directory = workspace / "profile"
     home_directory = workspace / "home"
@@ -182,6 +191,31 @@ def convert_workspace(
         stdout.chmod(0o600)
         stderr.chmod(0o600)
         try:
+            registered = run(
+                [
+                    str(actual_unopkg),
+                    f"-env:UserInstallation={profile_directory.as_uri()}",
+                    "add",
+                    "--force",
+                    "--suppress-license",
+                    str(actual_h2orestart_bundle),
+                ],
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_stream,
+                stderr=stderr_stream,
+                timeout=30,
+                env={
+                    "HOME": str(home_directory),
+                    "XDG_CACHE_HOME": str(cache_directory),
+                    "LANG": "C.UTF-8",
+                    "LC_ALL": "C.UTF-8",
+                    "PATH": "/usr/bin:/bin",
+                    "TZ": "UTC",
+                },
+            )
+            if registered.returncode != 0:
+                raise OfficeConverterError("H2Orestart profile registration returned failure")
             completed = run(
                 [
                     str(actual_libreoffice),

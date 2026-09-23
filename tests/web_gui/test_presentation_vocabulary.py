@@ -122,6 +122,9 @@ def test_known_user_errors_have_explanation_and_next_action() -> None:
         "CUSTOMER_SUPPORT_NOT_READY",
         "CUSTOMER_SUPPORT_CONTRACT_INVALID",
         "CONTROL_PRESET_NOT_PUBLISHED",
+        "OFFICE_DOCUMENT_CONVERSION_FAILED",
+        "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+        "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE",
         "HTTP_500",
     ):
         assert errors[code]["label"]

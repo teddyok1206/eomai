@@ -34,6 +34,7 @@ InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/usr/local/bin/codex
 ReadWritePaths=/var/lib/eom-catalog-api/staging/office-conversion/%i
+ReadOnlyPaths=/srv/eom/vendor/h2orestart/0.7.14/H2Orestart.oxt
 
 RestrictAddressFamilies=AF_UNIX
 MemoryMax=2G

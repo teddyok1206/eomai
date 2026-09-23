@@ -1210,6 +1210,11 @@ class CatalogApplicationClient:
                         error_code,
                         "Catalog PDF document-review intake failed",
                     ) from None
+                if error_code.startswith("OFFICE_DOCUMENT_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog Office document conversion failed",
+                    ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                     "Catalog application returned an unknown error code",

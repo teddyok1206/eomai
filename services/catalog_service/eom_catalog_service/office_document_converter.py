@@ -14,7 +14,7 @@ from eom_catalog_contracts import OfficeDocumentReviewConversionIdentity
 from eom_identifiers import sha256_file
 
 from eom_catalog_service.office_converter_worker import (
-    H2ORESTART_JAR,
+    H2ORESTART_BUNDLE,
     INSTANCE_PATTERN,
     LIBREOFFICE,
     MAX_OUTPUT_BYTES,
@@ -131,14 +131,14 @@ class SystemdOfficeDocumentConverter:
         *,
         systemctl: Path = SYSTEMCTL,
         libreoffice: Path = LIBREOFFICE,
-        h2orestart_jar: Path = H2ORESTART_JAR,
+        h2orestart_bundle: Path = H2ORESTART_BUNDLE,
         run: CommandRunner = _run_command,
         token_hex: Callable[[int], str] = secrets.token_hex,
     ) -> None:
         self.staging_root = staging_root
         self.systemctl = _require_root_file(systemctl, executable=True)
         self.libreoffice = _require_root_file(libreoffice, executable=True)
-        self.h2orestart_jar = _require_root_file(h2orestart_jar, executable=False)
+        self.h2orestart_bundle = _require_root_file(h2orestart_bundle, executable=False)
         self.run = run
         self.token_hex = token_hex
 
@@ -224,5 +224,5 @@ class SystemdOfficeDocumentConverter:
             review_pdf_sha256=sha256_file(output),
             libreoffice_version=_version(self.libreoffice, run=self.run),
             libreoffice_sha256=sha256_file(self.libreoffice),
-            h2orestart_sha256=sha256_file(self.h2orestart_jar),
+            h2orestart_sha256=sha256_file(self.h2orestart_bundle),
         )

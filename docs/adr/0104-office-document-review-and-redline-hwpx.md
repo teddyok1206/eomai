@@ -80,8 +80,16 @@ operation. No correction binary is copied into PostgreSQL or a JSON response.
 
 The Office conversion adapter uses the distribution-owned LibreOffice Writer executable and the
 H2Orestart extension because no existing EOM module can render arbitrary HWP/HWPX documents. This
-is a real adapter boundary and the reason for the new system dependency. The release records the
-LibreOffice executable/version and extension JAR SHA-256 in the intake manifest.
+is a real adapter boundary and the reason for the new system dependency. Ubuntu 24.04 supplies
+H2Orestart 0.6.1 as the base package, but that importer aborts on valid newer HWPX features observed
+in production documents. Each fresh conversion profile therefore registers the reviewed upstream
+H2Orestart 0.7.14 OXT whose release digest is pinned by the installer and worker. The OXT remains a
+root-owned, read-only runtime artifact outside Git; conversion still has no network access. The
+release records the LibreOffice executable/version and exact extension bundle SHA-256 in the intake
+manifest.
+
+The installer additionally requires the Ubuntu `unzip` package only to validate the OXT container
+and its declared version before installation; it is not part of the runtime document parser.
 
 Conversion uses a fresh mode-0700 workspace and a fresh LibreOffice user profile, no network, a
 bounded wall-clock timeout, bounded input/output, and no NAS access from the converter process. The

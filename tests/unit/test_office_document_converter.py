@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import stat
 import subprocess
 import zipfile
@@ -36,24 +37,54 @@ def test_fixed_workspace_worker_converts_hwpx_to_bounded_pdf(tmp_path: Path) -> 
     workspace = tmp_path / instance
     workspace.mkdir(mode=0o700)
     _write_minimal_hwpx(workspace / "original.hwpx")
+    calls: list[list[str]] = []
 
     def fake_run(arguments: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        calls.append(arguments)
         assert kwargs["env"]["XDG_CACHE_HOME"] == str(workspace / "cache")
         assert (workspace / "cache").stat().st_mode & 0o777 == 0o700
-        output_directory = Path(arguments[arguments.index("--outdir") + 1])
-        (output_directory / "original.pdf").write_bytes(b"%PDF-1.7\nconverted")
+        if "--outdir" in arguments:
+            output_directory = Path(arguments[arguments.index("--outdir") + 1])
+            (output_directory / "original.pdf").write_bytes(b"%PDF-1.7\nconverted")
         return subprocess.CompletedProcess(arguments, 0, b"", b"")
 
     output = convert_workspace(
         instance,
         conversion_root=tmp_path,
         libreoffice=Path("/bin/true"),
-        h2orestart_jar=Path("/bin/true"),
+        unopkg=Path("/bin/true"),
+        h2orestart_bundle=Path("/bin/true"),
+        h2orestart_bundle_sha256=hashlib.sha256(Path("/bin/true").read_bytes()).hexdigest(),
         run=fake_run,
     )
 
     assert output.read_bytes().startswith(b"%PDF-1.7")
     assert output.stat().st_mode & 0o777 == 0o600
+    assert calls[0][1:5] == [
+        f"-env:UserInstallation={(workspace / 'profile').as_uri()}",
+        "add",
+        "--force",
+        "--suppress-license",
+    ]
+    assert calls[0][-1] == "/usr/bin/true"
+    assert "--outdir" in calls[1]
+
+
+def test_fixed_workspace_worker_rejects_unreviewed_extension_bundle(tmp_path: Path) -> None:
+    instance = "officeconv_" + "4" * 32
+    workspace = tmp_path / instance
+    workspace.mkdir(mode=0o700)
+    _write_minimal_hwpx(workspace / "original.hwpx")
+
+    with pytest.raises(OfficeConverterError, match="bundle hash differs"):
+        convert_workspace(
+            instance,
+            conversion_root=tmp_path,
+            libreoffice=Path("/bin/true"),
+            unopkg=Path("/bin/true"),
+            h2orestart_bundle=Path("/bin/true"),
+            h2orestart_bundle_sha256="0" * 64,
+        )
 
 
 def test_fixed_workspace_worker_rejects_unsafe_hwpx_member(tmp_path: Path) -> None:
@@ -71,7 +102,9 @@ def test_fixed_workspace_worker_rejects_unsafe_hwpx_member(tmp_path: Path) -> No
             instance,
             conversion_root=tmp_path,
             libreoffice=Path("/bin/true"),
-            h2orestart_jar=Path("/bin/true"),
+            unopkg=Path("/bin/true"),
+            h2orestart_bundle=Path("/bin/true"),
+            h2orestart_bundle_sha256=hashlib.sha256(Path("/bin/true").read_bytes()).hexdigest(),
         )
 
 
@@ -105,7 +138,7 @@ def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(
         staging_root,
         systemctl=Path("/bin/true"),
         libreoffice=Path("/bin/true"),
-        h2orestart_jar=Path("/bin/true"),
+        h2orestart_bundle=Path("/bin/true"),
         run=fake_run,
         token_hex=lambda _: "3" * 32,
     )
@@ -132,6 +165,7 @@ def test_office_converter_unit_and_polkit_are_fixed_and_nas_is_inaccessible() ->
     assert "InaccessiblePaths=/mnt/nas" in unit
     assert "PrivateNetwork=true" in unit
     assert "ReadWritePaths=/var/lib/eom-catalog-api/staging/office-conversion/%i" in unit
+    assert "ReadOnlyPaths=/srv/eom/vendor/h2orestart/0.7.14/H2Orestart.oxt" in unit
     assert "eom_catalog_service.office_converter_worker %i" in unit
     assert "^eom-office-converter@officeconv_[0-9a-f]{32}\\.service$" in polkit
     assert 'subject.user === "eom-catalog-manager"' in polkit
@@ -147,6 +181,8 @@ def test_office_converter_installer_pins_reviewed_ubuntu_packages() -> None:
     assert "libreoffice-h2orestart" in installer
     assert '"${VERSION_ID:-}" == "24.04"' in installer
     assert '"${libreoffice_version}" == 4:24.2.*' in installer
-    assert '"${h2orestart_version}" == 0.6.*' in installer
+    assert '"${distribution_h2orestart_version}" == 0.6.*' in installer
+    assert "H2ORESTART_VERSION=0.7.14" in installer
+    assert "cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8" in installer
     assert "--no-install-recommends" in installer
     assert "curl" not in installer and "wget" not in installer
