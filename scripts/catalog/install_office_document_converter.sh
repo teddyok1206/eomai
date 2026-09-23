@@ -3,10 +3,19 @@ set -euo pipefail
 
 readonly PACKAGES=(libreoffice-writer libreoffice-h2orestart unzip)
 readonly LIBREOFFICE=/usr/bin/libreoffice
-readonly H2ORESTART_VERSION=0.7.14
-readonly H2ORESTART_SHA256=cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8
+readonly H2ORESTART_VERSION=0.7.14-eom.1
+readonly H2ORESTART_DECLARED_VERSION=0.7.14.1
+readonly H2ORESTART_SHA256=2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96
+readonly H2ORESTART_PATCH_SHA256=ea68732e8ac46f088cdff378c3b184d9251e8703874446c382b04393b0405fa2
+readonly SCRIPT_DIRECTORY=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+readonly REPOSITORY_ROOT=$(cd -- "${SCRIPT_DIRECTORY}/../.." && pwd)
+readonly H2ORESTART_PROVENANCE_DIRECTORY=${REPOSITORY_ROOT}/third_party/h2orestart/${H2ORESTART_VERSION}
+readonly H2ORESTART_PATCH_SOURCE=${H2ORESTART_PROVENANCE_DIRECTORY}/ConvGraphics-crop-compatibility.patch
+readonly H2ORESTART_README_SOURCE=${H2ORESTART_PROVENANCE_DIRECTORY}/README.md
 readonly H2ORESTART_DIRECTORY=/srv/eom/vendor/h2orestart/${H2ORESTART_VERSION}
 readonly H2ORESTART=${H2ORESTART_DIRECTORY}/H2Orestart.oxt
+readonly H2ORESTART_PATCH=${H2ORESTART_DIRECTORY}/ConvGraphics-crop-compatibility.patch
+readonly H2ORESTART_README=${H2ORESTART_DIRECTORY}/README.md
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -14,7 +23,7 @@ fail() {
 }
 
 [[ "$(id -u)" == "0" ]] || fail "Office converter installation requires root"
-(( $# <= 1 )) || fail "usage: $0 [/path/to/H2Orestart-v0.7.14.oxt]"
+(( $# <= 1 )) || fail "usage: $0 [/path/to/H2Orestart-0.7.14-eom.1.oxt]"
 [[ -r /etc/os-release ]] || fail "Ubuntu release metadata is unavailable"
 # shellcheck disable=SC1091
 source /etc/os-release
@@ -40,9 +49,18 @@ if (( $# == 1 )); then
     fail "H2Orestart release bundle hash differs from the reviewed release"
   unzip -tqq "${source_bundle}" >/dev/null || fail "H2Orestart release bundle is not a valid OXT"
   unzip -p "${source_bundle}" description.xml | \
-    grep -Fq '<version value="0.7.14"/>' || fail "H2Orestart release bundle version differs"
+    grep -Fq "<version value=\"${H2ORESTART_DECLARED_VERSION}\"/>" || \
+    fail "H2Orestart release bundle version differs"
+  [[ -f "${H2ORESTART_PATCH_SOURCE}" && ! -L "${H2ORESTART_PATCH_SOURCE}" ]] || \
+    fail "H2Orestart compatibility patch source is unavailable"
+  [[ "$(sha256sum "${H2ORESTART_PATCH_SOURCE}" | cut -d' ' -f1)" == \
+    "${H2ORESTART_PATCH_SHA256}" ]] || fail "H2Orestart compatibility patch hash differs"
+  [[ -f "${H2ORESTART_README_SOURCE}" && ! -L "${H2ORESTART_README_SOURCE}" ]] || \
+    fail "H2Orestart compatibility provenance is unavailable"
   install -d -o root -g root -m 0755 "${H2ORESTART_DIRECTORY}"
   install -o root -g root -m 0644 "${source_bundle}" "${H2ORESTART}"
+  install -o root -g root -m 0644 "${H2ORESTART_PATCH_SOURCE}" "${H2ORESTART_PATCH}"
+  install -o root -g root -m 0644 "${H2ORESTART_README_SOURCE}" "${H2ORESTART_README}"
 fi
 
 libreoffice_resolved=$(readlink -f "${LIBREOFFICE}")
@@ -61,6 +79,14 @@ libreoffice_resolved=$(readlink -f "${LIBREOFFICE}")
   fail "H2Orestart release bundle is group/world writable"
 [[ "$(sha256sum "${H2ORESTART}" | cut -d' ' -f1)" == "${H2ORESTART_SHA256}" ]] || \
   fail "installed H2Orestart release bundle hash differs"
+[[ -f "${H2ORESTART_PATCH}" && ! -L "${H2ORESTART_PATCH}" ]] || \
+  fail "installed H2Orestart compatibility patch is unavailable"
+[[ "$(stat -c '%U:%G %a' "${H2ORESTART_PATCH}")" == "root:root 644" ]] || \
+  fail "installed H2Orestart compatibility patch metadata differs"
+[[ "$(sha256sum "${H2ORESTART_PATCH}" | cut -d' ' -f1)" == \
+  "${H2ORESTART_PATCH_SHA256}" ]] || fail "installed H2Orestart compatibility patch hash differs"
+[[ -f "${H2ORESTART_README}" && ! -L "${H2ORESTART_README}" ]] || \
+  fail "installed H2Orestart compatibility provenance is unavailable"
 
 libreoffice_version=$(dpkg-query -W -f='${Version}' libreoffice-writer)
 distribution_h2orestart_version=$(dpkg-query -W -f='${Version}' libreoffice-h2orestart)
@@ -74,4 +100,5 @@ printf 'office_document_converter=READY\n'
 printf 'libreoffice_writer_version=%s\n' "${libreoffice_version}"
 printf 'distribution_h2orestart_version=%s\n' "${distribution_h2orestart_version}"
 printf 'h2orestart_version=%s\n' "${H2ORESTART_VERSION}"
+printf 'h2orestart_declared_version=%s\n' "${H2ORESTART_DECLARED_VERSION}"
 printf 'h2orestart_sha256=sha256:%s\n' "$(sha256sum "${H2ORESTART}" | cut -d' ' -f1)"

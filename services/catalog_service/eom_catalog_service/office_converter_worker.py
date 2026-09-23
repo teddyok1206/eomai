@@ -16,8 +16,8 @@ from typing import Final
 CONVERSION_ROOT: Final = Path("/var/lib/eom-catalog-api/staging/office-conversion")
 LIBREOFFICE: Final = Path("/usr/bin/libreoffice")
 UNOPKG: Final = Path("/usr/bin/unopkg")
-H2ORESTART_BUNDLE: Final = Path("/srv/eom/vendor/h2orestart/0.7.14/H2Orestart.oxt")
-H2ORESTART_BUNDLE_SHA256: Final = "cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8"
+H2ORESTART_BUNDLE: Final = Path("/srv/eom/vendor/h2orestart/0.7.14-eom.1/H2Orestart.oxt")
+H2ORESTART_BUNDLE_SHA256: Final = "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96"
 MAX_SOURCE_BYTES: Final = 256 * 1024 * 1024
 MAX_OUTPUT_BYTES: Final = 256 * 1024 * 1024
 MAX_HWPX_MEMBERS: Final = 4096

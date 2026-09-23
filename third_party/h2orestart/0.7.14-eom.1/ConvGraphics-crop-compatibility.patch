@@ -1,0 +1,66 @@
+diff --git a/source/soffice/ConvGraphics.java b/source/soffice/ConvGraphics.java
+index afb1dba..41e3b87 100644
+--- a/source/soffice/ConvGraphics.java
++++ b/source/soffice/ConvGraphics.java
+@@ -23,6 +23,7 @@ package soffice;
+ import java.awt.geom.AffineTransform;
+ import java.awt.geom.Point2D;
+ import java.awt.image.BufferedImage;
++import java.io.ByteArrayInputStream;
+ import java.io.ByteArrayOutputStream;
+ import java.io.IOException;
+ import java.net.URL;
+@@ -261,22 +262,17 @@ public class ConvGraphics {
+                     crop.Bottom = Transform.translateHwp2Office(pic.iniPicHeight-pic.cropBottom);
+                     xPropSet.setPropertyValue("GraphicCrop", crop);
+                     */
+-                    try {
+-                        PropertyValue[] pv = new PropertyValue[2];
+-                        Path homeDir = wContext.userHomeDir;
+-                        Path path = Files.createTempFile(homeDir, "H2O_IMG_", "_" + pic.binDataID + ".png");
+-                        URL url = path.toFile().toURI().toURL();
+-                        String urlString = url.toExternalForm();
+-                        pv[0] = new PropertyValue();
+-                        pv[0].Name = "URL";
+-                        pv[0].Value = urlString;
+-                        pv[1] = new PropertyValue();
+-                        pv[1].Name = "MimeType";
+-                        pv[1].Value = "image/png";
+-                        xGraphicProvider.storeGraphic(graphic, pv);
+-                        
+-                        BufferedImage originalImage = ImageIO.read(path.toFile());
+-                        Files.delete(path);
++                    try (ByteArrayInputStream input = new ByteArrayInputStream(imageAsByteArray)) {
++                        // Decode supported raster inputs directly instead of asking LibreOffice to
++                        // materialize an intermediate PNG.  GraphicProvider.storeGraphic can abort
++                        // the entire soffice process for otherwise usable large or unusual images.
++                        // ImageIO returns null for vector/unsupported inputs; retain the already
++                        // decoded original XGraphic in that case rather than failing the document.
++                        BufferedImage originalImage = ImageIO.read(input);
++                        if (originalImage == null) {
++                            throw new IOException(
++                                    "Crop derivative is unavailable; retaining original graphic");
++                        }
+                         
+                         int orgWidth = pic.iniPicWidth==0 ? pic.iniWidth : pic.iniPicWidth;
+                         if (pic.iniWidth == pic.cropRight && pic.iniHeight == pic.cropBottom) {
+@@ -301,6 +297,7 @@ public class ConvGraphics {
+                             ImageIO.write(subImgage, "png", baos);
+                             imageAsByteArray = baos.toByteArray();
+                             imageType = "png";
++                            PropertyValue[] pv = new PropertyValue[2];
+                             pv[0] = new PropertyValue();
+                             pv[0].Name = "InputStream";
+                             pv[0].Value = new ByteArrayToXInputStreamAdapter(imageAsByteArray);
+@@ -310,7 +307,10 @@ public class ConvGraphics {
+                             pv[1].Value = "image/png";
+                             graphic = xGraphicProvider.queryGraphic(pv);
+                         }
+-                    } catch (IOException e) {
++                    } catch (IOException | RuntimeException e) {
++                        // A malformed or degenerate crop must not abort the whole Writer import.
++                        // Keep the already decoded original graphic when ImageIO or getSubimage
++                        // cannot produce a safe cropped derivative.
+                         log.log(Level.SEVERE, e.toString(), e);
+                     }
+                 }

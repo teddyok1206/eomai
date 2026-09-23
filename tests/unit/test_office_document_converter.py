@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 from eom_catalog_service.office_converter_worker import (
+    H2ORESTART_BUNDLE,
+    H2ORESTART_BUNDLE_SHA256,
     OfficeConverterError,
     convert_workspace,
 )
@@ -85,6 +87,13 @@ def test_fixed_workspace_worker_rejects_unreviewed_extension_bundle(tmp_path: Pa
             h2orestart_bundle=Path("/bin/true"),
             h2orestart_bundle_sha256="0" * 64,
         )
+
+
+def test_fixed_workspace_worker_pins_compatibility_extension_identity() -> None:
+    assert Path("/srv/eom/vendor/h2orestart/0.7.14-eom.1/H2Orestart.oxt") == H2ORESTART_BUNDLE
+    assert H2ORESTART_BUNDLE_SHA256 == (
+        "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96"
+    )
 
 
 def test_fixed_workspace_worker_rejects_unsafe_hwpx_member(tmp_path: Path) -> None:
@@ -165,7 +174,7 @@ def test_office_converter_unit_and_polkit_are_fixed_and_nas_is_inaccessible() ->
     assert "InaccessiblePaths=/mnt/nas" in unit
     assert "PrivateNetwork=true" in unit
     assert "ReadWritePaths=/var/lib/eom-catalog-api/staging/office-conversion/%i" in unit
-    assert "ReadOnlyPaths=/srv/eom/vendor/h2orestart/0.7.14/H2Orestart.oxt" in unit
+    assert "ReadOnlyPaths=/srv/eom/vendor/h2orestart/0.7.14-eom.1/H2Orestart.oxt" in unit
     assert "eom_catalog_service.office_converter_worker %i" in unit
     assert "^eom-office-converter@officeconv_[0-9a-f]{32}\\.service$" in polkit
     assert 'subject.user === "eom-catalog-manager"' in polkit
@@ -182,7 +191,24 @@ def test_office_converter_installer_pins_reviewed_ubuntu_packages() -> None:
     assert '"${VERSION_ID:-}" == "24.04"' in installer
     assert '"${libreoffice_version}" == 4:24.2.*' in installer
     assert '"${distribution_h2orestart_version}" == 0.6.*' in installer
-    assert "H2ORESTART_VERSION=0.7.14" in installer
-    assert "cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8" in installer
+    assert "H2ORESTART_VERSION=0.7.14-eom.1" in installer
+    assert "H2ORESTART_DECLARED_VERSION=0.7.14.1" in installer
+    assert "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96" in installer
+    assert "ea68732e8ac46f088cdff378c3b184d9251e8703874446c382b04393b0405fa2" in installer
+    assert "ConvGraphics-crop-compatibility.patch" in installer
     assert "--no-install-recommends" in installer
     assert "curl" not in installer and "wget" not in installer
+
+
+def test_h2orestart_compatibility_patch_is_pinned_and_bounded() -> None:
+    root = Path(__file__).resolve().parents[2]
+    patch = root / "third_party/h2orestart/0.7.14-eom.1/ConvGraphics-crop-compatibility.patch"
+    content = patch.read_text(encoding="utf-8")
+
+    assert hashlib.sha256(patch.read_bytes()).hexdigest() == (
+        "ea68732e8ac46f088cdff378c3b184d9251e8703874446c382b04393b0405fa2"
+    )
+    assert "new ByteArrayInputStream(imageAsByteArray)" in content
+    assert "GraphicProvider.storeGraphic can abort" in content
+    assert "catch (IOException | RuntimeException e)" in content
+    assert content.count("source/soffice/ConvGraphics.java") == 4

@@ -88,6 +88,26 @@ root-owned, read-only runtime artifact outside Git; conversion still has no netw
 release records the LibreOffice executable/version and exact extension bundle SHA-256 in the intake
 manifest.
 
+An image-heavy production HWPX exposed a second, narrower incompatibility in upstream 0.7.14. Its
+picture-crop path asks LibreOffice to store each decoded `XGraphic` as an intermediate PNG before
+Java crops it. The intermediate round-trip can terminate an otherwise valid conversion. EOM uses
+compatibility revision `0.7.14-eom.1` (declared OXT version `0.7.14.1`) from the exact upstream tag.
+The reviewed GPL-3.0 source patch decodes supported raster bytes directly with ImageIO and keeps the
+already decoded original `XGraphic` when a vector or malformed crop cannot produce a safe raster
+derivative. The upload itself is never rewritten. The repository stores the small source patch and
+provenance, not the generated OXT; the installer accepts only the reviewed OXT and patch hashes and
+places both in the root-owned vendor directory. The exact OXT hash continues to be recorded in the
+existing conversion identity, so no released intake schema changes or silently reinterprets prior
+conversions.
+
+The dominant operation remains one ordered pass over the document pictures. Direct raster decoding
+is linear in compressed input plus decoded pixels and removes one full intermediate PNG write/read.
+No database, queue, worker protocol, or NAS ownership boundary changes. A failed conversion remains
+retryable through the existing upload application command; it never edits an earlier attempt or
+substitutes an implicit latest converter. The simpler alternatives—raising memory limits without
+evidence, mutating uploaded crop metadata, or accepting an unpinned extension—would either fail to
+address the importer boundary or break source fidelity and reproducibility.
+
 The installer additionally requires the Ubuntu `unzip` package only to validate the OXT container
 and its declared version before installation; it is not part of the runtime document parser.
 
