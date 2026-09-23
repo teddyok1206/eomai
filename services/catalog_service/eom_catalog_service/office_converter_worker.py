@@ -172,7 +172,8 @@ def convert_workspace(
     output_directory = workspace / "converted"
     profile_directory = workspace / "profile"
     home_directory = workspace / "home"
-    for directory in (output_directory, profile_directory, home_directory):
+    cache_directory = workspace / "cache"
+    for directory in (output_directory, profile_directory, home_directory, cache_directory):
         directory.mkdir(mode=0o700)
     output = output_directory / "original.pdf"
     stdout = workspace / "libreoffice.stdout.log"
@@ -205,6 +206,10 @@ def convert_workspace(
                 timeout=150,
                 env={
                     "HOME": str(home_directory),
+                    # H2Orestart resolves XDG_CACHE_HOME before falling back to the
+                    # account home.  The account home is intentionally read-only in the
+                    # converter sandbox, so keep its logger cache inside this one request.
+                    "XDG_CACHE_HOME": str(cache_directory),
                     "LANG": "C.UTF-8",
                     "LC_ALL": "C.UTF-8",
                     "PATH": "/usr/bin:/bin",

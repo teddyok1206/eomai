@@ -38,6 +38,8 @@ def test_fixed_workspace_worker_converts_hwpx_to_bounded_pdf(tmp_path: Path) -> 
     _write_minimal_hwpx(workspace / "original.hwpx")
 
     def fake_run(arguments: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        assert kwargs["env"]["XDG_CACHE_HOME"] == str(workspace / "cache")
+        assert (workspace / "cache").stat().st_mode & 0o777 == 0o700
         output_directory = Path(arguments[arguments.index("--outdir") + 1])
         (output_directory / "original.pdf").write_bytes(b"%PDF-1.7\nconverted")
         return subprocess.CompletedProcess(arguments, 0, b"", b"")
