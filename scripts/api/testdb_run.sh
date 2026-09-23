@@ -174,7 +174,8 @@ if [[ "${action}" == "pdf-review-tests" ]]; then
   "${PYTHON}" -m pytest -q \
     tests/api/test_runtime_role_live.py \
     tests/api/test_pdf_document_review_upload_service.py::test_pdf_review_upload_claim_is_serialized_by_postgresql \
-    tests/api/test_pdf_document_review_upload_intent_persistence.py::test_pdf_review_migration_matches_authoritative_models
+    tests/api/test_pdf_document_review_upload_intent_persistence.py::test_pdf_review_migration_matches_authoritative_models \
+    tests/api/test_paired_document_review_service.py::test_paired_review_set_persists_parent_before_members_on_postgresql
   printf 'Disposable PDF document-review persistence tests passed.\n'
   exit 0
 fi

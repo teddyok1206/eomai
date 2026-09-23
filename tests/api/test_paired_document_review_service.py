@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 from eom_api.errors import ApiError
@@ -24,11 +26,12 @@ from eom_catalog_contracts import (
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
 )
-from eom_identity_service import models as identity_models  # noqa: F401
+from eom_identity_service.models import OperatorRecord
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
+from eom_orchestrator.database import build_engine, build_session_factory
 from eom_workflow import PairedReviewAnchor, PairedReviewCrossDocumentCheck
 from eom_workflow_runner import models as workflow_models  # noqa: F401
-from sqlalchemy import Table, create_engine
+from sqlalchemy import Table, create_engine, func, select
 
 NOW = datetime(2026, 9, 22, 9, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
@@ -254,6 +257,82 @@ def test_paired_review_rejects_different_bytes_after_member_commit(tmp_path: Pat
         )
     assert mismatch.value.error_code == "PAIRED_DOCUMENT_REVIEW_UPLOAD_HASH_MISMATCH"
     engine.dispose()
+
+
+@pytest.mark.integration
+@pytest.mark.api_integration
+def test_paired_review_set_persists_parent_before_members_on_postgresql() -> None:
+    if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
+        pytest.skip("run through the guarded disposable PostgreSQL database")
+    explicit_url = os.environ.get("EOM_DATABASE_URL")
+    if not explicit_url:
+        pytest.fail("paired review persistence requires the guarded database URL")
+    engine = build_engine(explicit_url)
+    suffix = uuid4().hex[:12]
+    actor_id = "operator_" + uuid4().hex
+    sessions = build_session_factory(engine)
+    with sessions.begin() as session:
+        session.add(
+            OperatorRecord(
+                operator_id=actor_id,
+                username=f"paired-review-{suffix}",
+                normalized_username=f"paired-review-{suffix}",
+                display_name="Paired Review Persistence",
+                status="ACTIVE",
+                must_change_password=False,
+                role_version=1,
+                created_at=NOW,
+                created_by="paired-review-integration",
+                updated_at=NOW,
+                lock_version=1,
+            )
+        )
+    catalog = FakeCatalog()
+    commands = FakeCommands()
+    service = PairedDocumentReviewApplicationService(
+        engine,
+        catalog=catalog,  # type: ignore[arg-type]
+        commands=commands,  # type: ignore[arg-type]
+        intent_ttl_seconds=86_400,
+        processing_lease_seconds=300,
+    )
+    try:
+        value = service.create_set(
+            CreateDocumentReviewSetRequest(
+                documents=(
+                    DocumentReviewSetSourceRequest(
+                        role="QUESTION",
+                        original_filename="question.pdf",
+                        source_format="PDF",
+                        media_type="application/pdf",
+                        content_length=8,
+                    ),
+                    DocumentReviewSetSourceRequest(
+                        role="SOLUTION",
+                        original_filename="solution.pdf",
+                        source_format="PDF",
+                        media_type="application/pdf",
+                        content_length=8,
+                    ),
+                ),
+                preset_key="MOCK_EXAM",
+                additional_guidance=None,
+            ),
+            actor_id=actor_id,
+            observed_at=NOW,
+        )
+        with sessions() as session:
+            assert session.get(DocumentReviewSetRecord, value.review_set_id) is not None
+            assert (
+                session.scalar(
+                    select(func.count())
+                    .select_from(DocumentReviewSetMemberRecord)
+                    .where(DocumentReviewSetMemberRecord.review_set_id == value.review_set_id)
+                )
+                == 2
+            )
+    finally:
+        engine.dispose()
 
 
 def test_cross_document_missing_status_cannot_invent_solution_location() -> None:

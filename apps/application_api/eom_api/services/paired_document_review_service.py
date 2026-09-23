@@ -126,6 +126,11 @@ class PairedDocumentReviewApplicationService:
         )
         with transaction(self.sessions) as session:
             session.add(record)
+            # The set/member models intentionally do not expose an ORM relationship: the
+            # application service owns their aggregate and all reads are keyed lookups.  Flush
+            # the parent explicitly so SQLAlchemy cannot batch the member INSERTs ahead of the
+            # foreign-key target on PostgreSQL.
+            session.flush()
             session.add_all(members)
             session.flush()
         return self._view(record, members)
