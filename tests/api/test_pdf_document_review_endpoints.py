@@ -15,6 +15,8 @@ from eom_api_contracts.document_review import (
     DocumentReviewAnnotationView,
     DocumentReviewCorrectionEligibilityView,
     DocumentReviewCorrectionView,
+    DocumentReviewSetMemberView,
+    DocumentReviewSetView,
     DocumentReviewUploadIntentViewV2,
     PdfDocumentReviewPageView,
     PdfDocumentReviewUploadIntentView,
@@ -37,6 +39,7 @@ NOW = datetime(2026, 9, 22, 2, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
 INTENT_ID = "pdfreviewintent_" + "2" * 32
 WORKFLOW_ID = "workflow_" + "3" * 32
+REVIEW_SET_ID = "docreviewset_" + "7" * 32
 
 
 def _authentication() -> AccessAuthentication:
@@ -157,6 +160,77 @@ class FakePdfDocumentReviews:
             **value.model_dump(mode="json"),
             source_format="PDF",
             media_type="application/pdf",
+        )
+
+
+class FakePairedDocumentReviews:
+    def __init__(self) -> None:
+        self.uploads: list[tuple[str, bytes]] = []
+        self.committed_roles: set[str] = set()
+
+    def _member(self, role: str) -> DocumentReviewSetMemberView:
+        question = role == "QUESTION"
+        source_format = "HWPX" if question else "HWP"
+        media_type = "application/vnd.hancom.hwpx" if question else "application/vnd.hancom.hwp"
+        digit = "8" if question else "9"
+        committed = role in self.committed_roles
+        return DocumentReviewSetMemberView(
+            role=role,
+            original_filename="문제지.hwpx" if question else "해설지.hwp",
+            source_format=source_format,
+            media_type=media_type,
+            content_length=8,
+            state="COMMITTED" if committed else "AWAITING_UPLOAD",
+            upload_sha256=("sha256:" + digit * 64) if committed else None,
+            document_id=("document_" + digit * 32) if committed else None,
+            document_revision_id=("documentrev_" + digit * 32) if committed else None,
+            source_pdf_sha256=("sha256:" + digit * 64) if committed else None,
+            page_count=1 if committed else None,
+            failure_code=None,
+            upload_url=(
+                f"/api/v1/pdf-document-reviews/sets/{REVIEW_SET_ID}/documents/{role}/content"
+            ),
+        )
+
+    def _view(self) -> DocumentReviewSetView:
+        started = self.committed_roles == {"QUESTION", "SOLUTION"}
+        return DocumentReviewSetView(
+            review_set_id=REVIEW_SET_ID,
+            state="STARTED" if started else "AWAITING_UPLOADS",
+            documents=(self._member("QUESTION"), self._member("SOLUTION")),
+            preset_key="MOCK_EXAM",
+            additional_guidance_sha256=None,
+            workflow_id=WORKFLOW_ID if started else None,
+            failure_code=None,
+            review_url=(f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}" if started else None),
+            created_at=NOW,
+            updated_at=NOW,
+            expires_at=NOW + timedelta(days=1),
+            resource_version=3 if started else 1 + len(self.committed_roles),
+        )
+
+    def review_set(self, review_set_id: str, **values: Any) -> DocumentReviewSetView:
+        assert review_set_id == REVIEW_SET_ID
+        assert values["actor_id"] == OPERATOR_ID
+        return self._view()
+
+    def accept_member_upload(
+        self,
+        review_set_id: str,
+        document_role: str,
+        upload: object,
+        **values: Any,
+    ) -> tuple[str | None, DocumentReviewSetView]:
+        assert review_set_id == REVIEW_SET_ID
+        assert values["actor"].actor_id == OPERATOR_ID
+        expected = self._member(document_role)
+        assert upload.source_format == expected.source_format
+        assert upload.media_type == expected.media_type
+        self.uploads.append((document_role, upload.path.read_bytes()))
+        self.committed_roles.add(document_role)
+        return (
+            "wfcmd_" + "6" * 32 if self.committed_roles == {"QUESTION", "SOLUTION"} else None,
+            self._view(),
         )
 
 
@@ -455,6 +529,45 @@ def test_pdf_review_raw_upload_transport_fails_closed(tmp_path: Path) -> None:
         assert wrong_signature.status_code == 422
         assert wrong_signature.json()["error_code"] == "PDF_DOCUMENT_REVIEW_SIGNATURE_INVALID"
         assert reviews.uploads == []
+        assert not tuple(tmp_path.iterdir())
+    finally:
+        services.engine.dispose()
+
+
+def test_paired_review_raw_hwpx_and_hwp_upload_paths_reach_the_document_boundary(
+    tmp_path: Path,
+) -> None:
+    client, services, _reviews, _queries = _client(tmp_path)
+    paired_reviews = FakePairedDocumentReviews()
+    services.paired_document_reviews = paired_reviews  # type: ignore[assignment]
+    try:
+        with client:
+            question = client.put(
+                f"/api/v1/pdf-document-reviews/sets/{REVIEW_SET_ID}/documents/QUESTION/content",
+                headers={
+                    "Idempotency-Key": "paired-review-question-upload-0001",
+                    "Content-Type": "application/vnd.hancom.hwpx",
+                },
+                content=b"PK\x03\x04HWPX",
+            )
+            services.idempotency = MemoryIdempotency()  # type: ignore[assignment]
+            solution = client.put(
+                f"/api/v1/pdf-document-reviews/sets/{REVIEW_SET_ID}/documents/SOLUTION/content",
+                headers={
+                    "Idempotency-Key": "paired-review-solution-upload-0001",
+                    "Content-Type": "application/vnd.hancom.hwp",
+                },
+                content=bytes.fromhex("d0cf11e0a1b11ae1"),
+            )
+        assert question.status_code == 202
+        assert question.json()["data"]["resource_type"] == "paired_document_review_set"
+        assert solution.status_code == 202
+        assert solution.json()["data"]["resource_type"] == "pdf_document_review"
+        assert solution.json()["data"]["resource_id"] == WORKFLOW_ID
+        assert paired_reviews.uploads == [
+            ("QUESTION", b"PK\x03\x04HWPX"),
+            ("SOLUTION", bytes.fromhex("d0cf11e0a1b11ae1")),
+        ]
         assert not tuple(tmp_path.iterdir())
     finally:
         services.engine.dispose()

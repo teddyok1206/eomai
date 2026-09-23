@@ -20,8 +20,11 @@ from eom_api.security_headers import SECURITY_HEADERS
 
 REQUEST_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{15,127}$")
 JSON_METHODS = frozenset({"POST", "PUT", "PATCH"})
-PDF_REVIEW_UPLOAD_PATH = re.compile(
-    r"^/api/v1/pdf-document-reviews/upload-intents/pdfreviewintent_[0-9a-f]{32}/content$"
+DOCUMENT_REVIEW_UPLOAD_PATH = re.compile(
+    r"^/api/v1/pdf-document-reviews/(?:"
+    r"upload-intents/pdfreviewintent_[0-9a-f]{32}/content|"
+    r"sets/docreviewset_[0-9a-f]{32}/documents/(?:QUESTION|SOLUTION)/content"
+    r")$"
 )
 DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES = frozenset(
     {
@@ -83,7 +86,7 @@ class RequestBoundaryMiddleware:
             await self._send_problem(scope, receive, secured_send, 400, "API_REQUEST_INVALID")
             return
         method = scope.get("method", "")
-        is_pdf_review_upload = method == "PUT" and PDF_REVIEW_UPLOAD_PATH.fullmatch(
+        is_pdf_review_upload = method == "PUT" and DOCUMENT_REVIEW_UPLOAD_PATH.fullmatch(
             scope.get("path", "")
         )
         content_length = headers.get("content-length")
