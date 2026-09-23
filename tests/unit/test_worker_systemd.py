@@ -820,6 +820,118 @@ def test_worker_exec_accepts_same_physical_page_from_problem_and_answer_sources(
     )
 
 
+def test_worker_exec_accepts_role_ordered_paired_review_images(tmp_path: Path) -> None:
+    images: list[dict[str, object]] = []
+    expected_paths: list[Path] = []
+    for document_role, page in (("QUESTION", 1), ("QUESTION", 2), ("SOLUTION", 1)):
+        relative = f"source/{document_role.lower()}/images/page-{page:06d}.png"
+        payload = _png_header(1698, 2400) + f"{document_role}:{page}".encode("ascii")
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        path.chmod(0o640)
+        expected_paths.append(path)
+        images.append(
+            {
+                "document_role": document_role,
+                "physical_page": page,
+                "relative_path": relative,
+                "media_type": "image/png",
+                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+                "width_pixels": 1698,
+                "height_pixels": 2400,
+            }
+        )
+    document: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/3.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "images": images,
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["manifest_sha256"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest_path = tmp_path / "codex-image-inputs.json"
+    manifest_path.write_text(json.dumps(document), encoding="utf-8")
+    manifest_path.chmod(0o640)
+
+    paths = _load_image_inputs(
+        manifest_path,
+        workspace=tmp_path,
+        group_id=os.getgid(),
+        expected_plan_id="execplan_" + "1" * 32,
+    )
+
+    assert paths == tuple(expected_paths)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing_solution", "wrong_order", "role_path_mismatch"),
+)
+def test_worker_exec_rejects_invalid_paired_review_image_identity(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    images: list[dict[str, object]] = []
+    for document_role in ("QUESTION", "SOLUTION"):
+        relative = f"source/{document_role.lower()}/images/page-000001.png"
+        payload = _png_header(1698, 2400) + document_role.encode("ascii")
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        path.chmod(0o640)
+        images.append(
+            {
+                "document_role": document_role,
+                "physical_page": 1,
+                "relative_path": relative,
+                "media_type": "image/png",
+                "sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+                "width_pixels": 1698,
+                "height_pixels": 2400,
+            }
+        )
+    if mutation == "missing_solution":
+        images = images[:1]
+    elif mutation == "wrong_order":
+        images.reverse()
+    else:
+        images[1]["document_role"] = "QUESTION"
+    document: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/3.0",
+        "plan_id": "execplan_" + "1" * 32,
+        "images": images,
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    canonical = json.dumps(
+        {key: value for key, value in document.items() if key != "manifest_sha256"},
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["manifest_sha256"] = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest_path = tmp_path / "codex-image-inputs.json"
+    manifest_path.write_text(json.dumps(document), encoding="utf-8")
+    manifest_path.chmod(0o640)
+
+    with pytest.raises(ValueError):
+        _load_image_inputs(
+            manifest_path,
+            workspace=tmp_path,
+            group_id=os.getgid(),
+            expected_plan_id="execplan_" + "1" * 32,
+        )
+
+
 def test_worker_exec_rejects_assessment_png_decompression_bomb_dimensions(
     tmp_path: Path,
 ) -> None:

@@ -24,10 +24,13 @@ MAX_INPUT_BYTES = 4 * 1024 * 1024
 MAX_RESULT_BYTES = 1024 * 1024
 MAX_IMAGE_INPUTS_V1 = 32
 MAX_IMAGE_INPUTS_V2 = 64
+MAX_IMAGE_INPUTS_V3 = 128
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 128 * 1024 * 1024
 MAX_ASSESSMENT_IMAGE_PIXELS = 64_000_000
 MAX_ASSESSMENT_IMAGE_TOTAL_PIXELS = 256_000_000
+MAX_PAIRED_REVIEW_IMAGE_PIXELS = 64_000_000
+MAX_PAIRED_REVIEW_IMAGE_TOTAL_PIXELS = 512_000_000
 FINALIZATION_ERROR_EXIT = 74
 WORKSPACE_ERROR_EXIT = 78
 CODEX_BINARY = Path("/usr/local/bin/codex")
@@ -40,6 +43,9 @@ SHA256_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z", re.ASCII)
 IMAGE_PATH_PATTERN = re.compile(r"\Asource/document/images/page-([0-9]{6})\.png\Z", re.ASCII)
 ASSESSMENT_IMAGE_PATH_PATTERN = re.compile(
     r"\Asource/pages/(assessmentpage_[0-9a-f]{32})\.png\Z", re.ASCII
+)
+PAIRED_REVIEW_IMAGE_PATH_PATTERN = re.compile(
+    r"\Asource/(question|solution)/images/page-([0-9]{6})\.png\Z", re.ASCII
 )
 REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
@@ -217,17 +223,22 @@ def _load_image_inputs(
         raise ValueError("Codex image-input manifest shape is invalid")
     schema_version = document.get("schema_version")
     if (
-        schema_version not in {"codex-image-input-manifest/1.0", "codex-image-input-manifest/2.0"}
+        schema_version
+        not in {
+            "codex-image-input-manifest/1.0",
+            "codex-image-input-manifest/2.0",
+            "codex-image-input-manifest/3.0",
+        }
         or document.get("plan_id") != expected_plan_id
         or SHA256_PATTERN.fullmatch(str(document.get("manifest_sha256"))) is None
     ):
         raise ValueError("Codex image-input manifest identity is invalid")
     images = document.get("images")
-    maximum_images = (
-        MAX_IMAGE_INPUTS_V1
-        if schema_version == "codex-image-input-manifest/1.0"
-        else MAX_IMAGE_INPUTS_V2
-    )
+    maximum_images = {
+        "codex-image-input-manifest/1.0": MAX_IMAGE_INPUTS_V1,
+        "codex-image-input-manifest/2.0": MAX_IMAGE_INPUTS_V2,
+        "codex-image-input-manifest/3.0": MAX_IMAGE_INPUTS_V3,
+    }[str(schema_version)]
     if not isinstance(images, list) or not 1 <= len(images) <= maximum_images:
         raise ValueError("Codex image-input manifest count is invalid")
     canonical = json.dumps(
@@ -244,6 +255,7 @@ def _load_image_inputs(
     pages: list[int] = []
     page_input_ids: list[str] = []
     source_positions: list[tuple[str, int]] = []
+    document_positions: list[tuple[str, int]] = []
     total_bytes = 0
     total_pixels = 0
     image_keys = {
@@ -257,6 +269,8 @@ def _load_image_inputs(
     }
     if schema_version == "codex-image-input-manifest/2.0":
         image_keys.update({"page_input_id", "source_role"})
+    elif schema_version == "codex-image-input-manifest/3.0":
+        image_keys.add("document_role")
     for item in images:
         if not isinstance(item, dict) or set(item) != image_keys:
             raise ValueError("Codex image-input entry shape is invalid")
@@ -265,7 +279,11 @@ def _load_image_inputs(
         byte_count = item.get("bytes")
         width = item.get("width_pixels")
         height = item.get("height_pixels")
-        maximum_dimension = 10000 if schema_version == "codex-image-input-manifest/1.0" else 20000
+        maximum_dimension = {
+            "codex-image-input-manifest/1.0": 10000,
+            "codex-image-input-manifest/2.0": 20000,
+            "codex-image-input-manifest/3.0": 16384,
+        }[str(schema_version)]
         if (
             not isinstance(page, int)
             or not isinstance(relative_path, str)
@@ -281,13 +299,17 @@ def _load_image_inputs(
                 schema_version == "codex-image-input-manifest/2.0"
                 and width * height > MAX_ASSESSMENT_IMAGE_PIXELS
             )
+            or (
+                schema_version == "codex-image-input-manifest/3.0"
+                and width * height > MAX_PAIRED_REVIEW_IMAGE_PIXELS
+            )
         ):
             raise ValueError("Codex image-input entry values are invalid")
         if schema_version == "codex-image-input-manifest/1.0":
             match = IMAGE_PATH_PATTERN.fullmatch(relative_path)
             if match is None or int(match.group(1)) != page:
                 raise ValueError("Codex image-input page path is inconsistent")
-        else:
+        elif schema_version == "codex-image-input-manifest/2.0":
             page_input_id = item.get("page_input_id")
             source_role = item.get("source_role")
             match = ASSESSMENT_IMAGE_PATH_PATTERN.fullmatch(relative_path)
@@ -300,6 +322,17 @@ def _load_image_inputs(
                 raise ValueError("assessment image-input identity is inconsistent")
             page_input_ids.append(page_input_id)
             source_positions.append((str(source_role), page))
+        else:
+            document_role = item.get("document_role")
+            match = PAIRED_REVIEW_IMAGE_PATH_PATTERN.fullmatch(relative_path)
+            if (
+                document_role not in {"QUESTION", "SOLUTION"}
+                or match is None
+                or match.group(1) != str(document_role).lower()
+                or int(match.group(2)) != page
+            ):
+                raise ValueError("paired review image-input identity is inconsistent")
+            document_positions.append((str(document_role), page))
         image_path = workspace.joinpath(*Path(relative_path).parts)
         _verify_png_input(
             image_path,
@@ -317,16 +350,30 @@ def _load_image_inputs(
     if schema_version == "codex-image-input-manifest/1.0":
         expected_pages = list(range(pages[0], pages[-1] + 1))
         identities_valid = pages == expected_pages
-    else:
+    elif schema_version == "codex-image-input-manifest/2.0":
         identities_valid = len(page_input_ids) == len(set(page_input_ids)) and len(
             source_positions
         ) == len(set(source_positions))
+    else:
+        expected_positions = sorted(
+            document_positions,
+            key=lambda value: ({"QUESTION": 0, "SOLUTION": 1}[value[0]], value[1]),
+        )
+        identities_valid = (
+            document_positions == expected_positions
+            and len(document_positions) == len(set(document_positions))
+            and {role for role, _page in document_positions} == {"QUESTION", "SOLUTION"}
+        )
     if (
         not identities_valid
         or total_bytes > MAX_IMAGE_TOTAL_BYTES
         or (
             schema_version == "codex-image-input-manifest/2.0"
             and total_pixels > MAX_ASSESSMENT_IMAGE_TOTAL_PIXELS
+        )
+        or (
+            schema_version == "codex-image-input-manifest/3.0"
+            and total_pixels > MAX_PAIRED_REVIEW_IMAGE_TOTAL_PIXELS
         )
     ):
         raise ValueError("Codex image inputs are duplicated, unordered, or oversized")

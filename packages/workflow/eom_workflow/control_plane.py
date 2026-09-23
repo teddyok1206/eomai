@@ -1236,6 +1236,10 @@ class CodexPairedReviewImageInputManifest(FrozenModel):
             raise ValueError("paired review image inputs must be unique and role-page ordered")
         if {image.document_role for image in self.images} != {"QUESTION", "SOLUTION"}:
             raise ValueError("paired review image inputs must cover both document roles")
+        if any(image.width_pixels * image.height_pixels > 64_000_000 for image in self.images):
+            raise ValueError("paired review image input exceeds the decoded-pixel limit")
+        if sum(image.width_pixels * image.height_pixels for image in self.images) > 512_000_000:
+            raise ValueError("paired review image inputs exceed the aggregate decoded-pixel limit")
         body = self.model_dump(mode="json", exclude={"manifest_sha256"})
         if content_sha256(body) != self.manifest_sha256:
             raise ValueError("paired review image-input manifest hash differs")

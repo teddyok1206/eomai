@@ -26,6 +26,8 @@ from eom_catalog_contracts import (
     AssessmentPageImagePointer,
     ImageBlock,
     MediaArtifactPointer,
+    OfficeDocumentReviewIntakeManifest,
+    OfficeDocumentReviewIntakeManifestV3,
     PdfDocumentReviewIntakeManifest,
     PdfDocumentReviewPageMediaQuery,
     validate_contract,
@@ -48,6 +50,7 @@ from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from jsonschema import Draft202012Validator
+from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, and_, or_, select
 from sqlalchemy.orm import Session
 
@@ -71,6 +74,10 @@ from eom_catalog_service.models import (
     ItemRelationshipRecord,
     ItemRevisionRecord,
     UsageRecord,
+)
+from eom_catalog_service.office_document_review_intake import (
+    OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+    OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION,
 )
 from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.pdf_document_review_intake import (
@@ -645,48 +652,83 @@ class RegistryService:
                     else None
                 )
                 if not isinstance(raw_manifest, dict):
-                    raise ValueError("PDF review intake manifest is not an object")
-                validate_contract("pdf-document-review-intake-manifest", raw_manifest)
-                manifest = PdfDocumentReviewIntakeManifest.model_validate(raw_manifest)
-            except (OSError, UnicodeError, ValueError) as exc:
+                    raise ValueError("document-review intake manifest is not an object")
+                manifest = self._document_review_intake_manifest(raw_manifest)
+            except (OSError, UnicodeError, ValueError, JsonSchemaValidationError) as exc:
                 raise RegistryError(
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "PDF review intake manifest is invalid",
+                    "document-review intake manifest is invalid",
                 ) from exc
             page_matches = tuple(
                 page for page in manifest.pages if page.page_number == request.page_number
             )
             expected_request = job.request if job is not None else None
             expected_result = revision.result if revision is not None else None
+            if isinstance(manifest, PdfDocumentReviewIntakeManifest):
+                is_pdf = True
+                source_pdf_sha256 = manifest.source_pdf_sha256
+                expected_artifact_type = "pdf-document-review-source"
+                expected_protocol_version = PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION
+                request_matches = (
+                    isinstance(expected_request, dict)
+                    and expected_request.get("document_id") == request.document_id
+                    and expected_request.get("document_revision_id") == request.document_revision_id
+                    and expected_request.get("source_pdf_sha256") == source_pdf_sha256
+                    and expected_request.get("original_filename") == manifest.original_filename
+                    and expected_request.get("renderer")
+                    == manifest.renderer.model_dump(mode="json")
+                )
+            else:
+                is_pdf = False
+                source_pdf_sha256 = manifest.review_pdf.sha256
+                expected_artifact_type = (
+                    "document-review-source-v2"
+                    if isinstance(manifest, OfficeDocumentReviewIntakeManifest)
+                    else "document-review-projection-v3"
+                )
+                expected_protocol_version = (
+                    OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION
+                    if isinstance(manifest, OfficeDocumentReviewIntakeManifest)
+                    else OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION
+                )
+                request_matches = (
+                    isinstance(expected_request, dict)
+                    and expected_request.get("source_sha256") == manifest.original_source.sha256
+                    and expected_request.get("original_filename") == manifest.original_filename
+                    and expected_request.get("source_format") == manifest.source_format
+                    and expected_request.get("conversion")
+                    == manifest.conversion.model_dump(mode="json")
+                )
+            expected_task_type = expected_artifact_type
+            result_matches = (
+                expected_result.get("document_id") == request.document_id
+                and expected_result.get("document_revision_id") == request.document_revision_id
+                and expected_result.get("source_pdf_sha256" if is_pdf else "review_pdf_sha256")
+                == source_pdf_sha256
+                and expected_result.get("page_count") == manifest.page_count
+                and expected_result.get("manifest_sha256") == manifest.manifest_sha256
+                if isinstance(expected_result, dict)
+                else False
+            )
             if (
                 artifact is None
                 or revision is None
                 or job is None
                 or not artifact.approved
                 or not revision.approved
-                or artifact.artifact_type != "pdf-document-review-source"
+                or artifact.artifact_type != expected_artifact_type
                 or artifact.job_id != job.job_id
                 or revision.logical_artifact_id != artifact.logical_artifact_id
                 or revision.job_id != job.job_id
                 or revision.content_hash != content_sha256(raw_manifest)
                 or job.status != "SUCCEEDED"
                 or job.completed_at is None
-                or job.protocol_version != PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION
-                or job.task_type != "pdf-document-review-source"
+                or job.protocol_version != expected_protocol_version
+                or job.task_type != expected_task_type
                 or job.logical_artifact_id != pointer.artifact_id
                 or job.revision_id != pointer.artifact_revision_id
-                or not isinstance(expected_request, dict)
-                or expected_request.get("document_id") != request.document_id
-                or expected_request.get("document_revision_id") != request.document_revision_id
-                or expected_request.get("source_pdf_sha256") != manifest.source_pdf_sha256
-                or expected_request.get("original_filename") != manifest.original_filename
-                or expected_request.get("renderer") != manifest.renderer.model_dump(mode="json")
-                or not isinstance(expected_result, dict)
-                or expected_result.get("document_id") != request.document_id
-                or expected_result.get("document_revision_id") != request.document_revision_id
-                or expected_result.get("source_pdf_sha256") != manifest.source_pdf_sha256
-                or expected_result.get("page_count") != manifest.page_count
-                or expected_result.get("manifest_sha256") != manifest.manifest_sha256
+                or not request_matches
+                or not result_matches
                 or manifest.document_id != request.document_id
                 or manifest.document_revision_id != request.document_revision_id
                 or len(page_matches) != 1
@@ -696,7 +738,7 @@ class RegistryService:
             ):
                 raise RegistryError(
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "PDF review page pointer does not resolve through its intake lineage",
+                    "document-review page pointer does not resolve through its intake lineage",
                 )
             media_pointer = MediaArtifactPointer(
                 artifact_id=pointer.artifact_id,
@@ -709,13 +751,33 @@ class RegistryService:
             if path.lstat().st_size != pointer.content_length:
                 raise RegistryError(
                     RegistryErrorCode.ITEM_COMPONENT_INVALID,
-                    "PDF review page length differs from its pinned pointer",
+                    "document-review page length differs from its pinned pointer",
                 )
             return self._open_validated_media(
                 path,
                 media_pointer,
                 maximum_bytes=PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
             )
+
+    @staticmethod
+    def _document_review_intake_manifest(
+        raw_manifest: dict[str, object],
+    ) -> (
+        PdfDocumentReviewIntakeManifest
+        | OfficeDocumentReviewIntakeManifest
+        | OfficeDocumentReviewIntakeManifestV3
+    ):
+        schema_version = raw_manifest.get("schema_version")
+        if schema_version == "pdf-document-review-intake-manifest/1.0":
+            validate_contract("pdf-document-review-intake-manifest", raw_manifest)
+            return PdfDocumentReviewIntakeManifest.model_validate(raw_manifest)
+        if schema_version == "document-review-intake-manifest/2.0":
+            validate_contract("document-review-intake-manifest-v2", raw_manifest)
+            return OfficeDocumentReviewIntakeManifest.model_validate(raw_manifest)
+        if schema_version == "document-review-intake-manifest/3.0":
+            validate_contract("document-review-intake-manifest-v3", raw_manifest)
+            return OfficeDocumentReviewIntakeManifestV3.model_validate(raw_manifest)
+        raise ValueError("unsupported document-review intake manifest")
 
     @staticmethod
     def _assessment_layout(

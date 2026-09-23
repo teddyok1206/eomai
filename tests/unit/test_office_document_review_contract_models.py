@@ -19,6 +19,7 @@ from eom_catalog_contracts import (
     OfficeDocumentReviewSourceUploadManifest,
     validate_contract,
 )
+from eom_catalog_service.registry_service import RegistryService
 from eom_identifiers import content_sha256
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -280,6 +281,22 @@ def test_office_source_and_projection_v3_bind_hashes_and_exact_revision() -> Non
     tampered["editable_hwpx"]["artifact_revision_id"] = "rev_" + "9" * 32
     with pytest.raises(ValidationError, match="manifest hash differs"):
         OfficeDocumentReviewIntakeManifestV3.model_validate(tampered)
+
+
+def test_registry_media_resolver_discriminates_office_projection_v3() -> None:
+    projection = _hwpx_manifest_v3()
+
+    manifest = RegistryService._document_review_intake_manifest(projection)
+
+    assert isinstance(manifest, OfficeDocumentReviewIntakeManifestV3)
+    assert manifest.schema_version == "document-review-intake-manifest/3.0"
+
+
+def test_registry_media_resolver_rejects_unknown_manifest_family() -> None:
+    with pytest.raises(ValueError, match="unsupported document-review intake manifest"):
+        RegistryService._document_review_intake_manifest(
+            {"schema_version": "document-review-intake-manifest/999.0"}
+        )
 
 
 def test_office_conversion_outcome_is_closed_and_self_hashed() -> None:

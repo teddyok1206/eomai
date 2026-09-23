@@ -30,6 +30,7 @@ from eom_workflow import (
     CodexDeviceLoginStatusV2,
     CodexImageInputManifest,
     CodexInvocation,
+    CodexPairedReviewImageInputManifest,
     CodexUsageObservation,
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
@@ -908,6 +909,33 @@ def test_assessment_image_manifest_bounds_decoded_pixels() -> None:
     validate_control_contract("codex-image-input-manifest-v2", value)
     with pytest.raises(PydanticValidationError, match="decoded-pixel"):
         CodexAssessmentImageInputManifest.model_validate(value)
+
+
+def test_paired_review_image_manifest_bounds_decoded_pixels() -> None:
+    value: dict[str, object] = {
+        "schema_version": "codex-image-input-manifest/3.0",
+        "plan_id": "execplan_" + "8" * 32,
+        "images": [
+            {
+                "document_role": role,
+                "physical_page": 1,
+                "relative_path": f"source/{role.lower()}/images/page-000001.png",
+                "media_type": "image/png",
+                "sha256": "sha256:" + seed * 64,
+                "bytes": 1024,
+                "width_pixels": 10000,
+                "height_pixels": 7000,
+            }
+            for role, seed in (("QUESTION", "1"), ("SOLUTION", "2"))
+        ],
+        "manifest_sha256": ZERO_SHA,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    validate_control_contract("codex-image-input-manifest-v3", value)
+    with pytest.raises(PydanticValidationError, match="decoded-pixel"):
+        CodexPairedReviewImageInputManifest.model_validate(value)
 
 
 def test_analysis_plan_is_support_only_and_hash_pinned() -> None:
