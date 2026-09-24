@@ -35,6 +35,7 @@ from eom_catalog_contracts import (
     CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -48,6 +49,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMediaQuery,
     DocumentReviewPdfAnnotationMediaResponse,
     DocumentReviewPdfAnnotationResponse,
+    DocumentReviewPdfAnnotationResponseV2,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -506,16 +508,31 @@ class CatalogApplicationClient:
 
     def create_document_review_annotated_pdfs(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs,
-    ) -> DocumentReviewPdfAnnotationResponse:
+        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
+    ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         payload = command.model_dump(mode="json")
-        validate_contract("document-review-pdf-annotation-request", payload)
+        native_panel = isinstance(command, CreateDocumentReviewAnnotatedPdfsV2)
+        request_contract = (
+            "document-review-pdf-annotation-request-v2"
+            if native_panel
+            else "document-review-pdf-annotation-request"
+        )
+        response_contract = (
+            "document-review-pdf-annotation-response-v2"
+            if native_panel
+            else "document-review-pdf-annotation-response"
+        )
+        validate_contract(request_contract, payload)
         value = self._raw_request(
             payload,
             timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS,
         )
-        validate_contract("document-review-pdf-annotation-response", value)
-        response = DocumentReviewPdfAnnotationResponse.model_validate(value)
+        validate_contract(response_contract, value)
+        response = (
+            DocumentReviewPdfAnnotationResponseV2.model_validate(value)
+            if native_panel
+            else DocumentReviewPdfAnnotationResponse.model_validate(value)
+        )
         if response.status == "ERROR":
             self._raise_remote_error(response.error_code)
         return response

@@ -288,10 +288,14 @@ class FakeDocumentReviewAnnotations:
     content = b"%PDF-marked!"
     sha256 = "sha256:" + hashlib.sha256(content).hexdigest()
 
+    def __init__(self) -> None:
+        self.create_values: list[dict[str, Any]] = []
+
     def create(self, workflow_id: str, **values: Any) -> Any:
         assert workflow_id == WORKFLOW_ID
         assert values["actor_id"] == OPERATOR_ID
         assert values["idempotency_key"].startswith("api:")
+        self.create_values.append(values)
         return self.annotation(workflow_id, self.annotation_id, actor_id=values["actor_id"])
 
     def annotation(self, workflow_id: str, annotation_id: str, **values: Any) -> Any:
@@ -667,6 +671,7 @@ def test_document_review_annotation_create_read_and_authenticated_download(tmp_p
                 f"{annotations.annotation_id}/documents/DOCUMENT/download"
             )
         assert created.status_code == 201
+        assert annotations.create_values[0]["annotation_profile"] is None
         assert created.json()["data"]["resource_id"] == annotations.annotation_id
         assert detail.status_code == 200
         assert detail.json()["data"]["outputs"][0]["document_role"] == "DOCUMENT"
@@ -674,5 +679,29 @@ def test_document_review_annotation_create_read_and_authenticated_download(tmp_p
         assert downloaded.content == annotations.content
         assert downloaded.headers["content-type"] == "application/pdf"
         assert downloaded.headers["etag"] == f'"{annotations.sha256}"'
+    finally:
+        services.engine.dispose()
+
+
+def test_document_review_annotation_native_comment_profile_reaches_use_case(
+    tmp_path: Path,
+) -> None:
+    client, services, _reviews, _queries = _client(tmp_path)
+    annotations = cast(FakeDocumentReviewAnnotations, services.document_review_annotations)
+    try:
+        with client:
+            created = client.post(
+                f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations",
+                headers={"Idempotency-Key": "document-review-native-comments-test-0001"},
+                json={
+                    "include_all_findings": True,
+                    "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+                },
+            )
+
+        assert created.status_code == 201
+        assert annotations.create_values[0]["annotation_profile"] == (
+            "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+        )
     finally:
         services.engine.dispose()

@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "document_role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "media_type": {
+          "const": "application/pdf"
+        },
+        "member_path": {
+          "enum": [
+            "annotated/document.pdf",
+            "annotated/question.pdf",
+            "annotated/solution.pdf"
+          ]
+        },
+        "schema_ref": {
+          "const": "eom://schemas/document-review/annotated-pdf/1.0"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_role",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/document-review/document-review-pdf-annotation-result/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "annotation_id": {
+      "pattern": "^docannotation_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "annotation_profile": {
+      "const": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    },
+    "annotation_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/output"
+      },
+      "maxItems": 2,
+      "minItems": 1,
+      "type": "array"
+    },
+    "panel_comment_count": {
+      "maximum": 1024,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "panel_comment_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "document-review-pdf-annotation-result/2.0"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "annotation_profile",
+    "annotation_id",
+    "workflow_id",
+    "request_sha256",
+    "review_result_sha256",
+    "annotation_set_sha256",
+    "panel_comment_set_sha256",
+    "panel_comment_count",
+    "outputs",
+    "manifest_sha256",
+    "result_sha256"
+  ],
+  "title": "EOM Document Review PDF Annotation Result V2",
+  "type": "object"
+}

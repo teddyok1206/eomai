@@ -1251,7 +1251,10 @@ class HttpApplicationGateway:
             session,
             "POST",
             f"/api/v1/pdf-document-reviews/{workflow_id}/annotations",
-            json={"include_all_findings": value.include_all_findings},
+            json={
+                "include_all_findings": value.include_all_findings,
+                "annotation_profile": value.annotation_profile,
+            },
             headers={"Idempotency-Key": value.idempotency_key},
             timeout=self._workflow_start_timeout,
         )

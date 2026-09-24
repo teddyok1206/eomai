@@ -786,6 +786,36 @@ prepare_runtime_dependencies() {
   sudo -n /usr/bin/bash "${REPOSITORY_ROOT}/scripts/api/bootstrap_runtime_role.sh"
 }
 
+verify_native_pdf_annotation_runtime() {
+  sudo -n "${API_PYTHON}" -I - <<'PY'
+from __future__ import annotations
+
+import importlib.metadata
+import stat
+from importlib import import_module
+from pathlib import Path
+
+if importlib.metadata.version("PyMuPDF") != "1.26.7":
+    raise SystemExit("PyMuPDF 1.26.7 is required by the native PDF annotation renderer")
+pymupdf = import_module("pymupdf")
+native = import_module("pymupdf._extra")
+if str(pymupdf.__version__) != "1.26.7":
+    raise SystemExit("PyMuPDF runtime version differs from its installed distribution")
+for value in (pymupdf.__file__, native.__file__):
+    path = Path(str(value)).resolve(strict=True)
+    metadata = path.stat()
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_gid != 0
+        or metadata.st_nlink != 1
+        or metadata.st_mode & 0o022
+    ):
+        raise SystemExit("PyMuPDF runtime file metadata is unsafe")
+print("native_pdf_annotation_runtime=READY")
+PY
+}
+
 reconcile_installed_catalog_runtime_privileges() {
   # The Catalog runner has its own DB role and its privilege matrix ships in
   # the platform wheel. Reconcile it after installing the wheel so a release
@@ -1159,6 +1189,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/customer-support-v1.schema.json",
         "eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json",
         "eom_api_contracts/schemas/document-review-annotation-v1.schema.json",
+        "eom_api_contracts/schemas/document-review-annotation-v2.schema.json",
         "eom_api_contracts/schemas/document-review-set-create-v1.schema.json",
         "eom_api_contracts/schemas/document-review-set-view-v1.schema.json",
         "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
@@ -1596,11 +1627,15 @@ catalog_resources = {
     "document-review/document-review-hwpx-correction-plan-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-plan-v1.schema.json",
     "document-review/document-review-hwpx-correction-result-v1.schema.json": "schemas/document-review/document-review-hwpx-correction-result-v1.schema.json",
     "catalog-application/document-review-pdf-annotation-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-request-v2.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v2.schema.json",
     "catalog-application/document-review-pdf-annotation-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v1.schema.json",
+    "catalog-application/document-review-pdf-annotation-response-v2.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v2.schema.json",
     "catalog-application/document-review-pdf-annotation-media-request-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-request-v1.schema.json",
     "catalog-application/document-review-pdf-annotation-media-response-v1.schema.json": "schemas/catalog/catalog-application/document-review-pdf-annotation-media-response-v1.schema.json",
     "document-review/document-review-pdf-annotation-manifest-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-manifest-v1.schema.json",
+    "document-review/document-review-pdf-annotation-manifest-v2.schema.json": "schemas/document-review/document-review-pdf-annotation-manifest-v2.schema.json",
     "document-review/document-review-pdf-annotation-result-v1.schema.json": "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
+    "document-review/document-review-pdf-annotation-result-v2.schema.json": "schemas/document-review/document-review-pdf-annotation-result-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v1.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
     "knowledge/knowledge-analysis-batch-request-v2.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v2.schema.json",
     "knowledge/knowledge-analysis-batch-request-v3.schema.json": "schemas/knowledge/knowledge-analysis-batch-request-v3.schema.json",
@@ -2748,6 +2783,7 @@ case "${ACTION}" in
   install)
     sudo -n true || fail "noninteractive privileged access is required before installation"
     require_clean_tree
+    verify_native_pdf_annotation_runtime
     activate_workflow_runner_deployment_hold
     prepare_workflow_runner_hold_release_boundary_before_admission
     verify_mock_exam_deployment_admission
@@ -2781,6 +2817,7 @@ case "${ACTION}" in
     release_workflow_runner_deployment_hold_after_verified_receipt
     ;;
   verify)
+    verify_native_pdf_annotation_runtime
     verify_service
     ;;
 esac

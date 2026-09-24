@@ -31,6 +31,7 @@ from eom_catalog_contracts import (
     CatalogItemComponentMediaResponse,
     CatalogItemMediaResponse,
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -44,6 +45,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMediaQuery,
     DocumentReviewPdfAnnotationMediaResponse,
     DocumentReviewPdfAnnotationResponse,
+    DocumentReviewPdfAnnotationResponseV2,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
@@ -196,6 +198,21 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._create_document_review_annotated_pdfs(annotation_request)
+                return
+            if raw_operation == "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2":
+                try:
+                    validate_contract("document-review-pdf-annotation-request-v2", value)
+                    annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV2.model_validate(
+                        value
+                    )
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_pdf_annotation_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        native_panel=True,
+                    )
+                    return
+                self._create_document_review_annotated_pdfs(annotation_request_v2)
                 return
             if raw_operation == "GET_DOCUMENT_REVIEW_ANNOTATED_PDF":
                 try:
@@ -754,24 +771,30 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
 
     def _create_document_review_annotated_pdfs(
         self,
-        request: CreateDocumentReviewAnnotatedPdfs,
+        request: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
     ) -> None:
         annotations = self.server.document_review_pdf_annotations
         if annotations is None:
             self.server.write_document_review_pdf_annotation_error(
                 self.wfile,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
             )
             return
         try:
             response = annotations.create(request)
         except DocumentReviewPdfAnnotationServiceError as exc:
-            self.server.write_document_review_pdf_annotation_error(self.wfile, exc.code)
+            self.server.write_document_review_pdf_annotation_error(
+                self.wfile,
+                exc.code,
+                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
+            )
             return
         except Exception:
             self.server.write_document_review_pdf_annotation_error(
                 self.wfile,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
             )
             return
         self.server.write_document_review_pdf_annotation_response(self.wfile, response)
@@ -1235,10 +1258,15 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     @staticmethod
     def write_document_review_pdf_annotation_response(
         stream: Any,
-        response: DocumentReviewPdfAnnotationResponse,
+        response: DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2,
     ) -> None:
         payload = response.model_dump(mode="json", exclude_none=True)
-        validate_contract("document-review-pdf-annotation-response", payload)
+        contract = (
+            "document-review-pdf-annotation-response-v2"
+            if isinstance(response, DocumentReviewPdfAnnotationResponseV2)
+            else "document-review-pdf-annotation-response"
+        )
+        validate_contract(contract, payload)
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("PDF annotation response exceeded its fixed bound")
@@ -1249,10 +1277,16 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls,
         stream: Any,
         error_code: str,
+        *,
+        native_panel: bool = False,
     ) -> None:
         cls.write_document_review_pdf_annotation_response(
             stream,
-            DocumentReviewPdfAnnotationResponse(status="ERROR", error_code=error_code),
+            (
+                DocumentReviewPdfAnnotationResponseV2(status="ERROR", error_code=error_code)
+                if native_panel
+                else DocumentReviewPdfAnnotationResponse(status="ERROR", error_code=error_code)
+            ),
         )
 
     @staticmethod

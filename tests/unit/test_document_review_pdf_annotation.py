@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,15 +10,21 @@ import pytest
 from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
     DocumentReviewPdfAnnotationMark,
+    DocumentReviewPdfPanelComment,
     DocumentReviewResultMemberPointer,
     PdfReviewArtifactMemberPointer,
 )
 from eom_catalog_service.artifacts import CatalogArtifact
-from eom_catalog_service.document_review_pdf_annotation import annotate_pdf
+from eom_catalog_service.document_review_pdf_annotation import (
+    NativePanelCommentPayload,
+    annotate_pdf,
+    annotate_pdf_with_native_comments,
+)
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
     DocumentReviewPdfAnnotationServiceError,
@@ -121,6 +128,81 @@ def test_annotation_is_deterministic_and_preserves_source(tmp_path: Path) -> Non
     assert sha256_file(first) == sha256_file(second)
     assert sha256_file(first) != source_sha256
     subprocess.run(["/usr/bin/qpdf", "--check", str(first)], check=True)
+
+
+def test_native_panel_annotation_is_deterministic_and_carries_comment_text(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    pymupdf = import_module("pymupdf")
+    pymupdf_native = import_module("pymupdf._extra")
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation._pymupdf_runtime",
+        lambda: (
+            pymupdf,
+            Path(str(pymupdf.__file__)),
+            Path(str(pymupdf_native.__file__)),
+        ),
+    )
+    source = _source_pdf(tmp_path)
+    source_sha256 = sha256_file(source)
+    mark = _marks()[0]
+    contents = (
+        "검토 #1 · 과학 표기 확인\n분류: TYPOGRAPHY\n중요도: MEDIUM\n\n"
+        "문항의 표기를 확인해야 합니다.\n\n수정 권고 (VERIFY)\n원문과 대조하세요."
+    )
+    descriptor = DocumentReviewPdfPanelComment(
+        comment_id="reviewcomment_" + "c" * 32,
+        finding_id=mark.finding_id,
+        anchor_id=mark.anchor_id,
+        ordinal=mark.ordinal,
+        document_role=mark.document_role,
+        page_number=mark.page_number,
+        contents_sha256=sha256_bytes(contents.encode("utf-8")),
+        contents_utf8_length=len(contents.encode("utf-8")),
+    )
+    payload = NativePanelCommentPayload(
+        descriptor=descriptor,
+        contents=contents,
+        region=mark.region,
+    )
+    first = tmp_path / "native-first.pdf"
+    second = tmp_path / "native-second.pdf"
+
+    identity = annotate_pdf_with_native_comments(
+        source,
+        first,
+        role="DOCUMENT",
+        page_count=2,
+        annotations=(mark,),
+        panel_comments=(payload,),
+    )
+    annotate_pdf_with_native_comments(
+        source,
+        second,
+        role="DOCUMENT",
+        page_count=2,
+        annotations=(mark,),
+        panel_comments=(payload,),
+    )
+
+    assert identity.renderer_key == "pymupdf-qpdf-rsvg-document-review-annotation"
+    assert sha256_file(source) == source_sha256
+    assert sha256_file(first) == sha256_file(second)
+    document = pymupdf.open(str(first))
+    try:
+        page = document[0]
+        annotations = tuple(page.annots() or ())
+        assert len(annotations) == 1
+        annotation = annotations[0]
+        assert annotation.type[1] == "Square"
+        assert annotation.info["id"] == descriptor.comment_id
+        assert annotation.info["title"] == "EOM 문서 검토"
+        assert annotation.info["subject"] == "검토 #1"
+        assert annotation.info["content"] == contents
+        assert tuple(document[1].annots() or ()) == ()
+    finally:
+        document.close()
 
 
 class _StructuredResultArtifacts:
@@ -407,3 +489,107 @@ def test_catalog_annotation_service_commits_byte_and_semantic_hashes_separately(
         f"document-review-pdf-annotation:{command.request_sha256}"
     }
     assert all("idempotency_key" not in value["request"] for value in artifacts.commit_calls)
+
+
+def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    pymupdf = import_module("pymupdf")
+    pymupdf_native = import_module("pymupdf._extra")
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation._pymupdf_runtime",
+        lambda: (
+            pymupdf,
+            Path(str(pymupdf.__file__)),
+            Path(str(pymupdf_native.__file__)),
+        ),
+    )
+    source_path = _source_pdf(tmp_path)
+    source = _annotation_source(source_path)
+    annotation = (_marks()[0],)
+    payload: dict[str, Any] = {
+        "schema_version": "document-review-pdf-annotation-request/2.0",
+        "operation": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2",
+        "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        "actor_id": "operator_test",
+        "idempotency_key": "native-annotation-service-test",
+        "workflow_id": "workflow_" + "9" * 32,
+        "review_result": DocumentReviewResultMemberPointer(
+            artifact_id="artifact_" + "c" * 32,
+            artifact_revision_id="rev_" + "d" * 32,
+            sha256="sha256:" + "e" * 64,
+            content_length=100,
+            schema_ref=(
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+            ),
+        ),
+        "sources": (source,),
+        "annotations": annotation,
+        "annotation_set_sha256": content_sha256(
+            [value.model_dump(mode="json") for value in annotation]
+        ),
+    }
+    payload["request_sha256"] = content_sha256(
+        {key: value for key, value in payload.items() if key != "idempotency_key"}
+    )
+    command = CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
+    mark = annotation[0]
+    finding = SimpleNamespace(
+        finding_id=mark.finding_id,
+        ordinal=mark.ordinal,
+        category="TYPOGRAPHY",
+        severity="MEDIUM",
+        title="과학 표기 확인",
+        description="문항의 표기를 원문과 대조해야 합니다.",
+        recommendation=SimpleNamespace(
+            operation="VERIFY",
+            instruction="원문과 대조하세요.",
+            before_text=None,
+            after_text=None,
+        ),
+        anchors=(
+            SimpleNamespace(
+                anchor_id=mark.anchor_id,
+                page_number=mark.page_number,
+                page_image_sha256=mark.page_image_sha256,
+                region=mark.region,
+            ),
+        ),
+    )
+    parsed = PdfDocumentReviewRoleResult.model_construct(
+        workflow_id=command.workflow_id,
+        output=SimpleNamespace(
+            document_id=source.document_id,
+            document_revision_id=source.document_revision_id,
+            source_pdf_sha256=source.source_pdf.sha256,
+            findings=(finding,),
+        ),
+    )
+    artifacts = _Artifacts(source_path.read_bytes())
+    service = cast(
+        DocumentReviewPdfAnnotationService, object.__new__(DocumentReviewPdfAnnotationService)
+    )
+    service.settings = SimpleNamespace(staging_root=tmp_path)
+    service.artifacts = cast(Any, artifacts)
+    monkeypatch.setattr(service, "_validated_result", lambda _: parsed)
+
+    response = service.create(command)
+
+    assert response.schema_version == "document-review-pdf-annotation-response/2.0"
+    assert response.result is not None
+    assert response.result.panel_comment_count == 1
+    assert response.manifest is not None
+    assert response.manifest.schema_ref.endswith("annotation-manifest/2.0")
+    commit = artifacts.commit_calls[0]
+    assert commit["protocol_version"] == "catalog/1.20"
+    assert commit["manifest_version"] == "document-review-pdf-annotation-file-set/2.0"
+    document = pymupdf.open(stream=artifacts.committed["annotated/document.pdf"], filetype="pdf")
+    try:
+        page = document[0]
+        native = tuple(page.annots() or ())
+        assert len(native) == 1
+        assert native[0].info["subject"] == "검토 #1"
+        assert "원문과 대조하세요." in native[0].info["content"]
+    finally:
+        document.close()

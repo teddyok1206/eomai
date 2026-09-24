@@ -5,14 +5,19 @@ from typing import Any
 import pytest
 from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
     DocumentReviewPdfAnnotationManifest,
+    DocumentReviewPdfAnnotationManifestV2,
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationRenderer,
+    DocumentReviewPdfAnnotationRendererV2,
     DocumentReviewPdfAnnotationResult,
+    DocumentReviewPdfAnnotationResultV2,
+    DocumentReviewPdfPanelComment,
     DocumentReviewResultMemberPointer,
     PdfReviewArtifactMemberPointer,
     validate_contract,
@@ -108,6 +113,25 @@ def _request() -> CreateDocumentReviewAnnotatedPdfs:
     return CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
 
 
+def _request_v2() -> CreateDocumentReviewAnnotatedPdfsV2:
+    payload = _request().model_dump(mode="json")
+    payload.update(
+        {
+            "schema_version": "document-review-pdf-annotation-request/2.0",
+            "operation": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2",
+            "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        }
+    )
+    payload["request_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"idempotency_key", "request_sha256"}
+        }
+    )
+    return CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
+
+
 def test_annotation_request_is_schema_and_model_exact() -> None:
     value = _request()
     validate_contract("document-review-pdf-annotation-request", value.model_dump(mode="json"))
@@ -120,6 +144,12 @@ def test_annotation_request_rejects_tampered_page_hash_and_request_hash() -> Non
     payload["annotations"][0]["page_image_sha256"] = f"sha256:{'f' * 64}"
     with pytest.raises(ValidationError, match="pinned page"):
         CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+
+
+def test_native_panel_request_is_schema_and_model_exact() -> None:
+    value = _request_v2()
+    validate_contract("document-review-pdf-annotation-request-v2", value.model_dump(mode="json"))
+    assert value.request_sha256 != _request().request_sha256
 
     payload = _request().model_dump(mode="json")
     payload["request_sha256"] = f"sha256:{'f' * 64}"
@@ -185,3 +215,94 @@ def test_annotation_manifest_and_result_are_self_hashed() -> None:
     result = DocumentReviewPdfAnnotationResult.model_validate(result_payload)
     validate_contract("document-review-pdf-annotation-result", result.model_dump(mode="json"))
     assert result.result_sha256 == result_payload["result_sha256"]
+
+
+def test_native_panel_manifest_binds_primary_comments_and_renderer() -> None:
+    request = _request_v2()
+    outputs = (
+        DocumentReviewAnnotatedPdfMember(
+            document_role="QUESTION",
+            member_path="annotated/question.pdf",
+            sha256=f"sha256:{'1' * 64}",
+            content_length=1000,
+        ),
+        DocumentReviewAnnotatedPdfMember(
+            document_role="SOLUTION",
+            member_path="annotated/solution.pdf",
+            sha256=f"sha256:{'2' * 64}",
+            content_length=1100,
+        ),
+    )
+    comments = tuple(
+        DocumentReviewPdfPanelComment(
+            comment_id=f"reviewcomment_{fill * 32}",
+            finding_id=mark.finding_id,
+            anchor_id=mark.anchor_id,
+            ordinal=mark.ordinal,
+            document_role=mark.document_role,
+            page_number=mark.page_number,
+            contents_sha256=f"sha256:{fill * 64}",
+            contents_utf8_length=100,
+        )
+        for mark, fill in zip(request.annotations, ("1", "2"), strict=True)
+    )
+    renderer = DocumentReviewPdfAnnotationRendererV2(
+        qpdf_version="qpdf version 11.9.0",
+        qpdf_sha256=f"sha256:{'3' * 64}",
+        rsvg_convert_version="rsvg-convert version 2.58.0",
+        rsvg_convert_sha256=f"sha256:{'4' * 64}",
+        pdfinfo_version="pdfinfo version 24.02.0",
+        pdfinfo_sha256=f"sha256:{'5' * 64}",
+        pymupdf_version="1.26.7",
+        pymupdf_module_sha256=f"sha256:{'6' * 64}",
+        pymupdf_native_sha256=f"sha256:{'7' * 64}",
+    )
+    annotation_id = f"docannotation_{'8' * 32}"
+    manifest_payload: dict[str, Any] = {
+        "schema_version": "document-review-pdf-annotation-manifest/2.0",
+        "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        "annotation_id": annotation_id,
+        "workflow_id": request.workflow_id,
+        "request_sha256": request.request_sha256,
+        "review_result_sha256": request.review_result.sha256,
+        "sources": request.sources,
+        "annotations": request.annotations,
+        "annotation_set_sha256": request.annotation_set_sha256,
+        "panel_comments": comments,
+        "panel_comment_set_sha256": content_sha256(
+            [value.model_dump(mode="json") for value in comments]
+        ),
+        "renderer": renderer,
+        "outputs": outputs,
+    }
+    manifest_payload["manifest_sha256"] = content_sha256(manifest_payload)
+    manifest = DocumentReviewPdfAnnotationManifestV2.model_validate(manifest_payload)
+    validate_contract(
+        "document-review-pdf-annotation-manifest-v2",
+        manifest.model_dump(mode="json"),
+    )
+    result_payload: dict[str, Any] = {
+        "schema_version": "document-review-pdf-annotation-result/2.0",
+        "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        "annotation_id": annotation_id,
+        "workflow_id": request.workflow_id,
+        "request_sha256": request.request_sha256,
+        "review_result_sha256": request.review_result.sha256,
+        "annotation_set_sha256": request.annotation_set_sha256,
+        "panel_comment_set_sha256": manifest.panel_comment_set_sha256,
+        "panel_comment_count": len(comments),
+        "outputs": outputs,
+        "manifest_sha256": manifest.manifest_sha256,
+    }
+    result_payload["result_sha256"] = content_sha256(result_payload)
+    result = DocumentReviewPdfAnnotationResultV2.model_validate(result_payload)
+    validate_contract("document-review-pdf-annotation-result-v2", result.model_dump(mode="json"))
+    assert result.panel_comment_count == 2
+
+    incomplete = dict(manifest_payload)
+    incomplete["panel_comments"] = comments[:1]
+    incomplete["panel_comment_set_sha256"] = content_sha256([comments[0].model_dump(mode="json")])
+    incomplete.pop("manifest_sha256", None)
+    incomplete["manifest_sha256"] = content_sha256(incomplete)
+    with pytest.raises(ValidationError, match="cover every finding and role"):
+        DocumentReviewPdfAnnotationManifestV2.model_validate(incomplete)

@@ -8,6 +8,7 @@ import pytest
 from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
     CreateDocumentReviewAnnotationRequest,
+    CreateDocumentReviewAnnotationRequestV2,
     CreateDocumentReviewUploadIntentRequestV2,
     DocumentReviewAnnotationOutputView,
     DocumentReviewAnnotationView,
@@ -202,6 +203,23 @@ def test_document_review_annotation_contract_is_exact_and_role_addressed() -> No
         resource_version=1,
     )
     validator.validate(view.model_dump(mode="json"))
+
+
+def test_native_panel_annotation_request_is_a_strict_successor() -> None:
+    _, validator = _schema("document-review-annotation-v2.schema.json")
+    request = CreateDocumentReviewAnnotationRequestV2(
+        annotation_profile="NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    )
+    validator.validate(request.model_dump(mode="json"))
+    with pytest.raises(SchemaError):
+        validator.validate({"include_all_findings": True})
+    with pytest.raises(ValidationError):
+        CreateDocumentReviewAnnotationRequestV2.model_validate(
+            {
+                "include_all_findings": True,
+                "annotation_profile": "NUMBERED_BOXES_ONLY",
+            }
+        )
 
 
 def test_document_review_annotation_contract_rejects_partial_paired_output() -> None:

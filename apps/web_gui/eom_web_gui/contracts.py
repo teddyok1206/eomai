@@ -473,6 +473,9 @@ class DocumentReviewCorrectionView(WebModel):
 
 class DocumentReviewAnnotationSubmission(WebModel):
     include_all_findings: Literal[True] = True
+    annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] = (
+        "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    )
     idempotency_key: str = Field(
         min_length=16,
         max_length=128,

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/document-review-annotation-v2.schema.json",
+  "title": "EOM Document Review Annotation V2 Create Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "include_all_findings",
+    "annotation_profile"
+  ],
+  "properties": {
+    "include_all_findings": {
+      "const": true
+    },
+    "annotation_profile": {
+      "const": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    }
+  }
+}

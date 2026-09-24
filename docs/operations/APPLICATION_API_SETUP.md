@@ -25,8 +25,10 @@ kept out of the core distribution.
 
 FastAPI and Uvicorn implement the HTTP adapter; Pydantic validates stable DTOs; pwdlib with
 argon2-cffi implements Argon2id; SQLAlchemy and psycopg implement PostgreSQL transactions; HTTPX is
-used by the isolated smoke tests. PyYAML loads the reviewed configuration. These dependencies are
-version-pinned because the API and OpenAPI surfaces are persistent contracts.
+used by the isolated smoke tests. PyYAML loads the reviewed configuration. PyMuPDF creates and
+reopens standard PDF annotation objects for the Catalog-owned native review comment panel; its
+runtime module and native-extension hashes are recorded in each V2 renderer receipt. These
+dependencies are version-pinned because the API and OpenAPI surfaces are persistent contracts.
 
 ## System Identity And Database Role
 

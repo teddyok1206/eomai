@@ -328,7 +328,10 @@ async def test_document_review_annotation_gateway_verifies_role_download_hash() 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/annotations") and request.method == "POST":
             assert request.headers["idempotency-key"] == "studio:annotation:test-key"
-            assert json.loads(request.content) == {"include_all_findings": True}
+            assert json.loads(request.content) == {
+                "include_all_findings": True,
+                "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+            }
             return httpx.Response(
                 201,
                 json=_single(

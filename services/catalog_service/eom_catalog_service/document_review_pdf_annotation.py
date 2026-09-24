@@ -6,14 +6,20 @@ import re
 import stat
 import subprocess
 from collections import defaultdict
+from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
+from typing import Any
 
 from eom_catalog_contracts import (
+    DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationRole,
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationRenderer,
+    DocumentReviewPdfAnnotationRendererV2,
+    DocumentReviewPdfPanelComment,
 )
-from eom_identifiers import sha256_file
+from eom_identifiers import sha256_bytes, sha256_file
 
 QPDF = Path("/usr/bin/qpdf")
 RSVG_CONVERT = Path("/usr/bin/rsvg-convert")
@@ -38,6 +44,13 @@ class DocumentReviewPdfAnnotationError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+@dataclass(frozen=True)
+class NativePanelCommentPayload:
+    descriptor: DocumentReviewPdfPanelComment
+    contents: str
+    region: DocumentReviewAnnotationRegion
 
 
 def renderer_identity() -> DocumentReviewPdfAnnotationRenderer:
@@ -184,6 +197,271 @@ def annotate_pdf(
             child.unlink(missing_ok=True)
         overlay_root.rmdir()
     return identity
+
+
+def annotate_pdf_with_native_comments(
+    source: Path,
+    destination: Path,
+    *,
+    role: DocumentReviewAnnotationRole,
+    page_count: int,
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+    panel_comments: tuple[NativePanelCommentPayload, ...],
+) -> DocumentReviewPdfAnnotationRendererV2:
+    """Render visible boxes plus standard PDF annotations for viewer comment panels."""
+
+    base_identity = annotate_pdf(
+        source,
+        destination,
+        role=role,
+        page_count=page_count,
+        annotations=annotations,
+    )
+    if any(value.descriptor.document_role != role for value in panel_comments):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_ROLE_MISMATCH",
+            "A native panel comment belongs to another document role",
+        )
+    pymupdf, pymupdf_module, pymupdf_native = _pymupdf_runtime()
+    native_output = destination.parent / f".{destination.name}.native.pdf"
+    try:
+        document = pymupdf.open(str(destination))
+        try:
+            if document.page_count != page_count:
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_PAGE_COUNT_MISMATCH",
+                    "The native annotation PDF page count differs",
+                )
+            for value in panel_comments:
+                page = document[value.descriptor.page_number - 1]
+                rect = _native_rect(pymupdf, page.rect, value.region)
+                annotation = page.add_rect_annot(rect)
+                annotation.set_border(width=0)
+                annotation.set_colors(stroke=(0.843137, 0.0, 0.082353))
+                annotation.set_info(
+                    title="EOM 문서 검토",
+                    subject=f"검토 #{value.descriptor.ordinal}",
+                    content=value.contents,
+                    creationDate="D:20000101000000Z",
+                    modDate="D:20000101000000Z",
+                )
+                annotation.set_flags(4)
+                document.xref_set_key(
+                    annotation.xref,
+                    "NM",
+                    pymupdf.get_pdf_str(value.descriptor.comment_id),
+                )
+                annotation.update()
+            document.save(
+                str(native_output),
+                garbage=4,
+                clean=1,
+                deflate=1,
+                deflate_images=1,
+                deflate_fonts=1,
+                no_new_id=1,
+                appearance=0,
+                pretty=0,
+                preserve_metadata=1,
+                use_objstms=0,
+            )
+        finally:
+            document.close()
+        native_output.chmod(0o600)
+        native_output.replace(destination)
+        _require_regular_bounded_pdf(destination)
+        _run((str(QPDF), "--check", str(destination)), timeout=60)
+        _verify_native_panel_comments(
+            pymupdf,
+            destination,
+            page_count=page_count,
+            expected=panel_comments,
+        )
+        _reject_unsafe_pdf_references(destination, destination.parent)
+    except DocumentReviewPdfAnnotationError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_FAILED",
+            "The native PDF comment panel could not be created",
+        ) from exc
+    finally:
+        native_output.unlink(missing_ok=True)
+    return DocumentReviewPdfAnnotationRendererV2(
+        qpdf_version=base_identity.qpdf_version,
+        qpdf_sha256=base_identity.qpdf_sha256,
+        rsvg_convert_version=base_identity.rsvg_convert_version,
+        rsvg_convert_sha256=base_identity.rsvg_convert_sha256,
+        pdfinfo_version=base_identity.pdfinfo_version,
+        pdfinfo_sha256=base_identity.pdfinfo_sha256,
+        pymupdf_version=str(pymupdf.__version__),
+        pymupdf_module_sha256=sha256_file(pymupdf_module),
+        pymupdf_native_sha256=sha256_file(pymupdf_native),
+    )
+
+
+def _pymupdf_runtime() -> tuple[Any, Path, Path]:
+    try:
+        pymupdf = import_module("pymupdf")
+        native = import_module("pymupdf._extra")
+        module_path = Path(str(pymupdf.__file__)).resolve(strict=True)
+        native_path = Path(str(native.__file__)).resolve(strict=True)
+    except (AttributeError, ImportError, OSError, TypeError, ValueError) as exc:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_RENDERER_UNAVAILABLE",
+            "The native PDF annotation renderer is unavailable",
+        ) from exc
+    for path in (module_path, native_path):
+        metadata = path.stat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != 0
+            or metadata.st_gid != 0
+            or metadata.st_nlink != 1
+            or metadata.st_mode & 0o022
+        ):
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_RENDERER_UNTRUSTED",
+                "The native PDF annotation renderer has unsafe metadata",
+            )
+    if not str(pymupdf.__version__).startswith("1.26."):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_RENDERER_VERSION_UNSUPPORTED",
+            "The installed native PDF annotation renderer version is unsupported",
+        )
+    return pymupdf, module_path, native_path
+
+
+def _native_rect(pymupdf: Any, page_rect: Any, region: DocumentReviewAnnotationRegion) -> Any:
+    x0 = page_rect.width * region.x_ppm / 1_000_000
+    y0 = page_rect.height * region.y_ppm / 1_000_000
+    x1 = x0 + page_rect.width * region.width_ppm / 1_000_000
+    y1 = y0 + page_rect.height * region.height_ppm / 1_000_000
+    return pymupdf.Rect(x0, y0, x1, y1)
+
+
+def _verify_native_panel_comments(
+    pymupdf: Any,
+    path: Path,
+    *,
+    page_count: int,
+    expected: tuple[NativePanelCommentPayload, ...],
+) -> None:
+    by_id = {value.descriptor.comment_id: value for value in expected}
+    if len(by_id) != len(expected):
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_INVALID",
+            "Native PDF panel comment identities are not unique",
+        )
+    found: dict[str, tuple[int, int]] = {}
+    document = pymupdf.open(str(path))
+    try:
+        if document.page_count != page_count:
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_PAGE_COUNT_MISMATCH",
+                "The native annotation PDF page count differs",
+            )
+        for page_index in range(document.page_count):
+            page = document[page_index]
+            for annotation in page.annots() or ():
+                identity = str(annotation.info.get("id") or "")
+                if not identity.startswith("reviewcomment_"):
+                    continue
+                if identity in found:
+                    raise DocumentReviewPdfAnnotationError(
+                        "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_INVALID",
+                        "A native PDF panel comment is duplicated",
+                    )
+                found[identity] = (page_index + 1, annotation.xref)
+        if set(found) != set(by_id):
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_INVALID",
+                "Native PDF panel comments differ from the canonical set",
+            )
+        for identity, value in by_id.items():
+            page_number, annotation_xref = found[identity]
+            page = document[page_number - 1]
+            annotation = page.load_annot(annotation_xref)
+            if annotation is None:
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_INVALID",
+                    "A native PDF panel comment could not be reloaded",
+                )
+            info = annotation.info
+            expected_rect = _native_rect(
+                pymupdf,
+                page.rect,
+                value.region,
+            )
+            # PyMuPDF stores a fixed one-point rectangle difference (`/RD`) around Square
+            # annotations even when the border width is zero.  The visible red box remains the
+            # exact SVG overlay; verify this deterministic native hit-target expansion explicitly.
+            expected_coordinates = (
+                expected_rect.x0 - 1.0,
+                expected_rect.y0 - 1.0,
+                expected_rect.x1 + 1.0,
+                expected_rect.y1 + 1.0,
+            )
+            actual_rect = annotation.rect
+            coordinates_match = all(
+                abs(float(actual) - float(wanted)) <= 0.05
+                for actual, wanted in zip(actual_rect, expected_coordinates, strict=True)
+            )
+            if (
+                annotation.type[1] != "Square"
+                or page_number != value.descriptor.page_number
+                or info.get("title") != "EOM 문서 검토"
+                or info.get("subject") != f"검토 #{value.descriptor.ordinal}"
+                or sha256_bytes(str(info.get("content") or "").encode("utf-8"))
+                != value.descriptor.contents_sha256
+                or len(str(info.get("content") or "").encode("utf-8"))
+                != value.descriptor.contents_utf8_length
+                or not coordinates_match
+            ):
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_NATIVE_COMMENT_INVALID",
+                    "A native PDF panel comment differs from its manifest descriptor",
+                )
+            raw_object = document.xref_object(annotation.xref, compressed=False)
+            if any(token in raw_object for token in ("/A ", "/AA ", "/FS ", "/Dest ")):
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_EXTERNAL_REFERENCE_REJECTED",
+                    "A native PDF panel comment contains an unsafe action",
+                )
+    finally:
+        document.close()
+
+
+def _reject_unsafe_pdf_references(path: Path, temporary_root: Path) -> None:
+    sanitized = temporary_root / f".{path.name}.native.qdf.pdf"
+    try:
+        _run(
+            (
+                str(QPDF),
+                "--qdf",
+                "--object-streams=disable",
+                str(path),
+                str(sanitized),
+            ),
+            timeout=120,
+        )
+        payload = sanitized.read_bytes()
+        forbidden_tokens = (
+            b"/Filespec",
+            b"/EmbeddedFile",
+            b"/GoToR",
+            b"/Launch",
+            b"/JavaScript",
+            b"/SubmitForm",
+            b"/ImportData",
+        )
+        if any(token in payload for token in forbidden_tokens):
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_EXTERNAL_REFERENCE_REJECTED",
+                "The annotated PDF contains an unsafe external action or file reference",
+            )
+    finally:
+        sanitized.unlink(missing_ok=True)
 
 
 def _pdf_page_size(source: Path, page_number: int) -> tuple[float, float]:

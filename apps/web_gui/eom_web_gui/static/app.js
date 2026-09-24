@@ -3609,7 +3609,7 @@ function renderDocumentReviewAnnotation() {
   actions.querySelectorAll("a").forEach((value) => value.remove());
   const submit = $("#pdf-review-annotation-submit");
   submit.disabled = false;
-  showMessage(message, "검토 위치를 빨간 번호 상자로 표시한 별도 PDF를 만들 수 있습니다. 원본은 바뀌지 않습니다.");
+  showMessage(message, "검토 위치를 빨간 번호 상자로 표시하고 PDF 주석 패널에도 상세 내용을 넣습니다. 원본은 바뀌지 않습니다.");
   const annotation = state.pdfDocumentReviewAnnotation;
   if (!annotation) return;
   annotation.outputs.forEach((output) => {
@@ -3623,7 +3623,7 @@ function renderDocumentReviewAnnotation() {
         : "주석 PDF 다운로드";
     actions.append(link);
   });
-  showMessage(message, "주석 PDF를 만들었습니다. 상세 검토 문구는 화면에서 확인하고 PDF에는 번호와 위치만 표시됩니다.", "success");
+  showMessage(message, "주석 PDF를 만들었습니다. 빨간 번호 상자와 PDF 주석 패널에서 상세 검토 내용을 함께 확인할 수 있습니다.", "success");
 }
 
 function navigatePairedReviewAnchor(anchor) {
@@ -4043,6 +4043,7 @@ async function createDocumentReviewAnnotation() {
       mutation: true,
       body: {
         include_all_findings: true,
+        annotation_profile: "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
         idempotency_key: state.pdfDocumentReviewPendingAnnotation.idempotencyKey,
       },
     });

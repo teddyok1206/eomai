@@ -762,10 +762,21 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
     assert 'CURRENT_MIGRATION_REVISION != "20260923_0043"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/document-review-annotation-v2.schema.json"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation_service.py"' in deployment
     assert '"document-review/document-review-pdf-annotation-manifest-v1.schema.json"' in deployment
+    assert '"document-review/document-review-pdf-annotation-manifest-v2.schema.json"' in deployment
     assert '"document-review/document-review-pdf-annotation-result-v1.schema.json"' in deployment
+    assert '"document-review/document-review-pdf-annotation-result-v2.schema.json"' in deployment
+    assert (
+        '"catalog-application/document-review-pdf-annotation-request-v2.schema.json"' in deployment
+    )
+    assert (
+        '"catalog-application/document-review-pdf-annotation-response-v2.schema.json"' in deployment
+    )
+    assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in deployment
+    assert 'print("native_pdf_annotation_runtime=READY")' in deployment
 
 
 def test_release_verifies_assessment_occurrence_graph_schema_resources() -> None:

@@ -1,0 +1,331 @@
+{
+  "$defs": {
+    "memberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/json",
+            "image/png"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^(?:eom://|https://eom\\.local/)[A-Za-z0-9._:/-]+$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "content_length": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "document_role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "media_type": {
+          "const": "application/pdf"
+        },
+        "member_path": {
+          "enum": [
+            "annotated/document.pdf",
+            "annotated/question.pdf",
+            "annotated/solution.pdf"
+          ]
+        },
+        "schema_ref": {
+          "const": "eom://schemas/document-review/annotated-pdf/1.0"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "document_role",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "outputPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "document_role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "media_type": {
+          "const": "application/pdf"
+        },
+        "member_path": {
+          "enum": [
+            "annotated/document.pdf",
+            "annotated/question.pdf",
+            "annotated/solution.pdf"
+          ]
+        },
+        "schema_ref": {
+          "const": "eom://schemas/document-review/annotated-pdf/1.0"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "document_role",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/catalog/document-review-pdf-annotation-response/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "manifest": {
+          "$ref": "#/$defs/memberPointer"
+        },
+        "operation": {
+          "const": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/outputPointer"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array"
+        },
+        "result": {
+          "$defs": {
+            "output": {
+              "additionalProperties": false,
+              "properties": {
+                "content_length": {
+                  "maximum": 536870912,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "document_role": {
+                  "enum": [
+                    "DOCUMENT",
+                    "QUESTION",
+                    "SOLUTION"
+                  ]
+                },
+                "media_type": {
+                  "const": "application/pdf"
+                },
+                "member_path": {
+                  "enum": [
+                    "annotated/document.pdf",
+                    "annotated/question.pdf",
+                    "annotated/solution.pdf"
+                  ]
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/document-review/annotated-pdf/1.0"
+                },
+                "sha256": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document_role",
+                "member_path",
+                "sha256",
+                "content_length",
+                "media_type",
+                "schema_ref"
+              ],
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "annotation_id": {
+              "pattern": "^docannotation_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            "annotation_profile": {
+              "const": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+            },
+            "annotation_set_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "manifest_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "outputs": {
+              "items": {
+                "$ref": "#/$defs/output"
+              },
+              "maxItems": 2,
+              "minItems": 1,
+              "type": "array"
+            },
+            "panel_comment_count": {
+              "maximum": 1024,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "panel_comment_set_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "request_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "result_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "review_result_sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "document-review-pdf-annotation-result/2.0"
+            },
+            "workflow_id": {
+              "pattern": "^workflow_[0-9a-f]{32}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema_version",
+            "annotation_profile",
+            "annotation_id",
+            "workflow_id",
+            "request_sha256",
+            "review_result_sha256",
+            "annotation_set_sha256",
+            "panel_comment_set_sha256",
+            "panel_comment_count",
+            "outputs",
+            "manifest_sha256",
+            "result_sha256"
+          ],
+          "type": "object"
+        },
+        "schema_version": {
+          "const": "document-review-pdf-annotation-response/2.0"
+        },
+        "status": {
+          "const": "OK"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "outputs",
+        "manifest",
+        "result"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "type": "string"
+        },
+        "operation": {
+          "const": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2"
+        },
+        "schema_version": {
+          "const": "document-review-pdf-annotation-response/2.0"
+        },
+        "status": {
+          "const": "ERROR"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "error_code"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "EOM Document Review PDF Annotation Response V2"
+}

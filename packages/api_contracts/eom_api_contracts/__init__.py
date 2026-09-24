@@ -45,6 +45,7 @@ from eom_api_contracts.customer_support import (
 from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
     CreateDocumentReviewAnnotationRequest,
+    CreateDocumentReviewAnnotationRequestV2,
     CreateDocumentReviewSetRequest,
     CreateDocumentReviewUploadIntentRequestV2,
     CreatePdfDocumentReviewUploadIntentRequest,
@@ -174,6 +175,7 @@ __all__ = [
     "CreateAssessmentHwpxBuildRequest",
     "CreateCustomerSupportCaseRequest",
     "CreateDocumentReviewAnnotationRequest",
+    "CreateDocumentReviewAnnotationRequestV2",
     "CreateDocumentReviewSetRequest",
     "CreateDocumentReviewUploadIntentRequestV2",
     "CreateEvidenceBundleRequest",

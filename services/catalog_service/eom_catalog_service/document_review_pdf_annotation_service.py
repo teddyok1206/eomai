@@ -12,19 +12,32 @@ from typing import Any, BinaryIO, Literal, Protocol, cast
 from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewPdfAnnotationManifest,
+    DocumentReviewPdfAnnotationManifestV2,
+    DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationMediaQuery,
+    DocumentReviewPdfAnnotationRenderer,
+    DocumentReviewPdfAnnotationRendererV2,
     DocumentReviewPdfAnnotationResponse,
+    DocumentReviewPdfAnnotationResponseV2,
     DocumentReviewPdfAnnotationResult,
+    DocumentReviewPdfAnnotationResultV2,
+    DocumentReviewPdfPanelComment,
     DocumentReviewResultMemberPointer,
     OfficeDocumentReviewMemberPointer,
     PdfReviewArtifactMemberPointer,
     validate_contract,
 )
-from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
-from eom_workflow import PairedDocumentReviewRoleResult, PdfDocumentReviewRoleResult
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
+from eom_workflow import (
+    PairedDocumentReviewRoleResult,
+    PairedReviewFinding,
+    PdfDocumentReviewRoleResult,
+    PdfReviewFinding,
+)
 from eom_workflow.schemas import validate_role_result
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine
@@ -32,7 +45,9 @@ from sqlalchemy import Engine
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
 from eom_catalog_service.document_review_pdf_annotation import (
     DocumentReviewPdfAnnotationError,
+    NativePanelCommentPayload,
     annotate_pdf,
+    annotate_pdf_with_native_comments,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -45,6 +60,18 @@ DOCUMENT_REVIEW_PDF_ANNOTATION_SCHEMA_HASH = content_sha256(
             "document-review-pdf-annotation-manifest/1.0",
             "document-review-pdf-annotation-result/1.0",
             "document-review-pdf-annotation-response/1.0",
+        ],
+    }
+)
+DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION = "catalog/1.20"
+DOCUMENT_REVIEW_PDF_ANNOTATION_V2_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-pdf-annotation-request/2.0",
+            "document-review-pdf-annotation-manifest/2.0",
+            "document-review-pdf-annotation-result/2.0",
+            "document-review-pdf-annotation-response/2.0",
         ],
     }
 )
@@ -134,9 +161,10 @@ class DocumentReviewPdfAnnotationService:
 
     def create(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs,
-    ) -> DocumentReviewPdfAnnotationResponse:
+        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
+    ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         parsed = self._validated_result(command)
+        native_panel = isinstance(command, CreateDocumentReviewAnnotatedPdfsV2)
         expected_documents: tuple[tuple[str, str, str, str], ...]
         expected_marks: list[tuple[str, str, int, str, int, str, dict[str, object]]] = []
         if isinstance(parsed, PdfDocumentReviewRoleResult):
@@ -221,6 +249,7 @@ class DocumentReviewPdfAnnotationService:
                 "DOCUMENT_REVIEW_ANNOTATION_SOURCE_MISMATCH",
                 "The annotation sources differ from the validated review result",
             )
+        panel_payloads = _native_panel_comments(parsed, command.annotations) if native_panel else ()
         try:
             with tempfile.TemporaryDirectory(
                 prefix="document-review-annotation.",
@@ -229,7 +258,11 @@ class DocumentReviewPdfAnnotationService:
                 workspace = Path(raw_workspace)
                 output_members: list[DocumentReviewAnnotatedPdfMember] = []
                 files: dict[str, Path] = {}
-                renderer = None
+                renderer: (
+                    DocumentReviewPdfAnnotationRenderer
+                    | DocumentReviewPdfAnnotationRendererV2
+                    | None
+                ) = None
                 for source in command.sources:
                     source_bytes = self._read_pointer(source.source_pdf, 256 * 1024 * 1024)
                     source_path = workspace / f"source-{source.role.lower()}.pdf"
@@ -252,13 +285,31 @@ class DocumentReviewPdfAnnotationService:
                     role_marks = tuple(
                         value for value in command.annotations if value.document_role == source.role
                     )
-                    current_renderer = annotate_pdf(
-                        source_path,
-                        destination,
-                        role=source.role,
-                        page_count=source.page_count,
-                        annotations=role_marks,
+                    current_renderer: (
+                        DocumentReviewPdfAnnotationRenderer | DocumentReviewPdfAnnotationRendererV2
                     )
+                    if native_panel:
+                        role_comments = tuple(
+                            value
+                            for value in panel_payloads
+                            if value.descriptor.document_role == source.role
+                        )
+                        current_renderer = annotate_pdf_with_native_comments(
+                            source_path,
+                            destination,
+                            role=source.role,
+                            page_count=source.page_count,
+                            annotations=role_marks,
+                            panel_comments=role_comments,
+                        )
+                    else:
+                        current_renderer = annotate_pdf(
+                            source_path,
+                            destination,
+                            role=source.role,
+                            page_count=source.page_count,
+                            annotations=role_marks,
+                        )
                     if renderer is not None and current_renderer != renderer:
                         raise DocumentReviewPdfAnnotationServiceError(
                             "DOCUMENT_REVIEW_ANNOTATION_RENDERER_DRIFT",
@@ -287,40 +338,100 @@ class DocumentReviewPdfAnnotationService:
                     }
                 ).removeprefix("sha256:")
                 annotation_id = f"docannotation_{annotation_digest[:32]}"
-                manifest_payload: dict[str, object] = {
-                    "schema_version": "document-review-pdf-annotation-manifest/1.0",
-                    "annotation_id": annotation_id,
-                    "workflow_id": command.workflow_id,
-                    "request_sha256": command.request_sha256,
-                    "review_result_sha256": command.review_result.sha256,
-                    "sources": command.sources,
-                    "annotations": command.annotations,
-                    "annotation_set_sha256": command.annotation_set_sha256,
-                    "renderer": renderer,
-                    "outputs": tuple(output_members),
-                }
-                manifest_payload["manifest_sha256"] = content_sha256(manifest_payload)
-                manifest = DocumentReviewPdfAnnotationManifest.model_validate(manifest_payload)
-                result_payload: dict[str, object] = {
-                    "schema_version": "document-review-pdf-annotation-result/1.0",
-                    "annotation_id": annotation_id,
-                    "workflow_id": command.workflow_id,
-                    "request_sha256": command.request_sha256,
-                    "review_result_sha256": command.review_result.sha256,
-                    "annotation_set_sha256": command.annotation_set_sha256,
-                    "outputs": tuple(output_members),
-                    "manifest_sha256": manifest.manifest_sha256,
-                }
-                result_payload["result_sha256"] = content_sha256(result_payload)
-                result = DocumentReviewPdfAnnotationResult.model_validate(result_payload)
-                validate_contract(
-                    "document-review-pdf-annotation-manifest",
-                    manifest.model_dump(mode="json"),
+                manifest: (
+                    DocumentReviewPdfAnnotationManifest | DocumentReviewPdfAnnotationManifestV2
                 )
-                validate_contract(
-                    "document-review-pdf-annotation-result",
-                    result.model_dump(mode="json"),
-                )
+                result: DocumentReviewPdfAnnotationResult | DocumentReviewPdfAnnotationResultV2
+                if native_panel:
+                    panel_descriptors = tuple(value.descriptor for value in panel_payloads)
+                    panel_comment_set_sha256 = content_sha256(
+                        [value.model_dump(mode="json") for value in panel_descriptors]
+                    )
+                    manifest_payload: dict[str, object] = {
+                        "schema_version": "document-review-pdf-annotation-manifest/2.0",
+                        "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+                        "annotation_id": annotation_id,
+                        "workflow_id": command.workflow_id,
+                        "request_sha256": command.request_sha256,
+                        "review_result_sha256": command.review_result.sha256,
+                        "sources": command.sources,
+                        "annotations": command.annotations,
+                        "annotation_set_sha256": command.annotation_set_sha256,
+                        "panel_comments": panel_descriptors,
+                        "panel_comment_set_sha256": panel_comment_set_sha256,
+                        "renderer": renderer,
+                        "outputs": tuple(output_members),
+                    }
+                    manifest_payload["manifest_sha256"] = content_sha256(manifest_payload)
+                    manifest = DocumentReviewPdfAnnotationManifestV2.model_validate(
+                        manifest_payload
+                    )
+                    result_payload: dict[str, object] = {
+                        "schema_version": "document-review-pdf-annotation-result/2.0",
+                        "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+                        "annotation_id": annotation_id,
+                        "workflow_id": command.workflow_id,
+                        "request_sha256": command.request_sha256,
+                        "review_result_sha256": command.review_result.sha256,
+                        "annotation_set_sha256": command.annotation_set_sha256,
+                        "panel_comment_set_sha256": panel_comment_set_sha256,
+                        "panel_comment_count": len(panel_descriptors),
+                        "outputs": tuple(output_members),
+                        "manifest_sha256": manifest.manifest_sha256,
+                    }
+                    result_payload["result_sha256"] = content_sha256(result_payload)
+                    result = DocumentReviewPdfAnnotationResultV2.model_validate(result_payload)
+                    manifest_contract = "document-review-pdf-annotation-manifest-v2"
+                    result_contract = "document-review-pdf-annotation-result-v2"
+                    manifest_schema_ref = (
+                        "eom://schemas/document-review/document-review-pdf-annotation-manifest/2.0"
+                    )
+                    result_schema_ref = (
+                        "eom://schemas/document-review/document-review-pdf-annotation-result/2.0"
+                    )
+                    manifest_version = "document-review-pdf-annotation-file-set/2.0"
+                    protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION
+                    protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_SCHEMA_HASH
+                else:
+                    manifest_payload = {
+                        "schema_version": "document-review-pdf-annotation-manifest/1.0",
+                        "annotation_id": annotation_id,
+                        "workflow_id": command.workflow_id,
+                        "request_sha256": command.request_sha256,
+                        "review_result_sha256": command.review_result.sha256,
+                        "sources": command.sources,
+                        "annotations": command.annotations,
+                        "annotation_set_sha256": command.annotation_set_sha256,
+                        "renderer": renderer,
+                        "outputs": tuple(output_members),
+                    }
+                    manifest_payload["manifest_sha256"] = content_sha256(manifest_payload)
+                    manifest = DocumentReviewPdfAnnotationManifest.model_validate(manifest_payload)
+                    result_payload = {
+                        "schema_version": "document-review-pdf-annotation-result/1.0",
+                        "annotation_id": annotation_id,
+                        "workflow_id": command.workflow_id,
+                        "request_sha256": command.request_sha256,
+                        "review_result_sha256": command.review_result.sha256,
+                        "annotation_set_sha256": command.annotation_set_sha256,
+                        "outputs": tuple(output_members),
+                        "manifest_sha256": manifest.manifest_sha256,
+                    }
+                    result_payload["result_sha256"] = content_sha256(result_payload)
+                    result = DocumentReviewPdfAnnotationResult.model_validate(result_payload)
+                    manifest_contract = "document-review-pdf-annotation-manifest"
+                    result_contract = "document-review-pdf-annotation-result"
+                    manifest_schema_ref = (
+                        "eom://schemas/document-review/document-review-pdf-annotation-manifest/1.0"
+                    )
+                    result_schema_ref = (
+                        "eom://schemas/document-review/document-review-pdf-annotation-result/1.0"
+                    )
+                    manifest_version = "document-review-pdf-annotation-file-set/1.0"
+                    protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_PROTOCOL_VERSION
+                    protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_SCHEMA_HASH
+                validate_contract(manifest_contract, manifest.model_dump(mode="json"))
+                validate_contract(result_contract, result.model_dump(mode="json"))
                 manifest_path = workspace / DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER
                 result_path = workspace / "result.json"
                 manifest_bytes = canonical_json_bytes(manifest.model_dump(mode="json"))
@@ -339,17 +450,11 @@ class DocumentReviewPdfAnnotationService:
                 file_metadata = {
                     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER: {
                         "media_type": "application/json",
-                        "schema_ref": (
-                            "eom://schemas/document-review/"
-                            "document-review-pdf-annotation-manifest/1.0"
-                        ),
+                        "schema_ref": manifest_schema_ref,
                     },
                     "result.json": {
                         "media_type": "application/json",
-                        "schema_ref": (
-                            "eom://schemas/document-review/"
-                            "document-review-pdf-annotation-result/1.0"
-                        ),
+                        "schema_ref": result_schema_ref,
                     },
                 }
                 file_metadata.update(
@@ -369,9 +474,9 @@ class DocumentReviewPdfAnnotationService:
                     request=command.model_dump(mode="json", exclude={"idempotency_key"}),
                     result=result.model_dump(mode="json"),
                     file_metadata=file_metadata,
-                    manifest_version="document-review-pdf-annotation-file-set/1.0",
-                    protocol_version=DOCUMENT_REVIEW_PDF_ANNOTATION_PROTOCOL_VERSION,
-                    protocol_schema_hash=DOCUMENT_REVIEW_PDF_ANNOTATION_SCHEMA_HASH,
+                    manifest_version=manifest_version,
+                    protocol_version=protocol_version,
+                    protocol_schema_hash=protocol_schema_hash,
                     expected_file_sha256=expected,
                 )
         except DocumentReviewPdfAnnotationError as exc:
@@ -391,20 +496,28 @@ class DocumentReviewPdfAnnotationService:
             sha256=expected[DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER],
             content_length=len(manifest_bytes),
             media_type="application/json",
-            schema_ref=(
-                "eom://schemas/document-review/document-review-pdf-annotation-manifest/1.0"
-            ),
+            schema_ref=manifest_schema_ref,
         )
-        response = DocumentReviewPdfAnnotationResponse(
-            status="OK",
-            outputs=output_pointers,
-            manifest=manifest_pointer,
-            result=result,
-        )
-        validate_contract(
-            "document-review-pdf-annotation-response",
-            response.model_dump(mode="json", exclude_none=True),
-        )
+        response: DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2
+        if native_panel:
+            assert isinstance(result, DocumentReviewPdfAnnotationResultV2)
+            response = DocumentReviewPdfAnnotationResponseV2(
+                status="OK",
+                outputs=output_pointers,
+                manifest=manifest_pointer,
+                result=result,
+            )
+            response_contract = "document-review-pdf-annotation-response-v2"
+        else:
+            assert isinstance(result, DocumentReviewPdfAnnotationResult)
+            response = DocumentReviewPdfAnnotationResponse(
+                status="OK",
+                outputs=output_pointers,
+                manifest=manifest_pointer,
+                result=result,
+            )
+            response_contract = "document-review-pdf-annotation-response"
+        validate_contract(response_contract, response.model_dump(mode="json", exclude_none=True))
         return response
 
     def load_output(
@@ -420,7 +533,7 @@ class DocumentReviewPdfAnnotationService:
 
     def _validated_result(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs,
+        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
     ) -> PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult:
         try:
             raw = self.artifacts.load_json_revision(
@@ -486,3 +599,78 @@ class DocumentReviewPdfAnnotationService:
                 "DOCUMENT_REVIEW_ANNOTATION_POINTER_INVALID",
                 "An annotation pointer could not be resolved",
             ) from exc
+
+
+def _native_panel_comments(
+    parsed: PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult,
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+) -> tuple[NativePanelCommentPayload, ...]:
+    findings: tuple[PdfReviewFinding | PairedReviewFinding, ...] = parsed.output.findings
+    by_finding = {value.finding_id: value for value in findings}
+    primary: dict[tuple[str, str], DocumentReviewPdfAnnotationMark] = {}
+    for mark in annotations:
+        primary.setdefault((mark.finding_id, mark.document_role), mark)
+    comments: list[NativePanelCommentPayload] = []
+    for mark in primary.values():
+        finding = by_finding.get(mark.finding_id)
+        if finding is None or finding.ordinal != mark.ordinal:
+            raise DocumentReviewPdfAnnotationServiceError(
+                "DOCUMENT_REVIEW_ANNOTATION_FINDINGS_MISMATCH",
+                "A native PDF panel comment differs from the validated review finding",
+            )
+        contents = _native_panel_comment_contents(finding)
+        encoded = contents.encode("utf-8")
+        if not 1 <= len(encoded) <= 65536:
+            raise DocumentReviewPdfAnnotationServiceError(
+                "DOCUMENT_REVIEW_ANNOTATION_COMMENT_TOO_LARGE",
+                "A native PDF panel comment exceeds its fixed bound",
+            )
+        contents_sha256 = sha256_bytes(encoded)
+        comment_digest = content_sha256(
+            {
+                "profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+                "finding_id": mark.finding_id,
+                "anchor_id": mark.anchor_id,
+                "document_role": mark.document_role,
+                "contents_sha256": contents_sha256,
+            }
+        ).removeprefix("sha256:")
+        descriptor = DocumentReviewPdfPanelComment(
+            comment_id=f"reviewcomment_{comment_digest[:32]}",
+            finding_id=mark.finding_id,
+            anchor_id=mark.anchor_id,
+            ordinal=mark.ordinal,
+            document_role=mark.document_role,
+            page_number=mark.page_number,
+            contents_sha256=contents_sha256,
+            contents_utf8_length=len(encoded),
+        )
+        comments.append(
+            NativePanelCommentPayload(
+                descriptor=descriptor,
+                contents=contents,
+                region=mark.region,
+            )
+        )
+    return tuple(comments)
+
+
+def _native_panel_comment_contents(
+    finding: PdfReviewFinding | PairedReviewFinding,
+) -> str:
+    recommendation = finding.recommendation
+    lines = [
+        f"검토 #{finding.ordinal} · {finding.title}",
+        f"분류: {finding.category}",
+        f"중요도: {finding.severity}",
+        "",
+        finding.description,
+        "",
+        f"수정 권고 ({recommendation.operation})",
+        recommendation.instruction,
+    ]
+    if recommendation.before_text is not None:
+        lines.extend(("", "기존 문구", recommendation.before_text))
+    if recommendation.after_text is not None:
+        lines.extend(("", "제안 문구", recommendation.after_text))
+    return "\n".join(lines)

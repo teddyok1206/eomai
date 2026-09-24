@@ -1,0 +1,313 @@
+{
+  "$defs": {
+    "mark": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "pattern": "^reviewanchor_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "document_role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "finding_id": {
+          "pattern": "^reviewfinding_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "ordinal": {
+          "maximum": 512,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "page_image_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "page_number": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "region": {
+          "$ref": "#/$defs/region"
+        }
+      },
+      "required": [
+        "finding_id",
+        "anchor_id",
+        "ordinal",
+        "document_role",
+        "page_number",
+        "page_image_sha256",
+        "region"
+      ],
+      "type": "object"
+    },
+    "memberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 536870912,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/json",
+            "image/png"
+          ]
+        },
+        "member_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^(?:eom://|https://eom\\.local/)[A-Za-z0-9._:/-]+$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "page": {
+      "additionalProperties": false,
+      "properties": {
+        "page_image": {
+          "$ref": "#/$defs/memberPointer"
+        },
+        "page_number": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_number",
+        "page_image"
+      ],
+      "type": "object"
+    },
+    "region": {
+      "additionalProperties": false,
+      "properties": {
+        "height_ppm": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "width_ppm": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "x_ppm": {
+          "maximum": 999999,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "y_ppm": {
+          "maximum": 999999,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x_ppm",
+        "y_ppm",
+        "width_ppm",
+        "height_ppm"
+      ],
+      "type": "object"
+    },
+    "reviewResultPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "member_path": {
+          "const": "result.json"
+        },
+        "schema_ref": {
+          "enum": [
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+            "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json"
+          ]
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "content_length",
+        "media_type",
+        "schema_ref"
+      ],
+      "type": "object"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "pattern": "^document_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "document_revision_id": {
+          "pattern": "^documentrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "page_count": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/page"
+          },
+          "maxItems": 2000,
+          "minItems": 1,
+          "type": "array"
+        },
+        "role": {
+          "enum": [
+            "DOCUMENT",
+            "QUESTION",
+            "SOLUTION"
+          ]
+        },
+        "source_pdf": {
+          "$ref": "#/$defs/memberPointer"
+        }
+      },
+      "required": [
+        "role",
+        "document_id",
+        "document_revision_id",
+        "source_pdf",
+        "page_count",
+        "pages"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/catalog/document-review-pdf-annotation-request/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actor_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "type": "string"
+    },
+    "annotation_profile": {
+      "const": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    },
+    "annotation_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "annotations": {
+      "items": {
+        "$ref": "#/$defs/mark"
+      },
+      "maxItems": 4096,
+      "minItems": 1,
+      "type": "array"
+    },
+    "idempotency_key": {
+      "maxLength": 256,
+      "minLength": 16,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$",
+      "type": "string"
+    },
+    "operation": {
+      "const": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2"
+    },
+    "request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_result": {
+      "$ref": "#/$defs/reviewResultPointer"
+    },
+    "schema_version": {
+      "const": "document-review-pdf-annotation-request/2.0"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "maxItems": 2,
+      "minItems": 1,
+      "type": "array"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "annotation_profile",
+    "actor_id",
+    "idempotency_key",
+    "workflow_id",
+    "review_result",
+    "sources",
+    "annotations",
+    "annotation_set_sha256",
+    "request_sha256"
+  ],
+  "title": "EOM Document Review PDF Annotation Request V2",
+  "type": "object"
+}

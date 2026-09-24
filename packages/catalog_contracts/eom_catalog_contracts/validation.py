@@ -334,6 +334,15 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:bf4bffe7f5ce2030d7403000fc9f354a25a4d03cc86a211cd5ae80bf941c16d8",
         ),
+        "document-review-pdf-annotation-request-v2": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-request-v2.schema.json"
+            ),
+            ("resources/catalog-application/document-review-pdf-annotation-request-v2.schema.json"),
+            "2.0",
+            "sha256:7be6dab92977290406b82fed25c597b97f93b5b6606bddccca3b1f81dbc3eed8",
+        ),
         "document-review-pdf-annotation-response": CatalogSchemaResource(
             (
                 "schemas/catalog/catalog-application/"
@@ -345,6 +354,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             ),
             "1.0",
             "sha256:688036a8101999d62414ebee4445f48d4acf8c78f9f46dbaaf38ceba52b662fe",
+        ),
+        "document-review-pdf-annotation-response-v2": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-response-v2.schema.json"
+            ),
+            (
+                "resources/catalog-application/"
+                "document-review-pdf-annotation-response-v2.schema.json"
+            ),
+            "2.0",
+            "sha256:746458392aa78bdfec02d6edc45b4edd51c421743c2816ba219f89bb40be03a4",
         ),
         "document-review-pdf-annotation-media-request": CatalogSchemaResource(
             (
@@ -376,11 +397,23 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:442e77ce1bcebc0306d020c7cffcf288074799a32bb4798d5a1f212ba815e083",
         ),
+        "document-review-pdf-annotation-manifest-v2": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-manifest-v2.schema.json",
+            "resources/document-review/document-review-pdf-annotation-manifest-v2.schema.json",
+            "2.0",
+            "sha256:81e1647a71f138424f87d2401527759f197228386862ff8228800f1e6a1b9bd9",
+        ),
         "document-review-pdf-annotation-result": CatalogSchemaResource(
             "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
             "resources/document-review/document-review-pdf-annotation-result-v1.schema.json",
             "1.0",
             "sha256:426be96da09053ef3b716f19f64e2d87e7ff5c178d63ce39f88cabf710232567",
+        ),
+        "document-review-pdf-annotation-result-v2": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-result-v2.schema.json",
+            "resources/document-review/document-review-pdf-annotation-result-v2.schema.json",
+            "2.0",
+            "sha256:81b4e95d1be0988ffe6f3ef9d72c9b9ed432e868a60615e72e0156edf1fcf983",
         ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",

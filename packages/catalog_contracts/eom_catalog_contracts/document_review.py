@@ -884,3 +884,160 @@ class DocumentReviewPdfAnnotationResult(FrozenModel):
         ):
             raise ValueError("annotation result self-hash differs")
         return self
+
+
+class DocumentReviewPdfPanelComment(FrozenModel):
+    """One native PDF panel entry derived from a validated review finding."""
+
+    comment_id: Annotated[str, Field(pattern=r"^reviewcomment_[0-9a-f]{32}$")]
+    finding_id: Annotated[str, Field(pattern=r"^reviewfinding_[0-9a-f]{32}$")]
+    anchor_id: Annotated[str, Field(pattern=r"^reviewanchor_[0-9a-f]{32}$")]
+    ordinal: int = Field(ge=1, le=512)
+    document_role: DocumentReviewAnnotationRole
+    page_number: int = Field(ge=1, le=2000)
+    contents_sha256: Sha256
+    contents_utf8_length: int = Field(ge=1, le=65536)
+
+
+class DocumentReviewPdfAnnotationRendererV2(FrozenModel):
+    renderer_key: Literal["pymupdf-qpdf-rsvg-document-review-annotation"] = (
+        "pymupdf-qpdf-rsvg-document-review-annotation"
+    )
+    annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] = (
+        "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    )
+    qpdf_version: str = Field(min_length=1, max_length=128)
+    qpdf_sha256: Sha256
+    rsvg_convert_version: str = Field(min_length=1, max_length=128)
+    rsvg_convert_sha256: Sha256
+    pdfinfo_version: str = Field(min_length=1, max_length=128)
+    pdfinfo_sha256: Sha256
+    pymupdf_version: str = Field(min_length=1, max_length=128)
+    pymupdf_module_sha256: Sha256
+    pymupdf_native_sha256: Sha256
+    stroke_color: Literal["#D70015"] = "#D70015"
+    native_annotation_subtype: Literal["Square"] = "Square"
+
+
+class DocumentReviewPdfAnnotationManifestV2(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-manifest/2.0"] = (
+        "document-review-pdf-annotation-manifest/2.0"
+    )
+    annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] = (
+        "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    )
+    annotation_id: Annotated[str, Field(pattern=r"^docannotation_[0-9a-f]{32}$")]
+    workflow_id: Annotated[str, Field(pattern=r"^workflow_[0-9a-f]{32}$")]
+    request_sha256: Sha256
+    review_result_sha256: Sha256
+    sources: tuple[DocumentReviewAnnotationSource, ...] = Field(min_length=1, max_length=2)
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...] = Field(
+        min_length=1,
+        max_length=4096,
+    )
+    annotation_set_sha256: Sha256
+    panel_comments: tuple[DocumentReviewPdfPanelComment, ...] = Field(
+        min_length=1,
+        max_length=1024,
+    )
+    panel_comment_set_sha256: Sha256
+    renderer: DocumentReviewPdfAnnotationRendererV2
+    outputs: tuple[DocumentReviewAnnotatedPdfMember, ...] = Field(min_length=1, max_length=2)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_manifest(self) -> DocumentReviewPdfAnnotationManifestV2:
+        source_roles = tuple(value.role for value in self.sources)
+        if source_roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("annotation manifest source roles are invalid")
+        if tuple(value.document_role for value in self.outputs) != source_roles:
+            raise ValueError("annotation manifest outputs differ from source roles")
+        if content_sha256([value.model_dump(mode="json") for value in self.annotations]) != (
+            self.annotation_set_sha256
+        ):
+            raise ValueError("annotation manifest set hash differs")
+        comment_keys = tuple(
+            (
+                value.document_role,
+                value.page_number,
+                value.ordinal,
+                value.finding_id,
+                value.anchor_id,
+            )
+            for value in self.panel_comments
+        )
+        if comment_keys != tuple(sorted(set(comment_keys))):
+            raise ValueError("native PDF panel comments must be sorted and unique")
+        finding_role_keys = tuple(
+            (value.finding_id, value.document_role) for value in self.panel_comments
+        )
+        if len(finding_role_keys) != len(set(finding_role_keys)):
+            raise ValueError("one finding may have only one panel comment per document role")
+        expected_finding_role_keys = {
+            (value.finding_id, value.document_role) for value in self.annotations
+        }
+        if set(finding_role_keys) != expected_finding_role_keys:
+            raise ValueError("native PDF panel comments do not cover every finding and role")
+        mark_keys = {
+            (
+                value.finding_id,
+                value.anchor_id,
+                value.ordinal,
+                value.document_role,
+                value.page_number,
+            )
+            for value in self.annotations
+        }
+        if any(
+            (
+                value.finding_id,
+                value.anchor_id,
+                value.ordinal,
+                value.document_role,
+                value.page_number,
+            )
+            not in mark_keys
+            for value in self.panel_comments
+        ):
+            raise ValueError("native PDF panel comment differs from its annotation mark")
+        if content_sha256([value.model_dump(mode="json") for value in self.panel_comments]) != (
+            self.panel_comment_set_sha256
+        ):
+            raise ValueError("native PDF panel comment set hash differs")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
+            != self.manifest_sha256
+        ):
+            raise ValueError("annotation manifest self-hash differs")
+        return self
+
+
+class DocumentReviewPdfAnnotationResultV2(FrozenModel):
+    schema_version: Literal["document-review-pdf-annotation-result/2.0"] = (
+        "document-review-pdf-annotation-result/2.0"
+    )
+    annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] = (
+        "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    )
+    annotation_id: Annotated[str, Field(pattern=r"^docannotation_[0-9a-f]{32}$")]
+    workflow_id: Annotated[str, Field(pattern=r"^workflow_[0-9a-f]{32}$")]
+    request_sha256: Sha256
+    review_result_sha256: Sha256
+    annotation_set_sha256: Sha256
+    panel_comment_set_sha256: Sha256
+    panel_comment_count: int = Field(ge=1, le=1024)
+    outputs: tuple[DocumentReviewAnnotatedPdfMember, ...] = Field(min_length=1, max_length=2)
+    manifest_sha256: Sha256
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def require_exact_result(self) -> DocumentReviewPdfAnnotationResultV2:
+        roles = tuple(value.document_role for value in self.outputs)
+        if roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("annotation result output roles are invalid")
+        if (
+            content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+            != self.result_sha256
+        ):
+            raise ValueError("annotation result self-hash differs")
+        return self

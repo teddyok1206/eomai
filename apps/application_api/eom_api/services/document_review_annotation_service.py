@@ -11,6 +11,7 @@ from eom_api_contracts.document_review import (
 )
 from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
+    CreateDocumentReviewAnnotatedPdfsV2,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -58,6 +59,7 @@ class DocumentReviewAnnotationApplicationService:
         *,
         actor_id: str,
         idempotency_key: str,
+        annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] | None = None,
     ) -> DocumentReviewAnnotationView:
         review_result, source_values, parsed = self.queries.document_review_annotation_inputs(
             actor_id=actor_id,
@@ -133,8 +135,16 @@ class DocumentReviewAnnotationApplicationService:
             )
         annotations = tuple(marks)
         payload: dict[str, object] = {
-            "schema_version": "document-review-pdf-annotation-request/1.0",
-            "operation": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS",
+            "schema_version": (
+                "document-review-pdf-annotation-request/2.0"
+                if annotation_profile is not None
+                else "document-review-pdf-annotation-request/1.0"
+            ),
+            "operation": (
+                "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2"
+                if annotation_profile is not None
+                else "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS"
+            ),
             "actor_id": actor_id,
             "idempotency_key": idempotency_key,
             "workflow_id": workflow_id,
@@ -145,10 +155,16 @@ class DocumentReviewAnnotationApplicationService:
                 [value.model_dump(mode="json") for value in annotations]
             ),
         }
+        if annotation_profile is not None:
+            payload["annotation_profile"] = annotation_profile
         payload["request_sha256"] = content_sha256(
             {key: value for key, value in payload.items() if key != "idempotency_key"}
         )
-        command = CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+        command = (
+            CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
+            if annotation_profile is not None
+            else CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+        )
         prior = self._existing_for_request(
             workflow_id,
             command.request_sha256,

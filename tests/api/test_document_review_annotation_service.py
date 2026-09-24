@@ -14,6 +14,7 @@ from eom_api.services.document_review_annotation_service import (
     DocumentReviewAnnotationApplicationService,
 )
 from eom_catalog_contracts import (
+    CreateDocumentReviewAnnotatedPdfsV2,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewResultMemberPointer,
     OfficeDocumentReviewMemberPointer,
@@ -265,3 +266,30 @@ def test_immutable_annotation_commit_does_not_require_update_or_row_lock() -> No
     assert "with_for_update" not in source
     assert "document_review_pdf_annotations" not in UPDATE_TABLES
     assert "document_review_pdf_annotation_outputs" not in UPDATE_TABLES
+
+
+def test_native_comment_profile_uses_v2_without_changing_pointer_persistence() -> None:
+    service, engine, catalog = _service()
+
+    result = service.create(
+        WORKFLOW_ID,
+        actor_id=OPERATOR_ID,
+        idempotency_key="api:document-review-native-comment-test",
+        annotation_profile="NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+    )
+
+    assert result.annotation_id == ANNOTATION_ID
+    assert len(catalog.commands) == 1
+    command = catalog.commands[0]
+    assert isinstance(command, CreateDocumentReviewAnnotatedPdfsV2)
+    assert command.annotation_profile == "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
+    assert command.request_sha256 == content_sha256(
+        command.model_dump(
+            mode="json",
+            exclude={"idempotency_key", "request_sha256"},
+        )
+    )
+    with service.sessions() as session:
+        assert session.scalar(select(DocumentReviewPdfAnnotationRecord)) is not None
+        assert session.scalar(select(DocumentReviewPdfAnnotationOutputRecord)) is not None
+    engine.dispose()

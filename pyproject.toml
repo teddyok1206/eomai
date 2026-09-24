@@ -13,6 +13,8 @@ dependencies = [
   "psycopg[binary]>=3.2,<4",
   "pwdlib[argon2]>=0.3.1,<0.4",
   "pydantic>=2.11,<3",
+  # Create and verify standard PDF annotation objects for the native review comment panel.
+  "PyMuPDF>=1.26.7,<1.27",
   "PyYAML>=6.0,<7",
   # Resolve pinned cross-schema Catalog protocol references without network access.
   "referencing>=0.36,<1",
