@@ -8,6 +8,13 @@ from eom_catalog_service.artifacts import (
     CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH,
     CATALOG_PROTOCOL_VERSION,
 )
+from eom_catalog_service.document_review_hwpx_correction_service import (
+    DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION,
+)
+from eom_catalog_service.document_review_pdf_annotation_service import (
+    DOCUMENT_REVIEW_PDF_ANNOTATION_PROTOCOL_VERSION,
+    DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION,
+)
 from eom_catalog_service.knowledge_analysis_service import (
     KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL,
     KNOWLEDGE_ANALYSIS_DOCUMENT_CATALOG_PROTOCOL,
@@ -24,6 +31,10 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
     ITEM_REVIEW_PROTOCOL_VERSION,
     ITEM_REVIEW_PROTOCOL_VERSION_V2,
     ITEM_REVIEW_PROTOCOL_VERSION_V3,
+)
+from eom_catalog_service.office_document_review_intake import (
+    OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+    OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION,
 )
 from eom_catalog_service.pdf_document_review_intake import (
     PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION,
@@ -67,12 +78,22 @@ def test_catalog_contract_bundles_have_unique_immutable_protocol_versions() -> N
         ITEM_REVIEW_PROTOCOL_VERSION_V2,
         ITEM_REVIEW_PROTOCOL_VERSION_V3,
         PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+        OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION,
+        DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION,
+        DOCUMENT_REVIEW_PDF_ANNOTATION_PROTOCOL_VERSION,
+        OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION,
+        DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION,
     )
 
     assert CATALOG_ITEM_CONTENT_V2_PROTOCOL_VERSION == "catalog/1.2"
     assert CATALOG_ITEM_CONTENT_V3_PROTOCOL_VERSION == "catalog/1.13"
     assert ITEM_REVIEW_PROTOCOL_VERSION_V3 == "catalog/1.14"
     assert PDF_DOCUMENT_REVIEW_PROTOCOL_VERSION == "catalog/1.16"
+    assert OFFICE_DOCUMENT_REVIEW_PROTOCOL_VERSION == "catalog/1.17"
+    assert DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION == "catalog/1.18"
+    assert DOCUMENT_REVIEW_PDF_ANNOTATION_PROTOCOL_VERSION == "catalog/1.19"
+    assert OFFICE_DOCUMENT_REVIEW_V3_PROTOCOL_VERSION == "catalog/1.20"
+    assert DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION == "catalog/1.21"
     assert CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH == (
         "sha256:4e5fe407e576b68a4162c9105e8cf31f765cfd8fea21982f36be49503505f797"
     )

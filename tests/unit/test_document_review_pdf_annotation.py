@@ -582,7 +582,7 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     assert response.manifest is not None
     assert response.manifest.schema_ref.endswith("annotation-manifest/2.0")
     commit = artifacts.commit_calls[0]
-    assert commit["protocol_version"] == "catalog/1.20"
+    assert commit["protocol_version"] == "catalog/1.21"
     assert commit["manifest_version"] == "document-review-pdf-annotation-file-set/2.0"
     document = pymupdf.open(stream=artifacts.committed["annotated/document.pdf"], filetype="pdf")
     try:

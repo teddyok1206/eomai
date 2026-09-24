@@ -26,7 +26,7 @@ byte-stable.  Add:
 - public API `document-review-annotation-v2` request with required profile
   `NUMBERED_BOXES_WITH_NATIVE_COMMENTS`;
 - Catalog request/manifest/result/response `document-review-pdf-annotation-* /2.0`;
-- Catalog protocol `catalog/1.20`;
+- Catalog protocol `catalog/1.21`;
 - renderer identity `pymupdf-qpdf-rsvg-document-review-annotation`.
 
 The existing endpoint accepts the V1 or V2 public request.  V1 remains the historical numbered-box
