@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV3,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewPdfAnnotationManifest,
@@ -34,6 +35,7 @@ from eom_catalog_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_workflow import (
     PairedDocumentReviewRoleResult,
+    PairedDocumentReviewRoleResultV3,
     PairedReviewFinding,
     PdfDocumentReviewRoleResult,
     PdfReviewFinding,
@@ -69,6 +71,18 @@ DOCUMENT_REVIEW_PDF_ANNOTATION_V2_SCHEMA_HASH = content_sha256(
         "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION,
         "contracts": [
             "document-review-pdf-annotation-request/2.0",
+            "document-review-pdf-annotation-manifest/2.0",
+            "document-review-pdf-annotation-result/2.0",
+            "document-review-pdf-annotation-response/2.0",
+        ],
+    }
+)
+DOCUMENT_REVIEW_PDF_ANNOTATION_V3_PROTOCOL_VERSION = "catalog/1.22"
+DOCUMENT_REVIEW_PDF_ANNOTATION_V3_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V3_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-pdf-annotation-request/3.0",
             "document-review-pdf-annotation-manifest/2.0",
             "document-review-pdf-annotation-result/2.0",
             "document-review-pdf-annotation-response/2.0",
@@ -161,10 +175,17 @@ class DocumentReviewPdfAnnotationService:
 
     def create(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
+        command: (
+            CreateDocumentReviewAnnotatedPdfs
+            | CreateDocumentReviewAnnotatedPdfsV2
+            | CreateDocumentReviewAnnotatedPdfsV3
+        ),
     ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         parsed = self._validated_result(command)
-        native_panel = isinstance(command, CreateDocumentReviewAnnotatedPdfsV2)
+        native_panel = isinstance(
+            command,
+            (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
+        )
         expected_documents: tuple[tuple[str, str, str, str], ...]
         expected_marks: list[tuple[str, str, int, str, int, str, dict[str, object]]] = []
         if isinstance(parsed, PdfDocumentReviewRoleResult):
@@ -189,7 +210,10 @@ class DocumentReviewPdfAnnotationService:
                             anchor.region.model_dump(mode="json"),
                         )
                     )
-        elif isinstance(parsed, PairedDocumentReviewRoleResult):
+        elif isinstance(
+            parsed,
+            (PairedDocumentReviewRoleResultV3, PairedDocumentReviewRoleResult),
+        ):
             expected_documents = tuple(
                 (
                     value.role,
@@ -390,8 +414,12 @@ class DocumentReviewPdfAnnotationService:
                         "eom://schemas/document-review/document-review-pdf-annotation-result/2.0"
                     )
                     manifest_version = "document-review-pdf-annotation-file-set/2.0"
-                    protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION
-                    protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_SCHEMA_HASH
+                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV3):
+                        protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V3_PROTOCOL_VERSION
+                        protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V3_SCHEMA_HASH
+                    else:
+                        protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_PROTOCOL_VERSION
+                        protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V2_SCHEMA_HASH
                 else:
                     manifest_payload = {
                         "schema_version": "document-review-pdf-annotation-manifest/1.0",
@@ -533,8 +561,16 @@ class DocumentReviewPdfAnnotationService:
 
     def _validated_result(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
-    ) -> PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult:
+        command: (
+            CreateDocumentReviewAnnotatedPdfs
+            | CreateDocumentReviewAnnotatedPdfsV2
+            | CreateDocumentReviewAnnotatedPdfsV3
+        ),
+    ) -> (
+        PdfDocumentReviewRoleResult
+        | PairedDocumentReviewRoleResultV3
+        | PairedDocumentReviewRoleResult
+    ):
         try:
             raw = self.artifacts.load_json_revision(
                 artifact_id=command.review_result.artifact_id,
@@ -554,20 +590,30 @@ class DocumentReviewPdfAnnotationService:
                 "The document review result pointer could not be resolved",
             ) from exc
         try:
-            result_schema = (
-                "pdf-document-review-result@2.0"
-                if command.review_result.schema_ref.endswith(
-                    "/paired-document-review-result-v2.schema.json"
-                )
-                else "pdf-document-review-result@1.0"
-            )
+            if command.review_result.schema_ref.endswith(
+                "/paired-document-review-result-v3.schema.json"
+            ):
+                result_schema = "pdf-document-review-result@3.0"
+            elif command.review_result.schema_ref.endswith(
+                "/paired-document-review-result-v2.schema.json"
+            ):
+                result_schema = "pdf-document-review-result@2.0"
+            else:
+                result_schema = "pdf-document-review-result@1.0"
             parsed = validate_role_result(raw, "support", result_schema)
         except (JsonSchemaValidationError, ValueError) as exc:
             raise DocumentReviewPdfAnnotationServiceError(
                 "DOCUMENT_REVIEW_ANNOTATION_RESULT_INVALID",
                 "The document review result is invalid",
             ) from exc
-        if not isinstance(parsed, (PdfDocumentReviewRoleResult, PairedDocumentReviewRoleResult)):
+        if not isinstance(
+            parsed,
+            (
+                PdfDocumentReviewRoleResult,
+                PairedDocumentReviewRoleResultV3,
+                PairedDocumentReviewRoleResult,
+            ),
+        ):
             raise DocumentReviewPdfAnnotationServiceError(
                 "DOCUMENT_REVIEW_ANNOTATION_RESULT_INVALID",
                 "The document review result type is unsupported",
@@ -602,7 +648,11 @@ class DocumentReviewPdfAnnotationService:
 
 
 def _native_panel_comments(
-    parsed: PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult,
+    parsed: (
+        PdfDocumentReviewRoleResult
+        | PairedDocumentReviewRoleResultV3
+        | PairedDocumentReviewRoleResult
+    ),
     annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
 ) -> tuple[NativePanelCommentPayload, ...]:
     findings: tuple[PdfReviewFinding | PairedReviewFinding, ...] = parsed.output.findings

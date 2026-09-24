@@ -298,6 +298,7 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
         "pdf-document-review-control-bootstrap-v2.schema.json",
         "pdf-document-review-control-bootstrap-v3.schema.json",
         "pdf-document-review-control-bootstrap-v4.schema.json",
+        "pdf-document-review-control-bootstrap-v5.schema.json",
     ):
         canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
         packaged = (
@@ -386,6 +387,29 @@ def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
     assert "MOVE·REDRAW·VERIFY·NONE" in payload_role
     assert "question_anchors에는 QUESTION만" in payload_role
     assert "review_status는 NEEDS_HUMAN_DECISION" in payload_role
+
+    grounded = load_pdf_document_review_bootstrap_manifest(
+        ROOT / "config/control-plane/pdf-document-review-v5"
+    )
+    assert grounded.instruction_revision_number == 5
+    assert grounded.compatible_workflow_protocols == (
+        "workflow-role/1.25.0",
+        "workflow-role/1.26.0",
+        "workflow-role/1.27.0",
+    )
+    assert grounded.evidence_access == "EVIDENCE_CONTEXT"
+    assert grounded.retrieval_policy is not None
+    grounded_role = (
+        ROOT / "config/control-plane/pdf-document-review-v5/instructions/pdf-document-review.md"
+    ).read_text(encoding="utf-8")
+    for required_text in (
+        "EDITORIAL_CLARITY",
+        "TYPOGRAPHY",
+        "독립적으로 풀고",
+        "references/evidence/manifest.json",
+        "`ORIGINALITY` target이 `INSUFFICIENT`",
+    ):
+        assert required_text in grounded_role
 
 
 def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:

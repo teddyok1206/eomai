@@ -6,6 +6,7 @@ import pytest
 from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV3,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -132,6 +133,22 @@ def _request_v2() -> CreateDocumentReviewAnnotatedPdfsV2:
     return CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
 
 
+def _request_v3() -> CreateDocumentReviewAnnotatedPdfsV3:
+    payload = _request_v2().model_dump(mode="json")
+    payload["schema_version"] = "document-review-pdf-annotation-request/3.0"
+    payload["review_result"]["schema_ref"] = (
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json"
+    )
+    payload["request_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"idempotency_key", "request_sha256"}
+        }
+    )
+    return CreateDocumentReviewAnnotatedPdfsV3.model_validate(payload)
+
+
 def test_annotation_request_is_schema_and_model_exact() -> None:
     value = _request()
     validate_contract("document-review-pdf-annotation-request", value.model_dump(mode="json"))
@@ -155,6 +172,14 @@ def test_native_panel_request_is_schema_and_model_exact() -> None:
     payload["request_sha256"] = f"sha256:{'f' * 64}"
     with pytest.raises(ValidationError, match="self-hash"):
         CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+
+
+def test_graph_grounded_native_panel_request_is_additive_and_exact() -> None:
+    value = _request_v3()
+    validate_contract("document-review-pdf-annotation-request-v3", value.model_dump(mode="json"))
+    assert value.review_result.schema_ref.endswith("/paired-document-review-result-v3.schema.json")
+    with pytest.raises(ValidationError):
+        CreateDocumentReviewAnnotatedPdfsV2.model_validate(value.model_dump(mode="json"))
 
 
 def test_annotation_manifest_and_result_are_self_hashed() -> None:

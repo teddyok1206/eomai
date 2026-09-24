@@ -607,6 +607,9 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
 
     assert '"pdf-document-review-control-bootstrap-v3"' in deployment
     assert '"pdf-document-review-control-bootstrap-v4"' in deployment
+    assert '"pdf-document-review-control-bootstrap-v5"' in deployment
+    assert '"resolved-execution-plan-v15"' in deployment
+    assert '"document-review-evidence-validation-receipt-v1"' in deployment
 
     for resource in (
         "mock-exam-item-review-decision-v1.schema.json",
@@ -702,7 +705,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 46 packaged API schemas" in deployment
+    assert "expected exactly 47 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
@@ -773,8 +776,13 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
         '"catalog-application/document-review-pdf-annotation-request-v2.schema.json"' in deployment
     )
     assert (
+        '"catalog-application/document-review-pdf-annotation-request-v3.schema.json"' in deployment
+    )
+    assert (
         '"catalog-application/document-review-pdf-annotation-response-v2.schema.json"' in deployment
     )
+    assert '"catalog-application/document-review-evidence-request-v1.schema.json"' in deployment
+    assert '"document-review/document-review-evidence-plan-v1.schema.json"' in deployment
     assert 'importlib.metadata.version("PyMuPDF") != "1.26.7"' in deployment
     assert 'print("native_pdf_annotation_runtime=READY")' in deployment
 

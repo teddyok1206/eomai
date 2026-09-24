@@ -3670,6 +3670,117 @@ function renderPairedDocumentReviewCrossChecks(review) {
   });
 }
 
+const PDF_REVIEW_AXIS_LABELS = {
+  SCIENTIFIC_ACCURACY: "과학적 정확성",
+  ANSWER_UNIQUENESS: "정답 유일성",
+  SOLUTION_CONSISTENCY: "해설 일치",
+  CURRICULUM_SCOPE: "교육과정 범위",
+  ORIGINALITY: "독창성",
+  VISUAL_CONTENT: "시각 자료",
+  EDITORIAL_CLARITY: "편집 명료성",
+  TYPOGRAPHY: "조판",
+  DOCUMENT_STRUCTURE: "문서 구조",
+  ASSESSMENT_BALANCE: "평가 균형",
+};
+
+function appendPdfReviewAnchorButton(root, anchor, label) {
+  if (!anchor) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button quiet";
+  button.textContent = `${label} ${anchor.page_number}쪽`;
+  button.addEventListener("click", () => navigatePairedReviewAnchor(anchor));
+  root.append(button);
+}
+
+function pdfReviewItemDetail(title, values, describe) {
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `${title} ${values.length}건`;
+  const list = document.createElement("div");
+  list.className = "pdf-review-item-detail-list";
+  values.forEach((value, index) => {
+    const row = document.createElement("p");
+    row.className = "pdf-review-item-detail";
+    row.textContent = describe(value, index);
+    list.append(row);
+  });
+  details.append(summary, list);
+  return details;
+}
+
+function renderPairedDocumentReviewExhaustive(review) {
+  const root = $("#pdf-review-exhaustive");
+  const axisList = $("#pdf-review-axis-list");
+  const itemList = $("#pdf-review-item-list");
+  const evidenceSummary = $("#pdf-review-evidence-summary");
+  axisList.replaceChildren();
+  itemList.replaceChildren();
+  const items = review.result?.item_reviews;
+  const evidence = review.result?.evidence_usage;
+  root.hidden = !isPairedDocumentReview(review) || !Array.isArray(items) || !evidence;
+  if (root.hidden) {
+    evidenceSummary.textContent = "";
+    return;
+  }
+  review.result.verification_targets.forEach((target) => {
+    const badge = document.createElement("span");
+    badge.className = "pdf-review-axis";
+    badge.dataset.status = target.status;
+    badge.textContent = `${PDF_REVIEW_AXIS_LABELS[target.axis] || target.axis} · ${target.status}`;
+    axisList.append(badge);
+  });
+  evidenceSummary.textContent = `Graph 근거 ${evidence.citations.length}건 · 문항 ${items.length}개`;
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "pdf-review-item-audit";
+    const header = document.createElement("header");
+    const title = document.createElement("strong");
+    title.textContent = `${item.ordinal}. ${item.question_label}`;
+    const statuses = document.createElement("span");
+    statuses.className = "pdf-review-item-statuses";
+    [
+      ["정답", item.answer_status, item.answer_status === "VERIFIED"],
+      ["조건", item.condition_sufficiency, item.condition_sufficiency === "VERIFIED"],
+      ["근거", item.evidence_status, item.evidence_status === "SUPPORTED"],
+    ].forEach(([label, status, ok]) => {
+      const badge = document.createElement("span");
+      badge.className = "pdf-review-item-status";
+      badge.dataset.ok = String(ok);
+      badge.textContent = `${label} · ${status}`;
+      statuses.append(badge);
+    });
+    header.append(title, statuses);
+    const solve = document.createElement("p");
+    solve.textContent = `독립 풀이: ${item.solve_summary}`;
+    const answer = document.createElement("p");
+    answer.textContent = `검산 답: ${item.final_answer}`;
+    const conclusion = document.createElement("p");
+    conclusion.textContent = item.conclusion;
+    card.append(header, solve, answer, conclusion);
+    card.append(pdfReviewItemDetail("독립 풀이 단계", item.solve_steps, (value) => (
+      `${value.ordinal}. ${value.status} · ${value.claim_summary} — ${value.verification_summary}`
+    )));
+    card.append(pdfReviewItemDetail("단위 검증", item.unit_checks, (value) => (
+      `${value.quantity} · ${value.status} · ${value.conclusion}`
+    )));
+    if (item.choice_checks.length > 0) {
+      card.append(pdfReviewItemDetail("선지 검증", item.choice_checks, (value) => (
+        `${value.ordinal}. ${value.choice_key} · ${value.verdict} · ${value.rationale}`
+      )));
+    }
+    card.append(pdfReviewItemDetail("해설 단계 검증", item.explanation_steps, (value) => (
+      `${value.ordinal}. ${value.status} · ${value.claim_summary} — ${value.verification_summary}`
+    )));
+    const actions = document.createElement("div");
+    actions.className = "pdf-review-item-actions";
+    appendPdfReviewAnchorButton(actions, item.question_anchors?.[0], "문제지");
+    appendPdfReviewAnchorButton(actions, item.solution_anchors?.[0], "해설지");
+    card.append(actions);
+    itemList.append(card);
+  });
+}
+
 function renderPdfDocumentReviewDetail() {
   const review = state.pdfDocumentReviewSelected;
   if (!review) return;
@@ -3686,6 +3797,7 @@ function renderPdfDocumentReviewDetail() {
   const findingsRoot = $("#pdf-review-findings");
   summary.replaceChildren();
   findingsRoot.replaceChildren();
+  renderPairedDocumentReviewExhaustive(review);
   renderPairedDocumentReviewCrossChecks(review);
   if (review.state === "COMPLETED" && review.result) {
     const heading = document.createElement("h3");

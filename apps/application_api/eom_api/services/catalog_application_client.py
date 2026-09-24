@@ -36,6 +36,8 @@ from eom_catalog_contracts import (
     CatalogItemMediaResponse,
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -43,6 +45,8 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    DocumentReviewEvidencePlan,
+    DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
     DocumentReviewHwpxCorrectionResponse,
@@ -508,14 +512,25 @@ class CatalogApplicationClient:
 
     def create_document_review_annotated_pdfs(
         self,
-        command: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
+        command: (
+            CreateDocumentReviewAnnotatedPdfs
+            | CreateDocumentReviewAnnotatedPdfsV2
+            | CreateDocumentReviewAnnotatedPdfsV3
+        ),
     ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         payload = command.model_dump(mode="json")
-        native_panel = isinstance(command, CreateDocumentReviewAnnotatedPdfsV2)
+        native_panel = isinstance(
+            command,
+            (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
+        )
         request_contract = (
-            "document-review-pdf-annotation-request-v2"
-            if native_panel
-            else "document-review-pdf-annotation-request"
+            "document-review-pdf-annotation-request-v3"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV3)
+            else (
+                "document-review-pdf-annotation-request-v2"
+                if native_panel
+                else "document-review-pdf-annotation-request"
+            )
         )
         response_contract = (
             "document-review-pdf-annotation-response-v2"
@@ -913,6 +928,37 @@ class CatalogApplicationClient:
                 "Catalog item production Evidence Bundle response is invalid",
             )
         return response.item_production_evidence
+
+    def create_document_review_evidence(
+        self,
+        command: CreateDocumentReviewEvidenceCommand,
+    ) -> DocumentReviewEvidencePlan:
+        """Resolve one exact paired review into bounded Graph evidence."""
+
+        payload = command.model_dump(mode="json")
+        try:
+            validate_contract("document-review-evidence-request", payload)
+            value = self._raw_request(
+                payload,
+                timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS,
+            )
+            validate_contract("document-review-evidence-response", value)
+            response = DocumentReviewEvidenceResponse.model_validate(value)
+        except CatalogApplicationClientError:
+            raise
+        except (JsonSchemaValidationError, ValidationError, ValueError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog document review evidence response is invalid",
+            ) from exc
+        if response.status == "ERROR":
+            self._raise_remote_error(response.error_code)
+        if response.plan is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog document review evidence plan is missing",
+            )
+        return response.plan
 
     def publish_approved_item_analyses(
         self,

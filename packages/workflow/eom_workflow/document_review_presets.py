@@ -7,11 +7,12 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Literal, cast
 
-from eom_catalog_contracts import PdfReviewDocumentPointer
+from eom_catalog_contracts import DocumentReviewEvidencePlan, PdfReviewDocumentPointer
 from eom_identifiers import content_sha256
 
 from eom_workflow.document_review import (
     PairedDocumentReviewRequest,
+    PairedDocumentReviewRequestV2,
     PairedReviewDocument,
     PdfDocumentReviewRequest,
     PdfReviewPresetSnapshot,
@@ -102,3 +103,35 @@ def build_paired_document_review_request(
     }
     value["request_sha256"] = content_sha256(value)
     return PairedDocumentReviewRequest.model_validate(value)
+
+
+def build_graph_grounded_paired_document_review_request(
+    *,
+    question_document: PdfReviewDocumentPointer,
+    solution_document: PdfReviewDocumentPointer,
+    evidence_plan: DocumentReviewEvidencePlan,
+    preset_key: PdfReviewPresetKey,
+    additional_guidance: str | None,
+) -> PairedDocumentReviewRequestV2:
+    """Pin paired sources, preset, guidance, and one exact Graph evidence plan."""
+
+    normalized_guidance = (
+        None if additional_guidance is None else normalize_pdf_review_guidance(additional_guidance)
+    )
+    documents = (
+        PairedReviewDocument(role="QUESTION", document=question_document),
+        PairedReviewDocument(role="SOLUTION", document=solution_document),
+    )
+    value: dict[str, object] = {
+        "schema_version": "paired-document-review-request/2.0",
+        "documents": [document.model_dump(mode="json") for document in documents],
+        "preset": load_pdf_review_preset(preset_key).model_dump(mode="json"),
+        "additional_guidance": normalized_guidance,
+        "additional_guidance_sha256": (
+            None if normalized_guidance is None else content_sha256(normalized_guidance)
+        ),
+        "locale": "ko-KR",
+        "evidence_plan": evidence_plan.model_dump(mode="json"),
+    }
+    value["request_sha256"] = content_sha256(value)
+    return PairedDocumentReviewRequestV2.model_validate(value)

@@ -38,6 +38,7 @@ from eom_workflow import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
     PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
     ResolvedExecutionPlanV12,
     ResolvedStepExecutionV12,
@@ -196,6 +197,7 @@ def _prompt_name_for_request(
         | LegacyItemExtractionWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
+        | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
         | PdfDocumentReviewWorkerRequest
     ),
@@ -211,7 +213,12 @@ def _prompt_name_for_request(
     if worker_role == "support" and isinstance(request, CustomerSupportWorkerRequest):
         return "customer-support"
     if worker_role == "support" and isinstance(
-        request, (PdfDocumentReviewWorkerRequest, PairedDocumentReviewWorkerRequest)
+        request,
+        (
+            PdfDocumentReviewWorkerRequest,
+            PairedDocumentReviewWorkerRequest,
+            PairedDocumentReviewWorkerRequestV2,
+        ),
     ):
         return "pdf-document-review"
     if worker_role == "item_management":
@@ -254,6 +261,7 @@ class RoleJobExecutor(Protocol):
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
+            | PairedDocumentReviewWorkerRequestV2
             | PairedDocumentReviewWorkerRequest
             | PdfDocumentReviewWorkerRequest
         ),
@@ -296,6 +304,7 @@ class PlatformRoleJobExecutor:
             | LegacyItemExtractionWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
+            | PairedDocumentReviewWorkerRequestV2
             | PairedDocumentReviewWorkerRequest
             | PdfDocumentReviewWorkerRequest
         ),

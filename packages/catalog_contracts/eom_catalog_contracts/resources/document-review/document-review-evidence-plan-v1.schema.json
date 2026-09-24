@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/document-review/document-review-evidence-plan/1.0",
+  "title": "EOM Document Review Evidence Plan V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "documents",
+    "term_set_sha256",
+    "topic_keys",
+    "extractor",
+    "requirement",
+    "publication",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "document-review-evidence-plan/1.0"
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "document_id",
+                "document_revision_id",
+                "source_pdf_sha256"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "QUESTION",
+                    "SOLUTION"
+                  ]
+                },
+                "document_id": {
+                  "type": "string",
+                  "pattern": "^document_[0-9a-f]{32}$"
+                },
+                "document_revision_id": {
+                  "type": "string",
+                  "pattern": "^documentrev_[0-9a-f]{32}$"
+                },
+                "source_pdf_sha256": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "QUESTION"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "document_id",
+                "document_revision_id",
+                "source_pdf_sha256"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "QUESTION",
+                    "SOLUTION"
+                  ]
+                },
+                "document_id": {
+                  "type": "string",
+                  "pattern": "^document_[0-9a-f]{32}$"
+                },
+                "document_revision_id": {
+                  "type": "string",
+                  "pattern": "^documentrev_[0-9a-f]{32}$"
+                },
+                "source_pdf_sha256": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "SOLUTION"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "term_set_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "topic_keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+      }
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extractor_key",
+        "executable_sha256",
+        "max_text_bytes",
+        "max_terms"
+      ],
+      "properties": {
+        "extractor_key": {
+          "const": "poppler-pdftotext"
+        },
+        "executable_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "max_text_bytes": {
+          "const": 8388608
+        },
+        "max_terms": {
+          "const": 512
+        }
+      }
+    },
+    "requirement": {
+      "$ref": "eom://schemas/knowledge/educational-retrieval-requirement/1.0"
+    },
+    "publication": {
+      "$ref": "eom://schemas/knowledge/evidence-bundle-publication-result/5.0"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -16,6 +16,7 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewPdfAnnotationResult,
     DocumentReviewPdfAnnotationResultV2,
     DocumentReviewResultMemberPointer,
+    GraphGroundedDocumentReviewResultMemberPointer,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
     OfficeDocumentReviewMemberPointerV2,
@@ -734,6 +735,15 @@ class CreateDocumentReviewAnnotatedPdfsV2(FrozenModel):
         ):
             raise ValueError("annotation request self-hash differs")
         return self
+
+
+class CreateDocumentReviewAnnotatedPdfsV3(CreateDocumentReviewAnnotatedPdfsV2):
+    """Native-panel annotation request for a Graph-grounded V3 review result."""
+
+    schema_version: Literal["document-review-pdf-annotation-request/3.0"] = (
+        "document-review-pdf-annotation-request/3.0"  # type: ignore[assignment]
+    )
+    review_result: GraphGroundedDocumentReviewResultMemberPointer  # type: ignore[assignment]
 
 
 class DocumentReviewPdfAnnotationResponseV2(FrozenModel):

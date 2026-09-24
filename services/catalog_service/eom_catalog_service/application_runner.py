@@ -18,6 +18,9 @@ from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationService,
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.document_review_evidence_service import (
+    DocumentReviewEvidenceService,
+)
 from eom_catalog_service.document_review_hwpx_correction_service import (
     DocumentReviewHwpxCorrectionService,
 )
@@ -236,12 +239,13 @@ def serve() -> int:
             engine,
             automatic_acceptance=automatic_acceptance,
         )
+        knowledge_retrieval = KnowledgeRetrievalApplicationService(engine)
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
             knowledge_analysis,
             knowledge_analysis_batches,
-            KnowledgeRetrievalApplicationService(engine),
+            knowledge_retrieval,
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),
@@ -249,6 +253,10 @@ def serve() -> int:
             office_document_review_intake=OfficeDocumentReviewIntakeService(engine),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
+            document_review_evidence=DocumentReviewEvidenceService(
+                engine,
+                retrieval=knowledge_retrieval,
+            ),
         )
         thread = threading.Thread(
             target=server.serve_forever,

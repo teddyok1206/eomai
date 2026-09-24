@@ -65,8 +65,11 @@ from pydantic import (
 
 from eom_workflow.document_review import (
     PairedDocumentReviewOutput,
+    PairedDocumentReviewOutputV3,
     PairedDocumentReviewRequest,
+    PairedDocumentReviewRequestV2,
     PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewOutput,
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
@@ -470,7 +473,9 @@ class WorkflowRequest(FrozenModel):
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
     customer_support_case: CustomerSupportCase | None = None
     pdf_document_review_request: PdfDocumentReviewRequest | None = None
-    paired_document_review_request: PairedDocumentReviewRequest | None = None
+    paired_document_review_request: (
+        PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest | None
+    ) = None
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
@@ -772,9 +777,14 @@ class WorkflowRequest(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
     ):
         if self.paired_document_review_request is not None:
+            if isinstance(self.paired_document_review_request, PairedDocumentReviewRequestV2):
+                return PairedDocumentReviewWorkerRequestV2(
+                    review_request=self.paired_document_review_request
+                )
             return PairedDocumentReviewWorkerRequest(
                 review_request=self.paired_document_review_request
             )
@@ -984,6 +994,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.24.0",
         "workflow-role/1.25.0",
         "workflow-role/1.26.0",
+        "workflow-role/1.27.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -997,6 +1008,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
     )
     upstream_artifacts: tuple[ArtifactPointer, ...]
@@ -1013,6 +1025,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
     ):
         if isinstance(value, BaseModel):
@@ -1030,6 +1043,11 @@ class RoleWorkerInput(FrozenModel):
         if value.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST":
             return PdfDocumentReviewWorkerRequest.model_validate(value)
         if value.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST":
+            nested = value.get("review_request")
+            if isinstance(nested, dict) and nested.get("schema_version") == (
+                "paired-document-review-request/2.0"
+            ):
+                return PairedDocumentReviewWorkerRequestV2.model_validate(value)
             return PairedDocumentReviewWorkerRequest.model_validate(value)
         return WorkerRequest.model_validate(
             {"request_name": value.get("request_name"), "image_mode": value.get("image_mode")}
@@ -1108,6 +1126,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.24.0",
         "workflow-role/1.25.0",
         "workflow-role/1.26.0",
+        "workflow-role/1.27.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2770,6 +2789,12 @@ class PairedDocumentReviewRoleResult(RoleResultBase):
     output: PairedDocumentReviewOutput
 
 
+class PairedDocumentReviewRoleResultV3(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.27.0"] = "workflow-role/1.27.0"
+    role: Literal["support"] = "support"
+    output: PairedDocumentReviewOutputV3
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -2833,4 +2858,5 @@ RoleResult = (
     | CustomerSupportRoleResult
     | PdfDocumentReviewRoleResult
     | PairedDocumentReviewRoleResult
+    | PairedDocumentReviewRoleResultV3
 )

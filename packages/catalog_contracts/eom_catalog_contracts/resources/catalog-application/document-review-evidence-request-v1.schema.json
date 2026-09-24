@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/document-review-evidence-request/1.0",
+  "title": "EOM Document Review Evidence Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operation",
+    "documents",
+    "corpus_key",
+    "source_classes",
+    "evidence_budget",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "requester_role",
+    "requester_permission_keys",
+    "requested_by",
+    "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "document-review-evidence-request/1.0"
+    },
+    "operation": {
+      "const": "CREATE_DOCUMENT_REVIEW_EVIDENCE"
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "document"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "QUESTION",
+                    "SOLUTION"
+                  ]
+                },
+                "document": {
+                  "$ref": "eom://schemas/catalog/pdf-document-review-intake-response/1.0#/$defs/documentPointer"
+                }
+              }
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "QUESTION"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "role",
+                "document"
+              ],
+              "properties": {
+                "role": {
+                  "enum": [
+                    "QUESTION",
+                    "SOLUTION"
+                  ]
+                },
+                "document": {
+                  "$ref": "eom://schemas/catalog/pdf-document-review-intake-response/1.0#/$defs/documentPointer"
+                }
+              }
+            },
+            {
+              "properties": {
+                "role": {
+                  "const": "SOLUTION"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "items": false
+    },
+    "corpus_key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,63}$"
+    },
+    "source_classes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "CURRICULUM",
+          "TEXTBOOK",
+          "PAST_EXAM",
+          "APPROVED_ITEM",
+          "INTERNAL_GUIDE"
+        ]
+      }
+    },
+    "evidence_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_documents",
+        "max_item_revisions",
+        "max_graph_nodes",
+        "max_claims",
+        "max_context_tokens"
+      ],
+      "properties": {
+        "max_documents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "max_item_revisions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "max_graph_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "max_claims": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
+        "max_context_tokens": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 32000
+        }
+      }
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requester_role": {
+      "enum": [
+        "ADMIN",
+        "EDITOR",
+        "REVIEWER"
+      ]
+    },
+    "requester_permission_keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$",
+        "maxLength": 128
+      }
+    },
+    "requested_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 128,
+      "pattern": "^[!-~]+$"
+    },
+    "submission_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

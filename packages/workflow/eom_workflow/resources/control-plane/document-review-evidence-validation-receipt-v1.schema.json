@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/document-review-evidence-validation-receipt/1.0",
+  "title": "EOM Document Review Evidence Validation Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "workflow_id",
+    "step_run_id",
+    "job_id",
+    "attempt",
+    "review_request_sha256",
+    "evidence_plan_sha256",
+    "retrieval_request_id",
+    "graph_snapshot_revision_id",
+    "evidence_bundle_id",
+    "evidence_bundle_revision_id",
+    "evidence_manifest_artifact",
+    "evidence_manifest_sha256",
+    "evidence_context_artifact",
+    "result_artifact_id",
+    "result_artifact_revision_id",
+    "result_content_sha256",
+    "citation_set_sha256",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "document-review-evidence-validation-receipt/1.0"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^execplan_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "review_request_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "evidence_plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "retrieval_request_id": {
+      "type": "string",
+      "pattern": "^retrieval_[0-9a-f]{32}$"
+    },
+    "graph_snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "evidence_bundle_id": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{32}$"
+    },
+    "evidence_bundle_revision_id": {
+      "type": "string",
+      "pattern": "^evidencerev_[0-9a-f]{32}$"
+    },
+    "evidence_manifest_artifact": {
+      "$ref": "#/$defs/manifestArtifactMemberPointer"
+    },
+    "evidence_manifest_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "evidence_context_artifact": {
+      "$ref": "#/$defs/contextArtifactMemberPointer"
+    },
+    "result_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "result_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "result_content_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "citation_set_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "receipt_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "knowledgeArtifactMemberPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)[^/]+(?:/[^/]+)*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$"
+        },
+        "media_type": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$"
+        },
+        "logical_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+        }
+      }
+    },
+    "manifestArtifactMemberPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/knowledgeArtifactMemberPointer"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "evidence/manifest.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+            }
+          }
+        }
+      ]
+    },
+    "contextArtifactMemberPointer": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/knowledgeArtifactMemberPointer"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "evidence/context.md"
+            },
+            "media_type": {
+              "const": "text/markdown"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/evidence-bundle-context/1.0"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from eom_workflow import PairedDocumentReviewOutput, PdfDocumentReviewOutput
+from eom_workflow import (
+    PairedDocumentReviewOutput,
+    PairedDocumentReviewOutputV3,
+    PdfDocumentReviewOutput,
+)
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, UtcDatetime
@@ -560,7 +564,7 @@ class PairedDocumentReviewView(ApiModel):
         pattern=r"^sha256:[0-9a-f]{64}$",
     )
     result_artifact: PdfDocumentReviewResultArtifactView | None = None
-    result: PairedDocumentReviewOutput | None = None
+    result: PairedDocumentReviewOutputV3 | PairedDocumentReviewOutput | None = None
     failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     created_at: UtcDatetime
     updated_at: UtcDatetime

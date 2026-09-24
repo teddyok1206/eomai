@@ -670,6 +670,7 @@ class PairedReviewDocumentIdentity(WebModel):
 
 class PairedReviewCrossDocumentCheck(WebModel):
     check_id: str = Field(pattern=r"^reviewcross_[0-9a-f]{32}$")
+    item_key: str | None = Field(default=None, pattern=r"^reviewitem_[0-9a-f]{32}$")
     question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=16)
     solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=16)
     status: Literal["MATCHED", "MISMATCH", "MISSING", "INSUFFICIENT"]
@@ -687,6 +688,103 @@ class PairedReviewCrossDocumentCheck(WebModel):
         elif not self.solution_anchors:
             raise ValueError("cross-document check requires a solution location")
         return self
+
+
+class PairedReviewUnitCheck(WebModel):
+    check_id: str = Field(pattern=r"^reviewunit_[0-9a-f]{32}$")
+    quantity: str = Field(min_length=1, max_length=160)
+    value_expression: str | None = Field(default=None, min_length=1, max_length=500)
+    expected_unit: str | None = Field(default=None, min_length=1, max_length=160)
+    observed_unit: str | None = Field(default=None, min_length=1, max_length=160)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT", "NOT_APPLICABLE"]
+    anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+
+class PairedReviewSolveStepCheck(WebModel):
+    ordinal: int = Field(ge=1, le=64)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    claim_summary: str = Field(min_length=1, max_length=1000)
+    verification_summary: str = Field(min_length=1, max_length=4000)
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+
+
+class PairedReviewChoiceCheck(WebModel):
+    ordinal: int = Field(ge=1, le=10)
+    choice_key: str = Field(min_length=1, max_length=32)
+    verdict: Literal["CORRECT", "INCORRECT", "AMBIGUOUS", "INSUFFICIENT"]
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+    rationale: str = Field(min_length=1, max_length=4000)
+
+
+class PairedReviewExplanationStepCheck(WebModel):
+    ordinal: int = Field(ge=1, le=64)
+    status: Literal["VERIFIED", "FAILED", "MISSING", "INSUFFICIENT"]
+    claim_summary: str = Field(min_length=1, max_length=1000)
+    verification_summary: str = Field(min_length=1, max_length=4000)
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+
+
+class PairedReviewItemCheck(WebModel):
+    item_key: str = Field(pattern=r"^reviewitem_[0-9a-f]{32}$")
+    ordinal: int = Field(ge=1, le=256)
+    question_label: str = Field(min_length=1, max_length=64)
+    response_format: Literal[
+        "MULTIPLE_CHOICE",
+        "STATEMENT_COMBINATION",
+        "SHORT_ANSWER",
+        "OTHER",
+    ]
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=16)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=16)
+    solve_summary: str = Field(min_length=1, max_length=4000)
+    solve_steps: tuple[PairedReviewSolveStepCheck, ...] = Field(min_length=1, max_length=64)
+    final_answer: str = Field(min_length=1, max_length=500)
+    answer_status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    condition_sufficiency: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    unit_checks: tuple[PairedReviewUnitCheck, ...] = Field(min_length=1, max_length=64)
+    choice_checks: tuple[PairedReviewChoiceCheck, ...] = Field(max_length=10)
+    explanation_steps: tuple[PairedReviewExplanationStepCheck, ...] = Field(
+        min_length=1,
+        max_length=64,
+    )
+    evidence_status: Literal["SUPPORTED", "INSUFFICIENT"]
+    evidence_citation_ids: tuple[
+        Annotated[str, Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")], ...
+    ] = Field(max_length=32)
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+
+class DocumentReviewEvidenceCitationView(WebModel):
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    anchor_ids: tuple[Annotated[str, Field(pattern=r"^anchor_[a-z0-9][a-z0-9_-]{0,63}$")], ...] = (
+        Field(min_length=1, max_length=32)
+    )
+    application: Literal[
+        "CONCEPT_VERIFICATION",
+        "SOLUTION_VERIFICATION",
+        "ORIGINALITY_COMPARISON",
+        "AVOID_COPY_CHECK",
+    ]
+    item_keys: tuple[Annotated[str, Field(pattern=r"^reviewitem_[0-9a-f]{32}$")], ...] = Field(
+        min_length=1, max_length=256
+    )
+    review_json_paths: tuple[str, ...] = Field(min_length=1, max_length=128)
+
+
+class DocumentReviewEvidenceUsageView(WebModel):
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    context_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    citations: tuple[DocumentReviewEvidenceCitationView, ...] = Field(
+        min_length=1,
+        max_length=128,
+    )
 
 
 class PairedDocumentReviewOutputView(WebModel):
@@ -711,6 +809,17 @@ class PairedDocumentReviewOutputView(WebModel):
         min_length=1,
         max_length=512,
     )
+    page_coverage: tuple[PairedReviewPageRef, ...] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=4000,
+    )
+    item_reviews: tuple[PairedReviewItemCheck, ...] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+    )
+    evidence_usage: DocumentReviewEvidenceUsageView | None = None
     mutation_performed: Literal[False] = False
 
     @model_validator(mode="after")
@@ -723,6 +832,39 @@ class PairedDocumentReviewOutputView(WebModel):
         check_ids = tuple(value.check_id for value in self.cross_document_checks)
         if check_ids != tuple(sorted(set(check_ids))):
             raise ValueError("paired review cross-check IDs must be sorted and unique")
+        v3_parts = (self.page_coverage, self.item_reviews, self.evidence_usage)
+        if any(value is not None for value in v3_parts) != all(
+            value is not None for value in v3_parts
+        ):
+            raise ValueError("paired review exhaustive fields must be present together")
+        if self.item_reviews is not None:
+            expected_axes = {
+                "SCIENTIFIC_ACCURACY",
+                "ANSWER_UNIQUENESS",
+                "SOLUTION_CONSISTENCY",
+                "CURRICULUM_SCOPE",
+                "ORIGINALITY",
+                "VISUAL_CONTENT",
+                "EDITORIAL_CLARITY",
+                "TYPOGRAPHY",
+                "DOCUMENT_STRUCTURE",
+                "ASSESSMENT_BALANCE",
+            }
+            if {value.axis for value in self.verification_targets} != expected_axes:
+                raise ValueError("paired review exhaustive axes are incomplete")
+            item_keys = tuple(value.item_key for value in self.item_reviews)
+            if (
+                tuple(value.ordinal for value in self.item_reviews)
+                != tuple(range(1, len(self.item_reviews) + 1))
+                or len(item_keys) != len(set(item_keys))
+                or any(value.item_key is None for value in self.cross_document_checks)
+                or {value.item_key for value in self.cross_document_checks} != set(item_keys)
+            ):
+                raise ValueError("paired review exhaustive item coverage is incomplete")
+            if self.review_status == "COMPLETE" and any(
+                value.status != "VERIFIED" for value in self.verification_targets
+            ):
+                raise ValueError("complete paired review has an unverified axis")
         return self
 
 

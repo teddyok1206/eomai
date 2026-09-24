@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    catalog_schema_registry,
     content_team_material_required_retrieval_elements,
     validate_worker_knowledge_edge_endpoint_types,
 )
@@ -44,6 +45,7 @@ from pydantic import ValidationError
 from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
 )
 from eom_workflow.models import (
@@ -109,6 +111,7 @@ from eom_workflow.models import (
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
     PairedDocumentReviewRoleResult,
+    PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
     RegistrationRoleResult,
     ReviewRoleResult,
@@ -214,6 +217,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
             "pdf-document-review-result@2.0",
+            "pdf-document-review-result@3.0",
         }
     ),
 }
@@ -284,6 +288,7 @@ RESULT_SCHEMA_FILES = {
     "customer-support-result@1.0": "customer-support-result-v1.schema.json",
     "pdf-document-review-result@1.0": "pdf-document-review-result-v1.schema.json",
     "pdf-document-review-result@2.0": "paired-document-review-result-v2.schema.json",
+    "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -317,6 +322,7 @@ INPUT_SCHEMA_FILES_V1_23 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_24 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_25 = {"support": "pdf-document-review-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_26 = {"support": "paired-document-review-input-v2.schema.json"}
+INPUT_SCHEMA_FILES_V1_27 = {"support": "paired-document-review-input-v3.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -347,6 +353,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "customer-support-result@1.0": "workflow-role/1.22.0",
     "pdf-document-review-result@1.0": "workflow-role/1.25.0",
     "pdf-document-review-result@2.0": "workflow-role/1.26.0",
+    "pdf-document-review-result@3.0": "workflow-role/1.27.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -409,6 +416,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.24.0": INPUT_SCHEMA_FILES_V1_24,
     "workflow-role/1.25.0": INPUT_SCHEMA_FILES_V1_25,
     "workflow-role/1.26.0": INPUT_SCHEMA_FILES_V1_26,
+    "workflow-role/1.27.0": INPUT_SCHEMA_FILES_V1_27,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -438,6 +446,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.24.0",
     "workflow-role/1.25.0",
     "workflow-role/1.26.0",
+    "workflow-role/1.27.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -465,6 +474,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_24.values(),
             *INPUT_SCHEMA_FILES_V1_25.values(),
             *INPUT_SCHEMA_FILES_V1_26.values(),
+            *INPUT_SCHEMA_FILES_V1_27.values(),
         }
     )
 )
@@ -627,7 +637,11 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
 
 
 def validate_schema_message(schema: dict[str, Any], value: object, name: str) -> None:
-    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator = Draft202012Validator(
+        schema,
+        format_checker=FormatChecker(),
+        registry=catalog_schema_registry(),
+    )
     errors = sorted(validator.iter_errors(value), key=lambda error: list(error.absolute_path))
     if errors:
         error = errors[0]
@@ -863,6 +877,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         in {
             "pdf-document-review-result@1.0",
             "pdf-document-review-result@2.0",
+            "pdf-document-review-result@3.0",
         }
         and role == "support"
     ):
@@ -1005,6 +1020,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@2.0" and role == "support":
             return PairedDocumentReviewRoleResult.model_validate(canonical_value)
+        if schema_id == "pdf-document-review-result@3.0" and role == "support":
+            return PairedDocumentReviewRoleResultV3.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -1942,8 +1959,16 @@ def constrained_result_schema(
                 "enum": [page.page_image.sha256 for page in pdf_request.document.pages],
             }
         )
-    if schema_id == "pdf-document-review-result@2.0":
-        if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequest):
+    if schema_id in {
+        "pdf-document-review-result@2.0",
+        "pdf-document-review-result@3.0",
+    }:
+        expected_request_type = (
+            PairedDocumentReviewWorkerRequestV2
+            if schema_id == "pdf-document-review-result@3.0"
+            else PairedDocumentReviewWorkerRequest
+        )
+        if not isinstance(worker_input.request, expected_request_type):
             raise WorkflowSchemaError("paired document review result requires its typed request")
         paired_request = worker_input.request.review_request
         output_properties = _mapping(_mapping(definitions, "output"), "properties")
@@ -2026,6 +2051,21 @@ def constrained_result_schema(
         cross_check_properties["solution_anchors"]["description"] = (
             "Sort by anchor_id with no duplicates."
         )
+        if schema_id == "pdf-document-review-result@3.0":
+            output_properties["page_coverage"]["description"] = (
+                "Return every QUESTION page followed by every SOLUTION page, sorted by role and "
+                "page_number, with no omission or duplicate."
+            )
+            output_properties["item_reviews"]["description"] = (
+                "Return one ordered item review per question. Independently solve each item, "
+                "check every condition, applicable unit, choice, and explanation step, and cite "
+                "the staged Graph evidence."
+            )
+            output_properties["evidence_usage"]["description"] = (
+                "Use exact identities from references/evidence/manifest.json and cite only "
+                "manifest evidence and anchors. Every citation path must end at a non-null "
+                "primitive leaf under item_reviews."
+            )
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         if not isinstance(
             worker_input.request,

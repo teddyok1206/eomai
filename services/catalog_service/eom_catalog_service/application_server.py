@@ -32,6 +32,8 @@ from eom_catalog_contracts import (
     CatalogItemMediaResponse,
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -39,6 +41,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
     DocumentReviewHwpxCorrectionResponse,
@@ -79,6 +82,10 @@ from pydantic import ValidationError
 from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
     ApprovedItemGraphPublicationService,
+)
+from eom_catalog_service.document_review_evidence_service import (
+    DocumentReviewEvidenceService,
+    DocumentReviewEvidenceServiceError,
 )
 from eom_catalog_service.document_review_hwpx_correction_service import (
     DocumentReviewHwpxCorrectionService,
@@ -201,10 +208,21 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 return
             if raw_operation == "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2":
                 try:
-                    validate_contract("document-review-pdf-annotation-request-v2", value)
-                    annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV2.model_validate(
-                        value
+                    annotation_request_v2: (
+                        CreateDocumentReviewAnnotatedPdfsV3 | CreateDocumentReviewAnnotatedPdfsV2
                     )
+                    if value.get("schema_version") == (
+                        "document-review-pdf-annotation-request/3.0"
+                    ):
+                        validate_contract("document-review-pdf-annotation-request-v3", value)
+                        annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV3.model_validate(
+                            value
+                        )
+                    else:
+                        validate_contract("document-review-pdf-annotation-request-v2", value)
+                        annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV2.model_validate(
+                            value
+                        )
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_document_review_pdf_annotation_error(
                         self.wfile,
@@ -213,6 +231,23 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._create_document_review_annotated_pdfs(annotation_request_v2)
+                return
+            if raw_operation == "CREATE_DOCUMENT_REVIEW_EVIDENCE":
+                try:
+                    validate_contract("document-review-evidence-request", value)
+                    evidence_request = CreateDocumentReviewEvidenceCommand.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_evidence_response(
+                        self.wfile,
+                        DocumentReviewEvidenceResponse(
+                            status="ERROR",
+                            error_code=(
+                                CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value
+                            ),
+                        ),
+                    )
+                    return
+                self._create_document_review_evidence(evidence_request)
                 return
             if raw_operation == "GET_DOCUMENT_REVIEW_ANNOTATED_PDF":
                 try:
@@ -731,6 +766,32 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             return
         self.server.write_document_review_hwpx_correction_response(self.wfile, response)
 
+    def _create_document_review_evidence(
+        self,
+        request: CreateDocumentReviewEvidenceCommand,
+    ) -> None:
+        service = self.server.document_review_evidence
+        if service is None:
+            self.server.write_document_review_evidence_response(
+                self.wfile,
+                DocumentReviewEvidenceResponse(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+                ),
+            )
+            return
+        try:
+            plan = service.create(request)
+            response = DocumentReviewEvidenceResponse(status="OK", plan=plan)
+        except DocumentReviewEvidenceServiceError as exc:
+            response = DocumentReviewEvidenceResponse(status="ERROR", error_code=exc.code)
+        except Exception:
+            response = DocumentReviewEvidenceResponse(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+        self.server.write_document_review_evidence_response(self.wfile, response)
+
     def _stream_document_review_corrected_hwpx(
         self,
         request: DocumentReviewHwpxCorrectionMediaQuery,
@@ -771,14 +832,21 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
 
     def _create_document_review_annotated_pdfs(
         self,
-        request: CreateDocumentReviewAnnotatedPdfs | CreateDocumentReviewAnnotatedPdfsV2,
+        request: (
+            CreateDocumentReviewAnnotatedPdfs
+            | CreateDocumentReviewAnnotatedPdfsV2
+            | CreateDocumentReviewAnnotatedPdfsV3
+        ),
     ) -> None:
         annotations = self.server.document_review_pdf_annotations
         if annotations is None:
             self.server.write_document_review_pdf_annotation_error(
                 self.wfile,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
-                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
+                native_panel=isinstance(
+                    request,
+                    (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
+                ),
             )
             return
         try:
@@ -787,14 +855,20 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             self.server.write_document_review_pdf_annotation_error(
                 self.wfile,
                 exc.code,
-                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
+                native_panel=isinstance(
+                    request,
+                    (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
+                ),
             )
             return
         except Exception:
             self.server.write_document_review_pdf_annotation_error(
                 self.wfile,
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
-                native_panel=isinstance(request, CreateDocumentReviewAnnotatedPdfsV2),
+                native_panel=isinstance(
+                    request,
+                    (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
+                ),
             )
             return
         self.server.write_document_review_pdf_annotation_response(self.wfile, response)
@@ -1023,6 +1097,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         office_document_review_intake: OfficeDocumentReviewIntakeService | None = None,
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
+        document_review_evidence: DocumentReviewEvidenceService | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -1040,6 +1115,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.office_document_review_intake = office_document_review_intake
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.document_review_pdf_annotations = document_review_pdf_annotations
+        self.document_review_evidence = document_review_evidence
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -1151,6 +1227,19 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("PDF document-review intake response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_document_review_evidence_response(
+        stream: Any,
+        response: DocumentReviewEvidenceResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json")
+        payload.pop("error_code" if response.status == "OK" else "plan")
+        validate_contract("document-review-evidence-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("document review evidence response exceeded its fixed bound")
         stream.write(raw + b"\n")
 
     @staticmethod

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/document-review-evidence-response/1.0",
+  "title": "EOM Document Review Evidence Response V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "plan"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "document-review-evidence-response/1.0"
+        },
+        "operation": {
+          "const": "CREATE_DOCUMENT_REVIEW_EVIDENCE"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "plan": {
+          "$ref": "eom://schemas/document-review/document-review-evidence-plan/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "document-review-evidence-response/1.0"
+        },
+        "operation": {
+          "const": "CREATE_DOCUMENT_REVIEW_EVIDENCE"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}

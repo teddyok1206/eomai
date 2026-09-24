@@ -7,6 +7,7 @@ import unicodedata
 from typing import Annotated, Literal
 
 from eom_catalog_contracts import (
+    DocumentReviewEvidencePlan,
     PdfReviewDocumentPointer,
 )
 from eom_identifiers import content_sha256
@@ -408,6 +409,44 @@ class PairedDocumentReviewWorkerRequest(FrozenModel):
     review_request: PairedDocumentReviewRequest
 
 
+class PairedDocumentReviewRequestV2(PairedDocumentReviewRequest):
+    """Paired request bound to one exact Catalog-produced Graph evidence plan."""
+
+    schema_version: Literal["paired-document-review-request/2.0"] = (
+        "paired-document-review-request/2.0"  # type: ignore[assignment]
+    )
+    evidence_plan: DocumentReviewEvidencePlan
+
+    @model_validator(mode="after")
+    def exact_evidence_sources(self) -> PairedDocumentReviewRequestV2:
+        expected = tuple(
+            (
+                value.role,
+                value.document.document_id,
+                value.document.document_revision_id,
+                value.document.source_pdf.sha256,
+            )
+            for value in self.documents
+        )
+        actual = tuple(
+            (
+                value.role,
+                value.document_id,
+                value.document_revision_id,
+                value.source_pdf_sha256,
+            )
+            for value in self.evidence_plan.documents
+        )
+        if actual != expected:
+            raise ValueError("paired review Evidence Plan sources differ from the request")
+        return self
+
+
+class PairedDocumentReviewWorkerRequestV2(FrozenModel):
+    request_name: Literal["PAIRED_DOCUMENT_REVIEW_REQUEST"] = "PAIRED_DOCUMENT_REVIEW_REQUEST"
+    review_request: PairedDocumentReviewRequestV2
+
+
 class PairedReviewAnchor(PdfReviewAnchor):
     document_role: DocumentReviewRole
 
@@ -480,6 +519,236 @@ class PairedReviewCrossDocumentCheck(FrozenModel):
         return self
 
 
+class PairedReviewCrossDocumentCheckV2(PairedReviewCrossDocumentCheck):
+    """Cross-document check bound to one exact exhaustive item record."""
+
+    item_key: str = Field(pattern=r"^reviewitem_[0-9a-f]{32}$")
+
+
+DocumentReviewEvidenceApplication = Literal[
+    "CONCEPT_VERIFICATION",
+    "SOLUTION_VERIFICATION",
+    "ORIGINALITY_COMPARISON",
+    "AVOID_COPY_CHECK",
+]
+
+
+class PairedReviewSolveStepCheck(FrozenModel):
+    """One ordered, externally auditable step in the independent solution."""
+
+    ordinal: int = Field(ge=1, le=64)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    claim_summary: str = Field(min_length=1, max_length=1000)
+    verification_summary: str = Field(min_length=1, max_length=4000)
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def exact_question_anchors(self) -> PairedReviewSolveStepCheck:
+        if any(value.document_role != "QUESTION" for value in self.question_anchors):
+            raise ValueError("solve-step anchors must address the question document")
+        anchor_ids = tuple(value.anchor_id for value in self.question_anchors)
+        if anchor_ids != tuple(sorted(set(anchor_ids))):
+            raise ValueError("solve-step anchors must be sorted and unique")
+        return self
+
+
+class PairedReviewUnitCheck(FrozenModel):
+    """One explicit unit/dimension decision, including a justified non-applicable case."""
+
+    check_id: str = Field(pattern=r"^reviewunit_[0-9a-f]{32}$")
+    quantity: str = Field(min_length=1, max_length=160)
+    value_expression: str | None = Field(default=None, min_length=1, max_length=500)
+    expected_unit: str | None = Field(default=None, min_length=1, max_length=160)
+    observed_unit: str | None = Field(default=None, min_length=1, max_length=160)
+    status: Literal["VERIFIED", "FAILED", "INSUFFICIENT", "NOT_APPLICABLE"]
+    anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def exact_applicability_and_anchors(self) -> PairedReviewUnitCheck:
+        not_applicable = self.status == "NOT_APPLICABLE"
+        if not_applicable != (
+            self.value_expression is None
+            and self.expected_unit is None
+            and self.observed_unit is None
+        ):
+            raise ValueError("unit-check applicability differs from its unit payload")
+        anchor_ids = tuple(value.anchor_id for value in self.anchors)
+        if anchor_ids != tuple(sorted(set(anchor_ids))):
+            raise ValueError("unit-check anchors must be sorted and unique")
+        return self
+
+
+class PairedReviewChoiceCheck(FrozenModel):
+    """One ordered answer-choice decision grounded in the question and solution."""
+
+    ordinal: int = Field(ge=1, le=10)
+    choice_key: str = Field(min_length=1, max_length=32)
+    verdict: Literal["CORRECT", "INCORRECT", "AMBIGUOUS", "INSUFFICIENT"]
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=8)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+    rationale: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def exact_roles_and_anchors(self) -> PairedReviewChoiceCheck:
+        if any(value.document_role != "QUESTION" for value in self.question_anchors):
+            raise ValueError("choice question anchors must address the question document")
+        if any(value.document_role != "SOLUTION" for value in self.solution_anchors):
+            raise ValueError("choice solution anchors must address the solution document")
+        for anchors in (self.question_anchors, self.solution_anchors):
+            anchor_ids = tuple(value.anchor_id for value in anchors)
+            if anchor_ids != tuple(sorted(set(anchor_ids))):
+                raise ValueError("choice anchors must be sorted and unique")
+        return self
+
+
+class PairedReviewExplanationStepCheck(FrozenModel):
+    """One ordered official-explanation step checked against the independently solved item."""
+
+    ordinal: int = Field(ge=1, le=64)
+    status: Literal["VERIFIED", "FAILED", "MISSING", "INSUFFICIENT"]
+    claim_summary: str = Field(min_length=1, max_length=1000)
+    verification_summary: str = Field(min_length=1, max_length=4000)
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=8)
+
+    @model_validator(mode="after")
+    def exact_roles_and_presence(self) -> PairedReviewExplanationStepCheck:
+        if any(value.document_role != "QUESTION" for value in self.question_anchors):
+            raise ValueError("explanation question anchors must address the question document")
+        if any(value.document_role != "SOLUTION" for value in self.solution_anchors):
+            raise ValueError("explanation solution anchors must address the solution document")
+        if (self.status == "MISSING") != (not self.solution_anchors):
+            raise ValueError("explanation missing status differs from its solution anchors")
+        for anchors in (self.question_anchors, self.solution_anchors):
+            anchor_ids = tuple(value.anchor_id for value in anchors)
+            if anchor_ids != tuple(sorted(set(anchor_ids))):
+                raise ValueError("explanation anchors must be sorted and unique")
+        return self
+
+
+class PairedReviewItemCheck(FrozenModel):
+    """Auditable per-question solve, answer, unit, choice, explanation, and evidence record."""
+
+    item_key: str = Field(pattern=r"^reviewitem_[0-9a-f]{32}$")
+    ordinal: int = Field(ge=1, le=256)
+    question_label: str = Field(min_length=1, max_length=64)
+    response_format: Literal["MULTIPLE_CHOICE", "STATEMENT_COMBINATION", "SHORT_ANSWER", "OTHER"]
+    question_anchors: tuple[PairedReviewAnchor, ...] = Field(min_length=1, max_length=16)
+    solution_anchors: tuple[PairedReviewAnchor, ...] = Field(max_length=16)
+    solve_summary: str = Field(min_length=1, max_length=4000)
+    solve_steps: tuple[PairedReviewSolveStepCheck, ...] = Field(min_length=1, max_length=64)
+    final_answer: str = Field(min_length=1, max_length=500)
+    answer_status: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    condition_sufficiency: Literal["VERIFIED", "FAILED", "INSUFFICIENT"]
+    unit_checks: tuple[PairedReviewUnitCheck, ...] = Field(min_length=1, max_length=64)
+    choice_checks: tuple[PairedReviewChoiceCheck, ...] = Field(max_length=10)
+    explanation_steps: tuple[PairedReviewExplanationStepCheck, ...] = Field(
+        min_length=1, max_length=64
+    )
+    evidence_status: Literal["SUPPORTED", "INSUFFICIENT"]
+    evidence_citation_ids: tuple[
+        Annotated[str, Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")], ...
+    ] = Field(max_length=32)
+    conclusion: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def exhaustive_item_relations(self) -> PairedReviewItemCheck:
+        if any(value.document_role != "QUESTION" for value in self.question_anchors):
+            raise ValueError("item question anchors must address the question document")
+        if any(value.document_role != "SOLUTION" for value in self.solution_anchors):
+            raise ValueError("item solution anchors must address the solution document")
+        for anchors in (self.question_anchors, self.solution_anchors):
+            anchor_ids = tuple(value.anchor_id for value in anchors)
+            if anchor_ids != tuple(sorted(set(anchor_ids))):
+                raise ValueError("item anchors must be sorted and unique")
+        solve_ordinals = tuple(value.ordinal for value in self.solve_steps)
+        if solve_ordinals != tuple(range(1, len(self.solve_steps) + 1)):
+            raise ValueError("solve steps must be contiguous from one")
+        unit_ids = tuple(value.check_id for value in self.unit_checks)
+        if unit_ids != tuple(sorted(set(unit_ids))):
+            raise ValueError("item unit checks must be sorted and unique")
+        choice_ordinals = tuple(value.ordinal for value in self.choice_checks)
+        choice_keys = tuple(value.choice_key for value in self.choice_checks)
+        choice_bearing = self.response_format in {
+            "MULTIPLE_CHOICE",
+            "STATEMENT_COMBINATION",
+        }
+        if choice_bearing:
+            if (
+                len(self.choice_checks) < 2
+                or choice_ordinals != tuple(range(1, len(self.choice_checks) + 1))
+                or len(choice_keys) != len(set(choice_keys))
+                or sum(value.verdict == "CORRECT" for value in self.choice_checks) != 1
+            ):
+                raise ValueError(
+                    "choice-bearing item requires ordered unique choices and one answer"
+                )
+        elif self.choice_checks:
+            raise ValueError("non-choice item cannot carry choice checks")
+        explanation_ordinals = tuple(value.ordinal for value in self.explanation_steps)
+        if explanation_ordinals != tuple(range(1, len(self.explanation_steps) + 1)):
+            raise ValueError("explanation steps must be contiguous from one")
+        citation_ids = self.evidence_citation_ids
+        if citation_ids != tuple(sorted(set(citation_ids))):
+            raise ValueError("item evidence citation IDs must be sorted and unique")
+        if (self.evidence_status == "SUPPORTED") != bool(citation_ids):
+            raise ValueError("item evidence status differs from its citation IDs")
+        return self
+
+
+class DocumentReviewEvidenceCitation(FrozenModel):
+    """One manifest-visible citation applied to scalar leaves in item-review output."""
+
+    evidence_id: str = Field(pattern=r"^evidenceitem_[0-9a-f]{32}$")
+    anchor_ids: tuple[Annotated[str, Field(pattern=r"^anchor_[a-z0-9][a-z0-9_-]{0,63}$")], ...] = (
+        Field(min_length=1, max_length=32)
+    )
+    application: DocumentReviewEvidenceApplication
+    item_keys: tuple[Annotated[str, Field(pattern=r"^reviewitem_[0-9a-f]{32}$")], ...] = Field(
+        min_length=1, max_length=256
+    )
+    review_json_paths: tuple[str, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def canonical_citation(self) -> DocumentReviewEvidenceCitation:
+        for values, label in (
+            (self.anchor_ids, "anchor"),
+            (self.item_keys, "item"),
+            (self.review_json_paths, "review path"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(
+                    f"document-review evidence {label} values must be sorted and unique"
+                )
+        for pointer in self.review_json_paths:
+            if not pointer.startswith("/") or pointer == "/" or len(pointer) > 512:
+                raise ValueError("document-review evidence path is not a bounded JSON Pointer")
+            for token in pointer[1:].split("/"):
+                if not token or re.search(r"~(?![01])", token):
+                    raise ValueError("document-review evidence path is not RFC 6901 canonical")
+        return self
+
+
+class DocumentReviewEvidenceUsage(FrozenModel):
+    """Exact Graph/Evidence identity and the reviewer's bounded citations."""
+
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    manifest_sha256: Sha256
+    context_sha256: Sha256
+    citations: tuple[DocumentReviewEvidenceCitation, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def canonical_citations(self) -> DocumentReviewEvidenceUsage:
+        evidence_ids = tuple(value.evidence_id for value in self.citations)
+        if evidence_ids != tuple(sorted(set(evidence_ids))):
+            raise ValueError("document-review evidence citations must have sorted unique IDs")
+        return self
+
+
 class PairedDocumentReviewOutput(FrozenModel):
     review_request_sha256: Sha256
     documents: tuple[PairedReviewDocumentIdentity, PairedReviewDocumentIdentity] = Field(
@@ -547,6 +816,172 @@ class PairedDocumentReviewOutput(FrozenModel):
         return self
 
 
+class PairedDocumentReviewOutputV3(PairedDocumentReviewOutput):
+    """Exhaustive paired review with exact page, item, and Graph evidence coverage."""
+
+    page_coverage: tuple[PairedReviewPageRef, ...] = Field(min_length=2, max_length=4000)
+    item_reviews: tuple[PairedReviewItemCheck, ...] = Field(min_length=1, max_length=256)
+    cross_document_checks: tuple[PairedReviewCrossDocumentCheckV2, ...] = Field(
+        min_length=1, max_length=512
+    )
+    evidence_usage: DocumentReviewEvidenceUsage
+
+    @model_validator(mode="after")
+    def validate_review_relations(self) -> PairedDocumentReviewOutputV3:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("paired review output requires QUESTION then SOLUTION")
+        expected_axes = {
+            "SCIENTIFIC_ACCURACY",
+            "ANSWER_UNIQUENESS",
+            "SOLUTION_CONSISTENCY",
+            "CURRICULUM_SCOPE",
+            "ORIGINALITY",
+            "VISUAL_CONTENT",
+            "EDITORIAL_CLARITY",
+            "TYPOGRAPHY",
+            "DOCUMENT_STRUCTURE",
+            "ASSESSMENT_BALANCE",
+        }
+        target_ids = tuple(value.target_id for value in self.verification_targets)
+        target_axes = tuple(value.axis for value in self.verification_targets)
+        if (
+            target_ids != tuple(sorted(set(target_ids)))
+            or len(target_axes) != len(expected_axes)
+            or set(target_axes) != expected_axes
+        ):
+            raise ValueError(
+                "exhaustive paired review requires each verification axis exactly once"
+            )
+        page_keys = tuple((value.document_role, value.page_number) for value in self.page_coverage)
+        if page_keys != tuple(sorted(set(page_keys))):
+            raise ValueError("paired review page coverage must be sorted and unique")
+        candidate_ids = tuple(candidate.candidate_id for candidate in self.candidate_findings)
+        if candidate_ids != tuple(sorted(set(candidate_ids))):
+            raise ValueError("paired review candidates must be sorted and unique")
+        if tuple(finding.ordinal for finding in self.findings) != tuple(
+            range(1, len(self.findings) + 1)
+        ):
+            raise ValueError("paired review finding ordinals must be contiguous from one")
+        if len({finding.finding_id for finding in self.findings}) != len(self.findings):
+            raise ValueError("paired review finding IDs must be unique")
+        confirmed = {
+            candidate.candidate_id: candidate
+            for candidate in self.candidate_findings
+            if candidate.disposition == "CONFIRMED"
+        }
+        if tuple(finding.candidate_id for finding in self.findings) != tuple(sorted(confirmed)):
+            raise ValueError("paired review findings must exactly cover confirmed candidates")
+        for finding in self.findings:
+            candidate = confirmed[finding.candidate_id]
+            if (
+                finding.finding_code != candidate.finding_code
+                or finding.category != candidate.category
+                or finding.severity != candidate.severity
+                or finding.title != candidate.title
+                or finding.anchors != candidate.anchors
+            ):
+                raise ValueError("paired review finding differs from its confirmed candidate")
+
+        item_keys = tuple(value.item_key for value in self.item_reviews)
+        if (
+            tuple(value.ordinal for value in self.item_reviews)
+            != tuple(range(1, len(self.item_reviews) + 1))
+            or len(item_keys) != len(set(item_keys))
+            or len({value.question_label for value in self.item_reviews}) != len(self.item_reviews)
+        ):
+            raise ValueError("paired review items require contiguous order and unique identities")
+        cross_ids = tuple(value.check_id for value in self.cross_document_checks)
+        cross_item_keys = tuple(value.item_key for value in self.cross_document_checks)
+        if (
+            cross_ids != tuple(sorted(set(cross_ids)))
+            or len(cross_item_keys) != len(set(cross_item_keys))
+            or set(cross_item_keys) != set(item_keys)
+        ):
+            raise ValueError("cross-document checks must cover every item exactly once")
+
+        citations = {value.evidence_id: value for value in self.evidence_usage.citations}
+        declared_citations = {
+            evidence_id for item in self.item_reviews for evidence_id in item.evidence_citation_ids
+        }
+        if declared_citations != set(citations):
+            raise ValueError("item evidence IDs must exactly cover the global citation set")
+        item_indexes = {value.item_key: index for index, value in enumerate(self.item_reviews)}
+        applications_by_item: dict[str, set[str]] = {value: set() for value in item_keys}
+        application_fields = {
+            "CONCEPT_VERIFICATION": {
+                "solve_summary",
+                "solve_steps",
+                "unit_checks",
+                "choice_checks",
+                "conclusion",
+            },
+            "SOLUTION_VERIFICATION": {
+                "final_answer",
+                "answer_status",
+                "explanation_steps",
+                "conclusion",
+            },
+            "ORIGINALITY_COMPARISON": {"conclusion"},
+            "AVOID_COPY_CHECK": {"conclusion"},
+        }
+        for citation in citations.values():
+            if not set(citation.item_keys).issubset(item_indexes):
+                raise ValueError("evidence citation references an unknown review item")
+            for item_key in citation.item_keys:
+                applications_by_item[item_key].add(citation.application)
+            for pointer in citation.review_json_paths:
+                tokens = pointer[1:].split("/")
+                if (
+                    len(tokens) < 3
+                    or tokens[0] != "item_reviews"
+                    or not tokens[1].isdigit()
+                    or int(tokens[1]) >= len(self.item_reviews)
+                    or self.item_reviews[int(tokens[1])].item_key not in citation.item_keys
+                    or tokens[2] not in application_fields[citation.application]
+                ):
+                    raise ValueError(
+                        "evidence path is not bound to its declared review item application"
+                    )
+        for item in self.item_reviews:
+            if item.evidence_status == "SUPPORTED":
+                applications = applications_by_item[item.item_key]
+                if not {
+                    "CONCEPT_VERIFICATION",
+                    "SOLUTION_VERIFICATION",
+                }.issubset(applications) or not applications.intersection(
+                    {"ORIGINALITY_COMPARISON", "AVOID_COPY_CHECK"}
+                ):
+                    raise ValueError(
+                        "supported item needs concept, solution, and originality evidence"
+                    )
+
+        has_uncertain = any(
+            candidate.disposition == "UNCERTAIN" for candidate in self.candidate_findings
+        )
+        has_nonverified_target = any(
+            target.status != "VERIFIED" for target in self.verification_targets
+        )
+        has_cross_problem = any(check.status != "MATCHED" for check in self.cross_document_checks)
+        has_item_problem = any(
+            item.answer_status != "VERIFIED"
+            or item.condition_sufficiency != "VERIFIED"
+            or item.evidence_status != "SUPPORTED"
+            or any(check.status != "VERIFIED" for check in item.solve_steps)
+            or any(check.status not in {"VERIFIED", "NOT_APPLICABLE"} for check in item.unit_checks)
+            or any(check.verdict in {"AMBIGUOUS", "INSUFFICIENT"} for check in item.choice_checks)
+            or any(check.status != "VERIFIED" for check in item.explanation_steps)
+            for item in self.item_reviews
+        )
+        expected_status = (
+            "NEEDS_HUMAN_DECISION"
+            if has_uncertain or has_nonverified_target or has_cross_problem or has_item_problem
+            else "COMPLETE"
+        )
+        if self.review_status != expected_status:
+            raise ValueError("paired review status differs from exhaustive verification evidence")
+        return self
+
+
 def validate_paired_document_review_output_against_request(
     output: PairedDocumentReviewOutput,
     request: PairedDocumentReviewRequest,
@@ -597,3 +1032,52 @@ def validate_paired_document_review_output_against_request(
             anchor.page_image_sha256
         ):
             raise ValueError("paired review anchor differs from its pinned page image")
+
+
+def validate_paired_document_review_v3_output_against_request(
+    output: PairedDocumentReviewOutputV3,
+    request: PairedDocumentReviewRequest,
+) -> None:
+    """Bind exhaustive page/item anchors to both immutable request documents."""
+
+    validate_paired_document_review_output_against_request(output, request)
+    expected_pages = tuple(
+        sorted(
+            (value.role, page.page_number)
+            for value in request.documents
+            for page in value.document.pages
+        )
+    )
+    actual_pages = tuple((value.document_role, value.page_number) for value in output.page_coverage)
+    if actual_pages != expected_pages:
+        raise ValueError("paired review page coverage differs from the exact request pages")
+    page_hashes = {
+        (value.role, page.page_number): page.page_image.sha256
+        for value in request.documents
+        for page in value.document.pages
+    }
+    anchors = (
+        anchor
+        for item in output.item_reviews
+        for anchor in (
+            *item.question_anchors,
+            *item.solution_anchors,
+            *(anchor for step in item.solve_steps for anchor in step.question_anchors),
+            *(anchor for check in item.unit_checks for anchor in check.anchors),
+            *(
+                anchor
+                for check in item.choice_checks
+                for anchor in (*check.question_anchors, *check.solution_anchors)
+            ),
+            *(
+                anchor
+                for step in item.explanation_steps
+                for anchor in (*step.question_anchors, *step.solution_anchors)
+            ),
+        )
+    )
+    for anchor in anchors:
+        if page_hashes.get((anchor.document_role, anchor.page_number)) != (
+            anchor.page_image_sha256
+        ):
+            raise ValueError("paired review item anchor differs from its pinned page image")

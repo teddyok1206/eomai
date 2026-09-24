@@ -2,6 +2,23 @@
 
 Status date: 2026-09-24 (UTC)
 
+The repository now contains the protocol-first successor that closes the four limitations observed
+in the live V2 audit. Workflow `pdf-document-review@1.2.0`, role protocol `workflow-role/1.27.0`,
+result `pdf-document-review-result@3.0`, resolved plan V15, and the V5 control bootstrap require
+exactly ten independent axes including `EDITORIAL_CLARITY` and `TYPOGRAPHY`. Every detected Item has
+an ordered independent-solve, answer, condition, unit, choice, explanation-step, cross-document,
+and Graph-evidence record. Any unverified target—including insufficient originality—or any
+incomplete item decision forces `NEEDS_HUMAN_DECISION`.
+
+Catalog derives a bounded Graph scope from the exact PDF revisions with indexed node-term lookup
+and publishes an Evidence Bundle V5 requiring accepted solution evidence. The Orchestrator stages
+the exact manifest/context, validates evidence and anchors plus scalar result paths before NAS
+commit, and stores a self-hashed result-bound receipt in the same `ARTIFACT_COMMITTED` event. API,
+Scientific Studio, and the native-panel annotation request have additive V3 projections while V2
+history remains readable. This paragraph describes the repository candidate and is not an implicit
+claim that the successor is active in a particular runtime. See
+[ADR 0111](../adr/0111-graph-grounded-exhaustive-document-review.md).
+
 On 2026-09-24 the paired document-review path and its native PDF comment-panel derivative were
 verified against one completed live review without changing the review, source documents, or
 annotation artifacts. The pinned result covers a 14-page question document and a 7-page solution
@@ -11,15 +28,15 @@ solution anchors. The result records eight verification axes, one confirmed low-
 finding, and one derived V2 annotation whose standard PDF comment panel is user-confirmed as
 downloadable and usable.
 
-That audit also fixes the boundary of the current claim. The released result `@2.0` requires at
+That audit also fixes the boundary of the historical V2 claim. The released result `@2.0` requires at
 least one verification target and one cross-document check, but it does not mechanically require
 one target for every preset criterion, page, or detected Item. The live result omitted dedicated
 `EDITORIAL_CLARITY` and `TYPOGRAPHY` targets, and its `ORIGINALITY` target was `INSUFFICIENT` while
 the aggregate status remained `COMPLETE`; aggregate status currently follows uncertain candidates
 and insufficient cross-document checks, not every insufficient verification target. Existing
-bytes and historical results remain immutable. A future protocol-first successor must add typed
-coverage and fail-closed insufficient-target semantics before EOM claims contract-level exhaustive
-detail coverage. See
+bytes and historical results remain immutable. Those limits are not reinterpreted in place; the
+additive V3 successor described above owns exhaustive coverage and fail-closed insufficient-target
+semantics. See
 [Document Review Detail Audit](DOCUMENT_REVIEW_DETAIL_AUDIT_2026-09-24.md) and
 [ADR 0110](../adr/0110-native-pdf-review-comment-panel.md).
 

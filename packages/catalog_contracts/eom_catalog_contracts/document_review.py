@@ -707,6 +707,18 @@ class DocumentReviewResultMemberPointer(FrozenModel):
     ]
 
 
+class GraphGroundedDocumentReviewResultMemberPointer(FrozenModel):
+    artifact_id: ArtifactId
+    artifact_revision_id: ArtifactRevisionId
+    member_path: Literal["result.json"] = "result.json"
+    sha256: Sha256
+    content_length: int = Field(ge=1, le=16 * 1024 * 1024)
+    media_type: Literal["application/json"] = "application/json"
+    schema_ref: Literal[
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json"
+    ] = "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json"
+
+
 class DocumentReviewAnnotationRegion(FrozenModel):
     x_ppm: int = Field(ge=0, le=999999)
     y_ppm: int = Field(ge=0, le=999999)

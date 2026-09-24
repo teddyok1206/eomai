@@ -1,0 +1,19 @@
+schema_version: "1.0"
+definition_key: "pdf-document-review"
+definition_version: "1.2.0"
+start_step: "review_document"
+
+limits:
+  max_rework_cycles: 0
+  max_step_attempts: 1
+
+steps:
+  - key: "review_document"
+    type: "agent"
+    worker_role: "support"
+    result_schema: "pdf-document-review-result@3.0"
+    on_success: "complete"
+
+  - key: "complete"
+    type: "terminal"
+    terminal_status: "COMPLETED"

@@ -285,6 +285,11 @@ def test_pdf_document_review_ui_keeps_immutable_upload_and_anchor_contracts() ->
     assert "documentReviewSource(file)" in javascript
     assert "marker.style.left = `${anchor.region.x_ppm / 10000}%`" in javascript
     assert "finding.recommendation.instruction" in javascript
+    assert 'id="pdf-review-exhaustive"' in html
+    assert "renderPairedDocumentReviewExhaustive(review)" in javascript
+    assert "item.explanation_steps" in javascript
+    assert "item.solve_steps" in javascript
+    assert "Graph 근거" in javascript
     assert "mutation_performed" not in html
     assert "원본 보존 · 수정 글자 빨간색" in html
     assert "pdfDocumentReviewCorrectionFindingIds: new Set()" in javascript

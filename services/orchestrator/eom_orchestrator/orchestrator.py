@@ -32,8 +32,10 @@ from eom_workflow.control_plane import (
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
     validate_paired_document_review_output_against_request,
+    validate_paired_document_review_v3_output_against_request,
     validate_pdf_document_review_output_against_request,
 )
 from eom_workflow.models import (
@@ -55,6 +57,7 @@ from eom_workflow.models import (
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
     PairedDocumentReviewRoleResult,
+    PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
     RoleWorkerInput,
     WorkerRequest,
@@ -83,6 +86,9 @@ from eom_orchestrator.capacity_controller import CodexCapacityController, LeaseC
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.document_review_evidence_validation import (
+    validate_document_review_evidence_for_commit,
+)
 from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.evidence_usage_validation import (
     EvidenceUsageValidationError,
@@ -131,6 +137,7 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/3.0",
         "resolved-execution-plan/11.0",
         "resolved-execution-plan/12.0",
+        "resolved-execution-plan/15.0",
     }
 )
 
@@ -142,6 +149,7 @@ WorkflowRoleRequest = (
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
+    | PairedDocumentReviewWorkerRequestV2
     | PdfDocumentReviewWorkerRequest
 )
 
@@ -710,6 +718,22 @@ class Orchestrator:
                         ErrorCode.WORKER_RESULT_INVALID,
                         "paired document review result differs from its immutable request",
                     ) from exc
+            if isinstance(result, PairedDocumentReviewRoleResultV3):
+                if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequestV2):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "exhaustive paired review result has no Graph-grounded request",
+                    )
+                try:
+                    validate_paired_document_review_v3_output_against_request(
+                        result.output,
+                        worker_input.request.review_request,
+                    )
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "exhaustive paired review result differs from its immutable request",
+                    ) from exc
             result_document = result.model_dump(mode="json")
             evidence_receipt = None
             evidence_event_data: dict[str, object] = {}
@@ -841,6 +865,23 @@ class Orchestrator:
                     staging=staging,
                     worker_slot=slot.slot_id,
                 )
+                if isinstance(result, PairedDocumentReviewRoleResultV3):
+                    with self.sessions() as validation_session:
+                        document_review_receipt = validate_document_review_evidence_for_commit(
+                            validation_session,
+                            plan_id=plan_id,
+                            worker_input=worker_input,
+                            result=result,
+                            result_artifact_id=artifact.logical_artifact_id,
+                            result_artifact_revision_id=artifact.revision_id,
+                            result_content_sha256=staged.content_hash,
+                            canonical_artifact_root=self.settings.nas_artifact_root,
+                        )
+                    evidence_event_data = {
+                        "document_review_evidence_validation_receipt": (
+                            document_review_receipt.model_dump(mode="json")
+                        )
+                    }
                 if result_schema in {
                     "authoring-result@10.0",
                     "review-result@10.0",

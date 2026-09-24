@@ -12,6 +12,7 @@ from eom_api_contracts.document_review import (
 from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV3,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -21,7 +22,11 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_workflow import PairedDocumentReviewRoleResult, PdfDocumentReviewRoleResult
+from eom_workflow import (
+    PairedDocumentReviewRoleResult,
+    PairedDocumentReviewRoleResultV3,
+    PdfDocumentReviewRoleResult,
+)
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -102,7 +107,10 @@ class DocumentReviewAnnotationApplicationService:
                             ),
                         )
                     )
-        elif isinstance(parsed, PairedDocumentReviewRoleResult):
+        elif isinstance(
+            parsed,
+            (PairedDocumentReviewRoleResultV3, PairedDocumentReviewRoleResult),
+        ):
             for finding in parsed.output.findings:
                 for anchor in finding.anchors:
                     marks.append(
@@ -136,7 +144,10 @@ class DocumentReviewAnnotationApplicationService:
         annotations = tuple(marks)
         payload: dict[str, object] = {
             "schema_version": (
-                "document-review-pdf-annotation-request/2.0"
+                "document-review-pdf-annotation-request/3.0"
+                if annotation_profile is not None
+                and isinstance(parsed, PairedDocumentReviewRoleResultV3)
+                else "document-review-pdf-annotation-request/2.0"
                 if annotation_profile is not None
                 else "document-review-pdf-annotation-request/1.0"
             ),
@@ -160,11 +171,17 @@ class DocumentReviewAnnotationApplicationService:
         payload["request_sha256"] = content_sha256(
             {key: value for key, value in payload.items() if key != "idempotency_key"}
         )
-        command = (
-            CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
-            if annotation_profile is not None
-            else CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+        command: (
+            CreateDocumentReviewAnnotatedPdfs
+            | CreateDocumentReviewAnnotatedPdfsV2
+            | CreateDocumentReviewAnnotatedPdfsV3
         )
+        if annotation_profile is None:
+            command = CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
+        elif isinstance(parsed, PairedDocumentReviewRoleResultV3):
+            command = CreateDocumentReviewAnnotatedPdfsV3.model_validate(payload)
+        else:
+            command = CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
         prior = self._existing_for_request(
             workflow_id,
             command.request_sha256,

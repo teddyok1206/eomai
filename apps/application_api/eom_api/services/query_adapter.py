@@ -99,6 +99,7 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     DocumentReviewResultMemberPointer,
+    GraphGroundedDocumentReviewResultMemberPointer,
     InspectMockExamAssemblyQuery,
     PdfDocumentReviewResultMemberPointer,
     PreviewMockExamAssemblyPlanCommand,
@@ -176,9 +177,13 @@ from eom_workflow import (
 )
 from eom_workflow import (
     CustomerSupportRoleResult,
+    DocumentReviewEvidenceValidationReceipt,
     PairedDocumentReviewRequest,
+    PairedDocumentReviewRequestV2,
     PairedDocumentReviewRoleResult,
+    PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewRequest,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewWorkerRequest,
@@ -188,6 +193,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV11,
     RoleWorkerInput,
     validate_paired_document_review_output_against_request,
+    validate_paired_document_review_v3_output_against_request,
     validate_pdf_document_review_output_against_request,
 )
 from eom_workflow_runner.models import (
@@ -3024,9 +3030,13 @@ class QueryAdapter:
         actor_id: str,
         workflow_id: str,
     ) -> tuple[
-        DocumentReviewResultMemberPointer,
+        DocumentReviewResultMemberPointer | GraphGroundedDocumentReviewResultMemberPointer,
         tuple[tuple[str, PdfReviewDocumentPointer], ...],
-        PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult,
+        (
+            PdfDocumentReviewRoleResult
+            | PairedDocumentReviewRoleResultV3
+            | PairedDocumentReviewRoleResult
+        ),
     ]:
         """Resolve exact review result and source revisions for annotation materialization."""
 
@@ -3035,19 +3045,26 @@ class QueryAdapter:
             paired = (
                 workflow.initial_request.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST"
             )
-            result: PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult | None
+            result: (
+                PdfDocumentReviewRoleResult
+                | PairedDocumentReviewRoleResultV3
+                | PairedDocumentReviewRoleResult
+                | None
+            )
             sources: tuple[tuple[str, PdfReviewDocumentPointer], ...]
             schema_ref: Literal[
                 "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
                 "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+                "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json",
             ]
             if paired:
                 result = self._paired_document_review_results(session, [workflow]).get(workflow_id)
                 request = self._paired_document_review_request(workflow)
                 sources = tuple((value.role, value.document) for value in request.documents)
                 schema_ref = (
-                    "https://eom.local/schemas/workflow/roles/"
-                    "paired-document-review-result-v2.schema.json"
+                    "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json"
+                    if isinstance(result, PairedDocumentReviewRoleResultV3)
+                    else "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json"
                 )
             else:
                 result = self._pdf_document_review_results(session, [workflow]).get(workflow_id)
@@ -3079,12 +3096,27 @@ class QueryAdapter:
                     "Document review annotation source is invalid",
                     "The committed review result differs from its immutable Artifact revision.",
                 )
-            pointer = DocumentReviewResultMemberPointer(
-                artifact_id=result.artifact.logical_artifact_id,
-                artifact_revision_id=result.artifact.revision_id,
-                sha256=expected_sha256,
-                content_length=revision.content_bytes,
-                schema_ref=schema_ref,
+            pointer = (
+                GraphGroundedDocumentReviewResultMemberPointer(
+                    artifact_id=result.artifact.logical_artifact_id,
+                    artifact_revision_id=result.artifact.revision_id,
+                    sha256=expected_sha256,
+                    content_length=revision.content_bytes,
+                )
+                if isinstance(result, PairedDocumentReviewRoleResultV3)
+                else DocumentReviewResultMemberPointer(
+                    artifact_id=result.artifact.logical_artifact_id,
+                    artifact_revision_id=result.artifact.revision_id,
+                    sha256=expected_sha256,
+                    content_length=revision.content_bytes,
+                    schema_ref=cast(
+                        Literal[
+                            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+                            "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+                        ],
+                        schema_ref,
+                    ),
+                )
             )
             return pointer, sources, result
 
@@ -3156,7 +3188,7 @@ class QueryAdapter:
     @staticmethod
     def _paired_document_review_request(
         workflow: WorkflowInstanceRecord,
-    ) -> PairedDocumentReviewRequest:
+    ) -> PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest:
         try:
             request = load_persisted_workflow_request(workflow.initial_request)
         except ValueError as exc:
@@ -3458,7 +3490,7 @@ class QueryAdapter:
     def _paired_document_review_results(
         session: Session,
         workflows: list[WorkflowInstanceRecord],
-    ) -> dict[str, PairedDocumentReviewRoleResult]:
+    ) -> dict[str, PairedDocumentReviewRoleResultV3 | PairedDocumentReviewRoleResult]:
         if not workflows:
             return {}
         workflow_by_id = {workflow.workflow_id: workflow for workflow in workflows}
@@ -3496,7 +3528,11 @@ class QueryAdapter:
                 pointer.step_key != "review_document"
                 or pointer.attempt != step.attempt
                 or pointer.job_id != step.platform_job_id
-                or pointer.result_schema != "pdf-document-review-result@2.0"
+                or pointer.result_schema
+                not in {
+                    "pdf-document-review-result@2.0",
+                    "pdf-document-review-result@3.0",
+                }
             ):
                 raise ApiError(
                     500,
@@ -3551,7 +3587,10 @@ class QueryAdapter:
                 .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
             ):
                 events_by_job.setdefault(event.job_id, []).append(event)
-        results: dict[str, PairedDocumentReviewRoleResult] = {}
+        results: dict[
+            str,
+            PairedDocumentReviewRoleResultV3 | PairedDocumentReviewRoleResult,
+        ] = {}
         for workflow_id, pointer in pointers.items():
             step = step_by_workflow[workflow_id]
             events = events_by_job.get(pointer.job_id, [])
@@ -3559,7 +3598,7 @@ class QueryAdapter:
                 workflow_by_id[workflow_id]
             )
             results[workflow_id] = QueryAdapter._validated_paired_document_review_result(
-                workflow_id=workflow_id,
+                workflow=workflow_by_id[workflow_id],
                 review_request=review_request,
                 step=step,
                 pointer=pointer,
@@ -3581,30 +3620,44 @@ class QueryAdapter:
     @staticmethod
     def _validated_paired_document_review_result(
         *,
-        workflow_id: str,
-        review_request: PairedDocumentReviewRequest,
+        workflow: WorkflowInstanceRecord,
+        review_request: PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest,
         step: WorkflowStepRunRecord,
         pointer: WorkflowArtifactPointer,
         job: JobRecord | None,
         artifact: ArtifactRecord | None,
         revision: ArtifactRevisionRecord | None,
         event: JobEventRecord | None,
-    ) -> PairedDocumentReviewRoleResult:
+    ) -> PairedDocumentReviewRoleResultV3 | PairedDocumentReviewRoleResult:
+        workflow_id = workflow.workflow_id
+        grounded = isinstance(review_request, PairedDocumentReviewRequestV2)
+        expected_result_schema = (
+            "pdf-document-review-result@3.0" if grounded else "pdf-document-review-result@2.0"
+        )
+        expected_protocol = "workflow-role/1.27.0" if grounded else "workflow-role/1.26.0"
         try:
             manifest = (
                 ArtifactManifest.model_validate(revision.manifest) if revision is not None else None
             )
-            result = (
-                PairedDocumentReviewRoleResult.model_validate(revision.result)
-                if revision is not None
-                else None
-            )
+            result = None
+            if revision is not None:
+                result = (
+                    PairedDocumentReviewRoleResultV3.model_validate(revision.result)
+                    if grounded
+                    else PairedDocumentReviewRoleResult.model_validate(revision.result)
+                )
             worker_input = RoleWorkerInput.model_validate(job.request) if job is not None else None
             if result is not None:
-                validate_paired_document_review_output_against_request(
-                    result.output,
-                    review_request,
-                )
+                if isinstance(result, PairedDocumentReviewRoleResultV3):
+                    validate_paired_document_review_v3_output_against_request(
+                        result.output,
+                        review_request,
+                    )
+                else:
+                    validate_paired_document_review_output_against_request(
+                        result.output,
+                        review_request,
+                    )
         except ValueError as exc:
             raise ApiError(
                 500,
@@ -3612,11 +3665,72 @@ class QueryAdapter:
                 "Paired document review result invalid",
                 "The stored paired result contract or manifest is invalid.",
             ) from exc
-        expected_event_data = {
+        expected_event_data: dict[str, object] = {
             "logical_artifact_id": pointer.logical_artifact_id,
             "revision_id": pointer.revision_id,
             "content_hash": pointer.content_hash,
         }
+        if grounded:
+            try:
+                if not isinstance(review_request, PairedDocumentReviewRequestV2) or not isinstance(
+                    result, PairedDocumentReviewRoleResultV3
+                ):
+                    raise ValueError("grounded review result types differ")
+                receipt = DocumentReviewEvidenceValidationReceipt.model_validate(
+                    event.data.get("document_review_evidence_validation_receipt")
+                    if event is not None
+                    else None
+                )
+                publication = review_request.evidence_plan.publication
+                execution_plan = workflow.runtime_context.get("execution_plan")
+                citation_set_sha256 = content_sha256(
+                    {
+                        "schema_version": "document-review-evidence-citation-set/1.0",
+                        "citations": [
+                            value.model_dump(mode="json")
+                            for value in result.output.evidence_usage.citations
+                        ],
+                    }
+                )
+            except ValueError as exc:
+                raise ApiError(
+                    500,
+                    "PAIRED_DOCUMENT_REVIEW_EVIDENCE_RECEIPT_INVALID",
+                    "Paired document review evidence receipt invalid",
+                    "The stored Graph evidence validation receipt is invalid.",
+                ) from exc
+            if (
+                receipt.workflow_id != workflow_id
+                or not isinstance(execution_plan, dict)
+                or execution_plan.get("plan_id") != receipt.plan_id
+                or execution_plan.get("plan_sha256") != receipt.plan_sha256
+                or receipt.step_run_id != step.step_run_id
+                or receipt.job_id != pointer.job_id
+                or receipt.attempt != step.attempt
+                or receipt.review_request_sha256 != review_request.request_sha256
+                or receipt.evidence_plan_sha256 != review_request.evidence_plan.plan_sha256
+                or receipt.retrieval_request_id != publication.retrieval_request_id
+                or receipt.graph_snapshot_revision_id
+                != publication.graph_snapshot.graph_snapshot_revision_id
+                or receipt.evidence_bundle_id != publication.evidence_bundle_id
+                or receipt.evidence_bundle_revision_id != publication.evidence_bundle_revision_id
+                or receipt.evidence_manifest_artifact != publication.manifest_artifact
+                or receipt.evidence_manifest_sha256 != publication.manifest_sha256
+                or receipt.evidence_context_artifact != publication.context_artifact
+                or receipt.result_artifact_id != pointer.logical_artifact_id
+                or receipt.result_artifact_revision_id != pointer.revision_id
+                or receipt.result_content_sha256 != pointer.content_hash
+                or receipt.citation_set_sha256 != citation_set_sha256
+            ):
+                raise ApiError(
+                    500,
+                    "PAIRED_DOCUMENT_REVIEW_EVIDENCE_RECEIPT_INVALID",
+                    "Paired document review evidence receipt invalid",
+                    "The Graph evidence receipt differs from the exact result Artifact.",
+                )
+            expected_event_data["document_review_evidence_validation_receipt"] = receipt.model_dump(
+                mode="json"
+            )
         worker_request = worker_input.request if worker_input is not None else None
         expected_request_hash = (
             content_sha256(
@@ -3637,21 +3751,28 @@ class QueryAdapter:
             or result is None
             or worker_input is None
             or event is None
-            or not isinstance(worker_request, PairedDocumentReviewWorkerRequest)
+            or not isinstance(
+                worker_request,
+                (
+                    PairedDocumentReviewWorkerRequestV2
+                    if grounded
+                    else PairedDocumentReviewWorkerRequest
+                ),
+            )
             or worker_request.review_request != review_request
             or step.workflow_id != workflow_id
             or step.step_key != "review_document"
             or step.worker_role != "support"
-            or step.result_schema != "pdf-document-review-result@2.0"
+            or step.result_schema != expected_result_schema
             or step.state != "SUCCEEDED"
             or step.platform_job_id != pointer.job_id
             or pointer.step_key != "review_document"
             or pointer.attempt != step.attempt
-            or pointer.result_schema != "pdf-document-review-result@2.0"
+            or pointer.result_schema != expected_result_schema
             or job.job_id != pointer.job_id
             or job.status != "SUCCEEDED"
             or job.completed_at is None
-            or job.protocol_version != "workflow-role/1.26.0"
+            or job.protocol_version != expected_protocol
             or job.task_type != "workflow_support"
             or job.request_hash != expected_request_hash
             or job.logical_artifact_id != pointer.logical_artifact_id
@@ -3786,7 +3907,7 @@ class QueryAdapter:
     @staticmethod
     def _paired_document_review(
         workflow: WorkflowInstanceRecord,
-        result: PairedDocumentReviewRoleResult | None,
+        result: PairedDocumentReviewRoleResultV3 | PairedDocumentReviewRoleResult | None,
         members: list[DocumentReviewSetMemberRecord],
     ) -> PairedDocumentReviewView:
         request = QueryAdapter._paired_document_review_request(workflow)

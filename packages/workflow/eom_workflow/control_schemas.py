@@ -95,6 +95,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "4.0",
             "sha256:e89cf1199dc0b64fda9ec1e2708b25f8385f8102b7a37ff5807551df09a44b00",
         ),
+        "pdf-document-review-control-bootstrap-v5": ControlSchemaResource(
+            "schemas/workflow/control-plane/pdf-document-review-control-bootstrap-v5.schema.json",
+            "resources/control-plane/pdf-document-review-control-bootstrap-v5.schema.json",
+            "5.0",
+            "sha256:949c2d083f1e9c1b4d80c1830977f6458ced10fbd0a9576c887a60f25a969e82",
+        ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
             "resources/control-plane/knowledge-item-control-bootstrap-v1.schema.json",
@@ -400,6 +406,21 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/resolved-execution-plan-v14.schema.json",
             "14.0",
             "sha256:ee7400501e8a0c7f2273d68bff4c8b463ad96e6564bd19417fece90b27295a7d",
+        ),
+        "resolved-execution-plan-v15": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v15.schema.json",
+            "resources/control-plane/resolved-execution-plan-v15.schema.json",
+            "15.0",
+            "sha256:c0275cb355dca9efab082898f9bebdb8702519abfd15cb30e282a50509d9f743",
+        ),
+        "document-review-evidence-validation-receipt": ControlSchemaResource(
+            (
+                "schemas/workflow/control-plane/"
+                "document-review-evidence-validation-receipt-v1.schema.json"
+            ),
+            "resources/control-plane/document-review-evidence-validation-receipt-v1.schema.json",
+            "1.0",
+            "sha256:4931061529fb9f3a2bf792c5bf983eaa457ea9da235fb8178cca489c6d387240",
         ),
         "codex-invocation": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-invocation-v1.schema.json",

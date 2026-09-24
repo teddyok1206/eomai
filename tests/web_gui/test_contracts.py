@@ -10,6 +10,7 @@ from eom_web_gui.contracts import (
     ExplorerQuery,
     ItemPreview,
     ItemPreviewV2,
+    PairedDocumentReviewOutputView,
     PreviewChoice,
     PreviewLabeledTextBlock,
     PreviewParagraphBlock,
@@ -23,6 +24,8 @@ from eom_web_gui.contracts import (
 from eom_web_gui.request_drafts import DEMO_REQUEST, normalize_request, update_draft
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from referencing import Registry, Resource
+
+from tests.unit.test_document_review_v3_protocol import _output as exhaustive_review_output
 
 SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
@@ -46,6 +49,21 @@ def test_studio_problem_matches_web_schema_and_rejects_extra_data() -> None:
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
     with pytest.raises(ValidationError):
         Draft202012Validator(schema).validate(value.model_dump(mode="json") | {"detail": "x"})
+
+
+def test_web_contract_accepts_exhaustive_graph_grounded_review() -> None:
+    value = PairedDocumentReviewOutputView.model_validate(exhaustive_review_output())
+    assert value.item_reviews is not None
+    assert value.evidence_usage is not None
+    assert len(value.verification_targets) == 10
+    assert value.item_reviews[0].answer_status == "VERIFIED"
+
+
+def test_web_contract_rejects_partial_exhaustive_projection() -> None:
+    value = exhaustive_review_output()
+    value.pop("evidence_usage")
+    with pytest.raises(ValueError, match="exhaustive fields"):
+        PairedDocumentReviewOutputView.model_validate(value)
 
 
 def _curriculum_outline_projection() -> dict[str, object]:

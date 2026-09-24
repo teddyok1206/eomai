@@ -5,6 +5,8 @@ from eom_workflow import (
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionWorkerRequest,
+    PairedDocumentReviewWorkerRequest,
+    PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
     WorkerRequest,
 )
@@ -87,6 +89,16 @@ def test_pdf_document_review_uses_immutable_document_prompt_and_stage() -> None:
         WorkflowState.RUNNING,
         WorkflowStage.DOCUMENT_REVIEW,
     )
+
+
+def test_paired_document_review_versions_share_the_review_prompt() -> None:
+    for request in (
+        PairedDocumentReviewWorkerRequest.model_construct(review_request=None),
+        PairedDocumentReviewWorkerRequestV2.model_construct(review_request=None),
+    ):
+        assert _prompt_name_for_request(worker_role="support", request=request) == (
+            "pdf-document-review"
+        )
 
 
 def test_item_management_keeps_registration_prompt_alias() -> None:

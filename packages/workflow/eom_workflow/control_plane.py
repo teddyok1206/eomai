@@ -1087,6 +1087,140 @@ class ResolvedExecutionPlanV14(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV15(FrozenModel):
+    """Graph-grounded paired review pinned to exact documents and evidence."""
+
+    schema_version: Literal["resolved-execution-plan/15.0"] = "resolved-execution-plan/15.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["CODEX"] = "CODEX"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["pdf-document-review"] = "pdf-document-review"
+    workflow_definition_version: Literal["1.2.0"] = "1.2.0"
+    workflow_definition_sha256: Sha256
+    review_request_sha256: Sha256
+    documents: tuple[PairedReviewDocument, PairedReviewDocument] = Field(min_length=2, max_length=2)
+    evidence_plan_sha256: Sha256
+    retrieval_requirement: EducationalRetrievalRequirement
+    retrieval_requirement_sha256: Sha256
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    retrieval_request_sha256: Sha256
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_permissions_sha256: Sha256
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecutionV3, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["15.0.0"] = "15.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_grounded_review_plan(self) -> ResolvedExecutionPlanV15:
+        if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
+            raise ValueError("grounded paired review plan requires QUESTION then SOLUTION")
+        expected = tuple(
+            (
+                value.role,
+                value.document.document_id,
+                value.document.document_revision_id,
+                value.document.source_pdf.sha256,
+            )
+            for value in self.documents
+        )
+        step = self.steps[0]
+        if len(set(expected)) != 2:
+            raise ValueError("grounded paired review plan sources must be distinct")
+        if content_sha256(self.retrieval_requirement.model_dump(mode="json")) != (
+            self.retrieval_requirement_sha256
+        ):
+            raise ValueError("grounded paired review retrieval requirement hash differs")
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("grounded paired review evidence members are incompatible")
+        if (
+            step.step_key != "review_document"
+            or step.role != WorkerRole.SUPPORT
+            or step.model != "gpt-5.6-terra"
+            or step.reasoning_effort != "xhigh"
+            or step.worker_pool_key != "customer-support"
+            or step.reference_bundle is not None
+            or step.timeout_seconds != 3600
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "ALLOWED_WITH_PROVENANCE"
+            or step.evidence_access != "EVIDENCE_CONTEXT"
+        ):
+            raise ValueError("grounded paired review plan requires its evidence support step")
+        if content_sha256(self.model_dump(mode="json", exclude={"plan_sha256"})) != (
+            self.plan_sha256
+        ):
+            raise ValueError("grounded paired review plan hash differs")
+        return self
+
+
+class DocumentReviewEvidenceValidationReceipt(FrozenModel):
+    """Orchestrator attestation for a V3 review's exact Graph evidence usage."""
+
+    schema_version: Literal["document-review-evidence-validation-receipt/1.0"] = (
+        "document-review-evidence-validation-receipt/1.0"
+    )
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    workflow_id: WorkflowId
+    step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
+    job_id: JobId
+    attempt: int = Field(ge=1, le=10)
+    review_request_sha256: Sha256
+    evidence_plan_sha256: Sha256
+    retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    evidence_bundle_id: str = Field(pattern=r"^evidence_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    result_artifact_id: ArtifactId
+    result_artifact_revision_id: ArtifactRevisionId
+    result_content_sha256: Sha256
+    citation_set_sha256: Sha256
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_members_and_hash(self) -> DocumentReviewEvidenceValidationReceipt:
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+        ):
+            raise ValueError("document review receipt evidence members are incompatible")
+        if content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"})) != (
+            self.receipt_sha256
+        ):
+            raise ValueError("document review evidence receipt hash differs")
+        return self
+
+
 class CodexInvocation(FrozenModel):
     """Bounded job-local CLI selection derived from one resolved plan step."""
 

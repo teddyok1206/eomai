@@ -199,6 +199,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:32c2ccf98930d6e865aaeefe31abbf37e5749f21851bfbf9446d64ecb70683d6",
         ),
+        "document-review-evidence-plan": CatalogSchemaResource(
+            "schemas/document-review/document-review-evidence-plan-v1.schema.json",
+            "resources/document-review/document-review-evidence-plan-v1.schema.json",
+            "1.0",
+            "sha256:62cc57bec58327da8ab18d83a42307bea34bd8bb09f9a365d35d005d91ccede0",
+        ),
+        "document-review-evidence-request": CatalogSchemaResource(
+            "schemas/catalog-application/document-review-evidence-request-v1.schema.json",
+            "resources/catalog-application/document-review-evidence-request-v1.schema.json",
+            "1.0",
+            "sha256:c9b8d219761ead1f8630809bb29513ee730fae35a947ada0093ae1dd71bc98c1",
+        ),
+        "document-review-evidence-response": CatalogSchemaResource(
+            "schemas/catalog-application/document-review-evidence-response-v1.schema.json",
+            "resources/catalog-application/document-review-evidence-response-v1.schema.json",
+            "1.0",
+            "sha256:b30460358b6c7e83973cb5f85bbd52382f5f07fa05afaf20a35a90a4e45ac793",
+        ),
         "pdf-document-review-intake-request": CatalogSchemaResource(
             (
                 "schemas/catalog/catalog-application/"
@@ -342,6 +360,15 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             ("resources/catalog-application/document-review-pdf-annotation-request-v2.schema.json"),
             "2.0",
             "sha256:7be6dab92977290406b82fed25c597b97f93b5b6606bddccca3b1f81dbc3eed8",
+        ),
+        "document-review-pdf-annotation-request-v3": CatalogSchemaResource(
+            (
+                "schemas/catalog/catalog-application/"
+                "document-review-pdf-annotation-request-v3.schema.json"
+            ),
+            ("resources/catalog-application/document-review-pdf-annotation-request-v3.schema.json"),
+            "3.0",
+            "sha256:f192409e3bfcc8a5eaadda013cf7560abd676e19930780bc060a27f374adec6b",
         ),
         "document-review-pdf-annotation-response": CatalogSchemaResource(
             (
@@ -1757,6 +1784,12 @@ def _catalog_schema_registry() -> Registry[Any]:
             raise _resource_error(name, "schema identifier is missing")
         resources.append((identifier, Resource.from_contents(schema)))
     return Registry().with_resources(resources)
+
+
+def catalog_schema_registry() -> Registry[Any]:
+    """Return the immutable installed Catalog schema registry for composed contracts."""
+
+    return _catalog_schema_registry()
 
 
 def validate_contract(name: str, value: dict[str, Any]) -> None:

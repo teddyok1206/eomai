@@ -10,7 +10,12 @@ from typing import Literal
 
 import yaml
 from eom_identifiers import canonical_json_bytes
-from eom_workflow import AgentStep, ExecutionPresetRevision, compile_definition_data
+from eom_workflow import (
+    AgentStep,
+    ExecutionPresetRevision,
+    ExecutionPresetRevisionV2,
+    compile_definition_data,
+)
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.schemas import result_schema_protocol, role_schema_bundle_hash
 from eom_workflow_runner.models import WorkflowDefinitionRecord
@@ -50,6 +55,7 @@ from eom_orchestrator.fixed_host_capacity_bootstrap import (
 )
 from eom_orchestrator.preset_lifecycle import (
     create_execution_preset_draft,
+    create_execution_preset_draft_v2,
     execution_preset_policy_sha256,
     record_execution_preset_evaluation,
     release_execution_preset,
@@ -71,6 +77,39 @@ class PdfDocumentReviewBootstrapPredecessor(BaseModel):
     instruction_content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+class PdfDocumentReviewRetrievalBootstrapPolicy(BaseModel):
+    """Closed Graph access policy for exhaustive document review."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    access_policy_revision_id: Literal["accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9"]
+    access_policy_sha256: Literal[
+        "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+    ]
+    allowed_corpus_keys: tuple[Literal["integrated-science-textbooks"], ...]
+    allowed_query_kinds: tuple[Literal["ITEM_PREPARATION"], ...]
+    allowed_source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"], ...]
+    maximum_budget: dict[str, int]
+
+    @model_validator(mode="after")
+    def exact_retrieval_boundary(self) -> PdfDocumentReviewRetrievalBootstrapPolicy:
+        if (
+            self.allowed_corpus_keys != ("integrated-science-textbooks",)
+            or self.allowed_query_kinds != ("ITEM_PREPARATION",)
+            or self.allowed_source_classes != ("APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK")
+            or self.maximum_budget
+            != {
+                "max_documents": 16,
+                "max_item_revisions": 32,
+                "max_graph_nodes": 128,
+                "max_claims": 64,
+                "max_context_tokens": 16000,
+            }
+        ):
+            raise ValueError("PDF review retrieval policy differs")
+        return self
+
+
 class PdfDocumentReviewBootstrapManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -79,6 +118,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         "pdf-document-review-control-bootstrap/2.0",
         "pdf-document-review-control-bootstrap/3.0",
         "pdf-document-review-control-bootstrap/4.0",
+        "pdf-document-review-control-bootstrap/5.0",
     ]
     preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -88,28 +128,50 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     reasoning_effort: Literal["xhigh"]
     general_knowledge_policy: Literal["ALLOW_WITH_PROVENANCE"]
     compatible_workflow_protocols: tuple[
-        Literal["workflow-role/1.25.0", "workflow-role/1.26.0"], ...
+        Literal[
+            "workflow-role/1.25.0",
+            "workflow-role/1.26.0",
+            "workflow-role/1.27.0",
+        ],
+        ...,
     ] = Field(
         min_length=1,
-        max_length=2,
+        max_length=3,
     )
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/pdf-document-review.md"]
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
     timeout_seconds: Literal[3600]
-    instruction_revision_number: Literal[2, 3, 4] | None = None
+    instruction_revision_number: Literal[2, 3, 4, 5] | None = None
     predecessor: PdfDocumentReviewBootstrapPredecessor | None = None
+    evidence_access: Literal["EVIDENCE_CONTEXT"] | None = None
+    retrieval_policy: PdfDocumentReviewRetrievalBootstrapPolicy | None = None
 
     @model_validator(mode="after")
     def exact_policy(self) -> PdfDocumentReviewBootstrapManifest:
         if self.created_at.tzinfo is None or self.created_at.utcoffset() != timedelta(0):
             raise ValueError("PDF document-review bootstrap timestamp must use UTC")
-        expected = (
-            ("workflow-role/1.25.0",)
-            if self.schema_version == "pdf-document-review-control-bootstrap/1.0"
-            else ("workflow-role/1.25.0", "workflow-role/1.26.0")
-        )
+        expected = {
+            "pdf-document-review-control-bootstrap/1.0": ("workflow-role/1.25.0",),
+            "pdf-document-review-control-bootstrap/2.0": (
+                "workflow-role/1.25.0",
+                "workflow-role/1.26.0",
+            ),
+            "pdf-document-review-control-bootstrap/3.0": (
+                "workflow-role/1.25.0",
+                "workflow-role/1.26.0",
+            ),
+            "pdf-document-review-control-bootstrap/4.0": (
+                "workflow-role/1.25.0",
+                "workflow-role/1.26.0",
+            ),
+            "pdf-document-review-control-bootstrap/5.0": (
+                "workflow-role/1.25.0",
+                "workflow-role/1.26.0",
+                "workflow-role/1.27.0",
+            ),
+        }[self.schema_version]
         if self.compatible_workflow_protocols != expected:
             raise ValueError("PDF document-review bootstrap protocol must be exact")
         expected_revision = {
@@ -117,12 +179,19 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
             "pdf-document-review-control-bootstrap/2.0": 2,
             "pdf-document-review-control-bootstrap/3.0": 3,
             "pdf-document-review-control-bootstrap/4.0": 4,
+            "pdf-document-review-control-bootstrap/5.0": 5,
         }[self.schema_version]
         if (self.instruction_revision_number, self.predecessor is not None) != (
             expected_revision,
             expected_revision is not None,
         ):
             raise ValueError("PDF document-review successor pins must be exact")
+        grounded = self.schema_version == "pdf-document-review-control-bootstrap/5.0"
+        if (self.evidence_access is not None, self.retrieval_policy is not None) != (
+            grounded,
+            grounded,
+        ):
+            raise ValueError("PDF document-review evidence policy must be exact")
         return self
 
 
@@ -163,6 +232,9 @@ def load_pdf_document_review_bootstrap_manifest(
             ),
             "pdf-document-review-control-bootstrap/4.0": (
                 "pdf-document-review-control-bootstrap-v4"
+            ),
+            "pdf-document-review-control-bootstrap/5.0": (
+                "pdf-document-review-control-bootstrap-v5"
             ),
         }.get(schema_version if isinstance(schema_version, str) else "")
         if schema_key is None:
@@ -307,11 +379,13 @@ def bootstrap_pdf_document_review_control_plane(
                 protocol,
                 role_schema_bundle_hash(protocol),
             )
-        definition_version = (
-            "1.0.0"
-            if manifest.schema_version == "pdf-document-review-control-bootstrap/1.0"
-            else "1.1.0"
-        )
+        definition_version = {
+            "pdf-document-review-control-bootstrap/1.0": "1.0.0",
+            "pdf-document-review-control-bootstrap/2.0": "1.1.0",
+            "pdf-document-review-control-bootstrap/3.0": "1.1.0",
+            "pdf-document-review-control-bootstrap/4.0": "1.1.0",
+            "pdf-document-review-control-bootstrap/5.0": "1.2.0",
+        }[manifest.schema_version]
         definition = session.scalar(
             select(WorkflowDefinitionRecord).where(
                 WorkflowDefinitionRecord.definition_key == "pdf-document-review",
@@ -334,9 +408,11 @@ def bootstrap_pdf_document_review_control_plane(
             for step in compiled.definition.steps
             if isinstance(step, AgentStep)
         }
-        expected_protocol = (
-            "workflow-role/1.26.0" if definition_version == "1.1.0" else "workflow-role/1.25.0"
-        )
+        expected_protocol = {
+            "1.0.0": "workflow-role/1.25.0",
+            "1.1.0": "workflow-role/1.26.0",
+            "1.2.0": "workflow-role/1.27.0",
+        }[definition_version]
         if protocols != {expected_protocol}:
             raise ControlPlaneError(
                 "CONTROL_WORKFLOW_PROTOCOL_INVALID",
@@ -359,6 +435,7 @@ def bootstrap_pdf_document_review_control_plane(
         "pdf-document-review-control-bootstrap/2.0": "v2",
         "pdf-document-review-control-bootstrap/3.0": "v3",
         "pdf-document-review-control-bootstrap/4.0": "v4",
+        "pdf-document-review-control-bootstrap/5.0": "v5",
     }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,
@@ -421,6 +498,8 @@ def bootstrap_pdf_document_review_control_plane(
             "network": "disabled",
         }
     ]
+    if manifest.evidence_access is not None:
+        role_policies[0]["evidence_access"] = manifest.evidence_access
     draft_or_release = _find_or_create_exact_preset(
         sessions,
         manifest=manifest,
@@ -514,8 +593,11 @@ def _find_or_create_exact_preset(
     capacity_policy_revision_id: str,
     actor_id: str,
 ) -> ExecutionPresetRevisionRecord:
+    grounded = manifest.retrieval_policy is not None
     preview: dict[str, object] = {
-        "schema_version": "execution-preset-revision/1.0",
+        "schema_version": (
+            "execution-preset-revision/2.0" if grounded else "execution-preset-revision/1.0"
+        ),
         "preset_id": "execpreset_" + "0" * 32,
         "preset_revision_id": "execpresetrev_" + "0" * 32,
         "revision_number": 1,
@@ -529,9 +611,13 @@ def _find_or_create_exact_preset(
         "content_sha256": "sha256:" + "0" * 64,
         "created_at": manifest.created_at,
     }
+    if manifest.retrieval_policy is not None:
+        preview["retrieval_policy"] = manifest.retrieval_policy.model_dump(mode="json")
     preview["content_sha256"] = compute_control_document_hash(preview, "content_sha256")
     expected_policy_hash = execution_preset_policy_sha256(
-        ExecutionPresetRevision.model_validate(preview)
+        ExecutionPresetRevisionV2.model_validate(preview)
+        if grounded
+        else ExecutionPresetRevision.model_validate(preview)
     )
     with transaction(sessions) as session:
         logical = session.scalar(
@@ -621,6 +707,20 @@ def _find_or_create_exact_preset(
             )
         if matching_drafts:
             return matching_drafts[0]
+        if manifest.retrieval_policy is not None:
+            return create_execution_preset_draft_v2(
+                session,
+                preset_key=manifest.preset_key,
+                display_name=manifest.display_name,
+                description=manifest.description,
+                role_policies=role_policies,
+                capacity_policy_revision_id=capacity_policy_revision_id,
+                general_knowledge_policy=manifest.general_knowledge_policy,
+                compatible_workflow_protocols=list(manifest.compatible_workflow_protocols),
+                retrieval_policy=manifest.retrieval_policy.model_dump(mode="json"),
+                created_by=actor_id,
+                created_at=manifest.created_at,
+            )
         return create_execution_preset_draft(
             session,
             preset_key=manifest.preset_key,

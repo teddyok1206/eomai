@@ -1076,6 +1076,19 @@ class KnowledgeRetrievalApplicationService:
                     seed_scores.get(node_id, 0), 1000 if unit_id == scope.root_unit_id else 950
                 )
 
+        if command.topic_keys:
+            exact_topic_nodes = session.scalars(
+                select(KnowledgeNodeRecord.node_id)
+                .where(
+                    KnowledgeNodeRecord.graph_snapshot_revision_id == snapshot_id,
+                    KnowledgeNodeRecord.stable_key.in_(command.topic_keys),
+                )
+                .order_by(KnowledgeNodeRecord.node_id)
+                .limit(max_nodes)
+            )
+            for node_id in exact_topic_nodes:
+                seed_scores[str(node_id)] = max(seed_scores.get(str(node_id), 0), 1000)
+
         terms = sorted(
             {
                 term

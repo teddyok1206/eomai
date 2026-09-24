@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/pdf-document-review-control-bootstrap/5.0",
+  "title": "EOM Graph-Grounded PDF Document Review Control Bootstrap V5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "model",
+    "reasoning_effort",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "platform_instruction_path",
+    "role_instruction_path",
+    "slot_key",
+    "worker_pool_key",
+    "timeout_seconds",
+    "instruction_revision_number",
+    "predecessor",
+    "evidence_access",
+    "retrieval_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "pdf-document-review-control-bootstrap/5.0"
+    },
+    "preset_key": {
+      "const": "pdf-document-review"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "const": "gpt-5.6-terra"
+    },
+    "reasoning_effort": {
+      "const": "xhigh"
+    },
+    "general_knowledge_policy": {
+      "const": "ALLOW_WITH_PROVENANCE"
+    },
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "workflow-role/1.25.0"
+        },
+        {
+          "const": "workflow-role/1.26.0"
+        },
+        {
+          "const": "workflow-role/1.27.0"
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "platform_instruction_path": {
+      "const": "instructions/platform.md"
+    },
+    "role_instruction_path": {
+      "const": "instructions/pdf-document-review.md"
+    },
+    "slot_key": {
+      "const": "slot06"
+    },
+    "worker_pool_key": {
+      "const": "customer-support"
+    },
+    "timeout_seconds": {
+      "const": 3600
+    },
+    "instruction_revision_number": {
+      "const": 5
+    },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_revision_id",
+        "preset_policy_sha256",
+        "instruction_bundle_revision_id",
+        "instruction_manifest_sha256",
+        "instruction_content_sha256"
+      ],
+      "properties": {
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^instrrev_[0-9a-f]{32}$"
+        },
+        "instruction_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_content_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "evidence_access": {
+      "const": "EVIDENCE_CONTEXT"
+    },
+    "retrieval_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_policy_revision_id",
+        "access_policy_sha256",
+        "allowed_corpus_keys",
+        "allowed_query_kinds",
+        "allowed_source_classes",
+        "maximum_budget"
+      ],
+      "properties": {
+        "access_policy_revision_id": {
+          "const": "accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9"
+        },
+        "access_policy_sha256": {
+          "const": "sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0"
+        },
+        "allowed_corpus_keys": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "integrated-science-textbooks"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "allowed_query_kinds": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "ITEM_PREPARATION"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "allowed_source_classes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "APPROVED_ITEM"
+            },
+            {
+              "const": "PAST_EXAM"
+            },
+            {
+              "const": "TEXTBOOK"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "maximum_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_documents",
+            "max_item_revisions",
+            "max_graph_nodes",
+            "max_claims",
+            "max_context_tokens"
+          ],
+          "properties": {
+            "max_documents": {
+              "const": 16
+            },
+            "max_item_revisions": {
+              "const": 32
+            },
+            "max_graph_nodes": {
+              "const": 128
+            },
+            "max_claims": {
+              "const": 64
+            },
+            "max_context_tokens": {
+              "const": 16000
+            }
+          }
+        }
+      }
+    }
+  }
+}
