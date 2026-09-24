@@ -1,6 +1,27 @@
 # Current System Status
 
-Status date: 2026-09-21 (UTC)
+Status date: 2026-09-24 (UTC)
+
+On 2026-09-24 the paired document-review path and its native PDF comment-panel derivative were
+verified against one completed live review without changing the review, source documents, or
+annotation artifacts. The pinned result covers a 14-page question document and a 7-page solution
+document. Its combined verification, cross-document, and finding anchors touch all 21 source pages;
+it contains 25 question-to-solution checks, and every check has both role-correct question and
+solution anchors. The result records eight verification axes, one confirmed low-severity structure
+finding, and one derived V2 annotation whose standard PDF comment panel is user-confirmed as
+downloadable and usable.
+
+That audit also fixes the boundary of the current claim. The released result `@2.0` requires at
+least one verification target and one cross-document check, but it does not mechanically require
+one target for every preset criterion, page, or detected Item. The live result omitted dedicated
+`EDITORIAL_CLARITY` and `TYPOGRAPHY` targets, and its `ORIGINALITY` target was `INSUFFICIENT` while
+the aggregate status remained `COMPLETE`; aggregate status currently follows uncertain candidates
+and insufficient cross-document checks, not every insufficient verification target. Existing
+bytes and historical results remain immutable. A future protocol-first successor must add typed
+coverage and fail-closed insufficient-target semantics before EOM claims contract-level exhaustive
+detail coverage. See
+[Document Review Detail Audit](DOCUMENT_REVIEW_DETAIL_AUDIT_2026-09-24.md) and
+[ADR 0110](../adr/0110-native-pdf-review-comment-panel.md).
 
 On 2026-09-21 the repository added a protocol-first, additive Graph-verification review candidate.
 It is repository-verified only and is not an implicit live activation claim. The candidate pins

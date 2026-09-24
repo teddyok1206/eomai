@@ -47,6 +47,8 @@ readiness가 정본입니다.
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
+| 교육 문서 검토 | `pdf-document-review@1.1.0`, role `workflow-role/1.26.0`, result `@2.0` |
+| PDF 검토 주석 | `document-review-pdf-annotation/2.0`, Catalog protocol `catalog/1.21` |
 
 단일 문항의 최신 Graph 검증 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
 각각 독립 판정합니다. Review worker는 verdict 전에 검증 대상과 필요한 source class를 계획하고,
@@ -70,7 +72,25 @@ Artifact Revision으로 보존하고, HWP/HWPX는 격리된 LibreOffice/H2Oresta
 projection을 기존 페이지/영역 anchor 검토 Workflow에 전달합니다. PDF와 HWP는 검토 전용입니다.
 HWPX에서 worker가 확정한 정확한 `REPLACE` 지적만 사용자가 선택하면 원본을 덮어쓰지 않고 새
 HWPX 교정본을 만들며, 바뀐 글자만 빨간색으로 표시합니다. 교정 출력은 HWPX만 제공하고 PDF/HWP
-수정본을 만들지 않습니다. 자세한 불변식과 격리 경계는 ADR 0104에 기록돼 있습니다.
+수정본을 만들지 않습니다. 문제지와 해설지를 함께 올리면 두 문서를 별도 Revision으로 고정하고,
+각 문항의 문제 위치와 대응 정답·해설 위치를 역할별 anchor로 교차 검증합니다. 검토 worker는 전
+페이지를 읽고 각 문항을 독립적으로 풀도록 지시받으며, 과학적 정확성·정답 유일성·조건 충분성·
+해설 일관성·그림/표/수식·교육과정·난이도 흐름·편집 상태를 preset과 사용자 추가 지시에 따라
+확인합니다. 결과는 검증 target → 후보 재확인 → 확정 finding 순서로 남고, 확정 finding만 화면과
+파생 산출물에 표시됩니다.
+
+다운로드용 주석 PDF는 원본을 바꾸지 않는 별도 Artifact입니다. 빨간 번호 상자를 유지하면서 표준
+PDF `/Square` 주석에 제목·분류·심각도·설명·수정 권고를 넣으므로 Acrobat·한컴 등 호환 viewer의
+주석 패널에서도 내용을 볼 수 있습니다. 이번 release의 read-only 실물 감사에서는 14쪽 문제지와
+7쪽 해설지의 전체 21쪽이 검증 anchor로 덮였고 25개 문제–해설 교차 확인이 남았습니다. 다만 현재
+released result `@2.0`은 preset의 모든 검토 축을 구조적으로 하나씩 채우도록 강제하지 않으며,
+`INSUFFICIENT` verification target만으로 전체 상태를 사람 판단 필요로 올리지도 않습니다. 따라서
+전 축 coverage와 불충분 판정의 fail-closed 승격은 기존 bytes를 바꾸지 않는 successor 계약 과제로
+남깁니다. 세부 감사는
+[Document Review Detail Audit](docs/status/DOCUMENT_REVIEW_DETAIL_AUDIT_2026-09-24.md), 불변식과
+격리 경계는 [ADR 0104](docs/adr/0104-office-document-review-and-redline-hwpx.md),
+[ADR 0105](docs/adr/0105-paired-document-review-and-annotated-pdf.md),
+[ADR 0110](docs/adr/0110-native-pdf-review-comment-panel.md)에 기록돼 있습니다.
 
 `mock-exam-production-plan/5.0`은 Workflow 1.10, role 1.20, Pack 1.16.1, Item Brief 4.0과
 자료 형식 1.0을 함께 고정합니다. V5는 선택된 자료 형식을 authoring의 단일 권위로 사용합니다.
@@ -344,6 +364,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 ## 핵심 문서
 
 - [Current System Status](docs/status/CURRENT_SYSTEM_STATUS.md)
+- [Document Review Detail Audit](docs/status/DOCUMENT_REVIEW_DETAIL_AUDIT_2026-09-24.md)
 - [M01 Solution-report Backfill Recovery](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md)
 - [M02 25-Item Educational Review Baseline](docs/status/M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md)
 - [Repository agent rules](AGENTS.md)
