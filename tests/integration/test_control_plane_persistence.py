@@ -4039,6 +4039,73 @@ def test_pdf_document_review_v2_bootstrap_advances_exact_v1_predecessor(
         assert third_bundle is not None
         assert third_bundle.revision_number == 3
 
+    with sessions() as session:
+        third_preset = session.get(
+            ExecutionPresetRevisionRecord,
+            third.preset_revision_id,
+        )
+        third_bundle = session.get(
+            ExecutionBundleRevisionRecord,
+            third.instruction_bundle_revision_id,
+        )
+        assert third_preset is not None and third_bundle is not None
+        third_predecessor = {
+            "preset_revision_id": third_preset.preset_revision_id,
+            "preset_policy_sha256": execution_preset_policy_sha256(third_preset.canonical_document),
+            "instruction_bundle_revision_id": third_bundle.bundle_revision_id,
+            "instruction_manifest_sha256": third_bundle.manifest_sha256,
+            "instruction_content_sha256": third_bundle.content_sha256,
+        }
+
+    payload_successor_root = tmp_path / "pdf-document-review-v4"
+    shutil.copytree(
+        Path("config/control-plane/pdf-document-review-v4"),
+        payload_successor_root,
+    )
+    payload_manifest_path = payload_successor_root / "bootstrap.yaml"
+    payload_manifest = yaml.safe_load(payload_manifest_path.read_text(encoding="utf-8"))
+    payload_manifest["predecessor"] = third_predecessor
+    payload_manifest_path.write_text(
+        yaml.safe_dump(payload_manifest, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    fourth = bootstrap_pdf_document_review_control_plane(
+        integration_engine,
+        config_directory=payload_successor_root,
+        source_commit="d" * 40,
+        actor_id="pdf-review-integration",
+        settings=settings,
+    )
+    assert (
+        bootstrap_pdf_document_review_control_plane(
+            integration_engine,
+            config_directory=payload_successor_root,
+            source_commit="d" * 40,
+            actor_id="pdf-review-integration",
+            settings=settings,
+        )
+        == fourth
+    )
+    assert fourth.preset_id == third.preset_id
+    assert fourth.preset_revision_id != third.preset_revision_id
+    assert fourth.instruction_bundle_id == third.instruction_bundle_id
+    assert fourth.instruction_bundle_revision_id != third.instruction_bundle_revision_id
+
+    with sessions() as session:
+        preset_logical = session.get(ExecutionPresetRecord, fourth.preset_id)
+        bundle_logical = session.get(ExecutionBundleRecord, fourth.instruction_bundle_id)
+        fourth_bundle = session.get(
+            ExecutionBundleRevisionRecord,
+            fourth.instruction_bundle_revision_id,
+        )
+        assert preset_logical is not None
+        assert preset_logical.current_revision_id == fourth.preset_revision_id
+        assert bundle_logical is not None
+        assert bundle_logical.current_revision_id == fourth.instruction_bundle_revision_id
+        assert fourth_bundle is not None
+        assert fourth_bundle.revision_number == 4
+
 
 def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: Engine) -> None:
     with integration_engine.connect() as connection:

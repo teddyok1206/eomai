@@ -2207,6 +2207,7 @@ if not {
     "pdf-document-review-control-bootstrap",
     "pdf-document-review-control-bootstrap-v2",
     "pdf-document-review-control-bootstrap-v3",
+    "pdf-document-review-control-bootstrap-v4",
     "resolved-execution-plan-v14",
     "resolved-execution-plan-v10",
     "resolved-execution-plan-v13",

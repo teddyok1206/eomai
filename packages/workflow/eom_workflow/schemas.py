@@ -2906,9 +2906,69 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         if not isinstance(anchor_required, list) or "quote_sha256" not in anchor_required:
             raise WorkflowSchemaError("PDF document review quote hash requirement is invalid")
         anchor_required.remove("quote_sha256")
+        _project_pdf_review_recommendation_codex_contract(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
+
+
+def _project_pdf_review_recommendation_codex_contract(schema: dict[str, Any]) -> None:
+    """Represent operation-dependent text fields in Codex's supported ``anyOf`` subset."""
+
+    recommendation = _mapping(_mapping(schema, "$defs"), "recommendation")
+    properties = _mapping(recommendation, "properties")
+    if (
+        recommendation.get("type") != "object"
+        or recommendation.get("additionalProperties") is not False
+        or set(recommendation.get("required", ())) != set(properties)
+        or set(properties) != {"operation", "instruction", "before_text", "after_text"}
+    ):
+        raise WorkflowSchemaError("PDF review recommendation schema is not projectable")
+
+    def text_schema(field_name: str) -> dict[str, Any]:
+        field = _mapping(properties, field_name)
+        alternatives = field.get("anyOf")
+        if not isinstance(alternatives, list):
+            raise WorkflowSchemaError("PDF review recommendation text field is not nullable")
+        text = tuple(
+            value
+            for value in alternatives
+            if isinstance(value, dict) and value.get("type") == "string"
+        )
+        null = tuple(
+            value
+            for value in alternatives
+            if isinstance(value, dict) and value.get("type") == "null"
+        )
+        if len(text) != 1 or len(null) != 1:
+            raise WorkflowSchemaError("PDF review recommendation text union is invalid")
+        return copy.deepcopy(text[0])
+
+    before_text = text_schema("before_text")
+    after_text = text_schema("after_text")
+    base = copy.deepcopy(recommendation)
+    branches: list[dict[str, Any]] = []
+    for operation, before_required, after_required in (
+        ("REPLACE", True, True),
+        ("INSERT", False, True),
+        ("DELETE", True, False),
+        ("MOVE", False, False),
+        ("REDRAW", False, False),
+        ("VERIFY", False, False),
+        ("NONE", False, False),
+    ):
+        branch = copy.deepcopy(base)
+        branch_properties = _mapping(branch, "properties")
+        branch_properties["operation"] = {"type": "string", "const": operation}
+        branch_properties["before_text"] = (
+            copy.deepcopy(before_text) if before_required else {"type": "null"}
+        )
+        branch_properties["after_text"] = (
+            copy.deepcopy(after_text) if after_required else {"type": "null"}
+        )
+        branches.append(branch)
+    recommendation.clear()
+    recommendation["anyOf"] = branches
 
 
 def _project_content_team_image_v9_codex_contract(schema: dict[str, Any]) -> None:

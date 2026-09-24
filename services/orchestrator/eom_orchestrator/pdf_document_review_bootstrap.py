@@ -78,6 +78,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         "pdf-document-review-control-bootstrap/1.0",
         "pdf-document-review-control-bootstrap/2.0",
         "pdf-document-review-control-bootstrap/3.0",
+        "pdf-document-review-control-bootstrap/4.0",
     ]
     preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -97,7 +98,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
     timeout_seconds: Literal[3600]
-    instruction_revision_number: Literal[2, 3] | None = None
+    instruction_revision_number: Literal[2, 3, 4] | None = None
     predecessor: PdfDocumentReviewBootstrapPredecessor | None = None
 
     @model_validator(mode="after")
@@ -115,6 +116,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
             "pdf-document-review-control-bootstrap/1.0": None,
             "pdf-document-review-control-bootstrap/2.0": 2,
             "pdf-document-review-control-bootstrap/3.0": 3,
+            "pdf-document-review-control-bootstrap/4.0": 4,
         }[self.schema_version]
         if (self.instruction_revision_number, self.predecessor is not None) != (
             expected_revision,
@@ -158,6 +160,9 @@ def load_pdf_document_review_bootstrap_manifest(
             ),
             "pdf-document-review-control-bootstrap/3.0": (
                 "pdf-document-review-control-bootstrap-v3"
+            ),
+            "pdf-document-review-control-bootstrap/4.0": (
+                "pdf-document-review-control-bootstrap-v4"
             ),
         }.get(schema_version if isinstance(schema_version, str) else "")
         if schema_key is None:
@@ -353,6 +358,7 @@ def bootstrap_pdf_document_review_control_plane(
         "pdf-document-review-control-bootstrap/1.0": "v1",
         "pdf-document-review-control-bootstrap/2.0": "v2",
         "pdf-document-review-control-bootstrap/3.0": "v3",
+        "pdf-document-review-control-bootstrap/4.0": "v4",
     }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,

@@ -40,6 +40,7 @@ from eom_workflow.schemas import (
     validate_role_result,
 )
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -296,6 +297,7 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
         "pdf-document-review-control-bootstrap-v1.schema.json",
         "pdf-document-review-control-bootstrap-v2.schema.json",
         "pdf-document-review-control-bootstrap-v3.schema.json",
+        "pdf-document-review-control-bootstrap-v4.schema.json",
     ):
         canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
         packaged = (
@@ -362,6 +364,28 @@ def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
     ).read_text(encoding="utf-8")
     assert "anchors·question_anchors·solution_anchors는 anchor_id 오름차순" in role
     assert "findings는 CONFIRMED candidate_id 오름차순" in role
+
+    payload_successor = load_pdf_document_review_bootstrap_manifest(
+        ROOT / "config/control-plane/pdf-document-review-v4"
+    )
+    assert payload_successor.instruction_revision_number == 4
+    assert payload_successor.predecessor is not None
+    assert payload_successor.predecessor.preset_revision_id == (
+        "execpresetrev_1c160d2729b34b2990a7c840adcfea30"
+    )
+    assert payload_successor.predecessor.preset_policy_sha256 == (
+        "sha256:6123eef538974822304bf3c185f6a661959ad9725d55ab9c6c1927794df23243"
+    )
+    assert payload_successor.predecessor.instruction_bundle_revision_id == (
+        "instrrev_c0eb77c555027ed7011d9a865d8b7b5e"
+    )
+    payload_role = (
+        ROOT / "config/control-plane/pdf-document-review-v4/instructions/pdf-document-review.md"
+    ).read_text(encoding="utf-8")
+    assert "DELETE는 before_text 문자열과 after_text null" in payload_role
+    assert "MOVE·REDRAW·VERIFY·NONE" in payload_role
+    assert "question_anchors에는 QUESTION만" in payload_role
+    assert "review_status는 NEEDS_HUMAN_DECISION" in payload_role
 
 
 def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:
@@ -512,6 +536,58 @@ def test_paired_document_review_constrained_schema_explains_canonical_order() ->
     assert "anchor_id" in target["anchors"]["description"]
     assert "anchor_id" in cross_check["question_anchors"]["description"]
     assert "anchor_id" in cross_check["solution_anchors"]["description"]
+
+
+def test_document_review_codex_projection_enforces_recommendation_payloads() -> None:
+    schema = constrained_result_schema(
+        "pdf-document-review-result@2.0",
+        _paired_worker_input(),
+    )
+    recommendation = schema["$defs"]["recommendation"]
+    branches = recommendation["anyOf"]
+    by_operation = {branch["properties"]["operation"]["const"]: branch for branch in branches}
+    assert set(by_operation) == {
+        "REPLACE",
+        "INSERT",
+        "DELETE",
+        "MOVE",
+        "REDRAW",
+        "VERIFY",
+        "NONE",
+    }
+    assert by_operation["DELETE"]["properties"]["before_text"]["type"] == "string"
+    assert by_operation["DELETE"]["properties"]["after_text"] == {"type": "null"}
+    assert by_operation["INSERT"]["properties"]["before_text"] == {"type": "null"}
+    assert by_operation["INSERT"]["properties"]["after_text"]["type"] == "string"
+
+    validator = Draft202012Validator(recommendation)
+    validator.validate(
+        {
+            "operation": "DELETE",
+            "instruction": "중복 문장을 삭제해 주세요.",
+            "before_text": "중복 문장",
+            "after_text": None,
+        }
+    )
+    with pytest.raises(JsonSchemaValidationError):
+        validator.validate(
+            {
+                "operation": "DELETE",
+                "instruction": "중복 문장을 삭제해 주세요.",
+                "before_text": None,
+                "after_text": None,
+            }
+        )
+
+    invalid = copy.deepcopy(_result())
+    recommendation_value = invalid["output"]["findings"][0]["recommendation"]
+    recommendation_value.update({"operation": "DELETE", "before_text": None, "after_text": None})
+    with pytest.raises(ValueError, match="DELETE recommendation requires before text"):
+        validate_role_result(
+            invalid,
+            "support",
+            "pdf-document-review-result@1.0",
+        )
 
 
 def test_paired_document_review_rejects_unsorted_target_anchors() -> None:
