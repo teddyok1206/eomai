@@ -112,6 +112,14 @@ hash and stores role-addressed output pointers in a child relation keyed by anno
 Sequential lookup is O(log n), fixed one-or-two-role assembly is O(1), and concurrent creation is
 closed by both the database unique constraint and the Catalog semantic commit key.
 
+The API receipt and its output pointers are immutable after insertion.  Creation therefore performs
+an ordinary primary-key lookup under the reviewed `SELECT` + `INSERT` runtime privilege boundary;
+it does not acquire `SELECT ... FOR UPDATE`.  Concurrent creators are serialized by the primary and
+owner + Workflow + semantic-request unique constraints.  The losing transaction follows the
+`IntegrityError` path, reloads the committed receipt, and accepts it only after exact pointer/hash
+comparison.  Granting table-wide `UPDATE` merely to lock an immutable row would broaden authority
+without adding a concurrency invariant.
+
 The two input Artifact families intentionally use different resolvers.  Catalog source PDFs are
 file-set members and therefore resolve through the exact member entry in the Catalog file-set
 manifest.  The review result is an orchestrator structured Artifact whose canonical primary member

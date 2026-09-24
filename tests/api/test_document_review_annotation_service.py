@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -8,6 +9,7 @@ from eom_api.pdf_document_review_models import (
     DocumentReviewPdfAnnotationOutputRecord,
     DocumentReviewPdfAnnotationRecord,
 )
+from eom_api.runtime_privileges import UPDATE_TABLES
 from eom_api.services.document_review_annotation_service import (
     DocumentReviewAnnotationApplicationService,
 )
@@ -236,3 +238,11 @@ def test_document_review_annotation_is_pointer_only_idempotent_and_downloadable(
         == OUTPUT_SHA
     )
     engine.dispose()
+
+
+def test_immutable_annotation_commit_does_not_require_update_or_row_lock() -> None:
+    source = inspect.getsource(DocumentReviewAnnotationApplicationService.create)
+
+    assert "with_for_update" not in source
+    assert "document_review_pdf_annotations" not in UPDATE_TABLES
+    assert "document_review_pdf_annotation_outputs" not in UPDATE_TABLES

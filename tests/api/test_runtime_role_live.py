@@ -40,6 +40,13 @@ def test_disposable_runtime_role_allows_dml_and_denies_schema_changes() -> None:
                 )
                 assert cursor.fetchone() == (True,)
         cursor.execute("SELECT workflow_id FROM app.workflow_instances WHERE false FOR UPDATE")
+        cursor.execute("SELECT annotation_id FROM app.document_review_pdf_annotations WHERE false")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            cursor.execute(
+                "SELECT annotation_id FROM app.document_review_pdf_annotations "
+                "WHERE false FOR UPDATE"
+            )
+        connection.rollback()
         for table_name, expected_columns in UPDATE_COLUMN_PRIVILEGES:
             cursor.execute(
                 "SELECT has_table_privilege(current_user, %s, 'UPDATE')",

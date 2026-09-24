@@ -204,10 +204,14 @@ class DocumentReviewAnnotationApplicationService:
         )
         try:
             with transaction(self.sessions) as session:
+                # Annotation rows are immutable pointer receipts.  A row lock would require
+                # table-wide UPDATE privilege even when the deterministic ID is absent, while
+                # the primary/unique constraints and the IntegrityError replay path already
+                # serialize concurrent creation.  Keep this lookup within the reviewed
+                # SELECT+INSERT runtime boundary.
                 existing_record = session.get(
                     DocumentReviewPdfAnnotationRecord,
                     record.annotation_id,
-                    with_for_update=True,
                 )
                 if existing_record is None:
                     session.add(record)
