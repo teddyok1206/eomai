@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
@@ -19,8 +20,9 @@ from eom_catalog_service.artifacts import CatalogArtifact
 from eom_catalog_service.document_review_pdf_annotation import annotate_pdf
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
+    DocumentReviewPdfAnnotationServiceError,
 )
-from eom_identifiers import content_sha256, sha256_bytes, sha256_file
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.artifacts import stage_file_set_artifact
 from eom_workflow import PdfDocumentReviewRoleResult
 
@@ -119,6 +121,113 @@ def test_annotation_is_deterministic_and_preserves_source(tmp_path: Path) -> Non
     assert sha256_file(first) == sha256_file(second)
     assert sha256_file(first) != source_sha256
     subprocess.run(["/usr/bin/qpdf", "--check", str(first)], check=True)
+
+
+class _StructuredResultArtifacts:
+    def __init__(self, result: dict[str, object]) -> None:
+        self.result = result
+        self.calls: list[dict[str, object]] = []
+
+    def load_json_revision(self, **values: object) -> dict[str, object]:
+        self.calls.append(values)
+        return self.result
+
+    def read_member(self, **_values: object) -> bytes:
+        raise AssertionError("structured role results must not use the file-set member resolver")
+
+
+@pytest.mark.parametrize(
+    ("schema_ref", "expected_result_schema"),
+    [
+        (
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+            "pdf-document-review-result@1.0",
+        ),
+        (
+            "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+            "pdf-document-review-result@2.0",
+        ),
+    ],
+)
+def test_annotation_resolves_orchestrator_role_result_as_structured_artifact(
+    monkeypatch: Any,
+    schema_ref: str,
+    expected_result_schema: str,
+) -> None:
+    raw: dict[str, object] = {"schema_version": "test/1.0", "status": "ok"}
+    digest = content_sha256(raw)
+    pointer = DocumentReviewResultMemberPointer(
+        artifact_id="artifact_" + "c" * 32,
+        artifact_revision_id="rev_" + "d" * 32,
+        sha256=digest,
+        content_length=len(canonical_json_bytes(raw)),
+        schema_ref=cast(Any, schema_ref),
+    )
+    command = cast(
+        CreateDocumentReviewAnnotatedPdfs,
+        SimpleNamespace(
+            workflow_id="workflow_" + "9" * 32,
+            review_result=pointer,
+        ),
+    )
+    parsed = PdfDocumentReviewRoleResult.model_construct(workflow_id=command.workflow_id)
+    artifacts = _StructuredResultArtifacts(raw)
+    service = object.__new__(DocumentReviewPdfAnnotationService)
+    service.artifacts = cast(Any, artifacts)
+    validated_schemas: list[str] = []
+
+    def validate_result(_raw: object, _role: str, result_schema: str) -> object:
+        validated_schemas.append(result_schema)
+        return parsed
+
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation_service.validate_role_result",
+        validate_result,
+    )
+
+    assert service._validated_result(command) is parsed
+    assert artifacts.calls == [
+        {
+            "artifact_id": pointer.artifact_id,
+            "revision_id": pointer.artifact_revision_id,
+            "content_hash": pointer.sha256,
+            "max_bytes": 16 * 1024 * 1024,
+        }
+    ]
+    assert validated_schemas == [expected_result_schema]
+
+
+def test_annotation_rejects_structured_result_pointer_length_mismatch(
+    monkeypatch: Any,
+) -> None:
+    raw: dict[str, object] = {"schema_version": "test/1.0", "status": "ok"}
+    pointer = DocumentReviewResultMemberPointer(
+        artifact_id="artifact_" + "c" * 32,
+        artifact_revision_id="rev_" + "d" * 32,
+        sha256=content_sha256(raw),
+        content_length=len(canonical_json_bytes(raw)) + 1,
+        schema_ref=(
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+        ),
+    )
+    command = cast(
+        CreateDocumentReviewAnnotatedPdfs,
+        SimpleNamespace(
+            workflow_id="workflow_" + "9" * 32,
+            review_result=pointer,
+        ),
+    )
+    service = object.__new__(DocumentReviewPdfAnnotationService)
+    service.artifacts = cast(Any, _StructuredResultArtifacts(raw))
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation_service.validate_role_result",
+        lambda *_args: AssertionError("validation must not run after a pointer mismatch"),
+    )
+
+    with pytest.raises(DocumentReviewPdfAnnotationServiceError) as raised:
+        service._validated_result(command)
+
+    assert raised.value.code == "DOCUMENT_REVIEW_ANNOTATION_POINTER_INVALID"
 
 
 class _Artifacts:

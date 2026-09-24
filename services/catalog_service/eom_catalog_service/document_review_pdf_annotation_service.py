@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import io
-import json
 import tempfile
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Literal, Protocol, cast
+from typing import Any, BinaryIO, Literal, Protocol, cast
 
 from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
@@ -58,6 +57,15 @@ class DocumentReviewPdfAnnotationServiceError(RuntimeError):
 
 
 class AnnotationArtifacts(Protocol):
+    def load_json_revision(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        content_hash: str,
+        max_bytes: int,
+    ) -> dict[str, Any]: ...
+
     def read_member(
         self,
         *,
@@ -108,15 +116,6 @@ class ResolvedDocumentReviewAnnotatedPdf:
                 yield chunk
         finally:
             self.stream.close()
-
-
-def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    value: dict[str, object] = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError("duplicate JSON key")
-        value[key] = item
-    return value
 
 
 class DocumentReviewPdfAnnotationService:
@@ -423,21 +422,34 @@ class DocumentReviewPdfAnnotationService:
         self,
         command: CreateDocumentReviewAnnotatedPdfs,
     ) -> PdfDocumentReviewRoleResult | PairedDocumentReviewRoleResult:
-        raw_bytes = self._read_pointer(command.review_result, 16 * 1024 * 1024)
         try:
-            raw: object = json.loads(
-                raw_bytes.decode("utf-8", errors="strict"),
-                object_pairs_hook=_unique_json_object,
+            raw = self.artifacts.load_json_revision(
+                artifact_id=command.review_result.artifact_id,
+                revision_id=command.review_result.artifact_revision_id,
+                content_hash=command.review_result.sha256,
+                max_bytes=16 * 1024 * 1024,
             )
+            canonical_bytes = canonical_json_bytes(raw)
+            if (
+                len(canonical_bytes) != command.review_result.content_length
+                or content_sha256(raw) != command.review_result.sha256
+            ):
+                raise ValueError("document review result pointer metadata differs")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise DocumentReviewPdfAnnotationServiceError(
+                "DOCUMENT_REVIEW_ANNOTATION_POINTER_INVALID",
+                "The document review result pointer could not be resolved",
+            ) from exc
+        try:
             result_schema = (
-                "paired-document-review-result@2.0"
+                "pdf-document-review-result@2.0"
                 if command.review_result.schema_ref.endswith(
                     "/paired-document-review-result-v2.schema.json"
                 )
                 else "pdf-document-review-result@1.0"
             )
             parsed = validate_role_result(raw, "support", result_schema)
-        except (UnicodeError, JsonSchemaValidationError, ValueError) as exc:
+        except (JsonSchemaValidationError, ValueError) as exc:
             raise DocumentReviewPdfAnnotationServiceError(
                 "DOCUMENT_REVIEW_ANNOTATION_RESULT_INVALID",
                 "The document review result is invalid",

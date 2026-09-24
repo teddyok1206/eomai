@@ -1261,6 +1261,11 @@ class CatalogApplicationClient:
                         error_code,
                         "Catalog PDF document-review intake failed",
                     ) from None
+                if error_code.startswith("DOCUMENT_REVIEW_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog document-review derivative operation failed",
+                    ) from None
                 if error_code.startswith("OFFICE_DOCUMENT_"):
                     raise CatalogApplicationClientError(
                         error_code,

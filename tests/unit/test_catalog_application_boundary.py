@@ -1429,6 +1429,13 @@ def test_catalog_client_preserves_stable_office_conversion_error() -> None:
     assert raised.value.code == "OFFICE_DOCUMENT_CONVERSION_FAILED"
 
 
+def test_catalog_client_preserves_stable_document_review_derivative_error() -> None:
+    with pytest.raises(CatalogApplicationClientError) as raised:
+        CatalogApplicationClient._raise_remote_error("DOCUMENT_REVIEW_ANNOTATION_POINTER_INVALID")
+
+    assert raised.value.code == "DOCUMENT_REVIEW_ANNOTATION_POINTER_INVALID"
+
+
 def test_catalog_application_systemd_boundary_keeps_api_away_from_nas() -> None:
     unit = Path("infra/systemd/eom-catalog-application-runner.service").read_text(encoding="utf-8")
     assert "User=eom-catalog-manager" in unit

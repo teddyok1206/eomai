@@ -112,6 +112,20 @@ hash and stores role-addressed output pointers in a child relation keyed by anno
 Sequential lookup is O(log n), fixed one-or-two-role assembly is O(1), and concurrent creation is
 closed by both the database unique constraint and the Catalog semantic commit key.
 
+The two input Artifact families intentionally use different resolvers.  Catalog source PDFs are
+file-set members and therefore resolve through the exact member entry in the Catalog file-set
+manifest.  The review result is an orchestrator structured Artifact whose canonical primary member
+is `result.json`; its `ArtifactManifest` records the primary content hash and byte count rather than
+a file-set `files` array.  Catalog resolves that result by logical Artifact ID, pinned revision ID,
+approved lifecycle, exact content hash, bounded regular `result.json`, and canonical byte count,
+then applies the role-result JSON Schema and Pydantic validation.  Treating the structured result as
+a Catalog file-set member is invalid even though both Artifact families materialize a file named
+`result.json`.
+
+Stable `DOCUMENT_REVIEW_*` derivative errors cross the private Catalog boundary unchanged.  The API
+must not collapse pointer, renderer, or source mismatches into a generic availability error; this
+preserves actionable failure identity while leaving source and completed review revisions intact.
+
 ### Graph knowledge
 
 This successor does not fabricate a broad or relevance-free Graph bundle.  Existing review behavior
