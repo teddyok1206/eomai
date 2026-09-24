@@ -215,6 +215,10 @@ class DocumentReviewAnnotationApplicationService:
                 )
                 if existing_record is None:
                     session.add(record)
+                    # These pointer-only models intentionally do not expose an ORM
+                    # relationship.  Flush the immutable parent receipt first so the
+                    # database foreign key can validate the role-addressed child pointers.
+                    session.flush()
                     session.add_all(outputs)
                     session.flush()
                 else:

@@ -120,6 +120,11 @@ owner + Workflow + semantic-request unique constraints.  The losing transaction 
 comparison.  Granting table-wide `UPDATE` merely to lock an immutable row would broaden authority
 without adding a concurrency invariant.
 
+The API flushes the parent annotation receipt before its one-or-two role-addressed output pointers.
+The models deliberately do not add a mutable ORM relationship merely to influence unit-of-work
+ordering, so this explicit flush boundary is what makes the database foreign key authoritative.
+Either both parent and children commit in the surrounding transaction or all are rolled back.
+
 The two input Artifact families intentionally use different resolvers.  Catalog source PDFs are
 file-set members and therefore resolve through the exact member entry in the Catalog file-set
 manifest.  The review result is an orchestrator structured Artifact whose canonical primary member

@@ -23,7 +23,7 @@ from eom_catalog_contracts import (
 )
 from eom_identifiers import content_sha256
 from eom_workflow import PdfDocumentReviewRoleResult
-from sqlalchemy import Table, create_engine, select
+from sqlalchemy import Table, create_engine, event, select
 
 NOW = datetime(2026, 9, 22, 12, 0, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
@@ -194,6 +194,14 @@ def _service() -> tuple[DocumentReviewAnnotationApplicationService, Any, _Catalo
 
 def test_document_review_annotation_is_pointer_only_idempotent_and_downloadable() -> None:
     service, engine, catalog = _service()
+    statements: list[str] = []
+    event.listen(
+        engine,
+        "before_cursor_execute",
+        lambda _connection, _cursor, statement, _parameters, _context, _many: statements.append(
+            str(statement)
+        ),
+    )
     first = service.create(
         WORKFLOW_ID,
         actor_id=OPERATOR_ID,
@@ -237,6 +245,17 @@ def test_document_review_annotation_is_pointer_only_idempotent_and_downloadable(
         ).sha256
         == OUTPUT_SHA
     )
+    parent_insert = next(
+        index
+        for index, statement in enumerate(statements)
+        if "INSERT INTO document_review_pdf_annotations " in statement
+    )
+    child_insert = next(
+        index
+        for index, statement in enumerate(statements)
+        if "INSERT INTO document_review_pdf_annotation_outputs " in statement
+    )
+    assert parent_insert < child_insert
     engine.dispose()
 
 
