@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/pdf-document-review-control-bootstrap/3.0",
+  "title": "EOM PDF Document Review Control Bootstrap V3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "preset_key", "display_name", "description", "created_at", "model",
+    "reasoning_effort", "general_knowledge_policy", "compatible_workflow_protocols",
+    "platform_instruction_path", "role_instruction_path", "slot_key", "worker_pool_key",
+    "timeout_seconds", "instruction_revision_number", "predecessor"
+  ],
+  "properties": {
+    "schema_version": { "const": "pdf-document-review-control-bootstrap/3.0" },
+    "preset_key": { "const": "pdf-document-review" },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "model": { "const": "gpt-5.6-terra" },
+    "reasoning_effort": { "const": "xhigh" },
+    "general_knowledge_policy": { "const": "ALLOW_WITH_PROVENANCE" },
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "workflow-role/1.25.0" },
+        { "const": "workflow-role/1.26.0" }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "platform_instruction_path": { "const": "instructions/platform.md" },
+    "role_instruction_path": { "const": "instructions/pdf-document-review.md" },
+    "slot_key": { "const": "slot06" },
+    "worker_pool_key": { "const": "customer-support" },
+    "timeout_seconds": { "const": 3600 },
+    "instruction_revision_number": { "const": 3 },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_revision_id", "preset_policy_sha256", "instruction_bundle_revision_id",
+        "instruction_manifest_sha256", "instruction_content_sha256"
+      ],
+      "properties": {
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "preset_policy_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_bundle_revision_id": {
+          "type": "string",
+          "pattern": "^instrrev_[0-9a-f]{32}$"
+        },
+        "instruction_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "instruction_content_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

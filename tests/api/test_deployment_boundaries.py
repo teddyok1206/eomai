@@ -605,6 +605,8 @@ def test_release_verifies_mock_exam_assembly_protocol_and_policy_resources() -> 
 def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
+    assert '"pdf-document-review-control-bootstrap-v3"' in deployment
+
     for resource in (
         "mock-exam-item-review-decision-v1.schema.json",
         "mock-exam-item-review-decision-v2.schema.json",

@@ -411,7 +411,7 @@ def _codex_invocation() -> dict[str, object]:
 
 def test_control_schema_resources_are_immutable_and_packaged() -> None:
     entries = control_schema_inventory()
-    assert len(entries) == 87
+    assert len(entries) == 88
     assert len({name for name, _ in entries}) == len(entries)
     assert {
         "evidence-usage-validation-receipt",

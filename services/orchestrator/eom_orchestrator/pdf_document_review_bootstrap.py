@@ -60,7 +60,7 @@ from eom_orchestrator.settings import Settings
 
 
 class PdfDocumentReviewBootstrapPredecessor(BaseModel):
-    """Exact V1 control identities required before publishing the V2 successor."""
+    """Exact current control identities required before publishing a successor."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -77,6 +77,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     schema_version: Literal[
         "pdf-document-review-control-bootstrap/1.0",
         "pdf-document-review-control-bootstrap/2.0",
+        "pdf-document-review-control-bootstrap/3.0",
     ]
     preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -96,7 +97,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
     timeout_seconds: Literal[3600]
-    instruction_revision_number: Literal[2] | None = None
+    instruction_revision_number: Literal[2, 3] | None = None
     predecessor: PdfDocumentReviewBootstrapPredecessor | None = None
 
     @model_validator(mode="after")
@@ -110,8 +111,15 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         )
         if self.compatible_workflow_protocols != expected:
             raise ValueError("PDF document-review bootstrap protocol must be exact")
-        successor = self.schema_version == "pdf-document-review-control-bootstrap/2.0"
-        if successor != (self.instruction_revision_number == 2 and self.predecessor is not None):
+        expected_revision = {
+            "pdf-document-review-control-bootstrap/1.0": None,
+            "pdf-document-review-control-bootstrap/2.0": 2,
+            "pdf-document-review-control-bootstrap/3.0": 3,
+        }[self.schema_version]
+        if (self.instruction_revision_number, self.predecessor is not None) != (
+            expected_revision,
+            expected_revision is not None,
+        ):
             raise ValueError("PDF document-review successor pins must be exact")
         return self
 
@@ -142,12 +150,18 @@ def load_pdf_document_review_bootstrap_manifest(
         if isinstance(value, dict) and isinstance(value.get("created_at"), datetime):
             value = dict(value)
             value["created_at"] = value["created_at"].isoformat().replace("+00:00", "Z")
-        schema_key = (
-            "pdf-document-review-control-bootstrap-v2"
-            if isinstance(value, dict)
-            and value.get("schema_version") == "pdf-document-review-control-bootstrap/2.0"
-            else "pdf-document-review-control-bootstrap"
-        )
+        schema_version = value.get("schema_version") if isinstance(value, dict) else None
+        schema_key = {
+            "pdf-document-review-control-bootstrap/1.0": ("pdf-document-review-control-bootstrap"),
+            "pdf-document-review-control-bootstrap/2.0": (
+                "pdf-document-review-control-bootstrap-v2"
+            ),
+            "pdf-document-review-control-bootstrap/3.0": (
+                "pdf-document-review-control-bootstrap-v3"
+            ),
+        }.get(schema_version if isinstance(schema_version, str) else "")
+        if schema_key is None:
+            raise ValueError("unsupported PDF document-review bootstrap schema")
         validate_control_contract(schema_key, value)
         return PdfDocumentReviewBootstrapManifest.model_validate(value)
     except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
@@ -289,9 +303,9 @@ def bootstrap_pdf_document_review_control_plane(
                 role_schema_bundle_hash(protocol),
             )
         definition_version = (
-            "1.1.0"
-            if manifest.schema_version == "pdf-document-review-control-bootstrap/2.0"
-            else "1.0.0"
+            "1.0.0"
+            if manifest.schema_version == "pdf-document-review-control-bootstrap/1.0"
+            else "1.1.0"
         )
         definition = session.scalar(
             select(WorkflowDefinitionRecord).where(
@@ -335,13 +349,17 @@ def bootstrap_pdf_document_review_control_plane(
         slots=slots,
         observed_at=manifest.created_at,
     )
-    successor = manifest.predecessor is not None
+    artifact_key_version = {
+        "pdf-document-review-control-bootstrap/1.0": "v1",
+        "pdf-document-review-control-bootstrap/2.0": "v2",
+        "pdf-document-review-control-bootstrap/3.0": "v3",
+    }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,
         payload=_read_member(config_directory, manifest.platform_instruction_path),
         logical_name="platform.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="pdf-document-review-platform-v2" if successor else "pdf-document-review-platform-v1",
+        key=f"pdf-document-review-platform-{artifact_key_version}",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )
@@ -350,7 +368,7 @@ def bootstrap_pdf_document_review_control_plane(
         payload=_read_member(config_directory, manifest.role_instruction_path),
         logical_name="pdf-document-review.md",
         schema_ref="eom://schemas/workflow/instruction-member/1.0",
-        key="pdf-document-review-role-v2" if successor else "pdf-document-review-role-v1",
+        key=f"pdf-document-review-role-{artifact_key_version}",
         source_commit=source_commit,
         created_at=manifest.created_at,
     )

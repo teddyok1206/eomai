@@ -11,6 +11,12 @@ from eom_orchestrator.pdf_document_review_bootstrap import (
     load_pdf_document_review_bootstrap_manifest,
 )
 from eom_workflow import (
+    PairedDocumentReviewRequest,
+    PairedDocumentReviewWorkerRequest,
+    PairedReviewAnchor,
+    PairedReviewDocument,
+    PairedReviewPageRef,
+    PairedReviewVerificationTarget,
     PdfDocumentReviewRequest,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewWorkerRequest,
@@ -120,6 +126,46 @@ def _input() -> dict[str, object]:
         upstream_artifacts=(),
         artifact=ArtifactSpec(logical_artifact_id=ARTIFACT_ID, revision_id=REVISION_ID),
     ).model_dump(mode="json")
+
+
+def _paired_worker_input() -> RoleWorkerInput:
+    question = _request()
+    solution_document = question.document.model_copy(
+        update={
+            "document_id": "document_" + "c" * 32,
+            "document_revision_id": "documentrev_" + "d" * 32,
+        }
+    )
+    request_value: dict[str, object] = {
+        "schema_version": "paired-document-review-request/1.0",
+        "documents": [
+            PairedReviewDocument(
+                role="QUESTION",
+                document=question.document,
+            ).model_dump(mode="json"),
+            PairedReviewDocument(
+                role="SOLUTION",
+                document=solution_document,
+            ).model_dump(mode="json"),
+        ],
+        "preset": question.preset.model_dump(mode="json"),
+        "additional_guidance": question.additional_guidance,
+        "additional_guidance_sha256": question.additional_guidance_sha256,
+        "locale": "ko-KR",
+    }
+    request_value["request_sha256"] = content_sha256(request_value)
+    paired_request = PairedDocumentReviewRequest.model_validate(request_value)
+    return RoleWorkerInput(
+        protocol_version="workflow-role/1.26.0",
+        job_id=JOB_ID,
+        workflow_id=WORKFLOW_ID,
+        step_run_id=STEP_RUN_ID,
+        attempt=1,
+        role="support",
+        request=PairedDocumentReviewWorkerRequest(review_request=paired_request),
+        upstream_artifacts=(),
+        artifact=ArtifactSpec(logical_artifact_id=ARTIFACT_ID, revision_id=REVISION_ID),
+    )
 
 
 def _anchor() -> dict[str, object]:
@@ -249,6 +295,7 @@ def test_pdf_document_review_schemas_are_mirrored_and_draft_2020_12() -> None:
     for bootstrap_schema in (
         "pdf-document-review-control-bootstrap-v1.schema.json",
         "pdf-document-review-control-bootstrap-v2.schema.json",
+        "pdf-document-review-control-bootstrap-v3.schema.json",
     ):
         canonical = ROOT / "schemas/workflow/control-plane" / bootstrap_schema
         packaged = (
@@ -295,6 +342,26 @@ def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
     assert successor.predecessor.instruction_bundle_revision_id == (
         "instrrev_d477627a5325b57fb452808c9c2af04b"
     )
+
+    canonical_successor = load_pdf_document_review_bootstrap_manifest(
+        ROOT / "config/control-plane/pdf-document-review-v3"
+    )
+    assert canonical_successor.instruction_revision_number == 3
+    assert canonical_successor.predecessor is not None
+    assert canonical_successor.predecessor.preset_revision_id == (
+        "execpresetrev_b39009b28a3b4f73b62d10beae7142ef"
+    )
+    assert canonical_successor.predecessor.preset_policy_sha256 == (
+        "sha256:b9c272b4db478641630d0e5ca8cfb53d5c3504d2638b4f3750c571a032fc9a09"
+    )
+    assert canonical_successor.predecessor.instruction_bundle_revision_id == (
+        "instrrev_f24f2dae781c2a1e58ea4435ef820598"
+    )
+    role = (
+        ROOT / "config/control-plane/pdf-document-review-v3/instructions/pdf-document-review.md"
+    ).read_text(encoding="utf-8")
+    assert "anchors·question_anchors·solution_anchors는 anchor_id 오름차순" in role
+    assert "findings는 CONFIRMED candidate_id 오름차순" in role
 
 
 def test_pdf_document_review_plan_pins_exact_document_and_serial_support_policy() -> None:
@@ -427,6 +494,66 @@ def test_paired_document_review_codex_projection_preserves_documents_as_bounded_
     assert documents["minItems"] == documents["maxItems"] == 2
     assert documents["items"] == {"$ref": "#/$defs/document_identity"}
     assert "prefixItems" not in json.dumps(worker_schema, sort_keys=True)
+
+
+def test_paired_document_review_constrained_schema_explains_canonical_order() -> None:
+    schema = constrained_result_schema(
+        "pdf-document-review-result@2.0",
+        _paired_worker_input(),
+    )
+    definitions = schema["$defs"]
+    output = definitions["output"]["properties"]
+    target = definitions["target"]["properties"]
+    cross_check = definitions["cross_document_check"]["properties"]
+
+    assert "target_id" in output["verification_targets"]["description"]
+    assert "candidate_id" in output["candidate_findings"]["description"]
+    assert "document_role" in target["page_refs"]["description"]
+    assert "anchor_id" in target["anchors"]["description"]
+    assert "anchor_id" in cross_check["question_anchors"]["description"]
+    assert "anchor_id" in cross_check["solution_anchors"]["description"]
+
+
+def test_paired_document_review_rejects_unsorted_target_anchors() -> None:
+    anchors = tuple(
+        PairedReviewAnchor(
+            anchor_id="reviewanchor_" + seed * 32,
+            document_role="QUESTION",
+            page_number=1,
+            page_image_sha256=PAGE_SHA,
+            region={
+                "x_ppm": 100000,
+                "y_ppm": 100000,
+                "width_ppm": 100000,
+                "height_ppm": 100000,
+            },
+            quote=None,
+            quote_sha256=None,
+        )
+        for seed in ("2", "1")
+    )
+
+    with pytest.raises(ValidationError, match="anchors must be sorted and unique"):
+        PairedReviewVerificationTarget(
+            target_id="reviewtarget_" + "1" * 32,
+            axis="SCIENTIFIC_ACCURACY",
+            page_refs=(PairedReviewPageRef(document_role="QUESTION", page_number=1),),
+            anchors=anchors,
+            status="VERIFIED",
+            conclusion="검증 가능한 결론입니다.",
+        )
+
+    parsed = PairedReviewVerificationTarget(
+        target_id="reviewtarget_" + "1" * 32,
+        axis="SCIENTIFIC_ACCURACY",
+        page_refs=(PairedReviewPageRef(document_role="QUESTION", page_number=1),),
+        anchors=tuple(reversed(anchors)),
+        status="VERIFIED",
+        conclusion="검증 가능한 결론입니다.",
+    )
+    assert tuple(anchor.anchor_id for anchor in parsed.anchors) == tuple(
+        sorted(anchor.anchor_id for anchor in parsed.anchors)
+    )
 
 
 def test_pdf_document_review_rejects_supplied_incorrect_quote_hash() -> None:

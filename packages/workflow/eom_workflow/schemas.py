@@ -1993,6 +1993,39 @@ def constrained_result_schema(
                 ),
             }
         )
+        output_properties["verification_targets"]["description"] = (
+            "Sort by target_id with no duplicates."
+        )
+        output_properties["candidate_findings"]["description"] = (
+            "Sort by candidate_id with no duplicates."
+        )
+        output_properties["findings"]["description"] = (
+            "Match CONFIRMED candidates in candidate_id order and assign contiguous ordinals."
+        )
+        output_properties["cross_document_checks"]["description"] = (
+            "Sort by check_id with no duplicates."
+        )
+        target_properties = _mapping(_mapping(definitions, "target"), "properties")
+        target_properties["page_refs"]["description"] = (
+            "Sort unique entries by document_role and then page_number."
+        )
+        target_properties["anchors"]["description"] = "Sort by anchor_id with no duplicates."
+        candidate_properties = _mapping(_mapping(definitions, "candidate"), "properties")
+        candidate_properties["anchors"]["description"] = "Sort by anchor_id with no duplicates."
+        finding_properties = _mapping(_mapping(definitions, "finding"), "properties")
+        finding_properties["anchors"]["description"] = (
+            "Use the exact content and anchor_id order of the corresponding candidate."
+        )
+        cross_check_properties = _mapping(
+            _mapping(definitions, "cross_document_check"),
+            "properties",
+        )
+        cross_check_properties["question_anchors"]["description"] = (
+            "Sort by anchor_id with no duplicates."
+        )
+        cross_check_properties["solution_anchors"]["description"] = (
+            "Sort by anchor_id with no duplicates."
+        )
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         if not isinstance(
             worker_input.request,
