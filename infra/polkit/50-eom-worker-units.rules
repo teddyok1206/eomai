@@ -15,6 +15,7 @@ polkit.addRule(function(action, subject) {
     var localImageMicroProbeUnit = /^eom-image-lora-micro-probe@imgmicrotrainrun_[0-9a-f]{32}\.service$/;
     var localImageMicroEvaluationUnit = /^eom-image-lora-micro-evaluation@imgmicroevalrun_[0-9a-f]{32}\.service$/;
     var localImageCropLocatorUnit = /^eom-image-crop-locator@imgcroplocator_[0-9a-f]{32}\.service$/;
+    var localImageScienceVisualPilotUnit = /^eom-image-science-visual-pilot@imgscivisattempt_[0-9a-f]{32}\.service$/;
     var officeConverterUnit = /^eom-office-converter@officeconv_[0-9a-f]{32}\.service$/;
 
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
@@ -30,7 +31,8 @@ polkit.addRule(function(action, subject) {
             || loginUnit.test(unit) || usageUnit.test(unit) || localImageUnit.test(unit)
             || localImageTrainerUnit.test(unit) || localImageMicroProbeUnit.test(unit)
             || localImageMicroEvaluationUnit.test(unit)
-            || localImageCropLocatorUnit.test(unit))) {
+            || localImageCropLocatorUnit.test(unit)
+            || localImageScienceVisualPilotUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"

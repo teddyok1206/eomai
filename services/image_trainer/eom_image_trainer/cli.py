@@ -33,6 +33,13 @@ from eom_image_trainer.runner import (
     load_training_command,
     run_training_command,
 )
+from eom_image_trainer.science_corpus_visual_runner import (
+    ScienceCorpusVisualRunnerError,
+    run_science_corpus_visual_pilot,
+)
+from eom_image_trainer.science_corpus_visual_runner import (
+    load_command as load_science_visual_command,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -56,6 +63,9 @@ def _parser() -> argparse.ArgumentParser:
     locate = subcommands.add_parser("locate-crops")
     locate.add_argument("--command", required=True, type=Path)
     locate.add_argument("--workspace", required=True, type=Path)
+    science_visual = subcommands.add_parser("science-corpus-visual-pilot")
+    science_visual.add_argument("--command", required=True, type=Path)
+    science_visual.add_argument("--workspace", required=True, type=Path)
     return parser
 
 
@@ -107,6 +117,20 @@ def _lock_gpu(path: Path) -> int:
 
 def main() -> None:
     args = _parser().parse_args()
+    if args.operation == "science-corpus-visual-pilot":
+        try:
+            command = load_science_visual_command(args.command)
+            if args.workspace.name != command.attempt_id:
+                raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_WORKSPACE_ID_MISMATCH")
+            result = run_science_corpus_visual_pilot(
+                workspace=args.workspace,
+                command_path=args.command,
+            )
+        except ScienceCorpusVisualRunnerError as exc:
+            raise SystemExit(exc.code) from exc
+        if result.status != "SUCCEEDED":
+            raise SystemExit(result.error_code or "SCIENCE_VISUAL_PILOT_EXEC_FAILED")
+        return
     if args.operation == "locate-crops":
         try:
             locator_command = load_crop_locator_command(args.command)

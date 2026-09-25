@@ -13,6 +13,10 @@ from eom_image_contracts import (
 )
 from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
+    SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE,
+    SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
+    SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
     LocalImageTrainingControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
@@ -108,3 +112,39 @@ def test_image_control_artifact_uses_image_contract_number_encoding(monkeypatch)
     expected = content_json_bytes({"guidance_scale": 7.5})
     assert publisher.arguments["payload"] == expected
     assert pointer.sha256 == sha256_bytes(expected)
+
+
+def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypatch) -> None:
+    class _ScienceAuthorization(BaseModel):
+        authorization_sha256: str
+        approved_at: datetime
+
+    class _SciencePlan(BaseModel):
+        plan_sha256: str
+        created_at: datetime
+
+    monkeypatch.setattr(control_artifacts, "validate_contract", lambda *_args: None)
+    publisher = _Publisher()
+    adapter = LocalImageTrainingControlArtifactPublisher(
+        publisher,  # type: ignore[arg-type]
+        source_commit="a" * 40,
+    )
+    authorization = _ScienceAuthorization(
+        authorization_sha256="sha256:" + "b" * 64,
+        approved_at=datetime(2026, 9, 25, 18, 0, tzinfo=UTC),
+    )
+    authorization_pointer = adapter.commit_science_corpus_authorization(
+        authorization  # type: ignore[arg-type]
+    )
+    assert publisher.arguments["artifact_type"] == SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_CORPUS_AUTHORIZATION_MEMBER
+    assert authorization_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    plan = _SciencePlan(
+        plan_sha256="sha256:" + "c" * 64,
+        created_at=datetime(2026, 9, 25, 18, 5, tzinfo=UTC),
+    )
+    plan_pointer = adapter.commit_science_visual_pilot_plan(plan)  # type: ignore[arg-type]
+    assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PILOT_PLAN_MEMBER
+    assert plan_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])

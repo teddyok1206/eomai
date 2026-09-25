@@ -24,6 +24,8 @@ MICRO_EVALUATION_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-lora-micro-ev
 MICRO_EVALUATION_UNIT_TARGET=/etc/systemd/system/eom-image-lora-micro-evaluation@.service
 CROP_LOCATOR_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-crop-locator@.service
 CROP_LOCATOR_UNIT_TARGET=/etc/systemd/system/eom-image-crop-locator@.service
+SCIENCE_VISUAL_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-science-visual-pilot@.service
+SCIENCE_VISUAL_UNIT_TARGET=/etc/systemd/system/eom-image-science-visual-pilot@.service
 PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
 PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-provider@.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
@@ -70,7 +72,8 @@ if systemctl list-units --type=service --state=activating,active --no-legend \
   'eom-image-provider@*.service' 'eom-image-trainer@*.service' \
   'eom-image-lora-micro-probe@*.service' \
   'eom-image-lora-micro-evaluation@*.service' \
-  'eom-image-crop-locator@*.service' | grep -q .; then
+  'eom-image-crop-locator@*.service' \
+  'eom-image-science-visual-pilot@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_GPU_UNIT_ACTIVE"
 fi
 
@@ -95,12 +98,14 @@ install -o root -g root -m 0644 "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}
 install -o root -g root -m 0644 "${MICRO_PROBE_UNIT_SOURCE}" "${MICRO_PROBE_UNIT_TARGET}"
 install -o root -g root -m 0644 "${MICRO_EVALUATION_UNIT_SOURCE}" "${MICRO_EVALUATION_UNIT_TARGET}"
 install -o root -g root -m 0644 "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}"
+install -o root -g root -m 0644 "${SCIENCE_VISUAL_UNIT_SOURCE}" "${SCIENCE_VISUAL_UNIT_TARGET}"
 install -o root -g root -m 0644 "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${TRAINER_UNIT_TARGET}" "${MICRO_PROBE_UNIT_TARGET}" \
   "${MICRO_EVALUATION_UNIT_TARGET}" \
   "${CROP_LOCATOR_UNIT_TARGET}" \
+  "${SCIENCE_VISUAL_UNIT_TARGET}" \
   "${PROVIDER_UNIT_TARGET}"
 cmp -s "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_TRAINER_UNIT_DRIFT"
@@ -110,6 +115,8 @@ cmp -s "${MICRO_EVALUATION_UNIT_SOURCE}" "${MICRO_EVALUATION_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_MICRO_EVALUATION_UNIT_DRIFT"
 cmp -s "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_CROP_LOCATOR_UNIT_DRIFT"
+cmp -s "${SCIENCE_VISUAL_UNIT_SOURCE}" "${SCIENCE_VISUAL_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_SCIENCE_VISUAL_UNIT_DRIFT"
 cmp -s "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_PROVIDER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || \

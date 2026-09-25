@@ -10,6 +10,8 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageLoraMicroProbePlan,
     LocalImageQualityEvaluationPlan,
+    LocalImageScienceCorpusTrainingAuthorization,
+    LocalImageScienceCorpusVisualPilotPlan,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
     LocalImageTrainingCropReview,
@@ -35,6 +37,18 @@ CROP_REVIEW_ARTIFACT_TYPE = "control_local_image_training_crop_review"
 MICRO_PROBE_PLAN_MEMBER = "manifests/micro-probe-plan.json"
 MICRO_PROBE_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-micro-probe-plan/1.0"
 MICRO_PROBE_PLAN_ARTIFACT_TYPE = "control_local_image_lora_micro_probe_plan"
+SCIENCE_CORPUS_AUTHORIZATION_MEMBER = "manifests/science-corpus-training-authorization.json"
+SCIENCE_CORPUS_AUTHORIZATION_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-training-authorization/1.0"
+)
+SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE = (
+    "control_local_image_science_corpus_training_authorization"
+)
+SCIENCE_VISUAL_PILOT_PLAN_MEMBER = "manifests/visual-pilot-plan.json"
+SCIENCE_VISUAL_PILOT_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
+)
+SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE = "control_local_image_science_visual_pilot_plan"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -118,6 +132,36 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=MICRO_PROBE_PLAN_SCHEMA_REF,
             artifact_type=MICRO_PROBE_PLAN_ARTIFACT_TYPE,
             idempotency_prefix="local-image-lora-micro-probe-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_corpus_authorization(
+        self,
+        authorization: LocalImageScienceCorpusTrainingAuthorization,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=authorization,
+            contract_name="science-corpus-training-authorization",
+            member=SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
+            schema_ref=SCIENCE_CORPUS_AUTHORIZATION_SCHEMA_REF,
+            artifact_type=SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-corpus-training-authorization",
+            identity_sha256=authorization.authorization_sha256,
+            created_at=authorization.approved_at,
+        )
+
+    def commit_science_visual_pilot_plan(
+        self,
+        plan: LocalImageScienceCorpusVisualPilotPlan,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-corpus-visual-pilot-plan",
+            member=SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
+            schema_ref=SCIENCE_VISUAL_PILOT_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-pilot-plan",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )

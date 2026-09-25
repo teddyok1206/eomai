@@ -64,6 +64,25 @@ def test_local_image_crop_locator_unit_is_isolated_without_gpu_or_nas_access() -
     assert "Restart=no" in source
 
 
+def test_science_visual_pilot_unit_is_isolated_without_gpu_or_nas_access() -> None:
+    source = (ROOT / "infra/systemd/eom-image-science-visual-pilot@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image" in source
+    assert "Group=eom-image" in source
+    assert "eom-local-image-trainer science-corpus-visual-pilot" in source
+    assert "/srv/eom/image-training-workspaces/%i/command.json" in source
+    assert "--gpu-lock" not in source
+    assert "PrivateNetwork=true" in source
+    assert "PrivateDevices=true" in source
+    assert "NoNewPrivileges=true" in source
+    assert "ReadWritePaths=/srv/eom/image-training-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() -> None:
     source = (ROOT / "infra/systemd/eom-image-lora-micro-probe@.service").read_text(
         encoding="utf-8"
@@ -112,6 +131,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
     assert "eom-image-lora-micro-evaluation@imgmicroevalrun_" in source
     assert "eom-image-crop-locator@imgcroplocator_" in source
+    assert "eom-image-science-visual-pilot@imgscivisattempt_" in source
     assert "localImageUnit.test(unit)" in source
     assert re.search(
         r"subject\.user === \"eom-workflow-runner\"[\s\S]+localImageUnit\.test\(unit\)",
@@ -225,6 +245,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-evaluation@.service",
         ROOT / "infra/systemd/eom-image-crop-locator@.service",
+        ROOT / "infra/systemd/eom-image-science-visual-pilot@.service",
     ):
         verified_unit = unit
         if (
@@ -234,6 +255,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
                 "eom-image-lora-micro-probe@.service",
                 "eom-image-lora-micro-evaluation@.service",
                 "eom-image-crop-locator@.service",
+                "eom-image-science-visual-pilot@.service",
             }
             and not Path(
                 "/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer"
