@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.0",
+  "title": "EOM Science Corpus Visual Pattern Inventory V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "decision",
+        "pattern_family",
+        "visual_features",
+        "caption_en",
+        "caption_sha256",
+        "reviewed_by",
+        "reviewed_at"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$"
+        },
+        "decision": {
+          "enum": [
+            "DETERMINISTIC_RENDERER_ONLY",
+            "EXCLUDED",
+            "LORA_ELIGIBLE"
+          ]
+        },
+        "pattern_family": {
+          "enum": [
+            "APPARATUS",
+            "ASTRONOMICAL_SCENE",
+            "CELL_CROSS_SECTION",
+            "CIRCUIT",
+            "FOSSIL",
+            "GENERIC_LABELLED_DIAGRAM",
+            "GEOLOGIC_SECTION",
+            "GEOLOGIC_TEXTURE",
+            "MAP_BOUNDARY",
+            "MICROSCOPIC_TEXTURE",
+            "NATURAL_TEXTURE",
+            "ORBITAL_SYSTEM",
+            "ORGANISM",
+            "PARTICLE_SYSTEM",
+            "PLOT",
+            "RAY_DIAGRAM",
+            "TABLE",
+            "VECTOR_FIELD",
+            "OTHER"
+          ]
+        },
+        "visual_features": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "enum": [
+              "ARROWS",
+              "AXES",
+              "BOUNDARY",
+              "CALLOUT",
+              "DATA_POINTS",
+              "GRID",
+              "HATCHING",
+              "LABELS",
+              "LEADER_LINES",
+              "LEGEND",
+              "MULTIPLE_PANELS",
+              "NUMBERED_STEPS",
+              "PATTERN_FILL",
+              "SCALE",
+              "SYMBOL_KEY",
+              "TRAJECTORY"
+            ]
+          }
+        },
+        "caption_en": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caption_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reviewed_by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:@-]+$"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "primitive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primitive_key",
+        "support_count",
+        "visual_features",
+        "geometry_authority",
+        "render_route"
+      ],
+      "properties": {
+        "primitive_key": {
+          "enum": [
+            "APPARATUS",
+            "AXIS_PLOT",
+            "CELL_CROSS_SECTION",
+            "CIRCUIT",
+            "GENERIC_LABELLED_DIAGRAM",
+            "GEOLOGIC_SECTION",
+            "MAP_BOUNDARY",
+            "ORBITAL_SYSTEM",
+            "PARTICLE_SYSTEM",
+            "RAY_DIAGRAM",
+            "VECTOR_FIELD"
+          ]
+        },
+        "support_count": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 512
+        },
+        "visual_features": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "enum": [
+              "ARROWS",
+              "AXES",
+              "BOUNDARY",
+              "CALLOUT",
+              "DATA_POINTS",
+              "GRID",
+              "HATCHING",
+              "LABELS",
+              "LEADER_LINES",
+              "LEGEND",
+              "MULTIPLE_PANELS",
+              "NUMBERED_STEPS",
+              "PATTERN_FILL",
+              "SCALE",
+              "SYMBOL_KEY",
+              "TRAJECTORY"
+            ]
+          }
+        },
+        "geometry_authority": {
+          "const": "AUTHORITATIVE"
+        },
+        "render_route": {
+          "const": "PYTHON_SVG"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "inventory_id",
+    "pilot_result",
+    "pilot_result_sha256",
+    "reviews",
+    "primitive_recommendations",
+    "lora_eligible_count",
+    "deterministic_renderer_count",
+    "excluded_count",
+    "created_at",
+    "created_by",
+    "inventory_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-visual-pattern-inventory/1.0"
+    },
+    "inventory_id": {
+      "type": "string",
+      "pattern": "^imgscivisinventory_[0-9a-f]{32}$"
+    },
+    "pilot_result": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "pilot_result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reviews": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/review"
+      }
+    },
+    "primitive_recommendations": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/primitive"
+      }
+    },
+    "lora_eligible_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 512
+    },
+    "deterministic_renderer_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 512
+    },
+    "excluded_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 512
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "inventory_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0",
+  "title": "EOM Science Corpus Visual Pilot Plan V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "guidanceAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "logical_name",
+        "source_commit",
+        "sha256"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "AUTHORING_TEAM_LEAD",
+            "HWPX_EDITOR_TEAM_LEAD",
+            "KICE_ILLUSTRATION_GUIDE"
+          ]
+        },
+        "logical_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^[A-Za-z0-9._/-]+$"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "pdfSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "source_file_id",
+        "pdf",
+        "bytes",
+        "page_count",
+        "subject_family",
+        "issuer_type",
+        "administration_year",
+        "grade",
+        "session_label",
+        "exam_group_sha256",
+        "partition"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "source_file_id": {
+          "type": "string",
+          "pattern": "^sourcefile_[0-9a-f]{32}$"
+        },
+        "pdf": {
+          "$ref": "#/$defs/artifactMember"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 104857600
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "subject_family": {
+          "enum": [
+            "CHEMISTRY",
+            "EARTH_SCIENCE",
+            "GENERAL_SCIENCE",
+            "INTEGRATED_SCIENCE",
+            "LIFE_SCIENCE",
+            "PHYSICS"
+          ]
+        },
+        "issuer_type": {
+          "enum": [
+            "EDUCATION_AUTHORITY",
+            "KICE"
+          ]
+        },
+        "administration_year": {
+          "type": "integer",
+          "minimum": 1994,
+          "maximum": 2200
+        },
+        "grade": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "session_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "exam_group_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "partition": {
+          "enum": [
+            "HOLDOUT",
+            "TRAIN",
+            "VALIDATION"
+          ]
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pdftoppm",
+        "tesseract"
+      ],
+      "properties": {
+        "pdftoppm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "version"
+          ],
+          "properties": {
+            "path": {
+              "const": "/usr/bin/pdftoppm"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "tesseract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "version"
+          ],
+          "properties": {
+            "path": {
+              "const": "/usr/bin/tesseract"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "pilot_id",
+    "corpus_manifest",
+    "corpus_id",
+    "corpus_manifest_sha256",
+    "acquisition_sha256",
+    "resolution_sha256",
+    "resolution_policy_id",
+    "resolution_policy_sha256",
+    "training_authorization",
+    "selection_algorithm",
+    "selection_seed_sha256",
+    "selected_sources",
+    "max_page_images",
+    "max_visual_candidates",
+    "max_lora_training_crops",
+    "page_render_dpi",
+    "locator_revision",
+    "guidance_authorities",
+    "tools",
+    "created_at",
+    "created_by",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-corpus-visual-pilot-plan/1.0"
+    },
+    "pilot_id": {
+      "type": "string",
+      "pattern": "^imgscivispilot_[0-9a-f]{32}$"
+    },
+    "corpus_manifest": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "corpus_id": {
+      "type": "string",
+      "pattern": "^sciencecorpus_[0-9a-f]{32}$"
+    },
+    "corpus_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "acquisition_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "resolution_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "resolution_policy_id": {
+      "type": "string",
+      "pattern": "^sciencecorpuspolicy_[0-9a-f]{32}$"
+    },
+    "resolution_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "selection_algorithm": {
+      "const": "SCIENCE_VISUAL_STRATIFIED_SHA256_V1"
+    },
+    "selection_seed_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "selected_sources": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 96,
+      "items": {
+        "$ref": "#/$defs/pdfSource"
+      }
+    },
+    "max_page_images": {
+      "type": "integer",
+      "minimum": 12,
+      "maximum": 384
+    },
+    "max_visual_candidates": {
+      "type": "integer",
+      "minimum": 12,
+      "maximum": 512
+    },
+    "max_lora_training_crops": {
+      "type": "integer",
+      "minimum": 12,
+      "maximum": 96
+    },
+    "page_render_dpi": {
+      "const": 144
+    },
+    "locator_revision": {
+      "const": "science-corpus-visual-locator/1.0"
+    },
+    "guidance_authorities": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/guidanceAuthority"
+      }
+    },
+    "tools": {
+      "$ref": "#/$defs/tools"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

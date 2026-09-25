@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-corpus-training-authorization/1.0",
+  "title": "EOM Science Corpus Internal Visual Training Authorization V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "authorization_id",
+    "authorization_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "corpus_manifest",
+    "corpus_id",
+    "corpus_manifest_sha256",
+    "acquisition_sha256",
+    "resolution_sha256",
+    "resolution_policy_id",
+    "resolution_policy_sha256",
+    "authorization_basis",
+    "permitted_uses",
+    "derivative_output",
+    "raw_source_export",
+    "state",
+    "approved_at",
+    "approved_by",
+    "authorization_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-corpus-training-authorization/1.0"
+    },
+    "authorization_id": {
+      "type": "string",
+      "pattern": "^imgscicorpusauth_[0-9a-f]{32}$"
+    },
+    "authorization_revision_id": {
+      "type": "string",
+      "pattern": "^imgscicorpusauthrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "previous_revision_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^imgscicorpusauthrev_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "corpus_manifest": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "corpus_id": {
+      "type": "string",
+      "pattern": "^sciencecorpus_[0-9a-f]{32}$"
+    },
+    "corpus_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "acquisition_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "resolution_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "resolution_policy_id": {
+      "type": "string",
+      "pattern": "^sciencecorpuspolicy_[0-9a-f]{32}$"
+    },
+    "resolution_policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "authorization_basis": {
+      "const": "USER_APPROVED_INTERNAL_EXAM_MATERIALS"
+    },
+    "permitted_uses": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "DETERMINISTIC_PATTERN_ANALYSIS"
+        },
+        {
+          "const": "INTERNAL_SSD1B_LORA_TRAINING"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "derivative_output": {
+      "const": "LORA_ADAPTER_ONLY"
+    },
+    "raw_source_export": {
+      "const": "FORBIDDEN"
+    },
+    "state": {
+      "const": "APPROVED"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "authorization_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

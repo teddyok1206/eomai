@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0",
+  "title": "EOM Science Corpus Visual Pilot Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "boundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "top": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "right": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "bottom": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "pageImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "physical_page",
+        "member_path",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^pages/sciencedoc_[0-9a-f]{32}/page-[0-9]{1,3}\\.png$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 67108864
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "document_id",
+        "physical_page",
+        "page_image_sha256",
+        "bounding_box",
+        "member_path",
+        "sha256",
+        "size_bytes",
+        "representation_kind",
+        "rendering_mode",
+        "visual_features",
+        "authority_class",
+        "review_state",
+        "locator_score_milli"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$"
+        },
+        "document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "page_image_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bounding_box": {
+          "$ref": "#/$defs/boundingBox"
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^crops/imgsciviscandidate_[0-9a-f]{32}\\.png$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 67108864
+        },
+        "representation_kind": {
+          "enum": [
+            "APPARATUS",
+            "COMPOSITE",
+            "CROSS_SECTION",
+            "DIAGRAM",
+            "MAP",
+            "PARTICLE_MODEL",
+            "PHOTOGRAPH",
+            "PLOT",
+            "TABLE",
+            "UNKNOWN"
+          ]
+        },
+        "rendering_mode": {
+          "enum": [
+            "MIXED",
+            "RASTER",
+            "VECTOR_LIKE"
+          ]
+        },
+        "visual_features": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "enum": [
+              "ARROWS",
+              "AXES",
+              "BOUNDARY",
+              "CALLOUT",
+              "DATA_POINTS",
+              "GRID",
+              "HATCHING",
+              "LABELS",
+              "LEADER_LINES",
+              "LEGEND",
+              "MULTIPLE_PANELS",
+              "NUMBERED_STEPS",
+              "PATTERN_FILL",
+              "SCALE",
+              "SYMBOL_KEY",
+              "TRAJECTORY"
+            ]
+          }
+        },
+        "authority_class": {
+          "enum": [
+            "AUTHORITATIVE_DETERMINISTIC_GEOMETRY",
+            "NON_AUTHORITATIVE_RASTER_STYLE",
+            "UNKNOWN_REVIEW_REQUIRED"
+          ]
+        },
+        "review_state": {
+          "const": "PENDING"
+        },
+        "locator_score_milli": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
+    },
+    "omission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "physical_page",
+        "reason"
+      ],
+      "properties": {
+        "document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "reason": {
+          "enum": [
+            "CANDIDATE_LIMIT_REACHED",
+            "NO_VISUAL_REGION",
+            "PAGE_RENDER_FAILED",
+            "PDF_POINTER_INVALID"
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_version",
+        "pillow_version",
+        "opencv_version",
+        "tesseract_version",
+        "pdftoppm_version"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "pillow_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "opencv_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "tesseract_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "pdftoppm_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "pilot_id",
+    "plan_sha256",
+    "status",
+    "page_images",
+    "visual_candidates",
+    "omissions",
+    "runtime",
+    "error_code",
+    "started_at",
+    "completed_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-corpus-visual-pilot-result/1.0"
+    },
+    "pilot_id": {
+      "type": "string",
+      "pattern": "^imgscivispilot_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "status": {
+      "enum": [
+        "FAILED",
+        "SUCCEEDED"
+      ]
+    },
+    "page_images": {
+      "type": "array",
+      "maxItems": 384,
+      "items": {
+        "$ref": "#/$defs/pageImage"
+      }
+    },
+    "visual_candidates": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "maxItems": 384,
+      "items": {
+        "$ref": "#/$defs/omission"
+      }
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^SCIENCE_VISUAL_PILOT_[A-Z0-9_]{3,80}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}
