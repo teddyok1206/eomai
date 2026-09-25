@@ -68,6 +68,20 @@ The first pilot is bounded to 100-200 unique training crops.  If fewer than 100 
 rather than weakening eligibility.  The 12 fixed holdout samples and any near-duplicates of them are
 excluded from training.
 
+The first exact read-only projection against the 2026-09-25 accepted source snapshot found 72
+strictly cropable candidates and 37 explicit omissions whose page or bounding-box provenance was
+not sufficient to create a crop.  All projected candidates remain `PENDING`; projection is not a
+content or rights approval.  Across all bounded `RASTER`/`MIXED` observations there are 131 possible
+visuals, but the additional diagram/apparatus classes overwhelmingly carry axes, labels, scales,
+legends, symbols, data points, or other authoritative geometry.  They must not be silently admitted
+to satisfy the minimum sample count.
+
+Consequently the first pilot is stopped before dataset materialization while the strict eligible
+population is below 100.  A future successor eligibility policy may admit a larger population only
+after a human-approved crop/mask or redaction contract preserves exact source provenance and keeps
+all scientific geometry, labels, and values deterministic.  That successor is a separate protocol
+decision; it does not weaken `local-image-lora-eligibility/1.0` or reinterpret this projection.
+
 Source permissions and intended-use metadata must authorize internal derivative model training.
 Absence or ambiguity is an explicit `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` exclusion; approval as a
 RAG source alone is not silently treated as training authorization.
@@ -89,6 +103,11 @@ RAG source alone is not silently treated as training authorization.
 Candidate indexes are not added speculatively.  Existing item-revision, artifact-revision, source
 anchor, workflow/job, and idempotency indexes are reused; a new DB index requires an observed query
 plan showing a missing indexed lookup.
+
+The candidate projection is an `O(a + v + p)` pass over accepted analyses, visual observations, and
+source pages.  Maps keyed by item/source page and source anchor avoid repeated corpus scans; sets
+provide holdout membership and identity deduplication.  Missing crop provenance is retained as a
+typed omission rather than being silently dropped.
 
 ## Training configuration
 

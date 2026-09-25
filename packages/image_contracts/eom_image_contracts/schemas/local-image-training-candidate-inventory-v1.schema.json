@@ -236,7 +236,7 @@
     "candidates": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 537,
+      "maxItems": 4096,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -245,6 +245,7 @@
           "item_revision_id",
           "extraction_result",
           "source_anchor_id",
+          "visual_pattern_ids",
           "source_page_image",
           "physical_page",
           "bounding_box",
@@ -269,6 +270,16 @@
           "source_anchor_id": {
             "type": "string",
             "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          },
+          "visual_pattern_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^visualpattern_[0-9a-f]{32}$"
+            }
           },
           "source_page_image": {
             "$ref": "#/$defs/artifactPointer"

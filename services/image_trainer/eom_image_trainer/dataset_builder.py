@@ -23,10 +23,12 @@ from eom_image_contracts import (
     LocalImageTrainingCandidate,
     LocalImageTrainingCandidateInventory,
     LocalImageTrainingDatasetManifest,
+    LocalImageTrainingEligibilityReview,
     content_sha256,
     validate_contract,
     validate_training_dataset_authorization,
     validate_training_dataset_inventory,
+    validate_training_inventory_review,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -297,6 +299,8 @@ def build_training_dataset(
     *,
     inventory: LocalImageTrainingCandidateInventory,
     inventory_pointer: ImageEvaluationArtifactMember,
+    eligibility_review: LocalImageTrainingEligibilityReview,
+    eligibility_review_pointer: ImageEvaluationArtifactMember,
     authorization: LocalImageTrainingAuthorization,
     authorization_pointer: ImageEvaluationArtifactMember,
     base_model: LocalImageModelPointer,
@@ -311,6 +315,10 @@ def build_training_dataset(
 
     if not MINIMUM_SAMPLES <= maximum_samples <= MAXIMUM_SAMPLES:
         raise DatasetBuildError("IMAGE_TRAINING_SAMPLE_LIMIT_INVALID")
+    try:
+        validate_training_inventory_review(inventory, eligibility_review)
+    except ValueError as exc:
+        raise DatasetBuildError("IMAGE_TRAINING_ELIGIBILITY_REVIEW_INVALID") from exc
     _require_inventory_authorized(inventory, authorization)
     staged_index = _staged_page_index(inventory, staged_pages)
     if not output_root.is_absolute():
@@ -382,6 +390,7 @@ def build_training_dataset(
                         "item_revision_id": candidate.item_revision_id,
                         "extraction_result": candidate.extraction_result.model_dump(mode="json"),
                         "source_anchor_id": candidate.source_anchor_id,
+                        "visual_pattern_ids": list(candidate.visual_pattern_ids),
                         "source_page_image": candidate.source_page_image.model_dump(mode="json"),
                         "bounding_box": candidate.bounding_box.model_dump(mode="json"),
                         "rights_policy": candidate.rights_policy.model_dump(mode="json"),
@@ -413,6 +422,7 @@ def build_training_dataset(
         logical_identity = content_sha256(
             {
                 "authorization": authorization_pointer.model_dump(mode="json"),
+                "eligibility_review": eligibility_review_pointer.model_dump(mode="json"),
                 "candidate_inventory": inventory_pointer.model_dump(mode="json"),
                 "base_model": base_model.model_dump(mode="json"),
             }
@@ -428,6 +438,7 @@ def build_training_dataset(
             "previous_revision_id": None,
             "source_snapshot": inventory.source_snapshot.model_dump(mode="json"),
             "training_authorization": authorization_pointer.model_dump(mode="json"),
+            "eligibility_review": eligibility_review_pointer.model_dump(mode="json"),
             "candidate_inventory": inventory_pointer.model_dump(mode="json"),
             "base_model": base_model.model_dump(mode="json"),
             "eligibility_policy_revision": "local-image-lora-eligibility/1.0",

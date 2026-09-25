@@ -16,6 +16,7 @@ from eom_image_contracts import (
     LocalImageTrainingAuthorization,
     LocalImageTrainingCandidateInventory,
     LocalImageTrainingDatasetManifest,
+    LocalImageTrainingEligibilityReview,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -25,6 +26,7 @@ from eom_image_contracts import (
     validate_lora_training_worker_result,
     validate_training_dataset_authorization,
     validate_training_dataset_inventory,
+    validate_training_inventory_review,
 )
 from pydantic import ValidationError
 
@@ -111,6 +113,7 @@ def _sample(index: int) -> dict[str, object]:
             schema_ref="eom://schemas/catalog/legacy-item-extraction-result/1.0",
         ),
         "source_anchor_id": "assessmentanchor_" + f"{index + 3000:032x}",
+        "visual_pattern_ids": ["visualpattern_" + f"{index + 4000:032x}"],
         "source_page_image": _pointer(
             f"{((index + 1) % 15) + 1:x}",
             member_path=f"pages/{identity}.png",
@@ -142,6 +145,7 @@ def _candidate(index: int) -> dict[str, object]:
         "item_revision_id": sample["item_revision_id"],
         "extraction_result": sample["extraction_result"],
         "source_anchor_id": sample["source_anchor_id"],
+        "visual_pattern_ids": sample["visual_pattern_ids"],
         "source_page_image": sample["source_page_image"],
         "physical_page": index + 1,
         "bounding_box": sample["bounding_box"],
@@ -174,6 +178,35 @@ def _inventory_value() -> dict[str, object]:
     return {**body, "inventory_sha256": content_sha256(body)}
 
 
+def _eligibility_review_value() -> dict[str, object]:
+    candidates = [_candidate(index) for index in range(100)]
+    entries = [
+        {
+            **candidate,
+            "decision": "ELIGIBLE",
+            "exclusion_reasons": [],
+        }
+        for candidate in candidates
+    ]
+    body = {
+        "schema_version": "local-image-training-eligibility-review/1.0",
+        "review_id": "imgtrainreview_" + "b" * 32,
+        "review_state": "FINAL",
+        "source_snapshot": _source_snapshot(),
+        "holdout_evaluation_plan": _inventory_value()["holdout_evaluation_plan"],
+        "holdout_sample_ids": _inventory_value()["holdout_sample_ids"],
+        "holdout_source_anchor_ids": _inventory_value()["holdout_source_anchor_ids"],
+        "selection_query_revision": "local-image-lora-candidate-query/1.0",
+        "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
+        "entries": entries,
+        "projection_omissions": [],
+        "eligible_candidate_set_sha256": content_sha256(candidates),
+        "reviewed_at": "2026-09-25T02:04:00Z",
+        "reviewed_by": "operator_test",
+    }
+    return {**body, "review_sha256": content_sha256(body)}
+
+
 def _dataset_value() -> dict[str, object]:
     samples = [_sample(index) for index in range(100)]
     holdout_samples = ["imgsample_" + f"{index + 5000:032x}" for index in range(12)]
@@ -189,6 +222,11 @@ def _dataset_value() -> dict[str, object]:
             "b",
             member_path="manifests/training-authorization.json",
             schema_ref=("eom://schemas/image-provider/local-image-training-authorization/1.0"),
+        ),
+        "eligibility_review": _pointer(
+            "9",
+            member_path="manifests/eligibility-review.json",
+            schema_ref=("eom://schemas/image-provider/local-image-training-eligibility-review/1.0"),
         ),
         "candidate_inventory": _pointer(
             "a",
@@ -386,6 +424,7 @@ def test_training_schema_resources_are_canonical_mirrors() -> None:
         "local-image-training-authorization-v1.schema.json",
         "local-image-training-candidate-inventory-v1.schema.json",
         "local-image-training-dataset-manifest-v1.schema.json",
+        "local-image-training-eligibility-review-v1.schema.json",
         "local-image-lora-training-plan-v1.schema.json",
         "local-image-lora-adapter-manifest-v1.schema.json",
         "local-image-lora-checkpoint-manifest-v1.schema.json",
@@ -413,6 +452,10 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
         (
             "local-image-training-dataset-manifest-v1.schema.json",
             LocalImageTrainingDatasetManifest,
+        ),
+        (
+            "local-image-training-eligibility-review-v1.schema.json",
+            LocalImageTrainingEligibilityReview,
         ),
         ("local-image-lora-training-plan-v1.schema.json", LocalImageLoraTrainingPlan),
         (
@@ -447,6 +490,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     authorization_value = _authorization_value()
     inventory_value = _inventory_value()
     dataset_value = _dataset_value()
+    eligibility_review_value = _eligibility_review_value()
     plan_value = _plan_value()
     adapter_value = _adapter_value()
     checkpoint_value = _checkpoint_value()
@@ -457,6 +501,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
         ("training-authorization", authorization_value),
         ("training-candidate-inventory", inventory_value),
         ("training-dataset-manifest", dataset_value),
+        ("training-eligibility-review", eligibility_review_value),
         ("lora-training-plan", plan_value),
         ("lora-adapter-manifest", adapter_value),
         ("lora-checkpoint-manifest", checkpoint_value),
@@ -468,6 +513,9 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     authorization = LocalImageTrainingAuthorization.model_validate(authorization_value)
     inventory = LocalImageTrainingCandidateInventory.model_validate(inventory_value)
     dataset = LocalImageTrainingDatasetManifest.model_validate(dataset_value)
+    eligibility_review = LocalImageTrainingEligibilityReview.model_validate(
+        eligibility_review_value
+    )
     plan = LocalImageLoraTrainingPlan.model_validate(plan_value)
     adapter = LocalImageLoraAdapterManifest.model_validate(adapter_value)
     checkpoint = LocalImageLoraCheckpointManifest.model_validate(checkpoint_value)
@@ -476,6 +524,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     worker_result = LocalImageLoraTrainingWorkerResult.model_validate(worker_result_value)
     validate_training_dataset_authorization(dataset, authorization)
     validate_training_dataset_inventory(dataset, inventory)
+    validate_training_inventory_review(inventory, eligibility_review)
     validate_lora_training_plan(plan, dataset)
     validate_lora_training_receipt(receipt, plan, adapter)
     validate_lora_training_worker_result(command, worker_result)
@@ -548,6 +597,29 @@ def test_dataset_inventory_rejects_candidate_drift() -> None:
     dataset = LocalImageTrainingDatasetManifest.model_validate(value)
     with pytest.raises(ValueError, match="drifts from its candidate inventory"):
         validate_training_dataset_inventory(dataset, inventory)
+
+
+def test_inventory_review_rejects_unreviewed_candidate() -> None:
+    inventory = LocalImageTrainingCandidateInventory.model_validate(_inventory_value())
+    value = _eligibility_review_value()
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    entries[0]["decision"] = "EXCLUDED"
+    entries[0]["exclusion_reasons"] = ["HUMAN_SUBJECT"]
+    entries[0]["caption_en"] = None
+    entries[0]["caption_sha256"] = None
+    eligible = [
+        {key: item for key, item in entry.items() if key not in {"decision", "exclusion_reasons"}}
+        for entry in entries
+        if entry["decision"] == "ELIGIBLE"
+    ]
+    value["eligible_candidate_set_sha256"] = content_sha256(eligible)
+    body = copy.deepcopy(value)
+    body.pop("review_sha256")
+    value["review_sha256"] = content_sha256(body)
+    review = LocalImageTrainingEligibilityReview.model_validate(value)
+    with pytest.raises(ValueError, match="does not match its eligibility review"):
+        validate_training_inventory_review(inventory, review)
 
 
 def test_training_receipt_rejects_nonterminal_shape() -> None:

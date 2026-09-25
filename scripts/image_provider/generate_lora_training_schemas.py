@@ -270,6 +270,7 @@ def _dataset_manifest() -> dict[str, Any]:
             "item_revision_id",
             "extraction_result",
             "source_anchor_id",
+            "visual_pattern_ids",
             "source_page_image",
             "bounding_box",
             "rights_policy",
@@ -290,6 +291,13 @@ def _dataset_manifest() -> dict[str, Any]:
             "source_anchor_id": {
                 "type": "string",
                 "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": True,
+                "items": {"type": "string", "pattern": "^visualpattern_[0-9a-f]{32}$"},
             },
             "source_page_image": {"$ref": "#/$defs/artifactPointer"},
             "bounding_box": {"$ref": "#/$defs/boundingBox"},
@@ -339,6 +347,7 @@ def _dataset_manifest() -> dict[str, Any]:
                 "previous_revision_id",
                 "source_snapshot",
                 "training_authorization",
+                "eligibility_review",
                 "candidate_inventory",
                 "base_model",
                 "eligibility_policy_revision",
@@ -367,6 +376,7 @@ def _dataset_manifest() -> dict[str, Any]:
                 },
                 "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
                 "training_authorization": {"$ref": "#/$defs/artifactPointer"},
+                "eligibility_review": {"$ref": "#/$defs/artifactPointer"},
                 "candidate_inventory": {"$ref": "#/$defs/artifactPointer"},
                 "base_model": {"$ref": "#/$defs/modelPointer"},
                 "eligibility_policy_revision": {"const": "local-image-lora-eligibility/1.0"},
@@ -417,6 +427,7 @@ def _candidate_inventory() -> dict[str, Any]:
             "item_revision_id",
             "extraction_result",
             "source_anchor_id",
+            "visual_pattern_ids",
             "source_page_image",
             "physical_page",
             "bounding_box",
@@ -436,6 +447,13 @@ def _candidate_inventory() -> dict[str, Any]:
             "source_anchor_id": {
                 "type": "string",
                 "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": True,
+                "items": {"type": "string", "pattern": "^visualpattern_[0-9a-f]{32}$"},
             },
             "source_page_image": {"$ref": "#/$defs/artifactPointer"},
             "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
@@ -494,7 +512,7 @@ def _candidate_inventory() -> dict[str, Any]:
                 "candidates": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 537,
+                    "maxItems": 4096,
                     "items": candidate,
                 },
                 "created_at": DATE_TIME,
@@ -505,6 +523,257 @@ def _candidate_inventory() -> dict[str, Any]:
                     "pattern": "^[A-Za-z0-9._:@-]+$",
                 },
                 "inventory_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _eligibility_review() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-training-eligibility-review/1.0",
+        "EOM Local Image Training Eligibility Review V1",
+    )
+    entry = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "candidate_id",
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "visual_pattern_ids",
+            "source_page_image",
+            "physical_page",
+            "bounding_box",
+            "rights_policy",
+            "representation_kind",
+            "rendering_mode",
+            "decision",
+            "exclusion_reasons",
+            "caption_en",
+            "caption_sha256",
+        ],
+        "properties": {
+            "candidate_id": {
+                "type": "string",
+                "pattern": "^imgtraincandidate_[0-9a-f]{32}$",
+            },
+            "item_revision_id": {
+                "type": "string",
+                "pattern": "^itemrev_[0-9a-f]{32}$",
+            },
+            "extraction_result": {"$ref": "#/$defs/artifactPointer"},
+            "source_anchor_id": {
+                "type": "string",
+                "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": True,
+                "items": {"type": "string", "pattern": "^visualpattern_[0-9a-f]{32}$"},
+            },
+            "source_page_image": {"$ref": "#/$defs/artifactPointer"},
+            "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "bounding_box": {"$ref": "#/$defs/boundingBox"},
+            "rights_policy": {"$ref": "#/$defs/rightsPolicy"},
+            "representation_kind": {"enum": ["COMPOSITE", "PHOTOGRAPH"]},
+            "rendering_mode": {"enum": ["MIXED", "RASTER"]},
+            "decision": {"enum": ["PENDING", "ELIGIBLE", "EXCLUDED"]},
+            "exclusion_reasons": {
+                "type": "array",
+                "maxItems": 16,
+                "items": {
+                    "enum": [
+                        "AMBIGUOUS_CROP",
+                        "ANSWER_OR_EXPLANATION_CONTENT",
+                        "AUTHORITATIVE_GEOMETRY",
+                        "EMBEDDED_LABEL_OR_VALUE",
+                        "FULL_PAGE",
+                        "HOLDOUT_OR_NEAR_DUPLICATE",
+                        "HUMAN_SUBJECT",
+                        "ITEM_NUMBER_OR_PUBLISHER_MARK",
+                        "TABLE_OR_GRAPH",
+                        "UNAUTHORIZED_SOURCE",
+                        "UNSUITABLE_OTHER",
+                    ]
+                },
+            },
+            "caption_en": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 180,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+                    },
+                    {"type": "null"},
+                ]
+            },
+            "caption_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        },
+        "allOf": [
+            {
+                "if": {
+                    "required": ["decision"],
+                    "properties": {"decision": {"const": "ELIGIBLE"}},
+                },
+                "then": {
+                    "properties": {
+                        "exclusion_reasons": {"maxItems": 0},
+                        "caption_en": {"type": "string", "minLength": 3},
+                        "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    }
+                },
+            },
+            {
+                "if": {
+                    "required": ["decision"],
+                    "properties": {"decision": {"const": "EXCLUDED"}},
+                },
+                "then": {
+                    "properties": {
+                        "exclusion_reasons": {"minItems": 1},
+                        "caption_en": {"type": "null"},
+                        "caption_sha256": {"type": "null"},
+                    }
+                },
+            },
+            {
+                "if": {
+                    "required": ["decision"],
+                    "properties": {"decision": {"const": "PENDING"}},
+                },
+                "then": {
+                    "properties": {
+                        "exclusion_reasons": {"maxItems": 0},
+                        "caption_en": {"type": "null"},
+                        "caption_sha256": {"type": "null"},
+                    }
+                },
+            },
+        ],
+    }
+    omission = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "visual_pattern_ids",
+            "exclusion_reasons",
+        ],
+        "properties": {
+            "item_revision_id": {
+                "type": "string",
+                "pattern": "^itemrev_[0-9a-f]{32}$",
+            },
+            "extraction_result": {"$ref": "#/$defs/artifactPointer"},
+            "source_anchor_id": {
+                "type": "string",
+                "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 32,
+                "uniqueItems": True,
+                "items": {"type": "string", "pattern": "^visualpattern_[0-9a-f]{32}$"},
+            },
+            "exclusion_reasons": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": True,
+                "items": {
+                    "enum": [
+                        "AMBIGUOUS_CROP",
+                        "ANSWER_OR_EXPLANATION_CONTENT",
+                        "AUTHORITATIVE_GEOMETRY",
+                        "EMBEDDED_LABEL_OR_VALUE",
+                        "FULL_PAGE",
+                        "HOLDOUT_OR_NEAR_DUPLICATE",
+                        "HUMAN_SUBJECT",
+                        "ITEM_NUMBER_OR_PUBLISHER_MARK",
+                        "TABLE_OR_GRAPH",
+                        "UNAUTHORIZED_SOURCE",
+                        "UNSUITABLE_OTHER",
+                    ]
+                },
+            },
+        },
+    }
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "review_id",
+                "review_state",
+                "source_snapshot",
+                "holdout_evaluation_plan",
+                "holdout_sample_ids",
+                "holdout_source_anchor_ids",
+                "selection_query_revision",
+                "eligibility_policy_revision",
+                "entries",
+                "projection_omissions",
+                "eligible_candidate_set_sha256",
+                "reviewed_at",
+                "reviewed_by",
+                "review_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-training-eligibility-review/1.0"},
+                "review_id": {
+                    "type": "string",
+                    "pattern": "^imgtrainreview_[0-9a-f]{32}$",
+                },
+                "review_state": {"enum": ["DRAFT", "FINAL"]},
+                "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
+                "holdout_evaluation_plan": {"$ref": "#/$defs/artifactPointer"},
+                "holdout_sample_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "items": {
+                        "type": "string",
+                        "pattern": "^imgsample_[0-9a-f]{32}$",
+                    },
+                },
+                "holdout_source_anchor_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "items": {
+                        "type": "string",
+                        "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+                    },
+                },
+                "selection_query_revision": {"const": "local-image-lora-candidate-query/1.0"},
+                "eligibility_policy_revision": {"const": "local-image-lora-eligibility/1.0"},
+                "entries": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 4096,
+                    "items": entry,
+                },
+                "projection_omissions": {
+                    "type": "array",
+                    "maxItems": 4096,
+                    "items": omission,
+                },
+                "eligible_candidate_set_sha256": {"$ref": "#/$defs/sha256"},
+                "reviewed_at": DATE_TIME,
+                "reviewed_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "review_sha256": {"$ref": "#/$defs/sha256"},
             },
         }
     )
@@ -960,6 +1229,7 @@ SCHEMAS = {
     "local-image-training-authorization-v1.schema.json": _authorization(),
     "local-image-training-dataset-manifest-v1.schema.json": _dataset_manifest(),
     "local-image-training-candidate-inventory-v1.schema.json": _candidate_inventory(),
+    "local-image-training-eligibility-review-v1.schema.json": _eligibility_review(),
     "local-image-lora-training-plan-v1.schema.json": _training_plan(),
     "local-image-lora-adapter-manifest-v1.schema.json": _adapter_manifest(),
     "local-image-lora-checkpoint-manifest-v1.schema.json": _checkpoint_manifest(),

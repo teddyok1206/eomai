@@ -11,6 +11,7 @@ from eom_image_contracts import (
     LocalImageModelPointer,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCandidateInventory,
+    LocalImageTrainingEligibilityReview,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -131,6 +132,7 @@ def _inventory_and_pages(
                     sha256="sha256:" + hashlib.sha256(f"extraction-{index}".encode()).hexdigest(),
                 ),
                 "source_anchor_id": "assessmentanchor_" + f"{index + 3000:032x}",
+                "visual_pattern_ids": ["visualpattern_" + f"{index + 4000:032x}"],
                 "source_page_image": source_pointer,
                 "physical_page": index + 1,
                 "bounding_box": {"left": 0, "top": 0, "right": 10000, "bottom": 10000},
@@ -164,6 +166,55 @@ def _inventory_and_pages(
     validate_contract("training-candidate-inventory", value)
     inventory = LocalImageTrainingCandidateInventory.model_validate(value)
     return inventory, tuple(sorted(staged_pages, key=lambda page: page.key))
+
+
+def _eligibility_review(
+    inventory: LocalImageTrainingCandidateInventory,
+    *,
+    exclude_first: bool = False,
+) -> LocalImageTrainingEligibilityReview:
+    entries: list[dict[str, object]] = []
+    eligible_candidates: list[dict[str, object]] = []
+    for index, candidate in enumerate(inventory.candidates):
+        candidate_value = candidate.model_dump(mode="json")
+        if exclude_first and index == 0:
+            candidate_value["caption_en"] = None
+            candidate_value["caption_sha256"] = None
+            entries.append(
+                {
+                    **candidate_value,
+                    "decision": "EXCLUDED",
+                    "exclusion_reasons": ["HUMAN_SUBJECT"],
+                }
+            )
+        else:
+            eligible_candidates.append(candidate_value)
+            entries.append(
+                {
+                    **candidate_value,
+                    "decision": "ELIGIBLE",
+                    "exclusion_reasons": [],
+                }
+            )
+    body = {
+        "schema_version": "local-image-training-eligibility-review/1.0",
+        "review_id": "imgtrainreview_" + "f" * 32,
+        "review_state": "FINAL",
+        "source_snapshot": inventory.source_snapshot.model_dump(mode="json"),
+        "holdout_evaluation_plan": inventory.holdout_evaluation_plan.model_dump(mode="json"),
+        "holdout_sample_ids": list(inventory.holdout_sample_ids),
+        "holdout_source_anchor_ids": list(inventory.holdout_source_anchor_ids),
+        "selection_query_revision": "local-image-lora-candidate-query/1.0",
+        "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
+        "entries": entries,
+        "projection_omissions": [],
+        "eligible_candidate_set_sha256": content_sha256(eligible_candidates),
+        "reviewed_at": "2026-09-25T03:01:30Z",
+        "reviewed_by": "operator_test",
+    }
+    value = {**body, "review_sha256": content_sha256(body)}
+    validate_contract("training-eligibility-review", value)
+    return LocalImageTrainingEligibilityReview.model_validate(value)
 
 
 def _artifact_pointer(
@@ -202,6 +253,7 @@ def _build(tmp_path: Path):
     output_root = tmp_path / "output"
     output_root.mkdir(mode=0o700)
     authorization = _authorization()
+    eligibility_review = _eligibility_review(inventory)
     dataset = build_training_dataset(
         inventory=inventory,
         inventory_pointer=_artifact_pointer(
@@ -211,6 +263,13 @@ def _build(tmp_path: Path):
                 "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
             ),
             sha256=inventory.inventory_sha256,
+        ),
+        eligibility_review=eligibility_review,
+        eligibility_review_pointer=_artifact_pointer(
+            899,
+            member_path="manifests/eligibility-review.json",
+            schema_ref=("eom://schemas/image-provider/local-image-training-eligibility-review/1.0"),
+            sha256=eligibility_review.review_sha256,
         ),
         authorization=authorization,
         authorization_pointer=_artifact_pointer(
@@ -249,6 +308,7 @@ def test_dataset_builder_writes_one_atomic_valid_dataset(tmp_path: Path) -> None
 def test_dataset_builder_rejects_replay_without_overwrite(tmp_path: Path) -> None:
     _, output_root, staged_root, inventory, staged_pages = _build(tmp_path)
     authorization = _authorization()
+    eligibility_review = _eligibility_review(inventory)
     with pytest.raises(DatasetBuildError, match="IMAGE_TRAINING_DATASET_ALREADY_EXISTS"):
         build_training_dataset(
             inventory=inventory,
@@ -259,6 +319,15 @@ def test_dataset_builder_rejects_replay_without_overwrite(tmp_path: Path) -> Non
                     "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
                 ),
                 sha256=inventory.inventory_sha256,
+            ),
+            eligibility_review=eligibility_review,
+            eligibility_review_pointer=_artifact_pointer(
+                899,
+                member_path="manifests/eligibility-review.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/local-image-training-eligibility-review/1.0"
+                ),
+                sha256=eligibility_review.review_sha256,
             ),
             authorization=authorization,
             authorization_pointer=_artifact_pointer(
@@ -285,6 +354,7 @@ def test_dataset_builder_rejects_hash_drift_without_partial_output(tmp_path: Pat
     output_root = tmp_path / "output"
     output_root.mkdir(mode=0o700)
     authorization = _authorization()
+    eligibility_review = _eligibility_review(inventory)
     with pytest.raises(DatasetBuildError, match="IMAGE_TRAINING_SOURCE_PAGE_HASH_MISMATCH"):
         build_training_dataset(
             inventory=inventory,
@@ -295,6 +365,15 @@ def test_dataset_builder_rejects_hash_drift_without_partial_output(tmp_path: Pat
                     "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
                 ),
                 sha256=inventory.inventory_sha256,
+            ),
+            eligibility_review=eligibility_review,
+            eligibility_review_pointer=_artifact_pointer(
+                899,
+                member_path="manifests/eligibility-review.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/local-image-training-eligibility-review/1.0"
+                ),
+                sha256=eligibility_review.review_sha256,
             ),
             authorization=authorization,
             authorization_pointer=_artifact_pointer(
@@ -312,3 +391,47 @@ def test_dataset_builder_rejects_hash_drift_without_partial_output(tmp_path: Pat
         )
     assert not (output_root / "dataset").exists()
     assert not tuple(output_root.glob(".dataset-building-*"))
+
+
+def test_dataset_builder_rejects_inventory_not_matching_review(tmp_path: Path) -> None:
+    staged_root = tmp_path / "staged"
+    inventory, staged_pages = _inventory_and_pages(staged_root)
+    eligibility_review = _eligibility_review(inventory, exclude_first=True)
+    output_root = tmp_path / "output"
+    output_root.mkdir(mode=0o700)
+    authorization = _authorization()
+    with pytest.raises(DatasetBuildError, match="IMAGE_TRAINING_ELIGIBILITY_REVIEW_INVALID"):
+        build_training_dataset(
+            inventory=inventory,
+            inventory_pointer=_artifact_pointer(
+                900,
+                member_path="manifests/training-candidates.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
+                ),
+                sha256=inventory.inventory_sha256,
+            ),
+            eligibility_review=eligibility_review,
+            eligibility_review_pointer=_artifact_pointer(
+                899,
+                member_path="manifests/eligibility-review.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/local-image-training-eligibility-review/1.0"
+                ),
+                sha256=eligibility_review.review_sha256,
+            ),
+            authorization=authorization,
+            authorization_pointer=_artifact_pointer(
+                901,
+                member_path="manifests/training-authorization.json",
+                schema_ref=("eom://schemas/image-provider/local-image-training-authorization/1.0"),
+                sha256=authorization.authorization_sha256,
+            ),
+            base_model=_model(),
+            staged_root=staged_root,
+            staged_pages=staged_pages,
+            output_root=output_root,
+            created_at=datetime(2026, 9, 25, 3, 2, tzinfo=UTC),
+            created_by="operator_test",
+        )
+    assert not (output_root / "dataset").exists()

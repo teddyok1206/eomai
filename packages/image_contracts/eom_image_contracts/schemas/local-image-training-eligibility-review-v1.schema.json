@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0",
-  "title": "EOM Local Image Training Candidate Inventory V1",
+  "$id": "eom://schemas/image-provider/local-image-training-eligibility-review/1.0",
+  "title": "EOM Local Image Training Eligibility Review V1",
   "type": "object",
   "additionalProperties": false,
   "$defs": {
@@ -189,23 +189,34 @@
   },
   "required": [
     "schema_version",
-    "inventory_id",
+    "review_id",
+    "review_state",
     "source_snapshot",
     "holdout_evaluation_plan",
     "holdout_sample_ids",
     "holdout_source_anchor_ids",
-    "candidates",
-    "created_at",
-    "created_by",
-    "inventory_sha256"
+    "selection_query_revision",
+    "eligibility_policy_revision",
+    "entries",
+    "projection_omissions",
+    "eligible_candidate_set_sha256",
+    "reviewed_at",
+    "reviewed_by",
+    "review_sha256"
   ],
   "properties": {
     "schema_version": {
-      "const": "local-image-training-candidate-inventory/1.0"
+      "const": "local-image-training-eligibility-review/1.0"
     },
-    "inventory_id": {
+    "review_id": {
       "type": "string",
-      "pattern": "^imgtraininventory_[0-9a-f]{32}$"
+      "pattern": "^imgtrainreview_[0-9a-f]{32}$"
+    },
+    "review_state": {
+      "enum": [
+        "DRAFT",
+        "FINAL"
+      ]
     },
     "source_snapshot": {
       "$ref": "#/$defs/sourceSnapshot"
@@ -217,7 +228,6 @@
       "type": "array",
       "minItems": 12,
       "maxItems": 12,
-      "uniqueItems": true,
       "items": {
         "type": "string",
         "pattern": "^imgsample_[0-9a-f]{32}$"
@@ -227,15 +237,20 @@
       "type": "array",
       "minItems": 12,
       "maxItems": 12,
-      "uniqueItems": true,
       "items": {
         "type": "string",
         "pattern": "^assessmentanchor_[0-9a-f]{32}$"
       }
     },
-    "candidates": {
+    "selection_query_revision": {
+      "const": "local-image-lora-candidate-query/1.0"
+    },
+    "eligibility_policy_revision": {
+      "const": "local-image-lora-eligibility/1.0"
+    },
+    "entries": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 4096,
       "items": {
         "type": "object",
@@ -252,6 +267,8 @@
           "rights_policy",
           "representation_kind",
           "rendering_mode",
+          "decision",
+          "exclusion_reasons",
           "caption_en",
           "caption_sha256"
         ],
@@ -307,29 +324,209 @@
               "RASTER"
             ]
           },
+          "decision": {
+            "enum": [
+              "PENDING",
+              "ELIGIBLE",
+              "EXCLUDED"
+            ]
+          },
+          "exclusion_reasons": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "enum": [
+                "AMBIGUOUS_CROP",
+                "ANSWER_OR_EXPLANATION_CONTENT",
+                "AUTHORITATIVE_GEOMETRY",
+                "EMBEDDED_LABEL_OR_VALUE",
+                "FULL_PAGE",
+                "HOLDOUT_OR_NEAR_DUPLICATE",
+                "HUMAN_SUBJECT",
+                "ITEM_NUMBER_OR_PUBLISHER_MARK",
+                "TABLE_OR_GRAPH",
+                "UNAUTHORIZED_SOURCE",
+                "UNSUITABLE_OTHER"
+              ]
+            }
+          },
           "caption_en": {
-            "type": "string",
-            "minLength": 3,
-            "maxLength": 180,
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$"
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 180,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "caption_sha256": {
-            "$ref": "#/$defs/sha256"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "decision"
+              ],
+              "properties": {
+                "decision": {
+                  "const": "ELIGIBLE"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "exclusion_reasons": {
+                  "maxItems": 0
+                },
+                "caption_en": {
+                  "type": "string",
+                  "minLength": 3
+                },
+                "caption_sha256": {
+                  "$ref": "#/$defs/sha256"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "decision"
+              ],
+              "properties": {
+                "decision": {
+                  "const": "EXCLUDED"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "exclusion_reasons": {
+                  "minItems": 1
+                },
+                "caption_en": {
+                  "type": "null"
+                },
+                "caption_sha256": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "decision"
+              ],
+              "properties": {
+                "decision": {
+                  "const": "PENDING"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "exclusion_reasons": {
+                  "maxItems": 0
+                },
+                "caption_en": {
+                  "type": "null"
+                },
+                "caption_sha256": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "projection_omissions": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_revision_id",
+          "extraction_result",
+          "source_anchor_id",
+          "visual_pattern_ids",
+          "exclusion_reasons"
+        ],
+        "properties": {
+          "item_revision_id": {
+            "type": "string",
+            "pattern": "^itemrev_[0-9a-f]{32}$"
+          },
+          "extraction_result": {
+            "$ref": "#/$defs/artifactPointer"
+          },
+          "source_anchor_id": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          },
+          "visual_pattern_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^visualpattern_[0-9a-f]{32}$"
+            }
+          },
+          "exclusion_reasons": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "AMBIGUOUS_CROP",
+                "ANSWER_OR_EXPLANATION_CONTENT",
+                "AUTHORITATIVE_GEOMETRY",
+                "EMBEDDED_LABEL_OR_VALUE",
+                "FULL_PAGE",
+                "HOLDOUT_OR_NEAR_DUPLICATE",
+                "HUMAN_SUBJECT",
+                "ITEM_NUMBER_OR_PUBLISHER_MARK",
+                "TABLE_OR_GRAPH",
+                "UNAUTHORIZED_SOURCE",
+                "UNSUITABLE_OTHER"
+              ]
+            }
           }
         }
       }
     },
-    "created_at": {
+    "eligible_candidate_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reviewed_at": {
       "type": "string",
       "format": "date-time"
     },
-    "created_by": {
+    "reviewed_by": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9._:@-]+$"
     },
-    "inventory_sha256": {
+    "review_sha256": {
       "$ref": "#/$defs/sha256"
     }
   }

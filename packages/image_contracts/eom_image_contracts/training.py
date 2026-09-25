@@ -30,6 +30,9 @@ CHECKPOINT_MANIFEST_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-lora-checkpoint-manifest/1.0"
 )
 EVALUATION_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"
+ELIGIBILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-training-eligibility-review/1.0"
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -116,6 +119,7 @@ class LocalImageTrainingSample(FrozenModel):
     item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
     extraction_result: ImageEvaluationArtifactMember
     source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
     source_page_image: ImageEvaluationArtifactMember
     bounding_box: ImageEvaluationBoundingBox
     rights_policy: ImageTrainingRightsPolicy
@@ -139,6 +143,11 @@ class LocalImageTrainingSample(FrozenModel):
             raise ValueError("training crop path does not bind the sample identity")
         if self.caption_sha256 != text_sha256(self.caption_en):
             raise ValueError("training caption hash mismatch")
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("training visual pattern IDs must be valid, sorted, and unique")
         return self
 
 
@@ -147,6 +156,7 @@ class LocalImageTrainingCandidate(FrozenModel):
     item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
     extraction_result: ImageEvaluationArtifactMember
     source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
     source_page_image: ImageEvaluationArtifactMember
     physical_page: int = Field(ge=1, le=100_000)
     bounding_box: ImageEvaluationBoundingBox
@@ -166,6 +176,186 @@ class LocalImageTrainingCandidate(FrozenModel):
             raise ValueError("training candidate source page image must be PNG")
         if self.caption_sha256 != text_sha256(self.caption_en):
             raise ValueError("training candidate caption hash mismatch")
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("candidate visual pattern IDs must be valid, sorted, and unique")
+        return self
+
+
+ImageTrainingExclusionReason = Literal[
+    "AMBIGUOUS_CROP",
+    "ANSWER_OR_EXPLANATION_CONTENT",
+    "AUTHORITATIVE_GEOMETRY",
+    "EMBEDDED_LABEL_OR_VALUE",
+    "FULL_PAGE",
+    "HOLDOUT_OR_NEAR_DUPLICATE",
+    "HUMAN_SUBJECT",
+    "ITEM_NUMBER_OR_PUBLISHER_MARK",
+    "TABLE_OR_GRAPH",
+    "UNAUTHORIZED_SOURCE",
+    "UNSUITABLE_OTHER",
+]
+
+
+class LocalImageTrainingEligibilityEntry(FrozenModel):
+    candidate_id: str = Field(pattern=r"^imgtraincandidate_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    source_page_image: ImageEvaluationArtifactMember
+    physical_page: int = Field(ge=1, le=100_000)
+    bounding_box: ImageEvaluationBoundingBox
+    rights_policy: ImageTrainingRightsPolicy
+    representation_kind: Literal["COMPOSITE", "PHOTOGRAPH"]
+    rendering_mode: Literal["MIXED", "RASTER"]
+    decision: Literal["PENDING", "ELIGIBLE", "EXCLUDED"]
+    exclusion_reasons: tuple[ImageTrainingExclusionReason, ...] = Field(max_length=16)
+    caption_en: str | None = Field(
+        min_length=3,
+        max_length=180,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+    )
+    caption_sha256: Sha256 | None
+
+    @model_validator(mode="after")
+    def decision_is_coherent(self) -> LocalImageTrainingEligibilityEntry:
+        if self.source_page_image.media_type != "image/png":
+            raise ValueError("eligibility source page image must be PNG")
+        if self.exclusion_reasons != tuple(sorted(self.exclusion_reasons)) or len(
+            self.exclusion_reasons
+        ) != len(set(self.exclusion_reasons)):
+            raise ValueError("eligibility exclusion reasons must be uniquely sorted")
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("eligibility visual pattern IDs must be valid, sorted, and unique")
+        if self.decision == "ELIGIBLE":
+            if (
+                self.exclusion_reasons
+                or self.caption_en is None
+                or self.caption_sha256 != text_sha256(self.caption_en)
+            ):
+                raise ValueError("eligible training image requires one exact caption")
+        elif self.decision == "EXCLUDED" and (
+            not self.exclusion_reasons
+            or self.caption_en is not None
+            or self.caption_sha256 is not None
+        ):
+            raise ValueError("excluded training image requires only exclusion reasons")
+        elif self.decision == "PENDING" and (
+            self.exclusion_reasons or self.caption_en is not None or self.caption_sha256 is not None
+        ):
+            raise ValueError("pending training image cannot carry a decision or caption")
+        return self
+
+    def candidate(self) -> LocalImageTrainingCandidate:
+        if self.decision != "ELIGIBLE" or self.caption_en is None or self.caption_sha256 is None:
+            raise ValueError("excluded review entry is not a training candidate")
+        return LocalImageTrainingCandidate.model_validate(
+            self.model_dump(
+                mode="json",
+                exclude={"decision", "exclusion_reasons"},
+            )
+        )
+
+
+class LocalImageTrainingProjectionOmission(FrozenModel):
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    exclusion_reasons: tuple[ImageTrainingExclusionReason, ...] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def omission_is_coherent(self) -> LocalImageTrainingProjectionOmission:
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("omitted visual pattern IDs must be valid, sorted, and unique")
+        if self.exclusion_reasons != tuple(sorted(set(self.exclusion_reasons))):
+            raise ValueError("omission exclusion reasons must be sorted and unique")
+        return self
+
+
+class LocalImageTrainingEligibilityReview(FrozenModel):
+    schema_version: Literal["local-image-training-eligibility-review/1.0"]
+    review_id: str = Field(pattern=r"^imgtrainreview_[0-9a-f]{32}$")
+    review_state: Literal["DRAFT", "FINAL"]
+    source_snapshot: ImageEvaluationSourceSnapshot
+    holdout_evaluation_plan: ImageEvaluationArtifactMember
+    holdout_sample_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    holdout_source_anchor_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    selection_query_revision: Literal["local-image-lora-candidate-query/1.0"]
+    eligibility_policy_revision: Literal["local-image-lora-eligibility/1.0"]
+    entries: tuple[LocalImageTrainingEligibilityEntry, ...] = Field(
+        min_length=0,
+        max_length=4096,
+    )
+    projection_omissions: tuple[LocalImageTrainingProjectionOmission, ...] = Field(max_length=4096)
+    eligible_candidate_set_sha256: Sha256
+    reviewed_at: datetime
+    reviewed_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    review_sha256: Sha256
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def utc_review(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_review_is_coherent(self) -> LocalImageTrainingEligibilityReview:
+        _require_pointer(
+            self.holdout_evaluation_plan,
+            schema_ref=EVALUATION_PLAN_SCHEMA_REF,
+            member_path="manifests/evaluation-plan.json",
+        )
+        for values, label in (
+            (self.holdout_sample_ids, "holdout samples"),
+            (self.holdout_source_anchor_ids, "holdout source anchors"),
+        ):
+            if values != tuple(sorted(values)) or len(values) != len(set(values)):
+                raise ValueError(f"{label} must be uniquely sorted")
+        candidate_ids = tuple(entry.candidate_id for entry in self.entries)
+        anchors = tuple(entry.source_anchor_id for entry in self.entries)
+        if candidate_ids != tuple(sorted(candidate_ids)) or len(candidate_ids) != len(
+            set(candidate_ids)
+        ):
+            raise ValueError("eligibility entries must be uniquely sorted")
+        if len(anchors) != len(set(anchors)):
+            raise ValueError("eligibility source anchors must be unique")
+        omission_keys = tuple(
+            (omission.item_revision_id, omission.source_anchor_id)
+            for omission in self.projection_omissions
+        )
+        if omission_keys != tuple(sorted(omission_keys)) or len(omission_keys) != len(
+            set(omission_keys)
+        ):
+            raise ValueError("projection omissions must be uniquely sorted")
+        if set(anchors) & {omission.source_anchor_id for omission in self.projection_omissions}:
+            raise ValueError("reviewed and omitted source anchors must be disjoint")
+        if self.review_state == "FINAL" and any(
+            entry.decision == "PENDING" for entry in self.entries
+        ):
+            raise ValueError("final eligibility review cannot contain pending entries")
+        eligible = [
+            entry.candidate().model_dump(mode="json")
+            for entry in self.entries
+            if entry.decision == "ELIGIBLE"
+        ]
+        if self.eligible_candidate_set_sha256 != content_sha256(eligible):
+            raise ValueError("eligible candidate-set hash mismatch")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("eligibility review hash mismatch")
         return self
 
 
@@ -176,7 +366,7 @@ class LocalImageTrainingCandidateInventory(FrozenModel):
     holdout_evaluation_plan: ImageEvaluationArtifactMember
     holdout_sample_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
     holdout_source_anchor_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
-    candidates: tuple[LocalImageTrainingCandidate, ...] = Field(min_length=1, max_length=537)
+    candidates: tuple[LocalImageTrainingCandidate, ...] = Field(min_length=1, max_length=4096)
     created_at: datetime
     created_by: str = Field(
         min_length=1,
@@ -241,6 +431,7 @@ class LocalImageTrainingDatasetManifest(FrozenModel):
     previous_revision_id: str | None = Field(pattern=r"^imgdatasetrev_[0-9a-f]{32}$")
     source_snapshot: ImageEvaluationSourceSnapshot
     training_authorization: ImageEvaluationArtifactMember
+    eligibility_review: ImageEvaluationArtifactMember
     candidate_inventory: ImageEvaluationArtifactMember
     base_model: LocalImageModelPointer
     eligibility_policy_revision: Literal["local-image-lora-eligibility/1.0"]
@@ -286,6 +477,11 @@ class LocalImageTrainingDatasetManifest(FrozenModel):
             self.training_authorization,
             schema_ref=AUTHORIZATION_SCHEMA_REF,
             member_path="manifests/training-authorization.json",
+        )
+        _require_pointer(
+            self.eligibility_review,
+            schema_ref=ELIGIBILITY_REVIEW_SCHEMA_REF,
+            member_path="manifests/eligibility-review.json",
         )
         _require_pointer(
             self.candidate_inventory,
@@ -633,6 +829,7 @@ def validate_training_dataset_inventory(
         if (
             sample.item_revision_id != candidate.item_revision_id
             or sample.extraction_result != candidate.extraction_result
+            or sample.visual_pattern_ids != candidate.visual_pattern_ids
             or sample.source_page_image != candidate.source_page_image
             or sample.bounding_box != candidate.bounding_box
             or sample.rights_policy != candidate.rights_policy
@@ -642,6 +839,27 @@ def validate_training_dataset_inventory(
             or sample.caption_sha256 != candidate.caption_sha256
         ):
             raise ValueError("training sample drifts from its candidate inventory")
+
+
+def validate_training_inventory_review(
+    inventory: LocalImageTrainingCandidateInventory,
+    review: LocalImageTrainingEligibilityReview,
+) -> None:
+    """Require an inventory to be exactly the eligible subset of one reviewed population."""
+
+    if review.review_state != "FINAL":
+        raise ValueError("training inventory requires a final eligibility review")
+    reviewed_candidates = tuple(
+        entry.candidate() for entry in review.entries if entry.decision == "ELIGIBLE"
+    )
+    if (
+        inventory.source_snapshot != review.source_snapshot
+        or inventory.holdout_evaluation_plan != review.holdout_evaluation_plan
+        or inventory.holdout_sample_ids != review.holdout_sample_ids
+        or inventory.holdout_source_anchor_ids != review.holdout_source_anchor_ids
+        or inventory.candidates != reviewed_candidates
+    ):
+        raise ValueError("training inventory does not match its eligibility review")
 
 
 def validate_lora_training_plan(

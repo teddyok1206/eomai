@@ -1,0 +1,242 @@
+"""Project exact past-exam visual pointers into a human-review draft.
+
+The projection is deliberately read-only.  It performs one pass over accepted analyses and uses
+maps keyed by item, anchor, and page position, giving O(a + v + p) time and O(a + p) space for
+anchors, visual observations, and source pages.  It never reads source pixels or decides that a
+candidate is eligible; only a final human review can do that.
+"""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+
+from eom_catalog_contracts import (
+    AssessmentPageImageInput,
+    AssessmentVisualPatternObservation,
+    KnowledgeAnalysisResultV9,
+    LegacyItemExtractionResult,
+)
+from eom_image_contracts import (
+    ImageEvaluationArtifactMember,
+    ImageEvaluationSourceSnapshot,
+    ImageTrainingRightsPolicy,
+    LocalImageTrainingEligibilityReview,
+    content_sha256,
+    validate_contract,
+)
+from pydantic import ValidationError as PydanticValidationError
+
+
+class TrainingCandidateProjectionError(RuntimeError):
+    """Stable fail-closed error for malformed or incomplete source provenance."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+@dataclass(frozen=True, slots=True)
+class AcceptedVisualTrainingSource:
+    """One exact accepted V9 result and the extraction result it pins."""
+
+    accepted: KnowledgeAnalysisResultV9
+    extraction: LegacyItemExtractionResult
+    rights_policy: ImageTrainingRightsPolicy
+
+
+def _artifact_member(value: object) -> dict[str, object]:
+    model_dump = getattr(value, "model_dump", None)
+    if not callable(model_dump):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_POINTER_INVALID")
+    raw = model_dump(mode="json")
+    return ImageEvaluationArtifactMember.model_validate(raw).model_dump(mode="json")
+
+
+def _project_one(
+    source: AcceptedVisualTrainingSource,
+    *,
+    holdout_anchors: frozenset[str],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    accepted = source.accepted
+    extraction = source.extraction
+    accepted_source = accepted.source
+    if (
+        extraction.extraction_result_id != accepted_source.extraction_result_id
+        or extraction.result_sha256 != accepted_source.extraction_result_sha256
+    ):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_EXTRACTION_POINTER_MISMATCH")
+    proposals = tuple(
+        proposal
+        for proposal in extraction.items
+        if proposal.item_proposal_id == accepted_source.item_proposal_id
+        and proposal.item_number == accepted_source.item_number
+    )
+    if len(proposals) != 1:
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_ITEM_PROPOSAL_UNRESOLVED")
+    proposal = proposals[0]
+    anchors = {anchor.anchor_id: anchor for anchor in proposal.source_anchors}
+    if len(anchors) != len(proposal.source_anchors):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_DUPLICATE")
+    pages: dict[tuple[str, int], AssessmentPageImageInput] = {
+        (page.source_role, page.physical_page): page for page in accepted_source.page_inputs
+    }
+    if len(pages) != len(accepted_source.page_inputs):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_PAGE_DUPLICATE")
+
+    patterns_by_anchor: dict[str, list[AssessmentVisualPatternObservation]] = defaultdict(list)
+    for pattern in proposal.visual_patterns:
+        if pattern.representation_kind not in {"PHOTOGRAPH", "COMPOSITE"}:
+            continue
+        if pattern.rendering_mode not in {"RASTER", "MIXED"}:
+            continue
+        for anchor_id in pattern.source_anchor_ids:
+            patterns_by_anchor[anchor_id].append(pattern)
+
+    entries: list[dict[str, object]] = []
+    omissions: list[dict[str, object]] = []
+    extraction_pointer = _artifact_member(accepted_source.extraction_result_artifact)
+    rights_policy = source.rights_policy.model_dump(mode="json")
+    for anchor_id in sorted(patterns_by_anchor):
+        patterns = patterns_by_anchor[anchor_id]
+        anchor = anchors.get(anchor_id)
+        if anchor is None:
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_UNRESOLVED")
+        kinds = {pattern.representation_kind for pattern in patterns}
+        modes = {pattern.rendering_mode for pattern in patterns}
+        pattern_ids = sorted({pattern.pattern_id for pattern in patterns})
+        page = (
+            None
+            if anchor.physical_page is None
+            else pages.get((anchor.source_role, anchor.physical_page))
+        )
+        if (
+            anchor.physical_page is None
+            or anchor.bounding_box is None
+            or page is None
+            or len(kinds) != 1
+            or len(modes) != 1
+        ):
+            omissions.append(
+                {
+                    "item_revision_id": accepted_source.item_revision_id,
+                    "extraction_result": extraction_pointer,
+                    "source_anchor_id": anchor_id,
+                    "visual_pattern_ids": pattern_ids,
+                    "exclusion_reasons": ["AMBIGUOUS_CROP"],
+                }
+            )
+            continue
+        source_page = _artifact_member(page.image)
+        identity = content_sha256(
+            {
+                "item_revision_id": accepted_source.item_revision_id,
+                "extraction_result": extraction_pointer,
+                "source_anchor_id": anchor_id,
+                "visual_pattern_ids": pattern_ids,
+                "source_page_image": source_page,
+                "bounding_box": anchor.bounding_box.model_dump(mode="json"),
+            }
+        ).removeprefix("sha256:")
+        reasons: list[str] = []
+        if anchor_id in holdout_anchors:
+            reasons.append("HOLDOUT_OR_NEAR_DUPLICATE")
+        if anchor.source_role == "ANSWER_EXPLANATION_DOCUMENT":
+            reasons.append("ANSWER_OR_EXPLANATION_CONTENT")
+        entries.append(
+            {
+                "candidate_id": "imgtraincandidate_" + identity[:32],
+                "item_revision_id": accepted_source.item_revision_id,
+                "extraction_result": extraction_pointer,
+                "source_anchor_id": anchor_id,
+                "visual_pattern_ids": pattern_ids,
+                "source_page_image": source_page,
+                "physical_page": anchor.physical_page,
+                "bounding_box": anchor.bounding_box.model_dump(mode="json"),
+                "rights_policy": rights_policy,
+                "representation_kind": next(iter(kinds)),
+                "rendering_mode": next(iter(modes)),
+                "decision": "EXCLUDED" if reasons else "PENDING",
+                "exclusion_reasons": sorted(reasons),
+                "caption_en": None,
+                "caption_sha256": None,
+            }
+        )
+    return entries, omissions
+
+
+def project_training_eligibility_draft(
+    *,
+    sources: tuple[AcceptedVisualTrainingSource, ...],
+    source_snapshot: ImageEvaluationSourceSnapshot,
+    holdout_evaluation_plan: ImageEvaluationArtifactMember,
+    holdout_sample_ids: tuple[str, ...],
+    holdout_source_anchor_ids: tuple[str, ...],
+    created_at: datetime,
+    created_by: str,
+) -> LocalImageTrainingEligibilityReview:
+    """Create an immutable draft; no projected entry is automatically eligible."""
+
+    if len(sources) != source_snapshot.target_count:
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_SET_INCOMPLETE")
+    item_revision_ids = tuple(source.accepted.source.item_revision_id for source in sources)
+    if item_revision_ids != tuple(sorted(item_revision_ids)) or len(item_revision_ids) != len(
+        set(item_revision_ids)
+    ):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_SET_INVALID")
+    if holdout_sample_ids != tuple(sorted(set(holdout_sample_ids))) or (
+        holdout_source_anchor_ids != tuple(sorted(set(holdout_source_anchor_ids)))
+    ):
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_HOLDOUT_SET_INVALID")
+
+    entries: list[dict[str, object]] = []
+    omissions: list[dict[str, object]] = []
+    holdout_anchors = frozenset(holdout_source_anchor_ids)
+    try:
+        for source in sources:
+            projected, omitted = _project_one(source, holdout_anchors=holdout_anchors)
+            entries.extend(projected)
+            omissions.extend(omitted)
+        entries.sort(key=lambda entry: str(entry["candidate_id"]))
+        omissions.sort(
+            key=lambda omission: (
+                str(omission["item_revision_id"]),
+                str(omission["source_anchor_id"]),
+            )
+        )
+        if not entries and not omissions:
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_CANDIDATE_SET_EMPTY")
+        identity = content_sha256(
+            {
+                "source_snapshot": source_snapshot.model_dump(mode="json"),
+                "holdout_evaluation_plan": holdout_evaluation_plan.model_dump(mode="json"),
+                "entries": entries,
+                "projection_omissions": omissions,
+            }
+        ).removeprefix("sha256:")
+        body = {
+            "schema_version": "local-image-training-eligibility-review/1.0",
+            "review_id": "imgtrainreview_" + identity[:32],
+            "review_state": "DRAFT",
+            "source_snapshot": source_snapshot.model_dump(mode="json"),
+            "holdout_evaluation_plan": holdout_evaluation_plan.model_dump(mode="json"),
+            "holdout_sample_ids": list(holdout_sample_ids),
+            "holdout_source_anchor_ids": list(holdout_source_anchor_ids),
+            "selection_query_revision": "local-image-lora-candidate-query/1.0",
+            "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
+            "entries": entries,
+            "projection_omissions": omissions,
+            "eligible_candidate_set_sha256": content_sha256([]),
+            "reviewed_at": created_at.isoformat().replace("+00:00", "Z"),
+            "reviewed_by": created_by,
+        }
+        value = {**body, "review_sha256": content_sha256(body)}
+        validate_contract("training-eligibility-review", value)
+        return LocalImageTrainingEligibilityReview.model_validate(value)
+    except TrainingCandidateProjectionError:
+        raise
+    except (PydanticValidationError, TypeError, ValueError) as exc:
+        raise TrainingCandidateProjectionError(
+            "IMAGE_TRAINING_CANDIDATE_PROJECTION_FAILED"
+        ) from exc

@@ -23,6 +23,7 @@ SCHEMA_FILES = {
     "training-authorization": "local-image-training-authorization-v1.schema.json",
     "training-candidate-inventory": ("local-image-training-candidate-inventory-v1.schema.json"),
     "training-dataset-manifest": "local-image-training-dataset-manifest-v1.schema.json",
+    "training-eligibility-review": ("local-image-training-eligibility-review-v1.schema.json"),
     "lora-training-plan": "local-image-lora-training-plan-v1.schema.json",
     "lora-adapter-manifest": "local-image-lora-adapter-manifest-v1.schema.json",
     "lora-checkpoint-manifest": "local-image-lora-checkpoint-manifest-v1.schema.json",
@@ -47,10 +48,13 @@ SCHEMA_SHA256 = {
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
     ),
     "training-dataset-manifest": (
-        "sha256:8b742909fe369e3ca59fa78537d0617739caf9d2a61b047517eb7d70d6d320c5"
+        "sha256:ecb43e5ed58af59b40056a2afa0f541b12caffb71dee733aaa2681aef694c81c"
+    ),
+    "training-eligibility-review": (
+        "sha256:f7d3e559cb537057db36dcea3a97f199617b2b0c4a9725689b27212ff4384d0d"
     ),
     "training-candidate-inventory": (
-        "sha256:f8657fd68e87f2fa7e5fd82191458b150c8265007197e3b6c7c3f731f75538ee"
+        "sha256:c9908e54437663d1044822c61ff1c7ada6e1de09be8f08b72d2932b1849a9ee2"
     ),
     "lora-training-plan": (
         "sha256:f55bb6a9f5560764aa21174a91d5f187d430aed20a8c0cbcbfe24e430f49fdf5"
