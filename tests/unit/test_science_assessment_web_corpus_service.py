@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
     ScienceAssessmentCorpusSourcePointer,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
+    validate_science_corpus_manifest_against_acquisition,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_catalog_service.models import ContentIntakeSourceFileRecord
@@ -18,6 +19,9 @@ from eom_catalog_service.science_assessment_web_acquisition import (
     ScienceAssessmentDiscovery,
     ScienceAssessmentPdfCandidate,
 )
+from eom_catalog_service.science_assessment_web_acquisition_checkpoint import (
+    build_science_assessment_acquisition,
+)
 from eom_catalog_service.science_assessment_web_corpus_service import (
     MAX_INTAKE_FILES,
     ScienceAssessmentCorpusPublicationError,
@@ -25,6 +29,7 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _AggregatedPdf,
     _bounded_shards,
     _build_manifest,
+    _require_acquisition_projection,
     _ResolvedSource,
     _stage_intake_shard,
 )
@@ -147,9 +152,17 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
         candidates=tuple(value.candidate for value in acquired),
         rejected_link_count=0,
     )
+    acquisition = build_science_assessment_acquisition(
+        plan=plan,
+        discovery=discovery,
+        acquired=acquired,
+        failures=(),
+        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
+    )
 
     manifest = _build_manifest(
         plan=plan,
+        acquisition=acquisition,
         discovery=discovery,
         aggregate=aggregate,
         failures=(),
@@ -160,7 +173,6 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
             )
         },
         new_shards=(),
-        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
     )
 
     assert manifest.summary.unique_document_count == 1
@@ -168,11 +180,13 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
     assert manifest.summary.duplicate_observation_count == 1
     assert manifest.summary.reused_existing_count == 1
     assert manifest.intake_shards == ()
+    assert manifest.acquisition_sha256 == acquisition.acquisition_sha256
     validate_contract(
         "science-assessment-web-corpus-manifest",
         manifest.model_dump(mode="json"),
     )
     validate_science_corpus_manifest_against_plan(manifest, plan)
+    validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
 
 
 def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
@@ -194,6 +208,14 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
         candidates=(_candidate(post="100"),),
         rejected_link_count=0,
     )
+    acquired = (_acquired(source, post="100"),)
+    acquisition = build_science_assessment_acquisition(
+        plan=plan,
+        discovery=discovery,
+        acquired=acquired,
+        failures=(),
+        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
+    )
     shard = ScienceAssessmentCorpusIntakeShard(
         ordinal=1,
         intake_batch_id=pointer.intake_batch_id,
@@ -205,6 +227,7 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
 
     manifest = _build_manifest(
         plan=plan,
+        acquisition=acquisition,
         discovery=discovery,
         aggregate=aggregate,
         failures=(),
@@ -215,11 +238,34 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
             )
         },
         new_shards=(shard,),
-        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
     )
 
     assert manifest.summary.new_intake_count == 1
     assert manifest.intake_shards == (shard,)
+
+
+def test_acquisition_projection_rejects_local_observation_drift(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"x" * 4096)
+    acquired = (_acquired(source, post="100"),)
+    discovery = ScienceAssessmentDiscovery(
+        post_count=1,
+        candidates=(acquired[0].candidate,),
+        rejected_link_count=0,
+    )
+    acquisition = build_science_assessment_acquisition(
+        plan=_plan(),
+        discovery=discovery,
+        acquired=acquired,
+        failures=(),
+    )
+    drifted = (_acquired(source, post="200"),)
+
+    with pytest.raises(
+        ScienceAssessmentCorpusPublicationError,
+        match="ACQUISITION_PROJECTION_MISMATCH",
+    ):
+        _require_acquisition_projection(acquisition, discovery, drifted, ())
 
 
 def test_content_intake_source_hash_lookup_has_a_btree_index() -> None:

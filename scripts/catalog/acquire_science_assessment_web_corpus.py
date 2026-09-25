@@ -87,10 +87,14 @@ def main() -> None:
     args = _arguments()
     plan = _load_plan(args.plan)
     if args.publish_only:
-        discovery, acquired, failures = load_science_assessment_acquisition(
+        loaded = load_science_assessment_acquisition(
             plan=plan,
             workspace=args.workspace,
         )
+        acquisition = loaded.acquisition
+        discovery = loaded.discovery
+        acquired = loaded.acquired
+        failures = loaded.failures
     else:
         _require_workspace(args.workspace)
         acquirer = ScienceAssessmentWebAcquirer(plan)
@@ -131,6 +135,7 @@ def main() -> None:
     try:
         publication = ScienceAssessmentWebCorpusService(engine).publish(
             plan=plan,
+            acquisition=acquisition,
             discovery=discovery,
             acquired=acquired,
             failures=failures,

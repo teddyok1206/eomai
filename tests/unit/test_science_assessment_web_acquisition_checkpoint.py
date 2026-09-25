@@ -85,15 +85,16 @@ def test_acquisition_checkpoint_round_trip_revalidates_local_member(
         lambda *_args, **_kwargs: 4,
     )
 
-    loaded_discovery, loaded, failures = load_science_assessment_acquisition(
+    loaded = load_science_assessment_acquisition(
         plan=plan,
         workspace=workspace,
     )
 
     assert path.read_bytes().endswith(b"}")
-    assert loaded_discovery.post_count == 1
-    assert loaded == (acquired,)
-    assert failures == ()
+    assert loaded.discovery.post_count == 1
+    assert loaded.acquired == (acquired,)
+    assert loaded.failures == ()
+    assert loaded.acquisition == checkpoint
 
 
 def test_acquisition_checkpoint_rejects_member_hash_drift(
@@ -147,9 +148,9 @@ def test_acquisition_checkpoint_resolves_a_relative_workspace(
     )
     monkeypatch.chdir(tmp_path)
 
-    _, loaded, _ = load_science_assessment_acquisition(
+    loaded = load_science_assessment_acquisition(
         plan=plan,
         workspace=Path("workspace"),
     )
 
-    assert loaded[0].source == acquired.source
+    assert loaded.acquired[0].source == acquired.source

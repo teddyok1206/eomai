@@ -8,21 +8,24 @@ import stat
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from eom_catalog_contracts import (
+    ScienceAssessmentAcquisitionFailureObservation,
+    ScienceAssessmentAcquisitionSuccess,
     ScienceAssessmentCorpusAcquisitionFailure,
     ScienceAssessmentCorpusDocument,
     ScienceAssessmentCorpusIntakeShard,
     ScienceAssessmentCorpusOrigin,
-    ScienceAssessmentCorpusPdfValidator,
     ScienceAssessmentCorpusSourcePointer,
     ScienceAssessmentCorpusSummary,
+    ScienceAssessmentWebAcquisition,
     ScienceAssessmentWebCorpusManifest,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
+    validate_science_acquisition_against_plan,
+    validate_science_corpus_manifest_against_acquisition,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_catalog_contracts.science_assessment_corpus import IssuerType, SubjectFamily
@@ -112,14 +115,16 @@ class ScienceAssessmentWebCorpusService:
         self,
         *,
         plan: ScienceAssessmentWebCorpusPlan,
+        acquisition: ScienceAssessmentWebAcquisition,
         discovery: ScienceAssessmentDiscovery,
         acquired: tuple[AcquiredScienceAssessmentPdf, ...],
         failures: tuple[DownloadFailure, ...],
         received_by: str,
-        observed_at: datetime | None = None,
     ) -> ScienceAssessmentCorpusPublication:
         if not acquired:
             raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_NO_VALID_PDFS")
+        validate_science_acquisition_against_plan(acquisition, plan)
+        _require_acquisition_projection(acquisition, discovery, acquired, failures)
         aggregate = _aggregate_acquired(acquired)
         resolved = self._resolve_existing_sources(aggregate)
         new_hashes = tuple(value for value in aggregate if value not in resolved)
@@ -132,13 +137,14 @@ class ScienceAssessmentWebCorpusService:
         )
         manifest = _build_manifest(
             plan=plan,
+            acquisition=acquisition,
             discovery=discovery,
             aggregate=aggregate,
             failures=failures,
             resolved=resolved,
             new_shards=new_shards,
-            observed_at=observed_at or datetime.now(UTC),
         )
+        validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
         return self._commit_manifest(manifest, plan)
 
     def _resolve_existing_sources(
@@ -455,12 +461,12 @@ def _bounded_shards(
 def _build_manifest(
     *,
     plan: ScienceAssessmentWebCorpusPlan,
+    acquisition: ScienceAssessmentWebAcquisition,
     discovery: ScienceAssessmentDiscovery,
     aggregate: dict[str, _AggregatedPdf],
     failures: tuple[DownloadFailure, ...],
     resolved: dict[str, _ResolvedSource],
     new_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...],
-    observed_at: datetime,
 ) -> ScienceAssessmentWebCorpusManifest:
     documents = tuple(
         ScienceAssessmentCorpusDocument(
@@ -503,14 +509,8 @@ def _build_manifest(
             "schema_version": "science-assessment-web-corpus-manifest/1.0",
             "plan_id": plan.plan_id,
             "plan_sha256": plan.plan_sha256,
-            "document_sha256s": [value.sha256 for value in documents],
+            "acquisition_sha256": acquisition.acquisition_sha256,
         }
-    )
-    pdf_validator = ScienceAssessmentCorpusPdfValidator(
-        qpdf_path="/usr/bin/qpdf",
-        qpdf_sha256=sha256_file(Path("/usr/bin/qpdf")),
-        pdfinfo_path="/usr/bin/pdfinfo",
-        pdfinfo_sha256=sha256_file(Path("/usr/bin/pdfinfo")),
     )
     summary = ScienceAssessmentCorpusSummary(
         unique_document_count=len(documents),
@@ -527,8 +527,9 @@ def _build_manifest(
         "corpus_id": "sciencecorpus_" + identity.removeprefix("sha256:")[:32],
         "plan_id": plan.plan_id,
         "plan_sha256": plan.plan_sha256,
-        "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
-        "pdf_validator": pdf_validator.model_dump(mode="json"),
+        "acquisition_sha256": acquisition.acquisition_sha256,
+        "observed_at": acquisition.observed_at.isoformat().replace("+00:00", "Z"),
+        "pdf_validator": acquisition.pdf_validator.model_dump(mode="json"),
         "documents": [item.model_dump(mode="json") for item in documents],
         "failures": [item.model_dump(mode="json") for item in failure_models],
         "intake_shards": [item.model_dump(mode="json") for item in new_shards],
@@ -539,6 +540,80 @@ def _build_manifest(
         {key: item for key, item in value.items() if key != "manifest_sha256"}
     )
     return ScienceAssessmentWebCorpusManifest.model_validate(value)
+
+
+def _require_acquisition_projection(
+    acquisition: ScienceAssessmentWebAcquisition,
+    discovery: ScienceAssessmentDiscovery,
+    acquired: tuple[AcquiredScienceAssessmentPdf, ...],
+    failures: tuple[DownloadFailure, ...],
+) -> None:
+    successful = tuple(
+        sorted(
+            (
+                ScienceAssessmentAcquisitionSuccess(
+                    post_url=value.candidate.post_url,
+                    download_url=value.candidate.download_url,
+                    link_text=value.candidate.link_text,
+                    original_filename=value.candidate.original_filename,
+                    subject_family=value.candidate.subject_family,
+                    subject_label=value.candidate.subject_label,
+                    issuer_type=value.candidate.issuer_type,
+                    administration_year=value.candidate.administration_year,
+                    grade=value.candidate.grade,
+                    session_label=value.candidate.session_label,
+                    resolved_url=value.resolved_url,
+                    member_path=f"documents/{value.sha256.removeprefix('sha256:')}.pdf",
+                    sha256=value.sha256,
+                    bytes=value.bytes,
+                    page_count=value.page_count,
+                )
+                for value in acquired
+            ),
+            key=lambda value: (
+                value.post_url,
+                value.download_url,
+                value.link_text,
+                value.sha256,
+            ),
+        )
+    )
+    failed = tuple(
+        sorted(
+            (
+                ScienceAssessmentAcquisitionFailureObservation(
+                    post_url=value.candidate.post_url,
+                    download_url=value.candidate.download_url,
+                    link_text=value.candidate.link_text,
+                    original_filename=value.candidate.original_filename,
+                    subject_family=value.candidate.subject_family,
+                    subject_label=value.candidate.subject_label,
+                    issuer_type=value.candidate.issuer_type,
+                    administration_year=value.candidate.administration_year,
+                    grade=value.candidate.grade,
+                    session_label=value.candidate.session_label,
+                    error_code=value.error_code,
+                )
+                for value in failures
+            ),
+            key=lambda value: (
+                value.post_url,
+                value.download_url,
+                value.link_text,
+                value.error_code,
+            ),
+        )
+    )
+    if (
+        successful != acquisition.successful_observations
+        or failed != acquisition.failed_observations
+        or discovery.post_count != acquisition.summary.scanned_post_count
+        or discovery.rejected_link_count != acquisition.summary.rejected_link_count
+        or len(discovery.candidates) != acquisition.summary.candidate_count
+    ):
+        raise ScienceAssessmentCorpusPublicationError(
+            "SCIENCE_CORPUS_ACQUISITION_PROJECTION_MISMATCH"
+        )
 
 
 def _source_pointer(source: ContentIntakeSourceFileRecord) -> ScienceAssessmentCorpusSourcePointer:

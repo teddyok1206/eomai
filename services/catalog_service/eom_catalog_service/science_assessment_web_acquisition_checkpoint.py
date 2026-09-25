@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
@@ -36,6 +37,14 @@ class ScienceAssessmentAcquisitionCheckpointError(RuntimeError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedScienceAssessmentAcquisition:
+    acquisition: ScienceAssessmentWebAcquisition
+    discovery: ScienceAssessmentDiscovery
+    acquired: tuple[AcquiredScienceAssessmentPdf, ...]
+    failures: tuple[ScienceAssessmentAcquisitionFailure, ...]
 
 
 def build_science_assessment_acquisition(
@@ -179,11 +188,7 @@ def load_science_assessment_acquisition(
     *,
     plan: ScienceAssessmentWebCorpusPlan,
     workspace: Path,
-) -> tuple[
-    ScienceAssessmentDiscovery,
-    tuple[AcquiredScienceAssessmentPdf, ...],
-    tuple[ScienceAssessmentAcquisitionFailure, ...],
-]:
+) -> ValidatedScienceAssessmentAcquisition:
     _require_workspace(workspace)
     path = workspace / ACQUISITION_MANIFEST_NAME
     metadata = path.lstat()
@@ -266,7 +271,12 @@ def load_science_assessment_acquisition(
         ),
         rejected_link_count=acquisition.summary.rejected_link_count,
     )
-    return discovery, tuple(acquired), failures
+    return ValidatedScienceAssessmentAcquisition(
+        acquisition=acquisition,
+        discovery=discovery,
+        acquired=tuple(acquired),
+        failures=failures,
+    )
 
 
 def _candidate_from_success(
