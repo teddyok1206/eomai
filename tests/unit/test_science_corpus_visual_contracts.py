@@ -8,7 +8,9 @@ import pytest
 from eom_image_contracts import (
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotCommand,
+    LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
@@ -241,6 +243,28 @@ def _plan_value() -> dict[str, object]:
     return {**body, "plan_sha256": content_sha256(body)}
 
 
+def _plan_v2_value() -> dict[str, object]:
+    value = copy.deepcopy(_plan_value())
+    value["schema_version"] = "local-image-science-corpus-visual-pilot-plan/1.1"
+    value["locator_revision"] = "science-corpus-visual-locator/1.1"
+    value["locator_policy"] = {
+        "max_candidates_per_page": 4,
+        "max_candidates_per_source": 12,
+        "maximum_redaction_area_milli": 450,
+        "minimum_interior_ink_milli": 8,
+        "maximum_border_ink_fraction_milli": 800,
+        "minimum_aspect_ratio_milli": 125,
+        "maximum_aspect_ratio_milli": 8000,
+    }
+    body = {key: item for key, item in value.items() if key not in {"pilot_id", "plan_sha256"}}
+    identity = content_sha256(body).removeprefix("sha256:")
+    value["pilot_id"] = "imgscivispilot_" + identity[:32]
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    return value
+
+
 def _candidate(document_id: str, page_hash: str, index: int) -> dict[str, object]:
     authority = (
         "AUTHORITATIVE_DETERMINISTIC_GEOMETRY" if index < 2 else "NON_AUTHORITATIVE_RASTER_STYLE"
@@ -298,6 +322,34 @@ def _command_value() -> dict[str, object]:
     identity = content_sha256(body).removeprefix("sha256:")
     body["attempt_id"] = "imgscivisattempt_" + identity[:32]
     return {**body, "command_sha256": content_sha256(body)}
+
+
+def _command_v2_value() -> dict[str, object]:
+    plan = _plan_v2_value()
+    value = copy.deepcopy(_command_value())
+    value["schema_version"] = "local-image-science-corpus-visual-pilot-command/1.1"
+    value["plan"]["schema_ref"] = (
+        "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+    )
+    value["plan"]["sha256"] = plan["plan_sha256"]
+    value["plan_sha256"] = plan["plan_sha256"]
+    value["staged_sources"] = [
+        {
+            "document_id": source["document_id"],
+            "staged_pdf_member": f"input/pdfs/{source['document_id']}.pdf",
+            "sha256": source["pdf"]["sha256"],
+            "bytes": source["bytes"],
+            "page_count": source["page_count"],
+        }
+        for source in plan["selected_sources"]
+    ]
+    body = {key: item for key, item in value.items() if key not in {"attempt_id", "command_sha256"}}
+    identity = content_sha256(body).removeprefix("sha256:")
+    value["attempt_id"] = "imgscivisattempt_" + identity[:32]
+    value["command_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "command_sha256"}
+    )
+    return value
 
 
 def _result_value() -> dict[str, object]:
@@ -434,9 +486,19 @@ def _inventory_v2_value() -> dict[str, object]:
             _plan_value,
         ),
         (
+            "science-corpus-visual-pilot-plan-v2",
+            LocalImageScienceCorpusVisualPilotPlanV2,
+            _plan_v2_value,
+        ),
+        (
             "science-corpus-visual-pilot-command",
             LocalImageScienceCorpusVisualPilotCommand,
             _command_value,
+        ),
+        (
+            "science-corpus-visual-pilot-command-v2",
+            LocalImageScienceCorpusVisualPilotCommandV2,
+            _command_v2_value,
         ),
         (
             "science-corpus-visual-pilot-result",
@@ -480,6 +542,24 @@ def test_science_visual_cross_contract_bindings() -> None:
     assert (
         content_sha256(authorization.model_dump(mode="json")) == plan.training_authorization.sha256
     )
+
+    plan_v2 = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(_plan_v2_value())
+    command_v2 = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(_command_v2_value())
+    validate_science_visual_authorization_plan(authorization, plan_v2)
+    validate_science_visual_pilot_command(plan_v2, command_v2)
+
+
+def test_science_visual_v2_rejects_version_mismatch_and_invalid_locator_caps() -> None:
+    plan_v2 = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(_plan_v2_value())
+    command_v1 = LocalImageScienceCorpusVisualPilotCommand.model_validate(_command_value())
+    with pytest.raises(ValueError, match="contract versions differ"):
+        validate_science_visual_pilot_command(plan_v2, command_v1)
+
+    value = _plan_v2_value()
+    value["locator_policy"]["max_candidates_per_page"] = 8
+    value["locator_policy"]["max_candidates_per_source"] = 4
+    with pytest.raises(ValidationError, match="source cap is smaller"):
+        LocalImageScienceCorpusVisualPilotPlanV2.model_validate(value)
 
 
 def test_science_visual_command_rejects_staged_pdf_drift() -> None:
