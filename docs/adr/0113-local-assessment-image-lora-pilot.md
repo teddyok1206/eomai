@@ -116,6 +116,15 @@ The crop-review pointer SHA-256 covers the complete canonical proposal-set membe
 self-hash field. They are intentionally distinct and both are verified when the review is resolved;
 one must never be substituted for the other.
 
+The deterministic locator was subsequently exercised on the pinned population. Run
+`imgcroplocator_a30b7b2ba2b9f38ca00ea0b000a72ad9` produced 683 proposals for 139 anchors and 68
+typed omissions, covering all 207 staged or pre-omitted anchors. The proposal set and all-pending
+DRAFT review were published as immutable control Artifacts. Inspection of all 18 grouped review
+boards found at most 18 plausible anchors before duplicate removal. This is decisively below the
+100-sample minimum, so the decision above remains in force: the review is not finalized and no
+dataset or adapter is produced. This operational result is evidence for the fail-closed policy, not
+authorization to broaden the source classes or reinterpret excluded geometry as style material.
+
 Source permissions and intended-use metadata must authorize internal derivative model training.
 Absence or ambiguity is an explicit `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` exclusion; approval as a
 RAG source alone is not silently treated as training authorization.

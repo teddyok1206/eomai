@@ -104,6 +104,37 @@ work is `local-image-training-crop-proposal-set/1.0` followed by an exact
 redactions, and a human selects at most one immutable proposal per source anchor.  Neither action
 starts a GPU training job.
 
+### 2026-09-25 crop-locator execution outcome
+
+The approved source snapshot and training authorization were exercised through the isolated
+crop-locator boundary without starting GPU training. The successful run is
+`imgcroplocator_a30b7b2ba2b9f38ca00ea0b000a72ad9`, bound to source commit
+`ab2d2a563ef0a2c7aef3ce79bc1bd3a8af835db1`. It consumed 73 unique staged page images and closed
+the exact 207-anchor input population as follows:
+
+- 139 source anchors with 683 ranked immutable crop proposals;
+- 68 typed omissions;
+- zero uncovered source anchors;
+- proposal-set Artifact Revision `rev_24608be00d5145c8bb3ff6745a2a1ed3`, member SHA-256
+  `sha256:47a296855b2f299ba7f385060efc26e91a8a01524b56ceb469add5e5dea203fb`;
+- all-pending DRAFT review Artifact Revision `rev_a41ea79532d2401195512e6d3e4f6a34`, member SHA-256
+  `sha256:cc9622ff272877e118895b10fd075724060c5ac1058e72f6db5949a51eede1d9`.
+
+All 18 grouped contact-sheet boards were inspected against the accepted exclusions. The strict
+first screen retained at most 18 plausible anchors before exact/perceptual duplicate removal; the
+other proposals contained or were dominated by item text, options or answers, people, tables,
+graphs, axes, values, scientific labels, authoritative geometry, incomplete crops, or OCR-redaction
+damage. Several of the 18 preliminary survivors visibly repeat the same rock, fossil, vehicle, or
+natural-image source, so deterministic dataset deduplication can only reduce that number.
+
+This is below the immutable 100-sample minimum. The DRAFT therefore remains pending, no FINAL
+review or candidate inventory is published, and no dataset, GPU training run, LoRA adapter, holdout
+evaluation, or provider activation exists for this pilot. Do not reinterpret the user-level source
+authorization as individual crop approval, fabricate additional samples, augment duplicates, admit
+excluded diagram classes, or lower the minimum. A later attempt requires additional separately
+approved source material that can satisfy the existing policy, or a separately designed and
+approved training objective; it is not a retry of this exact source population.
+
 ## P2: deterministic dataset
 
 The Orchestrator stages exact validated page members into a local workspace. The trainer dataset
