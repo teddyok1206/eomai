@@ -5,13 +5,14 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageQualityEvaluationPlan,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
     LocalImageTrainingCropReview,
+    content_json_bytes,
     validate_contract,
 )
 from pydantic import BaseModel
@@ -116,7 +117,10 @@ class LocalImageTrainingControlArtifactPublisher:
     ) -> ImageEvaluationArtifactMember:
         document = value.model_dump(mode="json")
         validate_contract(contract_name, document)
-        payload = canonical_json_bytes(document)
+        # Image contracts intentionally include bounded JSON numbers such as sampler guidance.
+        # Persist their own canonical encoding instead of the generic EOM message serializer,
+        # which correctly rejects floats for message/state-machine contracts.
+        payload = content_json_bytes(document)
         digest = sha256_bytes(payload)
         published = self.publisher.publish_bytes(
             payload=payload,

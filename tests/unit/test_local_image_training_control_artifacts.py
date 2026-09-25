@@ -3,14 +3,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import eom_orchestrator.local_image_training_control_artifacts as control_artifacts
 from eom_catalog_service.local_image_training_authorization import build_training_authorization
-from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_image_contracts import ImageEvaluationSourceSnapshot, ImageTrainingRightsPolicy
+from eom_identifiers import sha256_bytes
+from eom_image_contracts import (
+    ImageEvaluationSourceSnapshot,
+    ImageTrainingRightsPolicy,
+    content_json_bytes,
+)
 from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
     LocalImageTrainingControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
+from pydantic import BaseModel
 
 
 class _Publisher:
@@ -66,7 +72,7 @@ def test_authorization_uses_orchestrator_control_artifact_boundary() -> None:
         source_commit="a" * 40,
     )
     pointer = adapter.commit_authorization(authorization)
-    payload = canonical_json_bytes(authorization.model_dump(mode="json"))
+    payload = content_json_bytes(authorization.model_dump(mode="json"))
     assert publisher.arguments["payload"] == payload
     assert publisher.arguments["artifact_type"] == AUTHORIZATION_ARTIFACT_TYPE
     assert publisher.arguments["idempotency_key"] == (
@@ -74,3 +80,31 @@ def test_authorization_uses_orchestrator_control_artifact_boundary() -> None:
         + authorization.authorization_sha256.removeprefix("sha256:")
     )
     assert pointer.sha256 == sha256_bytes(payload)
+
+
+def test_image_control_artifact_uses_image_contract_number_encoding(monkeypatch) -> None:
+    class _FloatControl(BaseModel):
+        guidance_scale: float
+
+    monkeypatch.setattr(control_artifacts, "validate_contract", lambda *_args: None)
+    publisher = _Publisher()
+    adapter = LocalImageTrainingControlArtifactPublisher(
+        publisher,  # type: ignore[arg-type]
+        source_commit="a" * 40,
+    )
+    value = _FloatControl(guidance_scale=7.5)
+
+    pointer = adapter._commit_document(
+        value=value,
+        contract_name="quality-evaluation-plan",
+        member="manifests/test-float.json",
+        schema_ref="eom://schemas/image-provider/test-float/1.0",
+        artifact_type="control_local_image_test_float",
+        idempotency_prefix="local-image-test-float",
+        identity_sha256="sha256:" + "f" * 64,
+        created_at=datetime(2026, 9, 25, 8, 0, tzinfo=UTC),
+    )
+
+    expected = content_json_bytes({"guidance_scale": 7.5})
+    assert publisher.arguments["payload"] == expected
+    assert pointer.sha256 == sha256_bytes(expected)
