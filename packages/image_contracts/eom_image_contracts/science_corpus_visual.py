@@ -682,6 +682,19 @@ def validate_science_visual_pilot_result(
         (value.document_id, value.physical_page) not in source_pages for value in result.omissions
     ):
         raise ValueError("science visual pilot result contains an unplanned source page")
+    if isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2):
+        candidates_per_page = Counter(
+            (value.document_id, value.physical_page) for value in result.visual_candidates
+        )
+        candidates_per_source = Counter(value.document_id for value in result.visual_candidates)
+        if any(
+            count > plan.locator_policy.max_candidates_per_page
+            for count in candidates_per_page.values()
+        ) or any(
+            count > plan.locator_policy.max_candidates_per_source
+            for count in candidates_per_source.values()
+        ):
+            raise ValueError("science visual pilot result exceeds locator limits")
 
 
 def validate_science_visual_pilot_command(

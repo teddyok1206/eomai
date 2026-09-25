@@ -634,6 +634,59 @@ def test_science_visual_result_rejects_unplanned_page_and_duplicate_crop() -> No
         LocalImageScienceCorpusVisualPilotResult.model_validate(duplicate)
 
 
+def test_science_visual_result_v2_rejects_locator_candidate_caps() -> None:
+    plan_value = _plan_v2_value()
+    plan_value["locator_policy"]["max_candidates_per_page"] = 2
+    plan_value["locator_policy"]["max_candidates_per_source"] = 2
+    plan_body = {
+        key: item for key, item in plan_value.items() if key not in {"pilot_id", "plan_sha256"}
+    }
+    plan_identity = content_sha256(plan_body).removeprefix("sha256:")
+    plan_value["pilot_id"] = "imgscivispilot_" + plan_identity[:32]
+    plan_value["plan_sha256"] = content_sha256(
+        {key: item for key, item in plan_value.items() if key != "plan_sha256"}
+    )
+    plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(plan_value)
+
+    result_value = _result_value()
+    result_value["pilot_id"] = plan.pilot_id
+    result_value["plan_sha256"] = plan.plan_sha256
+    first = copy.deepcopy(result_value["visual_candidates"][0])
+    additions = []
+    for offset in (100, 200):
+        candidate_body = {
+            key: item
+            for key, item in first.items()
+            if key not in {"candidate_id", "member_path", "sha256", "size_bytes"}
+        }
+        candidate_body["bounding_box"] = {
+            "left": 1000 + offset,
+            "top": 1200,
+            "right": 8000,
+            "bottom": 7200,
+        }
+        candidate_identity = content_sha256(candidate_body).removeprefix("sha256:")
+        candidate_id = "imgsciviscandidate_" + candidate_identity[:32]
+        additions.append(
+            {
+                "candidate_id": candidate_id,
+                **candidate_body,
+                "member_path": f"crops/{candidate_id}.png",
+                "sha256": "sha256:" + f"{offset + 900:064x}",
+                "size_bytes": 5000 + offset,
+            }
+        )
+    result_value["visual_candidates"].extend(additions)
+    result_value["visual_candidates"].sort(key=lambda item: item["candidate_id"])
+    result_value["result_sha256"] = content_sha256(
+        {key: item for key, item in result_value.items() if key != "result_sha256"}
+    )
+    result = LocalImageScienceCorpusVisualPilotResult.model_validate(result_value)
+
+    with pytest.raises(ValueError, match="exceeds locator limits"):
+        validate_science_visual_pilot_result(plan, result)
+
+
 def test_science_visual_inventory_rejects_authoritative_lora_and_missing_review() -> None:
     result = LocalImageScienceCorpusVisualPilotResult.model_validate(_result_value())
     value = _inventory_value()

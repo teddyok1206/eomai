@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np  # type: ignore[import-not-found]
-from eom_image_contracts import ImageEvaluationBoundingBox
+from eom_image_contracts import ImageEvaluationBoundingBox, ScienceVisualLocatorPolicyV2
 from PIL import Image, ImageFilter  # type: ignore[import-not-found]
 
 MAX_LOCATOR_DIMENSION = 700
@@ -346,3 +346,88 @@ def locate_visual_regions(
         if len(regions) == MAX_PROPOSALS:
             break
     return tuple(regions)
+
+
+def filter_visual_regions_v2(
+    image: Image.Image,
+    *,
+    regions: tuple[LocatedVisualRegion, ...],
+    policy: ScienceVisualLocatorPolicyV2,
+) -> tuple[LocatedVisualRegion, ...]:
+    """Apply the locator 1.1 false-positive policy to bounded 1.0 proposals.
+
+    The proposal population is capped at eight, so each proposal can inspect its crop while
+    retaining O(p) page-time and O(p) space.  Redaction coverage rejects text-dominant regions,
+    aspect bounds reject rules, and the share of ink in a narrow perimeter rejects empty answer
+    frames without rejecting tables that also carry internal grid/content ink.
+    """
+
+    if image.width < 64 or image.height < 64 or image.width * image.height > 100_000_000:
+        raise CropLocatorError("IMAGE_TRAINING_SOURCE_PAGE_INVALID")
+    grayscale = np.asarray(image.convert("L"))
+    filtered: list[LocatedVisualRegion] = []
+    for region in regions:
+        left, top, right, bottom = _pixel_box(
+            region.crop_bounding_box,
+            width=image.width,
+            height=image.height,
+        )
+        width = right - left
+        height = bottom - top
+        area = width * height
+        if width < 1 or height < 1 or area < 1:
+            continue
+        aspect_ratio_milli = width * 1000 // height
+        if not (
+            policy.minimum_aspect_ratio_milli
+            <= aspect_ratio_milli
+            <= policy.maximum_aspect_ratio_milli
+        ):
+            continue
+
+        raw_ink = grayscale[top:bottom, left:right] < _THRESHOLD
+        redaction_mask = np.zeros((height, width), dtype=np.bool_)
+        for redaction in region.redaction_boxes:
+            clipped = _clip_box(redaction, region.crop_bounding_box)
+            if clipped is None:
+                continue
+            redaction_pixels = _pixel_box(clipped, width=image.width, height=image.height)
+            redaction_left = max(0, redaction_pixels[0] - left)
+            redaction_top = max(0, redaction_pixels[1] - top)
+            redaction_right = min(width, redaction_pixels[2] - left)
+            redaction_bottom = min(height, redaction_pixels[3] - top)
+            redaction_mask[
+                redaction_top:redaction_bottom,
+                redaction_left:redaction_right,
+            ] = True
+        redaction_area_milli = int(redaction_mask.sum()) * 1000 // area
+        if redaction_area_milli > policy.maximum_redaction_area_milli:
+            continue
+
+        unredacted_ink = raw_ink & ~redaction_mask
+        ink_count = int(unredacted_ink.sum())
+        interior_ink_milli = ink_count * 1000 // area
+        if ink_count < 1 or interior_ink_milli < policy.minimum_interior_ink_milli:
+            continue
+
+        border_width = max(2, min(width, height) // 12)
+        border_mask = np.zeros((height, width), dtype=np.bool_)
+        border_mask[:border_width, :] = True
+        border_mask[-border_width:, :] = True
+        border_mask[:, :border_width] = True
+        border_mask[:, -border_width:] = True
+        border_ink_fraction_milli = int((unredacted_ink & border_mask).sum()) * 1000 // ink_count
+        if border_ink_fraction_milli > policy.maximum_border_ink_fraction_milli:
+            continue
+
+        filtered.append(
+            LocatedVisualRegion(
+                crop_bounding_box=region.crop_bounding_box,
+                redaction_boxes=region.redaction_boxes,
+                candidate_rank=len(filtered) + 1,
+                ink_fraction_milli=max(1, min(1000, interior_ink_milli)),
+            )
+        )
+        if len(filtered) == policy.max_candidates_per_page:
+            break
+    return tuple(filtered)

@@ -25,7 +25,9 @@ from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotCommand,
+    LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     ScienceVisualCandidate,
     ScienceVisualOmission,
@@ -43,6 +45,7 @@ from pydantic import ValidationError as PydanticValidationError
 from eom_image_trainer.crop_locator import (
     CropLocatorError,
     LocatedVisualRegion,
+    filter_visual_regions_v2,
     locate_visual_regions,
     run_tesseract,
 )
@@ -236,7 +239,15 @@ def _tool_version(executable: Path, *arguments: str) -> str:
     return first_line
 
 
-def _verify_tools(plan: LocalImageScienceCorpusVisualPilotPlan) -> tuple[str, str]:
+ScienceVisualPilotPlan = (
+    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
+)
+ScienceVisualPilotCommand = (
+    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+)
+
+
+def _verify_tools(plan: ScienceVisualPilotPlan) -> tuple[str, str]:
     pdftoppm_version = _tool_version(PDFTOPPM, "-v")
     tesseract_version = _tool_version(TESSERACT, "--version")
     if (
@@ -249,19 +260,24 @@ def _verify_tools(plan: LocalImageScienceCorpusVisualPilotPlan) -> tuple[str, st
     return pdftoppm_version, tesseract_version
 
 
-def load_command(path: Path) -> LocalImageScienceCorpusVisualPilotCommand:
+def load_command(path: Path) -> ScienceVisualPilotCommand:
     value = _parse_json(_read_regular(path, maximum_bytes=MAX_JSON_BYTES, expected_sha256=None))
     try:
-        validate_contract("science-corpus-visual-pilot-command", value)
-        return LocalImageScienceCorpusVisualPilotCommand.model_validate(value)
+        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.0":
+            validate_contract("science-corpus-visual-pilot-command", value)
+            return LocalImageScienceCorpusVisualPilotCommand.model_validate(value)
+        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.1":
+            validate_contract("science-corpus-visual-pilot-command-v2", value)
+            return LocalImageScienceCorpusVisualPilotCommandV2.model_validate(value)
+        raise ValueError("unsupported science visual pilot command version")
     except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_COMMAND_INVALID") from exc
 
 
 def _load_plan(
     workspace: Path,
-    command: LocalImageScienceCorpusVisualPilotCommand,
-) -> LocalImageScienceCorpusVisualPilotPlan:
+    command: ScienceVisualPilotCommand,
+) -> ScienceVisualPilotPlan:
     value = _parse_json(
         _read_regular(
             _member_path(workspace, command.staged_plan_member),
@@ -270,8 +286,14 @@ def _load_plan(
         )
     )
     try:
-        validate_contract("science-corpus-visual-pilot-plan", value)
-        plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(value)
+        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
+            validate_contract("science-corpus-visual-pilot-plan-v2", value)
+            plan: ScienceVisualPilotPlan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(
+                value
+            )
+        else:
+            validate_contract("science-corpus-visual-pilot-plan", value)
+            plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(value)
         validate_science_visual_pilot_command(plan, command)
         return plan
     except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
@@ -460,6 +482,7 @@ def run_science_corpus_visual_pilot(
     crop_hashes: set[str] = set()
 
     for source in command.staged_sources:
+        accepted_for_source = 0
         pdf_path = _member_path(workspace, source.staged_pdf_member)
         _read_regular(
             pdf_path,
@@ -497,11 +520,20 @@ def run_science_corpus_visual_pilot(
                     context_bounding_box=None,
                     ocr_boxes=run_tesseract(page, executable=TESSERACT),
                 )
+                if isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2):
+                    regions = filter_visual_regions_v2(
+                        page,
+                        regions=regions,
+                        policy=plan.locator_policy,
+                    )
             except CropLocatorError as exc:
                 raise ScienceCorpusVisualRunnerError(exc.code) from exc
             accepted_on_page = 0
             for region in regions:
-                if len(candidates) >= plan.max_visual_candidates:
+                if len(candidates) >= plan.max_visual_candidates or (
+                    isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
+                    and accepted_for_source >= plan.locator_policy.max_candidates_per_source
+                ):
                     break
                 crop_payload = _redacted_crop(page, region)
                 candidate = _candidate(
@@ -517,7 +549,12 @@ def run_science_corpus_visual_pilot(
                 crop_hashes.add(candidate.sha256)
                 candidates.append(candidate)
                 accepted_on_page += 1
-            if len(candidates) >= plan.max_visual_candidates and len(regions) > accepted_on_page:
+                accepted_for_source += 1
+            candidate_limit_reached = len(candidates) >= plan.max_visual_candidates or (
+                isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
+                and accepted_for_source >= plan.locator_policy.max_candidates_per_source
+            )
+            if candidate_limit_reached and len(regions) > accepted_on_page:
                 omissions.append(
                     ScienceVisualOmission(
                         document_id=source.document_id,

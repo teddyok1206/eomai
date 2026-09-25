@@ -10,7 +10,9 @@ import pytest
 from eom_image_contracts import (
     ImageEvaluationBoundingBox,
     LocalImageScienceCorpusVisualPilotCommand,
+    LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     content_sha256,
 )
 from eom_image_trainer import science_corpus_visual_runner as runner
@@ -227,6 +229,57 @@ def _stage(tmp_path: Path) -> tuple[Path, Path, LocalImageScienceCorpusVisualPil
     return workspace, command_path, plan
 
 
+def _stage_v2(
+    tmp_path: Path,
+) -> tuple[Path, Path, LocalImageScienceCorpusVisualPilotPlanV2]:
+    workspace, command_path, original_plan = _stage(tmp_path)
+    plan_body = original_plan.model_dump(
+        mode="json",
+        exclude={"pilot_id", "plan_sha256"},
+    )
+    plan_body["schema_version"] = "local-image-science-corpus-visual-pilot-plan/1.1"
+    plan_body["locator_revision"] = "science-corpus-visual-locator/1.1"
+    plan_body["locator_policy"] = {
+        "max_candidates_per_page": 2,
+        "max_candidates_per_source": 2,
+        "maximum_redaction_area_milli": 350,
+        "minimum_interior_ink_milli": 8,
+        "maximum_border_ink_fraction_milli": 650,
+        "minimum_aspect_ratio_milli": 200,
+        "maximum_aspect_ratio_milli": 5000,
+    }
+    identity = content_sha256(plan_body).removeprefix("sha256:")
+    plan_body["pilot_id"] = "imgscivispilot_" + identity[:32]
+    plan_body["plan_sha256"] = content_sha256(plan_body)
+    plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(plan_body)
+    plan_payload = _canonical_json(plan.model_dump(mode="json"))
+    (workspace / "input/visual-pilot-plan.json").write_bytes(plan_payload)
+    (workspace / "input/visual-pilot-plan.json").chmod(0o600)
+
+    original_command = runner.load_command(command_path)
+    command_body = original_command.model_dump(
+        mode="json",
+        exclude={"attempt_id", "command_sha256"},
+    )
+    command_body["schema_version"] = "local-image-science-corpus-visual-pilot-command/1.1"
+    command_body["plan"] = _pointer(
+        "f",
+        member_path="manifests/visual-pilot-plan.json",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+        ),
+        sha256="sha256:" + hashlib.sha256(plan_payload).hexdigest(),
+    )
+    command_body["plan_sha256"] = plan.plan_sha256
+    command_identity = content_sha256(command_body).removeprefix("sha256:")
+    command_body["attempt_id"] = "imgscivisattempt_" + command_identity[:32]
+    command_body["command_sha256"] = content_sha256(command_body)
+    command = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(command_body)
+    command_path.write_bytes(_canonical_json(command.model_dump(mode="json")))
+    command_path.chmod(0o600)
+    return workspace, command_path, plan
+
+
 def _png_for_path(path: Path) -> bytes:
     digest = hashlib.sha256(path.name.encode()).digest()
     image = Image.new("RGB", (160, 120), (255, 255, 255))
@@ -291,6 +344,68 @@ def test_runner_materializes_typed_pages_candidates_and_result(
     result_path = workspace / "manifests/visual-pilot-result.json"
     assert result_path.read_bytes() == _canonical_json(result.model_dump(mode="json"))
     assert result_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_runner_v2_applies_filter_and_per_source_candidate_cap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, command_path, plan = _stage_v2(tmp_path)
+    regions = tuple(
+        LocatedVisualRegion(
+            crop_bounding_box=ImageEvaluationBoundingBox(
+                left=1000 + index * 100,
+                top=1000 + index * 100,
+                right=8000 + index * 100,
+                bottom=8000 + index * 100,
+            ),
+            redaction_boxes=(),
+            candidate_rank=index + 1,
+            ink_fraction_milli=800,
+        )
+        for index in range(4)
+    )
+    filter_calls = 0
+
+    def _filter(
+        page: Image.Image,
+        *,
+        regions: tuple[LocatedVisualRegion, ...],
+        policy: object,
+    ) -> tuple[LocatedVisualRegion, ...]:
+        nonlocal filter_calls
+        filter_calls += 1
+        return regions
+
+    monkeypatch.setattr(
+        runner,
+        "_verify_tools",
+        lambda _plan: ("pdftoppm version 24.02.0", "tesseract 5.3.4"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_render_pdf",
+        lambda path, *, expected_pages, dpi: (_png_for_path(path),),
+    )
+    monkeypatch.setattr(runner, "run_tesseract", lambda page, *, executable: ())
+    monkeypatch.setattr(
+        runner,
+        "locate_visual_regions",
+        lambda page, *, context_bounding_box, ocr_boxes: regions,
+    )
+    monkeypatch.setattr(runner, "filter_visual_regions_v2", _filter)
+
+    result = runner.run_science_corpus_visual_pilot(
+        workspace=workspace,
+        command_path=command_path,
+        now=datetime(2026, 9, 25, 19, 10, tzinfo=UTC),
+    )
+
+    assert result.plan_sha256 == plan.plan_sha256
+    assert filter_calls == 12
+    assert len(result.visual_candidates) == 24
+    assert len(result.omissions) == 12
+    assert {value.reason for value in result.omissions} == {"CANDIDATE_LIMIT_REACHED"}
 
 
 def test_runner_rejects_staged_pdf_hash_drift_before_render(
