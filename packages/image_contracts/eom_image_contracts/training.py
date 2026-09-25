@@ -488,6 +488,78 @@ class LocalImageLoraTrainingReceipt(FrozenModel):
         return self
 
 
+class LocalImageLoraTrainingCommand(FrozenModel):
+    schema_version: Literal["local-image-lora-training-command/1.0"]
+    training_run_id: str = Field(pattern=r"^imgtrainrun_[0-9a-f]{32}$")
+    training_plan_pointer: ImageEvaluationArtifactMember
+    training_plan_sha256: Sha256
+    training_plan: LocalImageLoraTrainingPlan
+    attempt: int = Field(ge=1, le=10)
+    staged_plan_member: Literal["inputs/training-plan.json"]
+    staged_dataset_root: Literal["inputs/dataset"]
+    output_root_member: Literal["outputs"]
+    checkpoint_root_member: Literal["checkpoints"]
+    timeout_seconds: int = Field(ge=600, le=86_400)
+    command_sha256: Sha256
+
+    @model_validator(mode="after")
+    def command_is_coherent(self) -> LocalImageLoraTrainingCommand:
+        _require_pointer(
+            self.training_plan_pointer,
+            schema_ref=TRAINING_PLAN_SCHEMA_REF,
+            member_path="manifests/training-plan.json",
+        )
+        if self.training_plan_sha256 != self.training_plan.plan_sha256:
+            raise ValueError("LoRA training command plan hash mismatch")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("LoRA training command hash mismatch")
+        return self
+
+
+class LocalImageLoraTrainingWorkerResult(FrozenModel):
+    schema_version: Literal["local-image-lora-training-worker-result/1.0"]
+    training_run_id: str = Field(pattern=r"^imgtrainrun_[0-9a-f]{32}$")
+    training_plan_pointer: ImageEvaluationArtifactMember
+    training_plan_sha256: Sha256
+    attempt: int = Field(ge=1, le=10)
+    status: Literal["SUCCEEDED", "FAILED", "CANCELLED"]
+    adapter_manifest: LocalImageLoraAdapterManifest | None
+    error_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{2,95}$")
+    runtime: LocalImageLoraTrainingRuntime
+    completed_steps: int = Field(ge=0, le=2000)
+    final_loss: float | None = Field(ge=0, le=1_000_000)
+    started_at: datetime
+    completed_at: datetime
+    result_sha256: Sha256
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def worker_result_is_coherent(self) -> LocalImageLoraTrainingWorkerResult:
+        _require_pointer(
+            self.training_plan_pointer,
+            schema_ref=TRAINING_PLAN_SCHEMA_REF,
+            member_path="manifests/training-plan.json",
+        )
+        if self.completed_at < self.started_at:
+            raise ValueError("LoRA worker completion precedes start")
+        if self.status == "SUCCEEDED":
+            if self.adapter_manifest is None or self.error_code is not None:
+                raise ValueError("successful LoRA worker requires only an adapter manifest")
+            if self.completed_steps < 200 or self.final_loss is None:
+                raise ValueError("successful LoRA worker result is incomplete")
+        elif self.adapter_manifest is not None or self.error_code is None:
+            raise ValueError("failed or cancelled LoRA worker requires only an error code")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("LoRA worker result hash mismatch")
+        return self
+
+
 def validate_training_dataset_authorization(
     dataset: LocalImageTrainingDatasetManifest,
     authorization: LocalImageTrainingAuthorization,
@@ -558,3 +630,24 @@ def validate_lora_training_receipt(
             raise ValueError("LoRA adapter does not bind the training plan base model")
     elif adapter is not None:
         raise ValueError("non-successful LoRA training cannot publish an adapter")
+
+
+def validate_lora_training_worker_result(
+    command: LocalImageLoraTrainingCommand,
+    result: LocalImageLoraTrainingWorkerResult,
+) -> None:
+    """Validate one worker result against its exact orchestrator command."""
+
+    if (
+        result.training_run_id != command.training_run_id
+        or result.training_plan_pointer != command.training_plan_pointer
+        or result.training_plan_sha256 != command.training_plan_sha256
+        or result.attempt != command.attempt
+    ):
+        raise ValueError("LoRA worker result does not bind the exact command")
+    if result.adapter_manifest is not None and (
+        result.adapter_manifest.base_model != command.training_plan.base_model
+        or result.adapter_manifest.dataset_manifest != command.training_plan.dataset_manifest
+        or result.adapter_manifest.training_plan != command.training_plan_pointer
+    ):
+        raise ValueError("LoRA worker adapter manifest drifts from the command")

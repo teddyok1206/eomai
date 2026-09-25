@@ -740,6 +740,181 @@ def _training_receipt() -> dict[str, Any]:
     return schema
 
 
+def _training_command() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-lora-training-command/1.0",
+        "EOM Local Image LoRA Training Command V1",
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "training_run_id",
+                "training_plan_pointer",
+                "training_plan_sha256",
+                "training_plan",
+                "attempt",
+                "staged_plan_member",
+                "staged_dataset_root",
+                "output_root_member",
+                "checkpoint_root_member",
+                "timeout_seconds",
+                "command_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-lora-training-command/1.0"},
+                "training_run_id": {
+                    "type": "string",
+                    "pattern": "^imgtrainrun_[0-9a-f]{32}$",
+                },
+                "training_plan_pointer": {"$ref": "#/$defs/artifactPointer"},
+                "training_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "training_plan": {
+                    "$ref": ("eom://schemas/image-provider/local-image-lora-training-plan/1.0")
+                },
+                "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+                "staged_plan_member": {"const": "inputs/training-plan.json"},
+                "staged_dataset_root": {"const": "inputs/dataset"},
+                "output_root_member": {"const": "outputs"},
+                "checkpoint_root_member": {"const": "checkpoints"},
+                "timeout_seconds": {"type": "integer", "minimum": 600, "maximum": 86400},
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _training_worker_result() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-lora-training-worker-result/1.0",
+        "EOM Local Image LoRA Training Worker Result V1",
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "training_run_id",
+                "training_plan_pointer",
+                "training_plan_sha256",
+                "attempt",
+                "status",
+                "adapter_manifest",
+                "error_code",
+                "runtime",
+                "completed_steps",
+                "final_loss",
+                "started_at",
+                "completed_at",
+                "result_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-lora-training-worker-result/1.0"},
+                "training_run_id": {
+                    "type": "string",
+                    "pattern": "^imgtrainrun_[0-9a-f]{32}$",
+                },
+                "training_plan_pointer": {"$ref": "#/$defs/artifactPointer"},
+                "training_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+                "status": {"enum": ["SUCCEEDED", "FAILED", "CANCELLED"]},
+                "adapter_manifest": {
+                    "anyOf": [
+                        {
+                            "$ref": (
+                                "eom://schemas/image-provider/local-image-lora-adapter-manifest/1.0"
+                            )
+                        },
+                        {"type": "null"},
+                    ]
+                },
+                "error_code": {
+                    "anyOf": [
+                        {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,95}$"},
+                        {"type": "null"},
+                    ]
+                },
+                "runtime": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "python_version",
+                        "torch_version",
+                        "diffusers_version",
+                        "transformers_version",
+                        "accelerate_version",
+                        "peft_version",
+                        "bitsandbytes_version",
+                        "cuda_version",
+                        "gpu_name",
+                        "compute_capability",
+                        "peak_gpu_memory_bytes",
+                    ],
+                    "properties": {
+                        **{
+                            name: {"type": "string", "minLength": 1, "maxLength": 128}
+                            for name in (
+                                "python_version",
+                                "torch_version",
+                                "diffusers_version",
+                                "transformers_version",
+                                "accelerate_version",
+                                "peft_version",
+                                "bitsandbytes_version",
+                                "cuda_version",
+                                "gpu_name",
+                            )
+                        },
+                        "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+                        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1},
+                    },
+                },
+                "completed_steps": {"type": "integer", "minimum": 0, "maximum": 2000},
+                "final_loss": {
+                    "anyOf": [
+                        {"type": "number", "minimum": 0, "maximum": 1000000},
+                        {"type": "null"},
+                    ]
+                },
+                "started_at": DATE_TIME,
+                "completed_at": DATE_TIME,
+                "result_sha256": {"$ref": "#/$defs/sha256"},
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "required": ["status"],
+                        "properties": {"status": {"const": "SUCCEEDED"}},
+                    },
+                    "then": {
+                        "properties": {
+                            "adapter_manifest": {
+                                "$ref": (
+                                    "eom://schemas/image-provider/"
+                                    "local-image-lora-adapter-manifest/1.0"
+                                )
+                            },
+                            "error_code": {"type": "null"},
+                            "completed_steps": {"minimum": 200},
+                            "final_loss": {"type": "number", "minimum": 0, "maximum": 1000000},
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "adapter_manifest": {"type": "null"},
+                            "error_code": {
+                                "type": "string",
+                                "pattern": "^[A-Z][A-Z0-9_]{2,95}$",
+                            },
+                        }
+                    },
+                }
+            ],
+        }
+    )
+    return schema
+
+
 SCHEMAS = {
     "local-image-training-authorization-v1.schema.json": _authorization(),
     "local-image-training-dataset-manifest-v1.schema.json": _dataset_manifest(),
@@ -747,6 +922,8 @@ SCHEMAS = {
     "local-image-lora-training-plan-v1.schema.json": _training_plan(),
     "local-image-lora-adapter-manifest-v1.schema.json": _adapter_manifest(),
     "local-image-lora-training-receipt-v1.schema.json": _training_receipt(),
+    "local-image-lora-training-command-v1.schema.json": _training_command(),
+    "local-image-lora-training-worker-result-v1.schema.json": _training_worker_result(),
 }
 
 
