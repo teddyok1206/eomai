@@ -33,6 +33,9 @@ EVALUATION_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-quality-e
 ELIGIBILITY_REVIEW_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-training-eligibility-review/1.0"
 )
+CROP_PROPOSAL_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0"
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -101,6 +104,416 @@ class LocalImageTrainingAuthorization(FrozenModel):
         if self.authorization_sha256 != expected:
             raise ValueError("training authorization hash mismatch")
         return self
+
+
+ImageTrainingCropRepresentationKind = Literal[
+    "APPARATUS",
+    "COMPOSITE",
+    "CROSS_SECTION",
+    "DIAGRAM",
+    "MAP",
+    "PARTICLE_MODEL",
+    "PHOTOGRAPH",
+]
+ImageTrainingCropVisualFeature = Literal[
+    "ARROWS",
+    "AXES",
+    "BOUNDARY",
+    "CALLOUT",
+    "DATA_POINTS",
+    "ERROR_BAR",
+    "GRID",
+    "LABELS",
+    "LEADER_LINES",
+    "LEGEND",
+    "MULTIPLE_PANELS",
+    "NUMBERED_STEPS",
+    "PATTERN_FILL",
+    "SCALE",
+    "SYMBOL_KEY",
+    "TRAJECTORY",
+]
+ImageTrainingCropOmissionReason = Literal[
+    "ANSWER_EXPLANATION_SOURCE",
+    "HOLDOUT_SOURCE",
+    "NO_PAGE_INPUT",
+    "NO_VISUAL_REGION",
+    "SOURCE_POINTER_INVALID",
+    "UNSUPPORTED_REPRESENTATION",
+]
+ImageTrainingCropExclusionReason = Literal[
+    "ANSWER_OR_EXPLANATION_CONTENT",
+    "AUTHORITATIVE_GEOMETRY",
+    "HOLDOUT_OR_NEAR_DUPLICATE",
+    "HUMAN_SUBJECT",
+    "ITEM_NUMBER_OR_PUBLISHER_MARK",
+    "NO_VALID_CROP",
+    "OCR_REDACTION_INCOMPLETE",
+    "TABLE_OR_GRAPH",
+    "UNAUTHORIZED_SOURCE",
+    "UNSUITABLE_OTHER",
+]
+
+
+def _box_key(value: ImageEvaluationBoundingBox) -> tuple[int, int, int, int]:
+    return (value.top, value.left, value.bottom, value.right)
+
+
+def _box_contains(
+    outer: ImageEvaluationBoundingBox,
+    inner: ImageEvaluationBoundingBox,
+) -> bool:
+    return (
+        outer.left <= inner.left
+        and outer.top <= inner.top
+        and outer.right >= inner.right
+        and outer.bottom >= inner.bottom
+    )
+
+
+class LocalImageTrainingCropProposal(FrozenModel):
+    crop_proposal_id: str = Field(pattern=r"^imgcropproposal_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    source_page_image: ImageEvaluationArtifactMember
+    physical_page: int = Field(ge=1, le=100_000)
+    context_bounding_box: ImageEvaluationBoundingBox | None
+    crop_bounding_box: ImageEvaluationBoundingBox
+    redaction_boxes: tuple[ImageEvaluationBoundingBox, ...] = Field(max_length=64)
+    rights_policy: ImageTrainingRightsPolicy
+    representation_kind: ImageTrainingCropRepresentationKind
+    rendering_mode: Literal["MIXED", "RASTER", "VECTOR_LIKE"]
+    visual_features: tuple[ImageTrainingCropVisualFeature, ...] = Field(max_length=24)
+    candidate_rank: int = Field(ge=1, le=8)
+    ink_fraction_milli: int = Field(ge=1, le=1000)
+    ocr_redaction_count: int = Field(ge=0, le=64)
+
+    @model_validator(mode="after")
+    def immutable_proposal_is_coherent(self) -> LocalImageTrainingCropProposal:
+        if self.source_page_image.media_type != "image/png":
+            raise ValueError("crop proposal source page must be PNG")
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("crop proposal visual pattern IDs must be valid and sorted")
+        if self.visual_features != tuple(sorted(set(self.visual_features))):
+            raise ValueError("crop proposal visual features must be sorted and unique")
+        if self.redaction_boxes != tuple(sorted(set(self.redaction_boxes), key=_box_key)):
+            raise ValueError("crop proposal redaction boxes must be sorted and unique")
+        if any(not _box_contains(self.crop_bounding_box, box) for box in self.redaction_boxes):
+            raise ValueError("crop proposal redaction lies outside the visual crop")
+        if self.ocr_redaction_count != len(self.redaction_boxes):
+            raise ValueError("crop proposal OCR count does not match redaction boxes")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_proposal_id"})
+        ).removeprefix("sha256:")
+        if self.crop_proposal_id != "imgcropproposal_" + identity[:32]:
+            raise ValueError("crop proposal ID does not bind the proposal")
+        return self
+
+
+class LocalImageTrainingCropProposalOmission(FrozenModel):
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    reason: ImageTrainingCropOmissionReason
+
+    @model_validator(mode="after")
+    def immutable_omission_is_coherent(self) -> LocalImageTrainingCropProposalOmission:
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("crop omission visual pattern IDs must be valid and sorted")
+        return self
+
+
+def training_crop_proposal_population_sha256(
+    *,
+    source_snapshot: ImageEvaluationSourceSnapshot,
+    training_authorization: ImageEvaluationArtifactMember,
+    holdout_evaluation_plan: ImageEvaluationArtifactMember,
+    holdout_sample_ids: tuple[str, ...],
+    holdout_source_anchor_ids: tuple[str, ...],
+    selection_query_revision: str,
+    locator_revision: str,
+    proposals: tuple[LocalImageTrainingCropProposal, ...],
+    omissions: tuple[LocalImageTrainingCropProposalOmission, ...],
+) -> Sha256:
+    return content_sha256(
+        {
+            "source_snapshot": source_snapshot.model_dump(mode="json"),
+            "training_authorization": training_authorization.model_dump(mode="json"),
+            "holdout_evaluation_plan": holdout_evaluation_plan.model_dump(mode="json"),
+            "holdout_sample_ids": holdout_sample_ids,
+            "holdout_source_anchor_ids": holdout_source_anchor_ids,
+            "selection_query_revision": selection_query_revision,
+            "locator_revision": locator_revision,
+            "proposals": tuple(value.model_dump(mode="json") for value in proposals),
+            "omissions": tuple(value.model_dump(mode="json") for value in omissions),
+        }
+    )
+
+
+class LocalImageTrainingCropProposalSet(FrozenModel):
+    schema_version: Literal["local-image-training-crop-proposal-set/1.0"]
+    proposal_set_id: str = Field(pattern=r"^imgcropproposalset_[0-9a-f]{32}$")
+    source_snapshot: ImageEvaluationSourceSnapshot
+    training_authorization: ImageEvaluationArtifactMember
+    holdout_evaluation_plan: ImageEvaluationArtifactMember
+    holdout_sample_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    holdout_source_anchor_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    selection_query_revision: Literal["local-image-lora-crop-source-query/1.0"]
+    locator_revision: Literal["local-image-visual-crop-locator/1.0"]
+    proposals: tuple[LocalImageTrainingCropProposal, ...] = Field(
+        min_length=1,
+        max_length=4096,
+    )
+    omissions: tuple[LocalImageTrainingCropProposalOmission, ...] = Field(max_length=4096)
+    proposal_population_sha256: Sha256
+    created_at: datetime
+    created_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    proposal_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_set_is_coherent(self) -> LocalImageTrainingCropProposalSet:
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=AUTHORIZATION_SCHEMA_REF,
+            member_path="manifests/training-authorization.json",
+        )
+        _require_pointer(
+            self.holdout_evaluation_plan,
+            schema_ref=EVALUATION_PLAN_SCHEMA_REF,
+            member_path="manifests/evaluation-plan.json",
+        )
+        for values, label in (
+            (self.holdout_sample_ids, "crop proposal holdout samples"),
+            (self.holdout_source_anchor_ids, "crop proposal holdout anchors"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"{label} must be sorted and unique")
+        proposal_ids = tuple(value.crop_proposal_id for value in self.proposals)
+        if proposal_ids != tuple(sorted(set(proposal_ids))):
+            raise ValueError("crop proposals must be sorted and unique")
+        grouped: dict[str, list[LocalImageTrainingCropProposal]] = {}
+        for proposal in self.proposals:
+            grouped.setdefault(proposal.source_anchor_id, []).append(proposal)
+        if set(grouped) & set(self.holdout_source_anchor_ids):
+            raise ValueError("crop proposals contain a holdout source anchor")
+        for proposals in grouped.values():
+            ranks = tuple(sorted(value.candidate_rank for value in proposals))
+            if ranks != tuple(range(1, len(proposals) + 1)):
+                raise ValueError("crop proposal ranks must be contiguous per anchor")
+            first = proposals[0]
+            stable = (
+                first.item_revision_id,
+                first.extraction_result,
+                first.visual_pattern_ids,
+                first.source_page_image,
+                first.physical_page,
+                first.context_bounding_box,
+                first.rights_policy,
+                first.representation_kind,
+                first.rendering_mode,
+                first.visual_features,
+            )
+            if any(
+                (
+                    value.item_revision_id,
+                    value.extraction_result,
+                    value.visual_pattern_ids,
+                    value.source_page_image,
+                    value.physical_page,
+                    value.context_bounding_box,
+                    value.rights_policy,
+                    value.representation_kind,
+                    value.rendering_mode,
+                    value.visual_features,
+                )
+                != stable
+                for value in proposals[1:]
+            ):
+                raise ValueError("crop proposals for one anchor have drifted source identity")
+        omission_keys = tuple(
+            (value.item_revision_id, value.source_anchor_id, value.reason)
+            for value in self.omissions
+        )
+        if omission_keys != tuple(sorted(set(omission_keys))):
+            raise ValueError("crop proposal omissions must be sorted and unique")
+        if set(grouped) & {value.source_anchor_id for value in self.omissions}:
+            raise ValueError("crop proposal anchors and omissions must be disjoint")
+        population = training_crop_proposal_population_sha256(
+            source_snapshot=self.source_snapshot,
+            training_authorization=self.training_authorization,
+            holdout_evaluation_plan=self.holdout_evaluation_plan,
+            holdout_sample_ids=self.holdout_sample_ids,
+            holdout_source_anchor_ids=self.holdout_source_anchor_ids,
+            selection_query_revision=self.selection_query_revision,
+            locator_revision=self.locator_revision,
+            proposals=self.proposals,
+            omissions=self.omissions,
+        )
+        if self.proposal_population_sha256 != population:
+            raise ValueError("crop proposal population hash mismatch")
+        if self.proposal_set_id != (
+            "imgcropproposalset_" + population.removeprefix("sha256:")[:32]
+        ):
+            raise ValueError("crop proposal-set ID does not bind its population")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"proposal_set_sha256"}))
+        if self.proposal_set_sha256 != expected:
+            raise ValueError("crop proposal-set hash mismatch")
+        return self
+
+
+class LocalImageTrainingCropReviewEntry(FrozenModel):
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    proposal_ids: tuple[str, ...] = Field(min_length=1, max_length=8)
+    decision: Literal["PENDING", "ELIGIBLE", "EXCLUDED"]
+    selected_proposal_id: str | None = Field(pattern=r"^imgcropproposal_[0-9a-f]{32}$")
+    exclusion_reasons: tuple[ImageTrainingCropExclusionReason, ...] = Field(max_length=16)
+    caption_en: str | None = Field(
+        min_length=3,
+        max_length=180,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+    )
+    caption_sha256: Sha256 | None
+
+    @model_validator(mode="after")
+    def decision_is_coherent(self) -> LocalImageTrainingCropReviewEntry:
+        if self.proposal_ids != tuple(sorted(set(self.proposal_ids))) or any(
+            re.fullmatch(r"imgcropproposal_[0-9a-f]{32}", value) is None
+            for value in self.proposal_ids
+        ):
+            raise ValueError("crop review proposal IDs must be valid and sorted")
+        if self.exclusion_reasons != tuple(sorted(set(self.exclusion_reasons))):
+            raise ValueError("crop review exclusion reasons must be sorted and unique")
+        if self.decision == "ELIGIBLE":
+            if (
+                self.selected_proposal_id not in self.proposal_ids
+                or self.exclusion_reasons
+                or self.caption_en is None
+                or self.caption_sha256 != text_sha256(self.caption_en)
+            ):
+                raise ValueError("eligible crop review requires one selected proposal and caption")
+        elif self.decision == "EXCLUDED":
+            if (
+                self.selected_proposal_id is not None
+                or not self.exclusion_reasons
+                or self.caption_en is not None
+                or self.caption_sha256 is not None
+            ):
+                raise ValueError("excluded crop review requires only exclusion reasons")
+        elif (
+            self.selected_proposal_id is not None
+            or self.exclusion_reasons
+            or self.caption_en is not None
+            or self.caption_sha256 is not None
+        ):
+            raise ValueError("pending crop review cannot carry a decision")
+        return self
+
+
+def _eligible_crop_review_sha256(
+    entries: tuple[LocalImageTrainingCropReviewEntry, ...],
+) -> Sha256:
+    return content_sha256(
+        [
+            {
+                "source_anchor_id": value.source_anchor_id,
+                "selected_proposal_id": value.selected_proposal_id,
+                "caption_en": value.caption_en,
+                "caption_sha256": value.caption_sha256,
+            }
+            for value in entries
+            if value.decision == "ELIGIBLE"
+        ]
+    )
+
+
+class LocalImageTrainingCropReview(FrozenModel):
+    schema_version: Literal["local-image-training-crop-review/1.0"]
+    crop_review_id: str = Field(pattern=r"^imgcropreview_[0-9a-f]{32}$")
+    review_state: Literal["DRAFT", "FINAL"]
+    proposal_set: ImageEvaluationArtifactMember
+    proposal_set_sha256: Sha256
+    source_snapshot: ImageEvaluationSourceSnapshot
+    proposal_population_sha256: Sha256
+    entries: tuple[LocalImageTrainingCropReviewEntry, ...] = Field(
+        min_length=1,
+        max_length=4096,
+    )
+    eligible_proposal_set_sha256: Sha256
+    reviewed_at: datetime
+    reviewed_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    review_sha256: Sha256
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def utc_review(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_review_is_coherent(self) -> LocalImageTrainingCropReview:
+        _require_pointer(
+            self.proposal_set,
+            schema_ref=CROP_PROPOSAL_SET_SCHEMA_REF,
+            member_path="manifests/crop-proposals.json",
+        )
+        if self.proposal_set.sha256 != self.proposal_set_sha256:
+            raise ValueError("crop review proposal-set pointer hash mismatch")
+        anchors = tuple(value.source_anchor_id for value in self.entries)
+        if anchors != tuple(sorted(set(anchors))):
+            raise ValueError("crop review entries must be sorted by unique source anchor")
+        if self.review_state == "FINAL" and any(
+            value.decision == "PENDING" for value in self.entries
+        ):
+            raise ValueError("final crop review cannot contain pending entries")
+        if self.eligible_proposal_set_sha256 != _eligible_crop_review_sha256(self.entries):
+            raise ValueError("eligible crop proposal-set hash mismatch")
+        identity = self.proposal_population_sha256.removeprefix("sha256:")
+        if self.crop_review_id != "imgcropreview_" + identity[:32]:
+            raise ValueError("crop review ID does not bind the proposal population")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("crop review hash mismatch")
+        return self
+
+
+def validate_training_crop_review(
+    proposal_set: LocalImageTrainingCropProposalSet,
+    review: LocalImageTrainingCropReview,
+) -> None:
+    if (
+        review.source_snapshot != proposal_set.source_snapshot
+        or review.proposal_population_sha256 != proposal_set.proposal_population_sha256
+        or review.proposal_set_sha256 != proposal_set.proposal_set_sha256
+    ):
+        raise ValueError("crop review does not bind the exact proposal set")
+    grouped: dict[str, list[str]] = {}
+    for proposal in proposal_set.proposals:
+        grouped.setdefault(proposal.source_anchor_id, []).append(proposal.crop_proposal_id)
+    expected = {anchor: tuple(sorted(proposal_ids)) for anchor, proposal_ids in grouped.items()}
+    actual = {entry.source_anchor_id: entry.proposal_ids for entry in review.entries}
+    if actual != expected:
+        raise ValueError("crop review entries do not cover the exact proposal population")
 
 
 class LocalImageTrainingCropMember(FrozenModel):

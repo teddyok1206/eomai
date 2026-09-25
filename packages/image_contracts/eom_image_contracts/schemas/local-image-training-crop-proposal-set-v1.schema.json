@@ -431,6 +431,8 @@
             "enum": [
               "NO_PAGE_INPUT",
               "NO_VISUAL_REGION",
+              "ANSWER_EXPLANATION_SOURCE",
+              "HOLDOUT_SOURCE",
               "SOURCE_POINTER_INVALID",
               "UNSUPPORTED_REPRESENTATION"
             ]

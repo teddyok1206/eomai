@@ -381,6 +381,8 @@ def _crop_proposal_set() -> dict[str, Any]:
                 "enum": [
                     "NO_PAGE_INPUT",
                     "NO_VISUAL_REGION",
+                    "ANSWER_EXPLANATION_SOURCE",
+                    "HOLDOUT_SOURCE",
                     "SOURCE_POINTER_INVALID",
                     "UNSUPPORTED_REPRESENTATION",
                 ]
@@ -528,6 +530,46 @@ def _crop_review() -> dict[str, Any]:
             },
             "caption_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
         },
+        "allOf": [
+            {
+                "if": {"properties": {"decision": {"const": "ELIGIBLE"}}},
+                "then": {
+                    "properties": {
+                        "selected_proposal_id": {
+                            "type": "string",
+                            "pattern": "^imgcropproposal_[0-9a-f]{32}$",
+                        },
+                        "exclusion_reasons": {"maxItems": 0},
+                        "caption_en": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 180,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+                        },
+                        "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    }
+                },
+                "else": {
+                    "if": {"properties": {"decision": {"const": "EXCLUDED"}}},
+                    "then": {
+                        "properties": {
+                            "selected_proposal_id": {"type": "null"},
+                            "exclusion_reasons": {"minItems": 1},
+                            "caption_en": {"type": "null"},
+                            "caption_sha256": {"type": "null"},
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "selected_proposal_id": {"type": "null"},
+                            "exclusion_reasons": {"maxItems": 0},
+                            "caption_en": {"type": "null"},
+                            "caption_sha256": {"type": "null"},
+                        }
+                    },
+                },
+            }
+        ],
     }
     schema.update(
         {
@@ -572,6 +614,24 @@ def _crop_review() -> dict[str, Any]:
                 },
                 "review_sha256": {"$ref": "#/$defs/sha256"},
             },
+            "allOf": [
+                {
+                    "if": {"properties": {"review_state": {"const": "FINAL"}}},
+                    "then": {
+                        "properties": {
+                            "entries": {
+                                "not": {
+                                    "contains": {
+                                        "type": "object",
+                                        "required": ["decision"],
+                                        "properties": {"decision": {"const": "PENDING"}},
+                                    }
+                                }
+                            }
+                        }
+                    },
+                }
+            ],
         }
     )
     return schema

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from eom_image_contracts import (
+    ImageEvaluationArtifactMember,
     LocalImageLoraAdapterManifest,
     LocalImageLoraCheckpointManifest,
     LocalImageLoraTrainingCommand,
@@ -15,21 +16,28 @@ from eom_image_contracts import (
     LocalImageLoraTrainingWorkerResult,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCandidateInventory,
+    LocalImageTrainingCropProposal,
+    LocalImageTrainingCropProposalSet,
+    LocalImageTrainingCropReview,
+    LocalImageTrainingCropReviewEntry,
     LocalImageTrainingDatasetManifest,
     LocalImageTrainingEligibilityEntry,
     LocalImageTrainingEligibilityReview,
     content_sha256,
     text_sha256,
+    training_crop_proposal_population_sha256,
     training_eligibility_population_sha256,
     validate_contract,
     validate_lora_checkpoint_manifest,
     validate_lora_training_plan,
     validate_lora_training_receipt,
     validate_lora_training_worker_result,
+    validate_training_crop_review,
     validate_training_dataset_authorization,
     validate_training_dataset_inventory,
     validate_training_inventory_review,
 )
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -100,6 +108,127 @@ def _authorization_value() -> dict[str, object]:
         "approved_by": "operator_test",
     }
     return {**body, "authorization_sha256": content_sha256(body)}
+
+
+def _crop_proposal() -> dict[str, object]:
+    body = {
+        "item_revision_id": "itemrev_" + "1" * 32,
+        "extraction_result": _pointer(
+            "2",
+            member_path="extraction/result.json",
+            schema_ref="eom://schemas/catalog/legacy-item-extraction-result/1.0",
+        ),
+        "source_anchor_id": "assessmentanchor_" + "3" * 32,
+        "visual_pattern_ids": ["visualpattern_" + "4" * 32],
+        "source_page_image": _pointer(
+            "5",
+            member_path="pages/problem-1.png",
+            schema_ref="eom://schemas/catalog/assessment-page-image/1.0",
+            media_type="image/png",
+        ),
+        "physical_page": 1,
+        "context_bounding_box": {"left": 0, "top": 0, "right": 10000, "bottom": 10000},
+        "crop_bounding_box": {"left": 1000, "top": 1500, "right": 8000, "bottom": 7000},
+        "redaction_boxes": [{"left": 1500, "top": 1800, "right": 2200, "bottom": 2300}],
+        "rights_policy": _rights_policy(),
+        "representation_kind": "DIAGRAM",
+        "rendering_mode": "VECTOR_LIKE",
+        "visual_features": ["LABELS"],
+        "candidate_rank": 1,
+        "ink_fraction_milli": 170,
+        "ocr_redaction_count": 1,
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    return {"crop_proposal_id": "imgcropproposal_" + identity[:32], **body}
+
+
+def _crop_proposal_set_value() -> dict[str, object]:
+    proposal = LocalImageTrainingCropProposal.model_validate(_crop_proposal())
+    authorization_pointer = _pointer(
+        "b",
+        member_path="manifests/training-authorization.json",
+        schema_ref="eom://schemas/image-provider/local-image-training-authorization/1.0",
+    )
+    holdout_pointer = _inventory_value()["holdout_evaluation_plan"]
+    holdout_sample_ids = tuple(_inventory_value()["holdout_sample_ids"])
+    holdout_source_anchor_ids = tuple(_inventory_value()["holdout_source_anchor_ids"])
+    population = training_crop_proposal_population_sha256(
+        source_snapshot=LocalImageTrainingCandidateInventory.model_validate(
+            _inventory_value()
+        ).source_snapshot,
+        training_authorization=ImageEvaluationArtifactMember.model_validate(authorization_pointer),
+        holdout_evaluation_plan=ImageEvaluationArtifactMember.model_validate(holdout_pointer),
+        holdout_sample_ids=holdout_sample_ids,
+        holdout_source_anchor_ids=holdout_source_anchor_ids,
+        selection_query_revision="local-image-lora-crop-source-query/1.0",
+        locator_revision="local-image-visual-crop-locator/1.0",
+        proposals=(proposal,),
+        omissions=(),
+    )
+    body = {
+        "schema_version": "local-image-training-crop-proposal-set/1.0",
+        "proposal_set_id": "imgcropproposalset_" + population.removeprefix("sha256:")[:32],
+        "source_snapshot": _source_snapshot(),
+        "training_authorization": authorization_pointer,
+        "holdout_evaluation_plan": holdout_pointer,
+        "holdout_sample_ids": list(holdout_sample_ids),
+        "holdout_source_anchor_ids": list(holdout_source_anchor_ids),
+        "selection_query_revision": "local-image-lora-crop-source-query/1.0",
+        "locator_revision": "local-image-visual-crop-locator/1.0",
+        "proposals": [proposal.model_dump(mode="json")],
+        "omissions": [],
+        "proposal_population_sha256": population,
+        "created_at": "2026-09-25T02:01:00Z",
+        "created_by": "operator_test",
+    }
+    return {**body, "proposal_set_sha256": content_sha256(body)}
+
+
+def _crop_review_value() -> dict[str, object]:
+    proposal_set = LocalImageTrainingCropProposalSet.model_validate(_crop_proposal_set_value())
+    proposal = proposal_set.proposals[0]
+    caption = "Monochrome technical diagram with all semantic text removed."
+    entry = {
+        "source_anchor_id": proposal.source_anchor_id,
+        "proposal_ids": [proposal.crop_proposal_id],
+        "decision": "ELIGIBLE",
+        "selected_proposal_id": proposal.crop_proposal_id,
+        "exclusion_reasons": [],
+        "caption_en": caption,
+        "caption_sha256": text_sha256(caption),
+    }
+    eligible_hash = content_sha256(
+        [
+            {
+                "source_anchor_id": proposal.source_anchor_id,
+                "selected_proposal_id": proposal.crop_proposal_id,
+                "caption_en": caption,
+                "caption_sha256": text_sha256(caption),
+            }
+        ]
+    )
+    pointer = _pointer(
+        "d",
+        member_path="manifests/crop-proposals.json",
+        schema_ref="eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0",
+    )
+    pointer["sha256"] = proposal_set.proposal_set_sha256
+    body = {
+        "schema_version": "local-image-training-crop-review/1.0",
+        "crop_review_id": (
+            "imgcropreview_" + proposal_set.proposal_population_sha256.removeprefix("sha256:")[:32]
+        ),
+        "review_state": "FINAL",
+        "proposal_set": pointer,
+        "proposal_set_sha256": proposal_set.proposal_set_sha256,
+        "source_snapshot": _source_snapshot(),
+        "proposal_population_sha256": proposal_set.proposal_population_sha256,
+        "entries": [entry],
+        "eligible_proposal_set_sha256": eligible_hash,
+        "reviewed_at": "2026-09-25T02:02:00Z",
+        "reviewed_by": "operator_test",
+    }
+    return {**body, "review_sha256": content_sha256(body)}
 
 
 def _sample(index: int) -> dict[str, object]:
@@ -468,6 +597,14 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
             LocalImageTrainingCandidateInventory,
         ),
         (
+            "local-image-training-crop-proposal-set-v1.schema.json",
+            LocalImageTrainingCropProposalSet,
+        ),
+        (
+            "local-image-training-crop-review-v1.schema.json",
+            LocalImageTrainingCropReview,
+        ),
+        (
             "local-image-training-dataset-manifest-v1.schema.json",
             LocalImageTrainingDatasetManifest,
         ),
@@ -506,6 +643,8 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
 
 def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     authorization_value = _authorization_value()
+    crop_proposal_set_value = _crop_proposal_set_value()
+    crop_review_value = _crop_review_value()
     inventory_value = _inventory_value()
     dataset_value = _dataset_value()
     eligibility_review_value = _eligibility_review_value()
@@ -517,6 +656,8 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     worker_result_value = _worker_result_value()
     for name, value in (
         ("training-authorization", authorization_value),
+        ("training-crop-proposal-set", crop_proposal_set_value),
+        ("training-crop-review", crop_review_value),
         ("training-candidate-inventory", inventory_value),
         ("training-dataset-manifest", dataset_value),
         ("training-eligibility-review", eligibility_review_value),
@@ -529,6 +670,8 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     ):
         validate_contract(name, value)
     authorization = LocalImageTrainingAuthorization.model_validate(authorization_value)
+    crop_proposal_set = LocalImageTrainingCropProposalSet.model_validate(crop_proposal_set_value)
+    crop_review = LocalImageTrainingCropReview.model_validate(crop_review_value)
     inventory = LocalImageTrainingCandidateInventory.model_validate(inventory_value)
     dataset = LocalImageTrainingDatasetManifest.model_validate(dataset_value)
     eligibility_review = LocalImageTrainingEligibilityReview.model_validate(
@@ -541,6 +684,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     command = LocalImageLoraTrainingCommand.model_validate(command_value)
     worker_result = LocalImageLoraTrainingWorkerResult.model_validate(worker_result_value)
     validate_training_dataset_authorization(dataset, authorization)
+    validate_training_crop_review(crop_proposal_set, crop_review)
     validate_training_dataset_inventory(dataset, inventory)
     validate_training_inventory_review(inventory, eligibility_review)
     validate_lora_training_plan(plan, dataset)
@@ -676,3 +820,53 @@ def test_training_checkpoint_rejects_nonboundary_and_attempt_drift() -> None:
     changed = checkpoint.model_copy(update={"attempt": 2})
     with pytest.raises(ValueError, match="does not bind the exact resumable command state"):
         validate_lora_checkpoint_manifest(changed, command)
+
+
+def test_crop_proposal_rejects_redaction_outside_visual_crop() -> None:
+    value = _crop_proposal()
+    value["redaction_boxes"] = [{"left": 100, "top": 100, "right": 500, "bottom": 500}]
+    body = {key: item for key, item in value.items() if key != "crop_proposal_id"}
+    value["crop_proposal_id"] = (
+        "imgcropproposal_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    with pytest.raises(ValidationError, match="redaction lies outside"):
+        LocalImageTrainingCropProposal.model_validate(value)
+
+
+def test_final_crop_review_rejects_pending_entry() -> None:
+    value = _crop_review_value()
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    entries[0].update(
+        {
+            "decision": "PENDING",
+            "selected_proposal_id": None,
+            "caption_en": None,
+            "caption_sha256": None,
+        }
+    )
+    value["eligible_proposal_set_sha256"] = content_sha256([])
+    body = copy.deepcopy(value)
+    body.pop("review_sha256")
+    value["review_sha256"] = content_sha256(body)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("training-crop-review", value)
+    with pytest.raises(ValidationError, match="final crop review cannot contain pending"):
+        LocalImageTrainingCropReview.model_validate(value)
+
+
+def test_crop_review_rejects_proposal_population_drift() -> None:
+    proposal_set = LocalImageTrainingCropProposalSet.model_validate(_crop_proposal_set_value())
+    review = LocalImageTrainingCropReview.model_validate(_crop_review_value())
+    original = review.entries[0]
+    changed_id = "imgcropproposal_" + "f" * 32
+    changed_entry = LocalImageTrainingCropReviewEntry.model_validate(
+        {
+            **original.model_dump(mode="json"),
+            "proposal_ids": [changed_id],
+            "selected_proposal_id": changed_id,
+        }
+    )
+    changed_review = review.model_copy(update={"entries": (changed_entry,)})
+    with pytest.raises(ValueError, match="exact proposal population"):
+        validate_training_crop_review(proposal_set, changed_review)

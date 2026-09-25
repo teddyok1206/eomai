@@ -50,10 +50,10 @@ SCHEMA_SHA256 = {
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
     ),
     "training-crop-proposal-set": (
-        "sha256:3703a380567a7d50ff3eb4adacec2a1fef55f03d13c4bb130c6138998668fb28"
+        "sha256:8f328fef17c851c320508a56281e11b06b9c0dae4f7c788a9dd9fda78f9f47e1"
     ),
     "training-crop-review": (
-        "sha256:a78e476251396278e907cd4a5bca9894e280fcf81b8d367c6bf8ba209ce6a3ea"
+        "sha256:8caa7d97662dcc79b1ab3335c5bd655a71bba1f5a5cf045e8d5b5babb8a36b93"
     ),
     "training-dataset-manifest": (
         "sha256:ecb43e5ed58af59b40056a2afa0f541b12caffb71dee733aaa2681aef694c81c"
