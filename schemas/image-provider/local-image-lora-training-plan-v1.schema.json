@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-lora-training-plan/1.0",
+  "title": "EOM Local Image LoRA Training Plan V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "modelPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_revision_id",
+        "graph_snapshot_sha256",
+        "graph_manifest_sha256",
+        "target_count",
+        "target_set_sha256"
+      ],
+      "properties": {
+        "graph_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "graph_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "target_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "target_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rightsPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rights_policy_id",
+        "rights_policy_revision_id",
+        "rights_policy_sha256"
+      ],
+      "properties": {
+        "rights_policy_id": {
+          "type": "string",
+          "pattern": "^rightspolicy_[0-9a-f]{32}$"
+        },
+        "rights_policy_revision_id": {
+          "type": "string",
+          "pattern": "^rightspolicyrev_[0-9a-f]{32}$"
+        },
+        "rights_policy_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "boundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "top": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "right": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "bottom": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "adapterFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^(adapter_model\\.safetensors|adapter_config\\.json)$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "training_plan_id",
+    "dataset_manifest",
+    "base_model",
+    "trainer_contract",
+    "dependencies",
+    "hyperparameters",
+    "seed",
+    "created_at",
+    "created_by",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-lora-training-plan/1.0"
+    },
+    "training_plan_id": {
+      "type": "string",
+      "pattern": "^imgtrainplan_[0-9a-f]{32}$"
+    },
+    "dataset_manifest": {
+      "$ref": "#/$defs/artifactPointer"
+    },
+    "base_model": {
+      "$ref": "#/$defs/modelPointer"
+    },
+    "trainer_contract": {
+      "const": "eom-local-image-lora-trainer/1.0"
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "torch_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "diffusers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "transformers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "accelerate_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "peft_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "bitsandbytes_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "hyperparameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter_type",
+        "rank",
+        "alpha",
+        "resolution_width",
+        "resolution_height",
+        "train_batch_size",
+        "gradient_accumulation_steps",
+        "gradient_checkpointing",
+        "mixed_precision",
+        "optimizer",
+        "learning_rate",
+        "max_train_steps",
+        "checkpointing_steps",
+        "random_flip",
+        "train_text_encoders",
+        "train_vae"
+      ],
+      "properties": {
+        "adapter_type": {
+          "const": "UNET_LORA"
+        },
+        "rank": {
+          "const": 8
+        },
+        "alpha": {
+          "const": 8
+        },
+        "resolution_width": {
+          "const": 768
+        },
+        "resolution_height": {
+          "const": 512
+        },
+        "train_batch_size": {
+          "const": 1
+        },
+        "gradient_accumulation_steps": {
+          "const": 4
+        },
+        "gradient_checkpointing": {
+          "const": true
+        },
+        "mixed_precision": {
+          "const": "fp16"
+        },
+        "optimizer": {
+          "const": "adamw_8bit"
+        },
+        "learning_rate": {
+          "const": "1e-4"
+        },
+        "max_train_steps": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 2000
+        },
+        "checkpointing_steps": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 500
+        },
+        "random_flip": {
+          "const": false
+        },
+        "train_text_encoders": {
+          "const": false
+        },
+        "train_vae": {
+          "const": false
+        }
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}
