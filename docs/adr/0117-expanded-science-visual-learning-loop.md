@@ -155,6 +155,44 @@ Tests validate typed inputs, safe SVG, exact labels, stable ordering, pixel dime
 embedding, and Preview/HWPX parity. Human visual review is recorded separately from structural test
 success.
 
+## First-pilot findings and staged expansion
+
+The first bounded run completed over 36 source documents and 164 pages. It located 256 candidate
+crops, but review showed that a substantial fraction were empty answer frames, partially redacted
+text, thin rules, or incomplete table fragments. The useful candidates split as intended: exact
+plots, apparatus, circuits, particle/cell diagrams, geologic sections, orbital/ray diagrams, and
+maps are evidence for deterministic Python/SVG primitives, while only a small number of fossils,
+rocks, botanical line art, and natural/microscopic textures are plausible LoRA style inputs.
+
+This is a successful feasibility result, not a production training dataset. In particular:
+
+- the reviewed LoRA population must not be padded or duplicated to meet a training minimum;
+- a micro LoRA probe starts only after at least 12 distinct, rights-approved, non-authoritative
+  crops survive review and group-aware deduplication;
+- the locator needs an additive successor with per-source caps and explicit empty-frame,
+  redaction-dominance, extreme-aspect-ratio, and interior-ink filters before another bounded run;
+- the next run remains below 100 documents and is selected for diverse science-visual families,
+  rather than simply taking the next files in order; and
+- the base-versus-adapter comparison remains evaluation-only until the fixed holdout and human
+  visual review pass. A trained adapter is never activated implicitly.
+
+The first publication also exposed that a canonical JSON file hash and the result document's
+semantic self-hash are different immutable concepts. Pattern-inventory contract 1.1 therefore
+binds both `pilot_result_file_sha256` and `pilot_result_semantic_sha256`; contract 1.0 remains
+unchanged. Human review is allowed to classify a worker candidate whose authority is explicitly
+`UNKNOWN_REVIEW_REQUIRED`, while a review that contradicts an already classified authoritative or
+non-authoritative candidate still fails closed.
+
+The deterministic branch will jointly analyze the two pinned content-team lead authorities, the
+KICE illustration guide, and reviewed corpus observations. Its extension target is a typed science
+figure grammar, not copied source pixels: richer apparatus assemblies, axes and multi-series plots,
+ray and orbital systems, circuits, particles, cell sections, geologic sections and maps, vector
+fields, label anchors, leader lines, hatching, grayscale fills, and stable whitespace/layout rules.
+Image workers continue to state what must be drawn. Python/SVG code receives those typed values and
+owns authoritative geometry; the local raster model supplies only approved non-authoritative visual
+style. Preview and HWPX retain authored component order, editable tables, separate two-image PNGs,
+and editable panel labels.
+
 ## Simpler alternatives rejected
 
 Training directly from full PDF pages would teach publisher text, answers, layouts, and unrelated
