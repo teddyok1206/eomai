@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/science-assessment-web-corpus-plan/1.0",
+  "title": "EOM Science Assessment Web Corpus Plan V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "source_site",
+    "sitemap_url",
+    "category_urls",
+    "allowed_download_hosts",
+    "scope",
+    "issuer_types",
+    "subject_families",
+    "document_roles",
+    "crawl_delay_ms",
+    "max_post_pages",
+    "max_pdf_bytes",
+    "created_at",
+    "plan_sha256"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "uri": {"type": "string", "format": "uri", "minLength": 8, "maxLength": 4096},
+    "utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "science-assessment-web-corpus-plan/1.0"},
+    "plan_id": {"type": "string", "pattern": "^sciencecorpusplan_[0-9a-f]{32}$"},
+    "source_site": {"const": "https://legendstudy.com"},
+    "sitemap_url": {"const": "https://legendstudy.com/sitemap.xml"},
+    "category_urls": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/uri"}
+    },
+    "allowed_download_hosts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$"
+      }
+    },
+    "scope": {"const": "KICE_AND_EDUCATION_AUTHORITY_SCIENCE_ASSESSMENTS"},
+    "issuer_types": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["EDUCATION_AUTHORITY", "KICE"]}
+    },
+    "subject_families": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "CHEMISTRY",
+          "EARTH_SCIENCE",
+          "GENERAL_SCIENCE",
+          "INTEGRATED_SCIENCE",
+          "LIFE_SCIENCE",
+          "PHYSICS"
+        ]
+      }
+    },
+    "document_roles": {
+      "type": "array",
+      "prefixItems": [{"const": "PROBLEM_DOCUMENT"}],
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "crawl_delay_ms": {"type": "integer", "minimum": 1000, "maximum": 60000},
+    "max_post_pages": {"type": "integer", "minimum": 1, "maximum": 5000},
+    "max_pdf_bytes": {"type": "integer", "minimum": 1024, "maximum": 104857600},
+    "created_at": {"$ref": "#/$defs/utc"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"}
+  }
+}
