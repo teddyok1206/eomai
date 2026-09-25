@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -324,3 +325,58 @@ def test_runner_rejects_staged_pdf_hash_drift_before_render(
             now=datetime(2026, 9, 25, 19, 10, tzinfo=UTC),
         )
     assert not render_called
+
+
+def test_render_pdf_accepts_pdftoppm_zero_padded_page_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-placeholder")
+
+    def _render(
+        arguments: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[bytes]:
+        prefix = Path(arguments[-1])
+        for page_number in range(1, 13):
+            page_path = prefix.parent / f"{prefix.name}-{page_number:02d}.png"
+            page_path.write_bytes(_png_for_path(Path(f"page-{page_number}.png")))
+            page_path.chmod(0o600)
+        return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+    monkeypatch.setattr(runner.subprocess, "run", _render)
+
+    pages = runner._render_pdf(pdf_path, expected_pages=12, dpi=144)
+
+    assert len(pages) == 12
+    assert pages[0] == _png_for_path(Path("page-1.png"))
+    assert pages[-1] == _png_for_path(Path("page-12.png"))
+
+
+def test_render_pdf_rejects_duplicate_numeric_page_aliases(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pdf_path = tmp_path / "source.pdf"
+    pdf_path.write_bytes(b"%PDF-placeholder")
+
+    def _render(
+        arguments: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[bytes]:
+        prefix = Path(arguments[-1])
+        payload = _png_for_path(Path("page-1.png"))
+        for suffix in ("1", "01"):
+            page_path = prefix.parent / f"{prefix.name}-{suffix}.png"
+            page_path.write_bytes(payload)
+            page_path.chmod(0o600)
+        return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+    monkeypatch.setattr(runner.subprocess, "run", _render)
+
+    with pytest.raises(
+        runner.ScienceCorpusVisualRunnerError,
+        match="SCIENCE_VISUAL_PILOT_PAGE_COUNT_MISMATCH",
+    ):
+        runner._render_pdf(pdf_path, expected_pages=1, dpi=144)

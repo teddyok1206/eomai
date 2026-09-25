@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -298,6 +299,16 @@ def _decode_png(payload: bytes) -> Image.Image:
         Image.MAX_IMAGE_PIXELS = previous_limit
 
 
+_PDFTOPPM_PAGE = re.compile(r"^page-(0*[1-9][0-9]*)\.png$")
+
+
+def _rendered_page_number(path: Path) -> int:
+    match = _PDFTOPPM_PAGE.fullmatch(path.name)
+    if match is None or path.is_symlink() or not path.is_file():
+        raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PAGE_COUNT_MISMATCH")
+    return int(match.group(1))
+
+
 def _render_pdf(pdf_path: Path, *, expected_pages: int, dpi: int) -> tuple[bytes, ...]:
     temporary = Path(tempfile.mkdtemp(prefix="science-visual-render-"))
     try:
@@ -315,17 +326,22 @@ def _render_pdf(pdf_path: Path, *, expected_pages: int, dpi: int) -> tuple[bytes
             raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PAGE_RENDER_FAILED") from exc
         if completed.returncode != 0:
             raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PAGE_RENDER_FAILED")
-        expected_names = tuple(f"page-{page}.png" for page in range(1, expected_pages + 1))
-        actual_names = tuple(sorted(value.name for value in temporary.iterdir()))
-        if actual_names != tuple(sorted(expected_names)):
+        pages_by_number: dict[int, Path] = {}
+        for page_path in temporary.iterdir():
+            page_number = _rendered_page_number(page_path)
+            if page_number in pages_by_number:
+                raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PAGE_COUNT_MISMATCH")
+            pages_by_number[page_number] = page_path
+        expected_numbers = set(range(1, expected_pages + 1))
+        if set(pages_by_number) != expected_numbers:
             raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PAGE_COUNT_MISMATCH")
         return tuple(
             _read_regular(
-                temporary / name,
+                pages_by_number[page_number],
                 maximum_bytes=MAX_PNG_BYTES,
                 expected_sha256=None,
             )
-            for name in expected_names
+            for page_number in range(1, expected_pages + 1)
         )
     finally:
         shutil.rmtree(temporary, ignore_errors=True)
