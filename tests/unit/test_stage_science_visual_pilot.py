@@ -3,9 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from eom_image_contracts import ImageEvaluationArtifactMember
+from eom_image_contracts import (
+    ImageEvaluationArtifactMember,
+    LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotPlanV2,
+)
 
 from scripts.image_trainer import stage_science_visual_pilot as stage
+from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value
 
 
 def _pointer() -> ImageEvaluationArtifactMember:
@@ -51,6 +56,28 @@ def test_command_binds_every_staged_pdf_to_the_published_plan() -> None:
     )
 
 
+def test_command_v2_binds_filtered_plan_contract() -> None:
+    plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(_plan_v2_value())
+    plan_pointer = _pointer().model_copy(
+        update={
+            "schema_ref": (
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+            )
+        }
+    )
+
+    command = stage._build_command(
+        plan=plan,
+        plan_pointer=plan_pointer,
+        requested_at=datetime(2026, 9, 25, 20, 0, tzinfo=UTC),
+        requested_by="operator_user",
+    )
+
+    assert isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2)
+    assert command.plan.schema_ref.endswith("/1.1")
+    assert command.plan_sha256 == plan.plan_sha256
+
+
 def test_preflight_validates_population_without_publication_or_workspace(
     monkeypatch,
     capsys,
@@ -78,6 +105,14 @@ def test_preflight_validates_population_without_publication_or_workspace(
                 page_limit=48,
                 candidate_limit=24,
                 lora_crop_limit=12,
+                locator_version="1.0",
+                max_candidates_per_page=4,
+                max_candidates_per_source=12,
+                maximum_redaction_area_milli=350,
+                minimum_interior_ink_milli=8,
+                maximum_border_ink_fraction_milli=650,
+                minimum_aspect_ratio_milli=200,
+                maximum_aspect_ratio_milli=5000,
                 preflight_only=True,
             )
         ),

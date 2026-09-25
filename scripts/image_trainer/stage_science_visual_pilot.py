@@ -18,14 +18,18 @@ from eom_catalog_contracts import ScienceAssessmentWebCorpusManifestV2
 from eom_catalog_service.science_visual_pilot import (
     build_science_corpus_training_authorization,
     build_science_visual_pilot_plan,
+    build_science_visual_pilot_plan_v2,
     select_science_visual_pilot_sources,
 )
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusVisualPilotCommand,
+    LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     ScienceVisualGuidanceAuthority,
+    ScienceVisualLocatorPolicyV2,
     ScienceVisualToolIdentity,
     ScienceVisualToolSet,
     content_json_bytes,
@@ -97,6 +101,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--page-limit", type=int, default=192)
     parser.add_argument("--candidate-limit", type=int, default=256)
     parser.add_argument("--lora-crop-limit", type=int, default=24)
+    parser.add_argument("--locator-version", choices=("1.0", "1.1"), default="1.0")
+    parser.add_argument("--max-candidates-per-page", type=int, default=4)
+    parser.add_argument("--max-candidates-per-source", type=int, default=12)
+    parser.add_argument("--maximum-redaction-area-milli", type=int, default=350)
+    parser.add_argument("--minimum-interior-ink-milli", type=int, default=8)
+    parser.add_argument("--maximum-border-ink-fraction-milli", type=int, default=650)
+    parser.add_argument("--minimum-aspect-ratio-milli", type=int, default=200)
+    parser.add_argument("--maximum-aspect-ratio-milli", type=int, default=5000)
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
@@ -251,15 +263,28 @@ def _load_corpus(
         raise ScienceVisualPilotStageError("SCIENCE_VISUAL_PILOT_CORPUS_INVALID") from exc
 
 
+ScienceVisualPilotPlan = (
+    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
+)
+ScienceVisualPilotCommand = (
+    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+)
+
+
 def _build_command(
     *,
-    plan: LocalImageScienceCorpusVisualPilotPlan,
+    plan: ScienceVisualPilotPlan,
     plan_pointer: ImageEvaluationArtifactMember,
     requested_at: datetime,
     requested_by: str,
-) -> LocalImageScienceCorpusVisualPilotCommand:
+) -> ScienceVisualPilotCommand:
+    use_v2 = isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
     body: dict[str, object] = {
-        "schema_version": "local-image-science-corpus-visual-pilot-command/1.0",
+        "schema_version": (
+            "local-image-science-corpus-visual-pilot-command/1.1"
+            if use_v2
+            else "local-image-science-corpus-visual-pilot-command/1.0"
+        ),
         "plan": plan_pointer.model_dump(mode="json"),
         "plan_sha256": plan.plan_sha256,
         "staged_plan_member": "input/visual-pilot-plan.json",
@@ -280,8 +305,15 @@ def _build_command(
     identity = content_sha256(body).removeprefix("sha256:")
     body["attempt_id"] = "imgscivisattempt_" + identity[:32]
     body["command_sha256"] = content_sha256(body)
-    command = LocalImageScienceCorpusVisualPilotCommand.model_validate(body)
-    validate_contract("science-corpus-visual-pilot-command", command.model_dump(mode="json"))
+    if use_v2:
+        command: ScienceVisualPilotCommand = (
+            LocalImageScienceCorpusVisualPilotCommandV2.model_validate(body)
+        )
+        contract_name = "science-corpus-visual-pilot-command-v2"
+    else:
+        command = LocalImageScienceCorpusVisualPilotCommand.model_validate(body)
+        contract_name = "science-corpus-visual-pilot-command"
+    validate_contract(contract_name, command.model_dump(mode="json"))
     return command
 
 
@@ -300,9 +332,9 @@ def _chown_workspace(workspace: Path) -> None:
 def _stage_workspace(
     *,
     engine: Engine,
-    plan: LocalImageScienceCorpusVisualPilotPlan,
+    plan: ScienceVisualPilotPlan,
     plan_pointer: ImageEvaluationArtifactMember,
-    command: LocalImageScienceCorpusVisualPilotCommand,
+    command: ScienceVisualPilotCommand,
 ) -> Path:
     workspace = WORKSPACE_PARENT / command.attempt_id
     if workspace.exists() or workspace.is_symlink():
@@ -336,7 +368,7 @@ def _stage_workspace(
 
 def _write_receipt(
     *,
-    command: LocalImageScienceCorpusVisualPilotCommand,
+    command: ScienceVisualPilotCommand,
     plan_pointer: ImageEvaluationArtifactMember,
     authorization_pointer: ImageEvaluationArtifactMember,
     workspace: Path,
@@ -379,11 +411,21 @@ def main() -> int:
         pdftoppm=_tool("/usr/bin/pdftoppm", "-v"),
         tesseract=_tool("/usr/bin/tesseract", "--version"),
     )
+    locator_policy = ScienceVisualLocatorPolicyV2(
+        max_candidates_per_page=args.max_candidates_per_page,
+        max_candidates_per_source=args.max_candidates_per_source,
+        maximum_redaction_area_milli=args.maximum_redaction_area_milli,
+        minimum_interior_ink_milli=args.minimum_interior_ink_milli,
+        maximum_border_ink_fraction_milli=args.maximum_border_ink_fraction_milli,
+        minimum_aspect_ratio_milli=args.minimum_aspect_ratio_milli,
+        maximum_aspect_ratio_milli=args.maximum_aspect_ratio_milli,
+    )
     if args.preflight_only:
         print(
             json.dumps(
                 {
                     "preflight": "PASS",
+                    "locator_version": args.locator_version,
                     "selected_sources": len(selected),
                     "selected_pages": sum(value.page_count for value in selected),
                 },
@@ -403,23 +445,34 @@ def main() -> int:
         approved_by=args.approved_by,
     )
     authorization_pointer = publisher.commit_science_corpus_authorization(authorization)
-    plan = build_science_visual_pilot_plan(
-        corpus=corpus,
-        corpus_manifest=corpus_pointer,
-        authorization=authorization,
-        authorization_pointer=authorization_pointer,
-        selection_seed_sha256=args.selection_seed_sha256,
-        guidance_authorities=guidance,
-        tools=tools,
-        source_commit=args.source_commit,
-        created_at=args.created_at,
-        created_by=args.created_by,
-        source_limit=args.source_limit,
-        page_limit=args.page_limit,
-        max_visual_candidates=args.candidate_limit,
-        max_lora_training_crops=args.lora_crop_limit,
-    )
-    plan_pointer = publisher.commit_science_visual_pilot_plan(plan)
+    plan_arguments = {
+        "corpus": corpus,
+        "corpus_manifest": corpus_pointer,
+        "authorization": authorization,
+        "authorization_pointer": authorization_pointer,
+        "selection_seed_sha256": args.selection_seed_sha256,
+        "guidance_authorities": guidance,
+        "tools": tools,
+        "source_commit": args.source_commit,
+        "created_at": args.created_at,
+        "created_by": args.created_by,
+        "source_limit": args.source_limit,
+        "page_limit": args.page_limit,
+        "max_visual_candidates": args.candidate_limit,
+        "max_lora_training_crops": args.lora_crop_limit,
+    }
+    plan: ScienceVisualPilotPlan
+    if args.locator_version == "1.1":
+        plan_v2 = build_science_visual_pilot_plan_v2(
+            **plan_arguments,
+            locator_policy=locator_policy,
+        )
+        plan = plan_v2
+        plan_pointer = publisher.commit_science_visual_pilot_plan_v2(plan_v2)
+    else:
+        plan_v1 = build_science_visual_pilot_plan(**plan_arguments)
+        plan = plan_v1
+        plan_pointer = publisher.commit_science_visual_pilot_plan(plan_v1)
     command = _build_command(
         plan=plan,
         plan_pointer=plan_pointer,

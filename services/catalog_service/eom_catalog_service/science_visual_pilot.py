@@ -21,7 +21,9 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     ScienceVisualGuidanceAuthority,
+    ScienceVisualLocatorPolicyV2,
     ScienceVisualPilotSource,
     ScienceVisualToolSet,
     content_sha256,
@@ -296,5 +298,53 @@ def build_science_visual_pilot_plan(
     body["pilot_id"] = "imgscivispilot_" + identity[:32]
     body["plan_sha256"] = content_sha256(body)
     plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(body)
+    validate_science_visual_authorization_plan(authorization, plan)
+    return plan
+
+
+def build_science_visual_pilot_plan_v2(
+    *,
+    corpus: ScienceAssessmentWebCorpusManifestV2,
+    corpus_manifest: ImageEvaluationArtifactMember,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    authorization_pointer: ImageEvaluationArtifactMember,
+    selection_seed_sha256: str,
+    guidance_authorities: tuple[ScienceVisualGuidanceAuthority, ...],
+    tools: ScienceVisualToolSet,
+    source_commit: str,
+    created_at: datetime,
+    created_by: str,
+    locator_policy: ScienceVisualLocatorPolicyV2,
+    source_limit: int = 36,
+    page_limit: int = 192,
+    max_visual_candidates: int = 256,
+    max_lora_training_crops: int = 24,
+) -> LocalImageScienceCorpusVisualPilotPlanV2:
+    """Build the additive filtered-locator plan without changing the released 1.0 builder."""
+
+    predecessor = build_science_visual_pilot_plan(
+        corpus=corpus,
+        corpus_manifest=corpus_manifest,
+        authorization=authorization,
+        authorization_pointer=authorization_pointer,
+        selection_seed_sha256=selection_seed_sha256,
+        guidance_authorities=guidance_authorities,
+        tools=tools,
+        source_commit=source_commit,
+        created_at=created_at,
+        created_by=created_by,
+        source_limit=source_limit,
+        page_limit=page_limit,
+        max_visual_candidates=max_visual_candidates,
+        max_lora_training_crops=max_lora_training_crops,
+    )
+    body = predecessor.model_dump(mode="json", exclude={"pilot_id", "plan_sha256"})
+    body["schema_version"] = "local-image-science-corpus-visual-pilot-plan/1.1"
+    body["locator_revision"] = "science-corpus-visual-locator/1.1"
+    body["locator_policy"] = locator_policy.model_dump(mode="json")
+    identity = content_sha256(body).removeprefix("sha256:")
+    body["pilot_id"] = "imgscivispilot_" + identity[:32]
+    body["plan_sha256"] = content_sha256(body)
+    plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(body)
     validate_science_visual_authorization_plan(authorization, plan)
     return plan

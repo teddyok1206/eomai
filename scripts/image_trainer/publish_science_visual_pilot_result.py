@@ -15,7 +15,9 @@ from pathlib import Path, PurePosixPath
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotCommand,
+    LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     ScienceVisualCandidate,
     ScienceVisualPageImage,
@@ -158,8 +160,8 @@ def _png_dimensions(payload: bytes) -> tuple[int, int]:
 def _load_workspace(
     workspace: Path,
 ) -> tuple[
-    LocalImageScienceCorpusVisualPilotCommand,
-    LocalImageScienceCorpusVisualPilotPlan,
+    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     bytes,
     int,
@@ -168,8 +170,23 @@ def _load_workspace(
         _safe_read(workspace / "command.json", maximum_bytes=MAX_JSON_BYTES)
     )
     try:
-        validate_contract("science-corpus-visual-pilot-command", command_value)
-        command = LocalImageScienceCorpusVisualPilotCommand.model_validate(command_value)
+        command: (
+            LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+        )
+        if (
+            command_value.get("schema_version")
+            == "local-image-science-corpus-visual-pilot-command/1.1"
+        ):
+            validate_contract("science-corpus-visual-pilot-command-v2", command_value)
+            command = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(command_value)
+        elif (
+            command_value.get("schema_version")
+            == "local-image-science-corpus-visual-pilot-command/1.0"
+        ):
+            validate_contract("science-corpus-visual-pilot-command", command_value)
+            command = LocalImageScienceCorpusVisualPilotCommand.model_validate(command_value)
+        else:
+            raise ValueError("unsupported science visual pilot command version")
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_RESULT_INVALID") from exc
     plan_value = _json_object(
@@ -185,9 +202,14 @@ def _load_workspace(
     )
     result_value = _json_object(result_payload)
     try:
-        validate_contract("science-corpus-visual-pilot-plan", plan_value)
+        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
+            validate_contract("science-corpus-visual-pilot-plan-v2", plan_value)
+            plan: LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
+            plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(plan_value)
+        else:
+            validate_contract("science-corpus-visual-pilot-plan", plan_value)
+            plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(plan_value)
         validate_contract("science-corpus-visual-pilot-result", result_value)
-        plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(plan_value)
         result = LocalImageScienceCorpusVisualPilotResult.model_validate(result_value)
         validate_science_visual_pilot_command(plan, command)
         validate_science_visual_pilot_result(plan, result)

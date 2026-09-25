@@ -5,10 +5,19 @@ from collections import defaultdict
 
 import pytest
 from eom_catalog_contracts import ScienceAssessmentCorpusDocument
+from eom_catalog_service import science_visual_pilot as planning
 from eom_catalog_service.science_visual_pilot import (
     ScienceVisualPilotPlanningError,
+    build_science_visual_pilot_plan_v2,
     select_science_visual_pilot_sources,
 )
+from eom_image_contracts import (
+    LocalImageScienceCorpusTrainingAuthorization,
+    LocalImageScienceCorpusVisualPilotPlan,
+    ScienceVisualLocatorPolicyV2,
+)
+
+from tests.unit.test_science_corpus_visual_contracts import _authorization_value, _plan_value
 
 
 def _document(index: int) -> ScienceAssessmentCorpusDocument:
@@ -123,3 +132,45 @@ def test_selection_fails_closed_when_page_budget_cannot_fill_partition_quotas() 
             source_limit=12,
             page_limit=12,
         )
+
+
+def test_successor_plan_preserves_selection_and_adds_exact_locator_policy(monkeypatch) -> None:
+    predecessor = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
+    authorization = LocalImageScienceCorpusTrainingAuthorization.model_validate(
+        _authorization_value()
+    )
+    monkeypatch.setattr(
+        planning,
+        "build_science_visual_pilot_plan",
+        lambda **_kwargs: predecessor,
+    )
+    locator_policy = ScienceVisualLocatorPolicyV2(
+        max_candidates_per_page=4,
+        max_candidates_per_source=12,
+        maximum_redaction_area_milli=350,
+        minimum_interior_ink_milli=8,
+        maximum_border_ink_fraction_milli=650,
+        minimum_aspect_ratio_milli=200,
+        maximum_aspect_ratio_milli=5000,
+    )
+
+    successor = build_science_visual_pilot_plan_v2(
+        corpus=object(),  # type: ignore[arg-type]
+        corpus_manifest=predecessor.corpus_manifest,
+        authorization=authorization,
+        authorization_pointer=predecessor.training_authorization,
+        selection_seed_sha256=predecessor.selection_seed_sha256,
+        guidance_authorities=predecessor.guidance_authorities,
+        tools=predecessor.tools,
+        source_commit=predecessor.guidance_authorities[0].source_commit,
+        created_at=predecessor.created_at,
+        created_by=predecessor.created_by,
+        locator_policy=locator_policy,
+    )
+
+    assert successor.schema_version.endswith("/1.1")
+    assert successor.locator_revision.endswith("/1.1")
+    assert successor.locator_policy == locator_policy
+    assert successor.selected_sources == predecessor.selected_sources
+    assert successor.pilot_id != predecessor.pilot_id
+    assert successor.plan_sha256 != predecessor.plan_sha256

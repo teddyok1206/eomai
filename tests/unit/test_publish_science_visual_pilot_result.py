@@ -9,7 +9,7 @@ from eom_identifiers import sha256_bytes
 from eom_image_contracts import content_json_bytes, content_sha256
 
 from scripts.image_trainer import publish_science_visual_pilot_result as publication
-from tests.unit.test_science_corpus_visual_contracts import _plan_value
+from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value, _plan_value
 
 
 def _png(seed: int) -> bytes:
@@ -39,8 +39,8 @@ def _write(path: Path, payload: bytes) -> None:
     path.chmod(0o600)
 
 
-def _stage_complete_workspace(tmp_path: Path) -> tuple[Path, int]:
-    plan_value = _plan_value()
+def _stage_complete_workspace(tmp_path: Path, *, use_v2: bool = False) -> tuple[Path, int]:
+    plan_value = _plan_v2_value() if use_v2 else _plan_value()
     plan_payload = content_json_bytes(plan_value)
     staged_sources = [
         {
@@ -53,13 +53,19 @@ def _stage_complete_workspace(tmp_path: Path) -> tuple[Path, int]:
         for source in plan_value["selected_sources"]
     ]
     command_body: dict[str, object] = {
-        "schema_version": "local-image-science-corpus-visual-pilot-command/1.0",
+        "schema_version": (
+            "local-image-science-corpus-visual-pilot-command/1.1"
+            if use_v2
+            else "local-image-science-corpus-visual-pilot-command/1.0"
+        ),
         "plan": {
             "artifact_id": "artifact_" + "7" * 32,
             "artifact_revision_id": "rev_" + "7" * 32,
             "member_path": "manifests/visual-pilot-plan.json",
             "schema_ref": (
-                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+                if use_v2
+                else "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
             ),
             "media_type": "application/json",
             "sha256": sha256_bytes(plan_payload),
@@ -169,6 +175,16 @@ def test_load_workspace_validates_closed_page_and_crop_set(tmp_path: Path) -> No
     assert len(result.visual_candidates) == 12
     assert expected_members == 25
     assert output_bytes > len(result_payload)
+
+
+def test_load_workspace_accepts_filtered_locator_successor(tmp_path: Path) -> None:
+    workspace, _expected_members = _stage_complete_workspace(tmp_path, use_v2=True)
+
+    command, plan, result, _result_payload, _output_bytes = publication._load_workspace(workspace)
+
+    assert command.schema_version == "local-image-science-corpus-visual-pilot-command/1.1"
+    assert plan.schema_version == "local-image-science-corpus-visual-pilot-plan/1.1"
+    assert plan.plan_sha256 == result.plan_sha256
 
 
 def test_load_workspace_rejects_an_extra_crop(tmp_path: Path) -> None:
