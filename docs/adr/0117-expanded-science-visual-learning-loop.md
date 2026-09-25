@@ -193,6 +193,39 @@ owns authoritative geometry; the local raster model supplies only approved non-a
 style. Preview and HWPX retain authored component order, editable tables, separate two-image PNGs,
 and editable panel labels.
 
+## Executable expansion gates
+
+The expansion proceeds in the following order; a later gate may not reinterpret an earlier failure
+as success.
+
+1. **Filtered discovery.** Run locator `science-corpus-visual-locator/1.1` over a new, grouped and
+   stratified population below 100 PDFs. Enforce page/source caps and the reviewed redaction,
+   interior-ink, border-ink and aspect-ratio policy. Preserve locator 1.0 results as history.
+2. **Review and canonical crop materialization.** Review every candidate against the exact page and
+   source pointers. Publish the typed inventory, then materialize only the reviewed LoRA-eligible
+   crop set as a bounded Orchestrator-owned file-set Artifact. A worker workspace is not a canonical
+   training source.
+3. **Small local-model probe.** Continue only when at least 12 distinct, group-deduplicated,
+   rights-approved raster-style crops survive. Reuse the current offline SSD-1B micro-probe and
+   fixed base-versus-adapter evaluation semantics through an additive science-corpus plan. Do not
+   lower the minimum, pad samples, overwrite the base model, or activate the adapter automatically.
+4. **Prompt-and-pattern grammar.** Read both pinned team-lead documents and the KICE illustration
+   guide as exact authorities, then combine them with aggregate reviewed pattern evidence. The image
+   worker specifies the required objects, counts, labels, scientific relations and layout; a typed
+   grammar routes authoritative geometry to Python/SVG primitives. Generated pixels may contribute
+   only approved non-authoritative texture/style.
+5. **Publication regression.** Validate white/grayscale print behavior, exact horizontal labels,
+   arrow/line semantics, geometry/count conservation, 800×500 output, Preview, package-internal
+   HWPX image members, mixed IMAGE/TABLE order, one-image no-label behavior, and separate two-image
+   PNGs with editable HWPX `(가)/(나)` labels.
+
+The first grammar backlog is evidence-backed rather than speculative: apparatus topology, axis and
+multi-series plots, cell cross-sections, circuits, geologic sections, map boundaries, orbital and
+ray systems, particle systems and vector fields. Shared primitives include anchored labels, leader
+lines, arrowheads, line-style semantics, hatching, flat grayscale fills, safe margins and print-size
+proofs. A primitive is promoted only after two reviewed patterns need it and its scientific
+invariants can be represented as typed values and tested independently of SVG text.
+
 ## Simpler alternatives rejected
 
 Training directly from full PDF pages would teach publisher text, answers, layouts, and unrelated
