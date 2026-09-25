@@ -866,12 +866,35 @@ def _pattern_inventory() -> dict[str, Any]:
     return schema
 
 
+def _pattern_inventory_v2() -> dict[str, Any]:
+    """Bind the canonical result file and its semantic self-hash separately."""
+
+    schema = _pattern_inventory()
+    schema["title"] = "EOM Science Corpus Visual Pattern Inventory V1.1"
+    schema["$id"] = "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
+    required = schema["required"]
+    assert isinstance(required, list)
+    result_hash_index = required.index("pilot_result_sha256")
+    required[result_hash_index : result_hash_index + 1] = [
+        "pilot_result_file_sha256",
+        "pilot_result_semantic_sha256",
+    ]
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {"const": "local-image-science-visual-pattern-inventory/1.1"}
+    properties.pop("pilot_result_sha256")
+    properties["pilot_result_file_sha256"] = {"$ref": "#/$defs/sha256"}
+    properties["pilot_result_semantic_sha256"] = {"$ref": "#/$defs/sha256"}
+    return schema
+
+
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
     "local-image-science-corpus-visual-pilot-command-v1.schema.json": _pilot_command(),
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
+    "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
 }
 
 
