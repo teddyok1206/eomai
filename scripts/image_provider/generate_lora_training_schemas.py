@@ -156,6 +156,44 @@ def _base(identifier: str, title: str) -> dict[str, Any]:
     }
 
 
+def _runtime() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "python_version",
+            "torch_version",
+            "diffusers_version",
+            "transformers_version",
+            "accelerate_version",
+            "peft_version",
+            "bitsandbytes_version",
+            "cuda_version",
+            "gpu_name",
+            "compute_capability",
+            "peak_gpu_memory_bytes",
+        ],
+        "properties": {
+            **{
+                name: {"type": "string", "minLength": 1, "maxLength": 128}
+                for name in (
+                    "python_version",
+                    "torch_version",
+                    "diffusers_version",
+                    "transformers_version",
+                    "accelerate_version",
+                    "peft_version",
+                    "bitsandbytes_version",
+                    "cuda_version",
+                    "gpu_name",
+                )
+            },
+            "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+            "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1},
+        },
+    }
+
+
 def _authorization() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-training-authorization/1.0",
@@ -670,41 +708,7 @@ def _training_receipt() -> dict[str, Any]:
                         {"type": "null"},
                     ]
                 },
-                "runtime": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": [
-                        "python_version",
-                        "torch_version",
-                        "diffusers_version",
-                        "transformers_version",
-                        "accelerate_version",
-                        "peft_version",
-                        "bitsandbytes_version",
-                        "cuda_version",
-                        "gpu_name",
-                        "compute_capability",
-                        "peak_gpu_memory_bytes",
-                    ],
-                    "properties": {
-                        **{
-                            name: {"type": "string", "minLength": 1, "maxLength": 128}
-                            for name in (
-                                "python_version",
-                                "torch_version",
-                                "diffusers_version",
-                                "transformers_version",
-                                "accelerate_version",
-                                "peft_version",
-                                "bitsandbytes_version",
-                                "cuda_version",
-                                "gpu_name",
-                            )
-                        },
-                        "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
-                        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1},
-                    },
-                },
+                "runtime": {"anyOf": [_runtime(), {"type": "null"}]},
                 "completed_steps": {"type": "integer", "minimum": 0, "maximum": 2000},
                 "final_loss": {
                     "anyOf": [
@@ -723,6 +727,7 @@ def _training_receipt() -> dict[str, Any]:
                         "properties": {
                             "adapter_manifest": {"$ref": "#/$defs/artifactPointer"},
                             "error_code": {"type": "null"},
+                            "runtime": _runtime(),
                             "completed_steps": {"minimum": 200},
                             "final_loss": {"type": "number", "minimum": 0, "maximum": 1000000},
                         }
@@ -834,41 +839,7 @@ def _training_worker_result() -> dict[str, Any]:
                         {"type": "null"},
                     ]
                 },
-                "runtime": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": [
-                        "python_version",
-                        "torch_version",
-                        "diffusers_version",
-                        "transformers_version",
-                        "accelerate_version",
-                        "peft_version",
-                        "bitsandbytes_version",
-                        "cuda_version",
-                        "gpu_name",
-                        "compute_capability",
-                        "peak_gpu_memory_bytes",
-                    ],
-                    "properties": {
-                        **{
-                            name: {"type": "string", "minLength": 1, "maxLength": 128}
-                            for name in (
-                                "python_version",
-                                "torch_version",
-                                "diffusers_version",
-                                "transformers_version",
-                                "accelerate_version",
-                                "peft_version",
-                                "bitsandbytes_version",
-                                "cuda_version",
-                                "gpu_name",
-                            )
-                        },
-                        "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
-                        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1},
-                    },
-                },
+                "runtime": {"anyOf": [_runtime(), {"type": "null"}]},
                 "completed_steps": {"type": "integer", "minimum": 0, "maximum": 2000},
                 "final_loss": {
                     "anyOf": [
@@ -895,6 +866,7 @@ def _training_worker_result() -> dict[str, Any]:
                                 )
                             },
                             "error_code": {"type": "null"},
+                            "runtime": _runtime(),
                             "completed_steps": {"minimum": 200},
                             "final_loss": {"type": "number", "minimum": 0, "maximum": 1000000},
                         }

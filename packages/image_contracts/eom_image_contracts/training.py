@@ -449,7 +449,7 @@ class LocalImageLoraTrainingReceipt(FrozenModel):
     status: Literal["SUCCEEDED", "FAILED", "CANCELLED"]
     adapter_manifest: ImageEvaluationArtifactMember | None
     error_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{2,95}$")
-    runtime: LocalImageLoraTrainingRuntime
+    runtime: LocalImageLoraTrainingRuntime | None
     completed_steps: int = Field(ge=0, le=2000)
     final_loss: float | None = Field(ge=0, le=1_000_000)
     started_at: datetime
@@ -471,7 +471,7 @@ class LocalImageLoraTrainingReceipt(FrozenModel):
         if self.completed_at < self.started_at:
             raise ValueError("LoRA training completion precedes start")
         if self.status == "SUCCEEDED":
-            if self.adapter_manifest is None or self.error_code is not None:
+            if self.adapter_manifest is None or self.error_code is not None or self.runtime is None:
                 raise ValueError("successful LoRA training requires only an adapter manifest")
             _require_pointer(
                 self.adapter_manifest,
@@ -526,7 +526,7 @@ class LocalImageLoraTrainingWorkerResult(FrozenModel):
     status: Literal["SUCCEEDED", "FAILED", "CANCELLED"]
     adapter_manifest: LocalImageLoraAdapterManifest | None
     error_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{2,95}$")
-    runtime: LocalImageLoraTrainingRuntime
+    runtime: LocalImageLoraTrainingRuntime | None
     completed_steps: int = Field(ge=0, le=2000)
     final_loss: float | None = Field(ge=0, le=1_000_000)
     started_at: datetime
@@ -548,7 +548,7 @@ class LocalImageLoraTrainingWorkerResult(FrozenModel):
         if self.completed_at < self.started_at:
             raise ValueError("LoRA worker completion precedes start")
         if self.status == "SUCCEEDED":
-            if self.adapter_manifest is None or self.error_code is not None:
+            if self.adapter_manifest is None or self.error_code is not None or self.runtime is None:
                 raise ValueError("successful LoRA worker requires only an adapter manifest")
             if self.completed_steps < 200 or self.final_loss is None:
                 raise ValueError("successful LoRA worker result is incomplete")

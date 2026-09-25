@@ -247,76 +247,83 @@
       ]
     },
     "runtime": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "python_version",
-        "torch_version",
-        "diffusers_version",
-        "transformers_version",
-        "accelerate_version",
-        "peft_version",
-        "bitsandbytes_version",
-        "cuda_version",
-        "gpu_name",
-        "compute_capability",
-        "peak_gpu_memory_bytes"
-      ],
-      "properties": {
-        "python_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "python_version",
+            "torch_version",
+            "diffusers_version",
+            "transformers_version",
+            "accelerate_version",
+            "peft_version",
+            "bitsandbytes_version",
+            "cuda_version",
+            "gpu_name",
+            "compute_capability",
+            "peak_gpu_memory_bytes"
+          ],
+          "properties": {
+            "python_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "torch_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "diffusers_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "transformers_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "accelerate_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "peft_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "bitsandbytes_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "cuda_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "gpu_name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "compute_capability": {
+              "type": "string",
+              "pattern": "^[0-9]+\\.[0-9]+$"
+            },
+            "peak_gpu_memory_bytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         },
-        "torch_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "diffusers_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "transformers_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "accelerate_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "peft_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "bitsandbytes_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "cuda_version": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "gpu_name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "compute_capability": {
-          "type": "string",
-          "pattern": "^[0-9]+\\.[0-9]+$"
-        },
-        "peak_gpu_memory_bytes": {
-          "type": "integer",
-          "minimum": 1
+        {
+          "type": "null"
         }
-      }
+      ]
     },
     "completed_steps": {
       "type": "integer",
@@ -363,6 +370,78 @@
           },
           "error_code": {
             "type": "null"
+          },
+          "runtime": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "python_version",
+              "torch_version",
+              "diffusers_version",
+              "transformers_version",
+              "accelerate_version",
+              "peft_version",
+              "bitsandbytes_version",
+              "cuda_version",
+              "gpu_name",
+              "compute_capability",
+              "peak_gpu_memory_bytes"
+            ],
+            "properties": {
+              "python_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "torch_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "diffusers_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "transformers_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "accelerate_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "peft_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "bitsandbytes_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "cuda_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "gpu_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "compute_capability": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+$"
+              },
+              "peak_gpu_memory_bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
           },
           "completed_steps": {
             "minimum": 200

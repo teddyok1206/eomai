@@ -58,13 +58,13 @@ SCHEMA_SHA256 = {
         "sha256:6ff652980b8b3599d0843395820d0e468270cfd17e9ab733a6b7ee28d6acb546"
     ),
     "lora-training-receipt": (
-        "sha256:b416463535d9aa0a8febfae3da3afc8e839aaa90913d021827f3826d9fda7c1a"
+        "sha256:4fa7cb556139374b6964baa8aa028350843d2f7d85ff680a66f673e24f127089"
     ),
     "lora-training-command": (
         "sha256:6b7c6eb7acf0253b37cd627309bc8c1633f71da8becae2b760ba19cdb3ab4aa4"
     ),
     "lora-training-worker-result": (
-        "sha256:0dd0b7e8b9171b006fc97ebb1ea30c49ecdb618f55261f4e59328dc2fc23c28e"
+        "sha256:310500458a4496105816c55b207bd39daa842dcfd3fa02a820f462484441f6d7"
     ),
 }
 
