@@ -208,7 +208,7 @@ class LocalImageTrainingCandidateInventory(FrozenModel):
         _require_pointer(
             self.holdout_evaluation_plan,
             schema_ref=EVALUATION_PLAN_SCHEMA_REF,
-            member_path="evaluation/evaluation-plan.json",
+            member_path="manifests/evaluation-plan.json",
         )
         for values, label in (
             (self.holdout_sample_ids, "holdout samples"),
@@ -282,17 +282,17 @@ class LocalImageTrainingDatasetManifest(FrozenModel):
         _require_pointer(
             self.training_authorization,
             schema_ref=AUTHORIZATION_SCHEMA_REF,
-            member_path="authorization/training-authorization.json",
+            member_path="manifests/training-authorization.json",
         )
         _require_pointer(
             self.candidate_inventory,
             schema_ref=CANDIDATE_INVENTORY_SCHEMA_REF,
-            member_path="inventory/training-candidates.json",
+            member_path="manifests/training-candidates.json",
         )
         _require_pointer(
             self.holdout_evaluation_plan,
             schema_ref=EVALUATION_PLAN_SCHEMA_REF,
-            member_path="evaluation/evaluation-plan.json",
+            member_path="manifests/evaluation-plan.json",
         )
         if self.holdout_sample_ids != tuple(sorted(self.holdout_sample_ids)) or len(
             self.holdout_sample_ids
@@ -380,7 +380,7 @@ class LocalImageLoraTrainingPlan(FrozenModel):
         _require_pointer(
             self.dataset_manifest,
             schema_ref=DATASET_SCHEMA_REF,
-            member_path="dataset/training-dataset.json",
+            member_path="manifests/training-dataset.json",
         )
         if self.hyperparameters.checkpointing_steps > self.hyperparameters.max_train_steps:
             raise ValueError("checkpoint interval exceeds total training steps")
@@ -418,12 +418,12 @@ class LocalImageLoraAdapterManifest(FrozenModel):
         _require_pointer(
             self.dataset_manifest,
             schema_ref=DATASET_SCHEMA_REF,
-            member_path="dataset/training-dataset.json",
+            member_path="manifests/training-dataset.json",
         )
         _require_pointer(
             self.training_plan,
             schema_ref=TRAINING_PLAN_SCHEMA_REF,
-            member_path="training/training-plan.json",
+            member_path="manifests/training-plan.json",
         )
         paths = tuple(item.relative_path for item in self.files)
         if paths != ("adapter_config.json", "adapter_model.safetensors"):
@@ -466,7 +466,7 @@ class LocalImageLoraTrainingReceipt(FrozenModel):
         _require_pointer(
             self.training_plan,
             schema_ref=TRAINING_PLAN_SCHEMA_REF,
-            member_path="training/training-plan.json",
+            member_path="manifests/training-plan.json",
         )
         if self.completed_at < self.started_at:
             raise ValueError("LoRA training completion precedes start")
@@ -476,7 +476,7 @@ class LocalImageLoraTrainingReceipt(FrozenModel):
             _require_pointer(
                 self.adapter_manifest,
                 schema_ref=ADAPTER_MANIFEST_SCHEMA_REF,
-                member_path="adapter/adapter-manifest.json",
+                member_path="manifests/adapter-manifest.json",
             )
             if self.completed_steps < 200 or self.final_loss is None:
                 raise ValueError("successful LoRA training receipt is incomplete")

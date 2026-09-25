@@ -155,7 +155,7 @@ def _inventory_value() -> dict[str, object]:
         "source_snapshot": _source_snapshot(),
         "holdout_evaluation_plan": _pointer(
             "c",
-            member_path="evaluation/evaluation-plan.json",
+            member_path="manifests/evaluation-plan.json",
             schema_ref=("eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"),
         ),
         "holdout_sample_ids": ["imgsample_" + f"{index + 5000:032x}" for index in range(12)],
@@ -182,12 +182,12 @@ def _dataset_value() -> dict[str, object]:
         "source_snapshot": _source_snapshot(),
         "training_authorization": _pointer(
             "b",
-            member_path="authorization/training-authorization.json",
+            member_path="manifests/training-authorization.json",
             schema_ref=("eom://schemas/image-provider/local-image-training-authorization/1.0"),
         ),
         "candidate_inventory": _pointer(
             "a",
-            member_path="inventory/training-candidates.json",
+            member_path="manifests/training-candidates.json",
             schema_ref=(
                 "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
             ),
@@ -196,7 +196,7 @@ def _dataset_value() -> dict[str, object]:
         "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
         "holdout_evaluation_plan": _pointer(
             "c",
-            member_path="evaluation/evaluation-plan.json",
+            member_path="manifests/evaluation-plan.json",
             schema_ref=("eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"),
         ),
         "holdout_sample_ids": holdout_samples,
@@ -215,7 +215,7 @@ def _plan_value() -> dict[str, object]:
         "training_plan_id": "imgtrainplan_" + "f" * 32,
         "dataset_manifest": _pointer(
             "d",
-            member_path="dataset/training-dataset.json",
+            member_path="manifests/training-dataset.json",
             schema_ref=("eom://schemas/image-provider/local-image-training-dataset-manifest/1.0"),
         ),
         "base_model": _model_pointer(),
@@ -264,7 +264,7 @@ def _adapter_value() -> dict[str, object]:
         "dataset_manifest": _plan_value()["dataset_manifest"],
         "training_plan": _pointer(
             "f",
-            member_path="training/training-plan.json",
+            member_path="manifests/training-plan.json",
             schema_ref=("eom://schemas/image-provider/local-image-lora-training-plan/1.0"),
         ),
         "files": [
@@ -293,7 +293,7 @@ def _receipt_value() -> dict[str, object]:
         "status": "SUCCEEDED",
         "adapter_manifest": _pointer(
             "1",
-            member_path="adapter/adapter-manifest.json",
+            member_path="manifests/adapter-manifest.json",
             schema_ref=("eom://schemas/image-provider/local-image-lora-adapter-manifest/1.0"),
         ),
         "error_code": None,
