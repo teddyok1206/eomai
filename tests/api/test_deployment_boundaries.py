@@ -84,6 +84,13 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
         '"legacy-assessment/legacy-item-extraction-batch-v2.schema.json": '
         '"schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"'
     ) in source
+    for resource in (
+        "science-assessment-web-acquisition-v1.schema.json",
+        "science-assessment-web-corpus-manifest-v1.schema.json",
+        "science-assessment-web-corpus-plan-v1.schema.json",
+    ):
+        assert f'"legacy-assessment/{resource}": ' in source
+        assert f'"schemas/legacy-assessment/{resource}"' in source
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
     assert 'scripts/hwpx/bootstrap_manager_runtime_role.py"' in source
