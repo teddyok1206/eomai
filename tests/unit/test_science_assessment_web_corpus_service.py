@@ -26,7 +26,9 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _bounded_shards,
     _build_manifest,
     _ResolvedSource,
+    _stage_intake_shard,
 )
+from eom_identifiers import sha256_file
 
 
 def _plan() -> ScienceAssessmentWebCorpusPlan:
@@ -227,3 +229,66 @@ def test_content_intake_source_hash_lookup_has_a_btree_index() -> None:
     }
 
     assert indexes["ix_content_intake_source_sha256"] == ("sha256",)
+
+
+def test_intake_shard_staging_is_content_addressed_and_replayable(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"x" * 4096)
+    content_hash = sha256_file(source)
+    acquired = AcquiredScienceAssessmentPdf(
+        candidate=_candidate(post="100"),
+        resolved_url="https://t1.daumcdn.net/file/100.pdf",
+        source=source,
+        sha256=content_hash,
+        bytes=4096,
+        page_count=4,
+    )
+    aggregate = _aggregate_acquired((acquired,))
+
+    first = _stage_intake_shard(
+        staging_root=tmp_path / "staging",
+        plan=_plan(),
+        hashes=(content_hash,),
+        aggregate=aggregate,
+    )
+    second = _stage_intake_shard(
+        staging_root=tmp_path / "staging",
+        plan=_plan(),
+        hashes=(content_hash,),
+        aggregate=aggregate,
+    )
+
+    assert first == second
+    assert tuple(value.name for value in first.iterdir()) == (
+        f"{content_hash.removeprefix('sha256:')}.pdf",
+    )
+
+
+def test_intake_shard_staging_rejects_replay_drift(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"x" * 4096)
+    content_hash = sha256_file(source)
+    acquired = AcquiredScienceAssessmentPdf(
+        candidate=_candidate(post="100"),
+        resolved_url="https://t1.daumcdn.net/file/100.pdf",
+        source=source,
+        sha256=content_hash,
+        bytes=4096,
+        page_count=4,
+    )
+    aggregate = _aggregate_acquired((acquired,))
+    directory = _stage_intake_shard(
+        staging_root=tmp_path / "staging",
+        plan=_plan(),
+        hashes=(content_hash,),
+        aggregate=aggregate,
+    )
+    next(directory.iterdir()).write_bytes(b"drift")
+
+    with pytest.raises(ScienceAssessmentCorpusPublicationError, match="STAGING_INVALID"):
+        _stage_intake_shard(
+            staging_root=tmp_path / "staging",
+            plan=_plan(),
+            hashes=(content_hash,),
+            aggregate=aggregate,
+        )

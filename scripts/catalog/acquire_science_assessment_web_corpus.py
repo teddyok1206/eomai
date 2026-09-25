@@ -134,7 +134,6 @@ def main() -> None:
             discovery=discovery,
             acquired=acquired,
             failures=failures,
-            workspace=args.workspace,
             received_by=args.received_by,
         )
     finally:

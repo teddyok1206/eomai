@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import stat
+import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -114,7 +115,6 @@ class ScienceAssessmentWebCorpusService:
         discovery: ScienceAssessmentDiscovery,
         acquired: tuple[AcquiredScienceAssessmentPdf, ...],
         failures: tuple[DownloadFailure, ...],
-        workspace: Path,
         received_by: str,
         observed_at: datetime | None = None,
     ) -> ScienceAssessmentCorpusPublication:
@@ -127,7 +127,6 @@ class ScienceAssessmentWebCorpusService:
             plan=plan,
             aggregate=aggregate,
             hashes=new_hashes,
-            workspace=workspace,
             received_by=received_by,
             resolved=resolved,
         )
@@ -203,20 +202,21 @@ class ScienceAssessmentWebCorpusService:
         plan: ScienceAssessmentWebCorpusPlan,
         aggregate: dict[str, _AggregatedPdf],
         hashes: tuple[str, ...],
-        workspace: Path,
         received_by: str,
         resolved: dict[str, _ResolvedSource],
     ) -> tuple[ScienceAssessmentCorpusIntakeShard, ...]:
         shards: list[ScienceAssessmentCorpusIntakeShard] = []
         for ordinal, shard_hashes in enumerate(_bounded_shards(hashes, aggregate), start=1):
-            directory = workspace / f"intake-shard-{ordinal:03d}"
-            directory.mkdir(mode=0o700)
+            directory = _stage_intake_shard(
+                staging_root=self.settings.staging_root,
+                plan=plan,
+                hashes=shard_hashes,
+                aggregate=aggregate,
+            )
             declarations: list[IntakeSourceDeclaration] = []
             for content_hash in shard_hashes:
                 document = aggregate[content_hash]
                 filename = content_hash.removeprefix("sha256:") + ".pdf"
-                target = directory / filename
-                _copy_exact(document.source, target, content_hash, document.bytes)
                 declarations.append(
                     IntakeSourceDeclaration(
                         normalized_relative_path=filename,
@@ -573,3 +573,69 @@ def _copy_exact(source: Path, target: Path, expected_hash: str, expected_bytes: 
         or sha256_file(target) != expected_hash
     ):
         raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_SOURCE_COPY_INVALID")
+
+
+def _stage_intake_shard(
+    *,
+    staging_root: Path,
+    plan: ScienceAssessmentWebCorpusPlan,
+    hashes: tuple[str, ...],
+    aggregate: dict[str, _AggregatedPdf],
+) -> Path:
+    identity = content_sha256(
+        {
+            "plan_id": plan.plan_id,
+            "plan_sha256": plan.plan_sha256,
+            "source_sha256s": list(hashes),
+        }
+    ).removeprefix("sha256:")
+    parent = staging_root / "science-assessment-web-corpus" / "intake-shards"
+    parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    directory = parent / identity
+    if directory.exists():
+        _require_exact_staged_shard(directory, hashes, aggregate)
+        return directory
+
+    temporary = Path(tempfile.mkdtemp(prefix=f".{identity}.", dir=parent))
+    temporary.chmod(0o700)
+    try:
+        for content_hash in hashes:
+            document = aggregate[content_hash]
+            target = temporary / f"{content_hash.removeprefix('sha256:')}.pdf"
+            _copy_exact(document.source, target, content_hash, document.bytes)
+        _require_exact_staged_shard(temporary, hashes, aggregate)
+        try:
+            temporary.rename(directory)
+        except FileExistsError:
+            _require_exact_staged_shard(directory, hashes, aggregate)
+        else:
+            temporary = directory
+        return directory
+    finally:
+        if temporary != directory and temporary.exists():
+            shutil.rmtree(temporary)
+
+
+def _require_exact_staged_shard(
+    directory: Path,
+    hashes: tuple[str, ...],
+    aggregate: dict[str, _AggregatedPdf],
+) -> None:
+    metadata = directory.lstat()
+    if directory.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID")
+    expected_names = {f"{value.removeprefix('sha256:')}.pdf" for value in hashes}
+    if {value.name for value in directory.iterdir()} != expected_names:
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID")
+    for content_hash in hashes:
+        source = directory / f"{content_hash.removeprefix('sha256:')}.pdf"
+        source_metadata = source.lstat()
+        expected = aggregate[content_hash]
+        if (
+            source.is_symlink()
+            or not stat.S_ISREG(source_metadata.st_mode)
+            or source_metadata.st_nlink != 1
+            or source_metadata.st_size != expected.bytes
+            or sha256_file(source) != content_hash
+        ):
+            raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID")

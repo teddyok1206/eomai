@@ -29,7 +29,9 @@ NAS or PostgreSQL.  It emits a schema-validated, self-hashed local acquisition m
 
 In a separate no-network publication phase, the Catalog application revalidates that acquisition
 manifest and every exact PDF member, shards unique PDFs into at most 499 files and 2 GiB per batch,
-and commits them through the existing Content Intake Artifact boundary.  A final corpus manifest
+materializes replay-safe content-addressed shards under Catalog-owned staging, and commits them
+through the existing Content Intake Artifact boundary.  The acquisition workspace remains
+read-only during publication.  A final corpus manifest
 points to each immutable Content Intake source.  Workers never crawl, download, or write the source
 corpus.  Separating the phases prevents a native PDF parser handling untrusted bytes from sharing a
 process with database and NAS credentials.
