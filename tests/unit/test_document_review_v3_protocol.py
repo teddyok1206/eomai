@@ -7,7 +7,11 @@ from pathlib import Path
 
 import pytest
 from eom_workflow import PairedDocumentReviewOutputV3
-from eom_workflow.schemas import load_role_result_schema, validate_role_result
+from eom_workflow.schemas import (
+    load_codex_result_schema,
+    load_role_result_schema,
+    validate_role_result,
+)
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -254,6 +258,25 @@ def test_document_review_v3_requires_each_editorial_axis(missing_axis: str) -> N
     ]
     with pytest.raises((JsonSchemaValidationError, ValidationError, ValueError)):
         validate_role_result(value, "support", "pdf-document-review-result@3.0")
+
+
+def test_document_review_v3_codex_projection_preserves_canonical_validation_boundary() -> None:
+    canonical = load_role_result_schema("pdf-document-review-result@3.0")
+    projected = load_codex_result_schema("pdf-document-review-result@3.0")
+
+    assert "allOf" in canonical["$defs"]["output"]["properties"]["verification_targets"]
+    assert "allOf" not in json.dumps(projected, sort_keys=True)
+    assert "contains" not in json.dumps(projected, sort_keys=True)
+    assert "quote_sha256" not in projected["$defs"]["anchor"]["properties"]
+    assert (
+        "exactly one target for each axis"
+        in projected["$defs"]["output"]["properties"]["verification_targets"]["description"]
+    )
+    assert "NOT_APPLICABLE" in projected["$defs"]["unit_check"]["description"]
+    assert (
+        "MULTIPLE_CHOICE"
+        in projected["$defs"]["item_review"]["properties"]["choice_checks"]["description"]
+    )
 
 
 def test_document_review_v3_originality_insufficient_blocks_complete() -> None:

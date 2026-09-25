@@ -2936,6 +2936,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id in {
         "pdf-document-review-result@1.0",
         "pdf-document-review-result@2.0",
+        "pdf-document-review-result@3.0",
     }:
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
@@ -2947,6 +2948,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             raise WorkflowSchemaError("PDF document review quote hash requirement is invalid")
         anchor_required.remove("quote_sha256")
         _project_pdf_review_recommendation_codex_contract(schema)
+        if schema_id == "pdf-document-review-result@3.0":
+            _project_paired_document_review_v3_codex_contract(schema)
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
@@ -3009,6 +3012,54 @@ def _project_pdf_review_recommendation_codex_contract(schema: dict[str, Any]) ->
         branches.append(branch)
     recommendation.clear()
     recommendation["anyOf"] = branches
+
+
+def _project_paired_document_review_v3_codex_contract(schema: dict[str, Any]) -> None:
+    """Project canonical conditional review rules into Codex's supported subset.
+
+    The immutable V3 result contract uses ``allOf``/``contains``/conditionals for exact
+    cross-field rules. Codex Structured Outputs cannot express those compositions. The worker
+    projection therefore retains every field and bound, states the omitted relationships as
+    explicit instructions, and leaves the canonical JSON Schema plus Pydantic boundary as the
+    authoritative fail-closed validation.
+    """
+
+    definitions = _mapping(schema, "$defs")
+    output_properties = _mapping(_mapping(definitions, "output"), "properties")
+    verification_targets = _mapping(output_properties, "verification_targets")
+    if verification_targets.pop("allOf", None) is None:
+        raise WorkflowSchemaError("paired V3 verification target coverage is not projectable")
+    _append_projection_instruction(
+        verification_targets,
+        "Return exactly one target for each axis: SCIENTIFIC_ACCURACY, ANSWER_UNIQUENESS, "
+        "SOLUTION_CONSISTENCY, CURRICULUM_SCOPE, ORIGINALITY, VISUAL_CONTENT, "
+        "EDITORIAL_CLARITY, TYPOGRAPHY, DOCUMENT_STRUCTURE, and ASSESSMENT_BALANCE.",
+    )
+
+    unit_check = _mapping(definitions, "unit_check")
+    if unit_check.pop("allOf", None) is None:
+        raise WorkflowSchemaError("paired V3 unit check conditions are not projectable")
+    _append_projection_instruction(
+        unit_check,
+        "When status is NOT_APPLICABLE, value_expression, expected_unit, and observed_unit "
+        "MUST all be null. Otherwise value_expression and expected_unit MUST be non-empty "
+        "strings; observed_unit may be a non-empty string or null.",
+    )
+
+    item_review = _mapping(definitions, "item_review")
+    if item_review.pop("allOf", None) is None:
+        raise WorkflowSchemaError("paired V3 item review conditions are not projectable")
+    item_properties = _mapping(item_review, "properties")
+    _append_projection_instruction(
+        _mapping(item_properties, "choice_checks"),
+        "Return at least two entries for MULTIPLE_CHOICE or STATEMENT_COMBINATION; return the "
+        "empty array for every other response_format.",
+    )
+    _append_projection_instruction(
+        _mapping(item_properties, "evidence_citation_ids"),
+        "Return at least one evidence ID when evidence_status is SUPPORTED; return the empty "
+        "array when evidence_status is INSUFFICIENT.",
+    )
 
 
 def _project_content_team_image_v9_codex_contract(schema: dict[str, Any]) -> None:
