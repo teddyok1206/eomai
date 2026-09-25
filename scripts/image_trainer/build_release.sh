@@ -14,7 +14,9 @@ fail() {
 [[ "${EUID}" -ne 0 ]] || fail "LOCAL_IMAGE_TRAINER_BUILD_MUST_NOT_RUN_AS_ROOT"
 head_commit=$(git -C "${REPOSITORY}" rev-parse HEAD)
 [[ "${head_commit}" =~ ^[0-9a-f]{40}$ ]] || fail "LOCAL_IMAGE_TRAINER_SOURCE_COMMIT_INVALID"
-[[ -z "$(git -C "${REPOSITORY}" status --porcelain)" ]] || \
+# Wheels are built from the immutable archive below; unrelated untracked operator files cannot
+# enter it. Tracked or staged drift remains a hard failure.
+[[ -z "$(git -C "${REPOSITORY}" status --porcelain --untracked-files=no)" ]] || \
   fail "LOCAL_IMAGE_TRAINER_SOURCE_TREE_DIRTY"
 umask 077
 mkdir -p "${OUTPUT_ROOT}"

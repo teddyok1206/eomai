@@ -41,7 +41,9 @@ fail() {
   fail "LOCAL_IMAGE_TRAINER_SOURCE_COMMIT_INVALID"
 [[ "$(git -C "${REPOSITORY}" rev-parse HEAD)" == "${SOURCE_COMMIT}" ]] || \
   fail "LOCAL_IMAGE_TRAINER_SOURCE_COMMIT_MISMATCH"
-[[ -z "$(git -C "${REPOSITORY}" status --porcelain)" ]] || \
+# Deployment consumes committed wheels and committed unit files only. Ignore unrelated untracked
+# operator files while still rejecting any tracked or staged drift.
+[[ -z "$(git -C "${REPOSITORY}" status --porcelain --untracked-files=no)" ]] || \
   fail "LOCAL_IMAGE_TRAINER_SOURCE_TREE_DIRTY"
 for hash in "${CONTRACT_SHA256}" "${PROVIDER_SHA256}" "${TRAINER_SHA256}" \
   "${PEFT_SHA256}" "${BITSANDBYTES_SHA256}"; do
