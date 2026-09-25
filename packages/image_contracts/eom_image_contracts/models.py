@@ -342,6 +342,8 @@ class ImageEvaluationArtifactMember(FrozenModel):
     @field_validator("member_path")
     @classmethod
     def safe_member_path(cls, value: str) -> str:
+        if "\\" in value:
+            raise ValueError("evaluation artifact member path is unsafe")
         path = PurePosixPath(value)
         if path.is_absolute() or any(part in {"", ".", ".."} for part in value.split("/")):
             raise ValueError("evaluation artifact member path is unsafe")

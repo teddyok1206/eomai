@@ -17,9 +17,13 @@ DATE_TIME = {"type": "string", "format": "date-time"}
 MEMBER_PATH_PATTERN = "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/" + (
     "[^\\u0000-\\u001f\\u007f]+$"
 )
+ROOT_OR_NESTED_MEMBER_PATH_PATTERN = (
+    "^(?!/)(?!.*\\\\)(?!\\.{1,2}(?:/|$))(?!.*(?:/)\\.{1,2}(?:/|$))"
+    "[^/\\u0000-\\u001f\\u007f]+(?:/[^/\\u0000-\\u001f\\u007f]+)*$"
+)
 
 
-def _defs() -> dict[str, Any]:
+def _defs(*, allow_root_member_paths: bool = False) -> dict[str, Any]:
     return {
         "sha256": SHA,
         "modelPointer": {
@@ -62,9 +66,13 @@ def _defs() -> dict[str, Any]:
                 },
                 "member_path": {
                     "type": "string",
-                    "minLength": 3,
+                    "minLength": 1 if allow_root_member_paths else 3,
                     "maxLength": 512,
-                    "pattern": MEMBER_PATH_PATTERN,
+                    "pattern": (
+                        ROOT_OR_NESTED_MEMBER_PATH_PATTERN
+                        if allow_root_member_paths
+                        else MEMBER_PATH_PATTERN
+                    ),
                 },
                 "schema_ref": {
                     "type": "string",
@@ -145,14 +153,19 @@ def _defs() -> dict[str, Any]:
     }
 
 
-def _base(identifier: str, title: str) -> dict[str, Any]:
+def _base(
+    identifier: str,
+    title: str,
+    *,
+    allow_root_member_paths: bool = False,
+) -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": identifier,
         "title": title,
         "type": "object",
         "additionalProperties": False,
-        "$defs": _defs(),
+        "$defs": _defs(allow_root_member_paths=allow_root_member_paths),
     }
 
 
@@ -261,6 +274,7 @@ def _crop_proposal_set() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0",
         "EOM Local Image Training Crop Proposal Set V1",
+        allow_root_member_paths=True,
     )
     representation_kinds = [
         "APPARATUS",
@@ -466,6 +480,7 @@ def _crop_locator_command() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-crop-locator-command/1.0",
         "EOM Local Image Crop Locator Command V1",
+        allow_root_member_paths=True,
     )
     representation_kinds = [
         "APPARATUS",
@@ -651,6 +666,7 @@ def _crop_locator_result() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-crop-locator-result/1.0",
         "EOM Local Image Crop Locator Result V1",
+        allow_root_member_paths=True,
     )
     schema.update(
         {
@@ -729,6 +745,7 @@ def _crop_review() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-training-crop-review/1.0",
         "EOM Local Image Training Crop Review V1",
+        allow_root_member_paths=True,
     )
     entry = {
         "type": "object",

@@ -52,16 +52,16 @@ SCHEMA_SHA256 = {
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
     ),
     "crop-locator-command": (
-        "sha256:59319c1bb477d6feb01d3975c36422a5d514d99a41bd23ba71f6a99a77889bd4"
+        "sha256:6b3181bcd98de43a46110056ee0ca58fe3c91ed43d691d35d9f9f526c7d2d159"
     ),
     "crop-locator-result": (
-        "sha256:700940c1289d689c16e14083d2553f0a26aa131e2e5f539a90e77b34f750f320"
+        "sha256:a532cff048956c0ca52b7ba175aeba0860bb844d4f2a2777bfcf8f3f8fb75cd3"
     ),
     "training-crop-proposal-set": (
-        "sha256:8f328fef17c851c320508a56281e11b06b9c0dae4f7c788a9dd9fda78f9f47e1"
+        "sha256:c461eedb36d4ad631964a483dbbc14a0dfb6f26bb27cd90326a01839c79cb12f"
     ),
     "training-crop-review": (
-        "sha256:8caa7d97662dcc79b1ab3335c5bd655a71bba1f5a5cf045e8d5b5babb8a36b93"
+        "sha256:eb907f8ad4b92553a2401b750b446f9479394a4208810535569b1fff154a2f1a"
     ),
     "training-dataset-manifest": (
         "sha256:ecb43e5ed58af59b40056a2afa0f541b12caffb71dee733aaa2681aef694c81c"

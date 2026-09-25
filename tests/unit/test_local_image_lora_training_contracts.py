@@ -118,7 +118,7 @@ def _crop_proposal() -> dict[str, object]:
         "item_revision_id": "itemrev_" + "1" * 32,
         "extraction_result": _pointer(
             "2",
-            member_path="extraction/result.json",
+            member_path="result.json",
             schema_ref="eom://schemas/catalog/legacy-item-extraction-result/1.0",
         ),
         "source_anchor_id": "assessmentanchor_" + "3" * 32,
@@ -768,6 +768,22 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     validate_lora_training_receipt(receipt, plan, adapter)
     validate_lora_training_worker_result(command, worker_result)
     validate_lora_checkpoint_manifest(checkpoint, command)
+
+
+@pytest.mark.parametrize(
+    "member_path",
+    ("/result.json", "../result.json", "nested/../result.json", "nested//result.json", "a\\b"),
+)
+def test_crop_contract_rejects_unsafe_root_or_nested_member_path(member_path: str) -> None:
+    value = _crop_locator_command_value()
+    sources = value["sources"]
+    assert isinstance(sources, list)
+    sources[0]["extraction_result"]["member_path"] = member_path
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("crop-locator-command", value)
+    with pytest.raises(ValidationError, match="member path is unsafe"):
+        LocalImageCropLocatorCommand.model_validate(value)
 
 
 @pytest.mark.parametrize(
