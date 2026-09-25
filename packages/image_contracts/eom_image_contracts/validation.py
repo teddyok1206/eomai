@@ -34,6 +34,10 @@ SCHEMA_FILES = {
     "lora-training-receipt": "local-image-lora-training-receipt-v1.schema.json",
     "lora-training-command": "local-image-lora-training-command-v1.schema.json",
     "lora-training-worker-result": ("local-image-lora-training-worker-result-v1.schema.json"),
+    "lora-micro-probe-plan": "local-image-lora-micro-probe-plan-v1.schema.json",
+    "lora-micro-probe-command": "local-image-lora-micro-probe-command-v1.schema.json",
+    "lora-micro-adapter-manifest": "local-image-lora-micro-adapter-manifest-v1.schema.json",
+    "lora-micro-probe-worker-result": ("local-image-lora-micro-probe-worker-result-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -89,6 +93,18 @@ SCHEMA_SHA256 = {
     ),
     "lora-training-worker-result": (
         "sha256:310500458a4496105816c55b207bd39daa842dcfd3fa02a820f462484441f6d7"
+    ),
+    "lora-micro-probe-plan": (
+        "sha256:32c0c1ef0098a46a143f83a4e58292ff31254a69d89a87163d655474ac93bf20"
+    ),
+    "lora-micro-probe-command": (
+        "sha256:bd69973ef97f6955332e2cebe63e961a3e7181cfe6ceab47bca988fb37673bb6"
+    ),
+    "lora-micro-adapter-manifest": (
+        "sha256:1221dcd0213a912bcd20b487ae2895e5256dda6a927adb89dab77754365e0cd3"
+    ),
+    "lora-micro-probe-worker-result": (
+        "sha256:f6f1a795dcc433428b5b4a8a4597870c22243e0fee7ead8c947e4eaf19743d5b"
     ),
 }
 

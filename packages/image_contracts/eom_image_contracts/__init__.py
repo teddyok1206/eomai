@@ -1,5 +1,16 @@
 """Public contracts for EOM local image generation."""
 
+from eom_image_contracts.micro_training import (
+    LocalImageLoraMicroAdapterManifest,
+    LocalImageLoraMicroHyperparameters,
+    LocalImageLoraMicroProbeCommand,
+    LocalImageLoraMicroProbePlan,
+    LocalImageLoraMicroProbeWorkerResult,
+    LocalImageLoraMicroRealizedSample,
+    LocalImageLoraMicroSelection,
+    validate_micro_probe_plan_sources,
+    validate_micro_probe_worker_result,
+)
 from eom_image_contracts.models import (
     DeliveryCanvas,
     GenerationCanvas,
@@ -111,6 +122,13 @@ __all__ = [
     "LocalImageLoraCheckpointFile",
     "LocalImageLoraCheckpointManifest",
     "LocalImageLoraHyperparameters",
+    "LocalImageLoraMicroAdapterManifest",
+    "LocalImageLoraMicroHyperparameters",
+    "LocalImageLoraMicroProbeCommand",
+    "LocalImageLoraMicroProbePlan",
+    "LocalImageLoraMicroProbeWorkerResult",
+    "LocalImageLoraMicroRealizedSample",
+    "LocalImageLoraMicroSelection",
     "LocalImageLoraTrainingCommand",
     "LocalImageLoraTrainingPlan",
     "LocalImageLoraTrainingReceipt",
@@ -156,6 +174,8 @@ __all__ = [
     "validate_lora_training_plan",
     "validate_lora_training_receipt",
     "validate_lora_training_worker_result",
+    "validate_micro_probe_plan_sources",
+    "validate_micro_probe_worker_result",
     "validate_quality_evaluation_result",
     "validate_training_crop_review",
     "validate_training_dataset_authorization",
