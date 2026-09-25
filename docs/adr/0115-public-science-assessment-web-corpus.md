@@ -54,14 +54,16 @@ source-file lookup, ordered iteration, and bounded sharding.
 
 - sets provide expected O(1) URL and post membership;
 - maps keyed by SHA-256 provide expected O(1) deduplication and provenance aggregation;
-- the existing indexed `content_intake_source_files.sha256` lookup resolves reusable sources;
+- a non-unique B-tree index on immutable `content_intake_source_files.sha256` resolves reusable
+  sources without a table scan;
 - category and source lists are sorted once for deterministic output;
 - acquisition is O(posts + links + downloaded bytes), with O(unique documents + provenance) memory;
 - Content Intake sharding is a stable greedy pass, O(unique documents).
 
 The expected initial scale is below 5,000 PDF observations and 500 unique problem PDFs per Content
-Intake batch.  No new database table or index is required.  If observed source-file SHA lookup lacks
-an index, that is fixed before publication rather than compensated by repeated table scans.
+Intake batch.  No new database table is required.  The existing source table did not have a global
+SHA-256 lookup index, so migration `20260925_0044` adds exactly that index before publication; the
+bytes remain in Artifact storage and are not copied into PostgreSQL.
 
 ## Transaction, concurrency, retry, and idempotency
 
@@ -71,10 +73,12 @@ changed redirect target, media type, body, or hash creates a different observati
 silently replaces accepted bytes.
 
 The Content Intake fingerprint and unique source hashes are the canonical replay boundary.  A
-failed crawl or download leaves no published dataset and can resume only from hash-verified local
-materializations.  HTTP timeout is an unknown outcome for the individual request and is rechecked;
-there is no blind parallel retry.  Publication stops on source mutation, unsafe PDF structure,
-rights-policy mismatch, pointer drift, or canonical-hash mismatch.
+failed crawl or download leaves no published corpus manifest.  Already committed immutable intake
+shards may remain and are reused only after their exact Artifact member pointers and hashes resolve;
+otherwise resumption uses hash-verified local materializations.  HTTP timeout is an unknown outcome
+for the individual request and is rechecked; there is no blind parallel retry.  Publication stops
+on source mutation, unsafe PDF structure, rights-policy mismatch, pointer drift, or canonical-hash
+mismatch.
 
 ## Dependency direction and adapters
 

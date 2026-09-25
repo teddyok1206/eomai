@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from pathlib import PurePosixPath
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -122,16 +123,26 @@ class ScienceAssessmentCorpusOrigin(FrozenModel):
 
 class ScienceAssessmentCorpusSourcePointer(FrozenModel):
     intake_batch_id: str = Field(pattern=r"^intake_[0-9a-f]{32}$")
-    source_file_id: str = Field(pattern=r"^source_[0-9a-f]{32}$")
+    source_file_id: str = Field(pattern=r"^sourcefile_[0-9a-f]{32}$")
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
-    member_path: str = Field(pattern=r"^source/[0-9a-f]{64}\.pdf$", max_length=80)
+    member_path: str = Field(min_length=12, max_length=512)
     sha256: Sha256
 
     @model_validator(mode="after")
     def exact_member(self) -> ScienceAssessmentCorpusSourcePointer:
-        if self.member_path != f"source/{self.sha256.removeprefix('sha256:')}.pdf":
-            raise ValueError("corpus source member does not bind its content hash")
+        path = PurePosixPath(self.member_path)
+        if (
+            path.is_absolute()
+            or path.parts[0] != "source"
+            or len(path.parts) < 2
+            or any(part in {"", ".", ".."} for part in path.parts)
+            or "\\" in self.member_path
+            or not self.member_path.casefold().endswith(".pdf")
+            or self.member_path != unicodedata.normalize("NFC", self.member_path)
+            or any(ord(character) < 32 or ord(character) == 127 for character in self.member_path)
+        ):
+            raise ValueError("corpus source member path is unsafe")
         return self
 
 
@@ -140,7 +151,7 @@ class ScienceAssessmentCorpusDocument(FrozenModel):
     sha256: Sha256
     bytes: int = Field(ge=1024, le=100 * 1024 * 1024)
     page_count: int = Field(ge=1, le=512)
-    original_filename: str = Field(min_length=1, max_length=300)
+    original_filename: str = Field(min_length=1, max_length=255)
     media_type: Literal["application/pdf"]
     document_role: Literal["PROBLEM_DOCUMENT"]
     subject_family: SubjectFamily
@@ -179,8 +190,23 @@ class ScienceAssessmentCorpusIntakeShard(FrozenModel):
     document_count: int = Field(ge=1, le=499)
 
 
+class ScienceAssessmentCorpusAcquisitionFailure(FrozenModel):
+    post_url: str = Field(min_length=8, max_length=4096)
+    download_url: str = Field(min_length=8, max_length=4096)
+    error_code: str = Field(pattern=r"^SCIENCE_CORPUS_[A-Z0-9_]{1,96}$")
+
+    @model_validator(mode="after")
+    def safe_urls(self) -> ScienceAssessmentCorpusAcquisitionFailure:
+        _require_https_url(self.post_url, host="legendstudy.com")
+        _require_https_url(self.download_url)
+        return self
+
+
 class ScienceAssessmentCorpusSummary(FrozenModel):
     unique_document_count: int = Field(ge=1, le=5000)
+    scanned_post_count: int = Field(ge=1, le=5000)
+    candidate_count: int = Field(ge=1, le=5000)
+    acquisition_failure_count: int = Field(ge=0, le=5000)
     duplicate_observation_count: int = Field(ge=0)
     reused_existing_count: int = Field(ge=0)
     new_intake_count: int = Field(ge=0)
@@ -202,9 +228,8 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
     observed_at: UtcDatetime
     pdf_validator: ScienceAssessmentCorpusPdfValidator
     documents: tuple[ScienceAssessmentCorpusDocument, ...] = Field(min_length=1, max_length=5000)
-    intake_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...] = Field(
-        min_length=1, max_length=64
-    )
+    failures: tuple[ScienceAssessmentCorpusAcquisitionFailure, ...] = Field(max_length=5000)
+    intake_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...] = Field(max_length=64)
     summary: ScienceAssessmentCorpusSummary
     manifest_sha256: Sha256
 
@@ -245,10 +270,17 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
         ):
             raise ValueError("corpus intake shard count differs from its documents")
         origin_count = sum(len(value.origins) for value in self.documents)
+        failure_keys = tuple(
+            (value.post_url, value.download_url, value.error_code) for value in self.failures
+        )
+        if failure_keys != tuple(sorted(set(failure_keys))):
+            raise ValueError("corpus acquisition failures must be sorted and unique")
         reused = sum(value.publication_disposition == "REUSED_EXISTING" for value in self.documents)
         new = len(self.documents) - reused
         if (
             self.summary.unique_document_count != len(self.documents)
+            or self.summary.candidate_count != origin_count + len(self.failures)
+            or self.summary.acquisition_failure_count != len(self.failures)
             or self.summary.duplicate_observation_count != origin_count - len(self.documents)
             or self.summary.reused_existing_count != reused
             or self.summary.new_intake_count != new
@@ -280,6 +312,8 @@ def validate_science_corpus_manifest_against_plan(
 
     if manifest.plan_id != plan.plan_id or manifest.plan_sha256 != plan.plan_sha256:
         raise ValueError("corpus manifest references another acquisition plan")
+    if manifest.summary.scanned_post_count > plan.max_post_pages:
+        raise ValueError("corpus manifest exceeds the plan post limit")
     allowed_hosts = set(plan.allowed_download_hosts)
     for document in manifest.documents:
         if (
@@ -296,3 +330,6 @@ def validate_science_corpus_manifest_against_plan(
                 or urlsplit(origin.resolved_url).hostname not in allowed_hosts
             ):
                 raise ValueError("corpus origin host is outside the plan allowlist")
+    for failure in manifest.failures:
+        if urlsplit(failure.download_url).hostname not in allowed_hosts:
+            raise ValueError("corpus failure host is outside the plan allowlist")

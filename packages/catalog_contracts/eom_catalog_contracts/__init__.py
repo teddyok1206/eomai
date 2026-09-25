@@ -747,6 +747,7 @@ from eom_catalog_contracts.pdf_learning_completion import (
     verify_protocol_documents,
 )
 from eom_catalog_contracts.science_assessment_corpus import (
+    ScienceAssessmentCorpusAcquisitionFailure,
     ScienceAssessmentCorpusDocument,
     ScienceAssessmentCorpusIntakeShard,
     ScienceAssessmentCorpusOrigin,
@@ -1388,6 +1389,7 @@ __all__ = [
     "ReviewedItemContentImportResult",
     "RightsPolicyPointer",
     "RightsPolicyProof",
+    "ScienceAssessmentCorpusAcquisitionFailure",
     "ScienceAssessmentCorpusDocument",
     "ScienceAssessmentCorpusIntakeShard",
     "ScienceAssessmentCorpusOrigin",

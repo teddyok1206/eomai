@@ -87,7 +87,7 @@ def _document(
         ],
         "source": {
             "intake_batch_id": "intake_" + batch_character * 32,
-            "source_file_id": "source_" + character * 32,
+            "source_file_id": "sourcefile_" + character * 32,
             "artifact_id": "artifact_" + batch_character * 32,
             "artifact_revision_id": "rev_" + batch_character * 32,
             "member_path": f"source/{character * 64}.pdf",
@@ -122,6 +122,7 @@ def _manifest(plan: dict[str, object]) -> dict[str, object]:
             "pdfinfo_sha256": "sha256:" + "d" * 64,
         },
         "documents": documents,
+        "failures": [],
         "intake_shards": [
             {
                 "ordinal": 1,
@@ -134,6 +135,9 @@ def _manifest(plan: dict[str, object]) -> dict[str, object]:
         ],
         "summary": {
             "unique_document_count": 2,
+            "scanned_post_count": 2,
+            "candidate_count": 2,
+            "acquisition_failure_count": 0,
             "duplicate_observation_count": 0,
             "reused_existing_count": 1,
             "new_intake_count": 1,

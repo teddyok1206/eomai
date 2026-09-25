@@ -12,6 +12,7 @@
     "observed_at",
     "pdf_validator",
     "documents",
+    "failures",
     "intake_shards",
     "summary",
     "manifest_sha256"
@@ -33,13 +34,13 @@
       ],
       "properties": {
         "intake_batch_id": {"type": "string", "pattern": "^intake_[0-9a-f]{32}$"},
-        "source_file_id": {"type": "string", "pattern": "^source_[0-9a-f]{32}$"},
+        "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"},
         "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
         "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
         "member_path": {
           "type": "string",
-          "pattern": "^source/[0-9a-f]{64}\\.pdf$",
-          "maxLength": 80
+          "pattern": "^source/(?!.*(?:^|/)\\.\\.?/)[^\\u0000-\\u001f\\u007f\\\\]+\\.pdf$",
+          "maxLength": 512
         },
         "sha256": {"$ref": "#/$defs/sha256"}
       }
@@ -103,7 +104,7 @@
           "sha256": {"$ref": "#/$defs/sha256"},
           "bytes": {"type": "integer", "minimum": 1024, "maximum": 104857600},
           "page_count": {"type": "integer", "minimum": 1, "maximum": 512},
-          "original_filename": {"type": "string", "minLength": 1, "maxLength": 300},
+          "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
           "media_type": {"const": "application/pdf"},
           "document_role": {"const": "PROBLEM_DOCUMENT"},
           "subject_family": {
@@ -133,9 +134,26 @@
         }
       }
     },
+    "failures": {
+      "type": "array",
+      "maxItems": 5000,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["post_url", "download_url", "error_code"],
+        "properties": {
+          "post_url": {"$ref": "#/$defs/uri"},
+          "download_url": {"$ref": "#/$defs/uri"},
+          "error_code": {
+            "type": "string",
+            "pattern": "^SCIENCE_CORPUS_[A-Z0-9_]{1,96}$"
+          }
+        }
+      }
+    },
     "intake_shards": {
       "type": "array",
-      "minItems": 1,
       "maxItems": 64,
       "items": {
         "type": "object",
@@ -163,6 +181,9 @@
       "additionalProperties": false,
       "required": [
         "unique_document_count",
+        "scanned_post_count",
+        "candidate_count",
+        "acquisition_failure_count",
         "duplicate_observation_count",
         "reused_existing_count",
         "new_intake_count",
@@ -170,6 +191,9 @@
       ],
       "properties": {
         "unique_document_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "scanned_post_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "candidate_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "acquisition_failure_count": {"type": "integer", "minimum": 0, "maximum": 5000},
         "duplicate_observation_count": {"type": "integer", "minimum": 0},
         "reused_existing_count": {"type": "integer", "minimum": 0},
         "new_intake_count": {"type": "integer", "minimum": 0},
