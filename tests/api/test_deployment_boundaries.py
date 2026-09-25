@@ -85,8 +85,10 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
         '"schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"'
     ) in source
     for resource in (
+        "science-assessment-metadata-resolution-v1.schema.json",
         "science-assessment-web-acquisition-v1.schema.json",
         "science-assessment-web-corpus-manifest-v1.schema.json",
+        "science-assessment-web-corpus-manifest-v2.schema.json",
         "science-assessment-web-corpus-plan-v1.schema.json",
     ):
         assert f'"legacy-assessment/{resource}": ' in source

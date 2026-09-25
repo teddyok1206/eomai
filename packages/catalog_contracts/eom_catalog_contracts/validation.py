@@ -604,6 +604,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:28493d454739761c352c3459c3a09adc4f1786b63e6e72eb3d5b5b0a89ddeec5",
         ),
+        "science-assessment-metadata-resolution": CatalogSchemaResource(
+            ("schemas/legacy-assessment/science-assessment-metadata-resolution-v1.schema.json"),
+            ("resources/legacy-assessment/science-assessment-metadata-resolution-v1.schema.json"),
+            "1.0",
+            "sha256:71cbe3b3233d09be184568a6468fc72dcd76922ac152445b4cbdd0ff9768e4e4",
+        ),
         "science-assessment-web-corpus-plan": CatalogSchemaResource(
             "schemas/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
             "resources/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
@@ -615,6 +621,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/legacy-assessment/science-assessment-web-corpus-manifest-v1.schema.json",
             "1.0",
             "sha256:50bfa4ece78b249ff2fc2da7c187a97a116c6689710c05d5068f427abd98d54d",
+        ),
+        "science-assessment-web-corpus-manifest-v2": CatalogSchemaResource(
+            ("schemas/legacy-assessment/science-assessment-web-corpus-manifest-v2.schema.json"),
+            ("resources/legacy-assessment/science-assessment-web-corpus-manifest-v2.schema.json"),
+            "2.0",
+            "sha256:dd57a020106016a54a08712f065fb80231697abc9c0a03464117d227560dab64",
         ),
         "legacy-item-extraction-batch-v2": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",

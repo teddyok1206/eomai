@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/science-assessment-metadata-resolution/1.0",
+  "title": "EOM Science Assessment Metadata Resolution V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "acquisition_sha256",
+    "policy",
+    "documents",
+    "summary",
+    "resolution_sha256"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "subjectFamily": {
+      "enum": [
+        "CHEMISTRY",
+        "EARTH_SCIENCE",
+        "GENERAL_SCIENCE",
+        "INTEGRATED_SCIENCE",
+        "LIFE_SCIENCE",
+        "PHYSICS"
+      ]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "science-assessment-metadata-resolution/1.0"},
+    "plan_id": {"type": "string", "pattern": "^sciencecorpusplan_[0-9a-f]{32}$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "acquisition_sha256": {"$ref": "#/$defs/sha256"},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "policy_id",
+        "algorithm",
+        "subject_rules",
+        "issuer_rules",
+        "year_rules",
+        "grade_rules",
+        "session_rules",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "science-assessment-metadata-resolution-policy/1.0"},
+        "policy_id": {"type": "string", "pattern": "^sciencecorpuspolicy_[0-9a-f]{32}$"},
+        "algorithm": {"const": "EOM_SCIENCE_METADATA_RESOLVER_2026_09_25_A"},
+        "subject_rules": {
+          "const": [
+            "MULTI_SUBJECT_LIST",
+            "EXPLICIT_INTEGRATED_SCIENCE",
+            "EXPLICIT_SINGLE_SUBJECT",
+            "GENERIC_SCIENCE_INQUIRY",
+            "ACQUISITION_FALLBACK"
+          ]
+        },
+        "issuer_rules": {
+          "const": [
+            "EXPLICIT_KICE",
+            "EXPLICIT_EDUCATION_AUTHORITY",
+            "ACQUISITION_FALLBACK"
+          ]
+        },
+        "year_rules": {
+          "const": [
+            "EXPLICIT_ADMINISTRATION_YEAR",
+            "EXPLICIT_CALENDAR_YEAR",
+            "EXPLICIT_ACADEMIC_YEAR",
+            "ACQUISITION_FALLBACK"
+          ]
+        },
+        "grade_rules": {
+          "const": ["KICE_FIXED_GRADE_3", "EXPLICIT_GRADE", "ACQUISITION_FALLBACK"]
+        },
+        "session_rules": {
+          "const": ["EXPLICIT_KICE_CSAT", "EXPLICIT_MONTH", "ACQUISITION_FALLBACK"]
+        },
+        "policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "documents": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sha256",
+          "bytes",
+          "page_count",
+          "original_filename",
+          "subject_family",
+          "subject_label",
+          "subject_rule",
+          "issuer_type",
+          "issuer_rule",
+          "administration_year",
+          "year_rule",
+          "grade",
+          "grade_rule",
+          "session_label",
+          "session_rule",
+          "observation_count",
+          "had_metadata_conflict",
+          "metadata_changed"
+        ],
+        "properties": {
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "bytes": {"type": "integer", "minimum": 1024, "maximum": 104857600},
+          "page_count": {"type": "integer", "minimum": 1, "maximum": 512},
+          "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+          "subject_family": {"$ref": "#/$defs/subjectFamily"},
+          "subject_label": {"type": "string", "minLength": 1, "maxLength": 128},
+          "subject_rule": {
+            "enum": [
+              "MULTI_SUBJECT_LIST",
+              "EXPLICIT_INTEGRATED_SCIENCE",
+              "EXPLICIT_SINGLE_SUBJECT",
+              "GENERIC_SCIENCE_INQUIRY",
+              "ACQUISITION_FALLBACK"
+            ]
+          },
+          "issuer_type": {"enum": ["EDUCATION_AUTHORITY", "KICE"]},
+          "issuer_rule": {
+            "enum": ["EXPLICIT_KICE", "EXPLICIT_EDUCATION_AUTHORITY", "ACQUISITION_FALLBACK"]
+          },
+          "administration_year": {"type": "integer", "minimum": 1994, "maximum": 2200},
+          "year_rule": {
+            "enum": [
+              "EXPLICIT_ADMINISTRATION_YEAR",
+              "EXPLICIT_CALENDAR_YEAR",
+              "EXPLICIT_ACADEMIC_YEAR",
+              "ACQUISITION_FALLBACK"
+            ]
+          },
+          "grade": {"type": "integer", "minimum": 1, "maximum": 3},
+          "grade_rule": {
+            "enum": ["KICE_FIXED_GRADE_3", "EXPLICIT_GRADE", "ACQUISITION_FALLBACK"]
+          },
+          "session_label": {"type": "string", "minLength": 1, "maxLength": 128},
+          "session_rule": {
+            "enum": ["EXPLICIT_KICE_CSAT", "EXPLICIT_MONTH", "ACQUISITION_FALLBACK"]
+          },
+          "observation_count": {"type": "integer", "minimum": 1, "maximum": 32},
+          "had_metadata_conflict": {"type": "boolean"},
+          "metadata_changed": {"type": "boolean"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unique_document_count",
+        "successful_observation_count",
+        "conflicting_document_count",
+        "normalized_document_count"
+      ],
+      "properties": {
+        "unique_document_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "successful_observation_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "conflicting_document_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "normalized_document_count": {"type": "integer", "minimum": 0, "maximum": 5000}
+      }
+    },
+    "resolution_sha256": {"$ref": "#/$defs/sha256"}
+  }
+}

@@ -20,13 +20,16 @@ from eom_catalog_contracts import (
     ScienceAssessmentCorpusOrigin,
     ScienceAssessmentCorpusSourcePointer,
     ScienceAssessmentCorpusSummary,
+    ScienceAssessmentMetadataResolution,
     ScienceAssessmentWebAcquisition,
     ScienceAssessmentWebCorpusManifest,
+    ScienceAssessmentWebCorpusManifestV2,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
     validate_science_acquisition_against_plan,
-    validate_science_corpus_manifest_against_acquisition,
-    validate_science_corpus_manifest_against_plan,
+    validate_science_corpus_manifest_v2_against_inputs,
+    validate_science_corpus_manifest_v2_against_plan,
+    validate_science_metadata_resolution_against_acquisition,
 )
 from eom_catalog_contracts.science_assessment_corpus import IssuerType, SubjectFamily
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
@@ -39,6 +42,9 @@ from eom_catalog_service.intake_files import discover_source_files, source_finge
 from eom_catalog_service.intake_service import IntakeService, IntakeSourceDeclaration
 from eom_catalog_service.knowledge_analysis_sources import CONTENT_INTAKE_ELIGIBLE_STATES
 from eom_catalog_service.models import ContentIntakeBatchRecord, ContentIntakeSourceFileRecord
+from eom_catalog_service.science_assessment_metadata_resolution import (
+    resolve_science_assessment_metadata,
+)
 from eom_catalog_service.science_assessment_web_acquisition import (
     AcquiredScienceAssessmentPdf,
     ScienceAssessmentDiscovery,
@@ -52,7 +58,7 @@ MAX_INTAKE_FILES = 499
 MAX_INTAKE_BYTES = 2 * 1024 * 1024 * 1024
 SOURCE_MEMBER_SCHEMA_REF = "eom://schemas/content-intake/source-file/1.0"
 CORPUS_MANIFEST_SCHEMA_REF = (
-    "eom://schemas/legacy-assessment/science-assessment-web-corpus-manifest/1.0"
+    "eom://schemas/legacy-assessment/science-assessment-web-corpus-manifest/2.0"
 )
 
 
@@ -66,7 +72,7 @@ class ScienceAssessmentCorpusPublicationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ScienceAssessmentCorpusPublication:
-    manifest: ScienceAssessmentWebCorpusManifest
+    manifest: ScienceAssessmentWebCorpusManifestV2
     artifact_id: str
     artifact_revision_id: str
     manifest_sha256: str
@@ -116,6 +122,7 @@ class ScienceAssessmentWebCorpusService:
         *,
         plan: ScienceAssessmentWebCorpusPlan,
         acquisition: ScienceAssessmentWebAcquisition,
+        resolution: ScienceAssessmentMetadataResolution,
         discovery: ScienceAssessmentDiscovery,
         acquired: tuple[AcquiredScienceAssessmentPdf, ...],
         failures: tuple[DownloadFailure, ...],
@@ -125,7 +132,12 @@ class ScienceAssessmentWebCorpusService:
             raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_NO_VALID_PDFS")
         validate_science_acquisition_against_plan(acquisition, plan)
         _require_acquisition_projection(acquisition, discovery, acquired, failures)
-        aggregate = _aggregate_acquired(acquired)
+        validate_science_metadata_resolution_against_acquisition(resolution, acquisition)
+        if resolution != resolve_science_assessment_metadata(acquisition):
+            raise ScienceAssessmentCorpusPublicationError(
+                "SCIENCE_CORPUS_METADATA_RESOLUTION_MISMATCH"
+            )
+        aggregate = _aggregate_acquired(acquired, resolution)
         resolved = self._resolve_existing_sources(aggregate)
         new_hashes = tuple(value for value in aggregate if value not in resolved)
         new_shards = self._publish_new_sources(
@@ -135,16 +147,17 @@ class ScienceAssessmentWebCorpusService:
             received_by=received_by,
             resolved=resolved,
         )
-        manifest = _build_manifest(
+        manifest = _build_manifest_v2(
             plan=plan,
             acquisition=acquisition,
+            resolution=resolution,
             discovery=discovery,
             aggregate=aggregate,
             failures=failures,
             resolved=resolved,
             new_shards=new_shards,
         )
-        validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
+        validate_science_corpus_manifest_v2_against_inputs(manifest, acquisition, resolution)
         return self._commit_manifest(manifest, plan)
 
     def _resolve_existing_sources(
@@ -316,12 +329,12 @@ class ScienceAssessmentWebCorpusService:
 
     def _commit_manifest(
         self,
-        manifest: ScienceAssessmentWebCorpusManifest,
+        manifest: ScienceAssessmentWebCorpusManifestV2,
         plan: ScienceAssessmentWebCorpusPlan,
     ) -> ScienceAssessmentCorpusPublication:
-        validate_science_corpus_manifest_against_plan(manifest, plan)
+        validate_science_corpus_manifest_v2_against_plan(manifest, plan)
         value = manifest.model_dump(mode="json")
-        validate_contract("science-assessment-web-corpus-manifest", value)
+        validate_contract("science-assessment-web-corpus-manifest-v2", value)
         control = self.settings.staging_root / "science-assessment-web-corpus" / manifest.corpus_id
         control.mkdir(mode=0o750, parents=True, exist_ok=True)
         path = control / f"{manifest.manifest_sha256.removeprefix('sha256:')}.json"
@@ -344,6 +357,10 @@ class ScienceAssessmentWebCorpusService:
                 "corpus_id": manifest.corpus_id,
                 "plan_id": plan.plan_id,
                 "plan_sha256": plan.plan_sha256,
+                "acquisition_sha256": manifest.acquisition_sha256,
+                "resolution_sha256": manifest.resolution_sha256,
+                "resolution_policy_id": manifest.resolution_policy_id,
+                "resolution_policy_sha256": manifest.resolution_policy_sha256,
             },
             result={"corpus_id": manifest.corpus_id, "summary": value["summary"]},
             file_metadata={
@@ -366,9 +383,9 @@ class ScienceAssessmentWebCorpusService:
         stored_value: object = json.loads(raw)
         if not isinstance(stored_value, dict):
             raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_MANIFEST_INVALID")
-        validate_contract("science-assessment-web-corpus-manifest", stored_value)
-        stored = ScienceAssessmentWebCorpusManifest.model_validate(stored_value)
-        validate_science_corpus_manifest_against_plan(stored, plan)
+        validate_contract("science-assessment-web-corpus-manifest-v2", stored_value)
+        stored = ScienceAssessmentWebCorpusManifestV2.model_validate(stored_value)
+        validate_science_corpus_manifest_v2_against_plan(stored, plan)
         return ScienceAssessmentCorpusPublication(
             manifest=stored,
             artifact_id=committed.artifact_id,
@@ -379,10 +396,16 @@ class ScienceAssessmentWebCorpusService:
 
 def _aggregate_acquired(
     acquired: tuple[AcquiredScienceAssessmentPdf, ...],
+    resolution: ScienceAssessmentMetadataResolution | None = None,
 ) -> dict[str, _AggregatedPdf]:
     grouped: dict[str, list[AcquiredScienceAssessmentPdf]] = {}
     for value in acquired:
         grouped.setdefault(value.sha256, []).append(value)
+    resolved_by_hash = (
+        {value.sha256: value for value in resolution.documents} if resolution is not None else {}
+    )
+    if resolution is not None and set(resolved_by_hash) != set(grouped):
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_METADATA_RESOLUTION_MISMATCH")
     result: dict[str, _AggregatedPdf] = {}
     for content_hash, observations in sorted(grouped.items()):
         first = observations[0]
@@ -398,8 +421,9 @@ def _aggregate_acquired(
             )
             for value in observations
         }
-        if len(identities) != 1:
+        if resolution is None and len(identities) != 1:
             raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_METADATA_CONFLICT")
+        resolved = resolved_by_hash.get(content_hash)
         origins = tuple(
             sorted(
                 {
@@ -424,13 +448,31 @@ def _aggregate_acquired(
             sha256=content_hash,
             bytes=first.bytes,
             page_count=first.page_count,
-            original_filename=min(value.candidate.original_filename for value in observations),
-            subject_family=first.candidate.subject_family,
-            subject_label=min(value.candidate.subject_label for value in observations),
-            issuer_type=first.candidate.issuer_type,
-            administration_year=first.candidate.administration_year,
-            grade=first.candidate.grade,
-            session_label=first.candidate.session_label,
+            original_filename=(
+                resolved.original_filename
+                if resolved is not None
+                else min(value.candidate.original_filename for value in observations)
+            ),
+            subject_family=(
+                resolved.subject_family if resolved is not None else first.candidate.subject_family
+            ),
+            subject_label=(
+                resolved.subject_label
+                if resolved is not None
+                else min(value.candidate.subject_label for value in observations)
+            ),
+            issuer_type=(
+                resolved.issuer_type if resolved is not None else first.candidate.issuer_type
+            ),
+            administration_year=(
+                resolved.administration_year
+                if resolved is not None
+                else first.candidate.administration_year
+            ),
+            grade=resolved.grade if resolved is not None else first.candidate.grade,
+            session_label=(
+                resolved.session_label if resolved is not None else first.candidate.session_label
+            ),
             origins=origins,
         )
     return result
@@ -540,6 +582,90 @@ def _build_manifest(
         {key: item for key, item in value.items() if key != "manifest_sha256"}
     )
     return ScienceAssessmentWebCorpusManifest.model_validate(value)
+
+
+def _build_manifest_v2(
+    *,
+    plan: ScienceAssessmentWebCorpusPlan,
+    acquisition: ScienceAssessmentWebAcquisition,
+    resolution: ScienceAssessmentMetadataResolution,
+    discovery: ScienceAssessmentDiscovery,
+    aggregate: dict[str, _AggregatedPdf],
+    failures: tuple[DownloadFailure, ...],
+    resolved: dict[str, _ResolvedSource],
+    new_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...],
+) -> ScienceAssessmentWebCorpusManifestV2:
+    documents = tuple(
+        ScienceAssessmentCorpusDocument(
+            document_id="sciencedoc_" + content_hash.removeprefix("sha256:")[:32],
+            sha256=content_hash,
+            bytes=document.bytes,
+            page_count=document.page_count,
+            original_filename=document.original_filename,
+            media_type="application/pdf",
+            document_role="PROBLEM_DOCUMENT",
+            subject_family=document.subject_family,
+            subject_label=document.subject_label,
+            issuer_type=document.issuer_type,
+            administration_year=document.administration_year,
+            grade=document.grade,
+            session_label=document.session_label,
+            publication_disposition=resolved[content_hash].disposition,
+            origins=document.origins,
+            source=resolved[content_hash].pointer,
+        )
+        for content_hash, document in sorted(aggregate.items())
+    )
+    failure_models = tuple(
+        sorted(
+            {
+                ScienceAssessmentCorpusAcquisitionFailure(
+                    post_url=value.candidate.post_url,
+                    download_url=value.candidate.download_url,
+                    error_code=value.error_code,
+                )
+                for value in failures
+            },
+            key=lambda value: (value.post_url, value.download_url, value.error_code),
+        )
+    )
+    origin_count = sum(len(value.origins) for value in documents)
+    reused = sum(value.publication_disposition == "REUSED_EXISTING" for value in documents)
+    identity_fields = {
+        "schema_version": "science-assessment-web-corpus-manifest/2.0",
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "acquisition_sha256": acquisition.acquisition_sha256,
+        "resolution_sha256": resolution.resolution_sha256,
+        "resolution_policy_id": resolution.policy.policy_id,
+        "resolution_policy_sha256": resolution.policy.policy_sha256,
+    }
+    identity = content_sha256(identity_fields)
+    summary = ScienceAssessmentCorpusSummary(
+        unique_document_count=len(documents),
+        scanned_post_count=discovery.post_count,
+        candidate_count=len(discovery.candidates),
+        acquisition_failure_count=len(failure_models),
+        duplicate_observation_count=origin_count - len(documents),
+        reused_existing_count=reused,
+        new_intake_count=len(documents) - reused,
+        total_bytes=sum(value.bytes for value in documents),
+    )
+    value: dict[str, object] = {
+        **identity_fields,
+        "corpus_id": "sciencecorpus_" + identity.removeprefix("sha256:")[:32],
+        "observed_at": acquisition.observed_at.isoformat().replace("+00:00", "Z"),
+        "pdf_validator": acquisition.pdf_validator.model_dump(mode="json"),
+        "documents": [item.model_dump(mode="json") for item in documents],
+        "failures": [item.model_dump(mode="json") for item in failure_models],
+        "intake_shards": [item.model_dump(mode="json") for item in new_shards],
+        "summary": summary.model_dump(mode="json"),
+        "manifest_sha256": "sha256:" + "0" * 64,
+    }
+    value["manifest_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "manifest_sha256"}
+    )
+    return ScienceAssessmentWebCorpusManifestV2.model_validate(value)
 
 
 def _require_acquisition_projection(

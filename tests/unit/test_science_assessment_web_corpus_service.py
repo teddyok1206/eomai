@@ -12,8 +12,13 @@ from eom_catalog_contracts import (
     validate_contract,
     validate_science_corpus_manifest_against_acquisition,
     validate_science_corpus_manifest_against_plan,
+    validate_science_corpus_manifest_v2_against_inputs,
+    validate_science_corpus_manifest_v2_against_plan,
 )
 from eom_catalog_service.models import ContentIntakeSourceFileRecord
+from eom_catalog_service.science_assessment_metadata_resolution import (
+    resolve_science_assessment_metadata,
+)
 from eom_catalog_service.science_assessment_web_acquisition import (
     AcquiredScienceAssessmentPdf,
     ScienceAssessmentDiscovery,
@@ -29,6 +34,7 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _AggregatedPdf,
     _bounded_shards,
     _build_manifest,
+    _build_manifest_v2,
     _require_acquisition_projection,
     _ResolvedSource,
     _stage_intake_shard,
@@ -246,6 +252,57 @@ def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
 
     assert manifest.summary.new_intake_count == 1
     assert manifest.intake_shards == (shard,)
+
+
+def test_manifest_v2_binds_exact_resolution_policy_and_origins(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"x" * 4096)
+    acquired = (
+        _acquired(source, post="100"),
+        _acquired(source, post="200"),
+    )
+    plan = _plan()
+    discovery = ScienceAssessmentDiscovery(
+        post_count=2,
+        candidates=tuple(value.candidate for value in acquired),
+        rejected_link_count=0,
+    )
+    acquisition = build_science_assessment_acquisition(
+        plan=plan,
+        discovery=discovery,
+        acquired=acquired,
+        failures=(),
+        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
+    )
+    resolution = resolve_science_assessment_metadata(acquisition)
+    aggregate = _aggregate_acquired(acquired, resolution)
+    content_hash = next(iter(aggregate))
+    pointer = ScienceAssessmentCorpusSourcePointer(
+        intake_batch_id="intake_" + "1" * 32,
+        source_file_id="sourcefile_" + "2" * 32,
+        artifact_id="artifact_" + "3" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        member_path="source/existing-name.pdf",
+        sha256=content_hash,
+    )
+
+    manifest = _build_manifest_v2(
+        plan=plan,
+        acquisition=acquisition,
+        resolution=resolution,
+        discovery=discovery,
+        aggregate=aggregate,
+        failures=(),
+        resolved={content_hash: _ResolvedSource(pointer=pointer, disposition="REUSED_EXISTING")},
+        new_shards=(),
+    )
+
+    assert manifest.resolution_sha256 == resolution.resolution_sha256
+    assert manifest.resolution_policy_id == resolution.policy.policy_id
+    assert len(manifest.documents[0].origins) == 2
+    validate_contract("science-assessment-web-corpus-manifest-v2", manifest.model_dump(mode="json"))
+    validate_science_corpus_manifest_v2_against_inputs(manifest, acquisition, resolution)
+    validate_science_corpus_manifest_v2_against_plan(manifest, plan)
 
 
 def test_acquisition_projection_rejects_local_observation_drift(tmp_path: Path) -> None:

@@ -12,6 +12,13 @@ from eom_catalog_contracts import ScienceAssessmentWebCorpusPlan, validate_contr
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.database import build_engine
 
+from eom_catalog_service.science_assessment_metadata_checkpoint import (
+    load_science_assessment_metadata_resolution,
+    write_science_assessment_metadata_resolution,
+)
+from eom_catalog_service.science_assessment_metadata_resolution import (
+    resolve_science_assessment_metadata,
+)
 from eom_catalog_service.science_assessment_web_acquisition import ScienceAssessmentWebAcquirer
 from eom_catalog_service.science_assessment_web_acquisition_checkpoint import (
     build_science_assessment_acquisition,
@@ -31,9 +38,20 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--discover-only", action="store_true")
     parser.add_argument("--acquire-only", action="store_true")
+    parser.add_argument("--resolve-only", action="store_true")
     parser.add_argument("--publish-only", action="store_true")
     arguments = parser.parse_args()
-    if sum((arguments.discover_only, arguments.acquire_only, arguments.publish_only)) > 1:
+    if (
+        sum(
+            (
+                arguments.discover_only,
+                arguments.acquire_only,
+                arguments.resolve_only,
+                arguments.publish_only,
+            )
+        )
+        > 1
+    ):
         parser.error("choose at most one execution phase")
     return arguments
 
@@ -86,7 +104,7 @@ def _write_receipt(path: Path, value: dict[str, object]) -> None:
 def main() -> None:
     args = _arguments()
     plan = _load_plan(args.plan)
-    if args.publish_only:
+    if args.resolve_only or args.publish_only:
         loaded = load_science_assessment_acquisition(
             plan=plan,
             workspace=args.workspace,
@@ -95,6 +113,30 @@ def main() -> None:
         discovery = loaded.discovery
         acquired = loaded.acquired
         failures = loaded.failures
+        if args.resolve_only:
+            resolution = resolve_science_assessment_metadata(acquisition)
+            resolution_path = write_science_assessment_metadata_resolution(
+                args.workspace,
+                resolution,
+            )
+            _write_receipt(
+                args.receipt,
+                {
+                    "status": "RESOLVED",
+                    "plan_id": plan.plan_id,
+                    "acquisition_sha256": acquisition.acquisition_sha256,
+                    "resolution_sha256": resolution.resolution_sha256,
+                    "resolution_policy_id": resolution.policy.policy_id,
+                    "resolution_policy_sha256": resolution.policy.policy_sha256,
+                    "resolution_manifest": resolution_path.name,
+                    "summary": resolution.summary.model_dump(mode="json"),
+                },
+            )
+            return
+        resolution = load_science_assessment_metadata_resolution(
+            workspace=args.workspace,
+            acquisition=acquisition,
+        )
     else:
         _require_workspace(args.workspace)
         acquirer = ScienceAssessmentWebAcquirer(plan)
@@ -131,11 +173,14 @@ def main() -> None:
                 },
             )
             return
+        resolution = resolve_science_assessment_metadata(acquisition)
+        write_science_assessment_metadata_resolution(args.workspace, resolution)
     engine = build_engine()
     try:
         publication = ScienceAssessmentWebCorpusService(engine).publish(
             plan=plan,
             acquisition=acquisition,
+            resolution=resolution,
             discovery=discovery,
             acquired=acquired,
             failures=failures,
@@ -149,6 +194,7 @@ def main() -> None:
             "status": "PUBLISHED",
             "plan_id": plan.plan_id,
             "acquisition_sha256": acquisition.acquisition_sha256,
+            "resolution_sha256": resolution.resolution_sha256,
             "corpus_id": publication.manifest.corpus_id,
             "artifact_id": publication.artifact_id,
             "artifact_revision_id": publication.artifact_revision_id,

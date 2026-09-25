@@ -22,6 +22,34 @@ SubjectFamily = Literal[
 ]
 IssuerType = Literal["EDUCATION_AUTHORITY", "KICE"]
 PublicationDisposition = Literal["NEW_INTAKE", "REUSED_EXISTING"]
+SubjectResolutionRule = Literal[
+    "MULTI_SUBJECT_LIST",
+    "EXPLICIT_INTEGRATED_SCIENCE",
+    "EXPLICIT_SINGLE_SUBJECT",
+    "GENERIC_SCIENCE_INQUIRY",
+    "ACQUISITION_FALLBACK",
+]
+IssuerResolutionRule = Literal[
+    "EXPLICIT_KICE",
+    "EXPLICIT_EDUCATION_AUTHORITY",
+    "ACQUISITION_FALLBACK",
+]
+YearResolutionRule = Literal[
+    "EXPLICIT_ADMINISTRATION_YEAR",
+    "EXPLICIT_CALENDAR_YEAR",
+    "EXPLICIT_ACADEMIC_YEAR",
+    "ACQUISITION_FALLBACK",
+]
+GradeResolutionRule = Literal[
+    "KICE_FIXED_GRADE_3",
+    "EXPLICIT_GRADE",
+    "ACQUISITION_FALLBACK",
+]
+SessionResolutionRule = Literal[
+    "EXPLICIT_KICE_CSAT",
+    "EXPLICIT_MONTH",
+    "ACQUISITION_FALLBACK",
+]
 
 _ISSUER_TYPES = ("EDUCATION_AUTHORITY", "KICE")
 _SUBJECT_FAMILIES = (
@@ -322,6 +350,130 @@ class ScienceAssessmentWebAcquisition(FrozenModel):
         return self
 
 
+class ScienceAssessmentMetadataResolutionPolicy(FrozenModel):
+    schema_version: Literal["science-assessment-metadata-resolution-policy/1.0"]
+    policy_id: str = Field(pattern=r"^sciencecorpuspolicy_[0-9a-f]{32}$")
+    algorithm: Literal["EOM_SCIENCE_METADATA_RESOLVER_2026_09_25_A"]
+    subject_rules: tuple[SubjectResolutionRule, ...]
+    issuer_rules: tuple[IssuerResolutionRule, ...]
+    year_rules: tuple[YearResolutionRule, ...]
+    grade_rules: tuple[GradeResolutionRule, ...]
+    session_rules: tuple[SessionResolutionRule, ...]
+    policy_sha256: Sha256
+
+    @model_validator(mode="after")
+    def canonical_policy(self) -> ScienceAssessmentMetadataResolutionPolicy:
+        expected = {
+            "subject_rules": (
+                "MULTI_SUBJECT_LIST",
+                "EXPLICIT_INTEGRATED_SCIENCE",
+                "EXPLICIT_SINGLE_SUBJECT",
+                "GENERIC_SCIENCE_INQUIRY",
+                "ACQUISITION_FALLBACK",
+            ),
+            "issuer_rules": (
+                "EXPLICIT_KICE",
+                "EXPLICIT_EDUCATION_AUTHORITY",
+                "ACQUISITION_FALLBACK",
+            ),
+            "year_rules": (
+                "EXPLICIT_ADMINISTRATION_YEAR",
+                "EXPLICIT_CALENDAR_YEAR",
+                "EXPLICIT_ACADEMIC_YEAR",
+                "ACQUISITION_FALLBACK",
+            ),
+            "grade_rules": (
+                "KICE_FIXED_GRADE_3",
+                "EXPLICIT_GRADE",
+                "ACQUISITION_FALLBACK",
+            ),
+            "session_rules": (
+                "EXPLICIT_KICE_CSAT",
+                "EXPLICIT_MONTH",
+                "ACQUISITION_FALLBACK",
+            ),
+        }
+        if any(getattr(self, key) != value for key, value in expected.items()):
+            raise ValueError("science metadata resolution policy rules differ")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"policy_id", "policy_sha256"})
+        )
+        if self.policy_id != "sciencecorpuspolicy_" + identity.removeprefix("sha256:")[:32]:
+            raise ValueError("science metadata resolution policy ID differs")
+        if self.policy_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"policy_sha256"})
+        ):
+            raise ValueError("science metadata resolution policy hash differs")
+        return self
+
+
+class ScienceAssessmentResolvedDocumentMetadata(FrozenModel):
+    sha256: Sha256
+    bytes: int = Field(ge=1024, le=100 * 1024 * 1024)
+    page_count: int = Field(ge=1, le=512)
+    original_filename: str = Field(min_length=1, max_length=255)
+    subject_family: SubjectFamily
+    subject_label: str = Field(min_length=1, max_length=128)
+    subject_rule: SubjectResolutionRule
+    issuer_type: IssuerType
+    issuer_rule: IssuerResolutionRule
+    administration_year: int = Field(ge=1994, le=2200)
+    year_rule: YearResolutionRule
+    grade: int = Field(ge=1, le=3)
+    grade_rule: GradeResolutionRule
+    session_label: str = Field(min_length=1, max_length=128)
+    session_rule: SessionResolutionRule
+    observation_count: int = Field(ge=1, le=32)
+    had_metadata_conflict: bool
+    metadata_changed: bool
+
+    @model_validator(mode="after")
+    def canonical_metadata(self) -> ScienceAssessmentResolvedDocumentMetadata:
+        _require_canonical_filename(self.original_filename)
+        return self
+
+
+class ScienceAssessmentMetadataResolutionSummary(FrozenModel):
+    unique_document_count: int = Field(ge=1, le=5000)
+    successful_observation_count: int = Field(ge=1, le=5000)
+    conflicting_document_count: int = Field(ge=0, le=5000)
+    normalized_document_count: int = Field(ge=0, le=5000)
+
+
+class ScienceAssessmentMetadataResolution(FrozenModel):
+    schema_version: Literal["science-assessment-metadata-resolution/1.0"]
+    plan_id: str = Field(pattern=r"^sciencecorpusplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    acquisition_sha256: Sha256
+    policy: ScienceAssessmentMetadataResolutionPolicy
+    documents: tuple[ScienceAssessmentResolvedDocumentMetadata, ...] = Field(
+        min_length=1, max_length=5000
+    )
+    summary: ScienceAssessmentMetadataResolutionSummary
+    resolution_sha256: Sha256
+
+    @model_validator(mode="after")
+    def canonical_resolution(self) -> ScienceAssessmentMetadataResolution:
+        hashes = tuple(value.sha256 for value in self.documents)
+        if hashes != tuple(sorted(set(hashes))):
+            raise ValueError("science metadata resolution documents are not canonical")
+        if (
+            self.summary.unique_document_count != len(self.documents)
+            or self.summary.successful_observation_count
+            != sum(value.observation_count for value in self.documents)
+            or self.summary.conflicting_document_count
+            != sum(value.had_metadata_conflict for value in self.documents)
+            or self.summary.normalized_document_count
+            != sum(value.metadata_changed for value in self.documents)
+        ):
+            raise ValueError("science metadata resolution summary differs")
+        if self.resolution_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"resolution_sha256"})
+        ):
+            raise ValueError("science metadata resolution hash differs")
+        return self
+
+
 class ScienceAssessmentWebCorpusManifest(FrozenModel):
     schema_version: Literal["science-assessment-web-corpus-manifest/1.0"]
     corpus_id: str = Field(pattern=r"^sciencecorpus_[0-9a-f]{32}$")
@@ -405,6 +557,111 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
         ):
             raise ValueError("corpus manifest hash differs")
         return self
+
+
+class ScienceAssessmentWebCorpusManifestV2(FrozenModel):
+    schema_version: Literal["science-assessment-web-corpus-manifest/2.0"]
+    corpus_id: str = Field(pattern=r"^sciencecorpus_[0-9a-f]{32}$")
+    plan_id: str = Field(pattern=r"^sciencecorpusplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    acquisition_sha256: Sha256
+    resolution_sha256: Sha256
+    resolution_policy_id: str = Field(pattern=r"^sciencecorpuspolicy_[0-9a-f]{32}$")
+    resolution_policy_sha256: Sha256
+    observed_at: UtcDatetime
+    pdf_validator: ScienceAssessmentCorpusPdfValidator
+    documents: tuple[ScienceAssessmentCorpusDocument, ...] = Field(min_length=1, max_length=5000)
+    failures: tuple[ScienceAssessmentCorpusAcquisitionFailure, ...] = Field(max_length=5000)
+    intake_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...] = Field(max_length=64)
+    summary: ScienceAssessmentCorpusSummary
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def canonical_manifest(self) -> ScienceAssessmentWebCorpusManifestV2:
+        _validate_corpus_collections(
+            documents=self.documents,
+            failures=self.failures,
+            intake_shards=self.intake_shards,
+            summary=self.summary,
+        )
+        identity_sha256 = content_sha256(
+            {
+                "schema_version": self.schema_version,
+                "plan_id": self.plan_id,
+                "plan_sha256": self.plan_sha256,
+                "acquisition_sha256": self.acquisition_sha256,
+                "resolution_sha256": self.resolution_sha256,
+                "resolution_policy_id": self.resolution_policy_id,
+                "resolution_policy_sha256": self.resolution_policy_sha256,
+            }
+        )
+        if self.corpus_id != "sciencecorpus_" + identity_sha256.removeprefix("sha256:")[:32]:
+            raise ValueError("corpus ID does not bind its resolved document set")
+        if self.manifest_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"manifest_sha256"})
+        ):
+            raise ValueError("corpus manifest hash differs")
+        return self
+
+
+def _validate_corpus_collections(
+    *,
+    documents: tuple[ScienceAssessmentCorpusDocument, ...],
+    failures: tuple[ScienceAssessmentCorpusAcquisitionFailure, ...],
+    intake_shards: tuple[ScienceAssessmentCorpusIntakeShard, ...],
+    summary: ScienceAssessmentCorpusSummary,
+) -> None:
+    document_hashes = tuple(value.sha256 for value in documents)
+    if document_hashes != tuple(sorted(set(document_hashes))):
+        raise ValueError("corpus documents must be sorted and content-unique")
+    shard_ordinals = tuple(value.ordinal for value in intake_shards)
+    if shard_ordinals != tuple(range(1, len(intake_shards) + 1)):
+        raise ValueError("corpus intake shards must be consecutive and sorted")
+    shard_ids = tuple(value.intake_batch_id for value in intake_shards)
+    if len(shard_ids) != len(set(shard_ids)):
+        raise ValueError("corpus intake shards must be unique")
+    by_batch = {value.intake_batch_id: value for value in intake_shards}
+    new_counts: dict[str, int] = {}
+    pointer_ids: set[str] = set()
+    for document in documents:
+        if document.source.source_file_id in pointer_ids:
+            raise ValueError("corpus source pointer is duplicated")
+        pointer_ids.add(document.source.source_file_id)
+        shard = by_batch.get(document.source.intake_batch_id)
+        if document.publication_disposition == "NEW_INTAKE":
+            if (
+                shard is None
+                or shard.artifact_id != document.source.artifact_id
+                or shard.artifact_revision_id != document.source.artifact_revision_id
+            ):
+                raise ValueError("new corpus source is absent from its intake shard")
+            new_counts[document.source.intake_batch_id] = (
+                new_counts.get(document.source.intake_batch_id, 0) + 1
+            )
+        elif shard is not None:
+            raise ValueError("reused corpus source points into a newly created shard")
+    if any(
+        new_counts.get(value.intake_batch_id, 0) != value.document_count for value in intake_shards
+    ):
+        raise ValueError("corpus intake shard count differs from its documents")
+    origin_count = sum(len(value.origins) for value in documents)
+    failure_keys = tuple(
+        (value.post_url, value.download_url, value.error_code) for value in failures
+    )
+    if failure_keys != tuple(sorted(set(failure_keys))):
+        raise ValueError("corpus acquisition failures must be sorted and unique")
+    reused = sum(value.publication_disposition == "REUSED_EXISTING" for value in documents)
+    new = len(documents) - reused
+    if (
+        summary.unique_document_count != len(documents)
+        or summary.candidate_count != origin_count + len(failures)
+        or summary.acquisition_failure_count != len(failures)
+        or summary.duplicate_observation_count != origin_count - len(documents)
+        or summary.reused_existing_count != reused
+        or summary.new_intake_count != new
+        or summary.total_bytes != sum(value.bytes for value in documents)
+    ):
+        raise ValueError("corpus summary differs from its documents")
 
 
 def validate_science_corpus_manifest_against_acquisition(
@@ -553,3 +810,178 @@ def validate_science_acquisition_against_plan(
             or observation.bytes > plan.max_pdf_bytes
         ):
             raise ValueError("science acquisition result is outside the plan")
+
+
+def validate_science_metadata_resolution_against_acquisition(
+    resolution: ScienceAssessmentMetadataResolution,
+    acquisition: ScienceAssessmentWebAcquisition,
+) -> None:
+    """Bind publication metadata to the exact immutable acquisition observation set."""
+
+    if (
+        resolution.plan_id != acquisition.plan_id
+        or resolution.plan_sha256 != acquisition.plan_sha256
+        or resolution.acquisition_sha256 != acquisition.acquisition_sha256
+    ):
+        raise ValueError("science metadata resolution references another acquisition")
+    observations_by_hash: dict[str, list[ScienceAssessmentAcquisitionSuccess]] = {}
+    for observation in acquisition.successful_observations:
+        observations_by_hash.setdefault(observation.sha256, []).append(observation)
+    if {value.sha256 for value in resolution.documents} != set(observations_by_hash):
+        raise ValueError("science metadata resolution document set differs")
+    for document in resolution.documents:
+        observations = observations_by_hash[document.sha256]
+        byte_identities = {(value.bytes, value.page_count) for value in observations}
+        raw_metadata = {
+            (
+                value.subject_family,
+                value.issuer_type,
+                value.administration_year,
+                value.grade,
+                value.session_label,
+            )
+            for value in observations
+        }
+        if (
+            byte_identities != {(document.bytes, document.page_count)}
+            or document.original_filename != min(value.original_filename for value in observations)
+            or document.observation_count != len(observations)
+            or document.had_metadata_conflict != (len(raw_metadata) > 1)
+            or document.metadata_changed
+            != any(
+                (
+                    value.subject_family,
+                    value.subject_label,
+                    value.issuer_type,
+                    value.administration_year,
+                    value.grade,
+                    value.session_label,
+                )
+                != (
+                    document.subject_family,
+                    document.subject_label,
+                    document.issuer_type,
+                    document.administration_year,
+                    document.grade,
+                    document.session_label,
+                )
+                for value in observations
+            )
+        ):
+            raise ValueError("science metadata resolution differs from acquisition observations")
+
+
+def validate_science_corpus_manifest_v2_against_inputs(
+    manifest: ScienceAssessmentWebCorpusManifestV2,
+    acquisition: ScienceAssessmentWebAcquisition,
+    resolution: ScienceAssessmentMetadataResolution,
+) -> None:
+    """Bind a published v2 corpus to its exact raw and resolved metadata inputs."""
+
+    validate_science_metadata_resolution_against_acquisition(resolution, acquisition)
+    if (
+        manifest.acquisition_sha256 != acquisition.acquisition_sha256
+        or manifest.resolution_sha256 != resolution.resolution_sha256
+        or manifest.resolution_policy_id != resolution.policy.policy_id
+        or manifest.resolution_policy_sha256 != resolution.policy.policy_sha256
+        or manifest.plan_id != acquisition.plan_id
+        or manifest.plan_sha256 != acquisition.plan_sha256
+        or manifest.observed_at != acquisition.observed_at
+        or manifest.pdf_validator != acquisition.pdf_validator
+    ):
+        raise ValueError("corpus manifest v2 references another input")
+    resolved_by_hash = {value.sha256: value for value in resolution.documents}
+    observations_by_hash: dict[str, list[ScienceAssessmentAcquisitionSuccess]] = {}
+    for observation in acquisition.successful_observations:
+        observations_by_hash.setdefault(observation.sha256, []).append(observation)
+    if {value.sha256 for value in manifest.documents} != set(resolved_by_hash):
+        raise ValueError("corpus manifest v2 document set differs")
+    for document in manifest.documents:
+        resolved = resolved_by_hash[document.sha256]
+        observations = observations_by_hash[document.sha256]
+        expected_origins = tuple(
+            sorted(
+                {
+                    ScienceAssessmentCorpusOrigin(
+                        post_url=value.post_url,
+                        download_url=value.download_url,
+                        resolved_url=value.resolved_url,
+                        link_text=value.link_text,
+                    )
+                    for value in observations
+                },
+                key=lambda value: (
+                    value.post_url,
+                    value.download_url,
+                    value.resolved_url,
+                    value.link_text,
+                ),
+            )
+        )
+        if (
+            document.bytes,
+            document.page_count,
+            document.original_filename,
+            document.subject_family,
+            document.subject_label,
+            document.issuer_type,
+            document.administration_year,
+            document.grade,
+            document.session_label,
+            document.origins,
+        ) != (
+            resolved.bytes,
+            resolved.page_count,
+            resolved.original_filename,
+            resolved.subject_family,
+            resolved.subject_label,
+            resolved.issuer_type,
+            resolved.administration_year,
+            resolved.grade,
+            resolved.session_label,
+            expected_origins,
+        ):
+            raise ValueError("corpus manifest v2 metadata differs from resolution")
+    if {(value.post_url, value.download_url, value.error_code) for value in manifest.failures} != {
+        (value.post_url, value.download_url, value.error_code)
+        for value in acquisition.failed_observations
+    }:
+        raise ValueError("corpus manifest v2 failures differ from acquisition")
+    if (
+        manifest.summary.scanned_post_count != acquisition.summary.scanned_post_count
+        or manifest.summary.candidate_count != acquisition.summary.candidate_count
+        or manifest.summary.acquisition_failure_count
+        != acquisition.summary.failed_observation_count
+    ):
+        raise ValueError("corpus manifest v2 summary differs from acquisition")
+
+
+def validate_science_corpus_manifest_v2_against_plan(
+    manifest: ScienceAssessmentWebCorpusManifestV2,
+    plan: ScienceAssessmentWebCorpusPlan,
+) -> None:
+    """Validate a v2 corpus network provenance against its immutable crawl plan."""
+
+    if manifest.plan_id != plan.plan_id or manifest.plan_sha256 != plan.plan_sha256:
+        raise ValueError("corpus manifest v2 references another acquisition plan")
+    if manifest.summary.scanned_post_count > plan.max_post_pages:
+        raise ValueError("corpus manifest v2 exceeds the plan post limit")
+    allowed_hosts = set(plan.allowed_download_hosts)
+    for document in manifest.documents:
+        if (
+            document.subject_family not in plan.subject_families
+            or document.issuer_type not in plan.issuer_types
+            or document.document_role not in plan.document_roles
+            or document.bytes > plan.max_pdf_bytes
+        ):
+            raise ValueError("corpus document v2 is outside the plan scope")
+        for origin in document.origins:
+            if (
+                urlsplit(origin.post_url).hostname != "legendstudy.com"
+                or urlsplit(origin.download_url).hostname not in allowed_hosts
+                or urlsplit(origin.resolved_url).hostname not in allowed_hosts
+            ):
+                raise ValueError("corpus origin v2 host is outside the plan allowlist")
+    for failure in manifest.failures:
+        if urlsplit(failure.download_url).hostname not in allowed_hosts:
+            raise ValueError("corpus failure v2 host is outside the plan allowlist")
