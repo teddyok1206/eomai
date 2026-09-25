@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-lora-micro-evaluation-result/1.0",
+  "title": "EOM Local Image LoRA Micro Evaluation Result V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "modelPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_revision_id",
+        "graph_snapshot_sha256",
+        "graph_manifest_sha256",
+        "target_count",
+        "target_set_sha256"
+      ],
+      "properties": {
+        "graph_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "graph_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "target_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "target_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "torch_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "diffusers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "transformers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "accelerate_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "peft_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "bitsandbytes_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version",
+        "cuda_version",
+        "gpu_name",
+        "compute_capability",
+        "peak_gpu_memory_bytes"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "torch_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "diffusers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "transformers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "accelerate_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "peft_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "bitsandbytes_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "cuda_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "gpu_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "compute_capability": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "peak_gpu_memory_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "adapterFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ]
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_run_id",
+    "command_sha256",
+    "training_result_sha256",
+    "adapter_manifest_sha256",
+    "status",
+    "outputs",
+    "error_code",
+    "started_at",
+    "completed_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-lora-micro-evaluation-result/1.0"
+    },
+    "evaluation_run_id": {
+      "type": "string",
+      "pattern": "^imgmicroevalrun_[0-9a-f]{32}$"
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "training_result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "adapter_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sample_id",
+          "variant",
+          "member_path",
+          "sha256",
+          "size_bytes",
+          "width_px",
+          "height_px"
+        ],
+        "properties": {
+          "sample_id": {
+            "type": "string",
+            "pattern": "^imgsample_[0-9a-f]{32}$"
+          },
+          "variant": {
+            "enum": [
+              "ADAPTER",
+              "BASE"
+            ]
+          },
+          "member_path": {
+            "type": "string",
+            "pattern": "^outputs/imgsample_[0-9a-f]{32}-(adapter|base)\\.png$"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 67108864
+          },
+          "width_px": {
+            "const": 800
+          },
+          "height_px": {
+            "const": 500
+          }
+        }
+      }
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^IMAGE_EVALUATION_[A-Z0-9_]{3,96}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "minItems": 6,
+            "maxItems": 6
+          },
+          "error_code": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "pattern": "^IMAGE_EVALUATION_[A-Z0-9_]{3,96}$"
+          }
+        }
+      }
+    }
+  ]
+}
