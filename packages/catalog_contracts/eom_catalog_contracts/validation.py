@@ -598,6 +598,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:f3507d450aa77c8f90d8d500de185b9091e92ae556d1f3b4b075c13f75245180",
         ),
+        "science-assessment-web-corpus-plan": CatalogSchemaResource(
+            "schemas/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
+            "resources/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
+            "1.0",
+            "sha256:2ad0dc68ec23e27d7bab4f4b097370b6bfe1c35c4c8539e34213a8f100b77e18",
+        ),
+        "science-assessment-web-corpus-manifest": CatalogSchemaResource(
+            "schemas/legacy-assessment/science-assessment-web-corpus-manifest-v1.schema.json",
+            "resources/legacy-assessment/science-assessment-web-corpus-manifest-v1.schema.json",
+            "1.0",
+            "sha256:3f9768189372ba9a8ccc8ab8f0145d1a611f69de70d9cfc87cbfa590c06e3904",
+        ),
         "legacy-item-extraction-batch-v2": CatalogSchemaResource(
             "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
             "resources/legacy-assessment/legacy-item-extraction-batch-v2.schema.json",
