@@ -763,7 +763,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "mock-exam terminal-state contract export is incomplete" in deployment
     assert "mock-exam retirement contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20260923_0043"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20260925_0044"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v2.schema.json"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment

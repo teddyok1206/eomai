@@ -69,6 +69,7 @@ class ContentIntakeSourceFileRecord(Base):
         UniqueConstraint(
             "intake_batch_id", "sha256", "declared_role", name="uq_intake_source_hash_role"
         ),
+        Index("ix_content_intake_source_sha256", "sha256"),
     )
 
     source_file_id: Mapped[str] = mapped_column(String(43), primary_key=True)

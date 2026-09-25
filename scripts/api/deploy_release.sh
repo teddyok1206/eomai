@@ -2163,7 +2163,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20260923_0043":
+if CURRENT_MIGRATION_REVISION != "20260925_0044":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
