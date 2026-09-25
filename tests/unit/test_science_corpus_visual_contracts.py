@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from eom_image_contracts import (
     LocalImageScienceCorpusTrainingAuthorization,
+    LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualPatternInventory,
@@ -15,6 +16,7 @@ from eom_image_contracts import (
     validate_contract,
     validate_science_visual_authorization_plan,
     validate_science_visual_pattern_inventory,
+    validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -264,6 +266,38 @@ def _candidate(document_id: str, page_hash: str, index: int) -> dict[str, object
     }
 
 
+def _command_value() -> dict[str, object]:
+    plan = _plan_value()
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-corpus-visual-pilot-command/1.0",
+        "plan": _pointer(
+            "7",
+            member_path="manifests/visual-pilot-plan.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
+            ),
+        ),
+        "plan_sha256": plan["plan_sha256"],
+        "staged_plan_member": "input/visual-pilot-plan.json",
+        "staged_sources": [
+            {
+                "document_id": source["document_id"],
+                "staged_pdf_member": f"input/pdfs/{source['document_id']}.pdf",
+                "sha256": source["pdf"]["sha256"],
+                "bytes": source["bytes"],
+                "page_count": source["page_count"],
+            }
+            for source in plan["selected_sources"]
+        ],
+        "result_member": "manifests/visual-pilot-result.json",
+        "requested_at": "2026-09-25T18:25:00Z",
+        "requested_by": "operator_user",
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    body["attempt_id"] = "imgscivisattempt_" + identity[:32]
+    return {**body, "command_sha256": content_sha256(body)}
+
+
 def _result_value() -> dict[str, object]:
     plan = _plan_value()
     pages = []
@@ -378,6 +412,11 @@ def _inventory_value() -> dict[str, object]:
             _plan_value,
         ),
         (
+            "science-corpus-visual-pilot-command",
+            LocalImageScienceCorpusVisualPilotCommand,
+            _command_value,
+        ),
+        (
             "science-corpus-visual-pilot-result",
             LocalImageScienceCorpusVisualPilotResult,
             _result_value,
@@ -400,12 +439,30 @@ def test_science_visual_cross_contract_bindings() -> None:
         _authorization_value()
     )
     plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
+    command = LocalImageScienceCorpusVisualPilotCommand.model_validate(_command_value())
     result = LocalImageScienceCorpusVisualPilotResult.model_validate(_result_value())
     inventory = LocalImageScienceVisualPatternInventory.model_validate(_inventory_value())
 
     validate_science_visual_authorization_plan(authorization, plan)
+    validate_science_visual_pilot_command(plan, command)
     validate_science_visual_pilot_result(plan, result)
     validate_science_visual_pattern_inventory(result, inventory)
+
+
+def test_science_visual_command_rejects_staged_pdf_drift() -> None:
+    plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
+    value = _command_value()
+    value["staged_sources"][0]["sha256"] = _sha("f")
+    body = {key: item for key, item in value.items() if key not in {"attempt_id", "command_sha256"}}
+    identity = content_sha256(body).removeprefix("sha256:")
+    value["attempt_id"] = "imgscivisattempt_" + identity[:32]
+    value["command_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "command_sha256"}
+    )
+    command = LocalImageScienceCorpusVisualPilotCommand.model_validate(value)
+
+    with pytest.raises(ValueError, match="staged PDFs differ"):
+        validate_science_visual_pilot_command(plan, command)
 
 
 def test_science_visual_plan_rejects_partition_leakage_and_over_96_sources() -> None:
@@ -522,6 +579,9 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         ),
         "local-image-science-corpus-visual-pilot-plan-v1.schema.json": (
             "76a48e59f9d9fb9777467bf8466f915a7cface0d04a0383bdb68ec4dea2f4708"
+        ),
+        "local-image-science-corpus-visual-pilot-command-v1.schema.json": (
+            "9093b8e0c621cd12e978570eb1e5582097a8a70a73628b6fe182dfdaed3b8090"
         ),
         "local-image-science-corpus-visual-pilot-result-v1.schema.json": (
             "8b2dccc1f567922917912eb5025e1fbf9256f2361e4ac6918602c504749246a1"

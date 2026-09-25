@@ -377,6 +377,87 @@ def _bounding_box() -> dict[str, Any]:
     }
 
 
+def _pilot_command() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Corpus Visual Pilot Worker Command V1",
+        "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "stagedSource": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "document_id",
+                    "staged_pdf_member",
+                    "sha256",
+                    "bytes",
+                    "page_count",
+                ],
+                "properties": {
+                    "document_id": {
+                        "type": "string",
+                        "pattern": "^sciencedoc_[0-9a-f]{32}$",
+                    },
+                    "staged_pdf_member": {
+                        "type": "string",
+                        "pattern": "^input/pdfs/sciencedoc_[0-9a-f]{32}\\.pdf$",
+                    },
+                    "sha256": {"$ref": "#/$defs/sha256"},
+                    "bytes": {
+                        "type": "integer",
+                        "minimum": 1024,
+                        "maximum": 104857600,
+                    },
+                    "page_count": {"type": "integer", "minimum": 1, "maximum": 512},
+                },
+            }
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "attempt_id",
+                "plan",
+                "plan_sha256",
+                "staged_plan_member",
+                "staged_sources",
+                "result_member",
+                "requested_at",
+                "requested_by",
+                "command_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-corpus-visual-pilot-command/1.0"},
+                "attempt_id": {
+                    "type": "string",
+                    "pattern": "^imgscivisattempt_[0-9a-f]{32}$",
+                },
+                "plan": {"$ref": "#/$defs/artifactMember"},
+                "plan_sha256": {"$ref": "#/$defs/sha256"},
+                "staged_plan_member": {"const": "input/visual-pilot-plan.json"},
+                "staged_sources": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 96,
+                    "items": {"$ref": "#/$defs/stagedSource"},
+                },
+                "result_member": {"const": "manifests/visual-pilot-result.json"},
+                "requested_at": UTC,
+                "requested_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 REPRESENTATION_KINDS = [
     "APPARATUS",
     "COMPOSITE",
@@ -788,6 +869,7 @@ def _pattern_inventory() -> dict[str, Any]:
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
+    "local-image-science-corpus-visual-pilot-command-v1.schema.json": _pilot_command(),
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
 }

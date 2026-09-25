@@ -54,6 +54,7 @@ from eom_image_contracts.models import (
 from eom_image_contracts.safe_svg import SVG_ALLOWED_FONT_FAMILIES, sanitize_svg_overlay
 from eom_image_contracts.science_corpus_visual import (
     LocalImageScienceCorpusTrainingAuthorization,
+    LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualPatternInventory,
@@ -65,10 +66,12 @@ from eom_image_contracts.science_corpus_visual import (
     ScienceVisualPatternReview,
     ScienceVisualPilotRuntime,
     ScienceVisualPilotSource,
+    ScienceVisualStagedSource,
     ScienceVisualToolIdentity,
     ScienceVisualToolSet,
     validate_science_visual_authorization_plan,
     validate_science_visual_pattern_inventory,
+    validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
 )
 from eom_image_contracts.training import (
@@ -171,6 +174,7 @@ __all__ = [
     "LocalImageQualityEvaluationResult",
     "LocalImageRuntime",
     "LocalImageScienceCorpusTrainingAuthorization",
+    "LocalImageScienceCorpusVisualPilotCommand",
     "LocalImageScienceCorpusVisualPilotPlan",
     "LocalImageScienceCorpusVisualPilotResult",
     "LocalImageScienceVisualPatternInventory",
@@ -199,6 +203,7 @@ __all__ = [
     "ScienceVisualPatternReview",
     "ScienceVisualPilotRuntime",
     "ScienceVisualPilotSource",
+    "ScienceVisualStagedSource",
     "ScienceVisualToolIdentity",
     "ScienceVisualToolSet",
     "UpstreamModel",
@@ -222,6 +227,7 @@ __all__ = [
     "validate_quality_evaluation_result",
     "validate_science_visual_authorization_plan",
     "validate_science_visual_pattern_inventory",
+    "validate_science_visual_pilot_command",
     "validate_science_visual_pilot_result",
     "validate_training_crop_review",
     "validate_training_dataset_authorization",

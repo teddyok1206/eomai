@@ -46,6 +46,9 @@ SCHEMA_FILES = {
     "science-corpus-visual-pilot-plan": (
         "local-image-science-corpus-visual-pilot-plan-v1.schema.json"
     ),
+    "science-corpus-visual-pilot-command": (
+        "local-image-science-corpus-visual-pilot-command-v1.schema.json"
+    ),
     "science-corpus-visual-pilot-result": (
         "local-image-science-corpus-visual-pilot-result-v1.schema.json"
     ),
@@ -131,6 +134,9 @@ SCHEMA_SHA256 = {
     ),
     "science-corpus-visual-pilot-plan": (
         "sha256:76a48e59f9d9fb9777467bf8466f915a7cface0d04a0383bdb68ec4dea2f4708"
+    ),
+    "science-corpus-visual-pilot-command": (
+        "sha256:9093b8e0c621cd12e978570eb1e5582097a8a70a73628b6fe182dfdaed3b8090"
     ),
     "science-corpus-visual-pilot-result": (
         "sha256:8b2dccc1f567922917912eb5025e1fbf9256f2361e4ac6918602c504749246a1"

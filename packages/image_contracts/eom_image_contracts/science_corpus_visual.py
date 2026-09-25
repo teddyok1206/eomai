@@ -29,6 +29,9 @@ CORPUS_AUTHORIZATION_SCHEMA_REF = (
 CORPUS_PILOT_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
 )
+CORPUS_PILOT_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.0"
+)
 CORPUS_PILOT_RESULT_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
 )
@@ -392,6 +395,59 @@ class LocalImageScienceCorpusVisualPilotPlan(FrozenModel):
         return self
 
 
+class ScienceVisualStagedSource(FrozenModel):
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    staged_pdf_member: str = Field(pattern=r"^input/pdfs/sciencedoc_[0-9a-f]{32}\.pdf$")
+    sha256: Sha256
+    bytes: int = Field(ge=1024, le=100 * 1024 * 1024)
+    page_count: int = Field(ge=1, le=512)
+
+    @model_validator(mode="after")
+    def staged_member_matches_document(self) -> ScienceVisualStagedSource:
+        if self.staged_pdf_member != f"input/pdfs/{self.document_id}.pdf":
+            raise ValueError("science visual staged PDF member differs from its document")
+        return self
+
+
+class LocalImageScienceCorpusVisualPilotCommand(FrozenModel):
+    schema_version: Literal["local-image-science-corpus-visual-pilot-command/1.0"]
+    attempt_id: str = Field(pattern=r"^imgscivisattempt_[0-9a-f]{32}$")
+    plan: ImageEvaluationArtifactMember
+    plan_sha256: Sha256
+    staged_plan_member: Literal["input/visual-pilot-plan.json"]
+    staged_sources: tuple[ScienceVisualStagedSource, ...] = Field(min_length=12, max_length=96)
+    result_member: Literal["manifests/visual-pilot-result.json"]
+    requested_at: datetime
+    requested_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    command_sha256: Sha256
+
+    @field_validator("requested_at")
+    @classmethod
+    def utc_request(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_command_is_coherent(self) -> LocalImageScienceCorpusVisualPilotCommand:
+        _require_pointer(
+            self.plan,
+            schema_ref=CORPUS_PILOT_PLAN_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-plan.json",
+        )
+        source_ids = tuple(value.document_id for value in self.staged_sources)
+        if source_ids != tuple(sorted(set(source_ids))):
+            raise ValueError("science visual staged sources must be uniquely sorted")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"attempt_id", "command_sha256"})
+        ).removeprefix("sha256:")
+        if self.attempt_id != "imgscivisattempt_" + identity[:32]:
+            raise ValueError("science visual attempt ID does not bind its command")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("science visual pilot command hash mismatch")
+        return self
+
+
 class ScienceVisualPageImage(FrozenModel):
     document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
     physical_page: int = Field(ge=1, le=512)
@@ -549,6 +605,34 @@ def validate_science_visual_pilot_result(
         (value.document_id, value.physical_page) not in source_pages for value in result.omissions
     ):
         raise ValueError("science visual pilot result contains an unplanned source page")
+
+
+def validate_science_visual_pilot_command(
+    plan: LocalImageScienceCorpusVisualPilotPlan,
+    command: LocalImageScienceCorpusVisualPilotCommand,
+) -> None:
+    if command.plan_sha256 != plan.plan_sha256:
+        raise ValueError("science visual pilot command does not bind the plan")
+    expected = tuple(
+        (
+            source.document_id,
+            source.pdf.sha256,
+            source.bytes,
+            source.page_count,
+        )
+        for source in plan.selected_sources
+    )
+    actual = tuple(
+        (
+            source.document_id,
+            source.sha256,
+            source.bytes,
+            source.page_count,
+        )
+        for source in command.staged_sources
+    )
+    if actual != expected:
+        raise ValueError("science visual staged PDFs differ from the plan")
 
 
 class ScienceVisualPatternReview(FrozenModel):

@@ -42,8 +42,9 @@ PostgreSQL.
 Every Artifact member pointer is checked for logical and revision existence, approved lifecycle,
 exact member existence, schema, media type, declared SHA-256, manifest membership, regular-file
 identity, size bound, and stable bytes. The plan rejects implicit latest revisions, duplicate
-documents, duplicate PDF hashes, source members that do not end in the document hash, and corpus or
-authorization drift.
+documents, duplicate PDF hashes, unsafe source members, document/hash disagreement, and corpus or
+authorization drift. Existing Content Intake member names remain storage locations and are not
+rewritten into invented hash-named identities.
 
 The authorization records the user's explicit approval of the validated internal exam-material
 corpus for deterministic pattern analysis and internal SSD-1B LoRA training. Public availability is
