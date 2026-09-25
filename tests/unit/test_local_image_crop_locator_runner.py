@@ -122,6 +122,7 @@ def _workspace(tmp_path: Path, command: LocalImageCropLocatorCommand, page: byte
     workspace.mkdir(mode=0o700)
     (workspace / "pages").mkdir(mode=0o700)
     (workspace / "outputs").mkdir(mode=0o700)
+    (workspace / "review").mkdir(mode=0o700)
     page_path = workspace / command.sources[0].staged_page_member
     page_path.write_bytes(page)
     os.chmod(page_path, 0o600)

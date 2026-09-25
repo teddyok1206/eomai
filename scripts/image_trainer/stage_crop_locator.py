@@ -616,6 +616,9 @@ def main() -> None:
         outputs = temporary / "outputs"
         outputs.mkdir(mode=0o700)
         os.chown(outputs, trainer_uid, trainer_gid)
+        review = temporary / "review"
+        review.mkdir(mode=0o700)
+        os.chown(review, trainer_uid, trainer_gid)
         command_path = temporary / "command.json"
         _write_exclusive(
             command_path,
@@ -623,6 +626,9 @@ def main() -> None:
             mode=0o640,
         )
         os.chown(command_path, 0, trainer_gid)
+        # The worker receives immutable root-owned inputs and may write only to its pre-created
+        # output directories.  Group traversal is sufficient; workspace-wide write access is not.
+        os.chmod(temporary, 0o750)
         workspace = WORKSPACE_PARENT / command.locator_run_id
         if workspace.exists() or workspace.is_symlink():
             raise CropLocatorStageError("IMAGE_TRAINING_WORKSPACE_EXISTS")

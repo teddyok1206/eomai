@@ -99,11 +99,16 @@ def _require_workspace(workspace: Path) -> None:
         metadata = workspace.lstat()
     except OSError as exc:
         raise CropLocatorRunnerError("IMAGE_TRAINING_WORKSPACE_INVALID") from exc
+    self_owned = metadata.st_uid == os.geteuid() and stat.S_IMODE(metadata.st_mode) == 0o700
+    root_staged = (
+        metadata.st_uid == 0
+        and metadata.st_gid == os.getegid()
+        and stat.S_IMODE(metadata.st_mode) == 0o750
+    )
     if (
         workspace.is_symlink()
         or not stat.S_ISDIR(metadata.st_mode)
-        or metadata.st_uid != os.geteuid()
-        or stat.S_IMODE(metadata.st_mode) != 0o700
+        or not (self_owned or root_staged)
     ):
         raise CropLocatorRunnerError("IMAGE_TRAINING_WORKSPACE_INVALID")
 
@@ -276,9 +281,17 @@ def _write_contact_sheets(
 ) -> None:
     review_root = workspace / "review"
     try:
-        review_root.mkdir(mode=0o700, exist_ok=False)
+        review_metadata = review_root.lstat()
     except OSError as exc:
         raise CropLocatorRunnerError("IMAGE_TRAINING_REVIEW_OUTPUT_INVALID") from exc
+    if (
+        review_root.is_symlink()
+        or not stat.S_ISDIR(review_metadata.st_mode)
+        or review_metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(review_metadata.st_mode) != 0o700
+        or any(review_root.iterdir())
+    ):
+        raise CropLocatorRunnerError("IMAGE_TRAINING_REVIEW_OUTPUT_INVALID")
     by_anchor = {value.source_anchor_id: value for value in staged_sources}
     tiles: list[tuple[Image.Image, dict[str, object]]] = []
     for proposal in proposal_set.proposals:
