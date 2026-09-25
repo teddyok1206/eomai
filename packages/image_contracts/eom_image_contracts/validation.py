@@ -25,6 +25,7 @@ SCHEMA_FILES = {
     "training-dataset-manifest": "local-image-training-dataset-manifest-v1.schema.json",
     "lora-training-plan": "local-image-lora-training-plan-v1.schema.json",
     "lora-adapter-manifest": "local-image-lora-adapter-manifest-v1.schema.json",
+    "lora-checkpoint-manifest": "local-image-lora-checkpoint-manifest-v1.schema.json",
     "lora-training-receipt": "local-image-lora-training-receipt-v1.schema.json",
     "lora-training-command": "local-image-lora-training-command-v1.schema.json",
     "lora-training-worker-result": ("local-image-lora-training-worker-result-v1.schema.json"),
@@ -56,6 +57,9 @@ SCHEMA_SHA256 = {
     ),
     "lora-adapter-manifest": (
         "sha256:6ff652980b8b3599d0843395820d0e468270cfd17e9ab733a6b7ee28d6acb546"
+    ),
+    "lora-checkpoint-manifest": (
+        "sha256:ceaafc8068624e4ff460b852b636ce8d468c203480c9ed94d0d1337620e62f6b"
     ),
     "lora-training-receipt": (
         "sha256:4fa7cb556139374b6964baa8aa028350843d2f7d85ff680a66f673e24f127089"

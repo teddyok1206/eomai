@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from eom_image_contracts import (
     LocalImageLoraAdapterManifest,
+    LocalImageLoraCheckpointManifest,
     LocalImageLoraTrainingCommand,
     LocalImageLoraTrainingPlan,
     LocalImageLoraTrainingReceipt,
@@ -18,6 +19,7 @@ from eom_image_contracts import (
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_lora_checkpoint_manifest,
     validate_lora_training_plan,
     validate_lora_training_receipt,
     validate_lora_training_worker_result,
@@ -353,6 +355,32 @@ def _worker_result_value() -> dict[str, object]:
     return {**body, "result_sha256": content_sha256(body)}
 
 
+def _checkpoint_value() -> dict[str, object]:
+    command = _command_value()
+    body = {
+        "schema_version": "local-image-lora-checkpoint-manifest/1.0",
+        "training_run_id": command["training_run_id"],
+        "training_plan_sha256": command["training_plan_sha256"],
+        "attempt": command["attempt"],
+        "completed_steps": 200,
+        "micro_steps": 800,
+        "files": [
+            {
+                "relative_path": "adapter_model.safetensors",
+                "size_bytes": 65536,
+                "sha256": _sha("4"),
+            },
+            {
+                "relative_path": "optimizer-rng-state.pt",
+                "size_bytes": 131072,
+                "sha256": _sha("5"),
+            },
+        ],
+        "created_at": "2026-09-25T02:20:00Z",
+    }
+    return {**body, "manifest_sha256": content_sha256(body)}
+
+
 def test_training_schema_resources_are_canonical_mirrors() -> None:
     names = (
         "local-image-training-authorization-v1.schema.json",
@@ -360,6 +388,7 @@ def test_training_schema_resources_are_canonical_mirrors() -> None:
         "local-image-training-dataset-manifest-v1.schema.json",
         "local-image-lora-training-plan-v1.schema.json",
         "local-image-lora-adapter-manifest-v1.schema.json",
+        "local-image-lora-checkpoint-manifest-v1.schema.json",
         "local-image-lora-training-receipt-v1.schema.json",
         "local-image-lora-training-command-v1.schema.json",
         "local-image-lora-training-worker-result-v1.schema.json",
@@ -391,6 +420,10 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
             LocalImageLoraAdapterManifest,
         ),
         (
+            "local-image-lora-checkpoint-manifest-v1.schema.json",
+            LocalImageLoraCheckpointManifest,
+        ),
+        (
             "local-image-lora-training-receipt-v1.schema.json",
             LocalImageLoraTrainingReceipt,
         ),
@@ -416,6 +449,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     dataset_value = _dataset_value()
     plan_value = _plan_value()
     adapter_value = _adapter_value()
+    checkpoint_value = _checkpoint_value()
     receipt_value = _receipt_value()
     command_value = _command_value()
     worker_result_value = _worker_result_value()
@@ -425,6 +459,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
         ("training-dataset-manifest", dataset_value),
         ("lora-training-plan", plan_value),
         ("lora-adapter-manifest", adapter_value),
+        ("lora-checkpoint-manifest", checkpoint_value),
         ("lora-training-receipt", receipt_value),
         ("lora-training-command", command_value),
         ("lora-training-worker-result", worker_result_value),
@@ -435,6 +470,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     dataset = LocalImageTrainingDatasetManifest.model_validate(dataset_value)
     plan = LocalImageLoraTrainingPlan.model_validate(plan_value)
     adapter = LocalImageLoraAdapterManifest.model_validate(adapter_value)
+    checkpoint = LocalImageLoraCheckpointManifest.model_validate(checkpoint_value)
     receipt = LocalImageLoraTrainingReceipt.model_validate(receipt_value)
     command = LocalImageLoraTrainingCommand.model_validate(command_value)
     worker_result = LocalImageLoraTrainingWorkerResult.model_validate(worker_result_value)
@@ -443,6 +479,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     validate_lora_training_plan(plan, dataset)
     validate_lora_training_receipt(receipt, plan, adapter)
     validate_lora_training_worker_result(command, worker_result)
+    validate_lora_checkpoint_manifest(checkpoint, command)
 
 
 @pytest.mark.parametrize(
@@ -526,3 +563,14 @@ def test_training_worker_result_rejects_command_drift() -> None:
     changed = result.model_copy(update={"attempt": 2})
     with pytest.raises(ValueError, match="does not bind the exact command"):
         validate_lora_training_worker_result(command, changed)
+
+
+def test_training_checkpoint_rejects_nonboundary_and_attempt_drift() -> None:
+    command = LocalImageLoraTrainingCommand.model_validate(_command_value())
+    checkpoint = LocalImageLoraCheckpointManifest.model_validate(_checkpoint_value())
+    changed = checkpoint.model_copy(update={"completed_steps": 300, "micro_steps": 1200})
+    with pytest.raises(ValueError, match="does not bind the exact resumable command state"):
+        validate_lora_checkpoint_manifest(changed, command)
+    changed = checkpoint.model_copy(update={"attempt": 2})
+    with pytest.raises(ValueError, match="does not bind the exact resumable command state"):
+        validate_lora_checkpoint_manifest(changed, command)

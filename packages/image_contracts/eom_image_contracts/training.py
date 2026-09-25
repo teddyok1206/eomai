@@ -26,6 +26,9 @@ CANDIDATE_INVENTORY_SCHEMA_REF = (
 )
 TRAINING_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-training-plan/1.0"
 ADAPTER_MANIFEST_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-adapter-manifest/1.0"
+CHECKPOINT_MANIFEST_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-lora-checkpoint-manifest/1.0"
+)
 EVALUATION_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"
 
 
@@ -434,6 +437,39 @@ class LocalImageLoraAdapterManifest(FrozenModel):
         return self
 
 
+class LocalImageLoraCheckpointFile(FrozenModel):
+    relative_path: Literal["adapter_model.safetensors", "optimizer-rng-state.pt"]
+    size_bytes: int = Field(ge=1, le=2 * 1024 * 1024 * 1024)
+    sha256: Sha256
+
+
+class LocalImageLoraCheckpointManifest(FrozenModel):
+    schema_version: Literal["local-image-lora-checkpoint-manifest/1.0"]
+    training_run_id: str = Field(pattern=r"^imgtrainrun_[0-9a-f]{32}$")
+    training_plan_sha256: Sha256
+    attempt: int = Field(ge=1, le=10)
+    completed_steps: int = Field(ge=100, le=2000)
+    micro_steps: int = Field(ge=400, le=8000)
+    files: tuple[LocalImageLoraCheckpointFile, ...] = Field(min_length=2, max_length=2)
+    created_at: datetime
+    manifest_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_checkpoint_is_coherent(self) -> LocalImageLoraCheckpointManifest:
+        paths = tuple(item.relative_path for item in self.files)
+        if paths != ("adapter_model.safetensors", "optimizer-rng-state.pt"):
+            raise ValueError("LoRA checkpoint files must be exact and uniquely sorted")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
+        if self.manifest_sha256 != expected:
+            raise ValueError("LoRA checkpoint manifest hash mismatch")
+        return self
+
+
 class LocalImageLoraTrainingRuntime(LocalImageTrainerDependencies):
     cuda_version: str = Field(min_length=1, max_length=128)
     gpu_name: str = Field(min_length=1, max_length=128)
@@ -651,3 +687,22 @@ def validate_lora_training_worker_result(
         or result.adapter_manifest.training_plan != command.training_plan_pointer
     ):
         raise ValueError("LoRA worker adapter manifest drifts from the command")
+
+
+def validate_lora_checkpoint_manifest(
+    checkpoint: LocalImageLoraCheckpointManifest,
+    command: LocalImageLoraTrainingCommand,
+) -> None:
+    """Bind a resumable local checkpoint to one exact run, attempt, and plan."""
+
+    plan = command.training_plan
+    if (
+        checkpoint.training_run_id != command.training_run_id
+        or checkpoint.training_plan_sha256 != command.training_plan_sha256
+        or checkpoint.attempt != command.attempt
+        or checkpoint.completed_steps >= plan.hyperparameters.max_train_steps
+        or checkpoint.completed_steps % plan.hyperparameters.checkpointing_steps != 0
+        or checkpoint.micro_steps
+        != checkpoint.completed_steps * plan.hyperparameters.gradient_accumulation_steps
+    ):
+        raise ValueError("LoRA checkpoint does not bind the exact resumable command state")

@@ -668,6 +668,75 @@ def _adapter_manifest() -> dict[str, Any]:
     return schema
 
 
+def _checkpoint_manifest() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-lora-checkpoint-manifest/1.0",
+        "EOM Local Image LoRA Checkpoint Manifest V1",
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "training_run_id",
+                "training_plan_sha256",
+                "attempt",
+                "completed_steps",
+                "micro_steps",
+                "files",
+                "created_at",
+                "manifest_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-lora-checkpoint-manifest/1.0"},
+                "training_run_id": {
+                    "type": "string",
+                    "pattern": "^imgtrainrun_[0-9a-f]{32}$",
+                },
+                "training_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+                "completed_steps": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 2000,
+                },
+                "micro_steps": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 8000,
+                },
+                "files": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["relative_path", "size_bytes", "sha256"],
+                        "properties": {
+                            "relative_path": {
+                                "type": "string",
+                                "enum": [
+                                    "adapter_model.safetensors",
+                                    "optimizer-rng-state.pt",
+                                ],
+                            },
+                            "size_bytes": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2147483648,
+                            },
+                            "sha256": {"$ref": "#/$defs/sha256"},
+                        },
+                    },
+                },
+                "created_at": DATE_TIME,
+                "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 def _training_receipt() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-lora-training-receipt/1.0",
@@ -893,6 +962,7 @@ SCHEMAS = {
     "local-image-training-candidate-inventory-v1.schema.json": _candidate_inventory(),
     "local-image-lora-training-plan-v1.schema.json": _training_plan(),
     "local-image-lora-adapter-manifest-v1.schema.json": _adapter_manifest(),
+    "local-image-lora-checkpoint-manifest-v1.schema.json": _checkpoint_manifest(),
     "local-image-lora-training-receipt-v1.schema.json": _training_receipt(),
     "local-image-lora-training-command-v1.schema.json": _training_command(),
     "local-image-lora-training-worker-result-v1.schema.json": _training_worker_result(),
