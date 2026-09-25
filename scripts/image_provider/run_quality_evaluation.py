@@ -435,7 +435,9 @@ def _metrics(path: Path, *, require_delivery_canvas: bool = True) -> ImageEvalua
         image = opened.convert("RGB")
     if require_delivery_canvas and image.size != (800, 500):
         raise SystemExit("IMAGE_EVAL_OUTPUT_DIMENSIONS_INVALID")
-    pixels = np.asarray(image, dtype=np.int16)
+    # Weighted RGB luminance reaches 255000 before division; int16 silently wraps it.
+    # int32 keeps the metric exact while remaining negligible for the bounded 800x500 canvas.
+    pixels = np.asarray(image, dtype=np.int32)
     channel_span = pixels.max(axis=2) - pixels.min(axis=2)
     grayscale = channel_span <= 3
     white = pixels.min(axis=2) >= 245
