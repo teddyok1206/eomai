@@ -80,7 +80,7 @@ def test_candidate_rejects_answers_and_decodes_original_filename() -> None:
 def test_candidate_uses_decoded_category_for_issuer_classification() -> None:
     candidate = _candidate_from_link(
         post_url="https://legendstudy.com/1903",
-        post_title="2012학년도 과학탐구",
+        post_title="2012학년도 6월 과학탐구",
         category_urls=(
             "https://legendstudy.com/category/%EA%B3%BC%ED%95%99%ED%83%90%EA%B5%AC%28%ED%8F%89%EA%B0%80%EC%9B%90%29",
         ),
