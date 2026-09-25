@@ -21,6 +21,8 @@ SCHEMA_FILES = {
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
     "training-authorization": "local-image-training-authorization-v1.schema.json",
+    "crop-locator-command": "local-image-crop-locator-command-v1.schema.json",
+    "crop-locator-result": "local-image-crop-locator-result-v1.schema.json",
     "training-crop-proposal-set": ("local-image-training-crop-proposal-set-v1.schema.json"),
     "training-crop-review": "local-image-training-crop-review-v1.schema.json",
     "training-candidate-inventory": ("local-image-training-candidate-inventory-v1.schema.json"),
@@ -48,6 +50,12 @@ SCHEMA_SHA256 = {
     ),
     "training-authorization": (
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
+    ),
+    "crop-locator-command": (
+        "sha256:59319c1bb477d6feb01d3975c36422a5d514d99a41bd23ba71f6a99a77889bd4"
+    ),
+    "crop-locator-result": (
+        "sha256:700940c1289d689c16e14083d2553f0a26aa131e2e5f539a90e77b34f750f320"
     ),
     "training-crop-proposal-set": (
         "sha256:8f328fef17c851c320508a56281e11b06b9c0dae4f7c788a9dd9fda78f9f47e1"

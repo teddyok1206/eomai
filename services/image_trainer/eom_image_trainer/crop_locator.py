@@ -16,9 +16,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
+import numpy as np  # type: ignore[import-not-found]
 from eom_image_contracts import ImageEvaluationBoundingBox
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter  # type: ignore[import-not-found]
 
 MAX_LOCATOR_DIMENSION = 700
 MAX_OCR_TSV_BYTES = 8 * 1024 * 1024

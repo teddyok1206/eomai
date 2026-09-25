@@ -47,6 +47,8 @@ contract, provider, trainer = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/schemas/local-image-crop-locator-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-crop-locator-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-training-eligibility-review-v1.schema.json",
         "eom_image_contracts/schemas/local-image-training-crop-proposal-set-v1.schema.json",
         "eom_image_contracts/schemas/local-image-training-crop-review-v1.schema.json",
@@ -65,6 +67,7 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/checkpoints.py",
         "eom_image_trainer/cli.py",
         "eom_image_trainer/crop_locator.py",
+        "eom_image_trainer/crop_locator_runner.py",
         "eom_image_trainer/dataset_builder.py",
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/proposal_builder.py",

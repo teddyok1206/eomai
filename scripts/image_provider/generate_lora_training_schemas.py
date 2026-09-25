@@ -462,6 +462,269 @@ def _crop_proposal_set() -> dict[str, Any]:
     return schema
 
 
+def _crop_locator_command() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-crop-locator-command/1.0",
+        "EOM Local Image Crop Locator Command V1",
+    )
+    representation_kinds = [
+        "APPARATUS",
+        "COMPOSITE",
+        "CROSS_SECTION",
+        "DIAGRAM",
+        "MAP",
+        "PARTICLE_MODEL",
+        "PHOTOGRAPH",
+    ]
+    visual_features = [
+        "ARROWS",
+        "AXES",
+        "BOUNDARY",
+        "CALLOUT",
+        "DATA_POINTS",
+        "ERROR_BAR",
+        "GRID",
+        "LABELS",
+        "LEADER_LINES",
+        "LEGEND",
+        "MULTIPLE_PANELS",
+        "NUMBERED_STEPS",
+        "PATTERN_FILL",
+        "SCALE",
+        "SYMBOL_KEY",
+        "TRAJECTORY",
+    ]
+    visual_pattern_ids = {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 32,
+        "uniqueItems": True,
+        "items": {"type": "string", "pattern": "^visualpattern_[0-9a-f]{32}$"},
+    }
+    source = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "visual_pattern_ids",
+            "source_page_image",
+            "staged_page_member",
+            "physical_page",
+            "context_bounding_box",
+            "rights_policy",
+            "representation_kind",
+            "rendering_mode",
+            "visual_features",
+        ],
+        "properties": {
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+            "extraction_result": {"$ref": "#/$defs/artifactPointer"},
+            "source_anchor_id": {
+                "type": "string",
+                "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": visual_pattern_ids,
+            "source_page_image": {"$ref": "#/$defs/artifactPointer"},
+            "staged_page_member": {
+                "type": "string",
+                "pattern": "^pages/[0-9a-f]{64}\\.png$",
+            },
+            "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "context_bounding_box": {"anyOf": [{"$ref": "#/$defs/boundingBox"}, {"type": "null"}]},
+            "rights_policy": {"$ref": "#/$defs/rightsPolicy"},
+            "representation_kind": {"enum": representation_kinds},
+            "rendering_mode": {"enum": ["MIXED", "RASTER", "VECTOR_LIKE"]},
+            "visual_features": {
+                "type": "array",
+                "maxItems": 24,
+                "uniqueItems": True,
+                "items": {"enum": visual_features},
+            },
+        },
+    }
+    omission = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "visual_pattern_ids",
+            "reason",
+        ],
+        "properties": {
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+            "extraction_result": {"$ref": "#/$defs/artifactPointer"},
+            "source_anchor_id": {
+                "type": "string",
+                "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "visual_pattern_ids": visual_pattern_ids,
+            "reason": {
+                "enum": [
+                    "ANSWER_EXPLANATION_SOURCE",
+                    "HOLDOUT_SOURCE",
+                    "NO_PAGE_INPUT",
+                    "NO_VISUAL_REGION",
+                    "SOURCE_POINTER_INVALID",
+                    "UNSUPPORTED_REPRESENTATION",
+                ]
+            },
+        },
+    }
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "locator_run_id",
+                "source_snapshot",
+                "training_authorization",
+                "holdout_evaluation_plan",
+                "holdout_sample_ids",
+                "holdout_source_anchor_ids",
+                "selection_query_revision",
+                "locator_revision",
+                "sources",
+                "preliminary_omissions",
+                "created_at",
+                "created_by",
+                "output_member",
+                "command_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-crop-locator-command/1.0"},
+                "locator_run_id": {
+                    "type": "string",
+                    "pattern": "^imgcroplocator_[0-9a-f]{32}$",
+                },
+                "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
+                "training_authorization": {"$ref": "#/$defs/artifactPointer"},
+                "holdout_evaluation_plan": {"$ref": "#/$defs/artifactPointer"},
+                "holdout_sample_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "uniqueItems": True,
+                    "items": {"type": "string", "pattern": "^imgsample_[0-9a-f]{32}$"},
+                },
+                "holdout_source_anchor_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "uniqueItems": True,
+                    "items": {
+                        "type": "string",
+                        "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+                    },
+                },
+                "selection_query_revision": {"const": "local-image-lora-crop-source-query/1.0"},
+                "locator_revision": {"const": "local-image-visual-crop-locator/1.0"},
+                "sources": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4096,
+                    "items": source,
+                },
+                "preliminary_omissions": {
+                    "type": "array",
+                    "maxItems": 4096,
+                    "items": omission,
+                },
+                "created_at": DATE_TIME,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "output_member": {"const": "outputs/crop-locator-result.json"},
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _crop_locator_result() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-crop-locator-result/1.0",
+        "EOM Local Image Crop Locator Result V1",
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "locator_run_id",
+                "command_sha256",
+                "status",
+                "proposal_set",
+                "error_code",
+                "completed_at",
+                "result_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-crop-locator-result/1.0"},
+                "locator_run_id": {
+                    "type": "string",
+                    "pattern": "^imgcroplocator_[0-9a-f]{32}$",
+                },
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+                "status": {"enum": ["SUCCEEDED", "FAILED"]},
+                "proposal_set": {
+                    "anyOf": [
+                        {
+                            "$ref": (
+                                "eom://schemas/image-provider/"
+                                "local-image-training-crop-proposal-set/1.0"
+                            )
+                        },
+                        {"type": "null"},
+                    ]
+                },
+                "error_code": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+                        },
+                        {"type": "null"},
+                    ]
+                },
+                "completed_at": DATE_TIME,
+                "result_sha256": {"$ref": "#/$defs/sha256"},
+            },
+            "allOf": [
+                {
+                    "if": {"properties": {"status": {"const": "SUCCEEDED"}}},
+                    "then": {
+                        "properties": {
+                            "proposal_set": {
+                                "$ref": (
+                                    "eom://schemas/image-provider/"
+                                    "local-image-training-crop-proposal-set/1.0"
+                                )
+                            },
+                            "error_code": {"type": "null"},
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "proposal_set": {"type": "null"},
+                            "error_code": {
+                                "type": "string",
+                                "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+                            },
+                        }
+                    },
+                }
+            ],
+        }
+    )
+    return schema
+
+
 def _crop_review() -> dict[str, Any]:
     schema = _base(
         "eom://schemas/image-provider/local-image-training-crop-review/1.0",
@@ -1609,6 +1872,8 @@ def _training_worker_result() -> dict[str, Any]:
 
 SCHEMAS = {
     "local-image-training-authorization-v1.schema.json": _authorization(),
+    "local-image-crop-locator-command-v1.schema.json": _crop_locator_command(),
+    "local-image-crop-locator-result-v1.schema.json": _crop_locator_result(),
     "local-image-training-crop-proposal-set-v1.schema.json": _crop_proposal_set(),
     "local-image-training-crop-review-v1.schema.json": _crop_review(),
     "local-image-training-dataset-manifest-v1.schema.json": _dataset_manifest(),

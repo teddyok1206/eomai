@@ -94,12 +94,27 @@ Page bytes, crops, contact sheets, and later datasets remain artifact members.  
 source pointers, the Orchestrator stages and publishes, and a deterministic locator reads only its
 staged workspace.  Neither the locator nor a worker reads NAS or writes canonical artifacts.
 
+The staging and locator runtimes are deliberately separate. The Orchestrator-side adapter resolves
+the approved Catalog and NAS pointers and writes an exact
+`local-image-crop-locator-command/1.0` plus hash-named page members into a bounded workspace. The
+isolated image-trainer validates the command with JSON Schema 2020-12 and Pydantic, reads only those
+members, and writes `local-image-crop-locator-result/1.0`. The Orchestrator then validates that the
+result binds the same command, holdout, source population, and page pointers before publishing the
+proposal set and review. This avoids importing PostgreSQL/NAS dependencies into the trainer or
+raster/OCR dependencies into the API runtime. Contact sheets are temporary review materializations;
+if retained beyond review they must be committed by the Orchestrator with a manifest.
+
 The DRAFT and FINAL review revisions share an exact `candidate_population_sha256` derived from the
 source snapshot, holdout, selection/policy revisions, immutable candidate pointers/crops, and typed
 omissions.  Human decisions and captions are deliberately excluded from that population hash but
 remain covered by the final review self-hash.  This prevents a review successor from adding,
 removing, or repointing a candidate while still allowing pending decisions to become eligible or
 excluded.
+
+The crop-review pointer SHA-256 covers the complete canonical proposal-set member bytes, while
+`proposal_set_sha256` is the proposal set's semantic self-hash over the document without that
+self-hash field. They are intentionally distinct and both are verified when the review is resolved;
+one must never be substituted for the other.
 
 Source permissions and intended-use metadata must authorize internal derivative model training.
 Absence or ambiguity is an explicit `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` exclusion; approval as a

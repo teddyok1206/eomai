@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
+    LocalImageCropLocatorCommand,
+    LocalImageCropLocatorResult,
     LocalImageLoraAdapterManifest,
     LocalImageLoraCheckpointManifest,
     LocalImageLoraTrainingCommand,
@@ -28,6 +30,7 @@ from eom_image_contracts import (
     training_crop_proposal_population_sha256,
     training_eligibility_population_sha256,
     validate_contract,
+    validate_crop_locator_result,
     validate_lora_checkpoint_manifest,
     validate_lora_training_plan,
     validate_lora_training_receipt,
@@ -184,6 +187,63 @@ def _crop_proposal_set_value() -> dict[str, object]:
     return {**body, "proposal_set_sha256": content_sha256(body)}
 
 
+def _crop_locator_command_value() -> dict[str, object]:
+    proposal = _crop_proposal()
+    source = {
+        key: proposal[key]
+        for key in (
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "visual_pattern_ids",
+            "source_page_image",
+            "physical_page",
+            "context_bounding_box",
+            "rights_policy",
+            "representation_kind",
+            "rendering_mode",
+            "visual_features",
+        )
+    }
+    source["staged_page_member"] = "pages/" + "5" * 64 + ".png"
+    proposal_set = _crop_proposal_set_value()
+    identity_body = {
+        "schema_version": "local-image-crop-locator-command/1.0",
+        "source_snapshot": proposal_set["source_snapshot"],
+        "training_authorization": proposal_set["training_authorization"],
+        "holdout_evaluation_plan": proposal_set["holdout_evaluation_plan"],
+        "holdout_sample_ids": proposal_set["holdout_sample_ids"],
+        "holdout_source_anchor_ids": proposal_set["holdout_source_anchor_ids"],
+        "selection_query_revision": proposal_set["selection_query_revision"],
+        "locator_revision": proposal_set["locator_revision"],
+        "sources": [source],
+        "preliminary_omissions": [],
+        "created_at": proposal_set["created_at"],
+        "created_by": proposal_set["created_by"],
+        "output_member": "outputs/crop-locator-result.json",
+    }
+    locator_identity = content_sha256(identity_body).removeprefix("sha256:")
+    body = {
+        **identity_body,
+        "locator_run_id": "imgcroplocator_" + locator_identity[:32],
+    }
+    return {**body, "command_sha256": content_sha256(body)}
+
+
+def _crop_locator_result_value() -> dict[str, object]:
+    command = _crop_locator_command_value()
+    body = {
+        "schema_version": "local-image-crop-locator-result/1.0",
+        "locator_run_id": command["locator_run_id"],
+        "command_sha256": command["command_sha256"],
+        "status": "SUCCEEDED",
+        "proposal_set": _crop_proposal_set_value(),
+        "error_code": None,
+        "completed_at": "2026-09-25T02:03:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
 def _crop_review_value() -> dict[str, object]:
     proposal_set = LocalImageTrainingCropProposalSet.model_validate(_crop_proposal_set_value())
     proposal = proposal_set.proposals[0]
@@ -212,7 +272,7 @@ def _crop_review_value() -> dict[str, object]:
         member_path="manifests/crop-proposals.json",
         schema_ref="eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0",
     )
-    pointer["sha256"] = proposal_set.proposal_set_sha256
+    pointer["sha256"] = content_sha256(proposal_set.model_dump(mode="json"))
     body = {
         "schema_version": "local-image-training-crop-review/1.0",
         "crop_review_id": (
@@ -567,6 +627,8 @@ def _checkpoint_value() -> dict[str, object]:
 def test_training_schema_resources_are_canonical_mirrors() -> None:
     names = (
         "local-image-training-authorization-v1.schema.json",
+        "local-image-crop-locator-command-v1.schema.json",
+        "local-image-crop-locator-result-v1.schema.json",
         "local-image-training-candidate-inventory-v1.schema.json",
         "local-image-training-crop-proposal-set-v1.schema.json",
         "local-image-training-crop-review-v1.schema.json",
@@ -591,6 +653,14 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
         (
             "local-image-training-authorization-v1.schema.json",
             LocalImageTrainingAuthorization,
+        ),
+        (
+            "local-image-crop-locator-command-v1.schema.json",
+            LocalImageCropLocatorCommand,
+        ),
+        (
+            "local-image-crop-locator-result-v1.schema.json",
+            LocalImageCropLocatorResult,
         ),
         (
             "local-image-training-candidate-inventory-v1.schema.json",
@@ -643,6 +713,8 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
 
 def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     authorization_value = _authorization_value()
+    crop_locator_command_value = _crop_locator_command_value()
+    crop_locator_result_value = _crop_locator_result_value()
     crop_proposal_set_value = _crop_proposal_set_value()
     crop_review_value = _crop_review_value()
     inventory_value = _inventory_value()
@@ -656,6 +728,8 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     worker_result_value = _worker_result_value()
     for name, value in (
         ("training-authorization", authorization_value),
+        ("crop-locator-command", crop_locator_command_value),
+        ("crop-locator-result", crop_locator_result_value),
         ("training-crop-proposal-set", crop_proposal_set_value),
         ("training-crop-review", crop_review_value),
         ("training-candidate-inventory", inventory_value),
@@ -670,6 +744,8 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     ):
         validate_contract(name, value)
     authorization = LocalImageTrainingAuthorization.model_validate(authorization_value)
+    crop_locator_command = LocalImageCropLocatorCommand.model_validate(crop_locator_command_value)
+    crop_locator_result = LocalImageCropLocatorResult.model_validate(crop_locator_result_value)
     crop_proposal_set = LocalImageTrainingCropProposalSet.model_validate(crop_proposal_set_value)
     crop_review = LocalImageTrainingCropReview.model_validate(crop_review_value)
     inventory = LocalImageTrainingCandidateInventory.model_validate(inventory_value)
@@ -684,6 +760,7 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     command = LocalImageLoraTrainingCommand.model_validate(command_value)
     worker_result = LocalImageLoraTrainingWorkerResult.model_validate(worker_result_value)
     validate_training_dataset_authorization(dataset, authorization)
+    validate_crop_locator_result(crop_locator_command, crop_locator_result)
     validate_training_crop_review(crop_proposal_set, crop_review)
     validate_training_dataset_inventory(dataset, inventory)
     validate_training_inventory_review(inventory, eligibility_review)
@@ -870,3 +947,29 @@ def test_crop_review_rejects_proposal_population_drift() -> None:
     changed_review = review.model_copy(update={"entries": (changed_entry,)})
     with pytest.raises(ValueError, match="exact proposal population"):
         validate_training_crop_review(proposal_set, changed_review)
+
+
+def test_crop_review_rejects_proposal_member_byte_hash_drift() -> None:
+    proposal_set = LocalImageTrainingCropProposalSet.model_validate(_crop_proposal_set_value())
+    review = LocalImageTrainingCropReview.model_validate(_crop_review_value())
+    changed_pointer = review.proposal_set.model_copy(update={"sha256": _sha("f")})
+    changed_review = review.model_copy(update={"proposal_set": changed_pointer})
+    with pytest.raises(ValueError, match="exact proposal set"):
+        validate_training_crop_review(proposal_set, changed_review)
+
+
+def test_crop_locator_command_rejects_staged_page_hash_drift() -> None:
+    value = _crop_locator_command_value()
+    source = copy.deepcopy(value["sources"][0])
+    source["staged_page_member"] = "pages/" + "6" * 64 + ".png"
+    value["sources"] = [source]
+    with pytest.raises(ValidationError, match="staged page does not bind"):
+        LocalImageCropLocatorCommand.model_validate(value)
+
+
+def test_crop_locator_result_rejects_command_drift() -> None:
+    command = LocalImageCropLocatorCommand.model_validate(_crop_locator_command_value())
+    result = LocalImageCropLocatorResult.model_validate(_crop_locator_result_value())
+    changed = result.model_copy(update={"command_sha256": _sha("f")})
+    with pytest.raises(ValueError, match="does not bind"):
+        validate_crop_locator_result(command, changed)

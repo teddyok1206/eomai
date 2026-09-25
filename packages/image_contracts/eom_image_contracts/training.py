@@ -36,6 +36,10 @@ ELIGIBILITY_REVIEW_SCHEMA_REF = (
 CROP_PROPOSAL_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0"
 )
+CROP_LOCATOR_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-crop-locator-command/1.0"
+)
+CROP_LOCATOR_RESULT_SCHEMA_REF = "eom://schemas/image-provider/local-image-crop-locator-result/1.0"
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -232,6 +236,111 @@ class LocalImageTrainingCropProposalOmission(FrozenModel):
         return self
 
 
+class LocalImageCropLocatorSource(FrozenModel):
+    """One exact page materialization that the isolated locator may inspect."""
+
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    visual_pattern_ids: tuple[str, ...] = Field(min_length=1, max_length=32)
+    source_page_image: ImageEvaluationArtifactMember
+    staged_page_member: str = Field(pattern=r"^pages/[0-9a-f]{64}\.png$")
+    physical_page: int = Field(ge=1, le=100_000)
+    context_bounding_box: ImageEvaluationBoundingBox | None
+    rights_policy: ImageTrainingRightsPolicy
+    representation_kind: ImageTrainingCropRepresentationKind
+    rendering_mode: Literal["MIXED", "RASTER", "VECTOR_LIKE"]
+    visual_features: tuple[ImageTrainingCropVisualFeature, ...] = Field(max_length=24)
+
+    @model_validator(mode="after")
+    def staged_source_is_coherent(self) -> LocalImageCropLocatorSource:
+        if self.source_page_image.media_type != "image/png":
+            raise ValueError("crop locator source page must be PNG")
+        expected_member = "pages/" + self.source_page_image.sha256.removeprefix("sha256:") + ".png"
+        if self.staged_page_member != expected_member:
+            raise ValueError("crop locator staged page does not bind the source hash")
+        if self.visual_pattern_ids != tuple(sorted(set(self.visual_pattern_ids))) or any(
+            re.fullmatch(r"visualpattern_[0-9a-f]{32}", value) is None
+            for value in self.visual_pattern_ids
+        ):
+            raise ValueError("crop locator visual pattern IDs must be valid and sorted")
+        if self.visual_features != tuple(sorted(set(self.visual_features))):
+            raise ValueError("crop locator visual features must be sorted and unique")
+        return self
+
+
+class LocalImageCropLocatorCommand(FrozenModel):
+    """Bounded, pointer-bound command for the isolated deterministic crop locator."""
+
+    schema_version: Literal["local-image-crop-locator-command/1.0"]
+    locator_run_id: str = Field(pattern=r"^imgcroplocator_[0-9a-f]{32}$")
+    source_snapshot: ImageEvaluationSourceSnapshot
+    training_authorization: ImageEvaluationArtifactMember
+    holdout_evaluation_plan: ImageEvaluationArtifactMember
+    holdout_sample_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    holdout_source_anchor_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    selection_query_revision: Literal["local-image-lora-crop-source-query/1.0"]
+    locator_revision: Literal["local-image-visual-crop-locator/1.0"]
+    sources: tuple[LocalImageCropLocatorSource, ...] = Field(min_length=1, max_length=4096)
+    preliminary_omissions: tuple[LocalImageTrainingCropProposalOmission, ...] = Field(
+        max_length=4096
+    )
+    created_at: datetime
+    created_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    output_member: Literal["outputs/crop-locator-result.json"]
+    command_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_command_is_coherent(self) -> LocalImageCropLocatorCommand:
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=AUTHORIZATION_SCHEMA_REF,
+            member_path="manifests/training-authorization.json",
+        )
+        _require_pointer(
+            self.holdout_evaluation_plan,
+            schema_ref=EVALUATION_PLAN_SCHEMA_REF,
+            member_path="manifests/evaluation-plan.json",
+        )
+        for values, label in (
+            (self.holdout_sample_ids, "crop locator holdout samples"),
+            (self.holdout_source_anchor_ids, "crop locator holdout anchors"),
+        ):
+            if values != tuple(sorted(set(values))):
+                raise ValueError(f"{label} must be sorted and unique")
+        source_anchors = tuple(value.source_anchor_id for value in self.sources)
+        if source_anchors != tuple(sorted(set(source_anchors))):
+            raise ValueError("crop locator sources must be sorted by unique source anchor")
+        if set(source_anchors) & set(self.holdout_source_anchor_ids):
+            raise ValueError("crop locator sources contain a holdout source anchor")
+        omission_keys = tuple(
+            (value.item_revision_id, value.source_anchor_id, value.reason)
+            for value in self.preliminary_omissions
+        )
+        if omission_keys != tuple(sorted(set(omission_keys))):
+            raise ValueError("crop locator omissions must be sorted and unique")
+        if set(source_anchors) & {value.source_anchor_id for value in self.preliminary_omissions}:
+            raise ValueError("crop locator sources and omissions must be disjoint")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"locator_run_id", "command_sha256"})
+        ).removeprefix("sha256:")
+        if self.locator_run_id != "imgcroplocator_" + identity[:32]:
+            raise ValueError("crop locator run ID does not bind the command inputs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("crop locator command hash mismatch")
+        return self
+
+
 def training_crop_proposal_population_sha256(
     *,
     source_snapshot: ImageEvaluationSourceSnapshot,
@@ -379,6 +488,97 @@ class LocalImageTrainingCropProposalSet(FrozenModel):
         return self
 
 
+class LocalImageCropLocatorResult(FrozenModel):
+    """Typed local result; canonical publication remains an Orchestrator responsibility."""
+
+    schema_version: Literal["local-image-crop-locator-result/1.0"]
+    locator_run_id: str = Field(pattern=r"^imgcroplocator_[0-9a-f]{32}$")
+    command_sha256: Sha256
+    status: Literal["SUCCEEDED", "FAILED"]
+    proposal_set: LocalImageTrainingCropProposalSet | None
+    error_code: str | None = Field(pattern=r"^IMAGE_TRAINING_[A-Z0-9_]{3,96}$")
+    completed_at: datetime
+    result_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_result_is_coherent(self) -> LocalImageCropLocatorResult:
+        if self.status == "SUCCEEDED":
+            if self.proposal_set is None or self.error_code is not None:
+                raise ValueError("successful crop locator result requires only a proposal set")
+        elif self.proposal_set is not None or self.error_code is None:
+            raise ValueError("failed crop locator result requires only an error code")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("crop locator result hash mismatch")
+        return self
+
+
+def validate_crop_locator_result(
+    command: LocalImageCropLocatorCommand,
+    result: LocalImageCropLocatorResult,
+) -> None:
+    if (
+        result.locator_run_id != command.locator_run_id
+        or result.command_sha256 != command.command_sha256
+        or result.completed_at < command.created_at
+    ):
+        raise ValueError("crop locator result does not bind the command")
+    if result.status != "SUCCEEDED" or result.proposal_set is None:
+        return
+    proposal_set = result.proposal_set
+    if (
+        proposal_set.source_snapshot != command.source_snapshot
+        or proposal_set.training_authorization != command.training_authorization
+        or proposal_set.holdout_evaluation_plan != command.holdout_evaluation_plan
+        or proposal_set.holdout_sample_ids != command.holdout_sample_ids
+        or proposal_set.holdout_source_anchor_ids != command.holdout_source_anchor_ids
+        or proposal_set.selection_query_revision != command.selection_query_revision
+        or proposal_set.locator_revision != command.locator_revision
+        or proposal_set.created_at != command.created_at
+        or proposal_set.created_by != command.created_by
+    ):
+        raise ValueError("crop locator proposal set does not bind the command")
+    output_sources = {
+        (
+            value.item_revision_id,
+            value.source_anchor_id,
+            value.extraction_result,
+            value.source_page_image,
+        )
+        for value in proposal_set.proposals
+    }
+    expected_sources = {
+        (
+            value.item_revision_id,
+            value.source_anchor_id,
+            value.extraction_result,
+            value.source_page_image,
+        )
+        for value in command.sources
+    }
+    output_omissions = {
+        content_sha256(value.model_dump(mode="json")) for value in proposal_set.omissions
+    }
+    preliminary = {
+        content_sha256(value.model_dump(mode="json")) for value in command.preliminary_omissions
+    }
+    if not output_sources <= expected_sources or not preliminary <= output_omissions:
+        raise ValueError("crop locator output contains an unbound source")
+    output_anchor_ids = {value[1] for value in output_sources} | {
+        value.source_anchor_id for value in proposal_set.omissions
+    }
+    expected_anchor_ids = {value.source_anchor_id for value in command.sources} | {
+        value.source_anchor_id for value in command.preliminary_omissions
+    }
+    if output_anchor_ids != expected_anchor_ids:
+        raise ValueError("crop locator output does not cover the command population")
+
+
 class LocalImageTrainingCropReviewEntry(FrozenModel):
     source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
     proposal_ids: tuple[str, ...] = Field(min_length=1, max_length=8)
@@ -477,8 +677,6 @@ class LocalImageTrainingCropReview(FrozenModel):
             schema_ref=CROP_PROPOSAL_SET_SCHEMA_REF,
             member_path="manifests/crop-proposals.json",
         )
-        if self.proposal_set.sha256 != self.proposal_set_sha256:
-            raise ValueError("crop review proposal-set pointer hash mismatch")
         anchors = tuple(value.source_anchor_id for value in self.entries)
         if anchors != tuple(sorted(set(anchors))):
             raise ValueError("crop review entries must be sorted by unique source anchor")
@@ -505,6 +703,7 @@ def validate_training_crop_review(
         review.source_snapshot != proposal_set.source_snapshot
         or review.proposal_population_sha256 != proposal_set.proposal_population_sha256
         or review.proposal_set_sha256 != proposal_set.proposal_set_sha256
+        or review.proposal_set.sha256 != content_sha256(proposal_set.model_dump(mode="json"))
     ):
         raise ValueError("crop review does not bind the exact proposal set")
     grouped: dict[str, list[str]] = {}

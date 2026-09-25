@@ -11,6 +11,11 @@ from pathlib import Path
 
 from eom_image_provider.provider import verify_model_revision
 
+from eom_image_trainer.crop_locator_runner import (
+    CropLocatorRunnerError,
+    load_crop_locator_command,
+    run_crop_locator_command,
+)
 from eom_image_trainer.diffusers_backend import Ssd1bLoraBackend
 from eom_image_trainer.runner import (
     TrainingRunnerError,
@@ -21,12 +26,15 @@ from eom_image_trainer.runner import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    subcommands = parser.add_subparsers(dest="command", required=True)
+    subcommands = parser.add_subparsers(dest="operation", required=True)
     train = subcommands.add_parser("train")
     train.add_argument("--command", required=True, type=Path)
     train.add_argument("--model-store-root", required=True, type=Path)
     train.add_argument("--workspace", required=True, type=Path)
     train.add_argument("--gpu-lock", required=True, type=Path)
+    locate = subcommands.add_parser("locate-crops")
+    locate.add_argument("--command", required=True, type=Path)
+    locate.add_argument("--workspace", required=True, type=Path)
     return parser
 
 
@@ -78,8 +86,22 @@ def _lock_gpu(path: Path) -> int:
 
 def main() -> None:
     args = _parser().parse_args()
-    command = load_training_command(args.command)
-    if args.workspace.name != command.training_run_id:
+    if args.operation == "locate-crops":
+        try:
+            locator_command = load_crop_locator_command(args.command)
+            if args.workspace.name != locator_command.locator_run_id:
+                raise CropLocatorRunnerError("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
+            locator_result = run_crop_locator_command(
+                workspace=args.workspace,
+                command=locator_command,
+            )
+        except CropLocatorRunnerError as exc:
+            raise SystemExit(exc.code) from exc
+        if locator_result.status != "SUCCEEDED":
+            raise SystemExit(locator_result.error_code or "IMAGE_TRAINING_CROP_LOCATOR_FAILED")
+        return
+    training_command = load_training_command(args.command)
+    if args.workspace.name != training_command.training_run_id:
         raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
     lock_descriptor = _lock_gpu(args.gpu_lock)
     previous_sigterm = signal.getsignal(signal.SIGTERM)
@@ -89,10 +111,10 @@ def main() -> None:
 
     signal.signal(signal.SIGTERM, _cancel)
     try:
-        result = run_training_command(
+        training_result = run_training_command(
             workspace=args.workspace,
             model_store_root=args.model_store_root,
-            command=command,
+            command=training_command,
             backend=Ssd1bLoraBackend(),
             model_resolver=verify_model_revision,
         )
@@ -101,8 +123,8 @@ def main() -> None:
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
         os.close(lock_descriptor)
-    if result.status != "SUCCEEDED":
-        raise SystemExit(result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
+    if training_result.status != "SUCCEEDED":
+        raise SystemExit(training_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
 
 
 if __name__ == "__main__":
