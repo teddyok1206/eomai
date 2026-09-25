@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
 from eom_catalog_contracts import (
     ScienceAssessmentCorpusAcquisitionFailure,
@@ -419,9 +419,9 @@ def _aggregate_acquired(
             bytes=first.bytes,
             page_count=first.page_count,
             original_filename=min(value.candidate.original_filename for value in observations),
-            subject_family=cast(SubjectFamily, first.candidate.subject_family),
+            subject_family=first.candidate.subject_family,
             subject_label=min(value.candidate.subject_label for value in observations),
-            issuer_type=cast(IssuerType, first.candidate.issuer_type),
+            issuer_type=first.candidate.issuer_type,
             administration_year=first.candidate.administration_year,
             grade=first.candidate.grade,
             session_label=first.candidate.session_label,

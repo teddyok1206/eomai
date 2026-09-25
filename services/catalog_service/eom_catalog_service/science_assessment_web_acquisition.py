@@ -21,6 +21,7 @@ from urllib.request import HTTPRedirectHandler, OpenerDirector, Request, build_o
 from urllib.robotparser import RobotFileParser
 
 from eom_catalog_contracts import ScienceAssessmentWebCorpusPlan
+from eom_catalog_contracts.science_assessment_corpus import IssuerType, SubjectFamily
 from eom_identifiers import sha256_file
 
 USER_AGENT = "EOMResearchDatasetBot/1.0 (+internal-assessment-research; rate-limited)"
@@ -65,9 +66,9 @@ class ScienceAssessmentPdfCandidate:
     download_url: str
     link_text: str
     original_filename: str
-    subject_family: str
+    subject_family: SubjectFamily
     subject_label: str
-    issuer_type: str
+    issuer_type: IssuerType
     administration_year: int
     grade: int
     session_label: str
@@ -429,7 +430,9 @@ def _candidate_from_link(
     context = unicodedata.normalize(
         "NFC", unquote(" ".join((post_title, *category_urls, link_text)))
     )
-    issuer = "KICE" if re.search(r"(?:평가원|모의평가|수능)", context) else "EDUCATION_AUTHORITY"
+    issuer: IssuerType = (
+        "KICE" if re.search(r"(?:평가원|모의평가|수능)", context) else "EDUCATION_AUTHORITY"
+    )
     grade = 3 if issuer == "KICE" else _grade(context)
     year = _administration_year(context, issuer)
     session = _session_label(context, issuer)
@@ -451,11 +454,11 @@ def _candidate_from_link(
     )
 
 
-def _subject(value: str) -> tuple[str, str] | None:
+def _subject(value: str) -> tuple[SubjectFamily, str] | None:
     for family, pattern in _SUBJECT_PATTERNS:
         match = pattern.search(value)
         if match is not None:
-            return family, " ".join(match.group(0).split())[:128]
+            return cast(SubjectFamily, family), " ".join(match.group(0).split())[:128]
     return None
 
 

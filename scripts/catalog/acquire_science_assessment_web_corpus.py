@@ -11,6 +11,11 @@ from pathlib import Path
 
 from eom_catalog_contracts import ScienceAssessmentWebCorpusPlan, validate_contract
 from eom_catalog_service.science_assessment_web_acquisition import ScienceAssessmentWebAcquirer
+from eom_catalog_service.science_assessment_web_acquisition_checkpoint import (
+    build_science_assessment_acquisition,
+    load_science_assessment_acquisition,
+    write_science_assessment_acquisition,
+)
 from eom_catalog_service.science_assessment_web_corpus_service import (
     ScienceAssessmentWebCorpusService,
 )
@@ -25,7 +30,12 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--received-by", required=True)
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--discover-only", action="store_true")
-    return parser.parse_args()
+    parser.add_argument("--acquire-only", action="store_true")
+    parser.add_argument("--publish-only", action="store_true")
+    arguments = parser.parse_args()
+    if sum((arguments.discover_only, arguments.acquire_only, arguments.publish_only)) > 1:
+        parser.error("choose at most one execution phase")
+    return arguments
 
 
 def _load_plan(path: Path) -> ScienceAssessmentWebCorpusPlan:
@@ -75,23 +85,48 @@ def _write_receipt(path: Path, value: dict[str, object]) -> None:
 
 def main() -> None:
     args = _arguments()
-    _require_workspace(args.workspace)
     plan = _load_plan(args.plan)
-    acquirer = ScienceAssessmentWebAcquirer(plan)
-    discovery = acquirer.discover()
-    if args.discover_only:
-        _write_receipt(
-            args.receipt,
-            {
-                "status": "DISCOVERED",
-                "plan_id": plan.plan_id,
-                "post_count": discovery.post_count,
-                "candidate_count": len(discovery.candidates),
-                "rejected_link_count": discovery.rejected_link_count,
-            },
+    if args.publish_only:
+        discovery, acquired, failures = load_science_assessment_acquisition(
+            plan=plan,
+            workspace=args.workspace,
         )
-        return
-    acquired, failures = acquirer.acquire(discovery, args.workspace)
+    else:
+        _require_workspace(args.workspace)
+        acquirer = ScienceAssessmentWebAcquirer(plan)
+        discovery = acquirer.discover()
+        if args.discover_only:
+            _write_receipt(
+                args.receipt,
+                {
+                    "status": "DISCOVERED",
+                    "plan_id": plan.plan_id,
+                    "post_count": discovery.post_count,
+                    "candidate_count": len(discovery.candidates),
+                    "rejected_link_count": discovery.rejected_link_count,
+                },
+            )
+            return
+        acquired, failures = acquirer.acquire(discovery, args.workspace)
+        acquisition = build_science_assessment_acquisition(
+            plan=plan,
+            discovery=discovery,
+            acquired=acquired,
+            failures=failures,
+        )
+        acquisition_path = write_science_assessment_acquisition(args.workspace, acquisition)
+        if args.acquire_only:
+            _write_receipt(
+                args.receipt,
+                {
+                    "status": "ACQUIRED",
+                    "plan_id": plan.plan_id,
+                    "acquisition_sha256": acquisition.acquisition_sha256,
+                    "acquisition_manifest": acquisition_path.name,
+                    "summary": acquisition.summary.model_dump(mode="json"),
+                },
+            )
+            return
     engine = build_engine()
     try:
         publication = ScienceAssessmentWebCorpusService(engine).publish(
