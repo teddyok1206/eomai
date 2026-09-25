@@ -285,10 +285,13 @@ class ScienceVisualPilotSource(FrozenModel):
             schema_ref=CORPUS_SOURCE_SCHEMA_REF,
             media_type="application/pdf",
         )
+        validate_source_member_path(self.pdf.member_path)
         digest = self.pdf.sha256.removeprefix("sha256:")
+        member_path = PurePosixPath(self.pdf.member_path)
         if (
             self.document_id != "sciencedoc_" + digest[:32]
-            or self.pdf.member_path != f"source/{digest}.pdf"
+            or member_path.parts[0] != "source"
+            or member_path.suffix.lower() != ".pdf"
         ):
             raise ValueError("science visual source does not bind its PDF bytes")
         expected_group = content_sha256(

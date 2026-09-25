@@ -137,6 +137,28 @@ def _source(index: int, partition: str) -> dict[str, object]:
     }
 
 
+def test_source_accepts_canonical_ingest_member_name_without_inventing_hash_path() -> None:
+    value = _source(0, "TRAIN")
+    pointer = dict(value["pdf"])
+    pointer["member_path"] = "source/original-upload-name.pdf"
+    value["pdf"] = pointer
+
+    plan = _plan_value()
+    selected_sources = [
+        value if source["document_id"] == value["document_id"] else source
+        for source in plan["selected_sources"]
+    ]
+    selected_sources.sort(key=lambda source: source["document_id"])
+    plan["selected_sources"] = selected_sources
+    plan.pop("pilot_id")
+    plan.pop("plan_sha256")
+    identity = content_sha256(plan).removeprefix("sha256:")
+    plan["pilot_id"] = "imgscivispilot_" + identity[:32]
+    plan["plan_sha256"] = content_sha256(plan)
+
+    LocalImageScienceCorpusVisualPilotPlan.model_validate(plan)
+
+
 def _plan_value() -> dict[str, object]:
     authorization = _authorization_value()
     sources = [
