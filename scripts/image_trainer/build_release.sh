@@ -64,7 +64,9 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-lora-micro-evaluation-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-micro-evaluation-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-command-v2.schema.json",
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-plan-v2.schema.json",
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-result-v1.schema.json",
     }
     if not required.issubset(names):

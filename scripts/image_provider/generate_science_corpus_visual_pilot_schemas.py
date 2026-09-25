@@ -363,6 +363,64 @@ def _pilot_plan() -> dict[str, Any]:
     return schema
 
 
+def _pilot_plan_v2() -> dict[str, Any]:
+    schema = _pilot_plan()
+    schema["title"] = "EOM Science Corpus Visual Pilot Plan V1.1"
+    schema["$id"] = "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+    schema["$defs"]["locatorPolicy"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "max_candidates_per_page",
+            "max_candidates_per_source",
+            "maximum_redaction_area_milli",
+            "minimum_interior_ink_milli",
+            "maximum_border_ink_fraction_milli",
+            "minimum_aspect_ratio_milli",
+            "maximum_aspect_ratio_milli",
+        ],
+        "properties": {
+            "max_candidates_per_page": {"type": "integer", "minimum": 1, "maximum": 8},
+            "max_candidates_per_source": {"type": "integer", "minimum": 2, "maximum": 32},
+            "maximum_redaction_area_milli": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 800,
+            },
+            "minimum_interior_ink_milli": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 250,
+            },
+            "maximum_border_ink_fraction_milli": {
+                "type": "integer",
+                "minimum": 250,
+                "maximum": 1000,
+            },
+            "minimum_aspect_ratio_milli": {
+                "type": "integer",
+                "minimum": 50,
+                "maximum": 1000,
+            },
+            "maximum_aspect_ratio_milli": {
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 20000,
+            },
+        },
+    }
+    required = schema["required"]
+    assert isinstance(required, list)
+    locator_index = required.index("locator_revision")
+    required.insert(locator_index + 1, "locator_policy")
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {"const": "local-image-science-corpus-visual-pilot-plan/1.1"}
+    properties["locator_revision"] = {"const": "science-corpus-visual-locator/1.1"}
+    properties["locator_policy"] = {"$ref": "#/$defs/locatorPolicy"}
+    return schema
+
+
 def _bounding_box() -> dict[str, Any]:
     return {
         "type": "object",
@@ -455,6 +513,18 @@ def _pilot_command() -> dict[str, Any]:
             },
         }
     )
+    return schema
+
+
+def _pilot_command_v2() -> dict[str, Any]:
+    schema = _pilot_command()
+    schema["title"] = "EOM Science Corpus Visual Pilot Worker Command V1.1"
+    schema["$id"] = (
+        "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.1"
+    )
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-corpus-visual-pilot-command/1.1"
+    }
     return schema
 
 
@@ -891,7 +961,9 @@ def _pattern_inventory_v2() -> dict[str, Any]:
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
+    "local-image-science-corpus-visual-pilot-plan-v2.schema.json": _pilot_plan_v2(),
     "local-image-science-corpus-visual-pilot-command-v1.schema.json": _pilot_command(),
+    "local-image-science-corpus-visual-pilot-command-v2.schema.json": _pilot_command_v2(),
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
