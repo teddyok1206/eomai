@@ -720,6 +720,7 @@ def _eligibility_review() -> dict[str, Any]:
                 "eligibility_policy_revision",
                 "entries",
                 "projection_omissions",
+                "candidate_population_sha256",
                 "eligible_candidate_set_sha256",
                 "reviewed_at",
                 "reviewed_by",
@@ -765,6 +766,7 @@ def _eligibility_review() -> dict[str, Any]:
                     "maxItems": 4096,
                     "items": omission,
                 },
+                "candidate_population_sha256": {"$ref": "#/$defs/sha256"},
                 "eligible_candidate_set_sha256": {"$ref": "#/$defs/sha256"},
                 "reviewed_at": DATE_TIME,
                 "reviewed_by": {

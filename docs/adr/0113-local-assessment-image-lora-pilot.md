@@ -82,6 +82,13 @@ after a human-approved crop/mask or redaction contract preserves exact source pr
 all scientific geometry, labels, and values deterministic.  That successor is a separate protocol
 decision; it does not weaken `local-image-lora-eligibility/1.0` or reinterpret this projection.
 
+The DRAFT and FINAL review revisions share an exact `candidate_population_sha256` derived from the
+source snapshot, holdout, selection/policy revisions, immutable candidate pointers/crops, and typed
+omissions.  Human decisions and captions are deliberately excluded from that population hash but
+remain covered by the final review self-hash.  This prevents a review successor from adding,
+removing, or repointing a candidate while still allowing pending decisions to become eligible or
+excluded.
+
 Source permissions and intended-use metadata must authorize internal derivative model training.
 Absence or ambiguity is an explicit `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` exclusion; approval as a
 RAG source alone is not silently treated as training authorization.

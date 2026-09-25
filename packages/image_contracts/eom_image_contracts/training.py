@@ -282,6 +282,42 @@ class LocalImageTrainingProjectionOmission(FrozenModel):
         return self
 
 
+def training_eligibility_population_sha256(
+    *,
+    source_snapshot: ImageEvaluationSourceSnapshot,
+    holdout_evaluation_plan: ImageEvaluationArtifactMember,
+    holdout_sample_ids: tuple[str, ...],
+    holdout_source_anchor_ids: tuple[str, ...],
+    selection_query_revision: str,
+    eligibility_policy_revision: str,
+    entries: tuple[LocalImageTrainingEligibilityEntry, ...],
+    projection_omissions: tuple[LocalImageTrainingProjectionOmission, ...],
+) -> Sha256:
+    """Hash the immutable review population without mutable human decisions."""
+
+    population_entries = tuple(
+        entry.model_dump(
+            mode="json",
+            exclude={"decision", "exclusion_reasons", "caption_en", "caption_sha256"},
+        )
+        for entry in entries
+    )
+    return content_sha256(
+        {
+            "source_snapshot": source_snapshot.model_dump(mode="json"),
+            "holdout_evaluation_plan": holdout_evaluation_plan.model_dump(mode="json"),
+            "holdout_sample_ids": holdout_sample_ids,
+            "holdout_source_anchor_ids": holdout_source_anchor_ids,
+            "selection_query_revision": selection_query_revision,
+            "eligibility_policy_revision": eligibility_policy_revision,
+            "entries": population_entries,
+            "projection_omissions": tuple(
+                omission.model_dump(mode="json") for omission in projection_omissions
+            ),
+        }
+    )
+
+
 class LocalImageTrainingEligibilityReview(FrozenModel):
     schema_version: Literal["local-image-training-eligibility-review/1.0"]
     review_id: str = Field(pattern=r"^imgtrainreview_[0-9a-f]{32}$")
@@ -297,6 +333,7 @@ class LocalImageTrainingEligibilityReview(FrozenModel):
         max_length=4096,
     )
     projection_omissions: tuple[LocalImageTrainingProjectionOmission, ...] = Field(max_length=4096)
+    candidate_population_sha256: Sha256
     eligible_candidate_set_sha256: Sha256
     reviewed_at: datetime
     reviewed_by: str = Field(
@@ -342,6 +379,20 @@ class LocalImageTrainingEligibilityReview(FrozenModel):
             raise ValueError("projection omissions must be uniquely sorted")
         if set(anchors) & {omission.source_anchor_id for omission in self.projection_omissions}:
             raise ValueError("reviewed and omitted source anchors must be disjoint")
+        population_sha256 = training_eligibility_population_sha256(
+            source_snapshot=self.source_snapshot,
+            holdout_evaluation_plan=self.holdout_evaluation_plan,
+            holdout_sample_ids=self.holdout_sample_ids,
+            holdout_source_anchor_ids=self.holdout_source_anchor_ids,
+            selection_query_revision=self.selection_query_revision,
+            eligibility_policy_revision=self.eligibility_policy_revision,
+            entries=self.entries,
+            projection_omissions=self.projection_omissions,
+        )
+        if self.candidate_population_sha256 != population_sha256:
+            raise ValueError("training candidate-population hash mismatch")
+        if self.review_id != "imgtrainreview_" + population_sha256.removeprefix("sha256:")[:32]:
+            raise ValueError("training review ID does not bind its candidate population")
         if self.review_state == "FINAL" and any(
             entry.decision == "PENDING" for entry in self.entries
         ):

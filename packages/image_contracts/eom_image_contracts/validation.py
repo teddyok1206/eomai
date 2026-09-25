@@ -51,7 +51,7 @@ SCHEMA_SHA256 = {
         "sha256:ecb43e5ed58af59b40056a2afa0f541b12caffb71dee733aaa2681aef694c81c"
     ),
     "training-eligibility-review": (
-        "sha256:f7d3e559cb537057db36dcea3a97f199617b2b0c4a9725689b27212ff4384d0d"
+        "sha256:28568f2e83c23e9d4d94cb8c9e967a193082dbbc35c332148b1e9ccf3bcbd4b9"
     ),
     "training-candidate-inventory": (
         "sha256:c9908e54437663d1044822c61ff1c7ada6e1de09be8f08b72d2932b1849a9ee2"

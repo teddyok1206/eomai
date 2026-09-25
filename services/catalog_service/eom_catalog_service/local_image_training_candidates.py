@@ -22,8 +22,12 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     ImageEvaluationSourceSnapshot,
     ImageTrainingRightsPolicy,
+    LocalImageTrainingCandidateInventory,
+    LocalImageTrainingEligibilityEntry,
     LocalImageTrainingEligibilityReview,
+    LocalImageTrainingProjectionOmission,
     content_sha256,
+    training_eligibility_population_sha256,
     validate_contract,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -207,14 +211,23 @@ def project_training_eligibility_draft(
         )
         if not entries and not omissions:
             raise TrainingCandidateProjectionError("IMAGE_TRAINING_CANDIDATE_SET_EMPTY")
-        identity = content_sha256(
-            {
-                "source_snapshot": source_snapshot.model_dump(mode="json"),
-                "holdout_evaluation_plan": holdout_evaluation_plan.model_dump(mode="json"),
-                "entries": entries,
-                "projection_omissions": omissions,
-            }
-        ).removeprefix("sha256:")
+        typed_entries = tuple(
+            LocalImageTrainingEligibilityEntry.model_validate(entry) for entry in entries
+        )
+        typed_omissions = tuple(
+            LocalImageTrainingProjectionOmission.model_validate(omission) for omission in omissions
+        )
+        population_sha256 = training_eligibility_population_sha256(
+            source_snapshot=source_snapshot,
+            holdout_evaluation_plan=holdout_evaluation_plan,
+            holdout_sample_ids=holdout_sample_ids,
+            holdout_source_anchor_ids=holdout_source_anchor_ids,
+            selection_query_revision="local-image-lora-candidate-query/1.0",
+            eligibility_policy_revision="local-image-lora-eligibility/1.0",
+            entries=typed_entries,
+            projection_omissions=typed_omissions,
+        )
+        identity = population_sha256.removeprefix("sha256:")
         body = {
             "schema_version": "local-image-training-eligibility-review/1.0",
             "review_id": "imgtrainreview_" + identity[:32],
@@ -227,6 +240,7 @@ def project_training_eligibility_draft(
             "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
             "entries": entries,
             "projection_omissions": omissions,
+            "candidate_population_sha256": population_sha256,
             "eligible_candidate_set_sha256": content_sha256([]),
             "reviewed_at": created_at.isoformat().replace("+00:00", "Z"),
             "reviewed_by": created_by,
@@ -239,4 +253,47 @@ def project_training_eligibility_draft(
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise TrainingCandidateProjectionError(
             "IMAGE_TRAINING_CANDIDATE_PROJECTION_FAILED"
+        ) from exc
+
+
+def build_training_candidate_inventory(
+    *,
+    review: LocalImageTrainingEligibilityReview,
+    created_at: datetime,
+    created_by: str,
+) -> LocalImageTrainingCandidateInventory:
+    """Derive the sole ordered candidate inventory from one final review."""
+
+    if review.review_state != "FINAL":
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_ELIGIBILITY_REVIEW_NOT_FINAL")
+    candidates = tuple(
+        entry.candidate() for entry in review.entries if entry.decision == "ELIGIBLE"
+    )
+    if not candidates:
+        raise TrainingCandidateProjectionError("IMAGE_TRAINING_CANDIDATE_SET_EMPTY")
+    identity = content_sha256(
+        {
+            "review_id": review.review_id,
+            "review_sha256": review.review_sha256,
+            "eligible_candidate_set_sha256": review.eligible_candidate_set_sha256,
+        }
+    ).removeprefix("sha256:")
+    body = {
+        "schema_version": "local-image-training-candidate-inventory/1.0",
+        "inventory_id": "imgtraininventory_" + identity[:32],
+        "source_snapshot": review.source_snapshot.model_dump(mode="json"),
+        "holdout_evaluation_plan": review.holdout_evaluation_plan.model_dump(mode="json"),
+        "holdout_sample_ids": list(review.holdout_sample_ids),
+        "holdout_source_anchor_ids": list(review.holdout_source_anchor_ids),
+        "candidates": [candidate.model_dump(mode="json") for candidate in candidates],
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "created_by": created_by,
+    }
+    value = {**body, "inventory_sha256": content_sha256(body)}
+    try:
+        validate_contract("training-candidate-inventory", value)
+        return LocalImageTrainingCandidateInventory.model_validate(value)
+    except (PydanticValidationError, TypeError, ValueError) as exc:
+        raise TrainingCandidateProjectionError(
+            "IMAGE_TRAINING_CANDIDATE_INVENTORY_INVALID"
         ) from exc

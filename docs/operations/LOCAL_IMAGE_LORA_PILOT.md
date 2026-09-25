@@ -73,6 +73,11 @@ subset hash from the exact typed candidate values. The candidate inventory is va
 byte-for-value equal to that final eligible subset. The dataset manifest pins both Artifact members,
 so a later reviewer decision or caption cannot be silently substituted.
 
+Both review states must retain the same `candidate_population_sha256` and derived logical review ID.
+Only decisions, exclusion reasons, captions, reviewer, timestamp, eligible-subset hash, and review
+self-hash may change. The candidate inventory is derived from the FINAL eligible subset rather than
+assembled independently.
+
 ### Current read-only projection status
 
 The exact 2026-09-25 projection over the pinned 520 occurrence-backed accepted analyses produced:

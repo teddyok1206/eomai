@@ -11,9 +11,11 @@ from eom_image_contracts import (
     LocalImageModelPointer,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCandidateInventory,
+    LocalImageTrainingEligibilityEntry,
     LocalImageTrainingEligibilityReview,
     content_sha256,
     text_sha256,
+    training_eligibility_population_sha256,
     validate_contract,
 )
 from eom_image_trainer import DatasetBuildError, StagedPageImage, build_training_dataset
@@ -198,7 +200,6 @@ def _eligibility_review(
             )
     body = {
         "schema_version": "local-image-training-eligibility-review/1.0",
-        "review_id": "imgtrainreview_" + "f" * 32,
         "review_state": "FINAL",
         "source_snapshot": inventory.source_snapshot.model_dump(mode="json"),
         "holdout_evaluation_plan": inventory.holdout_evaluation_plan.model_dump(mode="json"),
@@ -212,6 +213,20 @@ def _eligibility_review(
         "reviewed_at": "2026-09-25T03:01:30Z",
         "reviewed_by": "operator_test",
     }
+    population_sha256 = training_eligibility_population_sha256(
+        source_snapshot=inventory.source_snapshot,
+        holdout_evaluation_plan=inventory.holdout_evaluation_plan,
+        holdout_sample_ids=inventory.holdout_sample_ids,
+        holdout_source_anchor_ids=inventory.holdout_source_anchor_ids,
+        selection_query_revision="local-image-lora-candidate-query/1.0",
+        eligibility_policy_revision="local-image-lora-eligibility/1.0",
+        entries=tuple(
+            LocalImageTrainingEligibilityEntry.model_validate(entry) for entry in entries
+        ),
+        projection_omissions=(),
+    )
+    body["review_id"] = "imgtrainreview_" + population_sha256.removeprefix("sha256:")[:32]
+    body["candidate_population_sha256"] = population_sha256
     value = {**body, "review_sha256": content_sha256(body)}
     validate_contract("training-eligibility-review", value)
     return LocalImageTrainingEligibilityReview.model_validate(value)

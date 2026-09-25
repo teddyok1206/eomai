@@ -16,9 +16,11 @@ from eom_image_contracts import (
     LocalImageTrainingAuthorization,
     LocalImageTrainingCandidateInventory,
     LocalImageTrainingDatasetManifest,
+    LocalImageTrainingEligibilityEntry,
     LocalImageTrainingEligibilityReview,
     content_sha256,
     text_sha256,
+    training_eligibility_population_sha256,
     validate_contract,
     validate_lora_checkpoint_manifest,
     validate_lora_training_plan,
@@ -190,7 +192,6 @@ def _eligibility_review_value() -> dict[str, object]:
     ]
     body = {
         "schema_version": "local-image-training-eligibility-review/1.0",
-        "review_id": "imgtrainreview_" + "b" * 32,
         "review_state": "FINAL",
         "source_snapshot": _source_snapshot(),
         "holdout_evaluation_plan": _inventory_value()["holdout_evaluation_plan"],
@@ -204,6 +205,21 @@ def _eligibility_review_value() -> dict[str, object]:
         "reviewed_at": "2026-09-25T02:04:00Z",
         "reviewed_by": "operator_test",
     }
+    inventory = LocalImageTrainingCandidateInventory.model_validate(_inventory_value())
+    population_sha256 = training_eligibility_population_sha256(
+        source_snapshot=inventory.source_snapshot,
+        holdout_evaluation_plan=inventory.holdout_evaluation_plan,
+        holdout_sample_ids=inventory.holdout_sample_ids,
+        holdout_source_anchor_ids=inventory.holdout_source_anchor_ids,
+        selection_query_revision="local-image-lora-candidate-query/1.0",
+        eligibility_policy_revision="local-image-lora-eligibility/1.0",
+        entries=tuple(
+            LocalImageTrainingEligibilityEntry.model_validate(entry) for entry in entries
+        ),
+        projection_omissions=(),
+    )
+    body["review_id"] = "imgtrainreview_" + population_sha256.removeprefix("sha256:")[:32]
+    body["candidate_population_sha256"] = population_sha256
     return {**body, "review_sha256": content_sha256(body)}
 
 
@@ -620,6 +636,18 @@ def test_inventory_review_rejects_unreviewed_candidate() -> None:
     review = LocalImageTrainingEligibilityReview.model_validate(value)
     with pytest.raises(ValueError, match="does not match its eligibility review"):
         validate_training_inventory_review(inventory, review)
+
+
+def test_eligibility_review_rejects_candidate_population_drift() -> None:
+    value = _eligibility_review_value()
+    entries = value["entries"]
+    assert isinstance(entries, list)
+    entries[0]["physical_page"] = 999
+    body = copy.deepcopy(value)
+    body.pop("review_sha256")
+    value["review_sha256"] = content_sha256(body)
+    with pytest.raises(ValidationError, match="candidate-population hash mismatch"):
+        LocalImageTrainingEligibilityReview.model_validate(value)
 
 
 def test_training_receipt_rejects_nonterminal_shape() -> None:

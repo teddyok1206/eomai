@@ -9,6 +9,7 @@ from eom_catalog_contracts import KnowledgeAnalysisResultV9, LegacyItemExtractio
 from eom_catalog_service.local_image_training_candidates import (
     AcceptedVisualTrainingSource,
     TrainingCandidateProjectionError,
+    build_training_candidate_inventory,
     project_training_eligibility_draft,
 )
 from eom_image_contracts import (
@@ -16,7 +17,10 @@ from eom_image_contracts import (
     ImageEvaluationBoundingBox,
     ImageEvaluationSourceSnapshot,
     ImageTrainingRightsPolicy,
+    LocalImageTrainingEligibilityEntry,
+    LocalImageTrainingEligibilityReview,
     content_sha256,
+    text_sha256,
 )
 
 
@@ -200,4 +204,50 @@ def test_projection_rejects_extraction_hash_drift() -> None:
             holdout_source_anchor_ids=_holdout_anchors(),
             created_at=datetime(2026, 9, 25, 5, 0, tzinfo=UTC),
             created_by="operator_test",
+        )
+
+
+def test_final_review_derives_exact_candidate_inventory() -> None:
+    draft = _project()
+    pending = draft.entries[0]
+    caption = "Side view of one nonhuman natural specimen."
+    eligible = LocalImageTrainingEligibilityEntry.model_validate(
+        {
+            **pending.model_dump(mode="json"),
+            "decision": "ELIGIBLE",
+            "caption_en": caption,
+            "caption_sha256": text_sha256(caption),
+        }
+    )
+    body = {
+        **draft.model_dump(mode="json", exclude={"review_sha256"}),
+        "review_state": "FINAL",
+        "entries": [eligible.model_dump(mode="json")],
+        "eligible_candidate_set_sha256": content_sha256(
+            [eligible.candidate().model_dump(mode="json")]
+        ),
+        "reviewed_at": "2026-09-25T05:01:00Z",
+        "reviewed_by": "operator_reviewer",
+    }
+    review = LocalImageTrainingEligibilityReview.model_validate(
+        {**body, "review_sha256": content_sha256(body)}
+    )
+    inventory = build_training_candidate_inventory(
+        review=review,
+        created_at=datetime(2026, 9, 25, 5, 2, tzinfo=UTC),
+        created_by="operator_reviewer",
+    )
+    assert inventory.candidates == (eligible.candidate(),)
+    assert inventory.source_snapshot == review.source_snapshot
+
+
+def test_inventory_rejects_draft_review() -> None:
+    with pytest.raises(
+        TrainingCandidateProjectionError,
+        match="IMAGE_TRAINING_ELIGIBILITY_REVIEW_NOT_FINAL",
+    ):
+        build_training_candidate_inventory(
+            review=_project(),
+            created_at=datetime(2026, 9, 25, 5, 2, tzinfo=UTC),
+            created_by="operator_reviewer",
         )
