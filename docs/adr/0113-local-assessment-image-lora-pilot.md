@@ -69,18 +69,30 @@ rather than weakening eligibility.  The 12 fixed holdout samples and any near-du
 excluded from training.
 
 The first exact read-only projection against the 2026-09-25 accepted source snapshot found 72
-strictly cropable candidates and 37 explicit omissions whose page or bounding-box provenance was
-not sufficient to create a crop.  All projected candidates remain `PENDING`; projection is not a
-content or rights approval.  Across all bounded `RASTER`/`MIXED` observations there are 131 possible
-visuals, but the additional diagram/apparatus classes overwhelmingly carry axes, labels, scales,
-legends, symbols, data points, or other authoritative geometry.  They must not be silently admitted
-to satisfy the minimum sample count.
+strict-policy source anchors with a page and bounding box, plus 37 explicit omissions whose page or
+bounding-box provenance was incomplete.  A subsequent pixel audit showed that the 72 bounding boxes
+usually delimit an item or a page rather than the visual itself.  They are therefore not training
+crops.  All projected candidates remain `PENDING`; projection is not a content, crop, or rights
+approval.  Across all bounded `RASTER`/`MIXED` observations there are 131 possible visuals, but the
+additional diagram/apparatus classes overwhelmingly carry axes, labels, scales, legends, symbols,
+data points, or other authoritative geometry.  They must not be silently admitted to satisfy the
+minimum sample count.
 
-Consequently the first pilot is stopped before dataset materialization while the strict eligible
-population is below 100.  A future successor eligibility policy may admit a larger population only
-after a human-approved crop/mask or redaction contract preserves exact source provenance and keeps
-all scientific geometry, labels, and values deterministic.  That successor is a separate protocol
-decision; it does not weaken `local-image-lora-eligibility/1.0` or reinterpret this projection.
+Consequently the first pilot is stopped before dataset materialization.  A successor crop-review
+protocol first records deterministic machine proposals, including an exact page pointer, proposed
+visual box, OCR redaction boxes, locator revision, and bounded metrics.  A human review may select at
+most one immutable proposal per source anchor or exclude the anchor.  It cannot edit proposal bytes
+in place.  A changed locator produces a new proposal set.  Only a final review can feed a future
+candidate-inventory/dataset successor.  This does not weaken
+`local-image-lora-eligibility/1.0` or reinterpret its page/item boxes as image crops.
+
+The dominant successor access patterns are proposal lookup by ID, grouping by source anchor,
+ordered review, and deduplication.  Proposal IDs and source anchors use maps and sets; immutable
+output is sorted tuples.  Proposal construction is O(v + p) over visual observations and staged
+pages plus the bounded cost of OCR/layout analysis.  PostgreSQL stores only pointers and hashes.
+Page bytes, crops, contact sheets, and later datasets remain artifact members.  Catalog selects
+source pointers, the Orchestrator stages and publishes, and a deterministic locator reads only its
+staged workspace.  Neither the locator nor a worker reads NAS or writes canonical artifacts.
 
 The DRAFT and FINAL review revisions share an exact `candidate_population_sha256` derived from the
 source snapshot, holdout, selection/policy revisions, immutable candidate pointers/crops, and typed

@@ -48,6 +48,8 @@ with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
         "eom_image_contracts/schemas/local-image-training-eligibility-review-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-training-crop-proposal-set-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-training-crop-review-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-checkpoint-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-worker-result-v1.schema.json",

@@ -89,16 +89,20 @@ assembled independently.
 
 The exact 2026-09-25 projection over the pinned 520 occurrence-backed accepted analyses produced:
 
-- 72 cropable `PHOTOGRAPH`/`COMPOSITE` candidates, all `DRAFT` + `PENDING`;
+- 72 `PHOTOGRAPH`/`COMPOSITE` source anchors with page/item bounding boxes, all
+  `DRAFT` + `PENDING`;
 - 37 typed `AMBIGUOUS_CROP` omissions with insufficient page/bounding-box provenance;
 - 131 bounded `RASTER`/`MIXED` visuals across all representation kinds, most additional examples
   carrying authoritative labels, axes, scales, legends, symbols, or geometry.
 
-This does not satisfy the 100-sample minimum.  Training and dataset publication therefore remain
-stopped.  Do not lower the minimum, mark pending rows eligible, broaden the representation allowlist,
-or infer derivative-training rights to make the count pass.  The safe next work is human review of
-the 72 candidates and a separate protocol-first crop/mask successor proposal for additional source
-classes.  Neither action starts a GPU training job.
+A pixel-level contact-sheet audit then established that most of those 72 boxes contain a complete
+item or page rather than only the visual.  They are not eligible training crops.  Training and
+dataset publication therefore remain stopped.  Do not lower the minimum, mark pending rows
+eligible, broaden the representation allowlist, or infer a crop from an item box.  The safe next
+work is `local-image-training-crop-proposal-set/1.0` followed by an exact
+`local-image-training-crop-review/1.0`: a deterministic locator proposes visual boxes and OCR
+redactions, and a human selects at most one immutable proposal per source anchor.  Neither action
+starts a GPU training job.
 
 ## P2: deterministic dataset
 

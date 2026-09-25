@@ -21,6 +21,8 @@ SCHEMA_FILES = {
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
     "training-authorization": "local-image-training-authorization-v1.schema.json",
+    "training-crop-proposal-set": ("local-image-training-crop-proposal-set-v1.schema.json"),
+    "training-crop-review": "local-image-training-crop-review-v1.schema.json",
     "training-candidate-inventory": ("local-image-training-candidate-inventory-v1.schema.json"),
     "training-dataset-manifest": "local-image-training-dataset-manifest-v1.schema.json",
     "training-eligibility-review": ("local-image-training-eligibility-review-v1.schema.json"),
@@ -46,6 +48,12 @@ SCHEMA_SHA256 = {
     ),
     "training-authorization": (
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
+    ),
+    "training-crop-proposal-set": (
+        "sha256:3703a380567a7d50ff3eb4adacec2a1fef55f03d13c4bb130c6138998668fb28"
+    ),
+    "training-crop-review": (
+        "sha256:a78e476251396278e907cd4a5bca9894e280fcf81b8d367c6bf8ba209ce6a3ea"
     ),
     "training-dataset-manifest": (
         "sha256:ecb43e5ed58af59b40056a2afa0f541b12caffb71dee733aaa2681aef694c81c"

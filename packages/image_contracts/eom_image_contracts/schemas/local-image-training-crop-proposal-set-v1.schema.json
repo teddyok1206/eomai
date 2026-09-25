@@ -1,0 +1,458 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-training-crop-proposal-set/1.0",
+  "title": "EOM Local Image Training Crop Proposal Set V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "modelPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "artifactPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+/[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_revision_id",
+        "graph_snapshot_sha256",
+        "graph_manifest_sha256",
+        "target_count",
+        "target_set_sha256"
+      ],
+      "properties": {
+        "graph_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "graph_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "target_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "target_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "rightsPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rights_policy_id",
+        "rights_policy_revision_id",
+        "rights_policy_sha256"
+      ],
+      "properties": {
+        "rights_policy_id": {
+          "type": "string",
+          "pattern": "^rightspolicy_[0-9a-f]{32}$"
+        },
+        "rights_policy_revision_id": {
+          "type": "string",
+          "pattern": "^rightspolicyrev_[0-9a-f]{32}$"
+        },
+        "rights_policy_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "boundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "properties": {
+        "left": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "top": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9999
+        },
+        "right": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "bottom": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "adapterFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "pattern": "^(adapter_model\\.safetensors|adapter_config\\.json)$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "proposal_set_id",
+    "source_snapshot",
+    "training_authorization",
+    "holdout_evaluation_plan",
+    "holdout_sample_ids",
+    "holdout_source_anchor_ids",
+    "selection_query_revision",
+    "locator_revision",
+    "proposals",
+    "omissions",
+    "proposal_population_sha256",
+    "created_at",
+    "created_by",
+    "proposal_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-training-crop-proposal-set/1.0"
+    },
+    "proposal_set_id": {
+      "type": "string",
+      "pattern": "^imgcropproposalset_[0-9a-f]{32}$"
+    },
+    "source_snapshot": {
+      "$ref": "#/$defs/sourceSnapshot"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/artifactPointer"
+    },
+    "holdout_evaluation_plan": {
+      "$ref": "#/$defs/artifactPointer"
+    },
+    "holdout_sample_ids": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^imgsample_[0-9a-f]{32}$"
+      }
+    },
+    "holdout_source_anchor_ids": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+      }
+    },
+    "selection_query_revision": {
+      "const": "local-image-lora-crop-source-query/1.0"
+    },
+    "locator_revision": {
+      "const": "local-image-visual-crop-locator/1.0"
+    },
+    "proposals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "crop_proposal_id",
+          "item_revision_id",
+          "extraction_result",
+          "source_anchor_id",
+          "visual_pattern_ids",
+          "source_page_image",
+          "physical_page",
+          "context_bounding_box",
+          "crop_bounding_box",
+          "redaction_boxes",
+          "rights_policy",
+          "representation_kind",
+          "rendering_mode",
+          "visual_features",
+          "candidate_rank",
+          "ink_fraction_milli",
+          "ocr_redaction_count"
+        ],
+        "properties": {
+          "crop_proposal_id": {
+            "type": "string",
+            "pattern": "^imgcropproposal_[0-9a-f]{32}$"
+          },
+          "item_revision_id": {
+            "type": "string",
+            "pattern": "^itemrev_[0-9a-f]{32}$"
+          },
+          "extraction_result": {
+            "$ref": "#/$defs/artifactPointer"
+          },
+          "source_anchor_id": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          },
+          "visual_pattern_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^visualpattern_[0-9a-f]{32}$"
+            }
+          },
+          "source_page_image": {
+            "$ref": "#/$defs/artifactPointer"
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "context_bounding_box": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/boundingBox"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crop_bounding_box": {
+            "$ref": "#/$defs/boundingBox"
+          },
+          "redaction_boxes": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/boundingBox"
+            }
+          },
+          "rights_policy": {
+            "$ref": "#/$defs/rightsPolicy"
+          },
+          "representation_kind": {
+            "enum": [
+              "APPARATUS",
+              "COMPOSITE",
+              "CROSS_SECTION",
+              "DIAGRAM",
+              "MAP",
+              "PARTICLE_MODEL",
+              "PHOTOGRAPH"
+            ]
+          },
+          "rendering_mode": {
+            "enum": [
+              "MIXED",
+              "RASTER",
+              "VECTOR_LIKE"
+            ]
+          },
+          "visual_features": {
+            "type": "array",
+            "maxItems": 24,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "ARROWS",
+                "AXES",
+                "BOUNDARY",
+                "CALLOUT",
+                "DATA_POINTS",
+                "ERROR_BAR",
+                "GRID",
+                "LABELS",
+                "LEADER_LINES",
+                "LEGEND",
+                "MULTIPLE_PANELS",
+                "NUMBERED_STEPS",
+                "PATTERN_FILL",
+                "SCALE",
+                "SYMBOL_KEY",
+                "TRAJECTORY"
+              ]
+            }
+          },
+          "candidate_rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "ink_fraction_milli": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "ocr_redaction_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 64
+          }
+        }
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item_revision_id",
+          "extraction_result",
+          "source_anchor_id",
+          "visual_pattern_ids",
+          "reason"
+        ],
+        "properties": {
+          "item_revision_id": {
+            "type": "string",
+            "pattern": "^itemrev_[0-9a-f]{32}$"
+          },
+          "extraction_result": {
+            "$ref": "#/$defs/artifactPointer"
+          },
+          "source_anchor_id": {
+            "type": "string",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$"
+          },
+          "visual_pattern_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^visualpattern_[0-9a-f]{32}$"
+            }
+          },
+          "reason": {
+            "enum": [
+              "NO_PAGE_INPUT",
+              "NO_VISUAL_REGION",
+              "SOURCE_POINTER_INVALID",
+              "UNSUPPORTED_REPRESENTATION"
+            ]
+          }
+        }
+      }
+    },
+    "proposal_population_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "proposal_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

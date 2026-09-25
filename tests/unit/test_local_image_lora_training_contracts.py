@@ -439,6 +439,8 @@ def test_training_schema_resources_are_canonical_mirrors() -> None:
     names = (
         "local-image-training-authorization-v1.schema.json",
         "local-image-training-candidate-inventory-v1.schema.json",
+        "local-image-training-crop-proposal-set-v1.schema.json",
+        "local-image-training-crop-review-v1.schema.json",
         "local-image-training-dataset-manifest-v1.schema.json",
         "local-image-training-eligibility-review-v1.schema.json",
         "local-image-lora-training-plan-v1.schema.json",
