@@ -200,6 +200,7 @@ export EOM_RUN_INTEGRATION=1
   tests/integration/test_workflow_engine.py \
   tests/integration/test_workflow_submission_idempotency.py \
   tests/integration/test_control_plane_persistence.py \
+  tests/integration/test_catalog_artifact_created_recovery.py \
   tests/integration/test_knowledge_analysis_service.py \
   tests/integration/test_knowledge_analysis_batch_service.py \
   tests/integration/test_knowledge_analysis_protocol_lineage.py \

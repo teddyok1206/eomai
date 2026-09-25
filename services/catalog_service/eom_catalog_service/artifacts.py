@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+from uuid import uuid4
 
 from eom_identifiers import (
     content_sha256,
@@ -224,78 +226,99 @@ class CatalogArtifactService:
                 revision = session.scalar(
                     select(ArtifactRevisionRecord).where(ArtifactRevisionRecord.job_id == job_id)
                 )
-                if revision is None:
+                if revision is not None:
+                    return CatalogArtifact(
+                        job_id=job_id,
+                        artifact_id=revision.logical_artifact_id,
+                        revision_id=revision.revision_id,
+                        content_hash=revision.content_hash,
+                        manifest_hash=revision.manifest_hash,
+                        content_bytes=revision.content_bytes,
+                        nas_path=revision.nas_path,
+                        manifest=revision.manifest,
+                    )
+                existing_job = session.get(JobRecord, job_id)
+                if existing_job is None or existing_job.status != JobState.CREATED.value:
                     raise RuntimeError("catalog artifact job is incomplete")
-                return CatalogArtifact(
-                    job_id=job_id,
-                    artifact_id=revision.logical_artifact_id,
-                    revision_id=revision.revision_id,
-                    content_hash=revision.content_hash,
-                    manifest_hash=revision.manifest_hash,
-                    content_bytes=revision.content_bytes,
-                    nas_path=revision.nas_path,
-                    manifest=revision.manifest,
-                )
 
-        staging = self.settings.staging_root / job_id / "artifact"
-        staged = stage_file_set_artifact(
-            files=files,
-            primary_file=primary_file,
-            job_id=job_id,
-            logical_artifact_id=artifact_id,
-            revision_id=revision_id,
-            artifact_type=artifact_type,
-            staging=staging,
-            manifest_version=manifest_version,
-            file_metadata=file_metadata,
-        )
-        if expected_file_sha256 is not None:
-            actual_file_sha256 = {member.relative_path: member.sha256 for member in staged.files}
-            if actual_file_sha256 != expected_file_sha256:
-                raise ValueError("catalog artifact staged members do not match expected hashes")
-        with transaction(self.sessions) as session:
-            transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")
-            transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
-            transition_job(session, job_id, JobState.CLAIMED, "CATALOG_CORE_CLAIMED")
-            transition_job(session, job_id, JobState.RUNNING, "CATALOG_ARTIFACT_STAGED")
-            transition_job(session, job_id, JobState.VALIDATING_RESULT, "CATALOG_ARTIFACT_HASHED")
-            transition_job(session, job_id, JobState.COMMITTING, "CATALOG_ARTIFACT_COMMITTING")
-        final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
-        with transaction(self.sessions) as session:
-            job = session.execute(
-                select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
-            ).scalar_one()
-            create_artifact_records(
-                session,
-                job=job,
+        # A source or expected-hash validation failure intentionally leaves the immutable Job in
+        # CREATED.  Exact idempotent replay may therefore restage it, while every later state stays
+        # fail-closed.  Per-attempt directories prevent concurrent callers from copying over one
+        # another; the locked CREATED -> VALIDATED transition selects the sole commit winner.
+        attempt_root = self.settings.staging_root / job_id / f"attempt-{uuid4().hex}"
+        try:
+            staged = stage_file_set_artifact(
+                files=files,
+                primary_file=primary_file,
+                job_id=job_id,
+                logical_artifact_id=artifact_id,
+                revision_id=revision_id,
+                artifact_type=artifact_type,
+                staging=attempt_root / "artifact",
+                manifest_version=manifest_version,
+                file_metadata=file_metadata,
+            )
+            if expected_file_sha256 is not None:
+                actual_file_sha256 = {
+                    member.relative_path: member.sha256 for member in staged.files
+                }
+                if actual_file_sha256 != expected_file_sha256:
+                    raise ValueError("catalog artifact staged members do not match expected hashes")
+            with transaction(self.sessions) as session:
+                transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")
+                transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
+                transition_job(session, job_id, JobState.CLAIMED, "CATALOG_CORE_CLAIMED")
+                transition_job(session, job_id, JobState.RUNNING, "CATALOG_ARTIFACT_STAGED")
+                transition_job(
+                    session,
+                    job_id,
+                    JobState.VALIDATING_RESULT,
+                    "CATALOG_ARTIFACT_HASHED",
+                )
+                transition_job(
+                    session,
+                    job_id,
+                    JobState.COMMITTING,
+                    "CATALOG_ARTIFACT_COMMITTING",
+                )
+            final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
+            with transaction(self.sessions) as session:
+                job = session.execute(
+                    select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+                ).scalar_one()
+                create_artifact_records(
+                    session,
+                    job=job,
+                    content_hash=staged.primary_hash,
+                    manifest_hash=staged.manifest_hash,
+                    content_bytes=staged.primary_bytes,
+                    nas_path=str(final),
+                    manifest=staged.manifest,
+                    result=result,
+                )
+                transition_job(
+                    session,
+                    job_id,
+                    JobState.SUCCEEDED,
+                    "CATALOG_ARTIFACT_COMMITTED",
+                    data={
+                        "logical_artifact_id": artifact_id,
+                        "revision_id": revision_id,
+                        "content_hash": staged.primary_hash,
+                    },
+                )
+            return CatalogArtifact(
+                job_id=job_id,
+                artifact_id=artifact_id,
+                revision_id=revision_id,
                 content_hash=staged.primary_hash,
                 manifest_hash=staged.manifest_hash,
                 content_bytes=staged.primary_bytes,
                 nas_path=str(final),
                 manifest=staged.manifest,
-                result=result,
             )
-            transition_job(
-                session,
-                job_id,
-                JobState.SUCCEEDED,
-                "CATALOG_ARTIFACT_COMMITTED",
-                data={
-                    "logical_artifact_id": artifact_id,
-                    "revision_id": revision_id,
-                    "content_hash": staged.primary_hash,
-                },
-            )
-        return CatalogArtifact(
-            job_id=job_id,
-            artifact_id=artifact_id,
-            revision_id=revision_id,
-            content_hash=staged.primary_hash,
-            manifest_hash=staged.manifest_hash,
-            content_bytes=staged.primary_bytes,
-            nas_path=str(final),
-            manifest=staged.manifest,
-        )
+        finally:
+            shutil.rmtree(attempt_root, ignore_errors=True)
 
     def read_member(
         self,
