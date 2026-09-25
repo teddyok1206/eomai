@@ -38,6 +38,9 @@ CORPUS_PILOT_RESULT_SCHEMA_REF = (
 CORPUS_PATTERN_INVENTORY_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.0"
 )
+CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -681,6 +684,48 @@ class ScienceRendererPrimitiveRecommendation(FrozenModel):
         return self
 
 
+def _validate_pattern_inventory_common(
+    *,
+    inventory: FrozenModel,
+    inventory_id: str,
+    reviews: tuple[ScienceVisualPatternReview, ...],
+    primitive_recommendations: tuple[ScienceRendererPrimitiveRecommendation, ...],
+    lora_eligible_count: int,
+    deterministic_renderer_count: int,
+    excluded_count: int,
+    inventory_sha256: Sha256,
+) -> None:
+    review_ids = tuple(value.candidate_id for value in reviews)
+    if review_ids != tuple(sorted(set(review_ids))):
+        raise ValueError("science visual reviews must be uniquely sorted")
+    counts = Counter(value.decision for value in reviews)
+    if (
+        lora_eligible_count != counts["LORA_ELIGIBLE"]
+        or deterministic_renderer_count != counts["DETERMINISTIC_RENDERER_ONLY"]
+        or excluded_count != counts["EXCLUDED"]
+    ):
+        raise ValueError("science visual inventory counts differ from its reviews")
+    primitive_keys = tuple(value.primitive_key for value in primitive_recommendations)
+    if primitive_keys != tuple(sorted(set(primitive_keys))):
+        raise ValueError("renderer primitive recommendations must be uniquely sorted")
+    support: Counter[ScienceVisualPatternFamily] = Counter(
+        value.pattern_family for value in reviews if value.decision == "DETERMINISTIC_RENDERER_ONLY"
+    )
+    for recommendation in primitive_recommendations:
+        if support[_PRIMITIVE_PATTERN_FAMILY[recommendation.primitive_key]] != (
+            recommendation.support_count
+        ):
+            raise ValueError("renderer primitive support count differs from reviewed patterns")
+    identity = content_sha256(
+        inventory.model_dump(mode="json", exclude={"inventory_id", "inventory_sha256"})
+    ).removeprefix("sha256:")
+    if inventory_id != "imgscivisinventory_" + identity[:32]:
+        raise ValueError("science visual inventory ID does not bind its content")
+    expected = content_sha256(inventory.model_dump(mode="json", exclude={"inventory_sha256"}))
+    if inventory_sha256 != expected:
+        raise ValueError("science visual inventory hash mismatch")
+
+
 class LocalImageScienceVisualPatternInventory(FrozenModel):
     schema_version: Literal["local-image-science-visual-pattern-inventory/1.0"]
     inventory_id: str = Field(pattern=r"^imgscivisinventory_[0-9a-f]{32}$")
@@ -712,52 +757,80 @@ class LocalImageScienceVisualPatternInventory(FrozenModel):
         )
         if self.pilot_result.sha256 != self.pilot_result_sha256:
             raise ValueError("science visual inventory result hash differs from its pointer")
-        review_ids = tuple(value.candidate_id for value in self.reviews)
-        if review_ids != tuple(sorted(set(review_ids))):
-            raise ValueError("science visual reviews must be uniquely sorted")
-        counts = Counter(value.decision for value in self.reviews)
-        if (
-            self.lora_eligible_count != counts["LORA_ELIGIBLE"]
-            or self.deterministic_renderer_count != counts["DETERMINISTIC_RENDERER_ONLY"]
-            or self.excluded_count != counts["EXCLUDED"]
-        ):
-            raise ValueError("science visual inventory counts differ from its reviews")
-        primitive_keys = tuple(value.primitive_key for value in self.primitive_recommendations)
-        if primitive_keys != tuple(sorted(set(primitive_keys))):
-            raise ValueError("renderer primitive recommendations must be uniquely sorted")
-        support: Counter[ScienceVisualPatternFamily] = Counter(
-            value.pattern_family
-            for value in self.reviews
-            if value.decision == "DETERMINISTIC_RENDERER_ONLY"
+        _validate_pattern_inventory_common(
+            inventory=self,
+            inventory_id=self.inventory_id,
+            reviews=self.reviews,
+            primitive_recommendations=self.primitive_recommendations,
+            lora_eligible_count=self.lora_eligible_count,
+            deterministic_renderer_count=self.deterministic_renderer_count,
+            excluded_count=self.excluded_count,
+            inventory_sha256=self.inventory_sha256,
         )
-        for recommendation in self.primitive_recommendations:
-            if support[_PRIMITIVE_PATTERN_FAMILY[recommendation.primitive_key]] != (
-                recommendation.support_count
-            ):
-                raise ValueError("renderer primitive support count differs from reviewed patterns")
-        identity = content_sha256(
-            self.model_dump(mode="json", exclude={"inventory_id", "inventory_sha256"})
-        ).removeprefix("sha256:")
-        if self.inventory_id != "imgscivisinventory_" + identity[:32]:
-            raise ValueError("science visual inventory ID does not bind its content")
-        expected = content_sha256(self.model_dump(mode="json", exclude={"inventory_sha256"}))
-        if self.inventory_sha256 != expected:
-            raise ValueError("science visual inventory hash mismatch")
         return self
 
 
-def validate_science_visual_pattern_inventory(
+class LocalImageScienceVisualPatternInventoryV2(FrozenModel):
+    """Reviewed pattern inventory with distinct file and semantic result hashes."""
+
+    schema_version: Literal["local-image-science-visual-pattern-inventory/1.1"]
+    inventory_id: str = Field(pattern=r"^imgscivisinventory_[0-9a-f]{32}$")
+    pilot_result: ImageEvaluationArtifactMember
+    pilot_result_file_sha256: Sha256
+    pilot_result_semantic_sha256: Sha256
+    reviews: tuple[ScienceVisualPatternReview, ...] = Field(min_length=1, max_length=512)
+    primitive_recommendations: tuple[ScienceRendererPrimitiveRecommendation, ...] = Field(
+        max_length=32
+    )
+    lora_eligible_count: int = Field(ge=0, le=512)
+    deterministic_renderer_count: int = Field(ge=0, le=512)
+    excluded_count: int = Field(ge=0, le=512)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    inventory_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_inventory_is_coherent(self) -> LocalImageScienceVisualPatternInventoryV2:
+        _require_pointer(
+            self.pilot_result,
+            schema_ref=CORPUS_PILOT_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-result.json",
+        )
+        if self.pilot_result.sha256 != self.pilot_result_file_sha256:
+            raise ValueError("science visual inventory file hash differs from its pointer")
+        _validate_pattern_inventory_common(
+            inventory=self,
+            inventory_id=self.inventory_id,
+            reviews=self.reviews,
+            primitive_recommendations=self.primitive_recommendations,
+            lora_eligible_count=self.lora_eligible_count,
+            deterministic_renderer_count=self.deterministic_renderer_count,
+            excluded_count=self.excluded_count,
+            inventory_sha256=self.inventory_sha256,
+        )
+        return self
+
+
+def _validate_pattern_inventory_against_result(
     result: LocalImageScienceCorpusVisualPilotResult,
-    inventory: LocalImageScienceVisualPatternInventory,
+    *,
+    semantic_sha256: Sha256,
+    reviews: tuple[ScienceVisualPatternReview, ...],
 ) -> None:
-    if result.status != "SUCCEEDED" or result.result_sha256 != inventory.pilot_result_sha256:
+    if result.status != "SUCCEEDED" or result.result_sha256 != semantic_sha256:
         raise ValueError("science visual inventory does not bind a successful pilot result")
     candidates = {value.candidate_id: value for value in result.visual_candidates}
     candidate_ids = set(candidates)
-    review_ids = {value.candidate_id for value in inventory.reviews}
+    review_ids = {value.candidate_id for value in reviews}
     if review_ids != candidate_ids:
         raise ValueError("science visual inventory does not review every candidate exactly once")
-    for review in inventory.reviews:
+    for review in reviews:
         candidate = candidates[review.candidate_id]
         if review.decision == "LORA_ELIGIBLE" and (
             candidate.authority_class != "NON_AUTHORITATIVE_RASTER_STYLE"
@@ -769,6 +842,28 @@ def validate_science_visual_pattern_inventory(
             and candidate.authority_class != "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
         ):
             raise ValueError("science visual renderer review lacks authoritative geometry")
+
+
+def validate_science_visual_pattern_inventory(
+    result: LocalImageScienceCorpusVisualPilotResult,
+    inventory: LocalImageScienceVisualPatternInventory,
+) -> None:
+    _validate_pattern_inventory_against_result(
+        result,
+        semantic_sha256=inventory.pilot_result_sha256,
+        reviews=inventory.reviews,
+    )
+
+
+def validate_science_visual_pattern_inventory_v2(
+    result: LocalImageScienceCorpusVisualPilotResult,
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+) -> None:
+    _validate_pattern_inventory_against_result(
+        result,
+        semantic_sha256=inventory.pilot_result_semantic_sha256,
+        reviews=inventory.reviews,
+    )
 
 
 def validate_science_visual_authorization_plan(

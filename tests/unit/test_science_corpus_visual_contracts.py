@@ -11,11 +11,13 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualPatternInventory,
+    LocalImageScienceVisualPatternInventoryV2,
     content_sha256,
     text_sha256,
     validate_contract,
     validate_science_visual_authorization_plan,
     validate_science_visual_pattern_inventory,
+    validate_science_visual_pattern_inventory_v2,
     validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
 )
@@ -398,6 +400,26 @@ def _inventory_value() -> dict[str, object]:
     return {**body, "inventory_sha256": content_sha256(body)}
 
 
+def _inventory_v2_value() -> dict[str, object]:
+    result = _result_value()
+    value = copy.deepcopy(_inventory_value())
+    value["schema_version"] = "local-image-science-visual-pattern-inventory/1.1"
+    value.pop("pilot_result_sha256")
+    result_file_sha256 = _sha("9")
+    value["pilot_result"]["sha256"] = result_file_sha256
+    value["pilot_result_file_sha256"] = result_file_sha256
+    value["pilot_result_semantic_sha256"] = result["result_sha256"]
+    body = {
+        key: item for key, item in value.items() if key not in {"inventory_id", "inventory_sha256"}
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    value["inventory_id"] = "imgscivisinventory_" + identity[:32]
+    value["inventory_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "inventory_sha256"}
+    )
+    return value
+
+
 @pytest.mark.parametrize(
     ("contract", "model", "value_factory"),
     [
@@ -426,6 +448,11 @@ def _inventory_value() -> dict[str, object]:
             LocalImageScienceVisualPatternInventory,
             _inventory_value,
         ),
+        (
+            "science-visual-pattern-inventory-v2",
+            LocalImageScienceVisualPatternInventoryV2,
+            _inventory_v2_value,
+        ),
     ],
 )
 def test_science_visual_contract_schema_and_model_parity(contract, model, value_factory) -> None:
@@ -447,6 +474,8 @@ def test_science_visual_cross_contract_bindings() -> None:
     validate_science_visual_pilot_command(plan, command)
     validate_science_visual_pilot_result(plan, result)
     validate_science_visual_pattern_inventory(result, inventory)
+    inventory_v2 = LocalImageScienceVisualPatternInventoryV2.model_validate(_inventory_v2_value())
+    validate_science_visual_pattern_inventory_v2(result, inventory_v2)
     assert authorization.authorization_sha256 != plan.training_authorization.sha256
     assert (
         content_sha256(authorization.model_dump(mode="json")) == plan.training_authorization.sha256
@@ -576,6 +605,35 @@ def test_science_visual_inventory_rejects_authoritative_lora_and_missing_review(
         validate_science_visual_pattern_inventory(result, partial)
 
 
+def test_science_visual_inventory_v2_keeps_file_and_semantic_hashes_distinct() -> None:
+    result = LocalImageScienceCorpusVisualPilotResult.model_validate(_result_value())
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(_inventory_v2_value())
+    assert inventory.pilot_result_file_sha256 == inventory.pilot_result.sha256
+    assert inventory.pilot_result_file_sha256 != inventory.pilot_result_semantic_sha256
+    validate_science_visual_pattern_inventory_v2(result, inventory)
+
+    wrong_semantic = copy.deepcopy(_inventory_v2_value())
+    wrong_semantic["pilot_result_semantic_sha256"] = _sha("8")
+    body = {
+        key: item
+        for key, item in wrong_semantic.items()
+        if key not in {"inventory_id", "inventory_sha256"}
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    wrong_semantic["inventory_id"] = "imgscivisinventory_" + identity[:32]
+    wrong_semantic["inventory_sha256"] = content_sha256(
+        {key: item for key, item in wrong_semantic.items() if key != "inventory_sha256"}
+    )
+    invalid = LocalImageScienceVisualPatternInventoryV2.model_validate(wrong_semantic)
+    with pytest.raises(ValueError, match="successful pilot result"):
+        validate_science_visual_pattern_inventory_v2(result, invalid)
+
+    wrong_file = copy.deepcopy(_inventory_v2_value())
+    wrong_file["pilot_result_file_sha256"] = _sha("8")
+    with pytest.raises(ValidationError, match="file hash differs"):
+        LocalImageScienceVisualPatternInventoryV2.model_validate(wrong_file)
+
+
 def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
     expected = {
         "local-image-science-corpus-training-authorization-v1.schema.json": (
@@ -592,6 +650,9 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         ),
         "local-image-science-visual-pattern-inventory-v1.schema.json": (
             "191235a93c0b53830cb54e34341f2f893b570510624ac1486e76be16270a3fb4"
+        ),
+        "local-image-science-visual-pattern-inventory-v2.schema.json": (
+            "e2c89de1a67b461a7eb0c6e59a7fdcb9d9dae95e597fa80c6b989e02021ba646"
         ),
     }
     for filename, digest in expected.items():

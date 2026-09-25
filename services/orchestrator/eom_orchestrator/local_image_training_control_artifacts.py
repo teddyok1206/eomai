@@ -14,6 +14,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualPatternInventory,
+    LocalImageScienceVisualPatternInventoryV2,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
     LocalImageTrainingCropReview,
@@ -62,6 +63,12 @@ SCIENCE_VISUAL_PATTERN_INVENTORY_SCHEMA_REF = (
 )
 SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE = (
     "control_local_image_science_visual_pattern_inventory"
+)
+SCIENCE_VISUAL_PATTERN_INVENTORY_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
+)
+SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_pattern_inventory_v2"
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -206,6 +213,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_VISUAL_PATTERN_INVENTORY_SCHEMA_REF,
             artifact_type=SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-visual-pattern-inventory",
+            identity_sha256=inventory.inventory_sha256,
+            created_at=inventory.created_at,
+        )
+
+    def commit_science_visual_pattern_inventory_v2(
+        self,
+        inventory: LocalImageScienceVisualPatternInventoryV2,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=inventory,
+            contract_name="science-visual-pattern-inventory-v2",
+            member=SCIENCE_VISUAL_PATTERN_INVENTORY_MEMBER,
+            schema_ref=SCIENCE_VISUAL_PATTERN_INVENTORY_V2_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-pattern-inventory-v2",
             identity_sha256=inventory.inventory_sha256,
             created_at=inventory.created_at,
         )
