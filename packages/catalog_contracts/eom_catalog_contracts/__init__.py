@@ -762,6 +762,7 @@ from eom_catalog_contracts.science_assessment_corpus import (
     ScienceAssessmentWebCorpusManifest,
     ScienceAssessmentWebCorpusPlan,
     validate_science_acquisition_against_plan,
+    validate_science_corpus_manifest_against_acquisition,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_catalog_contracts.validation import (
@@ -1480,6 +1481,7 @@ __all__ = [
     "validate_mock_exam_planned_placements",
     "validate_reviewed_authoring_guidance",
     "validate_science_acquisition_against_plan",
+    "validate_science_corpus_manifest_against_acquisition",
     "validate_science_corpus_manifest_against_plan",
     "validate_worker_knowledge_edge_endpoint_types",
     "verify_completion_shards",

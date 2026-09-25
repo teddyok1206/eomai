@@ -327,6 +327,7 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
     corpus_id: str = Field(pattern=r"^sciencecorpus_[0-9a-f]{32}$")
     plan_id: str = Field(pattern=r"^sciencecorpusplan_[0-9a-f]{32}$")
     plan_sha256: Sha256
+    acquisition_sha256: Sha256
     observed_at: UtcDatetime
     pdf_validator: ScienceAssessmentCorpusPdfValidator
     documents: tuple[ScienceAssessmentCorpusDocument, ...] = Field(min_length=1, max_length=5000)
@@ -394,7 +395,7 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
                 "schema_version": self.schema_version,
                 "plan_id": self.plan_id,
                 "plan_sha256": self.plan_sha256,
-                "document_sha256s": list(document_hashes),
+                "acquisition_sha256": self.acquisition_sha256,
             }
         )
         if self.corpus_id != "sciencecorpus_" + identity_sha256.removeprefix("sha256:")[:32]:
@@ -404,6 +405,38 @@ class ScienceAssessmentWebCorpusManifest(FrozenModel):
         ):
             raise ValueError("corpus manifest hash differs")
         return self
+
+
+def validate_science_corpus_manifest_against_acquisition(
+    manifest: ScienceAssessmentWebCorpusManifest,
+    acquisition: ScienceAssessmentWebAcquisition,
+) -> None:
+    """Bind the published corpus projection to its exact acquisition checkpoint."""
+
+    if (
+        manifest.acquisition_sha256 != acquisition.acquisition_sha256
+        or manifest.plan_id != acquisition.plan_id
+        or manifest.plan_sha256 != acquisition.plan_sha256
+        or manifest.observed_at != acquisition.observed_at
+        or manifest.pdf_validator != acquisition.pdf_validator
+    ):
+        raise ValueError("corpus manifest references another acquisition")
+    if {value.sha256 for value in manifest.documents} != {
+        value.sha256 for value in acquisition.successful_observations
+    }:
+        raise ValueError("corpus documents differ from the acquisition")
+    if {(value.post_url, value.download_url, value.error_code) for value in manifest.failures} != {
+        (value.post_url, value.download_url, value.error_code)
+        for value in acquisition.failed_observations
+    }:
+        raise ValueError("corpus failures differ from the acquisition")
+    if (
+        manifest.summary.scanned_post_count != acquisition.summary.scanned_post_count
+        or manifest.summary.candidate_count != acquisition.summary.candidate_count
+        or manifest.summary.acquisition_failure_count
+        != acquisition.summary.failed_observation_count
+    ):
+        raise ValueError("corpus summary differs from the acquisition")
 
 
 def validate_science_corpus_manifest_against_plan(

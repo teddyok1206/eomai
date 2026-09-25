@@ -9,6 +9,7 @@
     "corpus_id",
     "plan_id",
     "plan_sha256",
+    "acquisition_sha256",
     "observed_at",
     "pdf_validator",
     "documents",
@@ -62,6 +63,7 @@
     "corpus_id": {"type": "string", "pattern": "^sciencecorpus_[0-9a-f]{32}$"},
     "plan_id": {"type": "string", "pattern": "^sciencecorpusplan_[0-9a-f]{32}$"},
     "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "acquisition_sha256": {"$ref": "#/$defs/sha256"},
     "observed_at": {"$ref": "#/$defs/utc"},
     "pdf_validator": {
       "type": "object",

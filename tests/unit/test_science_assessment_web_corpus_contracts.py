@@ -103,12 +103,13 @@ def _manifest(plan: dict[str, object]) -> dict[str, object]:
         _document("1", disposition="NEW_INTAKE", batch_character="a"),
         _document("2", disposition="REUSED_EXISTING", batch_character="b"),
     ]
+    acquisition_sha256 = "sha256:" + "9" * 64
     identity = content_sha256(
         {
             "schema_version": "science-assessment-web-corpus-manifest/1.0",
             "plan_id": plan["plan_id"],
             "plan_sha256": plan["plan_sha256"],
-            "document_sha256s": [document["sha256"] for document in documents],
+            "acquisition_sha256": acquisition_sha256,
         }
     )
     value: dict[str, object] = {
@@ -116,6 +117,7 @@ def _manifest(plan: dict[str, object]) -> dict[str, object]:
         "corpus_id": "sciencecorpus_" + identity.removeprefix("sha256:")[:32],
         "plan_id": plan["plan_id"],
         "plan_sha256": plan["plan_sha256"],
+        "acquisition_sha256": acquisition_sha256,
         "observed_at": "2026-09-25T15:30:00Z",
         "pdf_validator": {
             "qpdf_path": "/usr/bin/qpdf",
