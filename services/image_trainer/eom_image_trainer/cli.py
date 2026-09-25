@@ -1,0 +1,109 @@
+"""CLI boundary for one isolated local-image training job."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import os
+import signal
+import stat
+from pathlib import Path
+
+from eom_image_provider.provider import verify_model_revision
+
+from eom_image_trainer.diffusers_backend import Ssd1bLoraBackend
+from eom_image_trainer.runner import (
+    TrainingRunnerError,
+    load_training_command,
+    run_training_command,
+)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    subcommands = parser.add_subparsers(dest="command", required=True)
+    train = subcommands.add_parser("train")
+    train.add_argument("--command", required=True, type=Path)
+    train.add_argument("--model-store-root", required=True, type=Path)
+    train.add_argument("--workspace", required=True, type=Path)
+    train.add_argument("--gpu-lock", required=True, type=Path)
+    return parser
+
+
+def _lock_gpu(path: Path) -> int:
+    if not path.is_absolute():
+        raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID")
+    try:
+        parent_metadata = path.parent.lstat()
+    except OSError as exc:
+        raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
+    if (
+        path.parent.is_symlink()
+        or not stat.S_ISDIR(parent_metadata.st_mode)
+        or parent_metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(parent_metadata.st_mode) != 0o700
+    ):
+        raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID")
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+            0o660,
+        )
+        metadata = os.fstat(descriptor)
+        os.fchmod(descriptor, 0o600)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(os.fstat(descriptor).st_mode) != 0o600
+        ):
+            raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID")
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return descriptor
+    except BlockingIOError as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise TrainingRunnerError("IMAGE_TRAINING_GPU_BUSY") from exc
+    except TrainingRunnerError:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise TrainingRunnerError("IMAGE_TRAINING_GPU_LOCK_INVALID") from exc
+
+
+def main() -> None:
+    args = _parser().parse_args()
+    command = load_training_command(args.command)
+    if args.workspace.name != command.training_run_id:
+        raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
+    lock_descriptor = _lock_gpu(args.gpu_lock)
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+    def _cancel(_signum: int, _frame: object) -> None:
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _cancel)
+    try:
+        result = run_training_command(
+            workspace=args.workspace,
+            model_store_root=args.model_store_root,
+            command=command,
+            backend=Ssd1bLoraBackend(),
+            model_resolver=verify_model_revision,
+        )
+    except TrainingRunnerError as exc:
+        raise SystemExit(exc.code) from exc
+    finally:
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        os.close(lock_descriptor)
+    if result.status != "SUCCEEDED":
+        raise SystemExit(result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
+
+
+if __name__ == "__main__":
+    main()

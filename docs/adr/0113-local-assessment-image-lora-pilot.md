@@ -82,8 +82,9 @@ RAG source alone is not silently treated as training authorization.
   avoiding all-pairs pixel comparison.  The expected pilot scale is at most 537 observations.
 - Revision history and receipts are append-only.  Training claims use the existing atomic
   claim/lease/idempotency model rather than directory scans.
-- PostgreSQL stores pointers, status, indexes, and bounded receipts only.  Crop PNGs, adapter
-  weights, optimizer checkpoints, and long logs are Artifacts and are never stored in DB rows.
+- PostgreSQL stores pointers, status, indexes, and bounded receipts only.  Crop PNGs, accepted
+  adapter weights, and long logs are Artifacts and are never stored in DB rows.  Optimizer
+  checkpoints are temporary worker-local materializations and are not canonical or published.
 
 Candidate indexes are not added speculatively.  Existing item-revision, artifact-revision, source
 anchor, workflow/job, and idempotency indexes are reused; a new DB index requires an observed query
@@ -97,11 +98,12 @@ seed, and a bounded number of steps selected after a preflight memory probe.  Re
 documented multiple of 64 no larger than the provider's native training capability.  Random
 horizontal flips are disabled because scientific orientation may carry meaning.
 
-The RTX 5080 exposes 16 GB VRAM.  `peft`, `bitsandbytes`, and `datasets` are not installed in the
+The RTX 5080 exposes 16 GB VRAM.  `peft` and `bitsandbytes` are not installed in the
 current inference environment.  They may be added only to a separate pinned trainer environment;
-each dependency is required respectively for LoRA injection/serialization, bounded-memory
-optimization, or deterministic local dataset loading.  No dependency is added to API, Web, Catalog,
-HWPX, or the inference provider merely for training.
+each dependency is required respectively for LoRA injection/serialization and bounded-memory
+optimization.  The bounded immutable sample tuple is loaded directly, so the pilot does not add a
+dataset framework.  No dependency is added to API, Web, Catalog, HWPX, or the inference provider
+merely for training.
 
 ## Transaction, concurrency, retry, and idempotency
 
@@ -112,9 +114,11 @@ replays the same terminal receipt; different input with the same key fails close
 
 At most one training job may hold the GPU training lease.  Image inference and LoRA training are
 mutually exclusive at the GPU capacity boundary.  Checkpoints are local temporary materializations
-until the terminal result validates.  A failed run remains failed; retry creates a new attempt bound
-to the same plan, not a rewritten result.  Cancellation stops the trainer and releases its lease but
-does not publish partial weights.
+bound by `local-image-lora-checkpoint-manifest/1.0` to the exact run, plan hash, attempt, completed
+optimizer step, micro-step, file set, and hashes.  A process restart may resume only the highest
+complete checkpoint for the same attempt; mismatches fail closed before deserialization.  A failed
+run remains failed; retry creates a new attempt bound to the same plan, not a rewritten result.
+Cancellation stops the trainer and releases its lease but does not publish partial weights.
 
 ## Evaluation and activation gate
 

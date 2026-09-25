@@ -54,6 +54,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-training-dataset-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-adapter-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-checkpoint-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-worker-result-v1.schema.json",

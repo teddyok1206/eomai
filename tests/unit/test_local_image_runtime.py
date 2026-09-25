@@ -16,7 +16,7 @@ def test_local_image_unit_is_fixed_hardened_and_nas_inaccessible() -> None:
     assert "Group=eom-image" in source
     assert "eom-local-image generate-composite" in source
     assert "/srv/eom/image-workspaces/%i/request.json" in source
-    assert "--gpu-lock /run/eom-image-provider/gpu0.lock" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
     assert "RestrictSUIDSGID=true" in source
@@ -28,10 +28,29 @@ def test_local_image_unit_is_fixed_hardened_and_nas_inaccessible() -> None:
     assert "Restart=no" in source
 
 
+def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock() -> None:
+    source = (ROOT / "infra/systemd/eom-image-trainer@.service").read_text(encoding="utf-8")
+
+    assert "User=eom-image" in source
+    assert "Group=eom-image" in source
+    assert "eom-local-image-trainer train" in source
+    assert "/srv/eom/image-training-workspaces/%i/command.json" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "PrivateNetwork=true" in source
+    assert "NoNewPrivileges=true" in source
+    assert "DevicePolicy=closed" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadWritePaths=/srv/eom/image-training-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/srv/eom/image-workspaces" in source
+    assert "Restart=no" in source
+
+
 def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     source = (ROOT / "infra/polkit/50-eom-worker-units.rules").read_text(encoding="utf-8")
 
     assert "eom-image-provider@imgreq_" in source
+    assert "eom-image-trainer@imgtrainrun_" in source
     assert "localImageUnit.test(unit)" in source
     assert re.search(
         r"subject\.user === \"eom-workflow-runner\"[\s\S]+localImageUnit\.test\(unit\)",
@@ -77,6 +96,8 @@ def test_local_image_release_scripts_have_valid_syntax() -> None:
     for relative in (
         "scripts/image_provider/build_release.sh",
         "scripts/image_provider/deploy_runtime.sh",
+        "scripts/image_trainer/build_release.sh",
+        "scripts/image_trainer/deploy_runtime.sh",
     ):
         completed = subprocess.run(
             ["bash", "-n", str(ROOT / relative)],
@@ -117,18 +138,39 @@ def test_fixed_composite_smoke_uses_production_adapter_and_is_not_an_item_workfl
     assert "session" not in source.lower()
 
 
-def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available() -> None:
+def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
+    tmp_path: Path,
+) -> None:
     if shutil.which("systemd-analyze") is None:
         return
     try:
         pwd.getpwnam("eom-image")
     except KeyError:
         return
-    unit = ROOT / "infra/systemd/eom-image-provider@.service"
-    completed = subprocess.run(
-        ["systemd-analyze", "verify", str(unit)],
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-    assert completed.returncode == 0, completed.stderr
+    for unit in (
+        ROOT / "infra/systemd/eom-image-provider@.service",
+        ROOT / "infra/systemd/eom-image-trainer@.service",
+    ):
+        verified_unit = unit
+        if (
+            unit.name == "eom-image-trainer@.service"
+            and not Path(
+                "/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer"
+            ).is_file()
+        ):
+            verified_unit = tmp_path / unit.name
+            verified_unit.write_text(
+                "\n".join(
+                    "ExecStart=/usr/bin/true" if line.startswith("ExecStart=") else line
+                    for line in unit.read_text(encoding="utf-8").splitlines()
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        completed = subprocess.run(
+            ["systemd-analyze", "verify", str(verified_unit)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr

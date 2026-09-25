@@ -8,14 +8,33 @@ version = "0.1.0"
 description = "Isolated bounded LoRA dataset and training adapter for EOM images"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+  # Pins the isolated training loop and mixed-precision process boundary.
+  "accelerate==1.10.1",
+  # Provides the bounded-memory 8-bit AdamW optimizer required by the 16 GiB GPU plan.
+  "bitsandbytes==0.47.0",
+  # Provides the exact SSD-1B/SDXL scheduler, UNet, VAE, and LoRA serialization APIs.
+  "diffusers==0.35.2",
   "eom-image-contracts==0.1.0",
+  # Reuses the existing immutable SSD-1B model resolver instead of duplicating it.
+  "eom-local-image-provider==0.1.0",
   # Required for explicit JSON Schema 2020-12 failure normalization at the adapter boundary.
   "jsonschema==4.25.1",
   # Required to decode, crop, resize, hash, and serialize staged PNG training samples.
   "Pillow==11.3.0",
+  # Provides LoRA injection and state extraction for the Diffusers UNet.
+  "peft==0.17.1",
   # Required for exact immutable training-contract validation and stable error normalization.
   "pydantic==2.13.4",
+  # Ensures adapter tensors are never serialized through executable pickle.
+  "safetensors==0.6.2",
+  # CUDA 12.8 training runtime; installed only in the dedicated trainer environment.
+  "torch==2.7.1",
+  # Provides the two frozen SDXL CLIP encoders and tokenizers.
+  "transformers==4.56.2",
 ]
+
+[project.scripts]
+eom-local-image-trainer = "eom_image_trainer.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

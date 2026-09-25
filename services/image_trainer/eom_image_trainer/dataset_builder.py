@@ -29,7 +29,7 @@ from eom_image_contracts import (
     validate_training_dataset_inventory,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-from PIL import Image, ImageOps, UnidentifiedImageError  # type: ignore[import-not-found]
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import ValidationError as PydanticValidationError
 
 MAX_SOURCE_PNG_BYTES = 64 * 1024 * 1024
@@ -59,7 +59,7 @@ class StagedPageImage:
 
     @property
     def filename(self) -> str:
-        return self.pointer.sha256.removeprefix("sha256:") + ".png"
+        return str(self.pointer.sha256).removeprefix("sha256:") + ".png"
 
     @property
     def key(self) -> PointerKey:

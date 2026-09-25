@@ -1,18 +1,18 @@
 [Unit]
-Description=EOM fixed local image provider request %i
+Description=EOM isolated local image LoRA trainer %i
 After=local-fs.target
-ConditionPathIsDirectory=/srv/eom/image-workspaces/%i
-ConditionPathIsReadWrite=/srv/eom/image-workspaces/%i
+ConditionPathIsDirectory=/srv/eom/image-training-workspaces/%i
+ConditionPathIsReadWrite=/srv/eom/image-training-workspaces/%i
 
 [Service]
 Type=oneshot
 User=eom-image
 Group=eom-image
-WorkingDirectory=/srv/eom/image-workspaces/%i
+WorkingDirectory=/srv/eom/image-training-workspaces/%i
 Environment=HOME=/var/lib/eom-image
 Environment=TZ=UTC
 Environment=PYTHONNOUSERSITE=1
-ExecStart=/srv/eom/conda/envs/eom-image/bin/eom-local-image generate-composite --request /srv/eom/image-workspaces/%i/request.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-workspaces/%i --gpu-lock /var/lib/eom-image/gpu0.lock
+ExecStart=/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer train --command /srv/eom/image-training-workspaces/%i/command.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-training-workspaces/%i --gpu-lock /var/lib/eom-image/gpu0.lock
 
 StateDirectory=eom-image
 StateDirectoryMode=0700
@@ -41,23 +41,26 @@ DeviceAllow=/dev/nvidiactl rw
 DeviceAllow=/dev/nvidia-uvm rw
 DeviceAllow=/dev/nvidia-uvm-tools rw
 
-ReadOnlyPaths=/srv/eom/conda/envs/eom-image
+ReadOnlyPaths=/srv/eom/conda/envs/eom-image-trainer
 ReadOnlyPaths=/srv/eom/models/image
-ReadWritePaths=/srv/eom/image-workspaces/%i
+ReadWritePaths=/srv/eom/image-training-workspaces/%i
+ReadWritePaths=/var/lib/eom-image
 InaccessiblePaths=/mnt/nas
 InaccessiblePaths=/home/eom/EOM
 InaccessiblePaths=/home/eom/EOMIS
 InaccessiblePaths=/etc/eom
+InaccessiblePaths=/srv/eom/image-workspaces
 InaccessiblePaths=/srv/eom/workspaces
 InaccessiblePaths=/srv/eom/worker-homes
 InaccessiblePaths=/root/.codex
 InaccessiblePaths=/var/run/docker.sock
 
 UMask=0077
-MemoryMax=24G
+MemoryMax=32G
 TasksMax=512
-TimeoutStartSec=930
-TimeoutStopSec=30
+TimeoutStartSec=14400
+TimeoutStopSec=120
+KillSignal=SIGTERM
 StandardOutput=journal
 StandardError=journal
 Restart=no
