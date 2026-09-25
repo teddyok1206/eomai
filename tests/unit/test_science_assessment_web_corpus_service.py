@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts import (
@@ -30,6 +33,7 @@ from eom_catalog_service.science_assessment_web_acquisition_checkpoint import (
 from eom_catalog_service.science_assessment_web_corpus_service import (
     MAX_INTAKE_FILES,
     ScienceAssessmentCorpusPublicationError,
+    ScienceAssessmentWebCorpusService,
     _aggregate_acquired,
     _AggregatedPdf,
     _bounded_shards,
@@ -39,7 +43,8 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _ResolvedSource,
     _stage_intake_shard,
 )
-from eom_identifiers import sha256_file
+from eom_catalog_service.settings import CatalogSettings
+from eom_identifiers import canonical_json_bytes, sha256_bytes, sha256_file
 
 
 def _plan() -> ScienceAssessmentWebCorpusPlan:
@@ -399,3 +404,65 @@ def test_intake_shard_staging_rejects_replay_drift(tmp_path: Path) -> None:
             hashes=(content_hash,),
             aggregate=aggregate,
         )
+
+
+def test_manifest_commit_separates_semantic_self_hash_from_file_hash(tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"x" * 4096)
+    acquired = (_acquired(source, post="100"),)
+    plan = _plan()
+    discovery = ScienceAssessmentDiscovery(
+        post_count=1,
+        candidates=(acquired[0].candidate,),
+        rejected_link_count=0,
+    )
+    acquisition = build_science_assessment_acquisition(
+        plan=plan,
+        discovery=discovery,
+        acquired=acquired,
+        failures=(),
+        observed_at=datetime(2026, 9, 25, 16, 30, tzinfo=UTC),
+    )
+    resolution = resolve_science_assessment_metadata(acquisition)
+    aggregate = _aggregate_acquired(acquired, resolution)
+    content_hash = next(iter(aggregate))
+    pointer = ScienceAssessmentCorpusSourcePointer(
+        intake_batch_id="intake_" + "1" * 32,
+        source_file_id="sourcefile_" + "2" * 32,
+        artifact_id="artifact_" + "3" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        member_path="source/existing-name.pdf",
+        sha256=content_hash,
+    )
+    manifest = _build_manifest_v2(
+        plan=plan,
+        acquisition=acquisition,
+        resolution=resolution,
+        discovery=discovery,
+        aggregate=aggregate,
+        failures=(),
+        resolved={content_hash: _ResolvedSource(pointer=pointer, disposition="REUSED_EXISTING")},
+        new_shards=(),
+    )
+    payload = canonical_json_bytes(manifest.model_dump(mode="json"))
+    payload_sha256 = sha256_bytes(payload)
+    assert payload_sha256 != manifest.manifest_sha256
+    artifacts = Mock()
+    artifacts.commit_file_set.return_value = SimpleNamespace(
+        artifact_id="artifact_" + "5" * 32,
+        revision_id="rev_" + "6" * 32,
+        content_hash=payload_sha256,
+    )
+    artifacts.read_member.return_value = payload
+    service = ScienceAssessmentWebCorpusService.__new__(ScienceAssessmentWebCorpusService)
+    service.settings = CatalogSettings(staging_root=tmp_path / "staging")
+    service.artifacts = cast(Any, artifacts)
+
+    publication = service._commit_manifest(manifest, plan)
+    replay = service._commit_manifest(manifest, plan)
+
+    assert publication.manifest_sha256 == manifest.manifest_sha256
+    assert replay == publication
+    call = artifacts.commit_file_set.call_args.kwargs
+    assert call["expected_file_sha256"] == {"corpus-manifest.json": payload_sha256}
+    assert sha256_file(call["files"]["corpus-manifest.json"]) == payload_sha256

@@ -32,7 +32,7 @@ from eom_catalog_contracts import (
     validate_science_metadata_resolution_against_acquisition,
 )
 from eom_catalog_contracts.science_assessment_corpus import IssuerType, SubjectFamily
-from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine, select
 
@@ -335,17 +335,19 @@ class ScienceAssessmentWebCorpusService:
         validate_science_corpus_manifest_v2_against_plan(manifest, plan)
         value = manifest.model_dump(mode="json")
         validate_contract("science-assessment-web-corpus-manifest-v2", value)
+        payload = canonical_json_bytes(value)
+        payload_sha256 = sha256_bytes(payload)
         control = self.settings.staging_root / "science-assessment-web-corpus" / manifest.corpus_id
         control.mkdir(mode=0o750, parents=True, exist_ok=True)
         path = control / f"{manifest.manifest_sha256.removeprefix('sha256:')}.json"
         if path.exists():
-            if path.is_symlink() or sha256_file(path) != manifest.manifest_sha256:
+            if path.is_symlink() or sha256_file(path) != payload_sha256:
                 raise ScienceAssessmentCorpusPublicationError(
                     "SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT"
                 )
         else:
             temporary = control / ".corpus-manifest.json.tmp"
-            temporary.write_bytes(canonical_json_bytes(value))
+            temporary.write_bytes(payload)
             temporary.chmod(0o600)
             temporary.replace(path)
         committed = self.artifacts.commit_file_set(
@@ -369,7 +371,7 @@ class ScienceAssessmentWebCorpusService:
                     "schema_ref": CORPUS_MANIFEST_SCHEMA_REF,
                 }
             },
-            expected_file_sha256={"corpus-manifest.json": manifest.manifest_sha256},
+            expected_file_sha256={"corpus-manifest.json": payload_sha256},
         )
         raw = self.artifacts.read_member(
             artifact_id=committed.artifact_id,
