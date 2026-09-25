@@ -138,17 +138,24 @@ def build_training_crop_proposal_set(
                 context_bounding_box=source.context_bounding_box,
                 ocr_boxes=ocr_boxes,
             )
-            regions = tuple(
-                replace(region, candidate_rank=rank)
-                for rank, region in enumerate(
-                    (
-                        value
-                        for value in regions
-                        if len(value.redaction_boxes) <= MAX_REDACTION_BOXES_PER_PROPOSAL
-                    ),
-                    start=1,
+            bounded_regions: list[LocatedVisualRegion] = []
+            for region in regions:
+                redactions = tuple(
+                    sorted(
+                        set(region.redaction_boxes),
+                        key=lambda value: (value.top, value.left, value.bottom, value.right),
+                    )
                 )
-            )
+                if len(redactions) > MAX_REDACTION_BOXES_PER_PROPOSAL:
+                    continue
+                bounded_regions.append(
+                    replace(
+                        region,
+                        redaction_boxes=redactions,
+                        candidate_rank=len(bounded_regions) + 1,
+                    )
+                )
+            regions = tuple(bounded_regions)
             if not regions:
                 omissions.append(
                     LocalImageTrainingCropProposalOmission(

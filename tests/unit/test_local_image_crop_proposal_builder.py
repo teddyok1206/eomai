@@ -177,6 +177,12 @@ def test_proposal_builder_skips_overbounded_ocr_candidate_and_reranks() -> None:
         candidate_rank=1,
         ink_fraction_milli=100,
     )
+    good_redaction = ImageEvaluationBoundingBox(
+        left=6000,
+        top=2000,
+        right=6100,
+        bottom=2100,
+    )
     good = LocatedVisualRegion(
         crop_bounding_box=ImageEvaluationBoundingBox(
             left=5000,
@@ -184,7 +190,7 @@ def test_proposal_builder_skips_overbounded_ocr_candidate_and_reranks() -> None:
             right=9000,
             bottom=8500,
         ),
-        redaction_boxes=(),
+        redaction_boxes=(good_redaction, good_redaction),
         candidate_rank=2,
         ink_fraction_milli=120,
     )
@@ -213,3 +219,4 @@ def test_proposal_builder_skips_overbounded_ocr_candidate_and_reranks() -> None:
     assert len(value.proposals) == 1
     assert value.proposals[0].candidate_rank == 1
     assert value.proposals[0].crop_bounding_box == good.crop_bounding_box
+    assert value.proposals[0].redaction_boxes == (good_redaction,)

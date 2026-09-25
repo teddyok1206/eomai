@@ -324,11 +324,11 @@ def locate_visual_regions(
         normalized = _normalized_box(page_box, width=page_width, height=page_height)
         redactions = tuple(
             sorted(
-                (
+                {
                     clipped
                     for value in ocr_boxes
                     if (clipped := _clip_box(value, normalized)) is not None
-                ),
+                },
                 key=lambda value: (value.top, value.left, value.bottom, value.right),
             )
         )
