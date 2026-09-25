@@ -618,7 +618,7 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
     assert '"pdf-document-review-control-bootstrap-v4"' in deployment
     assert '"pdf-document-review-control-bootstrap-v5"' in deployment
     assert '"resolved-execution-plan-v15"' in deployment
-    assert '"document-review-evidence-validation-receipt-v1"' in deployment
+    assert '"document-review-evidence-validation-receipt"' in deployment
 
     for resource in (
         "mock-exam-item-review-decision-v1.schema.json",

@@ -2286,7 +2286,7 @@ if not {
     "pdf-document-review-control-bootstrap-v5",
     "resolved-execution-plan-v14",
     "resolved-execution-plan-v15",
-    "document-review-evidence-validation-receipt-v1",
+    "document-review-evidence-validation-receipt",
     "resolved-execution-plan-v10",
     "resolved-execution-plan-v13",
     "worker-capacity-policy-v4",
