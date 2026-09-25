@@ -15,8 +15,12 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
     SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE,
     SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
+    SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_PATTERN_INVENTORY_MEMBER,
     SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE,
     SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
+    SCIENCE_VISUAL_PILOT_RESULT_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_PILOT_RESULT_MEMBER,
     LocalImageTrainingControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
@@ -123,6 +127,14 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
         plan_sha256: str
         created_at: datetime
 
+    class _ScienceResult(BaseModel):
+        result_sha256: str
+        completed_at: datetime
+
+    class _ScienceInventory(BaseModel):
+        inventory_sha256: str
+        created_at: datetime
+
     monkeypatch.setattr(control_artifacts, "validate_contract", lambda *_args: None)
     publisher = _Publisher()
     adapter = LocalImageTrainingControlArtifactPublisher(
@@ -148,3 +160,25 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE
     assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PILOT_PLAN_MEMBER
     assert plan_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    result = _ScienceResult(
+        result_sha256="sha256:" + "d" * 64,
+        completed_at=datetime(2026, 9, 25, 18, 10, tzinfo=UTC),
+    )
+    result_pointer = adapter.commit_science_visual_pilot_result(  # type: ignore[arg-type]
+        result
+    )
+    assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PILOT_RESULT_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PILOT_RESULT_MEMBER
+    assert result_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    inventory = _ScienceInventory(
+        inventory_sha256="sha256:" + "e" * 64,
+        created_at=datetime(2026, 9, 25, 18, 15, tzinfo=UTC),
+    )
+    inventory_pointer = adapter.commit_science_visual_pattern_inventory(
+        inventory  # type: ignore[arg-type]
+    )
+    assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PATTERN_INVENTORY_MEMBER
+    assert inventory_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
