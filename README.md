@@ -42,7 +42,7 @@ readiness가 정본입니다.
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
-| 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.5` (`1.4` replay 보존) |
+| 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.6` (`1.4` replay 보존) |
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
@@ -199,7 +199,7 @@ worker는 세 파일을 순서대로 모두 읽고 authoring 결과의 실제 `v
 Artifact provenance와 검증 단계에 남깁니다. HWPX staging은 symlink를 따르지 않는 file descriptor,
 bounded read, SHA-256, identity 재확인과 fresh-target copy를 사용합니다.
 
-이미지 policy 1.5는 occurrence-backed 기출 520개에서 층화한 대표 시각 패턴 12개를 같은 로컬
+이미지 policy 1.6은 occurrence-backed 기출 520개에서 층화한 대표 시각 패턴 12개를 같은 로컬
 SSD-1B 모델·seed로 세 가지 prompt에 입력한 36건 비교에서 정했습니다. HYBRID route는 worker가
 대상·개수·시점·핵심 상태를 담은 bounded English subject를 제출하고, Catalog가 검증된 흑백 시험지
 선화 prefix와 고정 음성 제약을 조합합니다. 그래프·지도·장치·입자모형·셀 구조와 정답을 좌우하는

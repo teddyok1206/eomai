@@ -328,6 +328,12 @@ def test_v6_hybrid_english_subject_uses_benchmarked_assessment_style(tmp_path: P
     )
     assert "photorealistic" in request.generation.negative_prompt
     assert "person" in request.generation.negative_prompt
+    assert "anime" in request.generation.negative_prompt
+    assert "manga" in request.generation.negative_prompt
+    assert "portrait" in request.generation.negative_prompt
+    assert "flat 2D technical line drawing" in request.generation.prompt
+    assert "uniform black outlines" in request.generation.prompt
+    assert "sparse light-gray hatching" in request.generation.prompt
 
 
 def test_assessment_style_contract_fails_closed_on_legacy_korean_subject(tmp_path: Path) -> None:
@@ -377,7 +383,7 @@ def test_local_gpu_prompt_policy_pins_both_team_lead_sources_and_kice_guide() ->
     root = Path(__file__).resolve().parents[2]
 
     assert LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.4"
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.5"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.6"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 3
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path

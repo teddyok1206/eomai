@@ -2,7 +2,7 @@ schema_version: '1.0'
 profile:
   type: image
   key: generated-stimulus-drawing
-  version: 12.1.0
+  version: 12.2.0
 template: prompt-templates/image.md
 input_schema_ref: eom://workflow/image-input@1.24
 output_schema_ref: image-result@12.0

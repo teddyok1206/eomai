@@ -9,7 +9,7 @@ from typing import Final, Literal
 LocalGpuPromptContract = Literal["LEGACY_COMPAT", "ASSESSMENT_LINE_ART_V1"]
 
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.5"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.6"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 180
 
@@ -43,8 +43,8 @@ LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = ("monochrome:",)
 # benchmark, while the same subjects in Korean repeatedly collapsed into unrelated portraits.
 # Scientific labels and exact geometry still belong to the deterministic SVG overlay.
 LOCAL_GPU_ASSESSMENT_STYLE_PREFIX: Final = (
-    "black-and-white Korean science exam illustration, clean white background, crisp simplified "
-    "linework, restrained grayscale texture, no text:"
+    "black-and-white Korean science exam figure, flat 2D technical line drawing, centered isolated "
+    "subject, clean white background, uniform black outlines, sparse light-gray hatching, no text:"
 )
 _LOCAL_GPU_ENGLISH_SUBJECT: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$")
 
@@ -82,9 +82,15 @@ LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS: Final = (
     "shadow",
     "photograph",
     "photorealistic",
+    "anime",
+    "manga",
+    "comic",
+    "cartoon",
     "3d",
+    "render",
     "perspective",
     "cinematic lighting",
+    "dramatic composition",
     "decoration",
     "extra objects",
     "duplicates",
@@ -103,6 +109,12 @@ LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS: Final = (
     "man",
     "woman",
     "child",
+    "face",
+    "portrait",
+    "fashion",
+    "clothing",
+    "stage",
+    "room",
 )
 
 

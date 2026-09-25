@@ -63,13 +63,12 @@ route는 KICE 삽화 reference와 고정 local provider 계약을 그대로 따�
 
 로컬 GPU 모델에는 위 원문 전체를 잘라서 보내지 않는다. Catalog가 원문과 drawing 전체를 immutable
 hash로 보존한 상태에서, image worker가 작성한 `drawing.alt_text`를 GPU의 짧은 의미 주제로 사용한다.
-따라서 HYBRID drawing의 `alt_text`는 무엇을 그릴지 알 수 있는 단일 문장으로 작성하고, 앞뒤 공백을
-포함해 50 Unicode 문자 이하여야 한다. 대상·개수·핵심 관계만 담고, 결정론적 overlay가 담당하는
-글자·숫자·정답·장식 설명은 넣지 마라. HYBRID drawing의 `negative_prompt`는 `null`로 제출한다.
-Catalog가 검토된 두 이미지 규칙에서 고정한 색·배경·글자·숫자·장식 금지 목록을 77토큰 안에서
-GPU에 전달하므로, worker가 같은 조건을 한국어 자유문으로 반복하거나 새 provider 음성 프롬프트를
-만들지 마라. 완전한 팀장 원문, scene_description, scientific_constraints, required_labels 및 SVG
-overlay는 결과에 그대로 남아 검증·합성·감사에 사용된다.
+HYBRID drawing의 `alt_text` 형식과 길이는 아래 `Local GPU subject and routing contract` 하나만 따른다.
+결정론적 overlay가 담당하는 글자·숫자·정답·장식 설명은 넣지 마라. HYBRID drawing의
+`negative_prompt`는 `null`로 제출한다. Catalog가 시험지 선화 스타일과 금지 목록을 붙이므로 worker가
+한국어 자유문, 인물, 사진, 만화 또는 장식 스타일을 추가하지 마라. 완전한 팀장 원문,
+scene_description, scientific_constraints, required_labels 및 SVG overlay는 결과에 그대로 남아
+검증·합성·감사에 사용된다.
 
 SVG text의 `font-family`는 내용에 맞게 다음 정확한 값 중 하나만 사용한다. 철자·공백·fallback 순서를
 바꾸거나 비슷한 별칭을 만들지 마라: 한국어는 `SM JGothic Std, Noto Sans CJK KR`, 영문은
@@ -93,9 +92,10 @@ AUTHORING_RESULT_JSON:
 
 520개 occurrence-backed 기출 분석의 시각 패턴과 고정 SSD-1B 비교 실험에서, 짧은 한국어 subject는
 관련 없는 인물 사진으로 붕괴했고 같은 대상을 영어로 기술하면 의미 정확도가 회복되었다. 또한
-`black and white Korean science exam illustration` 스타일을 명시한 영어 subject가 사진 질감을 줄이고
-시험지용 흑백 선화에 가장 가깝게 수렴했다. 이 관찰은 팀장 원문 두 개나 KICE 삽화 가이드를 바꾸지
-않으며, 로컬 모델에 전달하는 비권위 raster subject만 제한한다.
+영어 subject에 평면 2D 기술 선화, 균일한 검은 윤곽선, 희박한 연회색 해칭, 흰 배경과 넓은 여백을
+명시한 형태가 사진 질감과 만화풍을 줄이고 시험지용 흑백 선화에 가장 가깝게 수렴했다. 인물·사진·
+애니메이션·만화·시네마틱 구도는 provider 고정 음성 제약으로 거부한다. 이 관찰은 팀장 원문 두 개나
+KICE 삽화 가이드를 바꾸지 않으며, 로컬 모델에 전달하는 비권위 raster subject만 제한한다.
 
 `HYBRID_LOCAL_GENERATIVE`는 비인간 동물·유기물·복잡한 자연 질감·현실 자연 장면처럼 raster 표현이
 실제로 필요한 경우에만 사용한다. 그래프, 지도, 실험 장치, 입자 모형, 셀 구조, 축·수치·화살표·경계,

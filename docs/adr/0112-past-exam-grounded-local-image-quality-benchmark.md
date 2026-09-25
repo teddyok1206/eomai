@@ -135,7 +135,8 @@ every diagram scientifically exact; those elements remain deterministic SVG resp
 
 Therefore Content Pack 1.20 requires the image worker to provide a bounded English local-model
 subject for a HYBRID drawing while preserving the complete Korean scene and scientific constraints
-elsewhere in the typed drawing.  Catalog prompt policy 1.5 adds the benchmarked assessment-line-art
+elsewhere in the typed drawing.  Catalog prompt policy 1.6 adds the benchmarked flat technical
+assessment-line-art
 prefix and fixed negative requirements.  The existing Korean policy 1.4 remains a replay-compatible
 fallback for predecessor Pack results; policy selection and revision are included in request
 identity.  No source prompt, accepted Item, Graph record, or predecessor Pack is mutated.
