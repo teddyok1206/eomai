@@ -11,6 +11,7 @@ from eom_image_contracts import (
     build_training_crop_review_draft,
     content_sha256,
 )
+from eom_image_trainer.crop_locator import LocatedVisualRegion
 from eom_image_trainer.proposal_builder import (
     StagedVisualCropSource,
     build_training_crop_proposal_set,
@@ -152,3 +153,63 @@ def test_proposal_builder_records_no_visual_region_without_eligibility_fallback(
         assert str(exc) == "IMAGE_TRAINING_CROP_PROPOSAL_SET_EMPTY"
     else:
         raise AssertionError("an empty crop proposal population was accepted")
+
+
+def test_proposal_builder_skips_overbounded_ocr_candidate_and_reranks() -> None:
+    source = _source()
+    redactions = tuple(
+        ImageEvaluationBoundingBox(
+            left=1000 + index,
+            top=1000,
+            right=1002 + index,
+            bottom=1002,
+        )
+        for index in range(65)
+    )
+    bad = LocatedVisualRegion(
+        crop_bounding_box=ImageEvaluationBoundingBox(
+            left=500,
+            top=500,
+            right=9000,
+            bottom=9000,
+        ),
+        redaction_boxes=redactions,
+        candidate_rank=1,
+        ink_fraction_milli=100,
+    )
+    good = LocatedVisualRegion(
+        crop_bounding_box=ImageEvaluationBoundingBox(
+            left=5000,
+            top=1500,
+            right=9000,
+            bottom=8500,
+        ),
+        redaction_boxes=(),
+        candidate_rank=2,
+        ink_fraction_milli=120,
+    )
+    value = build_training_crop_proposal_set(
+        sources=(source,),
+        preliminary_omissions=(),
+        source_snapshot=ImageEvaluationSourceSnapshot(
+            graph_revision_id="graphrev_" + "7" * 32,
+            graph_snapshot_sha256=_sha("8"),
+            graph_manifest_sha256=_sha("9"),
+            target_count=520,
+            target_set_sha256=_sha("a"),
+        ),
+        training_authorization=_pointer(3, role="authorization"),
+        holdout_evaluation_plan=_pointer(4, role="holdout"),
+        holdout_sample_ids=tuple("imgsample_" + f"{index + 100:032x}" for index in range(12)),
+        holdout_source_anchor_ids=tuple(
+            "assessmentanchor_" + f"{index + 1000:032x}" for index in range(12)
+        ),
+        created_at=datetime(2026, 9, 25, 13, 0, tzinfo=UTC),
+        created_by="operator_test",
+        ocr_locator=lambda _image: (),
+        visual_locator=lambda *_args, **_kwargs: (bad, good),
+    )
+
+    assert len(value.proposals) == 1
+    assert value.proposals[0].candidate_rank == 1
+    assert value.proposals[0].crop_bounding_box == good.crop_bounding_box

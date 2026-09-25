@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal
 
@@ -79,6 +79,7 @@ class StagedVisualCropSource:
 
 OcrLocator = Callable[[Image.Image], tuple[ImageEvaluationBoundingBox, ...]]
 VisualLocator = Callable[..., tuple[LocatedVisualRegion, ...]]
+MAX_REDACTION_BOXES_PER_PROPOSAL = 64
 
 
 def _proposal(source: StagedVisualCropSource, region: LocatedVisualRegion) -> dict[str, object]:
@@ -136,6 +137,17 @@ def build_training_crop_proposal_set(
                 source.page_image,
                 context_bounding_box=source.context_bounding_box,
                 ocr_boxes=ocr_boxes,
+            )
+            regions = tuple(
+                replace(region, candidate_rank=rank)
+                for rank, region in enumerate(
+                    (
+                        value
+                        for value in regions
+                        if len(value.redaction_boxes) <= MAX_REDACTION_BOXES_PER_PROPOSAL
+                    ),
+                    start=1,
+                )
             )
             if not regions:
                 omissions.append(

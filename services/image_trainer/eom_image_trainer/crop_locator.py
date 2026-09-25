@@ -24,6 +24,7 @@ MAX_LOCATOR_DIMENSION = 700
 MAX_OCR_TSV_BYTES = 8 * 1024 * 1024
 MAX_TESSERACT_INPUT_BYTES = 64 * 1024 * 1024
 MAX_PROPOSALS = 8
+MAX_REDACTION_BOXES_PER_PROPOSAL = 64
 _THRESHOLD = 185
 _DILATION_SIZE = 15
 
@@ -306,7 +307,7 @@ def locate_visual_regions(
     ranked.sort(key=lambda value: (-value[0], value[1]))
 
     regions: list[LocatedVisualRegion] = []
-    for rank, (_, work_box, actual_ink) in enumerate(ranked[:MAX_PROPOSALS], start=1):
+    for _, work_box, actual_ink in ranked:
         left, top, right, bottom = work_box
         context_relative = (
             max(0, math.floor(left / scale)),
@@ -331,13 +332,17 @@ def locate_visual_regions(
                 key=lambda value: (value.top, value.left, value.bottom, value.right),
             )
         )
+        if len(redactions) > MAX_REDACTION_BOXES_PER_PROPOSAL:
+            continue
         fraction = max(1, min(1000, round(actual_ink * 1000 / max(1, area))))
         regions.append(
             LocatedVisualRegion(
                 crop_bounding_box=normalized,
                 redaction_boxes=redactions,
-                candidate_rank=rank,
+                candidate_rank=len(regions) + 1,
                 ink_fraction_milli=fraction,
             )
         )
+        if len(regions) == MAX_PROPOSALS:
+            break
     return tuple(regions)
