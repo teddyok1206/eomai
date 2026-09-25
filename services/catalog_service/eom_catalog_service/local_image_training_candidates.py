@@ -8,7 +8,7 @@ candidate is eligible; only a final human review can do that.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, cast
@@ -132,9 +132,42 @@ def select_training_visual_crop_sources(
     """Select exact raster/mixed visual pointers without reading pixels or approving crops."""
 
     holdout = frozenset(holdout_source_anchor_ids)
+    # Legacy assessment anchors are only guaranteed unique inside one extracted item.  A small
+    # number of old analyses reused placeholder-looking anchor IDs for unrelated pages.  The crop
+    # contracts intentionally use an anchor as their grouping key, so those ambiguous occurrences
+    # must be quarantined rather than merged or assigned an invented replacement identity.  This
+    # preliminary pass remains O(a + v) and lets the main projection emit an explicit omission for
+    # every affected immutable source occurrence.
+    anchor_occurrence_counts: Counter[str] = Counter()
+    for source in sources:
+        accepted_source = source.accepted.source
+        extraction = source.extraction
+        if (
+            extraction.extraction_result_id != accepted_source.extraction_result_id
+            or extraction.result_sha256 != accepted_source.extraction_result_sha256
+        ):
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_EXTRACTION_POINTER_MISMATCH")
+        matching_items = tuple(
+            proposal
+            for proposal in extraction.items
+            if proposal.item_proposal_id == accepted_source.item_proposal_id
+            and proposal.item_number == accepted_source.item_number
+        )
+        if len(matching_items) != 1:
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_ITEM_PROPOSAL_UNRESOLVED")
+        anchor_occurrence_counts.update(
+            {
+                anchor_id
+                for pattern in matching_items[0].visual_patterns
+                if pattern.rendering_mode in {"RASTER", "MIXED"}
+                for anchor_id in pattern.source_anchor_ids
+            }
+        )
+    ambiguous_anchors = frozenset(
+        anchor_id for anchor_id, count in anchor_occurrence_counts.items() if count > 1
+    )
     selected: list[TrainingVisualCropSource] = []
     omissions: list[LocalImageTrainingCropProposalOmission] = []
-    seen_anchors: set[str] = set()
     for source in sources:
         accepted_source = source.accepted.source
         extraction = source.extraction
@@ -171,9 +204,6 @@ def select_training_visual_crop_sources(
             _artifact_member(accepted_source.extraction_result_artifact)
         )
         for anchor_id in sorted(patterns_by_anchor):
-            if anchor_id in seen_anchors:
-                raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_DUPLICATE")
-            seen_anchors.add(anchor_id)
             patterns = patterns_by_anchor[anchor_id]
             anchor = anchors.get(anchor_id)
             if anchor is None:
@@ -182,7 +212,9 @@ def select_training_visual_crop_sources(
             kinds = {pattern.representation_kind for pattern in patterns}
             modes = {pattern.rendering_mode for pattern in patterns}
             omission_reason: TrainingCropOmissionReason | None = None
-            if anchor_id in holdout:
+            if anchor_id in ambiguous_anchors:
+                omission_reason = "SOURCE_POINTER_INVALID"
+            elif anchor_id in holdout:
                 omission_reason = "HOLDOUT_SOURCE"
             elif anchor.source_role == "ANSWER_EXPLANATION_DOCUMENT":
                 omission_reason = "ANSWER_EXPLANATION_SOURCE"

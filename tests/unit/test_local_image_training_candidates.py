@@ -79,10 +79,12 @@ def _source(
     *,
     extraction_hash: str = _sha("6"),
     include_bounding_box: bool = True,
+    item_revision_character: str = "a",
+    page_pointer_serial: int = 11,
 ) -> AcceptedVisualTrainingSource:
     extraction_pointer = _pointer(10)
     extraction_pointer = extraction_pointer.model_copy(update={"sha256": extraction_hash})
-    page_pointer = _pointer(11, media_type="image/png")
+    page_pointer = _pointer(page_pointer_serial, media_type="image/png")
     bounding_box = ImageEvaluationBoundingBox(left=1000, top=2000, right=8000, bottom=7000)
     source_anchor = SimpleNamespace(
         anchor_id="assessmentanchor_" + "5" * 32,
@@ -114,7 +116,7 @@ def _source(
         image=page_pointer,
     )
     accepted_source = SimpleNamespace(
-        item_revision_id="itemrev_" + "a" * 32,
+        item_revision_id="itemrev_" + item_revision_character * 32,
         extraction_result_id=extraction.extraction_result_id,
         extraction_result_sha256=extraction_hash,
         extraction_result_artifact=extraction_pointer,
@@ -187,6 +189,24 @@ def test_crop_source_selection_records_holdout_as_omission() -> None:
     assert selected == ()
     assert len(omissions) == 1
     assert omissions[0].reason == "HOLDOUT_SOURCE"
+
+
+def test_crop_source_selection_quarantines_globally_ambiguous_legacy_anchor() -> None:
+    first = _source()
+    second = _source(item_revision_character="d", page_pointer_serial=12)
+
+    selected, omissions = select_training_visual_crop_sources(
+        sources=(first, second),
+        holdout_source_anchor_ids=_holdout_anchors(include_candidate=True),
+    )
+
+    assert selected == ()
+    assert tuple(value.item_revision_id for value in omissions) == (
+        "itemrev_" + "a" * 32,
+        "itemrev_" + "d" * 32,
+    )
+    assert {value.source_anchor_id for value in omissions} == {"assessmentanchor_" + "5" * 32}
+    assert {value.reason for value in omissions} == {"SOURCE_POINTER_INVALID"}
 
 
 def test_projection_records_unbounded_anchor_as_explicit_omission() -> None:
