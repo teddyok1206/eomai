@@ -4,9 +4,11 @@ from copy import deepcopy
 
 import pytest
 from eom_catalog_contracts import (
+    ScienceAssessmentWebAcquisition,
     ScienceAssessmentWebCorpusManifest,
     ScienceAssessmentWebCorpusPlan,
     validate_contract,
+    validate_science_acquisition_against_plan,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_identifiers import content_sha256
@@ -151,6 +153,54 @@ def _manifest(plan: dict[str, object]) -> dict[str, object]:
     return value
 
 
+def _acquisition(plan: dict[str, object]) -> dict[str, object]:
+    success = {
+        "post_url": "https://legendstudy.com/1665",
+        "download_url": "https://t1.daumcdn.net/file/physics.pdf",
+        "link_text": "2026학년도 6월 모의평가 물리학1 문제.pdf",
+        "original_filename": "physics.pdf",
+        "subject_family": "PHYSICS",
+        "subject_label": "물리학1",
+        "issuer_type": "KICE",
+        "administration_year": 2025,
+        "grade": 3,
+        "session_label": "6월 모의평가",
+        "resolved_url": "https://t1.daumcdn.net/file/physics.pdf",
+        "member_path": f"documents/{'1' * 64}.pdf",
+        "sha256": "sha256:" + "1" * 64,
+        "bytes": 4096,
+        "page_count": 4,
+    }
+    value: dict[str, object] = {
+        "schema_version": "science-assessment-web-acquisition/1.0",
+        "plan_id": plan["plan_id"],
+        "plan_sha256": plan["plan_sha256"],
+        "observed_at": "2026-09-25T16:30:00Z",
+        "pdf_validator": {
+            "qpdf_path": "/usr/bin/qpdf",
+            "qpdf_sha256": "sha256:" + "c" * 64,
+            "pdfinfo_path": "/usr/bin/pdfinfo",
+            "pdfinfo_sha256": "sha256:" + "d" * 64,
+        },
+        "successful_observations": [success],
+        "failed_observations": [],
+        "summary": {
+            "scanned_post_count": 1,
+            "candidate_count": 1,
+            "successful_observation_count": 1,
+            "failed_observation_count": 0,
+            "rejected_link_count": 2,
+            "unique_pdf_count": 1,
+            "unique_pdf_bytes": 4096,
+        },
+        "acquisition_sha256": "sha256:" + "0" * 64,
+    }
+    value["acquisition_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "acquisition_sha256"}
+    )
+    return value
+
+
 def test_science_corpus_contracts_match_json_schema_and_models() -> None:
     plan_value = _plan()
     manifest_value = _manifest(plan_value)
@@ -160,6 +210,11 @@ def test_science_corpus_contracts_match_json_schema_and_models() -> None:
     plan = ScienceAssessmentWebCorpusPlan.model_validate(plan_value)
     manifest = ScienceAssessmentWebCorpusManifest.model_validate(manifest_value)
     validate_science_corpus_manifest_against_plan(manifest, plan)
+
+    acquisition_value = _acquisition(plan_value)
+    validate_contract("science-assessment-web-acquisition", acquisition_value)
+    acquisition = ScienceAssessmentWebAcquisition.model_validate(acquisition_value)
+    validate_science_acquisition_against_plan(acquisition, plan)
 
 
 def test_science_corpus_rejects_hash_drift_and_unlisted_host() -> None:

@@ -21,15 +21,18 @@ does not by itself approve model exposure, Graph publication, crop extraction, o
 
 ## Responsibility and boundary
 
-The Catalog-owned acquisition application reads an immutable crawl plan, observes allowed category
-pages at a bounded rate, extracts public PDF links, validates candidates, and materializes exact
-bytes into a protected staging directory.  Network access is confined to the discovery host and the
-plan's closed download-host allowlist.  The downloader never writes to NAS or PostgreSQL.
+The acquisition adapter reads an immutable crawl plan, observes allowed category pages at a bounded
+rate, extracts public PDF links, validates candidates, and materializes exact bytes into a protected
+staging directory.  Network access is confined to the discovery host and the plan's closed
+download-host allowlist.  The downloader never receives database credentials and never writes to
+NAS or PostgreSQL.  It emits a schema-validated, self-hashed local acquisition manifest.
 
-After acquisition validation, the existing Content Intake application shards unique PDFs into at
-most 499 files and 2 GiB per batch and commits them through its existing Artifact boundary.  A final
-small corpus manifest points to each immutable Content Intake source.  Workers never crawl, download,
-or write the source corpus.
+In a separate no-network publication phase, the Catalog application revalidates that acquisition
+manifest and every exact PDF member, shards unique PDFs into at most 499 files and 2 GiB per batch,
+and commits them through the existing Content Intake Artifact boundary.  A final corpus manifest
+points to each immutable Content Intake source.  Workers never crawl, download, or write the source
+corpus.  Separating the phases prevents a native PDF parser handling untrusted bytes from sharing a
+process with database and NAS credentials.
 
 ## Canonical source and revision model
 

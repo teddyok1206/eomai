@@ -747,6 +747,10 @@ from eom_catalog_contracts.pdf_learning_completion import (
     verify_protocol_documents,
 )
 from eom_catalog_contracts.science_assessment_corpus import (
+    ScienceAssessmentAcquisitionCandidate,
+    ScienceAssessmentAcquisitionFailureObservation,
+    ScienceAssessmentAcquisitionSuccess,
+    ScienceAssessmentAcquisitionSummary,
     ScienceAssessmentCorpusAcquisitionFailure,
     ScienceAssessmentCorpusDocument,
     ScienceAssessmentCorpusIntakeShard,
@@ -756,6 +760,8 @@ from eom_catalog_contracts.science_assessment_corpus import (
     ScienceAssessmentCorpusSummary,
     ScienceAssessmentWebCorpusManifest,
     ScienceAssessmentWebCorpusPlan,
+    ScienceAssessmentWebAcquisition,
+    validate_science_acquisition_against_plan,
     validate_science_corpus_manifest_against_plan,
 )
 from eom_catalog_contracts.validation import (
@@ -1389,6 +1395,10 @@ __all__ = [
     "ReviewedItemContentImportResult",
     "RightsPolicyPointer",
     "RightsPolicyProof",
+    "ScienceAssessmentAcquisitionCandidate",
+    "ScienceAssessmentAcquisitionFailureObservation",
+    "ScienceAssessmentAcquisitionSuccess",
+    "ScienceAssessmentAcquisitionSummary",
     "ScienceAssessmentCorpusAcquisitionFailure",
     "ScienceAssessmentCorpusDocument",
     "ScienceAssessmentCorpusIntakeShard",
@@ -1398,6 +1408,7 @@ __all__ = [
     "ScienceAssessmentCorpusSummary",
     "ScienceAssessmentWebCorpusManifest",
     "ScienceAssessmentWebCorpusPlan",
+    "ScienceAssessmentWebAcquisition",
     "SingleChoiceInteraction",
     "SourceRelease",
     "Statement",
@@ -1469,6 +1480,7 @@ __all__ = [
     "validate_mock_exam_planned_placements",
     "validate_reviewed_authoring_guidance",
     "validate_science_corpus_manifest_against_plan",
+    "validate_science_acquisition_against_plan",
     "validate_worker_knowledge_edge_endpoint_types",
     "verify_completion_shards",
     "verify_corpus_completion_receipt_command",

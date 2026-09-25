@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/legacy-assessment/science-assessment-web-acquisition/1.0",
+  "title": "EOM Science Assessment Web Acquisition V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "plan_sha256",
+    "observed_at",
+    "pdf_validator",
+    "successful_observations",
+    "failed_observations",
+    "summary",
+    "acquisition_sha256"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "uri": {"type": "string", "format": "uri", "minLength": 8, "maxLength": 4096},
+    "utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "candidate": {
+      "type": "object",
+      "required": [
+        "post_url",
+        "download_url",
+        "link_text",
+        "original_filename",
+        "subject_family",
+        "subject_label",
+        "issuer_type",
+        "administration_year",
+        "grade",
+        "session_label"
+      ],
+      "properties": {
+        "post_url": {"$ref": "#/$defs/uri"},
+        "download_url": {"$ref": "#/$defs/uri"},
+        "link_text": {"type": "string", "minLength": 1, "maxLength": 512},
+        "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+        "subject_family": {
+          "enum": [
+            "CHEMISTRY",
+            "EARTH_SCIENCE",
+            "GENERAL_SCIENCE",
+            "INTEGRATED_SCIENCE",
+            "LIFE_SCIENCE",
+            "PHYSICS"
+          ]
+        },
+        "subject_label": {"type": "string", "minLength": 1, "maxLength": 128},
+        "issuer_type": {"enum": ["EDUCATION_AUTHORITY", "KICE"]},
+        "administration_year": {"type": "integer", "minimum": 1994, "maximum": 2200},
+        "grade": {"type": "integer", "minimum": 1, "maximum": 3},
+        "session_label": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "science-assessment-web-acquisition/1.0"},
+    "plan_id": {"type": "string", "pattern": "^sciencecorpusplan_[0-9a-f]{32}$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "observed_at": {"$ref": "#/$defs/utc"},
+    "pdf_validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qpdf_path", "qpdf_sha256", "pdfinfo_path", "pdfinfo_sha256"],
+      "properties": {
+        "qpdf_path": {"const": "/usr/bin/qpdf"},
+        "qpdf_sha256": {"$ref": "#/$defs/sha256"},
+        "pdfinfo_path": {"const": "/usr/bin/pdfinfo"},
+        "pdfinfo_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "successful_observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5000,
+      "uniqueItems": true,
+      "items": {
+        "unevaluatedProperties": false,
+        "allOf": [
+          {"$ref": "#/$defs/candidate"},
+          {
+            "type": "object",
+            "required": [
+              "resolved_url",
+              "member_path",
+              "sha256",
+              "bytes",
+              "page_count"
+            ],
+            "properties": {
+              "resolved_url": {"$ref": "#/$defs/uri"},
+              "member_path": {
+                "type": "string",
+                "pattern": "^documents/[0-9a-f]{64}\\.pdf$"
+              },
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "bytes": {"type": "integer", "minimum": 1024, "maximum": 104857600},
+              "page_count": {"type": "integer", "minimum": 1, "maximum": 512}
+            }
+          }
+        ]
+      }
+    },
+    "failed_observations": {
+      "type": "array",
+      "maxItems": 5000,
+      "uniqueItems": true,
+      "items": {
+        "unevaluatedProperties": false,
+        "allOf": [
+          {"$ref": "#/$defs/candidate"},
+          {
+            "type": "object",
+            "required": ["error_code"],
+            "properties": {
+              "error_code": {
+                "type": "string",
+                "pattern": "^SCIENCE_CORPUS_[A-Z0-9_]{1,96}$"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scanned_post_count",
+        "candidate_count",
+        "successful_observation_count",
+        "failed_observation_count",
+        "rejected_link_count",
+        "unique_pdf_count",
+        "unique_pdf_bytes"
+      ],
+      "properties": {
+        "scanned_post_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "candidate_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "successful_observation_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "failed_observation_count": {"type": "integer", "minimum": 0, "maximum": 5000},
+        "rejected_link_count": {"type": "integer", "minimum": 0},
+        "unique_pdf_count": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "unique_pdf_bytes": {"type": "integer", "minimum": 1024}
+      }
+    },
+    "acquisition_sha256": {"$ref": "#/$defs/sha256"}
+  }
+}

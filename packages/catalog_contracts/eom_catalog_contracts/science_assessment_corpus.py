@@ -220,6 +220,108 @@ class ScienceAssessmentCorpusPdfValidator(FrozenModel):
     pdfinfo_sha256: Sha256
 
 
+class ScienceAssessmentAcquisitionCandidate(FrozenModel):
+    post_url: str = Field(min_length=8, max_length=4096)
+    download_url: str = Field(min_length=8, max_length=4096)
+    link_text: str = Field(min_length=1, max_length=512)
+    original_filename: str = Field(min_length=1, max_length=255)
+    subject_family: SubjectFamily
+    subject_label: str = Field(min_length=1, max_length=128)
+    issuer_type: IssuerType
+    administration_year: int = Field(ge=1994, le=2200)
+    grade: int = Field(ge=1, le=3)
+    session_label: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def canonical_candidate(self) -> ScienceAssessmentAcquisitionCandidate:
+        _require_https_url(self.post_url, host="legendstudy.com")
+        _require_https_url(self.download_url)
+        _require_canonical_filename(self.original_filename)
+        if self.link_text != unicodedata.normalize("NFC", self.link_text):
+            raise ValueError("acquisition link text is not NFC")
+        return self
+
+
+class ScienceAssessmentAcquisitionSuccess(ScienceAssessmentAcquisitionCandidate):
+    resolved_url: str = Field(min_length=8, max_length=4096)
+    member_path: str = Field(pattern=r"^documents/[0-9a-f]{64}\.pdf$")
+    sha256: Sha256
+    bytes: int = Field(ge=1024, le=100 * 1024 * 1024)
+    page_count: int = Field(ge=1, le=512)
+
+    @model_validator(mode="after")
+    def exact_member(self) -> ScienceAssessmentAcquisitionSuccess:
+        _require_https_url(self.resolved_url)
+        if self.member_path != f"documents/{self.sha256.removeprefix('sha256:')}.pdf":
+            raise ValueError("acquisition member path differs from its content hash")
+        return self
+
+
+class ScienceAssessmentAcquisitionFailureObservation(ScienceAssessmentAcquisitionCandidate):
+    error_code: str = Field(pattern=r"^SCIENCE_CORPUS_[A-Z0-9_]{1,96}$")
+
+
+class ScienceAssessmentAcquisitionSummary(FrozenModel):
+    scanned_post_count: int = Field(ge=1, le=5000)
+    candidate_count: int = Field(ge=1, le=5000)
+    successful_observation_count: int = Field(ge=1, le=5000)
+    failed_observation_count: int = Field(ge=0, le=5000)
+    rejected_link_count: int = Field(ge=0)
+    unique_pdf_count: int = Field(ge=1, le=5000)
+    unique_pdf_bytes: int = Field(ge=1024)
+
+
+class ScienceAssessmentWebAcquisition(FrozenModel):
+    schema_version: Literal["science-assessment-web-acquisition/1.0"]
+    plan_id: str = Field(pattern=r"^sciencecorpusplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    observed_at: UtcDatetime
+    pdf_validator: ScienceAssessmentCorpusPdfValidator
+    successful_observations: tuple[ScienceAssessmentAcquisitionSuccess, ...] = Field(
+        min_length=1, max_length=5000
+    )
+    failed_observations: tuple[ScienceAssessmentAcquisitionFailureObservation, ...] = Field(
+        max_length=5000
+    )
+    summary: ScienceAssessmentAcquisitionSummary
+    acquisition_sha256: Sha256
+
+    @model_validator(mode="after")
+    def canonical_acquisition(self) -> ScienceAssessmentWebAcquisition:
+        successful_keys = tuple(
+            (value.post_url, value.download_url, value.link_text, value.sha256)
+            for value in self.successful_observations
+        )
+        failed_keys = tuple(
+            (value.post_url, value.download_url, value.link_text, value.error_code)
+            for value in self.failed_observations
+        )
+        if successful_keys != tuple(sorted(set(successful_keys))):
+            raise ValueError("successful acquisition observations are not canonical")
+        if failed_keys != tuple(sorted(set(failed_keys))):
+            raise ValueError("failed acquisition observations are not canonical")
+        by_hash: dict[str, tuple[int, int]] = {}
+        for observation in self.successful_observations:
+            identity = (observation.bytes, observation.page_count)
+            existing = by_hash.setdefault(observation.sha256, identity)
+            if existing != identity:
+                raise ValueError("acquisition content metadata conflicts")
+        if (
+            self.summary.successful_observation_count != len(self.successful_observations)
+            or self.summary.failed_observation_count != len(self.failed_observations)
+            or self.summary.candidate_count
+            != len(self.successful_observations) + len(self.failed_observations)
+            or self.summary.unique_pdf_count != len(by_hash)
+            or self.summary.unique_pdf_bytes != sum(identity[0] for identity in by_hash.values())
+        ):
+            raise ValueError("acquisition summary differs from its observations")
+        if self.acquisition_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"acquisition_sha256"})
+        ):
+            raise ValueError("acquisition manifest hash differs")
+        return self
+
+
 class ScienceAssessmentWebCorpusManifest(FrozenModel):
     schema_version: Literal["science-assessment-web-corpus-manifest/1.0"]
     corpus_id: str = Field(pattern=r"^sciencecorpus_[0-9a-f]{32}$")
@@ -333,3 +435,29 @@ def validate_science_corpus_manifest_against_plan(
     for failure in manifest.failures:
         if urlsplit(failure.download_url).hostname not in allowed_hosts:
             raise ValueError("corpus failure host is outside the plan allowlist")
+
+
+def validate_science_acquisition_against_plan(
+    acquisition: ScienceAssessmentWebAcquisition,
+    plan: ScienceAssessmentWebCorpusPlan,
+) -> None:
+    """Validate a local acquisition checkpoint against its immutable network plan."""
+
+    if acquisition.plan_id != plan.plan_id or acquisition.plan_sha256 != plan.plan_sha256:
+        raise ValueError("science acquisition references another plan")
+    if acquisition.summary.scanned_post_count > plan.max_post_pages:
+        raise ValueError("science acquisition exceeds the plan post limit")
+    allowed_hosts = set(plan.allowed_download_hosts)
+    for observation in (*acquisition.successful_observations, *acquisition.failed_observations):
+        if (
+            observation.subject_family not in plan.subject_families
+            or observation.issuer_type not in plan.issuer_types
+            or urlsplit(observation.post_url).hostname != "legendstudy.com"
+            or urlsplit(observation.download_url).hostname not in allowed_hosts
+        ):
+            raise ValueError("science acquisition observation is outside the plan")
+        if isinstance(observation, ScienceAssessmentAcquisitionSuccess) and (
+            urlsplit(observation.resolved_url).hostname not in allowed_hosts
+            or observation.bytes > plan.max_pdf_bytes
+        ):
+            raise ValueError("science acquisition result is outside the plan")

@@ -16,6 +16,7 @@ PACKAGE_ROOT = (
     / "legacy-assessment"
 )
 SCHEMAS = (
+    "science-assessment-web-acquisition-v1.schema.json",
     "science-assessment-web-corpus-manifest-v1.schema.json",
     "science-assessment-web-corpus-plan-v1.schema.json",
 )

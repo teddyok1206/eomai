@@ -598,6 +598,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:f3507d450aa77c8f90d8d500de185b9091e92ae556d1f3b4b075c13f75245180",
         ),
+        "science-assessment-web-acquisition": CatalogSchemaResource(
+            "schemas/legacy-assessment/science-assessment-web-acquisition-v1.schema.json",
+            "resources/legacy-assessment/science-assessment-web-acquisition-v1.schema.json",
+            "1.0",
+            "sha256:28493d454739761c352c3459c3a09adc4f1786b63e6e72eb3d5b5b0a89ddeec5",
+        ),
         "science-assessment-web-corpus-plan": CatalogSchemaResource(
             "schemas/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
             "resources/legacy-assessment/science-assessment-web-corpus-plan-v1.schema.json",
