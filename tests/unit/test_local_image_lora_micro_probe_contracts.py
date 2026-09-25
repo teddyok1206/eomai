@@ -7,12 +7,15 @@ from typing import cast
 import pytest
 from eom_image_contracts import (
     LocalImageLoraMicroAdapterManifest,
+    LocalImageLoraMicroEvaluationCommand,
+    LocalImageLoraMicroEvaluationResult,
     LocalImageLoraMicroProbeCommand,
     LocalImageLoraMicroProbePlan,
     LocalImageLoraMicroProbeWorkerResult,
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_micro_evaluation_result,
     validate_micro_probe_worker_result,
 )
 from pydantic import BaseModel, ValidationError
@@ -239,6 +242,83 @@ def _result_value() -> dict[str, object]:
     return {**body, "result_sha256": content_sha256(body)}
 
 
+def _evaluation_command_value() -> dict[str, object]:
+    training_command = LocalImageLoraMicroProbeCommand.model_validate(_command_value())
+    training_result = LocalImageLoraMicroProbeWorkerResult.model_validate(_result_value())
+    assert training_result.adapter_manifest is not None
+    cases = [
+        {
+            "sample_id": f"imgsample_{index + 100:032x}",
+            "source_anchor_id": f"assessmentanchor_{index + 100:032x}",
+            "positive_prompt": f"Assessment-style holdout illustration {index}",
+            "positive_prompt_sha256": text_sha256(f"Assessment-style holdout illustration {index}"),
+            "negative_prompt": "photorealistic, decorative, labels, watermark",
+            "negative_prompt_sha256": text_sha256("photorealistic, decorative, labels, watermark"),
+            "seed": 20260925 + index,
+        }
+        for index in range(3)
+    ]
+    body: dict[str, object] = {
+        "schema_version": "local-image-lora-micro-evaluation-command/1.0",
+        "training_run_id": training_command.training_run_id,
+        "probe_plan_pointer": training_command.probe_plan_pointer.model_dump(mode="json"),
+        "probe_plan_sha256": training_command.probe_plan_sha256,
+        "training_result_sha256": training_result.result_sha256,
+        "adapter_manifest": training_result.adapter_manifest.model_dump(mode="json"),
+        "holdout_evaluation_plan": (
+            training_command.probe_plan.holdout_evaluation_plan.model_dump(mode="json")
+        ),
+        "holdout_plan_sha256": training_command.probe_plan.holdout_evaluation_plan.sha256,
+        "cases": cases,
+        "inference_steps": 20,
+        "guidance_scale": 7.5,
+        "generation_width": 800,
+        "generation_height": 504,
+        "delivery_width": 800,
+        "delivery_height": 500,
+        "staged_adapter_root": "inputs/adapter",
+        "output_root_member": "outputs",
+        "source_commit": "c" * 40,
+        "timeout_seconds": 1800,
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    body["evaluation_run_id"] = "imgmicroevalrun_" + identity[:32]
+    body["command_sha256"] = content_sha256(body)
+    return body
+
+
+def _evaluation_result_value() -> dict[str, object]:
+    command = LocalImageLoraMicroEvaluationCommand.model_validate(_evaluation_command_value())
+    outputs = [
+        {
+            "sample_id": case.sample_id,
+            "variant": variant,
+            "member_path": f"outputs/{case.sample_id}-{variant.lower()}.png",
+            "sha256": "sha256:" + f"{index + 1:064x}",
+            "size_bytes": 4096,
+            "width_px": 800,
+            "height_px": 500,
+        }
+        for index, (case, variant) in enumerate(
+            (case, variant) for case in command.cases for variant in ("ADAPTER", "BASE")
+        )
+    ]
+    outputs.sort(key=lambda value: (str(value["sample_id"]), str(value["variant"])))
+    body: dict[str, object] = {
+        "schema_version": "local-image-lora-micro-evaluation-result/1.0",
+        "evaluation_run_id": command.evaluation_run_id,
+        "command_sha256": command.command_sha256,
+        "training_result_sha256": command.training_result_sha256,
+        "adapter_manifest_sha256": command.adapter_manifest.manifest_sha256,
+        "status": "SUCCEEDED",
+        "outputs": outputs,
+        "error_code": None,
+        "started_at": "2026-09-25T12:21:00Z",
+        "completed_at": "2026-09-25T12:30:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
 @pytest.mark.parametrize(
     ("contract", "factory", "model"),
     [
@@ -248,6 +328,16 @@ def _result_value() -> dict[str, object]:
             "lora-micro-probe-worker-result",
             _result_value,
             LocalImageLoraMicroProbeWorkerResult,
+        ),
+        (
+            "lora-micro-evaluation-command",
+            _evaluation_command_value,
+            LocalImageLoraMicroEvaluationCommand,
+        ),
+        (
+            "lora-micro-evaluation-result",
+            _evaluation_result_value,
+            LocalImageLoraMicroEvaluationResult,
         ),
     ],
 )
@@ -294,3 +384,21 @@ def test_micro_probe_worker_result_binds_command() -> None:
     changed = result.model_copy(update={"command_sha256": _sha("0")})
     with pytest.raises(ValueError, match="exact command"):
         validate_micro_probe_worker_result(command, changed)
+
+
+def test_micro_evaluation_result_has_exact_base_adapter_pairs() -> None:
+    command = LocalImageLoraMicroEvaluationCommand.model_validate(_evaluation_command_value())
+    result = LocalImageLoraMicroEvaluationResult.model_validate(_evaluation_result_value())
+    validate_micro_evaluation_result(command, result)
+    changed = result.model_copy(update={"outputs": result.outputs[:-1]})
+    with pytest.raises(ValueError, match="exact paired coverage"):
+        validate_micro_evaluation_result(command, changed)
+
+
+def test_micro_evaluation_rejects_prompt_hash_drift() -> None:
+    value = _evaluation_command_value()
+    cases = cast(list[dict[str, object]], deepcopy(value["cases"]))
+    cases[0]["positive_prompt"] = "A drifted holdout prompt"
+    value["cases"] = cases
+    with pytest.raises(ValidationError, match="prompt hash mismatch"):
+        LocalImageLoraMicroEvaluationCommand.model_validate(value)

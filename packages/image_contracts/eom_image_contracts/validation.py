@@ -38,6 +38,8 @@ SCHEMA_FILES = {
     "lora-micro-probe-command": "local-image-lora-micro-probe-command-v1.schema.json",
     "lora-micro-adapter-manifest": "local-image-lora-micro-adapter-manifest-v1.schema.json",
     "lora-micro-probe-worker-result": ("local-image-lora-micro-probe-worker-result-v1.schema.json"),
+    "lora-micro-evaluation-command": ("local-image-lora-micro-evaluation-command-v1.schema.json"),
+    "lora-micro-evaluation-result": ("local-image-lora-micro-evaluation-result-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -105,6 +107,12 @@ SCHEMA_SHA256 = {
     ),
     "lora-micro-probe-worker-result": (
         "sha256:f6f1a795dcc433428b5b4a8a4597870c22243e0fee7ead8c947e4eaf19743d5b"
+    ),
+    "lora-micro-evaluation-command": (
+        "sha256:bb4ec8dbaceaa8c89044a857963408678f7a08e29cd0c8244d1e9b3e21578faf"
+    ),
+    "lora-micro-evaluation-result": (
+        "sha256:06fe871bafaa1a6cd1a8195836692ec2169d1ec6cdedc8d77282f19b85b04857"
     ),
 }
 
