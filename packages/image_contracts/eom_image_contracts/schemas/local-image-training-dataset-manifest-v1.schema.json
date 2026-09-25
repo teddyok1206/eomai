@@ -195,6 +195,7 @@
     "previous_revision_id",
     "source_snapshot",
     "training_authorization",
+    "candidate_inventory",
     "base_model",
     "eligibility_policy_revision",
     "holdout_evaluation_plan",
@@ -238,6 +239,9 @@
       "$ref": "#/$defs/sourceSnapshot"
     },
     "training_authorization": {
+      "$ref": "#/$defs/artifactPointer"
+    },
+    "candidate_inventory": {
       "$ref": "#/$defs/artifactPointer"
     },
     "base_model": {

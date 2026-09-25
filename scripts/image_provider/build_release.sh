@@ -50,6 +50,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-quality-evaluation-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-quality-evaluation-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-training-authorization-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-training-candidate-inventory-v1.schema.json",
         "eom_image_contracts/schemas/local-image-training-dataset-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-adapter-manifest-v1.schema.json",

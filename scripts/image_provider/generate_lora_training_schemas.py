@@ -301,6 +301,7 @@ def _dataset_manifest() -> dict[str, Any]:
                 "previous_revision_id",
                 "source_snapshot",
                 "training_authorization",
+                "candidate_inventory",
                 "base_model",
                 "eligibility_policy_revision",
                 "holdout_evaluation_plan",
@@ -328,6 +329,7 @@ def _dataset_manifest() -> dict[str, Any]:
                 },
                 "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
                 "training_authorization": {"$ref": "#/$defs/artifactPointer"},
+                "candidate_inventory": {"$ref": "#/$defs/artifactPointer"},
                 "base_model": {"$ref": "#/$defs/modelPointer"},
                 "eligibility_policy_revision": {"const": "local-image-lora-eligibility/1.0"},
                 "holdout_evaluation_plan": {"$ref": "#/$defs/artifactPointer"},
@@ -358,6 +360,113 @@ def _dataset_manifest() -> dict[str, Any]:
                     "pattern": "^[A-Za-z0-9._:@-]+$",
                 },
                 "dataset_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _candidate_inventory() -> dict[str, Any]:
+    schema = _base(
+        "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0",
+        "EOM Local Image Training Candidate Inventory V1",
+    )
+    candidate = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "candidate_id",
+            "item_revision_id",
+            "extraction_result",
+            "source_anchor_id",
+            "source_page_image",
+            "physical_page",
+            "bounding_box",
+            "rights_policy",
+            "representation_kind",
+            "rendering_mode",
+            "caption_en",
+            "caption_sha256",
+        ],
+        "properties": {
+            "candidate_id": {
+                "type": "string",
+                "pattern": "^imgtraincandidate_[0-9a-f]{32}$",
+            },
+            "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+            "extraction_result": {"$ref": "#/$defs/artifactPointer"},
+            "source_anchor_id": {
+                "type": "string",
+                "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+            },
+            "source_page_image": {"$ref": "#/$defs/artifactPointer"},
+            "physical_page": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "bounding_box": {"$ref": "#/$defs/boundingBox"},
+            "rights_policy": {"$ref": "#/$defs/rightsPolicy"},
+            "representation_kind": {"enum": ["COMPOSITE", "PHOTOGRAPH"]},
+            "rendering_mode": {"enum": ["MIXED", "RASTER"]},
+            "caption_en": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 180,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+            },
+            "caption_sha256": {"$ref": "#/$defs/sha256"},
+        },
+    }
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "inventory_id",
+                "source_snapshot",
+                "holdout_evaluation_plan",
+                "holdout_sample_ids",
+                "holdout_source_anchor_ids",
+                "candidates",
+                "created_at",
+                "created_by",
+                "inventory_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-training-candidate-inventory/1.0"},
+                "inventory_id": {
+                    "type": "string",
+                    "pattern": "^imgtraininventory_[0-9a-f]{32}$",
+                },
+                "source_snapshot": {"$ref": "#/$defs/sourceSnapshot"},
+                "holdout_evaluation_plan": {"$ref": "#/$defs/artifactPointer"},
+                "holdout_sample_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "uniqueItems": True,
+                    "items": {"type": "string", "pattern": "^imgsample_[0-9a-f]{32}$"},
+                },
+                "holdout_source_anchor_ids": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 12,
+                    "uniqueItems": True,
+                    "items": {
+                        "type": "string",
+                        "pattern": "^assessmentanchor_[0-9a-f]{32}$",
+                    },
+                },
+                "candidates": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 537,
+                    "items": candidate,
+                },
+                "created_at": DATE_TIME,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "inventory_sha256": {"$ref": "#/$defs/sha256"},
             },
         }
     )
@@ -634,6 +743,7 @@ def _training_receipt() -> dict[str, Any]:
 SCHEMAS = {
     "local-image-training-authorization-v1.schema.json": _authorization(),
     "local-image-training-dataset-manifest-v1.schema.json": _dataset_manifest(),
+    "local-image-training-candidate-inventory-v1.schema.json": _candidate_inventory(),
     "local-image-lora-training-plan-v1.schema.json": _training_plan(),
     "local-image-lora-adapter-manifest-v1.schema.json": _adapter_manifest(),
     "local-image-lora-training-receipt-v1.schema.json": _training_receipt(),

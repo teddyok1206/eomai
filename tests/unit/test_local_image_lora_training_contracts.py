@@ -11,6 +11,7 @@ from eom_image_contracts import (
     LocalImageLoraTrainingPlan,
     LocalImageLoraTrainingReceipt,
     LocalImageTrainingAuthorization,
+    LocalImageTrainingCandidateInventory,
     LocalImageTrainingDatasetManifest,
     content_sha256,
     text_sha256,
@@ -18,6 +19,7 @@ from eom_image_contracts import (
     validate_lora_training_plan,
     validate_lora_training_receipt,
     validate_training_dataset_authorization,
+    validate_training_dataset_inventory,
 )
 from pydantic import ValidationError
 
@@ -128,6 +130,45 @@ def _sample(index: int) -> dict[str, object]:
     }
 
 
+def _candidate(index: int) -> dict[str, object]:
+    sample = _sample(index)
+    return {
+        "candidate_id": "imgtraincandidate_" + f"{index + 1000:032x}",
+        "item_revision_id": sample["item_revision_id"],
+        "extraction_result": sample["extraction_result"],
+        "source_anchor_id": sample["source_anchor_id"],
+        "source_page_image": sample["source_page_image"],
+        "physical_page": index + 1,
+        "bounding_box": sample["bounding_box"],
+        "rights_policy": sample["rights_policy"],
+        "representation_kind": sample["representation_kind"],
+        "rendering_mode": sample["rendering_mode"],
+        "caption_en": sample["caption_en"],
+        "caption_sha256": sample["caption_sha256"],
+    }
+
+
+def _inventory_value() -> dict[str, object]:
+    body = {
+        "schema_version": "local-image-training-candidate-inventory/1.0",
+        "inventory_id": "imgtraininventory_" + "a" * 32,
+        "source_snapshot": _source_snapshot(),
+        "holdout_evaluation_plan": _pointer(
+            "c",
+            member_path="evaluation/evaluation-plan.json",
+            schema_ref=("eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"),
+        ),
+        "holdout_sample_ids": ["imgsample_" + f"{index + 5000:032x}" for index in range(12)],
+        "holdout_source_anchor_ids": [
+            "assessmentanchor_" + f"{index + 6000:032x}" for index in range(12)
+        ],
+        "candidates": [_candidate(index) for index in range(100)],
+        "created_at": "2026-09-25T02:03:00Z",
+        "created_by": "operator_test",
+    }
+    return {**body, "inventory_sha256": content_sha256(body)}
+
+
 def _dataset_value() -> dict[str, object]:
     samples = [_sample(index) for index in range(100)]
     holdout_samples = ["imgsample_" + f"{index + 5000:032x}" for index in range(12)]
@@ -143,6 +184,13 @@ def _dataset_value() -> dict[str, object]:
             "b",
             member_path="authorization/training-authorization.json",
             schema_ref=("eom://schemas/image-provider/local-image-training-authorization/1.0"),
+        ),
+        "candidate_inventory": _pointer(
+            "a",
+            member_path="inventory/training-candidates.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
+            ),
         ),
         "base_model": _model_pointer(),
         "eligibility_policy_revision": "local-image-lora-eligibility/1.0",
@@ -267,6 +315,7 @@ def _receipt_value() -> dict[str, object]:
 def test_training_schema_resources_are_canonical_mirrors() -> None:
     names = (
         "local-image-training-authorization-v1.schema.json",
+        "local-image-training-candidate-inventory-v1.schema.json",
         "local-image-training-dataset-manifest-v1.schema.json",
         "local-image-lora-training-plan-v1.schema.json",
         "local-image-lora-adapter-manifest-v1.schema.json",
@@ -284,6 +333,10 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
         (
             "local-image-training-authorization-v1.schema.json",
             LocalImageTrainingAuthorization,
+        ),
+        (
+            "local-image-training-candidate-inventory-v1.schema.json",
+            LocalImageTrainingCandidateInventory,
         ),
         (
             "local-image-training-dataset-manifest-v1.schema.json",
@@ -308,12 +361,14 @@ def test_training_json_schema_and_pydantic_top_level_required_fields_match() -> 
 
 def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     authorization_value = _authorization_value()
+    inventory_value = _inventory_value()
     dataset_value = _dataset_value()
     plan_value = _plan_value()
     adapter_value = _adapter_value()
     receipt_value = _receipt_value()
     for name, value in (
         ("training-authorization", authorization_value),
+        ("training-candidate-inventory", inventory_value),
         ("training-dataset-manifest", dataset_value),
         ("lora-training-plan", plan_value),
         ("lora-adapter-manifest", adapter_value),
@@ -321,11 +376,13 @@ def test_training_contracts_validate_and_bind_exact_inputs() -> None:
     ):
         validate_contract(name, value)
     authorization = LocalImageTrainingAuthorization.model_validate(authorization_value)
+    inventory = LocalImageTrainingCandidateInventory.model_validate(inventory_value)
     dataset = LocalImageTrainingDatasetManifest.model_validate(dataset_value)
     plan = LocalImageLoraTrainingPlan.model_validate(plan_value)
     adapter = LocalImageLoraAdapterManifest.model_validate(adapter_value)
     receipt = LocalImageLoraTrainingReceipt.model_validate(receipt_value)
     validate_training_dataset_authorization(dataset, authorization)
+    validate_training_dataset_inventory(dataset, inventory)
     validate_lora_training_plan(plan, dataset)
     validate_lora_training_receipt(receipt, plan, adapter)
 
@@ -380,6 +437,22 @@ def test_dataset_authorization_rejects_rights_drift() -> None:
     dataset = LocalImageTrainingDatasetManifest.model_validate(value)
     with pytest.raises(ValueError, match="lacks an exact authorized rights policy"):
         validate_training_dataset_authorization(dataset, authorization)
+
+
+def test_dataset_inventory_rejects_candidate_drift() -> None:
+    inventory = LocalImageTrainingCandidateInventory.model_validate(_inventory_value())
+    value = _dataset_value()
+    samples = value["samples"]
+    assert isinstance(samples, list)
+    samples[0]["caption_en"] = "Different but internally valid caption."
+    samples[0]["caption_sha256"] = text_sha256(samples[0]["caption_en"])
+    value["sample_set_sha256"] = content_sha256(samples)
+    body = copy.deepcopy(value)
+    body.pop("dataset_sha256")
+    value["dataset_sha256"] = content_sha256(body)
+    dataset = LocalImageTrainingDatasetManifest.model_validate(value)
+    with pytest.raises(ValueError, match="drifts from its candidate inventory"):
+        validate_training_dataset_inventory(dataset, inventory)
 
 
 def test_training_receipt_rejects_nonterminal_shape() -> None:

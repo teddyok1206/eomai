@@ -21,6 +21,9 @@ from eom_image_contracts.models import (
 
 AUTHORIZATION_SCHEMA_REF = "eom://schemas/image-provider/local-image-training-authorization/1.0"
 DATASET_SCHEMA_REF = "eom://schemas/image-provider/local-image-training-dataset-manifest/1.0"
+CANDIDATE_INVENTORY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0"
+)
 TRAINING_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-training-plan/1.0"
 ADAPTER_MANIFEST_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-adapter-manifest/1.0"
 EVALUATION_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-quality-evaluation-plan/1.0"
@@ -136,6 +139,97 @@ class LocalImageTrainingSample(FrozenModel):
         return self
 
 
+class LocalImageTrainingCandidate(FrozenModel):
+    candidate_id: str = Field(pattern=r"^imgtraincandidate_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str = Field(pattern=r"^assessmentanchor_[0-9a-f]{32}$")
+    source_page_image: ImageEvaluationArtifactMember
+    physical_page: int = Field(ge=1, le=100_000)
+    bounding_box: ImageEvaluationBoundingBox
+    rights_policy: ImageTrainingRightsPolicy
+    representation_kind: Literal["COMPOSITE", "PHOTOGRAPH"]
+    rendering_mode: Literal["MIXED", "RASTER"]
+    caption_en: str = Field(
+        min_length=3,
+        max_length=180,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$",
+    )
+    caption_sha256: Sha256
+
+    @model_validator(mode="after")
+    def candidate_is_coherent(self) -> LocalImageTrainingCandidate:
+        if self.source_page_image.media_type != "image/png":
+            raise ValueError("training candidate source page image must be PNG")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("training candidate caption hash mismatch")
+        return self
+
+
+class LocalImageTrainingCandidateInventory(FrozenModel):
+    schema_version: Literal["local-image-training-candidate-inventory/1.0"]
+    inventory_id: str = Field(pattern=r"^imgtraininventory_[0-9a-f]{32}$")
+    source_snapshot: ImageEvaluationSourceSnapshot
+    holdout_evaluation_plan: ImageEvaluationArtifactMember
+    holdout_sample_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    holdout_source_anchor_ids: tuple[str, ...] = Field(min_length=12, max_length=12)
+    candidates: tuple[LocalImageTrainingCandidate, ...] = Field(min_length=1, max_length=537)
+    created_at: datetime
+    created_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    inventory_sha256: Sha256
+
+    @field_validator("holdout_sample_ids")
+    @classmethod
+    def valid_holdout_samples(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        pattern = re.compile(r"^imgsample_[0-9a-f]{32}$")
+        if any(pattern.fullmatch(item) is None for item in value):
+            raise ValueError("invalid holdout sample identity")
+        return value
+
+    @field_validator("holdout_source_anchor_ids")
+    @classmethod
+    def valid_holdout_anchors(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        pattern = re.compile(r"^assessmentanchor_[0-9a-f]{32}$")
+        if any(pattern.fullmatch(item) is None for item in value):
+            raise ValueError("invalid holdout source anchor identity")
+        return value
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_inventory_is_coherent(self) -> LocalImageTrainingCandidateInventory:
+        _require_pointer(
+            self.holdout_evaluation_plan,
+            schema_ref=EVALUATION_PLAN_SCHEMA_REF,
+            member_path="evaluation/evaluation-plan.json",
+        )
+        for values, label in (
+            (self.holdout_sample_ids, "holdout samples"),
+            (self.holdout_source_anchor_ids, "holdout source anchors"),
+        ):
+            if values != tuple(sorted(values)) or len(values) != len(set(values)):
+                raise ValueError(f"{label} must be uniquely sorted")
+        candidate_ids = tuple(candidate.candidate_id for candidate in self.candidates)
+        if candidate_ids != tuple(sorted(candidate_ids)) or len(candidate_ids) != len(
+            set(candidate_ids)
+        ):
+            raise ValueError("training candidates must be uniquely sorted")
+        anchors = tuple(candidate.source_anchor_id for candidate in self.candidates)
+        if len(anchors) != len(set(anchors)):
+            raise ValueError("training candidate source anchors must be unique")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"inventory_sha256"}))
+        if self.inventory_sha256 != expected:
+            raise ValueError("training candidate inventory hash mismatch")
+        return self
+
+
 class LocalImageTrainingDatasetManifest(FrozenModel):
     schema_version: Literal["local-image-training-dataset-manifest/1.0"]
     dataset_id: str = Field(pattern=r"^imgdataset_[0-9a-f]{32}$")
@@ -144,6 +238,7 @@ class LocalImageTrainingDatasetManifest(FrozenModel):
     previous_revision_id: str | None = Field(pattern=r"^imgdatasetrev_[0-9a-f]{32}$")
     source_snapshot: ImageEvaluationSourceSnapshot
     training_authorization: ImageEvaluationArtifactMember
+    candidate_inventory: ImageEvaluationArtifactMember
     base_model: LocalImageModelPointer
     eligibility_policy_revision: Literal["local-image-lora-eligibility/1.0"]
     holdout_evaluation_plan: ImageEvaluationArtifactMember
@@ -188,6 +283,11 @@ class LocalImageTrainingDatasetManifest(FrozenModel):
             self.training_authorization,
             schema_ref=AUTHORIZATION_SCHEMA_REF,
             member_path="authorization/training-authorization.json",
+        )
+        _require_pointer(
+            self.candidate_inventory,
+            schema_ref=CANDIDATE_INVENTORY_SCHEMA_REF,
+            member_path="inventory/training-candidates.json",
         )
         _require_pointer(
             self.holdout_evaluation_plan,
@@ -402,6 +502,38 @@ def validate_training_dataset_authorization(
     for sample in dataset.samples:
         if authorized.get(sample.rights_policy.rights_policy_revision_id) != sample.rights_policy:
             raise ValueError("training sample lacks an exact authorized rights policy")
+
+
+def validate_training_dataset_inventory(
+    dataset: LocalImageTrainingDatasetManifest,
+    inventory: LocalImageTrainingCandidateInventory,
+) -> None:
+    """Validate that every dataset sample came from one exact candidate inventory."""
+
+    if (
+        dataset.source_snapshot != inventory.source_snapshot
+        or dataset.holdout_evaluation_plan != inventory.holdout_evaluation_plan
+        or dataset.holdout_sample_ids != inventory.holdout_sample_ids
+        or dataset.holdout_source_anchor_ids != inventory.holdout_source_anchor_ids
+    ):
+        raise ValueError("training dataset and candidate inventory pins do not match")
+    candidates = {candidate.source_anchor_id: candidate for candidate in inventory.candidates}
+    for sample in dataset.samples:
+        candidate = candidates.get(sample.source_anchor_id)
+        if candidate is None:
+            raise ValueError("training sample is absent from the candidate inventory")
+        if (
+            sample.item_revision_id != candidate.item_revision_id
+            or sample.extraction_result != candidate.extraction_result
+            or sample.source_page_image != candidate.source_page_image
+            or sample.bounding_box != candidate.bounding_box
+            or sample.rights_policy != candidate.rights_policy
+            or sample.representation_kind != candidate.representation_kind
+            or sample.rendering_mode != candidate.rendering_mode
+            or sample.caption_en != candidate.caption_en
+            or sample.caption_sha256 != candidate.caption_sha256
+        ):
+            raise ValueError("training sample drifts from its candidate inventory")
 
 
 def validate_lora_training_plan(

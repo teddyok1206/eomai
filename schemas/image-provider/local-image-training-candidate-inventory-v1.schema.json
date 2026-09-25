@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "eom://schemas/image-provider/local-image-training-dataset-manifest/1.0",
-  "title": "EOM Local Image Training Dataset Manifest V1",
+  "$id": "eom://schemas/image-provider/local-image-training-candidate-inventory/1.0",
+  "title": "EOM Local Image Training Candidate Inventory V1",
   "type": "object",
   "additionalProperties": false,
   "$defs": {
@@ -189,66 +189,26 @@
   },
   "required": [
     "schema_version",
-    "dataset_id",
-    "dataset_revision_id",
-    "revision_number",
-    "previous_revision_id",
+    "inventory_id",
     "source_snapshot",
-    "training_authorization",
-    "candidate_inventory",
-    "base_model",
-    "eligibility_policy_revision",
     "holdout_evaluation_plan",
     "holdout_sample_ids",
     "holdout_source_anchor_ids",
-    "samples",
-    "sample_set_sha256",
+    "candidates",
     "created_at",
     "created_by",
-    "dataset_sha256"
+    "inventory_sha256"
   ],
   "properties": {
     "schema_version": {
-      "const": "local-image-training-dataset-manifest/1.0"
+      "const": "local-image-training-candidate-inventory/1.0"
     },
-    "dataset_id": {
+    "inventory_id": {
       "type": "string",
-      "pattern": "^imgdataset_[0-9a-f]{32}$"
-    },
-    "dataset_revision_id": {
-      "type": "string",
-      "pattern": "^imgdatasetrev_[0-9a-f]{32}$"
-    },
-    "revision_number": {
-      "type": "integer",
-      "minimum": 1,
-      "maximum": 100000
-    },
-    "previous_revision_id": {
-      "anyOf": [
-        {
-          "type": "string",
-          "pattern": "^imgdatasetrev_[0-9a-f]{32}$"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "pattern": "^imgtraininventory_[0-9a-f]{32}$"
     },
     "source_snapshot": {
       "$ref": "#/$defs/sourceSnapshot"
-    },
-    "training_authorization": {
-      "$ref": "#/$defs/artifactPointer"
-    },
-    "candidate_inventory": {
-      "$ref": "#/$defs/artifactPointer"
-    },
-    "base_model": {
-      "$ref": "#/$defs/modelPointer"
-    },
-    "eligibility_policy_revision": {
-      "const": "local-image-lora-eligibility/1.0"
     },
     "holdout_evaluation_plan": {
       "$ref": "#/$defs/artifactPointer"
@@ -273,32 +233,31 @@
         "pattern": "^assessmentanchor_[0-9a-f]{32}$"
       }
     },
-    "samples": {
+    "candidates": {
       "type": "array",
-      "minItems": 100,
-      "maxItems": 200,
+      "minItems": 1,
+      "maxItems": 537,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "training_sample_id",
+          "candidate_id",
           "item_revision_id",
           "extraction_result",
           "source_anchor_id",
           "source_page_image",
+          "physical_page",
           "bounding_box",
           "rights_policy",
           "representation_kind",
           "rendering_mode",
-          "crop_member",
           "caption_en",
-          "caption_sha256",
-          "perceptual_hash"
+          "caption_sha256"
         ],
         "properties": {
-          "training_sample_id": {
+          "candidate_id": {
             "type": "string",
-            "pattern": "^imgtrainsample_[0-9a-f]{32}$"
+            "pattern": "^imgtraincandidate_[0-9a-f]{32}$"
           },
           "item_revision_id": {
             "type": "string",
@@ -313,6 +272,11 @@
           },
           "source_page_image": {
             "$ref": "#/$defs/artifactPointer"
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
           },
           "bounding_box": {
             "$ref": "#/$defs/boundingBox"
@@ -332,41 +296,6 @@
               "RASTER"
             ]
           },
-          "crop_member": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "member_path",
-              "media_type",
-              "width_px",
-              "height_px",
-              "size_bytes",
-              "sha256"
-            ],
-            "properties": {
-              "member_path": {
-                "type": "string",
-                "pattern": "^samples/imgtrainsample_[0-9a-f]{32}\\.png$"
-              },
-              "media_type": {
-                "const": "image/png"
-              },
-              "width_px": {
-                "const": 768
-              },
-              "height_px": {
-                "const": 512
-              },
-              "size_bytes": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 8388608
-              },
-              "sha256": {
-                "$ref": "#/$defs/sha256"
-              }
-            }
-          },
           "caption_en": {
             "type": "string",
             "minLength": 3,
@@ -375,16 +304,9 @@
           },
           "caption_sha256": {
             "$ref": "#/$defs/sha256"
-          },
-          "perceptual_hash": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{16}$"
           }
         }
       }
-    },
-    "sample_set_sha256": {
-      "$ref": "#/$defs/sha256"
     },
     "created_at": {
       "type": "string",
@@ -396,7 +318,7 @@
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9._:@-]+$"
     },
-    "dataset_sha256": {
+    "inventory_sha256": {
       "$ref": "#/$defs/sha256"
     }
   }

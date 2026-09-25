@@ -46,12 +46,15 @@ from eom_image_contracts.training import (
     LocalImageLoraTrainingRuntime,
     LocalImageTrainerDependencies,
     LocalImageTrainingAuthorization,
+    LocalImageTrainingCandidate,
+    LocalImageTrainingCandidateInventory,
     LocalImageTrainingCropMember,
     LocalImageTrainingDatasetManifest,
     LocalImageTrainingSample,
     validate_lora_training_plan,
     validate_lora_training_receipt,
     validate_training_dataset_authorization,
+    validate_training_dataset_inventory,
 )
 from eom_image_contracts.validation import SCHEMA_SHA256, load_schema, validate_contract
 
@@ -93,6 +96,8 @@ __all__ = [
     "LocalImageRuntime",
     "LocalImageTrainerDependencies",
     "LocalImageTrainingAuthorization",
+    "LocalImageTrainingCandidate",
+    "LocalImageTrainingCandidateInventory",
     "LocalImageTrainingCropMember",
     "LocalImageTrainingDatasetManifest",
     "LocalImageTrainingSample",
@@ -109,4 +114,5 @@ __all__ = [
     "validate_lora_training_receipt",
     "validate_quality_evaluation_result",
     "validate_training_dataset_authorization",
+    "validate_training_dataset_inventory",
 ]
