@@ -30,6 +30,7 @@ from eom_catalog_service.workflow_catalog import (
 )
 from eom_hwpx_contracts import ContentTeamImageSlot
 from eom_identifiers import content_sha256, sha256_file
+from eom_image_contracts import text_sha256
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.models import CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX
 from eom_workflow.schemas import ROLE_ALLOWED_RESULT_SCHEMAS
@@ -1171,7 +1172,8 @@ def test_v5_local_background_commits_one_pinned_four_member_artifact(
         ),
     )
 
-    def render(*_args: object, **_kwargs: object) -> SimpleNamespace:
+    def render(*_args: object, **kwargs: object) -> SimpleNamespace:
+        assert kwargs["prompt_contract"] == "LEGACY_COMPAT"
         return SimpleNamespace(
             svg_path=svg,
             background_path=background,
@@ -1185,6 +1187,7 @@ def test_v5_local_background_commits_one_pinned_four_member_artifact(
             renderer_sha256="sha256:" + "a" * 64,
             font_sha256="sha256:" + "b" * 64,
             font_manifest_sha256="sha256:" + "c" * 64,
+            prompt_policy_revision="local-gpu-image-prompt-policy/1.4",
         )
 
     monkeypatch.setattr(
@@ -1209,6 +1212,9 @@ def test_v5_local_background_commits_one_pinned_four_member_artifact(
     assert stimulus["result"]["local_image_binding_sha256"] == binding["binding_sha256"]
     assert stimulus["result"]["local_image_request_sha256"] == "sha256:" + "2" * 64
     assert stimulus["result"]["local_image_receipt_sha256"] == "sha256:" + "1" * 64
+    assert stimulus["result"]["local_image_policy_sha256"] == text_sha256(
+        "local-gpu-image-prompt-policy/1.4"
+    )
     assert stimulus["result"]["local_image_unit"] == (
         "eom-image-provider@imgreq_" + "3" * 32 + ".service"
     )
@@ -1294,9 +1300,10 @@ def test_v6_hybrid_plan_invokes_one_local_raster_and_commits_a_semantic_member(
     )
     calls = 0
 
-    def render_hybrid(*_args: object, **_kwargs: object) -> SimpleNamespace:
+    def render_hybrid(*_args: object, **kwargs: object) -> SimpleNamespace:
         nonlocal calls
         calls += 1
+        assert kwargs["prompt_contract"] == "LEGACY_COMPAT"
         return SimpleNamespace(
             svg_path=svg,
             background_path=raster,
@@ -1310,6 +1317,7 @@ def test_v6_hybrid_plan_invokes_one_local_raster_and_commits_a_semantic_member(
             renderer_sha256="sha256:" + "a" * 64,
             font_sha256="sha256:" + "b" * 64,
             font_manifest_sha256="sha256:" + "c" * 64,
+            prompt_policy_revision="local-gpu-image-prompt-policy/1.4",
         )
 
     monkeypatch.setattr(
@@ -1333,6 +1341,9 @@ def test_v6_hybrid_plan_invokes_one_local_raster_and_commits_a_semantic_member(
     }
     assert stimulus["result"]["production_route"] == "HYBRID_LOCAL_GENERATIVE"
     assert stimulus["result"]["route_reason"] == "HUMAN_OR_ANIMAL_REQUIRED"
+    assert stimulus["result"]["local_image_policy_sha256"] == text_sha256(
+        "local-gpu-image-prompt-policy/1.4"
+    )
     assert stimulus["result"]["local_image_raster_sha256"] == sha256_file(raster)
     assert "local_image_background_sha256" not in stimulus["result"]
 

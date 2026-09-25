@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-quality-evaluation-result/1.0",
+  "title": "EOM local image quality evaluation result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "plan_sha256",
+    "status",
+    "completed_at",
+    "outputs",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "local-image-quality-evaluation-result/1.0"},
+    "evaluation_id": {"type": "string", "pattern": "^imageeval_[0-9a-f]{32}$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "status": {"enum": ["AUTOMATED_COMPLETE", "MANUAL_COMPLETE", "PARTIAL", "FAILED"]},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "outputs": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {"$ref": "#/$defs/output"}
+    },
+    "result_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grayscale_fraction_milli",
+        "white_background_fraction_milli",
+        "dark_ink_fraction_milli",
+        "edge_fraction_milli",
+        "ink_bbox_coverage_milli",
+        "ocr_glyph_count"
+      ],
+      "properties": {
+        "grayscale_fraction_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "white_background_fraction_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "dark_ink_fraction_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "edge_fraction_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "ink_bbox_coverage_milli": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "ocr_glyph_count": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "manualReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_fidelity",
+        "assessment_style",
+        "unwanted_text",
+        "extra_objects",
+        "cropped_subject",
+        "notes"
+      ],
+      "properties": {
+        "semantic_fidelity": {"type": "integer", "minimum": 1, "maximum": 5},
+        "assessment_style": {"type": "integer", "minimum": 1, "maximum": 5},
+        "unwanted_text": {"type": "boolean"},
+        "extra_objects": {"type": "boolean"},
+        "cropped_subject": {"type": "boolean"},
+        "notes": {"type": "string", "maxLength": 500}
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "variant_id",
+        "request",
+        "receipt",
+        "metrics",
+        "manual_review"
+      ],
+      "properties": {
+        "sample_id": {"type": "string", "pattern": "^imgsample_[0-9a-f]{32}$"},
+        "variant_id": {
+          "enum": ["ASSESSMENT_STYLE_EN", "CURRENT_KO", "ENGLISH_SUBJECT"]
+        },
+        "request": {"$ref": "eom://schemas/image-provider/local-image-generation-request/1.0"},
+        "receipt": {"$ref": "eom://schemas/image-provider/local-image-generation-receipt/1.0"},
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "manual_review": {
+          "oneOf": [
+            {"$ref": "#/$defs/manualReview"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,8 @@ SCHEMA_FILES = {
     "provider-binding": "local-image-provider-binding-v1.schema.json",
     "generation-request": "local-image-generation-request-v1.schema.json",
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
+    "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
+    "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -26,6 +28,12 @@ SCHEMA_SHA256 = {
     "provider-binding": "sha256:5669a9e9d47b0e681b165dd7a8d71500d7f0552c968759273d4107eb488f00be",
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
+    "quality-evaluation-plan": (
+        "sha256:d0968b5e3237cef4edd5581f8e72e768c0e9c4c64efd4008d1bdeaed2c1497ca"
+    ),
+    "quality-evaluation-result": (
+        "sha256:58ec74c1d1485fdaa5847bdfa8adb8603743d68db7f6c612ac36cf2f524a3335"
+    ),
 }
 
 

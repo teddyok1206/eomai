@@ -13,7 +13,7 @@ import struct
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal, cast
 
 from eom_identifiers import sha256_file
 from eom_image_contracts import (
@@ -33,8 +33,9 @@ from eom_workflow.models import (
 
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_MAX_SUBJECT_CHARS,
-    LOCAL_GPU_PROMPT_POLICY_REVISION,
-    compose_local_gpu_prompts,
+    LocalGpuPromptContract,
+    compose_local_gpu_prompt_plan,
+    local_gpu_prompt_policy_revision,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -115,6 +116,7 @@ class LocalImageMaterialization:
     final_path: Path
     receipt_path: Path
     unit_name: str
+    prompt_policy_revision: str
 
 
 def load_local_image_provider_binding(
@@ -163,6 +165,7 @@ class FixedLocalImageProviderAdapter:
         overlay_path: Path,
         binding: LocalImageProviderBinding,
         output_directory: Path,
+        prompt_contract: LocalGpuPromptContract,
     ) -> LocalImageMaterialization:
         if drawing.production_route not in {
             "LOCAL_GENERATIVE_BACKGROUND",
@@ -176,6 +179,7 @@ class FixedLocalImageProviderAdapter:
             drawing=drawing,
             binding=binding,
             overlay_path=overlay_path,
+            prompt_contract=prompt_contract,
         )
         provider_gid = _provider_group_id(self.settings.local_image_provider_group)
         workspace = _prepare_workspace(
@@ -202,6 +206,7 @@ class FixedLocalImageProviderAdapter:
             final_path=output_directory / FINAL_MEMBER,
             receipt_path=receipt_path,
             unit_name=unit_name,
+            prompt_policy_revision=local_gpu_prompt_policy_revision(prompt_contract),
         )
 
 
@@ -213,6 +218,7 @@ def _build_request(
     drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
     binding: LocalImageProviderBinding,
     overlay_path: Path,
+    prompt_contract: LocalGpuPromptContract = "LEGACY_COMPAT",
 ) -> LocalImageCompositeRequest:
     if (
         _WORKFLOW_ID.fullmatch(workflow_id) is None
@@ -230,10 +236,20 @@ def _build_request(
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     else:
         subject = drawing.generation_prompt
-    prompt, negative = compose_local_gpu_prompts(
-        subject=subject,
-        background_only=drawing.production_route == "LOCAL_GENERATIVE_BACKGROUND",
+    production_route = cast(
+        Literal["LOCAL_GENERATIVE_BACKGROUND", "HYBRID_LOCAL_GENERATIVE"],
+        drawing.production_route,
     )
+    try:
+        prompt_plan = compose_local_gpu_prompt_plan(
+            subject=subject,
+            production_route=production_route,
+            prompt_contract=prompt_contract,
+        )
+    except ValueError as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID") from exc
+    prompt = prompt_plan.positive_prompt
+    negative = prompt_plan.negative_prompt
     if len(prompt) > 4000 or len(negative) > 2000:
         raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
     prompt_sha256 = text_sha256(prompt)
@@ -244,7 +260,7 @@ def _build_request(
             "result_revision_id": result_revision_id,
             "drawing_sha256": drawing_hash,
             "binding_sha256": binding.binding_sha256,
-            "prompt_policy_revision": LOCAL_GPU_PROMPT_POLICY_REVISION,
+            "prompt_policy_revision": prompt_plan.policy_revision,
             "prompt_sha256": prompt_sha256,
             "negative_prompt_sha256": negative_prompt_sha256,
         }

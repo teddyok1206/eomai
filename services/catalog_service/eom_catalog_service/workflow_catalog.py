@@ -41,6 +41,7 @@ from eom_image_contracts import (
     SVG_ALLOWED_FONT_FAMILIES,
     LocalImageProviderBinding,
     content_json_bytes,
+    text_sha256,
 )
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_orchestrator.database import build_session_factory
@@ -127,6 +128,7 @@ from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
     load_local_image_provider_binding,
 )
+from eom_catalog_service.local_image_prompt_policy import LocalGpuPromptContract
 from eom_catalog_service.models import (
     ContentIntakeBatchRecord,
     ContentPackActivationRecord,
@@ -166,6 +168,19 @@ COMPONENT_TYPES = {
 ComponentType = Literal[
     "UPPER_STEM", "IMAGE_SPEC", "REVIEW_REPORT", "METADATA", "ITEM_CONTENT", "IMAGE"
 ]
+
+
+def _local_image_prompt_contract(
+    workflow: WorkflowInstanceRecord,
+) -> LocalGpuPromptContract:
+    """Select only from the immutable Content Pack version pinned at workflow start."""
+
+    content_pack = workflow.runtime_context.get("content_pack")
+    if isinstance(content_pack, dict) and content_pack.get("version") == "1.20.0":
+        return "ASSESSMENT_LINE_ART_V1"
+    return "LEGACY_COMPAT"
+
+
 ROLE_BY_RESULT_SCHEMA = {
     "authoring-result@1.0": "authoring",
     "authoring-result@2.0": "authoring",
@@ -732,6 +747,7 @@ class WorkflowCatalogService:
                     drawing=drawing,
                     binding=binding,
                     adapter=self.local_image,
+                    prompt_contract="LEGACY_COMPAT",
                 )
                 raster_member = (
                     RASTER_MEMBER
@@ -769,6 +785,7 @@ class WorkflowCatalogService:
                     "local_image_binding_sha256": binding.binding_sha256,
                     "local_image_request_sha256": local_rendered.request_sha256,
                     "local_image_receipt_sha256": receipt.receipt_sha256,
+                    "local_image_policy_sha256": text_sha256(local_rendered.prompt_policy_revision),
                     "local_image_unit": local_rendered.unit_name,
                     (
                         "local_image_raster_sha256"
@@ -1224,6 +1241,7 @@ class WorkflowCatalogService:
             if isinstance(provider_value, dict)
             else None
         )
+        prompt_contract = _local_image_prompt_contract(workflow)
         committed: list[ContentTeamStimulusPointer] = []
         for item in image_drawings:
             drawing = item.drawing
@@ -1242,6 +1260,7 @@ class WorkflowCatalogService:
                     drawing=drawing,
                     binding=provider,
                     adapter=self.local_image,
+                    prompt_contract=prompt_contract,
                     operation_suffix=suffix,
                 )
                 files = {
@@ -1260,6 +1279,7 @@ class WorkflowCatalogService:
                     "local_image_binding_sha256": provider.binding_sha256,
                     "local_image_request_sha256": local_rendered.request_sha256,
                     "local_image_receipt_sha256": local_rendered.receipt.receipt_sha256,
+                    "local_image_policy_sha256": text_sha256(local_rendered.prompt_policy_revision),
                 }
                 file_metadata = {
                     PNG_MEMBER: {
@@ -1632,6 +1652,7 @@ class WorkflowCatalogService:
             "1.17.0",
             "1.18.0",
             "1.19.0",
+            "1.20.0",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1640,7 +1661,7 @@ class WorkflowCatalogService:
                     "content-team pack requires a typed content-team item brief",
                 )
             if (
-                release_version in {"1.16.0", "1.16.1", "1.17.0", "1.18.0", "1.19.0"}
+                release_version in {"1.16.0", "1.16.1", "1.17.0", "1.18.0", "1.19.0", "1.20.0"}
             ) != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
@@ -1652,6 +1673,7 @@ class WorkflowCatalogService:
                 "1.17.0",
                 "1.18.0",
                 "1.19.0",
+                "1.20.0",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode

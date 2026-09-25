@@ -24,6 +24,7 @@ from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
     LocalImageMaterialization,
 )
+from eom_catalog_service.local_image_prompt_policy import LocalGpuPromptContract
 from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
 from eom_catalog_service.staging import (
     create_catalog_operation_directory,
@@ -73,6 +74,7 @@ class RenderedLocalImageStimulus:
     renderer_sha256: str
     font_sha256: str
     font_manifest_sha256: str
+    prompt_policy_revision: str
 
 
 def render_generated_stimulus(
@@ -180,6 +182,7 @@ def render_generated_local_vector_stimulus(
     drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
     binding: LocalImageProviderBinding,
     adapter: FixedLocalImageProviderAdapter,
+    prompt_contract: LocalGpuPromptContract,
     operation_suffix: str | None = None,
 ) -> RenderedLocalImageStimulus:
     """Materialize a transparent SVG overlay through the fixed local raster provider boundary."""
@@ -211,6 +214,7 @@ def render_generated_local_vector_stimulus(
         overlay_path=overlay_path,
         binding=binding,
         output_directory=operation,
+        prompt_contract=prompt_contract,
     )
     validate_generated_png(materialized.background_path)
     validate_generated_png(materialized.final_path)
@@ -227,6 +231,7 @@ def render_generated_local_vector_stimulus(
         renderer_sha256=provenance.renderer_sha256,
         font_sha256=provenance.font_sha256,
         font_manifest_sha256=provenance.font_manifest_sha256,
+        prompt_policy_revision=materialized.prompt_policy_revision,
     )
 
 

@@ -38,11 +38,11 @@ readiness가 정본입니다.
 | --- | --- |
 | 단일 문항 Workflow | `generic-item-development@1.13.0` |
 | 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
-| Content Pack | `generated-knowledge-item@1.19.0` |
+| Content Pack | `generated-knowledge-item@1.20.0` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
-| 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.4` |
+| 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.5` (`1.4` replay 보존) |
 | 기출 풀이보고서 Workflow | `knowledge-analysis@10.0.0`, result `@10.0` |
 | 자료 형식 | `content-team-material-requirement/1.0`, Item Brief `4.0` |
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
@@ -198,6 +198,15 @@ worker는 세 파일을 순서대로 모두 읽고 authoring 결과의 실제 `v
 의미 설명과 흑백·흰 배경·장식 금지 정책만 전달하고, 전체 팀장 원문과 정확한 기하·label은
 Artifact provenance와 검증 단계에 남깁니다. HWPX staging은 symlink를 따르지 않는 file descriptor,
 bounded read, SHA-256, identity 재확인과 fresh-target copy를 사용합니다.
+
+이미지 policy 1.5는 occurrence-backed 기출 520개에서 층화한 대표 시각 패턴 12개를 같은 로컬
+SSD-1B 모델·seed로 세 가지 prompt에 입력한 36건 비교에서 정했습니다. HYBRID route는 worker가
+대상·개수·시점·핵심 상태를 담은 bounded English subject를 제출하고, Catalog가 검증된 흑백 시험지
+선화 prefix와 고정 음성 제약을 조합합니다. 그래프·지도·장치·입자모형·셀 구조와 정답을 좌우하는
+기하는 계속 SVG로 만듭니다. Pack 1.19 이하의 기존 한국어 subject는 policy 1.4로 재생되며, Pack
+version과 policy hash는 새 결과의 request/Artifact provenance에 고정됩니다. 설계와 표본·실패 규칙은
+[Past-exam-grounded local image quality benchmark](docs/adr/0112-past-exam-grounded-local-image-quality-benchmark.md)에
+기록되어 있습니다.
 
 서로 다른 자료 형식을 한 시험지로 합칠 때 per-Item HWPX header가 완전히 같은 bytes가 아닐 수
 있습니다. Whole-exam renderer는 기존 정의가 정확한 prefix인 append-only header superset만

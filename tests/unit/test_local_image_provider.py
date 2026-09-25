@@ -16,10 +16,14 @@ from eom_image_contracts import (
     LocalImageCompositeRequest,
     LocalImageGenerationRequest,
     LocalImageModelManifest,
+    LocalImageProviderBinding,
+    LocalImageQualityEvaluationPlan,
+    LocalImageQualityEvaluationResult,
     LocalImageRuntime,
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_quality_evaluation_result,
 )
 from eom_image_provider.model_manifest import SSD1B_REQUIRED_FILES, create_model_manifest
 from eom_image_provider.provider import (
@@ -182,6 +186,27 @@ class FakeBackend:
         )
 
 
+class QualityFakeBackend(FakeBackend):
+    def generate(
+        self, *, model_directory: Path, request: LocalImageGenerationRequest
+    ) -> GeneratedBackground:
+        assert model_directory.name == "files"
+        assert request.request_id.startswith("imgreq_")
+        return GeneratedBackground(
+            png_bytes=_png(),
+            runtime=LocalImageRuntime(
+                python_version="3.11.15",
+                torch_version="2.7.1+cu128",
+                diffusers_version="0.35.2",
+                transformers_version="4.56.2",
+                cuda_version="12.8",
+                gpu_name="NVIDIA GeForce RTX 5080",
+                compute_capability="12.0",
+                peak_gpu_memory_bytes=1024,
+            ),
+        )
+
+
 def _composite_request(
     manifest: LocalImageModelManifest, overlay: bytes
 ) -> LocalImageCompositeRequest:
@@ -213,6 +238,8 @@ def test_contract_resources_are_canonical_mirrors() -> None:
         "local-image-provider-binding-v1.schema.json",
         "local-image-composite-request-v1.schema.json",
         "local-image-composite-receipt-v1.schema.json",
+        "local-image-quality-evaluation-plan-v1.schema.json",
+        "local-image-quality-evaluation-result-v1.schema.json",
     ):
         canonical = REPOSITORY_ROOT / "schemas" / "image-provider" / name
         packaged = (
@@ -224,6 +251,191 @@ def test_contract_resources_are_canonical_mirrors() -> None:
             / name
         )
         assert canonical.read_bytes() == packaged.read_bytes()
+
+
+def _quality_plan(manifest: LocalImageModelManifest) -> LocalImageQualityEvaluationPlan:
+    binding_body = {
+        "schema_version": "local-image-provider-binding/1.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-generative-background/1.0",
+        "model": {
+            "model_id": manifest.model_id,
+            "model_revision_id": manifest.model_revision_id,
+            "manifest_sha256": manifest.manifest_sha256,
+            "provider_family": manifest.provider_family,
+            "runtime_contract_version": manifest.runtime_contract_version,
+        },
+        "sampler": {
+            "contract": "euler-discrete/ssd-1b-v1",
+            "inference_steps": 20,
+            "guidance_scale": 7.5,
+            "dtype": "float16",
+        },
+        "timeout_seconds": 600,
+    }
+    binding = LocalImageProviderBinding.model_validate(
+        {**binding_body, "binding_sha256": content_sha256(binding_body)}
+    )
+    variants = (
+        {
+            "variant_id": "ASSESSMENT_STYLE_EN",
+            "label": "assessment style",
+            "policy_revision": "evaluation/assessment-style-en-v1",
+        },
+        {
+            "variant_id": "CURRENT_KO",
+            "label": "current Korean subject",
+            "policy_revision": "local-gpu-image-prompt-policy/1.4",
+        },
+        {
+            "variant_id": "ENGLISH_SUBJECT",
+            "label": "English subject",
+            "policy_revision": "evaluation/english-subject-v1",
+        },
+    )
+    prompts = []
+    for variant in variants:
+        variant_id = variant["variant_id"]
+        positive = f"monochrome: fossil sample, {variant_id.lower()}"
+        negative = "color, text, labels, numbers"
+        prompts.append(
+            {
+                "variant_id": variant_id,
+                "positive_prompt": positive,
+                "positive_prompt_sha256": text_sha256(positive),
+                "negative_prompt": negative,
+                "negative_prompt_sha256": text_sha256(negative),
+            }
+        )
+    sample = {
+        "sample_id": "imgsample_" + "5" * 32,
+        "item_revision_id": "itemrev_" + "6" * 32,
+        "extraction_result": {
+            "artifact_id": "artifact_" + "7" * 32,
+            "artifact_revision_id": "rev_" + "8" * 32,
+            "member_path": "result.json",
+            "schema_ref": "legacy-item-extraction-result/1.0",
+            "media_type": "application/json",
+            "sha256": "sha256:" + "9" * 64,
+        },
+        "visual_pattern": {
+            "pattern_id": "visualpattern_" + "a" * 32,
+            "representation_kind": "PHOTOGRAPH",
+            "rendering_mode": "RASTER",
+            "color_mode": "GRAYSCALE",
+            "background": "WHITE",
+            "panel_layout": "SINGLE",
+            "features": ["LABELS"],
+            "pedagogical_function": "CONTEXT",
+            "composition_summary_sha256": "sha256:" + "b" * 64,
+            "reconstruction_guidance_sha256": "sha256:" + "c" * 64,
+        },
+        "source_anchor_id": "assessmentanchor_" + "f" * 32,
+        "source_page_image": {
+            "artifact_id": "artifact_" + "d" * 32,
+            "artifact_revision_id": "rev_" + "e" * 32,
+            "member_path": "source/pages/assessmentpage_" + "f" * 32 + ".png",
+            "schema_ref": "assessment-page-image/1.0",
+            "media_type": "image/png",
+            "sha256": "sha256:" + "1" * 64,
+        },
+        "physical_page": 3,
+        "bounding_box": {"left": 100, "top": 200, "right": 9000, "bottom": 8000},
+        "seed": 20260925,
+        "prompts": prompts,
+    }
+    body = {
+        "schema_version": "local-image-quality-evaluation-plan/1.0",
+        "evaluation_id": "imageeval_" + "2" * 32,
+        "created_at": "2026-09-25T00:00:00Z",
+        "source_snapshot": {
+            "graph_revision_id": "graphrev_" + "3" * 32,
+            "graph_snapshot_sha256": "sha256:" + "4" * 64,
+            "graph_manifest_sha256": "sha256:" + "5" * 64,
+            "target_count": 520,
+            "target_set_sha256": "sha256:" + "6" * 64,
+        },
+        "provider_binding": binding.model_dump(mode="json"),
+        "selection_method": "STRATIFIED_DETERMINISTIC_V1",
+        "population_pattern_count": 537,
+        "variants": list(variants),
+        "samples": [sample],
+    }
+    value = {**body, "plan_sha256": content_sha256(body)}
+    validate_contract("quality-evaluation-plan", value)
+    return LocalImageQualityEvaluationPlan.model_validate(value)
+
+
+def test_quality_evaluation_plan_result_and_cross_validation(tmp_path: Path) -> None:
+    root, manifest = _store(tmp_path)
+    plan = _quality_plan(manifest)
+    sample = plan.samples[0]
+    outputs = []
+    for index, prompt in enumerate(sample.prompts):
+        body = {
+            "schema_version": "local-image-generation-request/1.0",
+            "request_id": "imgreq_" + f"{index + 10:032x}",
+            "idempotency_key": f"image-quality-test:{index:032x}",
+            "model": plan.provider_binding.model.model_dump(mode="json"),
+            "prompt": prompt.positive_prompt,
+            "prompt_sha256": prompt.positive_prompt_sha256,
+            "negative_prompt": prompt.negative_prompt,
+            "negative_prompt_sha256": prompt.negative_prompt_sha256,
+            "seed": sample.seed,
+            "sampler": plan.provider_binding.sampler.model_dump(mode="json"),
+            "generation_canvas": {"width_px": 800, "height_px": 504},
+            "delivery_canvas": {"width_px": 800, "height_px": 500},
+            "output_member": "generated-background.png",
+            "timeout_seconds": plan.provider_binding.timeout_seconds,
+        }
+        request = LocalImageGenerationRequest.model_validate(
+            {**body, "request_sha256": content_sha256(body)}
+        )
+        workspace = tmp_path / f"quality-{index}"
+        workspace.mkdir(mode=0o700)
+        receipt = generate_background(
+            model_store_root=root,
+            workspace=workspace,
+            request=request,
+            backend=QualityFakeBackend(),
+        )
+        outputs.append(
+            {
+                "sample_id": sample.sample_id,
+                "variant_id": prompt.variant_id,
+                "request": request.model_dump(mode="json"),
+                "receipt": receipt.model_dump(mode="json"),
+                "metrics": {
+                    "grayscale_fraction_milli": 1000,
+                    "white_background_fraction_milli": 1000,
+                    "dark_ink_fraction_milli": 0,
+                    "edge_fraction_milli": 0,
+                    "ink_bbox_coverage_milli": 0,
+                    "ocr_glyph_count": 0,
+                },
+                "manual_review": None,
+            }
+        )
+    body = {
+        "schema_version": "local-image-quality-evaluation-result/1.0",
+        "evaluation_id": plan.evaluation_id,
+        "plan_sha256": plan.plan_sha256,
+        "status": "AUTOMATED_COMPLETE",
+        "completed_at": "2026-09-25T00:05:00Z",
+        "outputs": outputs,
+    }
+    value = {**body, "result_sha256": content_sha256(body)}
+    validate_contract("quality-evaluation-result", value)
+    result = LocalImageQualityEvaluationResult.model_validate(value)
+    validate_quality_evaluation_result(plan, result)
+
+
+def test_quality_evaluation_rejects_plan_drift(tmp_path: Path) -> None:
+    _, manifest = _store(tmp_path)
+    plan = _quality_plan(manifest)
+    changed = plan.model_copy(update={"population_pattern_count": 538})
+    with pytest.raises(ValueError, match="plan hash mismatch"):
+        LocalImageQualityEvaluationPlan.model_validate(changed.model_dump(mode="json"))
 
 
 def test_model_manifest_request_and_receipt_are_pointer_pinned(tmp_path: Path) -> None:

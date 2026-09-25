@@ -1855,6 +1855,8 @@ image_resources = {
     "local-image-provider-binding-v1.schema.json": "schemas/image-provider/local-image-provider-binding-v1.schema.json",
     "local-image-composite-request-v1.schema.json": "schemas/image-provider/local-image-composite-request-v1.schema.json",
     "local-image-composite-receipt-v1.schema.json": "schemas/image-provider/local-image-composite-receipt-v1.schema.json",
+    "local-image-quality-evaluation-plan-v1.schema.json": "schemas/image-provider/local-image-quality-evaluation-plan-v1.schema.json",
+    "local-image-quality-evaluation-result-v1.schema.json": "schemas/image-provider/local-image-quality-evaluation-result-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

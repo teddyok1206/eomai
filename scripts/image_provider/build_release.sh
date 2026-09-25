@@ -47,6 +47,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-provider-binding-v1.schema.json",
         "eom_image_contracts/schemas/local-image-composite-request-v1.schema.json",
         "eom_image_contracts/schemas/local-image-composite-receipt-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-quality-evaluation-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-quality-evaluation-result-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_CONTRACT_WHEEL_INVALID")

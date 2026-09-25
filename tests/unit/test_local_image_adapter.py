@@ -7,6 +7,7 @@ import os
 import struct
 import zlib
 from pathlib import Path
+from typing import Literal
 
 import eom_catalog_service.local_image_adapter as local_image_adapter
 import pytest
@@ -16,12 +17,16 @@ from eom_catalog_service.local_image_adapter import (
     load_local_image_provider_binding,
 )
 from eom_catalog_service.local_image_prompt_policy import (
+    LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
+    LOCAL_GPU_ASSESSMENT_STYLE_PREFIX,
     LOCAL_GPU_BACKGROUND_REQUIREMENTS,
+    LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION,
     LOCAL_GPU_MAX_SUBJECT_CHARS,
     LOCAL_GPU_NEGATIVE_REQUIREMENTS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     LOCAL_GPU_PROMPT_SOURCE_PINS,
     LOCAL_GPU_RASTER_REQUIREMENTS,
+    LocalGpuPromptPlan,
 )
 from eom_image_contracts import LocalImageProviderBinding, content_sha256
 from eom_workflow.models import (
@@ -225,11 +230,26 @@ def test_prompt_policy_revision_is_part_of_provider_request_identity(
         binding=binding,
         overlay_path=path,
     )
-    monkeypatch.setattr(
-        local_image_adapter,
-        "LOCAL_GPU_PROMPT_POLICY_REVISION",
-        "local-gpu-image-prompt-policy/1.5",
-    )
+    original = local_image_adapter.compose_local_gpu_prompt_plan  # type: ignore[attr-defined]
+
+    def changed_policy(
+        *,
+        subject: str,
+        production_route: Literal["LOCAL_GENERATIVE_BACKGROUND", "HYBRID_LOCAL_GENERATIVE"],
+        prompt_contract: Literal["LEGACY_COMPAT", "ASSESSMENT_LINE_ART_V1"],
+    ) -> LocalGpuPromptPlan:
+        plan = original(
+            subject=subject,
+            production_route=production_route,
+            prompt_contract=prompt_contract,
+        )
+        return LocalGpuPromptPlan(
+            policy_revision="local-gpu-image-prompt-policy/test-drift",
+            positive_prompt=plan.positive_prompt,
+            negative_prompt=plan.negative_prompt,
+        )
+
+    monkeypatch.setattr(local_image_adapter, "compose_local_gpu_prompt_plan", changed_policy)
     changed = _build_request(
         workflow_id="workflow_" + "3" * 32,
         result_revision_id="rev_" + "4" * 32,
@@ -285,6 +305,49 @@ def test_v6_hybrid_request_describes_a_semantic_raster_not_a_background(tmp_path
         assert requirement in request.generation.negative_prompt
 
 
+def test_v6_hybrid_english_subject_uses_benchmarked_assessment_style(tmp_path: Path) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    subject = "one trilobite fossil isolated on white"
+    drawing = _hybrid_drawing().model_copy(update={"alt_text": subject})
+
+    request = _build_request(
+        workflow_id="workflow_" + "6" * 32,
+        result_revision_id="rev_" + "7" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=LocalImageProviderBinding.model_validate(_binding_value()),
+        overlay_path=path,
+        prompt_contract="ASSESSMENT_LINE_ART_V1",
+    )
+
+    assert request.generation.prompt == f"{LOCAL_GPU_ASSESSMENT_STYLE_PREFIX} {subject}"
+    assert request.generation.negative_prompt == ", ".join(
+        LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS
+    )
+    assert "photorealistic" in request.generation.negative_prompt
+    assert "person" in request.generation.negative_prompt
+
+
+def test_assessment_style_contract_fails_closed_on_legacy_korean_subject(tmp_path: Path) -> None:
+    path = tmp_path / "generated-overlay.png"
+    path.write_bytes(_overlay_png())
+    path.chmod(0o640)
+    drawing = _hybrid_drawing()
+
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_INPUT_INVALID"):
+        _build_request(
+            workflow_id="workflow_" + "6" * 32,
+            result_revision_id="rev_" + "7" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            binding=LocalImageProviderBinding.model_validate(_binding_value()),
+            overlay_path=path,
+            prompt_contract="ASSESSMENT_LINE_ART_V1",
+        )
+
+
 def test_v6_hybrid_request_projects_worker_alt_text_and_keeps_team_prompt_in_identity(
     tmp_path: Path,
 ) -> None:
@@ -313,7 +376,8 @@ def test_v6_hybrid_request_projects_worker_alt_text_and_keeps_team_prompt_in_ide
 def test_local_gpu_prompt_policy_pins_both_team_lead_sources_and_kice_guide() -> None:
     root = Path(__file__).resolve().parents[2]
 
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.4"
+    assert LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.4"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.5"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 3
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path
