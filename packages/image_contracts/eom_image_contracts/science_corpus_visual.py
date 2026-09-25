@@ -833,15 +833,15 @@ def _validate_pattern_inventory_against_result(
     for review in reviews:
         candidate = candidates[review.candidate_id]
         if review.decision == "LORA_ELIGIBLE" and (
-            candidate.authority_class != "NON_AUTHORITATIVE_RASTER_STYLE"
+            candidate.authority_class == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
             or candidate.representation_kind in {"PLOT", "TABLE"}
         ):
             raise ValueError("science visual LoRA review selects authoritative content")
         if (
             review.decision == "DETERMINISTIC_RENDERER_ONLY"
-            and candidate.authority_class != "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
+            and candidate.authority_class == "NON_AUTHORITATIVE_RASTER_STYLE"
         ):
-            raise ValueError("science visual renderer review lacks authoritative geometry")
+            raise ValueError("science visual renderer review selects non-authoritative content")
 
 
 def validate_science_visual_pattern_inventory(

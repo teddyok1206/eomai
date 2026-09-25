@@ -634,6 +634,49 @@ def test_science_visual_inventory_v2_keeps_file_and_semantic_hashes_distinct() -
         LocalImageScienceVisualPatternInventoryV2.model_validate(wrong_file)
 
 
+def test_science_visual_inventory_v2_allows_human_classification_of_unknown_candidates() -> None:
+    result_value = _result_value()
+    first_candidate = result_value["visual_candidates"][0]
+    first_candidate["authority_class"] = "UNKNOWN_REVIEW_REQUIRED"
+    first_candidate["representation_kind"] = "UNKNOWN"
+    first_candidate["rendering_mode"] = "MIXED"
+    identity_body = {
+        key: item
+        for key, item in first_candidate.items()
+        if key not in {"candidate_id", "member_path", "sha256", "size_bytes"}
+    }
+    identity = content_sha256(identity_body).removeprefix("sha256:")
+    previous_id = first_candidate["candidate_id"]
+    first_candidate["candidate_id"] = "imgsciviscandidate_" + identity[:32]
+    first_candidate["member_path"] = f"crops/{first_candidate['candidate_id']}.png"
+    result_value["visual_candidates"].sort(key=lambda item: item["candidate_id"])
+    result_value["result_sha256"] = content_sha256(
+        {key: item for key, item in result_value.items() if key != "result_sha256"}
+    )
+    result = LocalImageScienceCorpusVisualPilotResult.model_validate(result_value)
+
+    inventory_value = _inventory_v2_value()
+    review = next(
+        item for item in inventory_value["reviews"] if item["candidate_id"] == previous_id
+    )
+    review["candidate_id"] = first_candidate["candidate_id"]
+    inventory_value["reviews"].sort(key=lambda item: item["candidate_id"])
+    inventory_value["pilot_result_semantic_sha256"] = result.result_sha256
+    body = {
+        key: item
+        for key, item in inventory_value.items()
+        if key not in {"inventory_id", "inventory_sha256"}
+    }
+    inventory_value["inventory_id"] = (
+        "imgscivisinventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    inventory_value["inventory_sha256"] = content_sha256(
+        {key: item for key, item in inventory_value.items() if key != "inventory_sha256"}
+    )
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(inventory_value)
+    validate_science_visual_pattern_inventory_v2(result, inventory)
+
+
 def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
     expected = {
         "local-image-science-corpus-training-authorization-v1.schema.json": (
