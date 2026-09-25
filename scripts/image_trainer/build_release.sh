@@ -64,6 +64,7 @@ with zipfile.ZipFile(trainer) as archive:
     required = {
         "eom_image_trainer/checkpoints.py",
         "eom_image_trainer/cli.py",
+        "eom_image_trainer/crop_locator.py",
         "eom_image_trainer/dataset_builder.py",
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/runner.py",

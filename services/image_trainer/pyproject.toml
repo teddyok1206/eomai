@@ -21,6 +21,8 @@ dependencies = [
   "jsonschema==4.25.1",
   # Required to decode, crop, resize, hash, and serialize staged PNG training samples.
   "Pillow==11.3.0",
+  # Provides bounded raster masks and linear row-run extraction for visual crop proposals.
+  "numpy==2.4.6",
   # Provides LoRA injection and state extraction for the Diffusers UNet.
   "peft==0.17.1",
   # Required for exact immutable training-contract validation and stable error normalization.
