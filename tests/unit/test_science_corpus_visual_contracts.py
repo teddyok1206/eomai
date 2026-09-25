@@ -183,7 +183,7 @@ def _plan_value() -> dict[str, object]:
             schema_ref=(
                 "eom://schemas/image-provider/local-image-science-corpus-training-authorization/1.0"
             ),
-            sha256=str(authorization["authorization_sha256"]),
+            sha256=content_sha256(authorization),
         ),
         "selection_algorithm": "SCIENCE_VISUAL_STRATIFIED_SHA256_V1",
         "selection_seed_sha256": _sha("a"),
@@ -447,6 +447,10 @@ def test_science_visual_cross_contract_bindings() -> None:
     validate_science_visual_pilot_command(plan, command)
     validate_science_visual_pilot_result(plan, result)
     validate_science_visual_pattern_inventory(result, inventory)
+    assert authorization.authorization_sha256 != plan.training_authorization.sha256
+    assert (
+        content_sha256(authorization.model_dump(mode="json")) == plan.training_authorization.sha256
+    )
 
 
 def test_science_visual_command_rejects_staged_pdf_drift() -> None:

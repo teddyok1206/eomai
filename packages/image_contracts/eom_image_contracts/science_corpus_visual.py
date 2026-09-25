@@ -783,7 +783,8 @@ def validate_science_visual_authorization_plan(
         or authorization.resolution_sha256 != plan.resolution_sha256
         or authorization.resolution_policy_id != plan.resolution_policy_id
         or authorization.resolution_policy_sha256 != plan.resolution_policy_sha256
-        or authorization.authorization_sha256 != plan.training_authorization.sha256
+        or content_sha256(authorization.model_dump(mode="json"))
+        != plan.training_authorization.sha256
     ):
         raise ValueError("science visual plan is outside its training authorization")
     _require_pointer(
