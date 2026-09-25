@@ -8,12 +8,12 @@ from eom_image_contracts import (
     ImageEvaluationBoundingBox,
     ImageEvaluationSourceSnapshot,
     ImageTrainingRightsPolicy,
+    build_training_crop_review_draft,
     content_sha256,
 )
 from eom_image_trainer.proposal_builder import (
     StagedVisualCropSource,
     build_training_crop_proposal_set,
-    build_training_crop_review_draft,
 )
 from PIL import Image, ImageDraw
 

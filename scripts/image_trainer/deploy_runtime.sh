@@ -18,6 +18,8 @@ BITSANDBYTES_SHA256=${10:-}
 SOURCE_COMMIT=${11:-}
 TRAINER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-trainer@.service
 TRAINER_UNIT_TARGET=/etc/systemd/system/eom-image-trainer@.service
+CROP_LOCATOR_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-crop-locator@.service
+CROP_LOCATOR_UNIT_TARGET=/etc/systemd/system/eom-image-crop-locator@.service
 PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
 PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-provider@.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
@@ -61,7 +63,8 @@ done
 [[ "$(basename "${BITSANDBYTES_WHEEL}")" == bitsandbytes-0.47.0-* ]] || \
   fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_WHEEL_INVALID"
 if systemctl list-units --type=service --state=activating,active --no-legend \
-  'eom-image-provider@*.service' 'eom-image-trainer@*.service' | grep -q .; then
+  'eom-image-provider@*.service' 'eom-image-trainer@*.service' \
+  'eom-image-crop-locator@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_GPU_UNIT_ACTIVE"
 fi
 
@@ -83,12 +86,16 @@ for forbidden in eom sudo docker lxd adm; do
 done
 install -d -o root -g eom-image -m 03770 /srv/eom/image-training-workspaces
 install -o root -g root -m 0644 "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}"
+install -o root -g root -m 0644 "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}"
 install -o root -g root -m 0644 "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
-systemd-analyze verify "${TRAINER_UNIT_TARGET}" "${PROVIDER_UNIT_TARGET}"
+systemd-analyze verify "${TRAINER_UNIT_TARGET}" "${CROP_LOCATOR_UNIT_TARGET}" \
+  "${PROVIDER_UNIT_TARGET}"
 cmp -s "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_TRAINER_UNIT_DRIFT"
+cmp -s "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_CROP_LOCATOR_UNIT_DRIFT"
 cmp -s "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_PROVIDER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || \

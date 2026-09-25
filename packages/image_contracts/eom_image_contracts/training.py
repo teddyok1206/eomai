@@ -715,6 +715,54 @@ def validate_training_crop_review(
         raise ValueError("crop review entries do not cover the exact proposal population")
 
 
+def build_training_crop_review_draft(
+    *,
+    proposal_set: LocalImageTrainingCropProposalSet,
+    proposal_set_pointer: ImageEvaluationArtifactMember,
+    reviewed_at: datetime,
+    reviewed_by: str,
+) -> LocalImageTrainingCropReview:
+    """Create the exact all-pending review population for a published proposal set."""
+
+    grouped: dict[str, list[str]] = {}
+    for proposal in proposal_set.proposals:
+        grouped.setdefault(proposal.source_anchor_id, []).append(proposal.crop_proposal_id)
+    entries = tuple(
+        LocalImageTrainingCropReviewEntry(
+            source_anchor_id=source_anchor_id,
+            proposal_ids=tuple(sorted(proposal_ids)),
+            decision="PENDING",
+            selected_proposal_id=None,
+            exclusion_reasons=(),
+            caption_en=None,
+            caption_sha256=None,
+        )
+        for source_anchor_id, proposal_ids in sorted(grouped.items())
+    )
+    body = {
+        "schema_version": "local-image-training-crop-review/1.0",
+        "crop_review_id": (
+            "imgcropreview_" + proposal_set.proposal_population_sha256.removeprefix("sha256:")[:32]
+        ),
+        "review_state": "DRAFT",
+        "proposal_set": proposal_set_pointer.model_dump(mode="json"),
+        "proposal_set_sha256": proposal_set.proposal_set_sha256,
+        "source_snapshot": proposal_set.source_snapshot.model_dump(mode="json"),
+        "proposal_population_sha256": proposal_set.proposal_population_sha256,
+        "entries": [value.model_dump(mode="json") for value in entries],
+        "eligible_proposal_set_sha256": content_sha256([]),
+        "reviewed_at": reviewed_at.isoformat().replace("+00:00", "Z"),
+        "reviewed_by": reviewed_by,
+    }
+    value = {**body, "review_sha256": content_sha256(body)}
+    try:
+        review = LocalImageTrainingCropReview.model_validate(value)
+        validate_training_crop_review(proposal_set, review)
+        return review
+    except (TypeError, ValueError) as exc:
+        raise ValueError("crop review draft is invalid") from exc
+
+
 class LocalImageTrainingCropMember(FrozenModel):
     member_path: str = Field(
         pattern=r"^samples/imgtrainsample_[0-9a-f]{32}\.png$",
