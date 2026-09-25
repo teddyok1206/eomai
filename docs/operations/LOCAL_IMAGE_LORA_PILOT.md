@@ -47,6 +47,13 @@ The authorization is not inferred from repository ownership, RAG approval, files
 generic request to continue development. If it is absent or does not bind every candidate,
 `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` is terminal for the pilot input.
 
+After explicit owner approval, publish the typed authorization with the bounded helper.  Supply the
+exact Graph revision/hashes, target count, UTC approval time, actor label, and reviewed source
+commit.  The helper reads the 520-member V9 scope under a repeatable-read read-only transaction,
+requires its exact 25 rights-policy revisions, then delegates the only NAS write to the
+Orchestrator control-artifact publisher.  Repeating the same semantic authorization is idempotent;
+a different payload under that identity fails closed.
+
 ## P1: candidate access pattern and review
 
 The dominant operations are exact revision lookup, source-anchor membership, and deterministic

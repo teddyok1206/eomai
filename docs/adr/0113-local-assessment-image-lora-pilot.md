@@ -93,6 +93,13 @@ Source permissions and intended-use metadata must authorize internal derivative 
 Absence or ambiguity is an explicit `TRAINING_SOURCE_RIGHTS_UNCONFIRMED` exclusion; approval as a
 RAG source alone is not silently treated as training authorization.
 
+The authorization application resolves only the accepted V9 past-exam members of the pinned Graph
+revision and joins their exact reviewed source-bundle revisions.  It publishes the resulting small
+typed authorization through `ControlArtifactPublisher`; Catalog returns the value while the
+Orchestrator alone writes its canonical member to NAS.  For the current 520-target snapshot this
+scope contains 25 rights-policy revisions.  Other reviewed source bundles are not implicitly
+authorized.
+
 ## Access patterns and data structures
 
 - Exact pointer lookup uses indexed IDs and maps keyed by revision ID.
