@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal, cast
 
 from eom_catalog_contracts import (
     AssessmentPageImageInput,
@@ -20,9 +21,11 @@ from eom_catalog_contracts import (
 )
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
+    ImageEvaluationBoundingBox,
     ImageEvaluationSourceSnapshot,
     ImageTrainingRightsPolicy,
     LocalImageTrainingCandidateInventory,
+    LocalImageTrainingCropProposalOmission,
     LocalImageTrainingEligibilityEntry,
     LocalImageTrainingEligibilityReview,
     LocalImageTrainingProjectionOmission,
@@ -48,6 +51,197 @@ class AcceptedVisualTrainingSource:
     accepted: KnowledgeAnalysisResultV9
     extraction: LegacyItemExtractionResult
     rights_policy: ImageTrainingRightsPolicy
+
+
+TrainingCropRepresentation = Literal[
+    "APPARATUS",
+    "COMPOSITE",
+    "CROSS_SECTION",
+    "DIAGRAM",
+    "MAP",
+    "PARTICLE_MODEL",
+    "PHOTOGRAPH",
+]
+TrainingCropMode = Literal["MIXED", "RASTER"]
+TrainingCropFeature = Literal[
+    "ARROWS",
+    "AXES",
+    "BOUNDARY",
+    "CALLOUT",
+    "DATA_POINTS",
+    "ERROR_BAR",
+    "GRID",
+    "LABELS",
+    "LEADER_LINES",
+    "LEGEND",
+    "MULTIPLE_PANELS",
+    "NUMBERED_STEPS",
+    "PATTERN_FILL",
+    "SCALE",
+    "SYMBOL_KEY",
+    "TRAJECTORY",
+]
+TrainingCropOmissionReason = Literal[
+    "ANSWER_EXPLANATION_SOURCE",
+    "HOLDOUT_SOURCE",
+    "NO_PAGE_INPUT",
+    "NO_VISUAL_REGION",
+    "SOURCE_POINTER_INVALID",
+    "UNSUPPORTED_REPRESENTATION",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class TrainingVisualCropSource:
+    """One source page and visual anchor selected for deterministic crop proposals."""
+
+    item_revision_id: str
+    extraction_result: ImageEvaluationArtifactMember
+    source_anchor_id: str
+    visual_pattern_ids: tuple[str, ...]
+    source_page_image: ImageEvaluationArtifactMember
+    physical_page: int
+    context_bounding_box: ImageEvaluationBoundingBox | None
+    rights_policy: ImageTrainingRightsPolicy
+    representation_kind: TrainingCropRepresentation
+    rendering_mode: TrainingCropMode
+    visual_features: tuple[TrainingCropFeature, ...]
+
+
+_CROP_REPRESENTATIONS = frozenset(
+    {
+        "APPARATUS",
+        "COMPOSITE",
+        "CROSS_SECTION",
+        "DIAGRAM",
+        "MAP",
+        "PARTICLE_MODEL",
+        "PHOTOGRAPH",
+    }
+)
+
+
+def select_training_visual_crop_sources(
+    *,
+    sources: tuple[AcceptedVisualTrainingSource, ...],
+    holdout_source_anchor_ids: tuple[str, ...],
+) -> tuple[
+    tuple[TrainingVisualCropSource, ...],
+    tuple[LocalImageTrainingCropProposalOmission, ...],
+]:
+    """Select exact raster/mixed visual pointers without reading pixels or approving crops."""
+
+    holdout = frozenset(holdout_source_anchor_ids)
+    selected: list[TrainingVisualCropSource] = []
+    omissions: list[LocalImageTrainingCropProposalOmission] = []
+    seen_anchors: set[str] = set()
+    for source in sources:
+        accepted_source = source.accepted.source
+        extraction = source.extraction
+        if (
+            extraction.extraction_result_id != accepted_source.extraction_result_id
+            or extraction.result_sha256 != accepted_source.extraction_result_sha256
+        ):
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_EXTRACTION_POINTER_MISMATCH")
+        matching_items = tuple(
+            proposal
+            for proposal in extraction.items
+            if proposal.item_proposal_id == accepted_source.item_proposal_id
+            and proposal.item_number == accepted_source.item_number
+        )
+        if len(matching_items) != 1:
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_ITEM_PROPOSAL_UNRESOLVED")
+        item = matching_items[0]
+        anchors = {anchor.anchor_id: anchor for anchor in item.source_anchors}
+        if len(anchors) != len(item.source_anchors):
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_DUPLICATE")
+        pages: dict[tuple[str, int], AssessmentPageImageInput] = {
+            (page.source_role, page.physical_page): page for page in accepted_source.page_inputs
+        }
+        if len(pages) != len(accepted_source.page_inputs):
+            raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_PAGE_DUPLICATE")
+        patterns_by_anchor: dict[str, list[AssessmentVisualPatternObservation]] = defaultdict(list)
+        for pattern in item.visual_patterns:
+            if pattern.rendering_mode not in {"RASTER", "MIXED"}:
+                continue
+            for anchor_id in pattern.source_anchor_ids:
+                patterns_by_anchor[anchor_id].append(pattern)
+
+        extraction_pointer = ImageEvaluationArtifactMember.model_validate(
+            _artifact_member(accepted_source.extraction_result_artifact)
+        )
+        for anchor_id in sorted(patterns_by_anchor):
+            if anchor_id in seen_anchors:
+                raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_DUPLICATE")
+            seen_anchors.add(anchor_id)
+            patterns = patterns_by_anchor[anchor_id]
+            anchor = anchors.get(anchor_id)
+            if anchor is None:
+                raise TrainingCandidateProjectionError("IMAGE_TRAINING_SOURCE_ANCHOR_UNRESOLVED")
+            pattern_ids = tuple(sorted({pattern.pattern_id for pattern in patterns}))
+            kinds = {pattern.representation_kind for pattern in patterns}
+            modes = {pattern.rendering_mode for pattern in patterns}
+            omission_reason: TrainingCropOmissionReason | None = None
+            if anchor_id in holdout:
+                omission_reason = "HOLDOUT_SOURCE"
+            elif anchor.source_role == "ANSWER_EXPLANATION_DOCUMENT":
+                omission_reason = "ANSWER_EXPLANATION_SOURCE"
+            elif len(kinds) != 1 or len(modes) != 1 or not kinds.issubset(_CROP_REPRESENTATIONS):
+                omission_reason = "UNSUPPORTED_REPRESENTATION"
+            page = (
+                None
+                if anchor.physical_page is None
+                else pages.get((anchor.source_role, anchor.physical_page))
+            )
+            if omission_reason is None and page is None:
+                omission_reason = "NO_PAGE_INPUT"
+            if omission_reason is not None:
+                omissions.append(
+                    LocalImageTrainingCropProposalOmission(
+                        item_revision_id=accepted_source.item_revision_id,
+                        extraction_result=extraction_pointer,
+                        source_anchor_id=anchor_id,
+                        visual_pattern_ids=pattern_ids,
+                        reason=omission_reason,
+                    )
+                )
+                continue
+            assert page is not None and anchor.physical_page is not None
+            kind = next(iter(kinds))
+            mode = next(iter(modes))
+            selected.append(
+                TrainingVisualCropSource(
+                    item_revision_id=accepted_source.item_revision_id,
+                    extraction_result=extraction_pointer,
+                    source_anchor_id=anchor_id,
+                    visual_pattern_ids=pattern_ids,
+                    source_page_image=ImageEvaluationArtifactMember.model_validate(
+                        _artifact_member(page.image)
+                    ),
+                    physical_page=anchor.physical_page,
+                    context_bounding_box=(
+                        None
+                        if anchor.bounding_box is None
+                        else ImageEvaluationBoundingBox.model_validate(
+                            anchor.bounding_box.model_dump(mode="json")
+                        )
+                    ),
+                    rights_policy=source.rights_policy,
+                    representation_kind=cast(TrainingCropRepresentation, kind),
+                    rendering_mode=cast(TrainingCropMode, mode),
+                    visual_features=cast(
+                        tuple[TrainingCropFeature, ...],
+                        tuple(
+                            sorted(
+                                {feature for pattern in patterns for feature in pattern.features}
+                            )
+                        ),
+                    ),
+                )
+            )
+    selected.sort(key=lambda value: value.source_anchor_id)
+    omissions.sort(key=lambda value: (value.item_revision_id, value.source_anchor_id, value.reason))
+    return tuple(selected), tuple(omissions)
 
 
 def _artifact_member(value: object) -> dict[str, object]:

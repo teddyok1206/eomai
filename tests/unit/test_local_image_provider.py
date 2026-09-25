@@ -8,11 +8,16 @@ import os
 import stat
 import struct
 import zlib
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from eom_catalog_service.local_image_training_evaluation import (
+    TrainingEvaluationPlanError,
+    align_training_holdout_plan,
+)
 from eom_image_contracts import (
+    ImageEvaluationSourceSnapshot,
     LocalImageCompositeRequest,
     LocalImageGenerationRequest,
     LocalImageModelManifest,
@@ -364,6 +369,49 @@ def _quality_plan(manifest: LocalImageModelManifest) -> LocalImageQualityEvaluat
     value = {**body, "plan_sha256": content_sha256(body)}
     validate_contract("quality-evaluation-plan", value)
     return LocalImageQualityEvaluationPlan.model_validate(value)
+
+
+def test_training_holdout_alignment_preserves_samples_and_pins_canonical_snapshot(
+    tmp_path: Path,
+) -> None:
+    _, manifest = _store(tmp_path)
+    original = _quality_plan(manifest)
+    samples = []
+    for index in range(12):
+        sample = original.samples[0].model_dump(mode="json")
+        sample["sample_id"] = "imgsample_" + f"{index + 100:032x}"
+        sample["source_anchor_id"] = "assessmentanchor_" + f"{index + 1000:032x}"
+        samples.append(sample)
+    template_body = original.model_dump(mode="json", exclude={"plan_sha256"})
+    template_body["samples"] = samples
+    template = LocalImageQualityEvaluationPlan.model_validate(
+        {**template_body, "plan_sha256": content_sha256(template_body)}
+    )
+    canonical = ImageEvaluationSourceSnapshot(
+        **{
+            **template.source_snapshot.model_dump(mode="json"),
+            "target_set_sha256": "sha256:" + "f" * 64,
+        }
+    )
+    aligned = align_training_holdout_plan(
+        template=template,
+        source_snapshot=canonical,
+        created_at=datetime(2026, 9, 25, 14, 0, tzinfo=UTC),
+    )
+    assert aligned.source_snapshot == canonical
+    assert aligned.samples == template.samples
+    assert aligned.provider_binding == template.provider_binding
+    assert aligned.evaluation_id != template.evaluation_id
+    mismatch = canonical.model_copy(update={"target_count": 519})
+    with pytest.raises(
+        TrainingEvaluationPlanError,
+        match="IMAGE_TRAINING_HOLDOUT_SOURCE_MISMATCH",
+    ):
+        align_training_holdout_plan(
+            template=template,
+            source_snapshot=mismatch,
+            created_at=datetime(2026, 9, 25, 14, 0, tzinfo=UTC),
+        )
 
 
 def test_quality_evaluation_plan_result_and_cross_validation(tmp_path: Path) -> None:

@@ -11,6 +11,7 @@ from eom_catalog_service.local_image_training_candidates import (
     TrainingCandidateProjectionError,
     build_training_candidate_inventory,
     project_training_eligibility_draft,
+    select_training_visual_crop_sources,
 )
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
@@ -93,6 +94,7 @@ def _source(
         pattern_id="visualpattern_" + "7" * 32,
         representation_kind="PHOTOGRAPH",
         rendering_mode="RASTER",
+        features=(),
         source_anchor_ids=(source_anchor.anchor_id,),
     )
     proposal = SimpleNamespace(
@@ -133,7 +135,7 @@ def _source(
     )
 
 
-def _project(*, include_candidate_in_holdout: bool = False):
+def _project(*, include_candidate_in_holdout: bool = False) -> LocalImageTrainingEligibilityReview:
     return project_training_eligibility_draft(
         sources=(_source(),),
         source_snapshot=_snapshot(),
@@ -161,6 +163,30 @@ def test_projection_marks_holdout_anchor_excluded() -> None:
     review = _project(include_candidate_in_holdout=True)
     assert review.entries[0].decision == "EXCLUDED"
     assert review.entries[0].exclusion_reasons == ("HOLDOUT_OR_NEAR_DUPLICATE",)
+
+
+def test_crop_source_selection_keeps_pending_raster_pointer_without_pixel_decision() -> None:
+    selected, omissions = select_training_visual_crop_sources(
+        sources=(_source(),),
+        holdout_source_anchor_ids=_holdout_anchors(),
+    )
+    assert len(selected) == 1
+    assert omissions == ()
+    source = selected[0]
+    assert source.source_anchor_id == "assessmentanchor_" + "5" * 32
+    assert source.representation_kind == "PHOTOGRAPH"
+    assert source.rendering_mode == "RASTER"
+    assert source.context_bounding_box is not None
+
+
+def test_crop_source_selection_records_holdout_as_omission() -> None:
+    selected, omissions = select_training_visual_crop_sources(
+        sources=(_source(),),
+        holdout_source_anchor_ids=_holdout_anchors(include_candidate=True),
+    )
+    assert selected == ()
+    assert len(omissions) == 1
+    assert omissions[0].reason == "HOLDOUT_SOURCE"
 
 
 def test_projection_records_unbounded_anchor_as_explicit_omission() -> None:

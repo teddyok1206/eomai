@@ -8,8 +8,6 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_image_contracts import ImageEvaluationSourceSnapshot, ImageTrainingRightsPolicy
 from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
-    AUTHORIZATION_MEMBER,
-    AUTHORIZATION_SCHEMA_REF,
     LocalImageTrainingControlArtifactPublisher,
 )
 from eom_workflow import ControlArtifactPointer
@@ -23,14 +21,18 @@ class _Publisher:
         self.arguments = kwargs
         payload = kwargs["payload"]
         assert isinstance(payload, bytes)
+        schema_ref = kwargs["schema_ref"]
+        logical_name = kwargs["logical_name"]
+        assert isinstance(schema_ref, str)
+        assert isinstance(logical_name, str)
         return SimpleNamespace(
             pointer=ControlArtifactPointer(
                 artifact_id="artifact_" + "1" * 32,
                 artifact_revision_id="rev_" + "2" * 32,
                 sha256=sha256_bytes(payload),
-                schema_ref=AUTHORIZATION_SCHEMA_REF,
+                schema_ref=schema_ref,
                 media_type="application/json",
-                logical_name=AUTHORIZATION_MEMBER,
+                logical_name=logical_name,
             )
         )
 
