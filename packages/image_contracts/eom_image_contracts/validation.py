@@ -98,7 +98,7 @@ SCHEMA_SHA256 = {
         "sha256:32c0c1ef0098a46a143f83a4e58292ff31254a69d89a87163d655474ac93bf20"
     ),
     "lora-micro-probe-command": (
-        "sha256:bd69973ef97f6955332e2cebe63e961a3e7181cfe6ceab47bca988fb37673bb6"
+        "sha256:149e08b0792eaea80b1e66eb0f8abcf836d66c71c863462723eeb6557b0d9cf3"
     ),
     "lora-micro-adapter-manifest": (
         "sha256:1221dcd0213a912bcd20b487ae2895e5256dda6a927adb89dab77754365e0cd3"

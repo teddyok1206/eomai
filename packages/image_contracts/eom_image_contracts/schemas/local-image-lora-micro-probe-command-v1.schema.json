@@ -265,6 +265,7 @@
     "probe_plan",
     "attempt",
     "staged_plan_member",
+    "staged_authorization_member",
     "staged_proposal_set_member",
     "staged_pages_root",
     "runtime_dataset_root",
@@ -295,6 +296,9 @@
     },
     "staged_plan_member": {
       "const": "inputs/micro-probe-plan.json"
+    },
+    "staged_authorization_member": {
+      "const": "inputs/training-authorization.json"
     },
     "staged_proposal_set_member": {
       "const": "inputs/crop-proposals.json"

@@ -17,6 +17,11 @@ from eom_image_trainer.crop_locator_runner import (
     run_crop_locator_command,
 )
 from eom_image_trainer.diffusers_backend import Ssd1bLoraBackend
+from eom_image_trainer.micro_probe_runner import (
+    MicroProbeRunnerError,
+    load_micro_probe_command,
+    run_micro_probe_command,
+)
 from eom_image_trainer.runner import (
     TrainingRunnerError,
     load_training_command,
@@ -32,6 +37,11 @@ def _parser() -> argparse.ArgumentParser:
     train.add_argument("--model-store-root", required=True, type=Path)
     train.add_argument("--workspace", required=True, type=Path)
     train.add_argument("--gpu-lock", required=True, type=Path)
+    micro = subcommands.add_parser("micro-probe")
+    micro.add_argument("--command", required=True, type=Path)
+    micro.add_argument("--model-store-root", required=True, type=Path)
+    micro.add_argument("--workspace", required=True, type=Path)
+    micro.add_argument("--gpu-lock", required=True, type=Path)
     locate = subcommands.add_parser("locate-crops")
     locate.add_argument("--command", required=True, type=Path)
     locate.add_argument("--workspace", required=True, type=Path)
@@ -99,6 +109,33 @@ def main() -> None:
             raise SystemExit(exc.code) from exc
         if locator_result.status != "SUCCEEDED":
             raise SystemExit(locator_result.error_code or "IMAGE_TRAINING_CROP_LOCATOR_FAILED")
+        return
+    if args.operation == "micro-probe":
+        micro_command = load_micro_probe_command(args.command)
+        if args.workspace.name != micro_command.training_run_id:
+            raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
+        lock_descriptor = _lock_gpu(args.gpu_lock)
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+        def _cancel_micro(_signum: int, _frame: object) -> None:
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGTERM, _cancel_micro)
+        try:
+            micro_result = run_micro_probe_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=micro_command,
+                backend=Ssd1bLoraBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except (TrainingRunnerError, MicroProbeRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            os.close(lock_descriptor)
+        if micro_result.status != "SUCCEEDED":
+            raise SystemExit(micro_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
     training_command = load_training_command(args.command)
     if args.workspace.name != training_command.training_run_id:

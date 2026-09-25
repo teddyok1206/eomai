@@ -147,6 +147,7 @@ def _command_value() -> dict[str, object]:
         "probe_plan": plan.model_dump(mode="json"),
         "attempt": 1,
         "staged_plan_member": "inputs/micro-probe-plan.json",
+        "staged_authorization_member": "inputs/training-authorization.json",
         "staged_proposal_set_member": "inputs/crop-proposals.json",
         "staged_pages_root": "inputs/pages",
         "runtime_dataset_root": "runtime-dataset",

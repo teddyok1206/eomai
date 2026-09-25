@@ -300,7 +300,9 @@ def _validate_safetensors(payload: bytes) -> None:
             raise TrainingRunnerError("IMAGE_TRAINING_ADAPTER_INVALID")
 
 
-def _adapter_files(output_root: Path) -> tuple[dict[str, object], ...]:
+def validate_adapter_files(output_root: Path) -> tuple[dict[str, object], ...]:
+    """Validate the exact bounded LoRA adapter file set in one worker output."""
+
     values: list[dict[str, object]] = []
     for name in ("adapter_config.json", "adapter_model.safetensors"):
         path = _require_member(output_root, name)
@@ -411,7 +413,7 @@ def run_training_command(
         _runtime_matches_plan(backend_result.runtime, plan)
         if backend_result.completed_steps != plan.hyperparameters.max_train_steps:
             raise TrainingRunnerError("IMAGE_TRAINING_STEP_COUNT_INVALID")
-        files = _adapter_files(output_root)
+        files = validate_adapter_files(output_root)
         adapter_identity = content_sha256(
             {
                 "training_plan": command.training_plan_pointer.model_dump(mode="json"),

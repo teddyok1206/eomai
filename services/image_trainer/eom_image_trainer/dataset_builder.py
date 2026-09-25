@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import shutil
 import stat
 import tempfile
-import warnings
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -31,14 +29,20 @@ from eom_image_contracts import (
     validate_training_inventory_review,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import ValidationError as PydanticValidationError
 
+from eom_image_trainer.crop_processing import (
+    OUTPUT_HEIGHT,
+    OUTPUT_WIDTH,
+    CropProcessingError,
+    PerceptualIndex,
+    average_hash,
+    decode_png,
+    materialize_training_crop,
+    png_bytes,
+)
+
 MAX_SOURCE_PNG_BYTES = 64 * 1024 * 1024
-MAX_SOURCE_IMAGE_PIXELS = 50_000_000
-OUTPUT_WIDTH = 768
-OUTPUT_HEIGHT = 512
-NEAR_DUPLICATE_HAMMING_DISTANCE = 2
 MINIMUM_SAMPLES = 100
 MAXIMUM_SAMPLES = 200
 
@@ -174,88 +178,6 @@ def _read_staged_page(directory_descriptor: int, staged: StagedPageImage) -> byt
     return value
 
 
-def _decode_png(payload: bytes) -> Image.Image:
-    previous_limit = Image.MAX_IMAGE_PIXELS
-    Image.MAX_IMAGE_PIXELS = MAX_SOURCE_IMAGE_PIXELS
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(payload)) as source:
-                if source.format != "PNG" or getattr(source, "n_frames", 1) != 1:
-                    raise DatasetBuildError("IMAGE_TRAINING_SOURCE_PAGE_FORMAT_INVALID")
-                source.load()
-                return source.convert("RGB")
-    except DatasetBuildError:
-        raise
-    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
-        raise DatasetBuildError("IMAGE_TRAINING_SOURCE_PAGE_TOO_LARGE") from exc
-    except (OSError, UnidentifiedImageError, ValueError) as exc:
-        raise DatasetBuildError("IMAGE_TRAINING_SOURCE_PAGE_DECODE_FAILED") from exc
-    finally:
-        Image.MAX_IMAGE_PIXELS = previous_limit
-
-
-def _crop(candidate: LocalImageTrainingCandidate, source: Image.Image) -> Image.Image:
-    box = candidate.bounding_box
-    left = box.left * source.width // 10_000
-    top = box.top * source.height // 10_000
-    right = (box.right * source.width + 9_999) // 10_000
-    bottom = (box.bottom * source.height + 9_999) // 10_000
-    if not (0 <= left < right <= source.width and 0 <= top < bottom <= source.height):
-        raise DatasetBuildError("IMAGE_TRAINING_BOUNDING_BOX_INVALID")
-    crop = source.crop((left, top, right, bottom)).convert("L")
-    crop.thumbnail((OUTPUT_WIDTH, OUTPUT_HEIGHT), Image.Resampling.LANCZOS)
-    canvas = Image.new("L", (OUTPUT_WIDTH, OUTPUT_HEIGHT), 255)
-    offset = ((OUTPUT_WIDTH - crop.width) // 2, (OUTPUT_HEIGHT - crop.height) // 2)
-    canvas.paste(crop, offset)
-    return canvas.convert("RGB")
-
-
-def _png_bytes(image: Image.Image) -> bytes:
-    target = io.BytesIO()
-    image.save(target, format="PNG", optimize=False, compress_level=9)
-    payload = target.getvalue()
-    if not 0 < len(payload) <= 8 * 1024 * 1024:
-        raise DatasetBuildError("IMAGE_TRAINING_CROP_SIZE_INVALID")
-    return payload
-
-
-def _average_hash(image: Image.Image) -> tuple[str, int]:
-    grayscale = image.convert("L")
-    ink_box = ImageOps.invert(grayscale).getbbox()
-    if ink_box is None:
-        raise DatasetBuildError("IMAGE_TRAINING_CROP_EMPTY")
-    pixels = tuple(grayscale.crop(ink_box).resize((8, 8), Image.Resampling.LANCZOS).tobytes())
-    average = sum(pixels) / len(pixels)
-    value = 0
-    for pixel in pixels:
-        value = (value << 1) | int(pixel >= average)
-    return f"{value:016x}", value
-
-
-class _PerceptualIndex:
-    """Four-band candidate index for bounded Hamming-distance lookup."""
-
-    def __init__(self) -> None:
-        self._values: list[int] = []
-        self._buckets: dict[tuple[int, int], set[int]] = defaultdict(set)
-
-    def contains_near_duplicate(self, value: int) -> bool:
-        candidates: set[int] = set()
-        for band in range(4):
-            candidates.update(self._buckets[(band, (value >> (band * 16)) & 0xFFFF)])
-        return any(
-            (value ^ self._values[index]).bit_count() <= NEAR_DUPLICATE_HAMMING_DISTANCE
-            for index in candidates
-        )
-
-    def add(self, value: int) -> None:
-        index = len(self._values)
-        self._values.append(value)
-        for band in range(4):
-            self._buckets[(band, (value >> (band * 16)) & 0xFFFF)].add(index)
-
-
 def _require_inventory_authorized(
     inventory: LocalImageTrainingCandidateInventory,
     authorization: LocalImageTrainingAuthorization,
@@ -350,7 +272,7 @@ def build_training_dataset(
     assert temporary is not None
     holdout_anchors = set(inventory.holdout_source_anchor_ids)
     exact_hashes: set[str] = set()
-    perceptual = _PerceptualIndex()
+    perceptual = PerceptualIndex()
     samples: list[dict[str, object]] = []
     try:
         by_page: dict[PointerKey, list[LocalImageTrainingCandidate]] = defaultdict(list)
@@ -362,12 +284,12 @@ def build_training_dataset(
                 )
                 by_page[key].append(candidate)
         for key in sorted(by_page):
-            source = _decode_png(_read_staged_page(pages_descriptor, staged_index[key]))
+            source = decode_png(_read_staged_page(pages_descriptor, staged_index[key]))
             for candidate in sorted(by_page[key], key=lambda value: value.candidate_id):
-                image = _crop(candidate, source)
-                payload = _png_bytes(image)
+                image = materialize_training_crop(source, crop_box=candidate.bounding_box)
+                payload = png_bytes(image)
                 crop_sha256 = "sha256:" + hashlib.sha256(payload).hexdigest()
-                perceptual_hash, perceptual_value = _average_hash(image)
+                perceptual_hash, perceptual_value = average_hash(image)
                 if crop_sha256 in exact_hashes or perceptual.contains_near_duplicate(
                     perceptual_value
                 ):
@@ -461,7 +383,14 @@ def build_training_dataset(
         return dataset
     except DatasetBuildError:
         raise
-    except (JsonSchemaValidationError, OSError, PydanticValidationError, ValueError) as exc:
+    except CropProcessingError as exc:
+        raise DatasetBuildError(exc.code) from exc
+    except (
+        JsonSchemaValidationError,
+        OSError,
+        PydanticValidationError,
+        ValueError,
+    ) as exc:
         raise DatasetBuildError("IMAGE_TRAINING_DATASET_BUILD_FAILED") from exc
     finally:
         os.close(pages_descriptor)

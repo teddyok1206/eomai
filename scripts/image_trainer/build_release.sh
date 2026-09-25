@@ -55,6 +55,10 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-lora-checkpoint-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-worker-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-probe-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-probe-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-adapter-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-probe-worker-result-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
@@ -68,8 +72,10 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/cli.py",
         "eom_image_trainer/crop_locator.py",
         "eom_image_trainer/crop_locator_runner.py",
+        "eom_image_trainer/crop_processing.py",
         "eom_image_trainer/dataset_builder.py",
         "eom_image_trainer/diffusers_backend.py",
+        "eom_image_trainer/micro_probe_runner.py",
         "eom_image_trainer/proposal_builder.py",
         "eom_image_trainer/runner.py",
     }

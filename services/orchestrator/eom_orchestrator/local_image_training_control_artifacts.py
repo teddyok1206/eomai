@@ -8,6 +8,7 @@ from datetime import datetime
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
+    LocalImageLoraMicroProbePlan,
     LocalImageQualityEvaluationPlan,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
@@ -31,6 +32,9 @@ CROP_PROPOSAL_ARTIFACT_TYPE = "control_local_image_training_crop_proposals"
 CROP_REVIEW_MEMBER = "manifests/crop-review.json"
 CROP_REVIEW_SCHEMA_REF = "eom://schemas/image-provider/local-image-training-crop-review/1.0"
 CROP_REVIEW_ARTIFACT_TYPE = "control_local_image_training_crop_review"
+MICRO_PROBE_PLAN_MEMBER = "manifests/micro-probe-plan.json"
+MICRO_PROBE_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-micro-probe-plan/1.0"
+MICRO_PROBE_PLAN_ARTIFACT_TYPE = "control_local_image_lora_micro_probe_plan"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -101,6 +105,21 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-training-crop-review",
             identity_sha256=review.review_sha256,
             created_at=review.reviewed_at,
+        )
+
+    def commit_micro_probe_plan(
+        self,
+        plan: LocalImageLoraMicroProbePlan,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="lora-micro-probe-plan",
+            member=MICRO_PROBE_PLAN_MEMBER,
+            schema_ref=MICRO_PROBE_PLAN_SCHEMA_REF,
+            artifact_type=MICRO_PROBE_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-lora-micro-probe-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
         )
 
     def _commit_document(

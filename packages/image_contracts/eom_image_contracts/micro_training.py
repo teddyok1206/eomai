@@ -198,6 +198,7 @@ class LocalImageLoraMicroProbeCommand(FrozenModel):
     probe_plan: LocalImageLoraMicroProbePlan
     attempt: Literal[1]
     staged_plan_member: Literal["inputs/micro-probe-plan.json"]
+    staged_authorization_member: Literal["inputs/training-authorization.json"]
     staged_proposal_set_member: Literal["inputs/crop-proposals.json"]
     staged_pages_root: Literal["inputs/pages"]
     runtime_dataset_root: Literal["runtime-dataset"]
@@ -205,6 +206,18 @@ class LocalImageLoraMicroProbeCommand(FrozenModel):
     checkpoint_root_member: Literal["checkpoints"]
     timeout_seconds: int = Field(ge=600, le=14_400)
     command_sha256: Sha256
+
+    @property
+    def training_plan(self) -> LocalImageLoraMicroProbePlan:
+        """Present the shared trainer backend with its immutable plan view."""
+
+        return self.probe_plan
+
+    @property
+    def training_plan_sha256(self) -> Sha256:
+        """Present the shared trainer backend with its immutable plan hash."""
+
+        return self.probe_plan_sha256
 
     @model_validator(mode="after")
     def command_is_coherent(self) -> LocalImageLoraMicroProbeCommand:
