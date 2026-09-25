@@ -49,6 +49,11 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-composite-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-quality-evaluation-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-quality-evaluation-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-training-authorization-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-training-dataset-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-training-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-adapter-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-training-receipt-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_CONTRACT_WHEEL_INVALID")

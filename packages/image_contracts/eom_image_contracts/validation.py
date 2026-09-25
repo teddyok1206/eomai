@@ -20,6 +20,11 @@ SCHEMA_FILES = {
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
+    "training-authorization": "local-image-training-authorization-v1.schema.json",
+    "training-dataset-manifest": "local-image-training-dataset-manifest-v1.schema.json",
+    "lora-training-plan": "local-image-lora-training-plan-v1.schema.json",
+    "lora-adapter-manifest": "local-image-lora-adapter-manifest-v1.schema.json",
+    "lora-training-receipt": "local-image-lora-training-receipt-v1.schema.json",
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -33,6 +38,21 @@ SCHEMA_SHA256 = {
     ),
     "quality-evaluation-result": (
         "sha256:58ec74c1d1485fdaa5847bdfa8adb8603743d68db7f6c612ac36cf2f524a3335"
+    ),
+    "training-authorization": (
+        "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"
+    ),
+    "training-dataset-manifest": (
+        "sha256:284d80b5ca724d205c58dffedaa38874dccc2dbe2715233126659aae8112c3a4"
+    ),
+    "lora-training-plan": (
+        "sha256:f55bb6a9f5560764aa21174a91d5f187d430aed20a8c0cbcbfe24e430f49fdf5"
+    ),
+    "lora-adapter-manifest": (
+        "sha256:6ff652980b8b3599d0843395820d0e468270cfd17e9ab733a6b7ee28d6acb546"
+    ),
+    "lora-training-receipt": (
+        "sha256:b416463535d9aa0a8febfae3da3afc8e839aaa90913d021827f3826d9fda7c1a"
     ),
 }
 
