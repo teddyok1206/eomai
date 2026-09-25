@@ -423,6 +423,7 @@ class LocalImageLoraMicroEvaluationCommand(FrozenModel):
         )
         if (
             self.adapter_manifest.probe_plan != self.probe_plan_pointer
+            or self.holdout_plan_sha256 != self.holdout_evaluation_plan.sha256
             or self.adapter_manifest.base_model.provider_family != "diffusers-ssd-1b"
             or self.adapter_manifest.state != "EVALUATION_ONLY"
             or self.adapter_manifest.activation_policy != "FORBIDDEN"

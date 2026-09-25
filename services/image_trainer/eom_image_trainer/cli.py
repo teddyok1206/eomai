@@ -17,6 +17,12 @@ from eom_image_trainer.crop_locator_runner import (
     run_crop_locator_command,
 )
 from eom_image_trainer.diffusers_backend import Ssd1bLoraBackend
+from eom_image_trainer.micro_evaluation_runner import (
+    MicroEvaluationRunnerError,
+    Ssd1bMicroEvaluationBackend,
+    load_micro_evaluation_command,
+    run_micro_evaluation_command,
+)
 from eom_image_trainer.micro_probe_runner import (
     MicroProbeRunnerError,
     load_micro_probe_command,
@@ -42,6 +48,11 @@ def _parser() -> argparse.ArgumentParser:
     micro.add_argument("--model-store-root", required=True, type=Path)
     micro.add_argument("--workspace", required=True, type=Path)
     micro.add_argument("--gpu-lock", required=True, type=Path)
+    evaluate = subcommands.add_parser("evaluate-micro-probe")
+    evaluate.add_argument("--command", required=True, type=Path)
+    evaluate.add_argument("--model-store-root", required=True, type=Path)
+    evaluate.add_argument("--workspace", required=True, type=Path)
+    evaluate.add_argument("--gpu-lock", required=True, type=Path)
     locate = subcommands.add_parser("locate-crops")
     locate.add_argument("--command", required=True, type=Path)
     locate.add_argument("--workspace", required=True, type=Path)
@@ -109,6 +120,26 @@ def main() -> None:
             raise SystemExit(exc.code) from exc
         if locator_result.status != "SUCCEEDED":
             raise SystemExit(locator_result.error_code or "IMAGE_TRAINING_CROP_LOCATOR_FAILED")
+        return
+    if args.operation == "evaluate-micro-probe":
+        evaluation_command = load_micro_evaluation_command(args.command)
+        if args.workspace.name != evaluation_command.evaluation_run_id:
+            raise SystemExit("IMAGE_EVALUATION_WORKSPACE_ID_MISMATCH")
+        lock_descriptor = _lock_gpu(args.gpu_lock)
+        try:
+            evaluation_result = run_micro_evaluation_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=evaluation_command,
+                backend=Ssd1bMicroEvaluationBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except (TrainingRunnerError, MicroEvaluationRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        finally:
+            os.close(lock_descriptor)
+        if evaluation_result.status != "SUCCEEDED":
+            raise SystemExit(evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED")
         return
     if args.operation == "micro-probe":
         micro_command = load_micro_probe_command(args.command)

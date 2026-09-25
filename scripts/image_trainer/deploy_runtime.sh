@@ -20,6 +20,8 @@ TRAINER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-trainer@.service
 TRAINER_UNIT_TARGET=/etc/systemd/system/eom-image-trainer@.service
 MICRO_PROBE_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-lora-micro-probe@.service
 MICRO_PROBE_UNIT_TARGET=/etc/systemd/system/eom-image-lora-micro-probe@.service
+MICRO_EVALUATION_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-lora-micro-evaluation@.service
+MICRO_EVALUATION_UNIT_TARGET=/etc/systemd/system/eom-image-lora-micro-evaluation@.service
 CROP_LOCATOR_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-crop-locator@.service
 CROP_LOCATOR_UNIT_TARGET=/etc/systemd/system/eom-image-crop-locator@.service
 PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
@@ -66,7 +68,9 @@ done
   fail "LOCAL_IMAGE_TRAINER_DEPENDENCY_WHEEL_INVALID"
 if systemctl list-units --type=service --state=activating,active --no-legend \
   'eom-image-provider@*.service' 'eom-image-trainer@*.service' \
-  'eom-image-lora-micro-probe@*.service' 'eom-image-crop-locator@*.service' | grep -q .; then
+  'eom-image-lora-micro-probe@*.service' \
+  'eom-image-lora-micro-evaluation@*.service' \
+  'eom-image-crop-locator@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_GPU_UNIT_ACTIVE"
 fi
 
@@ -89,17 +93,21 @@ done
 install -d -o root -g eom-image -m 03770 /srv/eom/image-training-workspaces
 install -o root -g root -m 0644 "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${MICRO_PROBE_UNIT_SOURCE}" "${MICRO_PROBE_UNIT_TARGET}"
+install -o root -g root -m 0644 "${MICRO_EVALUATION_UNIT_SOURCE}" "${MICRO_EVALUATION_UNIT_TARGET}"
 install -o root -g root -m 0644 "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}"
 install -o root -g root -m 0644 "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${TRAINER_UNIT_TARGET}" "${MICRO_PROBE_UNIT_TARGET}" \
+  "${MICRO_EVALUATION_UNIT_TARGET}" \
   "${CROP_LOCATOR_UNIT_TARGET}" \
   "${PROVIDER_UNIT_TARGET}"
 cmp -s "${TRAINER_UNIT_SOURCE}" "${TRAINER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_TRAINER_UNIT_DRIFT"
 cmp -s "${MICRO_PROBE_UNIT_SOURCE}" "${MICRO_PROBE_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_MICRO_PROBE_UNIT_DRIFT"
+cmp -s "${MICRO_EVALUATION_UNIT_SOURCE}" "${MICRO_EVALUATION_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_MICRO_EVALUATION_UNIT_DRIFT"
 cmp -s "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_CROP_LOCATOR_UNIT_DRIFT"
 cmp -s "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}" || \

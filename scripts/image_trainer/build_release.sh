@@ -59,6 +59,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-lora-micro-probe-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-micro-adapter-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-micro-probe-worker-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-evaluation-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-lora-micro-evaluation-result-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
@@ -76,6 +78,7 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/dataset_builder.py",
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/micro_probe_runner.py",
+        "eom_image_trainer/micro_evaluation_runner.py",
         "eom_image_trainer/proposal_builder.py",
         "eom_image_trainer/runner.py",
     }
