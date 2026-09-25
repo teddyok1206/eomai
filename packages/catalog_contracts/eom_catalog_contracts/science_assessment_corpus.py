@@ -421,10 +421,69 @@ def validate_science_corpus_manifest_against_acquisition(
         or manifest.pdf_validator != acquisition.pdf_validator
     ):
         raise ValueError("corpus manifest references another acquisition")
-    if {value.sha256 for value in manifest.documents} != {
-        value.sha256 for value in acquisition.successful_observations
-    }:
+    observations_by_hash: dict[str, list[ScienceAssessmentAcquisitionSuccess]] = {}
+    for observation in acquisition.successful_observations:
+        observations_by_hash.setdefault(observation.sha256, []).append(observation)
+    if {value.sha256 for value in manifest.documents} != set(observations_by_hash):
         raise ValueError("corpus documents differ from the acquisition")
+    for document in manifest.documents:
+        observations = observations_by_hash[document.sha256]
+        first = observations[0]
+        identities = {
+            (
+                value.bytes,
+                value.page_count,
+                value.subject_family,
+                value.issuer_type,
+                value.administration_year,
+                value.grade,
+                value.session_label,
+            )
+            for value in observations
+        }
+        expected_origins = tuple(
+            sorted(
+                {
+                    ScienceAssessmentCorpusOrigin(
+                        post_url=value.post_url,
+                        download_url=value.download_url,
+                        resolved_url=value.resolved_url,
+                        link_text=value.link_text,
+                    )
+                    for value in observations
+                },
+                key=lambda value: (
+                    value.post_url,
+                    value.download_url,
+                    value.resolved_url,
+                    value.link_text,
+                ),
+            )
+        )
+        if len(identities) != 1 or (
+            document.bytes,
+            document.page_count,
+            document.original_filename,
+            document.subject_family,
+            document.subject_label,
+            document.issuer_type,
+            document.administration_year,
+            document.grade,
+            document.session_label,
+            document.origins,
+        ) != (
+            first.bytes,
+            first.page_count,
+            min(value.original_filename for value in observations),
+            first.subject_family,
+            min(value.subject_label for value in observations),
+            first.issuer_type,
+            first.administration_year,
+            first.grade,
+            first.session_label,
+            expected_origins,
+        ):
+            raise ValueError("corpus document metadata differs from the acquisition")
     if {(value.post_url, value.download_url, value.error_code) for value in manifest.failures} != {
         (value.post_url, value.download_url, value.error_code)
         for value in acquisition.failed_observations

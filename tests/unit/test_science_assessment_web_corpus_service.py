@@ -187,6 +187,10 @@ def test_manifest_binds_summary_plan_and_reused_source(tmp_path: Path) -> None:
     )
     validate_science_corpus_manifest_against_plan(manifest, plan)
     validate_science_corpus_manifest_against_acquisition(manifest, acquisition)
+    drifted_document = manifest.documents[0].model_copy(update={"subject_label": "지구과학1"})
+    drifted_manifest = manifest.model_copy(update={"documents": (drifted_document,)})
+    with pytest.raises(ValueError, match="metadata differs"):
+        validate_science_corpus_manifest_against_acquisition(drifted_manifest, acquisition)
 
 
 def test_new_document_must_bind_exact_new_shard(tmp_path: Path) -> None:
