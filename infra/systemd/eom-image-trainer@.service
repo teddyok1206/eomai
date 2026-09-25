@@ -12,6 +12,7 @@ WorkingDirectory=/srv/eom/image-training-workspaces/%i
 Environment=HOME=/var/lib/eom-image
 Environment=TZ=UTC
 Environment=PYTHONNOUSERSITE=1
+Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8
 ExecStart=/srv/eom/conda/envs/eom-image-trainer/bin/eom-local-image-trainer train --command /srv/eom/image-training-workspaces/%i/command.json --model-store-root /srv/eom/models/image --workspace /srv/eom/image-training-workspaces/%i --gpu-lock /var/lib/eom-image/gpu0.lock
 
 StateDirectory=eom-image

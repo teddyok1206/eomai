@@ -9,6 +9,11 @@ import pytest
 from eom_image_contracts import LocalImageGenerationRequest, content_sha256, text_sha256
 from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
 from eom_image_provider.provider import ProviderError
+from eom_image_trainer.diffusers_backend import (
+    DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG,
+    _require_deterministic_runtime,
+)
+from eom_image_trainer.runner import TrainingBackendFailure
 
 
 class _Tokenizer:
@@ -219,3 +224,14 @@ def test_ssd1b_rejects_a_loader_that_did_not_apply_float16(
             model_directory=tmp_path,
             request=_request(),
         )
+
+
+def test_lora_trainer_requires_exact_deterministic_cublas_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    with pytest.raises(TrainingBackendFailure, match="IMAGE_TRAINING_RUNTIME_DRIFT"):
+        _require_deterministic_runtime()
+
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG)
+    _require_deterministic_runtime()

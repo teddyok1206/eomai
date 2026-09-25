@@ -24,6 +24,14 @@ from eom_image_trainer.runner import (
 )
 
 TARGET_MODULES = ("to_k", "to_out.0", "to_q", "to_v")
+DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+
+
+def _require_deterministic_runtime() -> None:
+    """Fail before model work when CUDA determinism cannot be honored."""
+
+    if os.environ.get("CUBLAS_WORKSPACE_CONFIG") != DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG:
+        raise TrainingBackendFailure("IMAGE_TRAINING_RUNTIME_DRIFT")
 
 
 def _sample_order(*, epoch: int, count: int, seed: int) -> tuple[int, ...]:
@@ -305,6 +313,7 @@ class Ssd1bLoraBackend:
         try:
             if not torch.cuda.is_available() or torch.cuda.get_device_capability(0) != (12, 0):
                 raise TrainingBackendFailure("IMAGE_TRAINING_GPU_UNAVAILABLE")
+            _require_deterministic_runtime()
             versions = _versions()
             expected = plan.dependencies.model_dump(mode="json")
             if versions != expected:

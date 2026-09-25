@@ -36,6 +36,7 @@ def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock(
     assert "eom-local-image-trainer train" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
     assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
     assert "DevicePolicy=closed" in source
@@ -73,6 +74,7 @@ def test_local_image_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() 
     assert "eom-local-image-trainer micro-probe" in source
     assert "/srv/eom/image-training-workspaces/%i/command.json" in source
     assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
     assert "PrivateNetwork=true" in source
     assert "NoNewPrivileges=true" in source
     assert "ReadOnlyPaths=/srv/eom/models/image" in source
