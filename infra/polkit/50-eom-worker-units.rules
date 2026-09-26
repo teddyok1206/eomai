@@ -13,6 +13,7 @@ polkit.addRule(function(action, subject) {
     var localImageUnit = /^eom-image-provider@imgreq_[0-9a-f]{32}\.service$/;
     var localImageTrainerUnit = /^eom-image-trainer@imgtrainrun_[0-9a-f]{32}\.service$/;
     var localImageMicroProbeUnit = /^eom-image-lora-micro-probe@imgmicrotrainrun_[0-9a-f]{32}\.service$/;
+    var localImageScienceMicroProbeUnit = /^eom-image-science-lora-micro-probe@imgscimicrotrainrun_[0-9a-f]{32}\.service$/;
     var localImageMicroEvaluationUnit = /^eom-image-lora-micro-evaluation@imgmicroevalrun_[0-9a-f]{32}\.service$/;
     var localImageCropLocatorUnit = /^eom-image-crop-locator@imgcroplocator_[0-9a-f]{32}\.service$/;
     var localImageScienceVisualPilotUnit = /^eom-image-science-visual-pilot@imgscivisattempt_[0-9a-f]{32}\.service$/;
@@ -30,6 +31,7 @@ polkit.addRule(function(action, subject) {
             || probeUnit.test(unit) || authUnit.test(unit)
             || loginUnit.test(unit) || usageUnit.test(unit) || localImageUnit.test(unit)
             || localImageTrainerUnit.test(unit) || localImageMicroProbeUnit.test(unit)
+            || localImageScienceMicroProbeUnit.test(unit)
             || localImageMicroEvaluationUnit.test(unit)
             || localImageCropLocatorUnit.test(unit)
             || localImageScienceVisualPilotUnit.test(unit))) {

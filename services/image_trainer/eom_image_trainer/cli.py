@@ -40,6 +40,11 @@ from eom_image_trainer.science_corpus_visual_runner import (
 from eom_image_trainer.science_corpus_visual_runner import (
     load_command as load_science_visual_command,
 )
+from eom_image_trainer.science_micro_probe_runner import (
+    ScienceMicroProbeRunnerError,
+    load_science_micro_probe_command,
+    run_science_micro_probe_command,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -55,6 +60,11 @@ def _parser() -> argparse.ArgumentParser:
     micro.add_argument("--model-store-root", required=True, type=Path)
     micro.add_argument("--workspace", required=True, type=Path)
     micro.add_argument("--gpu-lock", required=True, type=Path)
+    science_micro = subcommands.add_parser("science-micro-probe")
+    science_micro.add_argument("--command", required=True, type=Path)
+    science_micro.add_argument("--model-store-root", required=True, type=Path)
+    science_micro.add_argument("--workspace", required=True, type=Path)
+    science_micro.add_argument("--gpu-lock", required=True, type=Path)
     evaluate = subcommands.add_parser("evaluate-micro-probe")
     evaluate.add_argument("--command", required=True, type=Path)
     evaluate.add_argument("--model-store-root", required=True, type=Path)
@@ -191,6 +201,33 @@ def main() -> None:
             os.close(lock_descriptor)
         if micro_result.status != "SUCCEEDED":
             raise SystemExit(micro_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
+        return
+    if args.operation == "science-micro-probe":
+        science_command = load_science_micro_probe_command(args.command)
+        if args.workspace.name != science_command.training_run_id:
+            raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
+        lock_descriptor = _lock_gpu(args.gpu_lock)
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+        def _cancel_science_micro(_signum: int, _frame: object) -> None:
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGTERM, _cancel_science_micro)
+        try:
+            science_result = run_science_micro_probe_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=science_command,
+                backend=Ssd1bLoraBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except (TrainingRunnerError, ScienceMicroProbeRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            os.close(lock_descriptor)
+        if science_result.status != "SUCCEEDED":
+            raise SystemExit(science_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
     training_command = load_training_command(args.command)
     if args.workspace.name != training_command.training_run_id:

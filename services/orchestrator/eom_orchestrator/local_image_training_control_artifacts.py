@@ -14,6 +14,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
+    LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
     LocalImageTrainingAuthorization,
@@ -41,6 +42,11 @@ CROP_REVIEW_ARTIFACT_TYPE = "control_local_image_training_crop_review"
 MICRO_PROBE_PLAN_MEMBER = "manifests/micro-probe-plan.json"
 MICRO_PROBE_PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-lora-micro-probe-plan/1.0"
 MICRO_PROBE_PLAN_ARTIFACT_TYPE = "control_local_image_lora_micro_probe_plan"
+SCIENCE_MICRO_PROBE_PLAN_MEMBER = "manifests/science-micro-probe-plan.json"
+SCIENCE_MICRO_PROBE_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-lora-micro-probe-plan/1.0"
+)
+SCIENCE_MICRO_PROBE_PLAN_ARTIFACT_TYPE = "control_local_image_science_lora_micro_probe_plan"
 SCIENCE_CORPUS_AUTHORIZATION_MEMBER = "manifests/science-corpus-training-authorization.json"
 SCIENCE_CORPUS_AUTHORIZATION_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-training-authorization/1.0"
@@ -158,6 +164,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=MICRO_PROBE_PLAN_SCHEMA_REF,
             artifact_type=MICRO_PROBE_PLAN_ARTIFACT_TYPE,
             idempotency_prefix="local-image-lora-micro-probe-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_micro_probe_plan(
+        self,
+        plan: LocalImageScienceLoraMicroProbePlan,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-lora-micro-probe-plan",
+            member=SCIENCE_MICRO_PROBE_PLAN_MEMBER,
+            schema_ref=SCIENCE_MICRO_PROBE_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-lora-micro-probe-plan",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )

@@ -90,6 +90,7 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/dataset_builder.py",
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/micro_probe_runner.py",
+        "eom_image_trainer/science_micro_probe_runner.py",
         "eom_image_trainer/micro_evaluation_runner.py",
         "eom_image_trainer/proposal_builder.py",
         "eom_image_trainer/runner.py",

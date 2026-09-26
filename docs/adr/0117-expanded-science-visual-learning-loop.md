@@ -249,6 +249,40 @@ hash drift, stale source pointer, cross-partition group, or non-LoRA review fail
 alternative of training directly from the worker workspace is insufficient because that path has no
 immutable lifecycle, Artifact revision, or replay authority.
 
+### Evaluation-only science micro-probe successor
+
+The first reviewed file set contains 15 unique exam groups selected from 24 eligible reviewed
+candidates: 12 TRAIN, one VALIDATION, and two HOLDOUT. The additive
+`local-image-science-lora-micro-probe-plan/1.0` contract binds that exact crop-set Artifact member,
+its semantic self-hash, every partition member ID, the active pinned SSD-1B base-model revision,
+runtime dependency versions, fixed 200-step hyperparameters, explicit owner authorization, source
+commit, and `activation_policy=FORBIDDEN`. Validation and holdout members are reserved for the
+comparison stage and never enter the training dataset.
+
+The staging application resolves the approved file-set members through their Artifact Revision and
+manifest entries, validates schema, media type and hash, and materializes one local workspace. It
+publishes the immutable plan through the Orchestrator control-Artifact boundary before creating the
+command. The isolated `eom-image` worker has no PostgreSQL, NAS, repository, network, or secret
+access; it reads only the staged files, normalizes only the 12 TRAIN crops through the existing
+deterministic 768 by 512 grayscale crop processor, rechecks exact and perceptual uniqueness, and
+returns a typed local result. The worker and inference provider share the existing exclusive GPU
+capacity lock.
+
+The dominant operations are candidate lookup, stable training-member iteration, uniqueness checks,
+and manifest assembly. One candidate map plus exact-hash and four-band perceptual sets keep the
+bounded preparation path `O(n)` in time and space for `n=15`. Training is the intentionally dominant
+cost. Plan publication and workspace staging are separately idempotent: a same-input plan reuses its
+Artifact revision, while an existing workspace or result fails closed rather than overwriting an
+attempt. Adapter files remain local, evaluation-only outputs until a later Orchestrator publication
+and fixed base-versus-adapter evaluation succeed. This phase does not create or activate a provider
+binding.
+
+Reusing the older page/proposal micro-probe command without an additive contract was rejected. It
+would lose the reviewed crop-set revision, exam-group partitions, reserved validation/holdout IDs,
+and the explicit activation prohibition. Building a second training backend was also rejected: the
+science successor deliberately reuses the pinned SSD-1B backend and changes only the typed dataset
+input and provenance boundary.
+
 ## Simpler alternatives rejected
 
 Training directly from full PDF pages would teach publisher text, answers, layouts, and unrelated
