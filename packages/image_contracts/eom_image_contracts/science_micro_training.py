@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -14,6 +15,7 @@ from eom_image_contracts.models import (
     LocalImageModelPointer,
     Sha256,
     content_sha256,
+    text_sha256,
 )
 from eom_image_contracts.science_corpus_visual import LocalImageScienceVisualCropSet
 from eom_image_contracts.training import (
@@ -275,6 +277,150 @@ class LocalImageScienceLoraMicroProbeWorkerResult(FrozenModel):
         return self
 
 
+class LocalImageScienceLoraMicroEvaluationCase(FrozenModel):
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    exam_group_sha256: Sha256
+    positive_prompt: str = Field(min_length=1, max_length=4000)
+    positive_prompt_sha256: Sha256
+    negative_prompt: str = Field(min_length=1, max_length=2000)
+    negative_prompt_sha256: Sha256
+    seed: int = Field(ge=0, le=2**32 - 1)
+
+    @field_validator("positive_prompt", "negative_prompt")
+    @classmethod
+    def prompt_is_bounded_text(cls, value: str) -> str:
+        if value != value.strip() or value != unicodedata.normalize("NFC", value):
+            raise ValueError("science micro evaluation prompt must be trimmed NFC text")
+        if any(
+            character not in {"\n", "\t"} and unicodedata.category(character).startswith("C")
+            for character in value
+        ):
+            raise ValueError("science micro evaluation prompt contains a control character")
+        return value
+
+    @model_validator(mode="after")
+    def prompt_hashes_match(self) -> LocalImageScienceLoraMicroEvaluationCase:
+        if self.positive_prompt_sha256 != text_sha256(
+            self.positive_prompt
+        ) or self.negative_prompt_sha256 != text_sha256(self.negative_prompt):
+            raise ValueError("science micro evaluation prompt hash mismatch")
+        return self
+
+
+class LocalImageScienceLoraMicroEvaluationCommand(FrozenModel):
+    schema_version: Literal["local-image-science-lora-micro-evaluation-command/1.0"]
+    evaluation_run_id: str = Field(pattern=r"^imgscimicroevalrun_[0-9a-f]{32}$")
+    training_run_id: str = Field(pattern=r"^imgscimicrotrainrun_[0-9a-f]{32}$")
+    probe_plan_pointer: ImageEvaluationArtifactMember
+    probe_plan_sha256: Sha256
+    crop_set: ImageEvaluationArtifactMember
+    crop_set_sha256: Sha256
+    training_result_sha256: Sha256
+    adapter_manifest: LocalImageScienceLoraMicroAdapterManifest
+    cases: tuple[LocalImageScienceLoraMicroEvaluationCase, ...] = Field(min_length=2, max_length=2)
+    inference_steps: Literal[20]
+    guidance_scale: float = Field(ge=7.5, le=7.5)
+    generation_width: Literal[800]
+    generation_height: Literal[504]
+    delivery_width: Literal[800]
+    delivery_height: Literal[500]
+    staged_adapter_root: Literal["inputs/adapter"]
+    output_root_member: Literal["outputs"]
+    source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    timeout_seconds: int = Field(ge=600, le=3600)
+    command_sha256: Sha256
+
+    @model_validator(mode="after")
+    def immutable_command_is_coherent(self) -> LocalImageScienceLoraMicroEvaluationCommand:
+        _require_pointer(
+            self.probe_plan_pointer,
+            schema_ref=SCIENCE_MICRO_PLAN_SCHEMA_REF,
+            member_path="manifests/science-micro-probe-plan.json",
+        )
+        _require_pointer(
+            self.crop_set,
+            schema_ref=SCIENCE_CROP_SET_SCHEMA_REF,
+            member_path="manifests/science-visual-crop-set.json",
+        )
+        if (
+            self.adapter_manifest.probe_plan != self.probe_plan_pointer
+            or self.adapter_manifest.state != "EVALUATION_ONLY"
+            or self.adapter_manifest.activation_policy != "FORBIDDEN"
+        ):
+            raise ValueError("science micro evaluation adapter binding mismatch")
+        candidate_ids = tuple(value.candidate_id for value in self.cases)
+        documents = tuple(value.document_id for value in self.cases)
+        groups = tuple(value.exam_group_sha256 for value in self.cases)
+        if candidate_ids != tuple(sorted(set(candidate_ids))) or any(
+            len(values) != len(set(values)) for values in (documents, groups)
+        ):
+            raise ValueError("science micro evaluation cases must be sorted and unique")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"evaluation_run_id", "command_sha256"})
+        ).removeprefix("sha256:")
+        if self.evaluation_run_id != "imgscimicroevalrun_" + identity[:32]:
+            raise ValueError("science micro evaluation ID does not bind command inputs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("science micro evaluation command hash mismatch")
+        return self
+
+
+class LocalImageScienceLoraMicroEvaluationOutput(FrozenModel):
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    variant: Literal["ADAPTER", "BASE"]
+    member_path: str = Field(
+        pattern=r"^outputs/imgsciviscandidate_[0-9a-f]{32}-(adapter|base)\.png$"
+    )
+    sha256: Sha256
+    size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
+    width_px: Literal[800]
+    height_px: Literal[500]
+
+    @model_validator(mode="after")
+    def member_path_matches_identity(self) -> LocalImageScienceLoraMicroEvaluationOutput:
+        if self.member_path != f"outputs/{self.candidate_id}-{self.variant.lower()}.png":
+            raise ValueError("science micro evaluation output path mismatch")
+        return self
+
+
+class LocalImageScienceLoraMicroEvaluationResult(FrozenModel):
+    schema_version: Literal["local-image-science-lora-micro-evaluation-result/1.0"]
+    evaluation_run_id: str = Field(pattern=r"^imgscimicroevalrun_[0-9a-f]{32}$")
+    command_sha256: Sha256
+    training_result_sha256: Sha256
+    adapter_manifest_sha256: Sha256
+    status: Literal["SUCCEEDED", "FAILED"]
+    outputs: tuple[LocalImageScienceLoraMicroEvaluationOutput, ...] = Field(max_length=4)
+    error_code: str | None = Field(pattern=r"^IMAGE_EVALUATION_[A-Z0-9_]{3,96}$")
+    started_at: datetime
+    completed_at: datetime
+    result_sha256: Sha256
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def terminal_result_is_coherent(self) -> LocalImageScienceLoraMicroEvaluationResult:
+        if self.completed_at < self.started_at:
+            raise ValueError("science micro evaluation completion precedes start")
+        keys = tuple((value.candidate_id, value.variant) for value in self.outputs)
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("science micro evaluation outputs must be sorted and unique")
+        if self.status == "SUCCEEDED":
+            if len(self.outputs) != 4 or self.error_code is not None:
+                raise ValueError("successful science micro evaluation is incomplete")
+        elif self.error_code is None:
+            raise ValueError("failed science micro evaluation requires an error code")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("science micro evaluation result hash mismatch")
+        return self
+
+
 def validate_science_micro_probe_plan_sources(
     plan: LocalImageScienceLoraMicroProbePlan,
     crop_set: LocalImageScienceVisualCropSet,
@@ -318,3 +464,60 @@ def validate_science_micro_probe_worker_result(
         or result.adapter_manifest.probe_plan != command.probe_plan_pointer
     ):
         raise ValueError("science micro-probe adapter does not bind the exact plan")
+
+
+def validate_science_micro_evaluation_command(
+    plan: LocalImageScienceLoraMicroProbePlan,
+    crop_set: LocalImageScienceVisualCropSet,
+    training_result: LocalImageScienceLoraMicroProbeWorkerResult,
+    command: LocalImageScienceLoraMicroEvaluationCommand,
+) -> None:
+    if (
+        command.training_run_id != training_result.training_run_id
+        or command.probe_plan_pointer != training_result.probe_plan_pointer
+        or command.probe_plan_sha256 != plan.plan_sha256
+        or command.crop_set != plan.crop_set
+        or command.crop_set_sha256 != crop_set.crop_set_sha256
+        or command.training_result_sha256 != training_result.result_sha256
+        or training_result.status != "SUCCEEDED"
+        or training_result.adapter_manifest is None
+        or command.adapter_manifest != training_result.adapter_manifest
+    ):
+        raise ValueError("science micro evaluation does not bind exact training inputs")
+    members = {value.candidate_id: value for value in crop_set.members}
+    expected = set(plan.holdout_member_ids)
+    actual = {value.candidate_id for value in command.cases}
+    if actual != expected:
+        raise ValueError("science micro evaluation lacks exact holdout coverage")
+    for case in command.cases:
+        member = members.get(case.candidate_id)
+        if (
+            member is None
+            or member.partition != "HOLDOUT"
+            or case.document_id != member.document_id
+            or case.exam_group_sha256 != member.exam_group_sha256
+            or case.positive_prompt != member.caption_en
+            or case.positive_prompt_sha256 != member.caption_sha256
+        ):
+            raise ValueError("science micro evaluation case binding mismatch")
+
+
+def validate_science_micro_evaluation_result(
+    command: LocalImageScienceLoraMicroEvaluationCommand,
+    result: LocalImageScienceLoraMicroEvaluationResult,
+) -> None:
+    if (
+        result.evaluation_run_id != command.evaluation_run_id
+        or result.command_sha256 != command.command_sha256
+        or result.training_result_sha256 != command.training_result_sha256
+        or result.adapter_manifest_sha256 != command.adapter_manifest.manifest_sha256
+    ):
+        raise ValueError("science micro evaluation result command binding mismatch")
+    expected = {
+        (case.candidate_id, variant) for case in command.cases for variant in ("ADAPTER", "BASE")
+    }
+    actual = {(value.candidate_id, value.variant) for value in result.outputs}
+    if result.status == "SUCCEEDED" and actual != expected:
+        raise ValueError("science micro evaluation result lacks exact paired coverage")
+    if not actual.issubset(expected):
+        raise ValueError("science micro evaluation result contains unplanned output")

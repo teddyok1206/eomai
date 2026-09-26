@@ -13,6 +13,8 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroAdapterManifest,
+    LocalImageScienceLoraMicroEvaluationCommand,
+    LocalImageScienceLoraMicroEvaluationResult,
     LocalImageScienceLoraMicroProbeCommand,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
@@ -22,6 +24,8 @@ from eom_image_contracts import (
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_science_micro_evaluation_command,
+    validate_science_micro_evaluation_result,
     validate_science_micro_probe_plan_sources,
     validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
@@ -838,6 +842,97 @@ def _science_micro_result_value() -> dict[str, object]:
     return {**body, "result_sha256": content_sha256(body)}
 
 
+def _science_micro_evaluation_command_value() -> dict[str, object]:
+    training = _science_micro_command_value()
+    plan = training["probe_plan"]
+    assert isinstance(plan, dict)
+    result = _science_micro_result_value()
+    crop_set = _crop_set_value()
+    crop_members = crop_set["members"]
+    assert isinstance(crop_members, list)
+    members = {str(value["candidate_id"]): value for value in crop_members}
+    holdout_ids = plan["holdout_member_ids"]
+    assert isinstance(holdout_ids, list)
+    negative = (
+        "people, portrait, photorealistic scene, decorative text, watermark, color, "
+        "answer markings, cropped subject, clutter"
+    )
+    cases = [
+        {
+            "candidate_id": candidate_id,
+            "document_id": members[candidate_id]["document_id"],
+            "exam_group_sha256": members[candidate_id]["exam_group_sha256"],
+            "positive_prompt": members[candidate_id]["caption_en"],
+            "positive_prompt_sha256": members[candidate_id]["caption_sha256"],
+            "negative_prompt": negative,
+            "negative_prompt_sha256": text_sha256(negative),
+            "seed": 20261026 + index,
+        }
+        for index, candidate_id in enumerate(holdout_ids)
+    ]
+    cases.sort(key=lambda value: str(value["candidate_id"]))
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-lora-micro-evaluation-command/1.0",
+        "training_run_id": training["training_run_id"],
+        "probe_plan_pointer": training["probe_plan_pointer"],
+        "probe_plan_sha256": training["probe_plan_sha256"],
+        "crop_set": plan["crop_set"],
+        "crop_set_sha256": plan["crop_set_sha256"],
+        "training_result_sha256": result["result_sha256"],
+        "adapter_manifest": result["adapter_manifest"],
+        "cases": cases,
+        "inference_steps": 20,
+        "guidance_scale": 7.5,
+        "generation_width": 800,
+        "generation_height": 504,
+        "delivery_width": 800,
+        "delivery_height": 500,
+        "staged_adapter_root": "inputs/adapter",
+        "output_root_member": "outputs",
+        "source_commit": "f" * 40,
+        "timeout_seconds": 3600,
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    with_id = {**body, "evaluation_run_id": "imgscimicroevalrun_" + identity[:32]}
+    return {**with_id, "command_sha256": content_sha256(with_id)}
+
+
+def _science_micro_evaluation_result_value() -> dict[str, object]:
+    command = _science_micro_evaluation_command_value()
+    cases = command["cases"]
+    assert isinstance(cases, list)
+    outputs = [
+        {
+            "candidate_id": case["candidate_id"],
+            "variant": variant,
+            "member_path": (f"outputs/{case['candidate_id']}-{str(variant).lower()}.png"),
+            "sha256": f"sha256:{index + 1:064x}",
+            "size_bytes": 4096,
+            "width_px": 800,
+            "height_px": 500,
+        }
+        for index, (case, variant) in enumerate(
+            (value, variant) for value in cases for variant in ("ADAPTER", "BASE")
+        )
+    ]
+    outputs.sort(key=lambda value: (str(value["candidate_id"]), str(value["variant"])))
+    adapter = command["adapter_manifest"]
+    assert isinstance(adapter, dict)
+    body = {
+        "schema_version": "local-image-science-lora-micro-evaluation-result/1.0",
+        "evaluation_run_id": command["evaluation_run_id"],
+        "command_sha256": command["command_sha256"],
+        "training_result_sha256": command["training_result_sha256"],
+        "adapter_manifest_sha256": adapter["manifest_sha256"],
+        "status": "SUCCEEDED",
+        "outputs": outputs,
+        "error_code": None,
+        "started_at": "2026-09-26T00:11:00Z",
+        "completed_at": "2026-09-26T00:20:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
 @pytest.mark.parametrize(
     ("contract", "model", "value_factory"),
     [
@@ -905,6 +1000,16 @@ def _science_micro_result_value() -> dict[str, object]:
             "science-lora-micro-probe-worker-result",
             LocalImageScienceLoraMicroProbeWorkerResult,
             _science_micro_result_value,
+        ),
+        (
+            "science-lora-micro-evaluation-command",
+            LocalImageScienceLoraMicroEvaluationCommand,
+            _science_micro_evaluation_command_value,
+        ),
+        (
+            "science-lora-micro-evaluation-result",
+            LocalImageScienceLoraMicroEvaluationResult,
+            _science_micro_evaluation_result_value,
         ),
     ],
 )
@@ -975,6 +1080,25 @@ def test_science_micro_probe_binds_all_partitioned_crop_members_and_result() -> 
     assert len(plan.training_member_ids) == 12
     assert len(plan.validation_member_ids) == 1
     assert len(plan.holdout_member_ids) == 2
+
+
+def test_science_micro_evaluation_binds_exact_holdout_and_pairs() -> None:
+    crop_set = LocalImageScienceVisualCropSet.model_validate(_crop_set_value())
+    plan = LocalImageScienceLoraMicroProbePlan.model_validate(_science_micro_plan_value())
+    training_result = LocalImageScienceLoraMicroProbeWorkerResult.model_validate(
+        _science_micro_result_value()
+    )
+    command = LocalImageScienceLoraMicroEvaluationCommand.model_validate(
+        _science_micro_evaluation_command_value()
+    )
+    result = LocalImageScienceLoraMicroEvaluationResult.model_validate(
+        _science_micro_evaluation_result_value()
+    )
+
+    validate_science_micro_evaluation_command(plan, crop_set, training_result, command)
+    validate_science_micro_evaluation_result(command, result)
+    assert {value.candidate_id for value in command.cases} == set(plan.holdout_member_ids)
+    assert len(result.outputs) == 4
 
 
 def test_science_micro_probe_rejects_partition_leakage() -> None:
