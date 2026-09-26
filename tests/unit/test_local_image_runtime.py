@@ -217,11 +217,16 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
 
     trainer_build = (ROOT / "scripts/image_trainer/build_release.sh").read_text(encoding="utf-8")
     trainer_deploy = (ROOT / "scripts/image_trainer/deploy_runtime.sh").read_text(encoding="utf-8")
+    science_evaluation_stage = (
+        ROOT / "scripts/image_trainer/stage_science_micro_evaluation.py"
+    ).read_text(encoding="utf-8")
     assert "eom_image_trainer/science_micro_probe_runner.py" in trainer_build
     assert "eom_image_trainer/science_micro_evaluation_runner.py" in trainer_build
     assert "eom-image-science-lora-micro-probe@.service" in trainer_deploy
     assert "eom-image-science-lora-micro-evaluation@.service" in trainer_deploy
     assert '"${SCIENCE_MICRO_PROBE_UNIT_TARGET}"' in trainer_deploy
+    assert "content_json_bytes(command.model_dump" in science_evaluation_stage
+    assert "from eom_identifiers import canonical_json_bytes" not in science_evaluation_stage
 
 
 def test_local_image_release_scripts_have_valid_syntax() -> None:

@@ -13,7 +13,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from eom_identifiers import canonical_json_bytes
 from eom_image_contracts import (
     LocalImageScienceLoraMicroEvaluationCase,
     LocalImageScienceLoraMicroEvaluationCommand,
@@ -21,6 +20,7 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
     LocalImageScienceVisualCropSet,
+    content_json_bytes,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -280,7 +280,7 @@ def main() -> None:
             _stage_file(adapter / name, payload, trainer_gid=trainer_gid)
         _stage_file(
             temporary / "command.json",
-            canonical_json_bytes(command.model_dump(mode="json")),
+            content_json_bytes(command.model_dump(mode="json")),
             trainer_gid=trainer_gid,
         )
         os.chown(temporary, trainer.pw_uid, trainer_gid)
