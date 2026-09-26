@@ -104,6 +104,18 @@ SCHEMA_FILES = {
     "science-lora-micro-probe-worker-result": (
         "local-image-science-lora-micro-probe-worker-result-v1.schema.json"
     ),
+    "science-campaign-lora-micro-probe-plan": (
+        "local-image-science-campaign-lora-micro-probe-plan-v1.schema.json"
+    ),
+    "science-campaign-lora-micro-probe-command": (
+        "local-image-science-campaign-lora-micro-probe-command-v1.schema.json"
+    ),
+    "science-campaign-lora-micro-adapter-manifest": (
+        "local-image-science-campaign-lora-micro-adapter-manifest-v1.schema.json"
+    ),
+    "science-campaign-lora-micro-probe-worker-result": (
+        "local-image-science-campaign-lora-micro-probe-worker-result-v1.schema.json"
+    ),
     "science-lora-micro-evaluation-command": (
         "local-image-science-lora-micro-evaluation-command-v1.schema.json"
     ),
@@ -255,6 +267,18 @@ SCHEMA_SHA256 = {
     ),
     "science-lora-micro-probe-worker-result": (
         "sha256:4dc0aa5f491448d27f24c652250bdb3eed7098a9d590fa7bc262dd3215876080"
+    ),
+    "science-campaign-lora-micro-probe-plan": (
+        "sha256:ab99e4ea978c40bd0caf0175570082eff7ddbec300594b306f7a30eb5da07566"
+    ),
+    "science-campaign-lora-micro-probe-command": (
+        "sha256:35eb988dc82e34342f98dafc6485d4ca77c2ed58050c104b896de6500de689e5"
+    ),
+    "science-campaign-lora-micro-adapter-manifest": (
+        "sha256:06370c3246b1d376ac569fd597d60404102e468f42dbf6fa96319e2297daacb3"
+    ),
+    "science-campaign-lora-micro-probe-worker-result": (
+        "sha256:9d8a70a25346b427e15860197dd61ca1746c93a0ef6d257e50077f40dffa809f"
     ),
     "science-lora-micro-evaluation-command": (
         "sha256:715e3f8495698b9e3db7601ec954a38774011ab67a649c19190e9bfe6774b019"

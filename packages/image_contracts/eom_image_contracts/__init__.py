@@ -52,6 +52,15 @@ from eom_image_contracts.models import (
     validate_quality_evaluation_result,
 )
 from eom_image_contracts.safe_svg import SVG_ALLOWED_FONT_FAMILIES, sanitize_svg_overlay
+from eom_image_contracts.science_campaign_micro_training import (
+    LocalImageScienceCampaignLoraMicroAdapterManifest,
+    LocalImageScienceCampaignLoraMicroProbeCommand,
+    LocalImageScienceCampaignLoraMicroProbePlan,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResult,
+    LocalImageScienceCampaignLoraMicroRealizedSample,
+    validate_science_campaign_micro_probe_plan_sources,
+    validate_science_campaign_micro_probe_worker_result,
+)
 from eom_image_contracts.science_corpus_visual import (
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotCommand,
@@ -222,6 +231,11 @@ __all__ = [
     "LocalImageQualityEvaluationPlan",
     "LocalImageQualityEvaluationResult",
     "LocalImageRuntime",
+    "LocalImageScienceCampaignLoraMicroAdapterManifest",
+    "LocalImageScienceCampaignLoraMicroProbeCommand",
+    "LocalImageScienceCampaignLoraMicroProbePlan",
+    "LocalImageScienceCampaignLoraMicroProbeWorkerResult",
+    "LocalImageScienceCampaignLoraMicroRealizedSample",
     "LocalImageScienceCorpusTrainingAuthorization",
     "LocalImageScienceCorpusVisualPilotCommand",
     "LocalImageScienceCorpusVisualPilotCommandV2",
@@ -306,6 +320,8 @@ __all__ = [
     "validate_micro_probe_plan_sources",
     "validate_micro_probe_worker_result",
     "validate_quality_evaluation_result",
+    "validate_science_campaign_micro_probe_plan_sources",
+    "validate_science_campaign_micro_probe_worker_result",
     "validate_science_micro_evaluation_command",
     "validate_science_micro_evaluation_result",
     "validate_science_micro_probe_plan_sources",

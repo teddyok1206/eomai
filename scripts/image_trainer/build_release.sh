@@ -84,6 +84,10 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-adapter-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-worker-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-campaign-lora-micro-probe-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-campaign-lora-micro-probe-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-campaign-lora-micro-adapter-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-campaign-lora-micro-probe-worker-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-evaluation-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-evaluation-result-v1.schema.json",
     }
@@ -104,6 +108,7 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/micro_probe_runner.py",
         "eom_image_trainer/science_micro_probe_runner.py",
+        "eom_image_trainer/science_campaign_micro_probe_runner.py",
         "eom_image_trainer/micro_evaluation_runner.py",
         "eom_image_trainer/science_micro_evaluation_runner.py",
         "eom_image_trainer/proposal_builder.py",

@@ -123,6 +123,26 @@ def test_science_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() -> N
     assert "Restart=no" in source
 
 
+def test_science_campaign_micro_probe_unit_is_evaluation_only_and_nas_inaccessible() -> None:
+    source = (
+        ROOT / "infra/systemd/eom-image-science-campaign-lora-micro-probe@.service"
+    ).read_text(encoding="utf-8")
+
+    assert "User=eom-image" in source
+    assert "Group=eom-image" in source
+    assert "eom-local-image-trainer science-campaign-micro-probe" in source
+    assert "/srv/eom/image-training-workspaces/%i/command.json" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
+    assert "PrivateNetwork=true" in source
+    assert "NoNewPrivileges=true" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadWritePaths=/srv/eom/image-training-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_micro_evaluation_unit_is_isolated_and_nas_inaccessible() -> None:
     source = (ROOT / "infra/systemd/eom-image-lora-micro-evaluation@.service").read_text(
         encoding="utf-8"

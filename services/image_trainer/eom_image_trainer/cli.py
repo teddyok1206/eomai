@@ -33,6 +33,11 @@ from eom_image_trainer.runner import (
     load_training_command,
     run_training_command,
 )
+from eom_image_trainer.science_campaign_micro_probe_runner import (
+    ScienceCampaignMicroProbeRunnerError,
+    load_science_campaign_micro_probe_command,
+    run_science_campaign_micro_probe_command,
+)
 from eom_image_trainer.science_corpus_visual_runner import (
     ScienceCorpusVisualRunnerError,
     run_science_corpus_visual_pilot,
@@ -70,6 +75,11 @@ def _parser() -> argparse.ArgumentParser:
     science_micro.add_argument("--model-store-root", required=True, type=Path)
     science_micro.add_argument("--workspace", required=True, type=Path)
     science_micro.add_argument("--gpu-lock", required=True, type=Path)
+    science_campaign_micro = subcommands.add_parser("science-campaign-micro-probe")
+    science_campaign_micro.add_argument("--command", required=True, type=Path)
+    science_campaign_micro.add_argument("--model-store-root", required=True, type=Path)
+    science_campaign_micro.add_argument("--workspace", required=True, type=Path)
+    science_campaign_micro.add_argument("--gpu-lock", required=True, type=Path)
     evaluate = subcommands.add_parser("evaluate-micro-probe")
     evaluate.add_argument("--command", required=True, type=Path)
     evaluate.add_argument("--model-store-root", required=True, type=Path)
@@ -258,6 +268,33 @@ def main() -> None:
             os.close(lock_descriptor)
         if science_result.status != "SUCCEEDED":
             raise SystemExit(science_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
+        return
+    if args.operation == "science-campaign-micro-probe":
+        campaign_command = load_science_campaign_micro_probe_command(args.command)
+        if args.workspace.name != campaign_command.training_run_id:
+            raise SystemExit("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
+        lock_descriptor = _lock_gpu(args.gpu_lock)
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+        def _cancel_science_campaign_micro(_signum: int, _frame: object) -> None:
+            raise KeyboardInterrupt
+
+        signal.signal(signal.SIGTERM, _cancel_science_campaign_micro)
+        try:
+            campaign_result = run_science_campaign_micro_probe_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=campaign_command,
+                backend=Ssd1bLoraBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except (TrainingRunnerError, ScienceCampaignMicroProbeRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            os.close(lock_descriptor)
+        if campaign_result.status != "SUCCEEDED":
+            raise SystemExit(campaign_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
         return
     training_command = load_training_command(args.command)
     if args.workspace.name != training_command.training_run_id:
