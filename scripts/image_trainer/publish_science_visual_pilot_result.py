@@ -16,8 +16,10 @@ from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotCommandV3,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     ScienceVisualCandidate,
     ScienceVisualPageImage,
@@ -160,8 +162,16 @@ def _png_dimensions(payload: bytes) -> tuple[int, int]:
 def _load_workspace(
     workspace: Path,
 ) -> tuple[
-    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2,
-    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2,
+    (
+        LocalImageScienceCorpusVisualPilotCommand
+        | LocalImageScienceCorpusVisualPilotCommandV2
+        | LocalImageScienceCorpusVisualPilotCommandV3
+    ),
+    (
+        LocalImageScienceCorpusVisualPilotPlan
+        | LocalImageScienceCorpusVisualPilotPlanV2
+        | LocalImageScienceCorpusVisualPilotPlanV3
+    ),
     LocalImageScienceCorpusVisualPilotResult,
     bytes,
     int,
@@ -171,9 +181,17 @@ def _load_workspace(
     )
     try:
         command: (
-            LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+            LocalImageScienceCorpusVisualPilotCommand
+            | LocalImageScienceCorpusVisualPilotCommandV2
+            | LocalImageScienceCorpusVisualPilotCommandV3
         )
         if (
+            command_value.get("schema_version")
+            == "local-image-science-corpus-visual-pilot-command/1.2"
+        ):
+            validate_contract("science-corpus-visual-pilot-command-v3", command_value)
+            command = LocalImageScienceCorpusVisualPilotCommandV3.model_validate(command_value)
+        elif (
             command_value.get("schema_version")
             == "local-image-science-corpus-visual-pilot-command/1.1"
         ):
@@ -202,9 +220,16 @@ def _load_workspace(
     )
     result_value = _json_object(result_payload)
     try:
-        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
+        plan: (
+            LocalImageScienceCorpusVisualPilotPlan
+            | LocalImageScienceCorpusVisualPilotPlanV2
+            | LocalImageScienceCorpusVisualPilotPlanV3
+        )
+        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV3):
+            validate_contract("science-corpus-visual-pilot-plan-v3", plan_value)
+            plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(plan_value)
+        elif isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
             validate_contract("science-corpus-visual-pilot-plan-v2", plan_value)
-            plan: LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
             plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(plan_value)
         else:
             validate_contract("science-corpus-visual-pilot-plan", plan_value)

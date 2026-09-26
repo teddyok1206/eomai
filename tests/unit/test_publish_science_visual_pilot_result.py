@@ -9,7 +9,11 @@ from eom_identifiers import sha256_bytes
 from eom_image_contracts import content_json_bytes, content_sha256
 
 from scripts.image_trainer import publish_science_visual_pilot_result as publication
-from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value, _plan_value
+from tests.unit.test_science_corpus_visual_contracts import (
+    _plan_v2_value,
+    _plan_v3_value,
+    _plan_value,
+)
 
 
 def _png(seed: int) -> bytes:
@@ -39,8 +43,14 @@ def _write(path: Path, payload: bytes) -> None:
     path.chmod(0o600)
 
 
-def _stage_complete_workspace(tmp_path: Path, *, use_v2: bool = False) -> tuple[Path, int]:
-    plan_value = _plan_v2_value() if use_v2 else _plan_value()
+def _stage_complete_workspace(
+    tmp_path: Path,
+    *,
+    use_v2: bool = False,
+    use_v3: bool = False,
+) -> tuple[Path, int]:
+    assert not (use_v2 and use_v3)
+    plan_value = _plan_v3_value() if use_v3 else _plan_v2_value() if use_v2 else _plan_value()
     plan_payload = content_json_bytes(plan_value)
     staged_sources = [
         {
@@ -54,7 +64,9 @@ def _stage_complete_workspace(tmp_path: Path, *, use_v2: bool = False) -> tuple[
     ]
     command_body: dict[str, object] = {
         "schema_version": (
-            "local-image-science-corpus-visual-pilot-command/1.1"
+            "local-image-science-corpus-visual-pilot-command/1.2"
+            if use_v3
+            else "local-image-science-corpus-visual-pilot-command/1.1"
             if use_v2
             else "local-image-science-corpus-visual-pilot-command/1.0"
         ),
@@ -63,7 +75,9 @@ def _stage_complete_workspace(tmp_path: Path, *, use_v2: bool = False) -> tuple[
             "artifact_revision_id": "rev_" + "7" * 32,
             "member_path": "manifests/visual-pilot-plan.json",
             "schema_ref": (
-                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+                if use_v3
+                else "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
                 if use_v2
                 else "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
             ),
@@ -184,6 +198,16 @@ def test_load_workspace_accepts_filtered_locator_successor(tmp_path: Path) -> No
 
     assert command.schema_version == "local-image-science-corpus-visual-pilot-command/1.1"
     assert plan.schema_version == "local-image-science-corpus-visual-pilot-plan/1.1"
+    assert plan.plan_sha256 == result.plan_sha256
+
+
+def test_load_workspace_accepts_disjoint_campaign_successor(tmp_path: Path) -> None:
+    workspace, _expected_members = _stage_complete_workspace(tmp_path, use_v3=True)
+
+    command, plan, result, _result_payload, _output_bytes = publication._load_workspace(workspace)
+
+    assert command.schema_version == "local-image-science-corpus-visual-pilot-command/1.2"
+    assert plan.schema_version == "local-image-science-corpus-visual-pilot-plan/1.2"
     assert plan.plan_sha256 == result.plan_sha256
 
 
