@@ -36,6 +36,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualRasterRefinementPlan,
     LocalImageScienceVisualRasterSuitabilityReview,
     ScienceVisualPatternReview,
+    assemble_science_visual_campaign_pattern_inventory,
     content_json_bytes,
     content_sha256,
     text_sha256,
@@ -61,6 +62,9 @@ from pydantic import ValidationError
 
 from scripts.image_trainer import (
     assemble_science_visual_campaign_review_batch_result as batch_assembler,
+)
+from scripts.image_trainer import (
+    publish_science_visual_campaign_inventory_from_batches as campaign_assembler_publisher,
 )
 from scripts.image_trainer import (
     publish_science_visual_campaign_pattern_inventory as campaign_publisher,
@@ -918,6 +922,264 @@ def test_campaign_review_batch_rejects_extra_candidate() -> None:
             ),
             review_result=result,
         )
+
+
+def _complete_campaign_review_batches() -> tuple[
+    tuple[LocalImageScienceVisualCampaignReviewBatchCommand, ...],
+    tuple[ImageEvaluationArtifactMember, ...],
+    tuple[LocalImageScienceVisualCampaignReviewBatchResult, ...],
+    tuple[ImageEvaluationArtifactMember, ...],
+    tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    tuple[ImageEvaluationArtifactMember, ...],
+    tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    tuple[ImageEvaluationArtifactMember, ...],
+]:
+    inventory, plan_values, result_values, plan_pointer_values, result_pointer_values = (
+        _campaign_inventory_value()
+    )
+    review_values = inventory["reviews"]
+    pilots = inventory["pilot_results"]
+    assert isinstance(review_values, list)
+    assert isinstance(pilots, list)
+    commands: list[LocalImageScienceVisualCampaignReviewBatchCommand] = []
+    command_pointers: list[ImageEvaluationArtifactMember] = []
+    review_results: list[LocalImageScienceVisualCampaignReviewBatchResult] = []
+    review_result_pointers: list[ImageEvaluationArtifactMember] = []
+    for offset in range(0, len(review_values), 12):
+        selected = copy.deepcopy(review_values[offset : offset + 12])
+        command_body: dict[str, object] = {
+            "schema_version": "local-image-science-visual-campaign-review-batch-command/1.0",
+            "campaign_id": inventory["campaign_id"],
+            "pilot_results": copy.deepcopy(pilots),
+            "candidate_ids": [str(value["candidate_id"]) for value in selected],
+            "created_at": f"2026-09-26T12:{10 + offset // 12:02d}:00Z",
+            "created_by": "reviewer_user",
+        }
+        command_body["batch_id"] = (
+            "imgscivisreviewbatch_" + content_sha256(command_body).removeprefix("sha256:")[:32]
+        )
+        command_value = {**command_body, "command_sha256": content_sha256(command_body)}
+        command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+        command_pointer = ImageEvaluationArtifactMember.model_validate(
+            _pointer(
+                str(offset // 12 + 1),
+                member_path="manifests/science-visual-campaign-review-batch-command.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/"
+                    "local-image-science-visual-campaign-review-batch-command/1.0"
+                ),
+                sha256=content_sha256(command_value),
+            )
+        )
+        result_body: dict[str, object] = {
+            "schema_version": "local-image-science-visual-campaign-review-batch-result/1.0",
+            "batch_id": command.batch_id,
+            "review_batch": command_pointer.model_dump(mode="json"),
+            "command_sha256": command.command_sha256,
+            "reviews": selected,
+            "completed_at": f"2026-09-26T12:{20 + offset // 12:02d}:00Z",
+            "completed_by": "reviewer_user",
+        }
+        result_value = {**result_body, "result_sha256": content_sha256(result_body)}
+        review_result = LocalImageScienceVisualCampaignReviewBatchResult.model_validate(
+            result_value
+        )
+        result_pointer = ImageEvaluationArtifactMember.model_validate(
+            _pointer(
+                str(offset // 12 + 4),
+                member_path="manifests/science-visual-campaign-review-batch-result.json",
+                schema_ref=(
+                    "eom://schemas/image-provider/"
+                    "local-image-science-visual-campaign-review-batch-result/1.0"
+                ),
+                sha256=content_sha256(result_value),
+            )
+        )
+        commands.append(command)
+        command_pointers.append(command_pointer)
+        review_results.append(review_result)
+        review_result_pointers.append(result_pointer)
+    return (
+        tuple(commands),
+        tuple(command_pointers),
+        tuple(review_results),
+        tuple(review_result_pointers),
+        tuple(LocalImageScienceCorpusVisualPilotPlanV3.model_validate(v) for v in plan_values),
+        tuple(ImageEvaluationArtifactMember.model_validate(v) for v in plan_pointer_values),
+        tuple(LocalImageScienceCorpusVisualPilotResult.model_validate(v) for v in result_values),
+        tuple(ImageEvaluationArtifactMember.model_validate(v) for v in result_pointer_values),
+    )
+
+
+def test_assemble_campaign_inventory_from_complete_review_batches() -> None:
+    (
+        commands,
+        command_pointers,
+        review_results,
+        result_pointers,
+        plans,
+        plan_pointers,
+        results,
+        pilot_result_pointers,
+    ) = _complete_campaign_review_batches()
+    inventory = assemble_science_visual_campaign_pattern_inventory(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=pilot_result_pointers,
+        commands=tuple(reversed(commands)),
+        command_pointers=tuple(reversed(command_pointers)),
+        review_results=tuple(reversed(review_results)),
+        review_result_pointers=tuple(reversed(result_pointers)),
+        created_at=plans[0].created_at,
+        created_by="reviewer_user",
+    )
+    assert len(inventory.reviews) == 36
+    assert inventory.lora_eligible_count == 30
+    assert inventory.deterministic_renderer_count == 6
+    assert inventory.excluded_count == 0
+    assert inventory.primitive_recommendations[0].primitive_key == "AXIS_PLOT"
+    assert inventory.primitive_recommendations[0].support_count == 6
+
+
+def test_assemble_campaign_inventory_rejects_duplicate_batch() -> None:
+    (
+        commands,
+        command_pointers,
+        review_results,
+        result_pointers,
+        plans,
+        plan_pointers,
+        results,
+        pilot_result_pointers,
+    ) = _complete_campaign_review_batches()
+    with pytest.raises(ValueError, match="batches repeat"):
+        assemble_science_visual_campaign_pattern_inventory(
+            plans=plans,
+            plan_pointers=plan_pointers,
+            results=results,
+            result_pointers=pilot_result_pointers,
+            commands=(commands[0], commands[0], *commands[2:]),
+            command_pointers=(command_pointers[0], command_pointers[0], *command_pointers[2:]),
+            review_results=(review_results[0], review_results[0], *review_results[2:]),
+            review_result_pointers=(result_pointers[0], result_pointers[0], *result_pointers[2:]),
+            created_at=plans[0].created_at,
+            created_by="reviewer_user",
+        )
+
+
+def test_assemble_campaign_inventory_rejects_result_pointer_hash_drift() -> None:
+    (
+        commands,
+        command_pointers,
+        review_results,
+        result_pointers,
+        plans,
+        plan_pointers,
+        results,
+        pilot_result_pointers,
+    ) = _complete_campaign_review_batches()
+    drifted = result_pointers[0].model_copy(update={"sha256": _sha("f")})
+    with pytest.raises(ValueError, match="result pointer hash differs"):
+        assemble_science_visual_campaign_pattern_inventory(
+            plans=plans,
+            plan_pointers=plan_pointers,
+            results=results,
+            result_pointers=pilot_result_pointers,
+            commands=commands,
+            command_pointers=command_pointers,
+            review_results=review_results,
+            review_result_pointers=(drifted, *result_pointers[1:]),
+            created_at=plans[0].created_at,
+            created_by="reviewer_user",
+        )
+
+
+def test_campaign_inventory_batch_publisher_resolves_exact_artifact_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (
+        commands,
+        command_pointers,
+        review_results,
+        result_pointers,
+        plans,
+        plan_pointers,
+        results,
+        pilot_result_pointers,
+    ) = _complete_campaign_review_batches()
+    command = commands[0]
+    command_pointer = command_pointers[0]
+    review_result = review_results[0]
+    result_pointer = result_pointers[0]
+    command_payload = content_json_bytes(command.model_dump(mode="json"))
+    result_payload = content_json_bytes(review_result.model_dump(mode="json"))
+    command_receipt = tmp_path / (f"science-visual-campaign-review-command-{command.batch_id}.json")
+    result_receipt = tmp_path / (f"science-visual-campaign-review-result-{command.batch_id}.json")
+    command_receipt.write_bytes(
+        content_json_bytes(
+            {
+                "schema_version": (
+                    "science-visual-campaign-review-command-publication-receipt/1.0"
+                ),
+                "batch_id": command.batch_id,
+                "command_sha256": command.command_sha256,
+                "command_artifact": command_pointer.model_dump(mode="json"),
+                "source_commit": "a" * 40,
+            }
+        )
+    )
+    result_receipt.write_bytes(
+        content_json_bytes(
+            {
+                "schema_version": ("science-visual-campaign-review-result-publication-receipt/1.0"),
+                "batch_id": command.batch_id,
+                "result_sha256": review_result.result_sha256,
+                "result_artifact": result_pointer.model_dump(mode="json"),
+                "source_commit": "a" * 40,
+            }
+        )
+    )
+    command_receipt.chmod(0o600)
+    result_receipt.chmod(0o600)
+    payloads = {
+        command_pointer.artifact_id: command_payload,
+        result_pointer.artifact_id: result_payload,
+    }
+    monkeypatch.setattr(campaign_assembler_publisher, "STATE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        campaign_assembler_publisher,
+        "resolve_control_artifact_member",
+        lambda _engine, pointer, maximum_bytes: payloads[pointer.artifact_id],
+    )
+    campaign = batch_stager.ResolvedScienceVisualCampaign(
+        campaign_id=command.campaign_id,
+        pilots=command.pilot_results,
+        candidate_ids=tuple(
+            sorted(
+                candidate.candidate_id
+                for pilot_result in results
+                for candidate in pilot_result.visual_candidates
+            )
+        ),
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=pilot_result_pointers,
+    )
+
+    loaded = campaign_assembler_publisher._load_published_reviews(
+        engine=object(),  # type: ignore[arg-type]
+        campaign=campaign,
+        batch_ids=(command.batch_id,),
+    )
+
+    assert loaded[0] == (command,)
+    assert loaded[1] == (command_pointer,)
+    assert loaded[2] == (review_result,)
+    assert loaded[3] == (result_pointer,)
+    assert loaded[4][0]["batch_id"] == command.batch_id
 
 
 def test_campaign_review_batch_publisher_preflights_exact_command(

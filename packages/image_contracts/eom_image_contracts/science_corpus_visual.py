@@ -1106,6 +1106,149 @@ class LocalImageScienceVisualCampaignPatternInventory(FrozenModel):
         return self
 
 
+_PATTERN_FAMILY_PRIMITIVE: dict[ScienceVisualPatternFamily, ScienceRendererPrimitiveKey] = {
+    pattern_family: primitive_key
+    for primitive_key, pattern_family in _PRIMITIVE_PATTERN_FAMILY.items()
+}
+
+
+def assemble_science_visual_campaign_pattern_inventory(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    commands: tuple[LocalImageScienceVisualCampaignReviewBatchCommand, ...],
+    command_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    review_results: tuple[LocalImageScienceVisualCampaignReviewBatchResult, ...],
+    review_result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    created_at: datetime,
+    created_by: str,
+) -> LocalImageScienceVisualCampaignPatternInventory:
+    """Assemble one complete campaign inventory from published review batches.
+
+    Exact-key dictionaries and sets keep coverage and deduplication linear in the
+    number of campaign candidates and batches. Artifact bytes are resolved by the
+    Orchestrator before this pure contract boundary is called; the supplied
+    pointers bind those canonical bytes here.
+    """
+
+    if not commands or not (
+        len(commands) == len(command_pointers) == len(review_results) == len(review_result_pointers)
+    ):
+        raise ValueError("science visual campaign review publication cardinality differs")
+    ordered = tuple(
+        sorted(
+            zip(
+                commands,
+                command_pointers,
+                review_results,
+                review_result_pointers,
+                strict=True,
+            ),
+            key=lambda value: value[0].batch_id,
+        )
+    )
+    batch_ids = tuple(value[0].batch_id for value in ordered)
+    if batch_ids != tuple(sorted(set(batch_ids))):
+        raise ValueError("science visual campaign review batches repeat")
+
+    all_candidate_ids = {
+        candidate.candidate_id for result in results for candidate in result.visual_candidates
+    }
+    reviews_by_candidate: dict[str, ScienceVisualPatternReview] = {}
+    pilots: tuple[ScienceVisualCampaignPilotResult, ...] | None = None
+    campaign_id: str | None = None
+    for command, command_pointer, review_result, review_result_pointer in ordered:
+        _require_pointer(
+            command_pointer,
+            schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-review-batch-command.json",
+        )
+        _require_pointer(
+            review_result_pointer,
+            schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-review-batch-result.json",
+        )
+        if command_pointer.sha256 != content_sha256(command.model_dump(mode="json")):
+            raise ValueError("science visual campaign review command pointer hash differs")
+        if review_result_pointer.sha256 != content_sha256(review_result.model_dump(mode="json")):
+            raise ValueError("science visual campaign review result pointer hash differs")
+        validate_science_visual_campaign_review_batch(
+            command=command,
+            command_pointer=command_pointer,
+            plans=plans,
+            plan_pointers=plan_pointers,
+            results=results,
+            result_pointers=result_pointers,
+            review_result=review_result,
+        )
+        if pilots is None:
+            pilots = command.pilot_results
+            campaign_id = command.campaign_id
+        elif command.pilot_results != pilots or command.campaign_id != campaign_id:
+            raise ValueError("science visual campaign review batches bind different campaigns")
+        for review in review_result.reviews:
+            if review.candidate_id in reviews_by_candidate:
+                raise ValueError("science visual campaign review candidate is duplicated")
+            reviews_by_candidate[review.candidate_id] = review
+
+    if set(reviews_by_candidate) != all_candidate_ids:
+        raise ValueError("science visual campaign review batches do not cover every candidate")
+    if pilots is None or campaign_id is None:
+        raise ValueError("science visual campaign review batches are empty")
+
+    reviews = tuple(reviews_by_candidate[key] for key in sorted(reviews_by_candidate))
+    deterministic: dict[ScienceRendererPrimitiveKey, list[ScienceVisualPatternReview]] = {}
+    for review in reviews:
+        primitive_key = _PATTERN_FAMILY_PRIMITIVE.get(review.pattern_family)
+        if review.decision == "DETERMINISTIC_RENDERER_ONLY" and primitive_key is not None:
+            deterministic.setdefault(primitive_key, []).append(review)
+    recommendations = tuple(
+        ScienceRendererPrimitiveRecommendation(
+            primitive_key=primitive_key,
+            support_count=len(supporting_reviews),
+            visual_features=tuple(
+                sorted(
+                    {feature for review in supporting_reviews for feature in review.visual_features}
+                )
+            ),
+            geometry_authority="AUTHORITATIVE",
+            render_route="PYTHON_SVG",
+        )
+        for primitive_key, supporting_reviews in sorted(deterministic.items())
+        if len(supporting_reviews) >= 2
+    )
+    counts = Counter(review.decision for review in reviews)
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-campaign-pattern-inventory/1.0",
+        "campaign_id": campaign_id,
+        "pilot_results": [value.model_dump(mode="json") for value in pilots],
+        "reviews": [value.model_dump(mode="json") for value in reviews],
+        "primitive_recommendations": [value.model_dump(mode="json") for value in recommendations],
+        "lora_eligible_count": counts["LORA_ELIGIBLE"],
+        "deterministic_renderer_count": counts["DETERMINISTIC_RENDERER_ONLY"],
+        "excluded_count": counts["EXCLUDED"],
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "created_by": created_by,
+    }
+    inventory_id = "imgsciviscampaigninventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    with_identity = {**body, "inventory_id": inventory_id}
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(
+        {**with_identity, "inventory_sha256": content_sha256(with_identity)}
+    )
+    validate_science_visual_campaign_pattern_inventory(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+    )
+    return inventory
+
+
 def _validate_complete_campaign_pilots(
     pilot_results: tuple[ScienceVisualCampaignPilotResult, ...],
 ) -> None:
