@@ -12,12 +12,18 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
+    LocalImageScienceLoraMicroAdapterManifest,
+    LocalImageScienceLoraMicroProbeCommand,
+    LocalImageScienceLoraMicroProbePlan,
+    LocalImageScienceLoraMicroProbeWorkerResult,
     LocalImageScienceVisualCropSet,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_science_micro_probe_plan_sources,
+    validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
     validate_science_visual_crop_set,
     validate_science_visual_pattern_inventory,
@@ -653,6 +659,185 @@ def _crop_set_value() -> dict[str, object]:
     return {**body, "crop_set_sha256": content_sha256(body)}
 
 
+def _science_micro_plan_value() -> dict[str, object]:
+    crop_set = _crop_set_value()
+    members = crop_set["members"]
+    assert isinstance(members, list)
+    by_partition = {
+        partition: sorted(
+            str(value["candidate_id"]) for value in members if value["partition"] == partition
+        )
+        for partition in ("TRAIN", "VALIDATION", "HOLDOUT")
+    }
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-lora-micro-probe-plan/1.0",
+        "crop_set": _pointer(
+            "a",
+            member_path="manifests/science-visual-crop-set.json",
+            schema_ref=("eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"),
+        ),
+        "crop_set_sha256": crop_set["crop_set_sha256"],
+        "base_model": {
+            "model_id": "imgmodel_" + "b" * 32,
+            "model_revision_id": "imgmodelrev_" + "c" * 32,
+            "manifest_sha256": _sha("d"),
+            "provider_family": "diffusers-ssd-1b",
+            "runtime_contract_version": "eom-local-image-provider/1.0",
+        },
+        "training_member_ids": by_partition["TRAIN"],
+        "validation_member_ids": by_partition["VALIDATION"],
+        "holdout_member_ids": by_partition["HOLDOUT"],
+        "preprocessing_revision": "local-image-science-crop-preprocess/1.0",
+        "trainer_contract": "eom-local-image-science-lora-micro-trainer/1.0",
+        "dependencies": {
+            "python_version": "3.11.13",
+            "torch_version": "2.8.0",
+            "diffusers_version": "0.35.1",
+            "transformers_version": "4.56.1",
+            "accelerate_version": "1.10.1",
+            "peft_version": "0.17.1",
+            "bitsandbytes_version": "0.47.0",
+        },
+        "hyperparameters": {
+            "adapter_type": "UNET_LORA",
+            "rank": 8,
+            "alpha": 8,
+            "resolution_width": 768,
+            "resolution_height": 512,
+            "train_batch_size": 1,
+            "gradient_accumulation_steps": 4,
+            "gradient_checkpointing": True,
+            "mixed_precision": "fp16",
+            "optimizer": "adamw_8bit",
+            "learning_rate": "1e-4",
+            "max_train_steps": 200,
+            "checkpointing_steps": 200,
+            "random_flip": False,
+            "train_text_encoders": False,
+            "train_vae": False,
+        },
+        "seed": 20260926,
+        "purpose": "EVALUATION_ONLY_SCIENCE_MICRO_PROBE",
+        "activation_policy": "FORBIDDEN",
+        "authorized_at": "2026-09-26T00:00:00Z",
+        "authorized_by": "operator_eom",
+        "authorization_reference_sha256": _sha("e"),
+        "created_at": "2026-09-26T00:01:00Z",
+        "created_by": "operator_eom",
+        "source_commit": "f" * 40,
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    with_id = {**body, "probe_id": "imgscimicroprobe_" + identity[:32]}
+    return {**with_id, "plan_sha256": content_sha256(with_id)}
+
+
+def _science_micro_command_value() -> dict[str, object]:
+    plan = _science_micro_plan_value()
+    pointer = _pointer(
+        "1",
+        member_path="manifests/science-micro-probe-plan.json",
+        schema_ref=("eom://schemas/image-provider/local-image-science-lora-micro-probe-plan/1.0"),
+    )
+    identity = content_sha256(
+        {
+            "probe_plan_pointer": pointer,
+            "probe_plan_sha256": plan["plan_sha256"],
+            "attempt": 1,
+        }
+    ).removeprefix("sha256:")
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-lora-micro-probe-command/1.0",
+        "training_run_id": "imgscimicrotrainrun_" + identity[:32],
+        "probe_plan_pointer": pointer,
+        "probe_plan_sha256": plan["plan_sha256"],
+        "probe_plan": plan,
+        "attempt": 1,
+        "staged_plan_member": "inputs/science-micro-probe-plan.json",
+        "staged_crop_set_member": "inputs/science-visual-crop-set.json",
+        "staged_crops_root": "inputs/crops",
+        "runtime_dataset_root": "runtime-dataset",
+        "output_root_member": "outputs",
+        "checkpoint_root_member": "checkpoints",
+        "timeout_seconds": 7200,
+    }
+    return {**body, "command_sha256": content_sha256(body)}
+
+
+def _science_micro_result_value() -> dict[str, object]:
+    command = _science_micro_command_value()
+    plan = command["probe_plan"]
+    assert isinstance(plan, dict)
+    member_ids = plan["training_member_ids"]
+    assert isinstance(member_ids, list)
+    crop_set_members = _crop_set_value()["members"]
+    assert isinstance(crop_set_members, list)
+    members = {str(value["candidate_id"]): value for value in crop_set_members}
+    realized = [
+        {
+            "candidate_id": candidate_id,
+            "document_id": members[candidate_id]["document_id"],
+            "exam_group_sha256": members[candidate_id]["exam_group_sha256"],
+            "training_sample_id": f"imgtrainsample_{index + 1:032x}",
+            "source_crop_sha256": members[candidate_id]["sha256"],
+            "realized_crop_sha256": f"sha256:{index + 100:064x}",
+            "caption_sha256": members[candidate_id]["caption_sha256"],
+            "perceptual_hash": f"{index + 1000:016x}",
+        }
+        for index, candidate_id in enumerate(member_ids)
+    ]
+    realized.sort(key=lambda value: str(value["training_sample_id"]))
+    sample_set_sha256 = content_sha256(realized)
+    adapter_body: dict[str, object] = {
+        "schema_version": "local-image-science-lora-micro-adapter-manifest/1.0",
+        "adapter_id": "imgadapter_" + "2" * 32,
+        "adapter_revision_id": "imgadapterrev_" + "3" * 32,
+        "state": "EVALUATION_ONLY",
+        "activation_policy": "FORBIDDEN",
+        "base_model": plan["base_model"],
+        "probe_plan": command["probe_plan_pointer"],
+        "sample_set_sha256": sample_set_sha256,
+        "files": [
+            {
+                "relative_path": "adapter_config.json",
+                "size_bytes": 128,
+                "sha256": _sha("4"),
+            },
+            {
+                "relative_path": "adapter_model.safetensors",
+                "size_bytes": 1024,
+                "sha256": _sha("5"),
+            },
+        ],
+        "created_at": "2026-09-26T00:10:00Z",
+    }
+    adapter = {**adapter_body, "manifest_sha256": content_sha256(adapter_body)}
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-lora-micro-probe-worker-result/1.0",
+        "training_run_id": command["training_run_id"],
+        "probe_plan_pointer": command["probe_plan_pointer"],
+        "probe_plan_sha256": command["probe_plan_sha256"],
+        "command_sha256": command["command_sha256"],
+        "attempt": 1,
+        "status": "SUCCEEDED",
+        "adapter_manifest": adapter,
+        "realized_samples": realized,
+        "sample_set_sha256": sample_set_sha256,
+        "error_code": None,
+        "runtime": {
+            **plan["dependencies"],
+            "cuda_version": "13.0",
+            "gpu_name": "NVIDIA RTX PRO 6000 Blackwell",
+            "compute_capability": "12.0",
+            "peak_gpu_memory_bytes": 1024,
+        },
+        "completed_steps": 200,
+        "final_loss": 0.125,
+        "started_at": "2026-09-26T00:02:00Z",
+        "completed_at": "2026-09-26T00:10:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
 @pytest.mark.parametrize(
     ("contract", "model", "value_factory"),
     [
@@ -700,6 +885,26 @@ def _crop_set_value() -> dict[str, object]:
             "science-visual-crop-set",
             LocalImageScienceVisualCropSet,
             _crop_set_value,
+        ),
+        (
+            "science-lora-micro-probe-plan",
+            LocalImageScienceLoraMicroProbePlan,
+            _science_micro_plan_value,
+        ),
+        (
+            "science-lora-micro-probe-command",
+            LocalImageScienceLoraMicroProbeCommand,
+            _science_micro_command_value,
+        ),
+        (
+            "science-lora-micro-adapter-manifest",
+            LocalImageScienceLoraMicroAdapterManifest,
+            lambda: _science_micro_result_value()["adapter_manifest"],
+        ),
+        (
+            "science-lora-micro-probe-worker-result",
+            LocalImageScienceLoraMicroProbeWorkerResult,
+            _science_micro_result_value,
         ),
     ],
 )
@@ -755,6 +960,33 @@ def test_science_visual_crop_set_binds_reviewed_group_deduplicated_members() -> 
     )
     assert len(crop_set.members) == 15
     assert len({value.exam_group_sha256 for value in crop_set.members}) == 15
+
+
+def test_science_micro_probe_binds_all_partitioned_crop_members_and_result() -> None:
+    crop_set = LocalImageScienceVisualCropSet.model_validate(_crop_set_value())
+    plan = LocalImageScienceLoraMicroProbePlan.model_validate(_science_micro_plan_value())
+    command = LocalImageScienceLoraMicroProbeCommand.model_validate(_science_micro_command_value())
+    result = LocalImageScienceLoraMicroProbeWorkerResult.model_validate(
+        _science_micro_result_value()
+    )
+
+    validate_science_micro_probe_plan_sources(plan, crop_set)
+    validate_science_micro_probe_worker_result(command, result)
+    assert len(plan.training_member_ids) == 12
+    assert len(plan.validation_member_ids) == 1
+    assert len(plan.holdout_member_ids) == 2
+
+
+def test_science_micro_probe_rejects_partition_leakage() -> None:
+    value = _science_micro_plan_value()
+    value["validation_member_ids"] = [value["training_member_ids"][0]]
+    body = {key: item for key, item in value.items() if key not in {"probe_id", "plan_sha256"}}
+    value["probe_id"] = "imgscimicroprobe_" + content_sha256(body).removeprefix("sha256:")[:32]
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    with pytest.raises(ValidationError, match="partitions overlap"):
+        LocalImageScienceLoraMicroProbePlan.model_validate(value)
 
 
 def test_science_visual_crop_set_rejects_repeated_exam_group() -> None:

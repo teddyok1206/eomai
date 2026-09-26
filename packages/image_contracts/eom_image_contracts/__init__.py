@@ -82,6 +82,15 @@ from eom_image_contracts.science_corpus_visual import (
     validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
 )
+from eom_image_contracts.science_micro_training import (
+    LocalImageScienceLoraMicroAdapterManifest,
+    LocalImageScienceLoraMicroProbeCommand,
+    LocalImageScienceLoraMicroProbePlan,
+    LocalImageScienceLoraMicroProbeWorkerResult,
+    LocalImageScienceLoraMicroRealizedSample,
+    validate_science_micro_probe_plan_sources,
+    validate_science_micro_probe_worker_result,
+)
 from eom_image_contracts.training import (
     ImageTrainingRightsPolicy,
     LocalImageCropLocatorCommand,
@@ -187,6 +196,11 @@ __all__ = [
     "LocalImageScienceCorpusVisualPilotPlan",
     "LocalImageScienceCorpusVisualPilotPlanV2",
     "LocalImageScienceCorpusVisualPilotResult",
+    "LocalImageScienceLoraMicroAdapterManifest",
+    "LocalImageScienceLoraMicroProbeCommand",
+    "LocalImageScienceLoraMicroProbePlan",
+    "LocalImageScienceLoraMicroProbeWorkerResult",
+    "LocalImageScienceLoraMicroRealizedSample",
     "LocalImageScienceVisualCropSet",
     "LocalImageScienceVisualPatternInventory",
     "LocalImageScienceVisualPatternInventoryV2",
@@ -239,6 +253,8 @@ __all__ = [
     "validate_micro_probe_plan_sources",
     "validate_micro_probe_worker_result",
     "validate_quality_evaluation_result",
+    "validate_science_micro_probe_plan_sources",
+    "validate_science_micro_probe_worker_result",
     "validate_science_visual_authorization_plan",
     "validate_science_visual_crop_set",
     "validate_science_visual_pattern_inventory",
