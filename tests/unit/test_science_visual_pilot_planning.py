@@ -9,6 +9,7 @@ from eom_catalog_service import science_visual_pilot as planning
 from eom_catalog_service.science_visual_pilot import (
     ScienceVisualPilotPlanningError,
     build_science_visual_pilot_plan_v2,
+    select_science_visual_campaign_shard_sources,
     select_science_visual_pilot_sources,
 )
 from eom_image_contracts import (
@@ -116,6 +117,46 @@ def test_selection_rejects_duplicate_pdf_identity() -> None:
             selection_seed_sha256="sha256:" + "5" * 64,
             source_limit=12,
             page_limit=60,
+        )
+
+
+def test_campaign_shards_are_deterministic_and_do_not_reuse_source_pdfs() -> None:
+    documents = tuple(_document(index) for index in range(360))
+    seed = "sha256:" + "a" * 64
+    shards = tuple(
+        select_science_visual_campaign_shard_sources(
+            documents,
+            selection_seed_sha256=seed,
+            campaign_shard_index=index,
+            campaign_shard_count=3,
+            source_limit=36,
+            page_limit=192,
+        )
+        for index in range(3)
+    )
+    replay = select_science_visual_campaign_shard_sources(
+        tuple(reversed(documents)),
+        selection_seed_sha256=seed,
+        campaign_shard_index=1,
+        campaign_shard_count=3,
+        source_limit=36,
+        page_limit=192,
+    )
+
+    assert shards[1] == replay
+    all_hashes = [source.pdf.sha256 for shard in shards for source in shard]
+    assert len(all_hashes) == 108
+    assert len(all_hashes) == len(set(all_hashes))
+    assert all(sum(source.page_count for source in shard) <= 192 for shard in shards)
+
+
+def test_campaign_shard_rejects_an_invalid_coordinate() -> None:
+    with pytest.raises(ScienceVisualPilotPlanningError, match="CAMPAIGN_SHARD_INVALID"):
+        select_science_visual_campaign_shard_sources(
+            tuple(_document(index) for index in range(120)),
+            selection_seed_sha256="sha256:" + "a" * 64,
+            campaign_shard_index=2,
+            campaign_shard_count=2,
         )
 
 

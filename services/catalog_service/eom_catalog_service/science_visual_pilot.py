@@ -204,6 +204,112 @@ def select_science_visual_pilot_sources(
     return sources
 
 
+def select_science_visual_campaign_shard_sources(
+    documents: tuple[ScienceAssessmentCorpusDocument, ...],
+    *,
+    selection_seed_sha256: str,
+    campaign_shard_index: int,
+    campaign_shard_count: int,
+    source_limit: int = 36,
+    page_limit: int = 192,
+) -> tuple[ScienceVisualPilotSource, ...]:
+    """Select one disjoint, deterministic shard of a large visual-corpus campaign.
+
+    The caller persists the campaign seed and shard coordinates with its successor
+    campaign contract.  This function owns only the bounded source selection; it
+    never opens PDFs or copies bytes.  Sorting once per `(partition, stratum)` and
+    allocating rank positions by modulo makes shard membership stable and prevents
+    two independently staged workers from receiving the same source PDF.
+    """
+
+    if not 2 <= campaign_shard_count <= 64 or not 0 <= campaign_shard_index < campaign_shard_count:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_CAMPAIGN_SHARD_INVALID")
+    if not 12 <= source_limit <= 96 or not source_limit % 6 == 0:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_PILOT_SOURCE_LIMIT_INVALID")
+    if not source_limit <= page_limit <= 384:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_PILOT_PAGE_LIMIT_INVALID")
+    if not documents or len({value.sha256 for value in documents}) != len(documents):
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_PILOT_CORPUS_INVALID")
+
+    partitions = _group_partitions(documents, selection_seed_sha256=selection_seed_sha256)
+    grouped: dict[
+        ScienceVisualPartitionName,
+        dict[tuple[str, str], list[ScienceAssessmentCorpusDocument]],
+    ] = {
+        "TRAIN": defaultdict(list),
+        "VALIDATION": defaultdict(list),
+        "HOLDOUT": defaultdict(list),
+    }
+    for document in documents:
+        partition = partitions[_exam_group_sha256(document)]
+        grouped[partition][(document.subject_family, document.issuer_type)].append(document)
+    pools: dict[
+        ScienceVisualPartitionName,
+        dict[tuple[str, str], tuple[ScienceAssessmentCorpusDocument, ...]],
+    ] = {"TRAIN": {}, "VALIDATION": {}, "HOLDOUT": {}}
+    for partition, strata in grouped.items():
+        pools[partition] = {
+            key: tuple(
+                value
+                for position, value in enumerate(
+                    sorted(
+                        values,
+                        key=lambda item: _rank(item, selection_seed_sha256=selection_seed_sha256),
+                    )
+                )
+                if position % campaign_shard_count == campaign_shard_index
+            )
+            for key, values in strata.items()
+        }
+
+    quotas = {
+        "TRAIN": source_limit * 2 // 3,
+        "VALIDATION": source_limit // 6,
+        "HOLDOUT": source_limit // 6,
+    }
+    chosen: list[tuple[ScienceAssessmentCorpusDocument, ScienceVisualPartitionName]] = []
+    remaining_pages = page_limit
+    for partition in ("HOLDOUT", "VALIDATION", "TRAIN"):
+        selected, remaining_pages = _select_partition(
+            pools=pools[partition],
+            count=quotas[partition],
+            remaining_page_budget=remaining_pages,
+        )
+        chosen.extend((document, partition) for document in selected)
+    sources = tuple(
+        sorted(
+            (
+                ScienceVisualPilotSource(
+                    document_id=document.document_id,
+                    source_file_id=document.source.source_file_id,
+                    pdf=ImageEvaluationArtifactMember(
+                        artifact_id=document.source.artifact_id,
+                        artifact_revision_id=document.source.artifact_revision_id,
+                        member_path=document.source.member_path,
+                        schema_ref="eom://schemas/content-intake/source-file/1.0",
+                        media_type="application/pdf",
+                        sha256=document.sha256,
+                    ),
+                    bytes=document.bytes,
+                    page_count=document.page_count,
+                    subject_family=document.subject_family,
+                    issuer_type=document.issuer_type,
+                    administration_year=document.administration_year,
+                    grade=document.grade,
+                    session_label=document.session_label,
+                    exam_group_sha256=_exam_group_sha256(document),
+                    partition=partition,
+                )
+                for document, partition in chosen
+            ),
+            key=lambda value: value.document_id,
+        )
+    )
+    if len(sources) != source_limit:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_PILOT_POPULATION_INSUFFICIENT")
+    return sources
+
+
 def build_science_corpus_training_authorization(
     *,
     corpus: ScienceAssessmentWebCorpusManifestV2,
