@@ -262,6 +262,7 @@ def test_local_image_release_scripts_have_valid_syntax() -> None:
         "scripts/image_trainer/stage_science_micro_probe.py",
         "scripts/image_trainer/stage_micro_evaluation.py",
         "scripts/image_trainer/stage_science_micro_evaluation.py",
+        "scripts/image_trainer/publish_science_micro_evaluation.py",
     ):
         compile(
             (ROOT / relative).read_text(encoding="utf-8"),
