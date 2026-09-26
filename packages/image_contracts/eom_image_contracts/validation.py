@@ -64,6 +64,7 @@ SCHEMA_FILES = {
     "science-visual-pattern-inventory-v2": (
         "local-image-science-visual-pattern-inventory-v2.schema.json"
     ),
+    "science-visual-crop-set": "local-image-science-visual-crop-set-v1.schema.json",
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -161,6 +162,9 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-pattern-inventory-v2": (
         "sha256:e2c89de1a67b461a7eb0c6e59a7fdcb9d9dae95e597fa80c6b989e02021ba646"
+    ),
+    "science-visual-crop-set": (
+        "sha256:bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"
     ),
 }
 

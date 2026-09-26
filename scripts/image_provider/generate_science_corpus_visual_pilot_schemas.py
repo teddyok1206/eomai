@@ -958,6 +958,132 @@ def _pattern_inventory_v2() -> dict[str, Any]:
     return schema
 
 
+def _reviewed_crop_set() -> dict[str, Any]:
+    """Describe the exact reviewed PNG members committed as one immutable file set."""
+
+    schema = _base(
+        "EOM Science Corpus Reviewed Visual Crop Set V1",
+        "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "cropMember": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "candidate_id",
+                    "document_id",
+                    "physical_page",
+                    "exam_group_sha256",
+                    "partition",
+                    "pattern_family",
+                    "member_path",
+                    "media_type",
+                    "width_px",
+                    "height_px",
+                    "size_bytes",
+                    "sha256",
+                    "caption_en",
+                    "caption_sha256",
+                    "perceptual_hash",
+                ],
+                "properties": {
+                    "candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "pattern": "^sciencedoc_[0-9a-f]{32}$",
+                    },
+                    "physical_page": {"type": "integer", "minimum": 1, "maximum": 512},
+                    "exam_group_sha256": {"$ref": "#/$defs/sha256"},
+                    "partition": {"enum": ["HOLDOUT", "TRAIN", "VALIDATION"]},
+                    "pattern_family": {
+                        "enum": [
+                            "ASTRONOMICAL_SCENE",
+                            "FOSSIL",
+                            "GEOLOGIC_TEXTURE",
+                            "MICROSCOPIC_TEXTURE",
+                            "NATURAL_TEXTURE",
+                            "ORGANISM",
+                        ]
+                    },
+                    "member_path": {
+                        "type": "string",
+                        "pattern": "^crops/imgsciviscandidate_[0-9a-f]{32}\\.png$",
+                    },
+                    "media_type": {"const": "image/png"},
+                    "width_px": {"type": "integer", "minimum": 16, "maximum": 10000},
+                    "height_px": {"type": "integer", "minimum": 16, "maximum": 10000},
+                    "size_bytes": {
+                        "type": "integer",
+                        "minimum": 64,
+                        "maximum": 67108864,
+                    },
+                    "sha256": {"$ref": "#/$defs/sha256"},
+                    "caption_en": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+                    },
+                    "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    "perceptual_hash": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+                },
+            }
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "crop_set_id",
+                "pattern_inventory",
+                "pattern_inventory_semantic_sha256",
+                "pilot_plan",
+                "pilot_plan_sha256",
+                "pilot_result",
+                "pilot_result_semantic_sha256",
+                "training_authorization",
+                "members",
+                "created_at",
+                "created_by",
+                "crop_set_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-visual-crop-set/1.0"},
+                "crop_set_id": {
+                    "type": "string",
+                    "pattern": "^imgsciviscropset_[0-9a-f]{32}$",
+                },
+                "pattern_inventory": {"$ref": "#/$defs/artifactMember"},
+                "pattern_inventory_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "pilot_plan": {"$ref": "#/$defs/artifactMember"},
+                "pilot_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "pilot_result": {"$ref": "#/$defs/artifactMember"},
+                "pilot_result_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "training_authorization": {"$ref": "#/$defs/artifactMember"},
+                "members": {
+                    "type": "array",
+                    "minItems": 12,
+                    "maxItems": 96,
+                    "items": {"$ref": "#/$defs/cropMember"},
+                },
+                "created_at": UTC,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "crop_set_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
@@ -967,6 +1093,7 @@ SCHEMAS = {
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
+    "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
 }
 
 

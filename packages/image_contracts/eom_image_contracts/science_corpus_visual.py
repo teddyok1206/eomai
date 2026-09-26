@@ -44,6 +44,9 @@ CORPUS_PATTERN_INVENTORY_SCHEMA_REF = (
 CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
 )
+CORPUS_REVIEWED_CROP_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -907,6 +910,174 @@ class LocalImageScienceVisualPatternInventoryV2(FrozenModel):
             inventory_sha256=self.inventory_sha256,
         )
         return self
+
+
+ScienceVisualRasterPatternFamily = Literal[
+    "ASTRONOMICAL_SCENE",
+    "FOSSIL",
+    "GEOLOGIC_TEXTURE",
+    "MICROSCOPIC_TEXTURE",
+    "NATURAL_TEXTURE",
+    "ORGANISM",
+]
+
+
+class ScienceVisualReviewedCropMember(FrozenModel):
+    """One exact post-review PNG member; the containing Artifact owns its bytes."""
+
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    physical_page: int = Field(ge=1, le=512)
+    exam_group_sha256: Sha256
+    partition: ScienceVisualPartition
+    pattern_family: ScienceVisualRasterPatternFamily
+    member_path: str = Field(pattern=r"^crops/imgsciviscandidate_[0-9a-f]{32}\.png$")
+    media_type: Literal["image/png"]
+    width_px: int = Field(ge=16, le=10_000)
+    height_px: int = Field(ge=16, le=10_000)
+    size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
+    sha256: Sha256
+    caption_en: str = Field(
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256
+    perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+    @model_validator(mode="after")
+    def immutable_member_is_coherent(self) -> ScienceVisualReviewedCropMember:
+        if self.member_path != f"crops/{self.candidate_id}.png":
+            raise ValueError("science visual crop member path differs from its candidate")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("science visual crop caption hash mismatch")
+        return self
+
+
+class LocalImageScienceVisualCropSet(FrozenModel):
+    """Group-deduplicated reviewed crop set for one bounded internal micro probe."""
+
+    schema_version: Literal["local-image-science-visual-crop-set/1.0"]
+    crop_set_id: str = Field(pattern=r"^imgsciviscropset_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    pilot_plan: ImageEvaluationArtifactMember
+    pilot_plan_sha256: Sha256
+    pilot_result: ImageEvaluationArtifactMember
+    pilot_result_semantic_sha256: Sha256
+    training_authorization: ImageEvaluationArtifactMember
+    members: tuple[ScienceVisualReviewedCropMember, ...] = Field(min_length=12, max_length=96)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    crop_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_crop_set_is_coherent(self) -> LocalImageScienceVisualCropSet:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.pilot_plan,
+            schema_ref=CORPUS_PILOT_PLAN_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-plan.json",
+        )
+        _require_pointer(
+            self.pilot_result,
+            schema_ref=CORPUS_PILOT_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-result.json",
+        )
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=CORPUS_AUTHORIZATION_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-corpus-training-authorization.json",
+        )
+        member_ids = tuple(value.candidate_id for value in self.members)
+        if member_ids != tuple(sorted(set(member_ids))):
+            raise ValueError("science visual crop members must be uniquely sorted")
+        for label, values in (
+            ("documents", (value.document_id for value in self.members)),
+            ("exam groups", (value.exam_group_sha256 for value in self.members)),
+            ("crop hashes", (value.sha256 for value in self.members)),
+            ("perceptual hashes", (value.perceptual_hash for value in self.members)),
+        ):
+            sequence = tuple(values)
+            if len(sequence) != len(set(sequence)):
+                raise ValueError(f"science visual crop set repeats {label}")
+        partition_counts = Counter(value.partition for value in self.members)
+        if (
+            partition_counts["TRAIN"] < 12
+            or partition_counts["VALIDATION"] < 1
+            or partition_counts["HOLDOUT"] < 2
+        ):
+            raise ValueError("science visual crop partitions are too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_set_id", "crop_set_sha256"})
+        ).removeprefix("sha256:")
+        if self.crop_set_id != "imgsciviscropset_" + identity[:32]:
+            raise ValueError("science visual crop-set ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
+        if self.crop_set_sha256 != expected:
+            raise ValueError("science visual crop-set hash mismatch")
+        return self
+
+
+def validate_science_visual_crop_set(
+    *,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    plan: LocalImageScienceCorpusVisualPilotPlanV2,
+    result: LocalImageScienceCorpusVisualPilotResult,
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+    crop_set: LocalImageScienceVisualCropSet,
+) -> None:
+    """Bind every crop member to its approved source, review, partition, and bytes."""
+
+    validate_science_visual_authorization_plan(authorization, plan)
+    validate_science_visual_pilot_result(plan, result)
+    validate_science_visual_pattern_inventory_v2(result, inventory)
+    if (
+        crop_set.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or crop_set.pilot_plan_sha256 != plan.plan_sha256
+        or crop_set.pilot_result_semantic_sha256 != result.result_sha256
+        or crop_set.pilot_result != inventory.pilot_result
+        or crop_set.training_authorization != plan.training_authorization
+        or crop_set.training_authorization.sha256
+        != content_sha256(authorization.model_dump(mode="json"))
+    ):
+        raise ValueError("science visual crop-set source hash differs")
+    sources = {value.document_id: value for value in plan.selected_sources}
+    candidates = {value.candidate_id: value for value in result.visual_candidates}
+    reviews = {value.candidate_id: value for value in inventory.reviews}
+    for member in crop_set.members:
+        source = sources.get(member.document_id)
+        candidate = candidates.get(member.candidate_id)
+        review = reviews.get(member.candidate_id)
+        if (
+            source is None
+            or candidate is None
+            or review is None
+            or candidate.document_id != member.document_id
+            or candidate.physical_page != member.physical_page
+            or candidate.member_path != member.member_path
+            or candidate.sha256 != member.sha256
+            or source.exam_group_sha256 != member.exam_group_sha256
+            or source.partition != member.partition
+            or review.decision != "LORA_ELIGIBLE"
+            or review.pattern_family != member.pattern_family
+            or review.caption_en != member.caption_en
+            or review.caption_sha256 != member.caption_sha256
+        ):
+            raise ValueError("science visual crop member differs from reviewed evidence")
 
 
 def _validate_pattern_inventory_against_result(

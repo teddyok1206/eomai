@@ -12,12 +12,14 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
+    LocalImageScienceVisualCropSet,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
     content_sha256,
     text_sha256,
     validate_contract,
     validate_science_visual_authorization_plan,
+    validate_science_visual_crop_set,
     validate_science_visual_pattern_inventory,
     validate_science_visual_pattern_inventory_v2,
     validate_science_visual_pilot_command,
@@ -472,6 +474,185 @@ def _inventory_v2_value() -> dict[str, object]:
     return value
 
 
+def _crop_set_sources() -> list[dict[str, object]]:
+    return [
+        _source(index, "TRAIN" if index < 12 else "VALIDATION" if index < 15 else "HOLDOUT")
+        for index in range(18)
+    ]
+
+
+def _crop_set_plan_value() -> dict[str, object]:
+    value = copy.deepcopy(_plan_v2_value())
+    sources = sorted(_crop_set_sources(), key=lambda item: item["document_id"])
+    value["selected_sources"] = sources
+    value["max_page_images"] = 18
+    value["max_visual_candidates"] = 36
+    value["max_lora_training_crops"] = 18
+    body = {key: item for key, item in value.items() if key not in {"pilot_id", "plan_sha256"}}
+    value["pilot_id"] = "imgscivispilot_" + content_sha256(body).removeprefix("sha256:")[:32]
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    return value
+
+
+def _crop_set_result_value() -> dict[str, object]:
+    plan = _crop_set_plan_value()
+    pages: list[dict[str, object]] = []
+    candidates: list[dict[str, object]] = []
+    for index, source in enumerate(plan["selected_sources"]):
+        page_hash = "sha256:" + f"{index + 500:064x}"
+        document_id = str(source["document_id"])
+        pages.append(
+            {
+                "document_id": document_id,
+                "physical_page": 1,
+                "member_path": f"pages/{document_id}/page-1.png",
+                "sha256": page_hash,
+                "size_bytes": 16384 + index,
+                "width_px": 1191,
+                "height_px": 1684,
+            }
+        )
+        candidates.append(_candidate(document_id, page_hash, index + 20))
+    candidates.sort(key=lambda item: item["candidate_id"])
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-corpus-visual-pilot-result/1.0",
+        "pilot_id": plan["pilot_id"],
+        "plan_sha256": plan["plan_sha256"],
+        "status": "SUCCEEDED",
+        "page_images": pages,
+        "visual_candidates": candidates,
+        "omissions": [],
+        "runtime": {
+            "python_version": "3.12",
+            "pillow_version": "11.3",
+            "opencv_version": "4.11",
+            "tesseract_version": "5.3",
+            "pdftoppm_version": "24.02",
+        },
+        "error_code": None,
+        "started_at": "2026-09-26T06:00:00Z",
+        "completed_at": "2026-09-26T06:01:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
+def _crop_set_inventory_value() -> dict[str, object]:
+    result = _crop_set_result_value()
+    families = (
+        "ASTRONOMICAL_SCENE",
+        "FOSSIL",
+        "GEOLOGIC_TEXTURE",
+        "MICROSCOPIC_TEXTURE",
+        "NATURAL_TEXTURE",
+        "ORGANISM",
+    )
+    reviews = []
+    for index, candidate in enumerate(result["visual_candidates"]):
+        caption = f"grayscale science assessment natural reference image {index}"
+        reviews.append(
+            {
+                "candidate_id": candidate["candidate_id"],
+                "decision": "LORA_ELIGIBLE",
+                "pattern_family": families[index % len(families)],
+                "visual_features": [],
+                "caption_en": caption,
+                "caption_sha256": text_sha256(caption),
+                "reviewed_by": "reviewer_user",
+                "reviewed_at": "2026-09-26T06:02:00Z",
+            }
+        )
+    result_file_sha256 = _sha("9")
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-pattern-inventory/1.1",
+        "pilot_result": _pointer(
+            "f",
+            member_path="manifests/visual-pilot-result.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
+            ),
+            sha256=result_file_sha256,
+        ),
+        "pilot_result_file_sha256": result_file_sha256,
+        "pilot_result_semantic_sha256": result["result_sha256"],
+        "reviews": reviews,
+        "primitive_recommendations": [],
+        "lora_eligible_count": 18,
+        "deterministic_renderer_count": 0,
+        "excluded_count": 0,
+        "created_at": "2026-09-26T06:03:00Z",
+        "created_by": "reviewer_user",
+    }
+    body["inventory_id"] = "imgscivisinventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    return {**body, "inventory_sha256": content_sha256(body)}
+
+
+def _crop_set_value() -> dict[str, object]:
+    plan = _crop_set_plan_value()
+    result = _crop_set_result_value()
+    inventory = _crop_set_inventory_value()
+    sources = {value["document_id"]: value for value in plan["selected_sources"]}
+    reviews = {value["candidate_id"]: value for value in inventory["reviews"]}
+    selected_by_partition = {"TRAIN": 0, "VALIDATION": 0, "HOLDOUT": 0}
+    members = []
+    for candidate in result["visual_candidates"]:
+        source = sources[candidate["document_id"]]
+        partition = str(source["partition"])
+        limit = 12 if partition == "TRAIN" else 1 if partition == "VALIDATION" else 2
+        if selected_by_partition[partition] >= limit:
+            continue
+        selected_by_partition[partition] += 1
+        review = reviews[candidate["candidate_id"]]
+        members.append(
+            {
+                "candidate_id": candidate["candidate_id"],
+                "document_id": candidate["document_id"],
+                "physical_page": candidate["physical_page"],
+                "exam_group_sha256": source["exam_group_sha256"],
+                "partition": partition,
+                "pattern_family": review["pattern_family"],
+                "member_path": candidate["member_path"],
+                "media_type": "image/png",
+                "width_px": 768,
+                "height_px": 512,
+                "size_bytes": candidate["size_bytes"],
+                "sha256": candidate["sha256"],
+                "caption_en": review["caption_en"],
+                "caption_sha256": review["caption_sha256"],
+                "perceptual_hash": f"{len(members) + 1:016x}",
+            }
+        )
+    members.sort(key=lambda item: item["candidate_id"])
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-crop-set/1.0",
+        "pattern_inventory": _pointer(
+            "7",
+            member_path="manifests/science-visual-pattern-inventory.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
+            ),
+        ),
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "pilot_plan": _pointer(
+            "6",
+            member_path="manifests/visual-pilot-plan.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
+            ),
+        ),
+        "pilot_plan_sha256": plan["plan_sha256"],
+        "pilot_result": inventory["pilot_result"],
+        "pilot_result_semantic_sha256": result["result_sha256"],
+        "training_authorization": plan["training_authorization"],
+        "members": members,
+        "created_at": "2026-09-26T06:04:00Z",
+        "created_by": "reviewer_user",
+    }
+    body["crop_set_id"] = "imgsciviscropset_" + content_sha256(body).removeprefix("sha256:")[:32]
+    return {**body, "crop_set_sha256": content_sha256(body)}
+
+
 @pytest.mark.parametrize(
     ("contract", "model", "value_factory"),
     [
@@ -515,6 +696,11 @@ def _inventory_v2_value() -> dict[str, object]:
             LocalImageScienceVisualPatternInventoryV2,
             _inventory_v2_value,
         ),
+        (
+            "science-visual-crop-set",
+            LocalImageScienceVisualCropSet,
+            _crop_set_value,
+        ),
     ],
 )
 def test_science_visual_contract_schema_and_model_parity(contract, model, value_factory) -> None:
@@ -547,6 +733,42 @@ def test_science_visual_cross_contract_bindings() -> None:
     command_v2 = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(_command_v2_value())
     validate_science_visual_authorization_plan(authorization, plan_v2)
     validate_science_visual_pilot_command(plan_v2, command_v2)
+
+
+def test_science_visual_crop_set_binds_reviewed_group_deduplicated_members() -> None:
+    authorization = LocalImageScienceCorpusTrainingAuthorization.model_validate(
+        _authorization_value()
+    )
+    plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(_crop_set_plan_value())
+    result = LocalImageScienceCorpusVisualPilotResult.model_validate(_crop_set_result_value())
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(
+        _crop_set_inventory_value()
+    )
+    crop_set = LocalImageScienceVisualCropSet.model_validate(_crop_set_value())
+
+    validate_science_visual_crop_set(
+        authorization=authorization,
+        plan=plan,
+        result=result,
+        inventory=inventory,
+        crop_set=crop_set,
+    )
+    assert len(crop_set.members) == 15
+    assert len({value.exam_group_sha256 for value in crop_set.members}) == 15
+
+
+def test_science_visual_crop_set_rejects_repeated_exam_group() -> None:
+    value = _crop_set_value()
+    value["members"][1]["exam_group_sha256"] = value["members"][0]["exam_group_sha256"]
+    body = {
+        key: item for key, item in value.items() if key not in {"crop_set_id", "crop_set_sha256"}
+    }
+    value["crop_set_id"] = "imgsciviscropset_" + content_sha256(body).removeprefix("sha256:")[:32]
+    value["crop_set_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "crop_set_sha256"}
+    )
+    with pytest.raises(ValidationError, match="repeats exam groups"):
+        LocalImageScienceVisualCropSet.model_validate(value)
 
 
 def test_science_visual_v2_rejects_version_mismatch_and_invalid_locator_caps() -> None:
@@ -835,6 +1057,9 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         ),
         "local-image-science-visual-pattern-inventory-v2.schema.json": (
             "e2c89de1a67b461a7eb0c6e59a7fdcb9d9dae95e597fa80c6b989e02021ba646"
+        ),
+        "local-image-science-visual-crop-set-v1.schema.json": (
+            "bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"
         ),
     }
     for filename, digest in expected.items():

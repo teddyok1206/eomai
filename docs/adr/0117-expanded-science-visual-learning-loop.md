@@ -226,6 +226,29 @@ lines, arrowheads, line-style semantics, hatching, flat grayscale fills, safe ma
 proofs. A primitive is promoted only after two reviewed patterns need it and its scientific
 invariants can be represented as typed values and tested independently of SVG text.
 
+### Reviewed crop-set successor
+
+`local-image-science-visual-crop-set/1.0` is the canonical manifest for gate 2. Its containing
+Artifact is the one canonical byte owner for the reviewed PNG members. The manifest pins the exact
+pattern-inventory, visual-pilot plan/result, training authorization, candidate, source document,
+exam group, original partition, crop hash and size, caption, pattern family, and perceptual hash.
+It does not embed PNG bytes or filesystem paths in PostgreSQL.
+
+The dominant reads are candidate lookup, ordered member iteration, exact-hash membership, and
+partition/group membership. Validators therefore build bounded maps and sets once and run in
+`O(c + s)` time and space for `c <= 96` crops and the bounded source population `s`. Members are
+sorted by candidate ID; document, exam-group, exact crop hash, and retained perceptual hash are
+unique. At least 12 TRAIN groups, one VALIDATION group, and two HOLDOUT groups must survive. This
+preserves the already pinned source split instead of inventing a new split after visual review.
+
+Publication is one Orchestrator-owned idempotent file-set transaction: validate every regular,
+single-link source member and its expected hash, stage a typed manifest, atomically commit the NAS
+directory, then persist only the Artifact/Revision pointers and small manifest metadata. Same-key
+same-input replay returns the existing revision; different input conflicts. A dangling member,
+hash drift, stale source pointer, cross-partition group, or non-LoRA review fails closed. The simpler
+alternative of training directly from the worker workspace is insufficient because that path has no
+immutable lifecycle, Artifact revision, or replay authority.
+
 ## Simpler alternatives rejected
 
 Training directly from full PDF pages would teach publisher text, answers, layouts, and unrelated
