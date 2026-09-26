@@ -19,6 +19,8 @@ from eom_catalog_service.science_visual_pilot import (
     build_science_corpus_training_authorization,
     build_science_visual_pilot_plan,
     build_science_visual_pilot_plan_v2,
+    build_science_visual_pilot_plan_v3,
+    select_science_visual_campaign_shard_sources,
     select_science_visual_pilot_sources,
 )
 from eom_identifiers import sha256_bytes
@@ -26,8 +28,10 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotCommandV3,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     ScienceVisualGuidanceAuthority,
     ScienceVisualLocatorPolicyV2,
     ScienceVisualToolIdentity,
@@ -102,6 +106,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--candidate-limit", type=int, default=256)
     parser.add_argument("--lora-crop-limit", type=int, default=24)
     parser.add_argument("--locator-version", choices=("1.0", "1.1"), default="1.0")
+    parser.add_argument("--campaign-shard-index", type=int)
+    parser.add_argument("--campaign-shard-count", type=int)
     parser.add_argument("--max-candidates-per-page", type=int, default=4)
     parser.add_argument("--max-candidates-per-source", type=int, default=12)
     parser.add_argument("--maximum-redaction-area-milli", type=int, default=350)
@@ -264,10 +270,14 @@ def _load_corpus(
 
 
 ScienceVisualPilotPlan = (
-    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
+    LocalImageScienceCorpusVisualPilotPlan
+    | LocalImageScienceCorpusVisualPilotPlanV2
+    | LocalImageScienceCorpusVisualPilotPlanV3
 )
 ScienceVisualPilotCommand = (
-    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+    LocalImageScienceCorpusVisualPilotCommand
+    | LocalImageScienceCorpusVisualPilotCommandV2
+    | LocalImageScienceCorpusVisualPilotCommandV3
 )
 
 
@@ -278,10 +288,13 @@ def _build_command(
     requested_at: datetime,
     requested_by: str,
 ) -> ScienceVisualPilotCommand:
+    use_v3 = isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV3)
     use_v2 = isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
     body: dict[str, object] = {
         "schema_version": (
-            "local-image-science-corpus-visual-pilot-command/1.1"
+            "local-image-science-corpus-visual-pilot-command/1.2"
+            if use_v3
+            else "local-image-science-corpus-visual-pilot-command/1.1"
             if use_v2
             else "local-image-science-corpus-visual-pilot-command/1.0"
         ),
@@ -305,10 +318,12 @@ def _build_command(
     identity = content_sha256(body).removeprefix("sha256:")
     body["attempt_id"] = "imgscivisattempt_" + identity[:32]
     body["command_sha256"] = content_sha256(body)
-    if use_v2:
-        command: ScienceVisualPilotCommand = (
-            LocalImageScienceCorpusVisualPilotCommandV2.model_validate(body)
-        )
+    command: ScienceVisualPilotCommand
+    if use_v3:
+        command = LocalImageScienceCorpusVisualPilotCommandV3.model_validate(body)
+        contract_name = "science-corpus-visual-pilot-command-v3"
+    elif use_v2:
+        command = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(body)
         contract_name = "science-corpus-visual-pilot-command-v2"
     else:
         command = LocalImageScienceCorpusVisualPilotCommand.model_validate(body)
@@ -396,12 +411,26 @@ def main() -> int:
     engine = build_engine()
     corpus_pointer = _corpus_pointer(args)
     corpus = _load_corpus(engine, corpus_pointer)
-    selected = select_science_visual_pilot_sources(
-        corpus.documents,
-        selection_seed_sha256=args.selection_seed_sha256,
-        source_limit=args.source_limit,
-        page_limit=args.page_limit,
-    )
+    if (args.campaign_shard_index is None) != (args.campaign_shard_count is None):
+        raise ScienceVisualPilotStageError("SCIENCE_VISUAL_CAMPAIGN_SHARD_INVALID")
+    if args.campaign_shard_count is not None:
+        if args.locator_version != "1.1":
+            raise ScienceVisualPilotStageError("SCIENCE_VISUAL_CAMPAIGN_LOCATOR_INVALID")
+        selected = select_science_visual_campaign_shard_sources(
+            corpus.documents,
+            selection_seed_sha256=args.selection_seed_sha256,
+            campaign_shard_index=args.campaign_shard_index,
+            campaign_shard_count=args.campaign_shard_count,
+            source_limit=args.source_limit,
+            page_limit=args.page_limit,
+        )
+    else:
+        selected = select_science_visual_pilot_sources(
+            corpus.documents,
+            selection_seed_sha256=args.selection_seed_sha256,
+            source_limit=args.source_limit,
+            page_limit=args.page_limit,
+        )
     for source in selected:
         payload = _load_artifact_member(engine, source.pdf, maximum_bytes=100 * 1024 * 1024)
         if len(payload) != source.bytes:
@@ -462,7 +491,16 @@ def main() -> int:
         "max_lora_training_crops": args.lora_crop_limit,
     }
     plan: ScienceVisualPilotPlan
-    if args.locator_version == "1.1":
+    if args.campaign_shard_count is not None:
+        plan_v3 = build_science_visual_pilot_plan_v3(
+            **plan_arguments,
+            campaign_shard_index=args.campaign_shard_index,
+            campaign_shard_count=args.campaign_shard_count,
+            locator_policy=locator_policy,
+        )
+        plan = plan_v3
+        plan_pointer = publisher.commit_science_visual_pilot_plan_v3(plan_v3)
+    elif args.locator_version == "1.1":
         plan_v2 = build_science_visual_pilot_plan_v2(
             **plan_arguments,
             locator_policy=locator_policy,

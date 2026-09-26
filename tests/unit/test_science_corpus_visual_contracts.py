@@ -10,8 +10,10 @@ from eom_image_contracts import (
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotCommandV3,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroAdapterManifest,
     LocalImageScienceLoraMicroEvaluationCommand,
@@ -284,6 +286,33 @@ def _plan_v2_value() -> dict[str, object]:
     return value
 
 
+def _plan_v3_value() -> dict[str, object]:
+    value = copy.deepcopy(_plan_v2_value())
+    value["schema_version"] = "local-image-science-corpus-visual-pilot-plan/1.2"
+    value["selection_algorithm"] = "SCIENCE_VISUAL_STRATIFIED_SHA256_V2_CAMPAIGN"
+    value["campaign_shard_index"] = 1
+    value["campaign_shard_count"] = 3
+    campaign_identity = content_sha256(
+        {
+            "corpus_id": value["corpus_id"],
+            "corpus_manifest_sha256": value["corpus_manifest_sha256"],
+            "acquisition_sha256": value["acquisition_sha256"],
+            "resolution_sha256": value["resolution_sha256"],
+            "resolution_policy_id": value["resolution_policy_id"],
+            "resolution_policy_sha256": value["resolution_policy_sha256"],
+            "selection_seed_sha256": value["selection_seed_sha256"],
+            "campaign_shard_count": value["campaign_shard_count"],
+        }
+    ).removeprefix("sha256:")
+    value["campaign_id"] = "imgsciviscampaign_" + campaign_identity[:32]
+    body = {key: item for key, item in value.items() if key not in {"pilot_id", "plan_sha256"}}
+    value["pilot_id"] = "imgscivispilot_" + content_sha256(body).removeprefix("sha256:")[:32]
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    return value
+
+
 def _candidate(document_id: str, page_hash: str, index: int) -> dict[str, object]:
     authority = (
         "AUTHORITATIVE_DETERMINISTIC_GEOMETRY" if index < 2 else "NON_AUTHORITATIVE_RASTER_STYLE"
@@ -365,6 +394,33 @@ def _command_v2_value() -> dict[str, object]:
     body = {key: item for key, item in value.items() if key not in {"attempt_id", "command_sha256"}}
     identity = content_sha256(body).removeprefix("sha256:")
     value["attempt_id"] = "imgscivisattempt_" + identity[:32]
+    value["command_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "command_sha256"}
+    )
+    return value
+
+
+def _command_v3_value() -> dict[str, object]:
+    plan = _plan_v3_value()
+    value = copy.deepcopy(_command_v2_value())
+    value["schema_version"] = "local-image-science-corpus-visual-pilot-command/1.2"
+    value["plan"]["schema_ref"] = (
+        "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+    )
+    value["plan"]["sha256"] = plan["plan_sha256"]
+    value["plan_sha256"] = plan["plan_sha256"]
+    value["staged_sources"] = [
+        {
+            "document_id": source["document_id"],
+            "staged_pdf_member": f"input/pdfs/{source['document_id']}.pdf",
+            "sha256": source["pdf"]["sha256"],
+            "bytes": source["bytes"],
+            "page_count": source["page_count"],
+        }
+        for source in plan["selected_sources"]
+    ]
+    body = {key: item for key, item in value.items() if key not in {"attempt_id", "command_sha256"}}
+    value["attempt_id"] = "imgscivisattempt_" + content_sha256(body).removeprefix("sha256:")[:32]
     value["command_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "command_sha256"}
     )
@@ -1136,6 +1192,11 @@ def _science_micro_evaluation_result_value() -> dict[str, object]:
             _plan_v2_value,
         ),
         (
+            "science-corpus-visual-pilot-plan-v3",
+            LocalImageScienceCorpusVisualPilotPlanV3,
+            _plan_v3_value,
+        ),
+        (
             "science-corpus-visual-pilot-command",
             LocalImageScienceCorpusVisualPilotCommand,
             _command_value,
@@ -1144,6 +1205,11 @@ def _science_micro_evaluation_result_value() -> dict[str, object]:
             "science-corpus-visual-pilot-command-v2",
             LocalImageScienceCorpusVisualPilotCommandV2,
             _command_v2_value,
+        ),
+        (
+            "science-corpus-visual-pilot-command-v3",
+            LocalImageScienceCorpusVisualPilotCommandV3,
+            _command_v3_value,
         ),
         (
             "science-corpus-visual-pilot-result",
@@ -1503,6 +1569,22 @@ def test_science_visual_v2_rejects_version_mismatch_and_invalid_locator_caps() -
         LocalImageScienceCorpusVisualPilotPlanV2.model_validate(value)
 
 
+def test_science_visual_v3_requires_coherent_campaign_coordinates() -> None:
+    plan_v3 = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(_plan_v3_value())
+    command_v3 = LocalImageScienceCorpusVisualPilotCommandV3.model_validate(_command_v3_value())
+    validate_science_visual_pilot_command(plan_v3, command_v3)
+
+    value = _plan_v3_value()
+    value["campaign_shard_index"] = value["campaign_shard_count"]
+    body = {key: item for key, item in value.items() if key not in {"pilot_id", "plan_sha256"}}
+    value["pilot_id"] = "imgscivispilot_" + content_sha256(body).removeprefix("sha256:")[:32]
+    value["plan_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "plan_sha256"}
+    )
+    with pytest.raises(ValidationError, match="shard index"):
+        LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value)
+
+
 def test_science_visual_command_rejects_staged_pdf_drift() -> None:
     plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
     value = _command_value()
@@ -1762,11 +1844,17 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         "local-image-science-corpus-visual-pilot-plan-v2.schema.json": (
             "90b6e463e31978d63d95ea045cec6a5b6ca7b4bb5c91e6f417eea83203af4057"
         ),
+        "local-image-science-corpus-visual-pilot-plan-v3.schema.json": (
+            "cf3e1ad771eba8ffb32a62f367970955f3aea74109dd519debc01504b77add4b"
+        ),
         "local-image-science-corpus-visual-pilot-command-v1.schema.json": (
             "9093b8e0c621cd12e978570eb1e5582097a8a70a73628b6fe182dfdaed3b8090"
         ),
         "local-image-science-corpus-visual-pilot-command-v2.schema.json": (
             "5dae2e101d539b2eabbe40abaa96d91e0e850eab08cf437d51f696b6f424b4cc"
+        ),
+        "local-image-science-corpus-visual-pilot-command-v3.schema.json": (
+            "953143fe884c4ff39c7a3cfe9c66d1337c153433dc5ce9d2c9deeac755e706c6"
         ),
         "local-image-science-corpus-visual-pilot-result-v1.schema.json": (
             "8b2dccc1f567922917912eb5025e1fbf9256f2361e4ac6918602c504749246a1"

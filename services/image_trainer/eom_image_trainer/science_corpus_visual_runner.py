@@ -26,8 +26,10 @@ from pathlib import Path, PurePosixPath
 from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotCommandV3,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     ScienceVisualCandidate,
     ScienceVisualOmission,
@@ -240,10 +242,14 @@ def _tool_version(executable: Path, *arguments: str) -> str:
 
 
 ScienceVisualPilotPlan = (
-    LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2
+    LocalImageScienceCorpusVisualPilotPlan
+    | LocalImageScienceCorpusVisualPilotPlanV2
+    | LocalImageScienceCorpusVisualPilotPlanV3
 )
 ScienceVisualPilotCommand = (
-    LocalImageScienceCorpusVisualPilotCommand | LocalImageScienceCorpusVisualPilotCommandV2
+    LocalImageScienceCorpusVisualPilotCommand
+    | LocalImageScienceCorpusVisualPilotCommandV2
+    | LocalImageScienceCorpusVisualPilotCommandV3
 )
 
 
@@ -269,6 +275,9 @@ def load_command(path: Path) -> ScienceVisualPilotCommand:
         if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.1":
             validate_contract("science-corpus-visual-pilot-command-v2", value)
             return LocalImageScienceCorpusVisualPilotCommandV2.model_validate(value)
+        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.2":
+            validate_contract("science-corpus-visual-pilot-command-v3", value)
+            return LocalImageScienceCorpusVisualPilotCommandV3.model_validate(value)
         raise ValueError("unsupported science visual pilot command version")
     except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_COMMAND_INVALID") from exc
@@ -286,11 +295,13 @@ def _load_plan(
         )
     )
     try:
-        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
+        plan: ScienceVisualPilotPlan
+        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV3):
+            validate_contract("science-corpus-visual-pilot-plan-v3", value)
+            plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value)
+        elif isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
             validate_contract("science-corpus-visual-pilot-plan-v2", value)
-            plan: ScienceVisualPilotPlan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(
-                value
-            )
+            plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(value)
         else:
             validate_contract("science-corpus-visual-pilot-plan", value)
             plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(value)
@@ -520,7 +531,13 @@ def run_science_corpus_visual_pilot(
                     context_bounding_box=None,
                     ocr_boxes=run_tesseract(page, executable=TESSERACT),
                 )
-                if isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2):
+                if isinstance(
+                    plan,
+                    (
+                        LocalImageScienceCorpusVisualPilotPlanV2,
+                        LocalImageScienceCorpusVisualPilotPlanV3,
+                    ),
+                ):
                     regions = filter_visual_regions_v2(
                         page,
                         regions=regions,
@@ -531,7 +548,13 @@ def run_science_corpus_visual_pilot(
             accepted_on_page = 0
             for region in regions:
                 if len(candidates) >= plan.max_visual_candidates or (
-                    isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
+                    isinstance(
+                        plan,
+                        (
+                            LocalImageScienceCorpusVisualPilotPlanV2,
+                            LocalImageScienceCorpusVisualPilotPlanV3,
+                        ),
+                    )
                     and accepted_for_source >= plan.locator_policy.max_candidates_per_source
                 ):
                     break
@@ -551,7 +574,13 @@ def run_science_corpus_visual_pilot(
                 accepted_on_page += 1
                 accepted_for_source += 1
             candidate_limit_reached = len(candidates) >= plan.max_visual_candidates or (
-                isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
+                isinstance(
+                    plan,
+                    (
+                        LocalImageScienceCorpusVisualPilotPlanV2,
+                        LocalImageScienceCorpusVisualPilotPlanV3,
+                    ),
+                )
                 and accepted_for_source >= plan.locator_policy.max_candidates_per_source
             )
             if candidate_limit_reached and len(regions) > accepted_on_page:

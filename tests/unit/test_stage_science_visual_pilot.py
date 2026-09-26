@@ -6,11 +6,13 @@ from types import SimpleNamespace
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusVisualPilotCommandV2,
+    LocalImageScienceCorpusVisualPilotCommandV3,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
 )
 
 from scripts.image_trainer import stage_science_visual_pilot as stage
-from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value
+from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value, _plan_v3_value
 
 
 def _pointer() -> ImageEvaluationArtifactMember:
@@ -78,6 +80,28 @@ def test_command_v2_binds_filtered_plan_contract() -> None:
     assert command.plan_sha256 == plan.plan_sha256
 
 
+def test_command_v3_binds_a_pinned_campaign_shard_contract() -> None:
+    plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(_plan_v3_value())
+    plan_pointer = _pointer().model_copy(
+        update={
+            "schema_ref": (
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+            )
+        }
+    )
+
+    command = stage._build_command(
+        plan=plan,
+        plan_pointer=plan_pointer,
+        requested_at=datetime(2026, 9, 25, 20, 0, tzinfo=UTC),
+        requested_by="operator_user",
+    )
+
+    assert isinstance(command, LocalImageScienceCorpusVisualPilotCommandV3)
+    assert command.plan.schema_ref.endswith("/1.2")
+    assert command.plan_sha256 == plan.plan_sha256
+
+
 def test_preflight_validates_population_without_publication_or_workspace(
     monkeypatch,
     capsys,
@@ -106,6 +130,8 @@ def test_preflight_validates_population_without_publication_or_workspace(
                 candidate_limit=24,
                 lora_crop_limit=12,
                 locator_version="1.0",
+                campaign_shard_index=None,
+                campaign_shard_count=None,
                 max_candidates_per_page=4,
                 max_candidates_per_source=12,
                 maximum_redaction_area_milli=350,

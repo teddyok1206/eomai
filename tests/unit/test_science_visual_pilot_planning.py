@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import defaultdict
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts import ScienceAssessmentCorpusDocument
@@ -9,6 +10,7 @@ from eom_catalog_service import science_visual_pilot as planning
 from eom_catalog_service.science_visual_pilot import (
     ScienceVisualPilotPlanningError,
     build_science_visual_pilot_plan_v2,
+    build_science_visual_pilot_plan_v3,
     select_science_visual_campaign_shard_sources,
     select_science_visual_pilot_sources,
 )
@@ -196,7 +198,7 @@ def test_successor_plan_preserves_selection_and_adds_exact_locator_policy(monkey
     )
 
     successor = build_science_visual_pilot_plan_v2(
-        corpus=object(),  # type: ignore[arg-type]
+        corpus=SimpleNamespace(documents=()),  # type: ignore[arg-type]
         corpus_manifest=predecessor.corpus_manifest,
         authorization=authorization,
         authorization_pointer=predecessor.training_authorization,
@@ -215,3 +217,49 @@ def test_successor_plan_preserves_selection_and_adds_exact_locator_policy(monkey
     assert successor.selected_sources == predecessor.selected_sources
     assert successor.pilot_id != predecessor.pilot_id
     assert successor.plan_sha256 != predecessor.plan_sha256
+
+
+def test_campaign_plan_pins_coordinates_and_replaces_only_the_selected_shard(monkeypatch) -> None:
+    predecessor = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
+    authorization = LocalImageScienceCorpusTrainingAuthorization.model_validate(
+        _authorization_value()
+    )
+    locator_policy = ScienceVisualLocatorPolicyV2(
+        max_candidates_per_page=4,
+        max_candidates_per_source=12,
+        maximum_redaction_area_milli=350,
+        minimum_interior_ink_milli=8,
+        maximum_border_ink_fraction_milli=650,
+        minimum_aspect_ratio_milli=200,
+        maximum_aspect_ratio_milli=5000,
+    )
+    monkeypatch.setattr(
+        planning,
+        "build_science_visual_pilot_plan",
+        lambda **_kwargs: predecessor,
+    )
+    monkeypatch.setattr(
+        planning,
+        "select_science_visual_campaign_shard_sources",
+        lambda *_args, **_kwargs: predecessor.selected_sources,
+    )
+
+    campaign = build_science_visual_pilot_plan_v3(
+        corpus=SimpleNamespace(documents=()),  # type: ignore[arg-type]
+        corpus_manifest=predecessor.corpus_manifest,
+        authorization=authorization,
+        authorization_pointer=predecessor.training_authorization,
+        selection_seed_sha256=predecessor.selection_seed_sha256,
+        campaign_shard_index=1,
+        campaign_shard_count=3,
+        guidance_authorities=predecessor.guidance_authorities,
+        tools=predecessor.tools,
+        source_commit=predecessor.guidance_authorities[0].source_commit,
+        created_at=predecessor.created_at,
+        created_by=predecessor.created_by,
+        locator_policy=locator_policy,
+    )
+    assert campaign.schema_version.endswith("/1.2")
+    assert campaign.campaign_shard_index == 1
+    assert campaign.campaign_shard_count == 3
+    assert campaign.selected_sources == predecessor.selected_sources

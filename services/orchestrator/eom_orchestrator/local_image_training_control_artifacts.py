@@ -13,6 +13,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualPatternInventory,
@@ -65,6 +66,10 @@ SCIENCE_VISUAL_PILOT_PLAN_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
 )
 SCIENCE_VISUAL_PILOT_PLAN_V2_ARTIFACT_TYPE = "control_local_image_science_visual_pilot_plan_v2"
+SCIENCE_VISUAL_PILOT_PLAN_V3_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+)
+SCIENCE_VISUAL_PILOT_PLAN_V3_ARTIFACT_TYPE = "control_local_image_science_visual_pilot_plan_v3"
 SCIENCE_VISUAL_PILOT_RESULT_MEMBER = "manifests/visual-pilot-result.json"
 SCIENCE_VISUAL_PILOT_RESULT_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
@@ -238,6 +243,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_VISUAL_PILOT_PLAN_V2_SCHEMA_REF,
             artifact_type=SCIENCE_VISUAL_PILOT_PLAN_V2_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-visual-pilot-plan-v2",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_visual_pilot_plan_v3(
+        self,
+        plan: LocalImageScienceCorpusVisualPilotPlanV3,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-corpus-visual-pilot-plan-v3",
+            member=SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
+            schema_ref=SCIENCE_VISUAL_PILOT_PLAN_V3_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_PILOT_PLAN_V3_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-campaign-plan",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )

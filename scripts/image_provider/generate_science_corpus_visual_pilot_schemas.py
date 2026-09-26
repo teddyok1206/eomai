@@ -421,6 +421,33 @@ def _pilot_plan_v2() -> dict[str, Any]:
     return schema
 
 
+def _pilot_plan_v3() -> dict[str, Any]:
+    """Add immutable campaign coordinates to the filtered locator successor."""
+
+    schema = _pilot_plan_v2()
+    schema["title"] = "EOM Science Corpus Visual Campaign Pilot Plan V1.2"
+    schema["$id"] = "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+    required = schema["required"]
+    assert isinstance(required, list)
+    insertion = required.index("selection_seed_sha256") + 1
+    required[insertion:insertion] = [
+        "campaign_id",
+        "campaign_shard_index",
+        "campaign_shard_count",
+    ]
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {"const": "local-image-science-corpus-visual-pilot-plan/1.2"}
+    properties["selection_algorithm"] = {"const": "SCIENCE_VISUAL_STRATIFIED_SHA256_V2_CAMPAIGN"}
+    properties["campaign_id"] = {
+        "type": "string",
+        "pattern": "^imgsciviscampaign_[0-9a-f]{32}$",
+    }
+    properties["campaign_shard_index"] = {"type": "integer", "minimum": 0, "maximum": 63}
+    properties["campaign_shard_count"] = {"type": "integer", "minimum": 2, "maximum": 64}
+    return schema
+
+
 def _bounding_box() -> dict[str, Any]:
     return {
         "type": "object",
@@ -525,6 +552,19 @@ def _pilot_command_v2() -> dict[str, Any]:
     schema["properties"]["schema_version"] = {
         "const": "local-image-science-corpus-visual-pilot-command/1.1"
     }
+    return schema
+
+
+def _pilot_command_v3() -> dict[str, Any]:
+    schema = _pilot_command_v2()
+    schema["title"] = "EOM Science Corpus Visual Campaign Pilot Command V1.2"
+    schema["$id"] = (
+        "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.2"
+    )
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {"const": "local-image-science-corpus-visual-pilot-command/1.2"}
+    properties["plan"] = {"$ref": "#/$defs/artifactMember"}
     return schema
 
 
@@ -1988,8 +2028,10 @@ SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
     "local-image-science-corpus-visual-pilot-plan-v2.schema.json": _pilot_plan_v2(),
+    "local-image-science-corpus-visual-pilot-plan-v3.schema.json": _pilot_plan_v3(),
     "local-image-science-corpus-visual-pilot-command-v1.schema.json": _pilot_command(),
     "local-image-science-corpus-visual-pilot-command-v2.schema.json": _pilot_command_v2(),
+    "local-image-science-corpus-visual-pilot-command-v3.schema.json": _pilot_command_v3(),
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),

@@ -32,8 +32,14 @@ CORPUS_PILOT_PLAN_SCHEMA_REF = (
 CORPUS_PILOT_PLAN_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
 )
+CORPUS_PILOT_PLAN_V3_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+)
 CORPUS_PILOT_COMMAND_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.0"
+)
+CORPUS_PILOT_COMMAND_V3_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-command/1.2"
 )
 CORPUS_PILOT_RESULT_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
@@ -338,7 +344,10 @@ class _LocalImageScienceCorpusVisualPilotPlanBase(FrozenModel):
     resolution_policy_id: str = Field(pattern=r"^sciencecorpuspolicy_[0-9a-f]{32}$")
     resolution_policy_sha256: Sha256
     training_authorization: ImageEvaluationArtifactMember
-    selection_algorithm: Literal["SCIENCE_VISUAL_STRATIFIED_SHA256_V1"]
+    selection_algorithm: Literal[
+        "SCIENCE_VISUAL_STRATIFIED_SHA256_V1",
+        "SCIENCE_VISUAL_STRATIFIED_SHA256_V2_CAMPAIGN",
+    ]
     selection_seed_sha256: Sha256
     selected_sources: tuple[ScienceVisualPilotSource, ...] = Field(min_length=12, max_length=96)
     max_page_images: int = Field(ge=12, le=384)
@@ -413,6 +422,7 @@ class _LocalImageScienceCorpusVisualPilotPlanBase(FrozenModel):
 
 class LocalImageScienceCorpusVisualPilotPlan(_LocalImageScienceCorpusVisualPilotPlanBase):
     schema_version: Literal["local-image-science-corpus-visual-pilot-plan/1.0"]
+    selection_algorithm: Literal["SCIENCE_VISUAL_STRATIFIED_SHA256_V1"]
     locator_revision: Literal["science-corpus-visual-locator/1.0"]
 
 
@@ -436,6 +446,7 @@ class ScienceVisualLocatorPolicyV2(FrozenModel):
 
 class LocalImageScienceCorpusVisualPilotPlanV2(_LocalImageScienceCorpusVisualPilotPlanBase):
     schema_version: Literal["local-image-science-corpus-visual-pilot-plan/1.1"]
+    selection_algorithm: Literal["SCIENCE_VISUAL_STRATIFIED_SHA256_V1"]
     locator_revision: Literal["science-corpus-visual-locator/1.1"]
     locator_policy: ScienceVisualLocatorPolicyV2
 
@@ -443,6 +454,44 @@ class LocalImageScienceCorpusVisualPilotPlanV2(_LocalImageScienceCorpusVisualPil
     def locator_policy_fits_plan(self) -> LocalImageScienceCorpusVisualPilotPlanV2:
         if self.locator_policy.max_candidates_per_source > self.max_visual_candidates:
             raise ValueError("science visual source cap exceeds the plan candidate limit")
+        return self
+
+
+class LocalImageScienceCorpusVisualPilotPlanV3(_LocalImageScienceCorpusVisualPilotPlanBase):
+    """One pinned internal shard of a disjoint visual-corpus campaign."""
+
+    schema_version: Literal["local-image-science-corpus-visual-pilot-plan/1.2"]
+    selection_algorithm: Literal["SCIENCE_VISUAL_STRATIFIED_SHA256_V2_CAMPAIGN"]
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    campaign_shard_index: int = Field(ge=0, le=63)
+    campaign_shard_count: int = Field(ge=2, le=64)
+    locator_revision: Literal["science-corpus-visual-locator/1.1"]
+    locator_policy: ScienceVisualLocatorPolicyV2
+
+    @model_validator(mode="after")
+    def locator_policy_fits_plan(self) -> LocalImageScienceCorpusVisualPilotPlanV3:
+        if self.locator_policy.max_candidates_per_source > self.max_visual_candidates:
+            raise ValueError("science visual source cap exceeds the plan candidate limit")
+        return self
+
+    @model_validator(mode="after")
+    def campaign_coordinates_are_coherent(self) -> LocalImageScienceCorpusVisualPilotPlanV3:
+        if self.campaign_shard_index >= self.campaign_shard_count:
+            raise ValueError("science visual campaign shard index is invalid")
+        identity = content_sha256(
+            {
+                "corpus_id": self.corpus_id,
+                "corpus_manifest_sha256": self.corpus_manifest_sha256,
+                "acquisition_sha256": self.acquisition_sha256,
+                "resolution_sha256": self.resolution_sha256,
+                "resolution_policy_id": self.resolution_policy_id,
+                "resolution_policy_sha256": self.resolution_policy_sha256,
+                "selection_seed_sha256": self.selection_seed_sha256,
+                "campaign_shard_count": self.campaign_shard_count,
+            }
+        ).removeprefix("sha256:")
+        if self.campaign_id != "imgsciviscampaign_" + identity[:32]:
+            raise ValueError("science visual campaign ID does not bind shard population")
         return self
 
 
@@ -530,6 +579,22 @@ class LocalImageScienceCorpusVisualPilotCommandV2(_LocalImageScienceCorpusVisual
             self,
             plan=self.plan,
             plan_schema_ref=CORPUS_PILOT_PLAN_V2_SCHEMA_REF,
+            staged_sources=self.staged_sources,
+            attempt_id=self.attempt_id,
+            command_sha256=self.command_sha256,
+        )
+        return self
+
+
+class LocalImageScienceCorpusVisualPilotCommandV3(_LocalImageScienceCorpusVisualPilotCommandBase):
+    schema_version: Literal["local-image-science-corpus-visual-pilot-command/1.2"]
+
+    @model_validator(mode="after")
+    def immutable_command_is_coherent(self) -> LocalImageScienceCorpusVisualPilotCommandV3:
+        _validate_visual_pilot_command(
+            self,
+            plan=self.plan,
+            plan_schema_ref=CORPUS_PILOT_PLAN_V3_SCHEMA_REF,
             staged_sources=self.staged_sources,
             attempt_id=self.attempt_id,
             command_sha256=self.command_sha256,
@@ -667,7 +732,11 @@ class LocalImageScienceCorpusVisualPilotResult(FrozenModel):
 
 
 def validate_science_visual_pilot_result(
-    plan: LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2,
+    plan: (
+        LocalImageScienceCorpusVisualPilotPlan
+        | LocalImageScienceCorpusVisualPilotPlanV2
+        | LocalImageScienceCorpusVisualPilotPlanV3
+    ),
     result: LocalImageScienceCorpusVisualPilotResult,
 ) -> None:
     if result.pilot_id != plan.pilot_id or result.plan_sha256 != plan.plan_sha256:
@@ -694,7 +763,10 @@ def validate_science_visual_pilot_result(
         (value.document_id, value.physical_page) not in source_pages for value in result.omissions
     ):
         raise ValueError("science visual pilot result contains an unplanned source page")
-    if isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2):
+    if isinstance(
+        plan,
+        (LocalImageScienceCorpusVisualPilotPlanV2, LocalImageScienceCorpusVisualPilotPlanV3),
+    ):
         candidates_per_page = Counter(
             (value.document_id, value.physical_page) for value in result.visual_candidates
         )
@@ -710,13 +782,21 @@ def validate_science_visual_pilot_result(
 
 
 def validate_science_visual_pilot_command(
-    plan: LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2,
+    plan: (
+        LocalImageScienceCorpusVisualPilotPlan
+        | LocalImageScienceCorpusVisualPilotPlanV2
+        | LocalImageScienceCorpusVisualPilotPlanV3
+    ),
     command: LocalImageScienceCorpusVisualPilotCommand
-    | LocalImageScienceCorpusVisualPilotCommandV2,
+    | LocalImageScienceCorpusVisualPilotCommandV2
+    | LocalImageScienceCorpusVisualPilotCommandV3,
 ) -> None:
-    if isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2) != isinstance(
-        command, LocalImageScienceCorpusVisualPilotCommandV2
-    ):
+    expected_version = {
+        LocalImageScienceCorpusVisualPilotPlan: LocalImageScienceCorpusVisualPilotCommand,
+        LocalImageScienceCorpusVisualPilotPlanV2: LocalImageScienceCorpusVisualPilotCommandV2,
+        LocalImageScienceCorpusVisualPilotPlanV3: LocalImageScienceCorpusVisualPilotCommandV3,
+    }[type(plan)]
+    if type(command) is not expected_version:
         raise ValueError("science visual plan and command contract versions differ")
     if command.plan_sha256 != plan.plan_sha256:
         raise ValueError("science visual pilot command does not bind the plan")
@@ -1583,7 +1663,11 @@ def validate_science_visual_raster_suitability_review(
 
 def validate_science_visual_authorization_plan(
     authorization: LocalImageScienceCorpusTrainingAuthorization,
-    plan: LocalImageScienceCorpusVisualPilotPlan | LocalImageScienceCorpusVisualPilotPlanV2,
+    plan: (
+        LocalImageScienceCorpusVisualPilotPlan
+        | LocalImageScienceCorpusVisualPilotPlanV2
+        | LocalImageScienceCorpusVisualPilotPlanV3
+    ),
 ) -> None:
     if (
         authorization.corpus_manifest != plan.corpus_manifest

@@ -22,6 +22,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
+    LocalImageScienceCorpusVisualPilotPlanV3,
     ScienceVisualGuidanceAuthority,
     ScienceVisualLocatorPolicyV2,
     ScienceVisualPilotSource,
@@ -452,5 +453,84 @@ def build_science_visual_pilot_plan_v2(
     body["pilot_id"] = "imgscivispilot_" + identity[:32]
     body["plan_sha256"] = content_sha256(body)
     plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(body)
+    validate_science_visual_authorization_plan(authorization, plan)
+    return plan
+
+
+def build_science_visual_pilot_plan_v3(
+    *,
+    corpus: ScienceAssessmentWebCorpusManifestV2,
+    corpus_manifest: ImageEvaluationArtifactMember,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    authorization_pointer: ImageEvaluationArtifactMember,
+    selection_seed_sha256: str,
+    campaign_shard_index: int,
+    campaign_shard_count: int,
+    guidance_authorities: tuple[ScienceVisualGuidanceAuthority, ...],
+    tools: ScienceVisualToolSet,
+    source_commit: str,
+    created_at: datetime,
+    created_by: str,
+    locator_policy: ScienceVisualLocatorPolicyV2,
+    source_limit: int = 36,
+    page_limit: int = 192,
+    max_visual_candidates: int = 256,
+    max_lora_training_crops: int = 24,
+) -> LocalImageScienceCorpusVisualPilotPlanV3:
+    """Pin one campaign shard without changing released bounded V1/V2 plans."""
+
+    predecessor = build_science_visual_pilot_plan_v2(
+        corpus=corpus,
+        corpus_manifest=corpus_manifest,
+        authorization=authorization,
+        authorization_pointer=authorization_pointer,
+        selection_seed_sha256=selection_seed_sha256,
+        guidance_authorities=guidance_authorities,
+        tools=tools,
+        source_commit=source_commit,
+        created_at=created_at,
+        created_by=created_by,
+        locator_policy=locator_policy,
+        source_limit=source_limit,
+        page_limit=page_limit,
+        max_visual_candidates=max_visual_candidates,
+        max_lora_training_crops=max_lora_training_crops,
+    )
+    selected = select_science_visual_campaign_shard_sources(
+        corpus.documents,
+        selection_seed_sha256=selection_seed_sha256,
+        campaign_shard_index=campaign_shard_index,
+        campaign_shard_count=campaign_shard_count,
+        source_limit=source_limit,
+        page_limit=page_limit,
+    )
+    campaign_identity = content_sha256(
+        {
+            "corpus_id": predecessor.corpus_id,
+            "corpus_manifest_sha256": predecessor.corpus_manifest_sha256,
+            "acquisition_sha256": predecessor.acquisition_sha256,
+            "resolution_sha256": predecessor.resolution_sha256,
+            "resolution_policy_id": predecessor.resolution_policy_id,
+            "resolution_policy_sha256": predecessor.resolution_policy_sha256,
+            "selection_seed_sha256": selection_seed_sha256,
+            "campaign_shard_count": campaign_shard_count,
+        }
+    ).removeprefix("sha256:")
+    body = predecessor.model_dump(mode="json", exclude={"pilot_id", "plan_sha256"})
+    body.update(
+        {
+            "schema_version": "local-image-science-corpus-visual-pilot-plan/1.2",
+            "selection_algorithm": "SCIENCE_VISUAL_STRATIFIED_SHA256_V2_CAMPAIGN",
+            "campaign_id": "imgsciviscampaign_" + campaign_identity[:32],
+            "campaign_shard_index": campaign_shard_index,
+            "campaign_shard_count": campaign_shard_count,
+            "selected_sources": tuple(value.model_dump(mode="json") for value in selected),
+            "max_page_images": sum(value.page_count for value in selected),
+        }
+    )
+    identity = content_sha256(body).removeprefix("sha256:")
+    body["pilot_id"] = "imgscivispilot_" + identity[:32]
+    body["plan_sha256"] = content_sha256(body)
+    plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(body)
     validate_science_visual_authorization_plan(authorization, plan)
     return plan

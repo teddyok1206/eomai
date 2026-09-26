@@ -27,6 +27,7 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     SCIENCE_VISUAL_PILOT_PLAN_ARTIFACT_TYPE,
     SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
     SCIENCE_VISUAL_PILOT_PLAN_V2_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_PILOT_PLAN_V3_ARTIFACT_TYPE,
     SCIENCE_VISUAL_PILOT_RESULT_ARTIFACT_TYPE,
     SCIENCE_VISUAL_PILOT_RESULT_MEMBER,
     LocalImageTrainingControlArtifactPublisher,
@@ -183,6 +184,13 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PILOT_PLAN_V2_ARTIFACT_TYPE
     assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PILOT_PLAN_MEMBER
     assert plan_v2_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    plan_v3_pointer = adapter.commit_science_visual_pilot_plan_v3(  # type: ignore[arg-type]
+        plan
+    )
+    assert publisher.arguments["artifact_type"] == SCIENCE_VISUAL_PILOT_PLAN_V3_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_PILOT_PLAN_MEMBER
+    assert plan_v3_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     science_micro_pointer = adapter.commit_science_micro_probe_plan(  # type: ignore[arg-type]
         plan
