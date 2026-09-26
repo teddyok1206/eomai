@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -1774,6 +1775,34 @@ def _campaign_reviewed_crop_set() -> dict[str, Any]:
     return schema
 
 
+def _campaign_reviewed_crop_set_v2() -> dict[str, Any]:
+    """Bounded multi-candidate successor that preserves source-group partitions."""
+
+    schema = deepcopy(_campaign_reviewed_crop_set())
+    schema["$id"] = "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.1"
+    schema["title"] = "EOM Science Campaign Reviewed Visual Crop Set V2"
+    schema["required"].insert(schema["required"].index("members"), "member_policy")
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-visual-campaign-crop-set/1.1"
+    }
+    schema["properties"]["member_policy"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "partition_policy",
+            "max_members_per_document",
+            "max_members_per_exam_group",
+        ],
+        "properties": {
+            "partition_policy": {"const": "PINNED_SOURCE_GROUP_V1"},
+            "max_members_per_document": {"const": 3},
+            "max_members_per_exam_group": {"const": 4},
+        },
+    }
+    schema["properties"]["members"]["minItems"] = 24
+    return schema
+
+
 def _model_pointer() -> dict[str, Any]:
     return {
         "type": "object",
@@ -2324,6 +2353,43 @@ def _science_campaign_micro_plan() -> dict[str, Any]:
     return schema
 
 
+def _science_campaign_micro_plan_object_v2() -> dict[str, Any]:
+    value = deepcopy(_science_campaign_micro_plan_object())
+    value["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-probe-plan/1.1"
+    }
+    value["properties"]["training_member_ids"].update({"minItems": 16, "maxItems": 16})
+    value["properties"]["validation_member_ids"].update({"minItems": 4, "maxItems": 4})
+    value["properties"]["holdout_member_ids"].update({"minItems": 4, "maxItems": 4})
+    value["properties"]["trainer_contract"] = {
+        "const": "eom-local-image-science-campaign-lora-micro-trainer/1.1"
+    }
+    value["properties"]["purpose"] = {"const": "EVALUATION_ONLY_SCIENCE_CAMPAIGN_EXPANDED_PROBE"}
+    return value
+
+
+def _science_campaign_micro_plan_v2() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Campaign LoRA Expanded Probe Plan V2",
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.1",
+    )
+    schema["$defs"].update(
+        {
+            "modelPointer": _model_pointer(),
+            "dependencies": _trainer_dependencies(),
+            "hyperparameters": _micro_hyperparameters(),
+        }
+    )
+    schema.update(
+        {
+            key: value
+            for key, value in _science_campaign_micro_plan_object_v2().items()
+            if key not in {"type", "additionalProperties"}
+        }
+    )
+    return schema
+
+
 def _science_campaign_micro_command() -> dict[str, Any]:
     schema = _base(
         "EOM Science Campaign LoRA Micro-Probe Command V1",
@@ -2381,6 +2447,19 @@ def _science_campaign_micro_command() -> dict[str, Any]:
     return schema
 
 
+def _science_campaign_micro_command_v2() -> dict[str, Any]:
+    schema = deepcopy(_science_campaign_micro_command())
+    schema["$id"] = (
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-command/1.1"
+    )
+    schema["title"] = "EOM Science Campaign LoRA Expanded Probe Command V2"
+    schema["$defs"]["plan"] = _science_campaign_micro_plan_object_v2()
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-probe-command/1.1"
+    }
+    return schema
+
+
 def _science_campaign_micro_adapter_object() -> dict[str, Any]:
     value = _science_micro_adapter_object()
     value["properties"]["schema_version"] = {
@@ -2399,6 +2478,30 @@ def _science_campaign_micro_adapter() -> dict[str, Any]:
         {
             key: value
             for key, value in _science_campaign_micro_adapter_object().items()
+            if key not in {"type", "additionalProperties"}
+        }
+    )
+    return schema
+
+
+def _science_campaign_micro_adapter_object_v2() -> dict[str, Any]:
+    value = deepcopy(_science_campaign_micro_adapter_object())
+    value["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+    }
+    return value
+
+
+def _science_campaign_micro_adapter_v2() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Campaign LoRA Expanded Adapter Manifest V2",
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1",
+    )
+    schema["$defs"].update({"modelPointer": _model_pointer(), "adapterFile": _adapter_file()})
+    schema.update(
+        {
+            key: value
+            for key, value in _science_campaign_micro_adapter_object_v2().items()
             if key not in {"type", "additionalProperties"}
         }
     )
@@ -2543,6 +2646,23 @@ def _science_campaign_micro_worker_result() -> dict[str, Any]:
             ],
         }
     )
+    return schema
+
+
+def _science_campaign_micro_worker_result_v2() -> dict[str, Any]:
+    schema = deepcopy(_science_campaign_micro_worker_result())
+    schema["$id"] = (
+        "eom://schemas/image-provider/"
+        "local-image-science-campaign-lora-micro-probe-worker-result/1.1"
+    )
+    schema["title"] = "EOM Science Campaign LoRA Expanded Probe Worker Result V2"
+    schema["$defs"]["adapter"] = _science_campaign_micro_adapter_object_v2()
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-probe-worker-result/1.1"
+    }
+    schema["properties"]["realized_samples"]["maxItems"] = 16
+    success = schema["allOf"][0]["then"]["properties"]
+    success["realized_samples"] = {"minItems": 16, "maxItems": 16}
     return schema
 
 
@@ -2865,6 +2985,21 @@ def _science_campaign_micro_evaluation_command() -> dict[str, Any]:
     return schema
 
 
+def _science_campaign_micro_evaluation_command_v2() -> dict[str, Any]:
+    schema = deepcopy(_science_campaign_micro_evaluation_command())
+    schema["$id"] = (
+        "eom://schemas/image-provider/"
+        "local-image-science-campaign-lora-micro-evaluation-command/1.1"
+    )
+    schema["title"] = "EOM Science Campaign LoRA Expanded Evaluation Command V2"
+    schema["$defs"]["adapter"] = _science_campaign_micro_adapter_object_v2()
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-evaluation-command/1.1"
+    }
+    schema["properties"]["cases"].update({"minItems": 4, "maxItems": 4})
+    return schema
+
+
 def _science_campaign_micro_evaluation_result() -> dict[str, Any]:
     schema = _base(
         "EOM Science Campaign LoRA Micro Evaluation Result V1",
@@ -2890,9 +3025,7 @@ def _science_campaign_micro_evaluation_result() -> dict[str, Any]:
             "variant": {"enum": ["ADAPTER", "BASE"]},
             "member_path": {
                 "type": "string",
-                "pattern": (
-                    "^outputs/imgsciviscampaigncrop_[0-9a-f]{32}-(adapter|base)\\.png$"
-                ),
+                "pattern": ("^outputs/imgsciviscampaigncrop_[0-9a-f]{32}-(adapter|base)\\.png$"),
             },
             "sha256": {"$ref": "#/$defs/sha256"},
             "size_bytes": {"type": "integer", "minimum": 64, "maximum": 67108864},
@@ -2965,6 +3098,21 @@ def _science_campaign_micro_evaluation_result() -> dict[str, Any]:
     return schema
 
 
+def _science_campaign_micro_evaluation_result_v2() -> dict[str, Any]:
+    schema = deepcopy(_science_campaign_micro_evaluation_result())
+    schema["$id"] = (
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-result/1.1"
+    )
+    schema["title"] = "EOM Science Campaign LoRA Expanded Evaluation Result V2"
+    schema["properties"]["schema_version"] = {
+        "const": "local-image-science-campaign-lora-micro-evaluation-result/1.1"
+    }
+    schema["properties"]["outputs"]["maxItems"] = 8
+    success = schema["allOf"][0]["then"]["properties"]
+    success["outputs"] = {"minItems": 8, "maxItems": 8}
+    return schema
+
+
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
@@ -2987,6 +3135,9 @@ SCHEMAS = {
         _campaign_raster_refinement_plan()
     ),
     "local-image-science-visual-campaign-crop-set-v1.schema.json": (_campaign_reviewed_crop_set()),
+    "local-image-science-visual-campaign-crop-set-v2.schema.json": (
+        _campaign_reviewed_crop_set_v2()
+    ),
     "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
     "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": _science_micro_adapter(),
@@ -2996,14 +3147,26 @@ SCHEMAS = {
     "local-image-science-campaign-lora-micro-probe-plan-v1.schema.json": (
         _science_campaign_micro_plan()
     ),
+    "local-image-science-campaign-lora-micro-probe-plan-v2.schema.json": (
+        _science_campaign_micro_plan_v2()
+    ),
     "local-image-science-campaign-lora-micro-probe-command-v1.schema.json": (
         _science_campaign_micro_command()
+    ),
+    "local-image-science-campaign-lora-micro-probe-command-v2.schema.json": (
+        _science_campaign_micro_command_v2()
     ),
     "local-image-science-campaign-lora-micro-adapter-manifest-v1.schema.json": (
         _science_campaign_micro_adapter()
     ),
+    "local-image-science-campaign-lora-micro-adapter-manifest-v2.schema.json": (
+        _science_campaign_micro_adapter_v2()
+    ),
     "local-image-science-campaign-lora-micro-probe-worker-result-v1.schema.json": (
         _science_campaign_micro_worker_result()
+    ),
+    "local-image-science-campaign-lora-micro-probe-worker-result-v2.schema.json": (
+        _science_campaign_micro_worker_result_v2()
     ),
     "local-image-science-lora-micro-evaluation-command-v1.schema.json": (
         _science_micro_evaluation_command()
@@ -3014,8 +3177,14 @@ SCHEMAS = {
     "local-image-science-campaign-lora-micro-evaluation-command-v1.schema.json": (
         _science_campaign_micro_evaluation_command()
     ),
+    "local-image-science-campaign-lora-micro-evaluation-command-v2.schema.json": (
+        _science_campaign_micro_evaluation_command_v2()
+    ),
     "local-image-science-campaign-lora-micro-evaluation-result-v1.schema.json": (
         _science_campaign_micro_evaluation_result()
+    ),
+    "local-image-science-campaign-lora-micro-evaluation-result-v2.schema.json": (
+        _science_campaign_micro_evaluation_result_v2()
     ),
 }
 
