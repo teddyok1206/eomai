@@ -65,6 +65,7 @@ SCHEMA_FILES = {
         "local-image-science-visual-pattern-inventory-v2.schema.json"
     ),
     "science-visual-crop-set": "local-image-science-visual-crop-set-v1.schema.json",
+    "science-visual-crop-set-v2": "local-image-science-visual-crop-set-v2.schema.json",
     "science-raster-suitability-review": (
         "local-image-science-raster-suitability-review-v1.schema.json"
     ),
@@ -184,6 +185,9 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-crop-set": (
         "sha256:bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"
+    ),
+    "science-visual-crop-set-v2": (
+        "sha256:2b4f1865270c1c50c33ed6aedb56f239679accccf15ce49b9575418715bc12b7"
     ),
     "science-raster-suitability-review": (
         "sha256:b386137ac8f1188aa01b12a075f8e1ba3696621d299cbf599bce8760f92b3713"

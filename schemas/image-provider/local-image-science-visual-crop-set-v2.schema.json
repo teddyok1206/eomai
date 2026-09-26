@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-visual-crop-set/1.1",
+  "title": "EOM Science Corpus Raster-Reviewed Visual Crop Set V1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "cropMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "document_id",
+        "physical_page",
+        "exam_group_sha256",
+        "partition",
+        "pattern_family",
+        "member_path",
+        "media_type",
+        "width_px",
+        "height_px",
+        "size_bytes",
+        "sha256",
+        "caption_en",
+        "caption_sha256",
+        "perceptual_hash"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$"
+        },
+        "document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "exam_group_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "partition": {
+          "enum": [
+            "HOLDOUT",
+            "TRAIN",
+            "VALIDATION"
+          ]
+        },
+        "pattern_family": {
+          "enum": [
+            "ASTRONOMICAL_SCENE",
+            "FOSSIL",
+            "GEOLOGIC_TEXTURE",
+            "MICROSCOPIC_TEXTURE",
+            "NATURAL_TEXTURE",
+            "ORGANISM"
+          ]
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^crops/imgsciviscandidate_[0-9a-f]{32}\\.png$"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 10000
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 10000
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 67108864
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "caption_en": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 240,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$"
+        },
+        "caption_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "perceptual_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "crop_set_id",
+    "pattern_inventory",
+    "pattern_inventory_semantic_sha256",
+    "raster_suitability_review",
+    "raster_suitability_review_sha256",
+    "pilot_plan",
+    "pilot_plan_sha256",
+    "pilot_result",
+    "pilot_result_semantic_sha256",
+    "training_authorization",
+    "members",
+    "created_at",
+    "created_by",
+    "crop_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-visual-crop-set/1.1"
+    },
+    "crop_set_id": {
+      "type": "string",
+      "pattern": "^imgsciviscropset_[0-9a-f]{32}$"
+    },
+    "pattern_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "pattern_inventory_semantic_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "pilot_plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "pilot_plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "pilot_result": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "pilot_result_semantic_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 96,
+      "items": {
+        "$ref": "#/$defs/cropMember"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "crop_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "raster_suitability_review": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "raster_suitability_review_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

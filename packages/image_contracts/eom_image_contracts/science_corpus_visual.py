@@ -47,6 +47,9 @@ CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
 CORPUS_REVIEWED_CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
 )
+CORPUS_RASTER_REVIEWED_CROP_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-crop-set/1.1"
+)
 CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
 )
@@ -1146,6 +1149,98 @@ class LocalImageScienceVisualCropSet(FrozenModel):
         return self
 
 
+class LocalImageScienceVisualCropSetV2(FrozenModel):
+    """Successor crop set that pins the second-pass raster suitability audit.
+
+    This is deliberately additive: V1 remains the immutable record of the
+    broad-review micro probe.  Any future raster LoRA run must use this
+    successor and therefore cannot silently treat a diagram, montage, or
+    redacted crop as a GPU-training image.
+    """
+
+    schema_version: Literal["local-image-science-visual-crop-set/1.1"]
+    crop_set_id: str = Field(pattern=r"^imgsciviscropset_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    raster_suitability_review: ImageEvaluationArtifactMember
+    raster_suitability_review_sha256: Sha256
+    pilot_plan: ImageEvaluationArtifactMember
+    pilot_plan_sha256: Sha256
+    pilot_result: ImageEvaluationArtifactMember
+    pilot_result_semantic_sha256: Sha256
+    training_authorization: ImageEvaluationArtifactMember
+    members: tuple[ScienceVisualReviewedCropMember, ...] = Field(min_length=12, max_length=96)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    crop_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_crop_set_is_coherent(self) -> LocalImageScienceVisualCropSetV2:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.raster_suitability_review,
+            schema_ref=CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-raster-suitability-review.json",
+        )
+        _require_pointer(
+            self.pilot_plan,
+            schema_ref=CORPUS_PILOT_PLAN_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-plan.json",
+        )
+        _require_pointer(
+            self.pilot_result,
+            schema_ref=CORPUS_PILOT_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-result.json",
+        )
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=CORPUS_AUTHORIZATION_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-corpus-training-authorization.json",
+        )
+        member_ids = tuple(value.candidate_id for value in self.members)
+        if member_ids != tuple(sorted(set(member_ids))):
+            raise ValueError("science visual crop members must be uniquely sorted")
+        for label, values in (
+            ("documents", (value.document_id for value in self.members)),
+            ("exam groups", (value.exam_group_sha256 for value in self.members)),
+            ("crop hashes", (value.sha256 for value in self.members)),
+            ("perceptual hashes", (value.perceptual_hash for value in self.members)),
+        ):
+            sequence = tuple(values)
+            if len(sequence) != len(set(sequence)):
+                raise ValueError(f"science visual crop set repeats {label}")
+        partition_counts = Counter(value.partition for value in self.members)
+        if (
+            partition_counts["TRAIN"] < 12
+            or partition_counts["VALIDATION"] < 1
+            or partition_counts["HOLDOUT"] < 2
+        ):
+            raise ValueError("science visual crop partitions are too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_set_id", "crop_set_sha256"})
+        ).removeprefix("sha256:")
+        if self.crop_set_id != "imgsciviscropset_" + identity[:32]:
+            raise ValueError("science visual crop-set ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
+        if self.crop_set_sha256 != expected:
+            raise ValueError("science visual crop-set hash mismatch")
+        return self
+
+
 def validate_science_visual_crop_set(
     *,
     authorization: LocalImageScienceCorpusTrainingAuthorization,
@@ -1192,6 +1287,72 @@ def validate_science_visual_crop_set(
             or review.caption_sha256 != member.caption_sha256
         ):
             raise ValueError("science visual crop member differs from reviewed evidence")
+
+
+def validate_science_visual_crop_set_v2(
+    *,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    plan: LocalImageScienceCorpusVisualPilotPlanV2,
+    result: LocalImageScienceCorpusVisualPilotResult,
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+    raster_suitability_review: LocalImageScienceVisualRasterSuitabilityReview,
+    crop_set: LocalImageScienceVisualCropSetV2,
+) -> None:
+    """Require each successor crop to be a verified GPU-raster candidate.
+
+    The maps make the cross-artifact binding linear in the bounded member
+    count; no binary image data is materialized here.
+    """
+
+    # Bind the common immutable pilot chain first.  A V1-shaped temporary is
+    # intentionally not constructed: V2 must keep its raster-review pointer
+    # in the canonical identity rather than merely borrowing V1 validation.
+    validate_science_visual_authorization_plan(authorization, plan)
+    validate_science_visual_pilot_result(plan, result)
+    validate_science_visual_pattern_inventory_v2(result, inventory)
+    validate_science_visual_raster_suitability_review(inventory, raster_suitability_review)
+    if (
+        crop_set.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or crop_set.raster_suitability_review_sha256 != raster_suitability_review.review_sha256
+        or raster_suitability_review.pattern_inventory != crop_set.pattern_inventory
+        or crop_set.raster_suitability_review.sha256
+        != content_sha256(raster_suitability_review.model_dump(mode="json"))
+        or crop_set.pilot_plan_sha256 != plan.plan_sha256
+        or crop_set.pilot_result_semantic_sha256 != result.result_sha256
+        or crop_set.pilot_result != inventory.pilot_result
+        or crop_set.training_authorization != plan.training_authorization
+        or crop_set.training_authorization.sha256
+        != content_sha256(authorization.model_dump(mode="json"))
+    ):
+        raise ValueError("science raster-reviewed crop-set source hash differs")
+    sources = {value.document_id: value for value in plan.selected_sources}
+    candidates = {value.candidate_id: value for value in result.visual_candidates}
+    reviews = {value.candidate_id: value for value in inventory.reviews}
+    raster_reviews = {value.candidate_id: value for value in raster_suitability_review.entries}
+    for member in crop_set.members:
+        source = sources.get(member.document_id)
+        candidate = candidates.get(member.candidate_id)
+        review = reviews.get(member.candidate_id)
+        raster_review = raster_reviews.get(member.candidate_id)
+        if (
+            source is None
+            or candidate is None
+            or review is None
+            or raster_review is None
+            or candidate.document_id != member.document_id
+            or candidate.physical_page != member.physical_page
+            or candidate.member_path != member.member_path
+            or candidate.sha256 != member.sha256
+            or source.exam_group_sha256 != member.exam_group_sha256
+            or source.partition != member.partition
+            or review.decision != "LORA_ELIGIBLE"
+            or review.pattern_family != member.pattern_family
+            or raster_review.decision != "GPU_RASTER_ELIGIBLE"
+            or raster_review.semantic_alignment != "VERIFIED"
+            or raster_review.caption_en != member.caption_en
+            or raster_review.caption_sha256 != member.caption_sha256
+        ):
+            raise ValueError("science crop member differs from raster suitability evidence")
 
 
 def _validate_pattern_inventory_against_result(

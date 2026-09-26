@@ -1084,6 +1084,27 @@ def _reviewed_crop_set() -> dict[str, Any]:
     return schema
 
 
+def _raster_reviewed_crop_set_v2() -> dict[str, Any]:
+    """Add the immutable second-pass raster review to the V1 crop-set shape."""
+
+    schema = _reviewed_crop_set()
+    schema["title"] = "EOM Science Corpus Raster-Reviewed Visual Crop Set V1.1"
+    schema["$id"] = "eom://schemas/image-provider/local-image-science-visual-crop-set/1.1"
+    required = schema["required"]
+    assert isinstance(required, list)
+    inventory_index = required.index("pattern_inventory_semantic_sha256") + 1
+    required[inventory_index:inventory_index] = [
+        "raster_suitability_review",
+        "raster_suitability_review_sha256",
+    ]
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {"const": "local-image-science-visual-crop-set/1.1"}
+    properties["raster_suitability_review"] = {"$ref": "#/$defs/artifactMember"}
+    properties["raster_suitability_review_sha256"] = {"$ref": "#/$defs/sha256"}
+    return schema
+
+
 def _raster_suitability_review() -> dict[str, Any]:
     """Second-pass audit that narrows broad LoRA eligibility without rewriting history."""
 
@@ -1865,6 +1886,7 @@ SCHEMAS = {
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
     "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
+    "local-image-science-visual-crop-set-v2.schema.json": _raster_reviewed_crop_set_v2(),
     "local-image-science-raster-suitability-review-v1.schema.json": _raster_suitability_review(),
     "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
     "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),

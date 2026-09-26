@@ -48,5 +48,8 @@ ADR 0120 and `local-image-science-raster-suitability-review/1.0` introduce a com
 immutable second-pass review. It pins the exact V1.1 pattern-inventory artifact/file and
 semantic hashes, covers every broad LoRA candidate exactly once, records the route and
 reason, and permits a caption only for `GPU_RASTER_ELIGIBLE` plus `VERIFIED` semantic
-alignment. The future crop-set publisher must consume this review; the legacy V1 crop
-set remains historical evidence and is not reinterpreted.
+alignment. `local-image-science-visual-crop-set/1.1` now consumes this review before
+publication and rejects every non-GPU-raster candidate. The legacy V1 crop set remains
+historical evidence and is not reinterpreted. The V1.1 set is not yet publishable from
+this 24-crop inventory because its seven eligible members remain below the immutable
+15-member partition minimum.

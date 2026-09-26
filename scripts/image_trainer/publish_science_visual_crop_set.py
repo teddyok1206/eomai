@@ -25,12 +25,16 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceVisualCropSet,
+    LocalImageScienceVisualCropSetV2,
     LocalImageScienceVisualPatternInventoryV2,
+    LocalImageScienceVisualRasterSuitabilityReview,
     ScienceVisualReviewedCropMember,
     content_json_bytes,
     validate_contract,
     validate_science_visual_crop_set,
+    validate_science_visual_crop_set_v2,
     validate_science_visual_pilot_command,
+    validate_science_visual_raster_suitability_review,
 )
 from eom_image_contracts.science_corpus_visual import ScienceVisualRasterPatternFamily
 from eom_orchestrator.database import build_engine
@@ -52,6 +56,10 @@ NEAR_DUPLICATE_HAMMING_DISTANCE = 2
 TRAINER_PYTHON = Path("/srv/eom/conda/envs/eom-image-trainer/bin/python")
 CROP_SCHEMA_REF = "eom://schemas/image-provider/local-image-science-visual-crop/1.0"
 CROP_SET_SCHEMA_REF = "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
+CROP_SET_V2_SCHEMA_REF = "eom://schemas/image-provider/local-image-science-visual-crop-set/1.1"
+RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
+)
 _ATTEMPT = re.compile(r"^imgscivisattempt_[0-9a-f]{32}$")
 _INVENTORY = re.compile(r"^imgscivisinventory_[0-9a-f]{32}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
@@ -85,6 +93,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--created-at", type=datetime.fromisoformat, required=True)
     parser.add_argument("--created-by", required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--raster-suitability-review-artifact-id")
+    parser.add_argument("--raster-suitability-review-artifact-revision-id")
+    parser.add_argument("--raster-suitability-review-artifact-sha256")
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
@@ -330,6 +341,45 @@ def _load_inputs(
     return authorization, plan, result, inventory, inventory_pointer, command.plan
 
 
+def _load_raster_suitability_review(
+    *,
+    engine: Engine,
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+    inventory_pointer: ImageEvaluationArtifactMember,
+    artifact_id: str | None,
+    artifact_revision_id: str | None,
+    artifact_sha256: str | None,
+) -> tuple[LocalImageScienceVisualRasterSuitabilityReview, ImageEvaluationArtifactMember] | None:
+    """Resolve the optional successor-only audit through its immutable pointer."""
+
+    values = (artifact_id, artifact_revision_id, artifact_sha256)
+    if not any(values):
+        return None
+    if not all(values):
+        raise ScienceVisualCropSetPublicationError("SCIENCE_VISUAL_CROP_RASTER_ARGUMENT_INVALID")
+    assert artifact_id is not None
+    assert artifact_revision_id is not None
+    assert artifact_sha256 is not None
+    try:
+        pointer = ImageEvaluationArtifactMember(
+            artifact_id=artifact_id,
+            artifact_revision_id=artifact_revision_id,
+            member_path="manifests/science-raster-suitability-review.json",
+            schema_ref=RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            sha256=artifact_sha256,
+        )
+        value = _load_artifact_json(engine, pointer)
+        validate_contract("science-raster-suitability-review", value)
+        review = LocalImageScienceVisualRasterSuitabilityReview.model_validate(value)
+        validate_science_visual_raster_suitability_review(inventory, review)
+    except (PydanticValidationError, TypeError, ValueError) as exc:
+        raise ScienceVisualCropSetPublicationError("SCIENCE_VISUAL_CROP_RASTER_INVALID") from exc
+    if review.pattern_inventory != inventory_pointer:
+        raise ScienceVisualCropSetPublicationError("SCIENCE_VISUAL_CROP_RASTER_INVALID")
+    return review, pointer
+
+
 def _build_crop_set(
     *,
     authorization: LocalImageScienceCorpusTrainingAuthorization,
@@ -338,16 +388,39 @@ def _build_crop_set(
     inventory: LocalImageScienceVisualPatternInventoryV2,
     inventory_pointer: ImageEvaluationArtifactMember,
     plan_pointer: ImageEvaluationArtifactMember,
+    raster_suitability_review: LocalImageScienceVisualRasterSuitabilityReview | None,
+    raster_suitability_review_pointer: ImageEvaluationArtifactMember | None,
     workspace: Path,
     created_at: datetime,
     created_by: str,
     inspect_png: Callable[[bytes], tuple[int, int, str, int]] = _inspect_png,
-) -> tuple[LocalImageScienceVisualCropSet, tuple[_InspectedCandidate, ...]]:
+) -> tuple[
+    LocalImageScienceVisualCropSet | LocalImageScienceVisualCropSetV2,
+    tuple[_InspectedCandidate, ...],
+]:
     sources = {value.document_id: value for value in plan.selected_sources}
     candidates = {value.candidate_id: value for value in result.visual_candidates}
+    raster_reviews = (
+        {value.candidate_id: value for value in raster_suitability_review.entries}
+        if raster_suitability_review is not None
+        else None
+    )
+    if (raster_suitability_review is None) != (raster_suitability_review_pointer is None):
+        raise ScienceVisualCropSetPublicationError("SCIENCE_VISUAL_CROP_RASTER_INVALID")
     inspected: list[_InspectedCandidate] = []
     for review in inventory.reviews:
         if review.decision != "LORA_ELIGIBLE":
+            continue
+        raster_review = (
+            raster_reviews.get(review.candidate_id) if raster_reviews is not None else None
+        )
+        if raster_reviews is not None and (
+            raster_review is None
+            or raster_review.decision != "GPU_RASTER_ELIGIBLE"
+            or raster_review.semantic_alignment != "VERIFIED"
+            or raster_review.caption_en != review.caption_en
+            or raster_review.caption_sha256 != review.caption_sha256
+        ):
             continue
         candidate = candidates.get(review.candidate_id)
         source = sources.get(candidate.document_id) if candidate is not None else None
@@ -389,7 +462,11 @@ def _build_crop_set(
         )
     selected = _select_group_representatives(tuple(inspected))
     body: dict[str, object] = {
-        "schema_version": "local-image-science-visual-crop-set/1.0",
+        "schema_version": (
+            "local-image-science-visual-crop-set/1.1"
+            if raster_suitability_review is not None
+            else "local-image-science-visual-crop-set/1.0"
+        ),
         "pattern_inventory": inventory_pointer.model_dump(mode="json"),
         "pattern_inventory_semantic_sha256": inventory.inventory_sha256,
         "pilot_plan": plan_pointer.model_dump(mode="json"),
@@ -401,19 +478,37 @@ def _build_crop_set(
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
         "created_by": created_by,
     }
+    if raster_suitability_review is not None and raster_suitability_review_pointer is not None:
+        body["raster_suitability_review"] = raster_suitability_review_pointer.model_dump(
+            mode="json"
+        )
+        body["raster_suitability_review_sha256"] = raster_suitability_review.review_sha256
     identity = content_sha256(body).removeprefix("sha256:")
     body["crop_set_id"] = "imgsciviscropset_" + identity[:32]
     body["crop_set_sha256"] = content_sha256(body)
     try:
-        value = LocalImageScienceVisualCropSet.model_validate(body)
-        validate_contract("science-visual-crop-set", value.model_dump(mode="json"))
-        validate_science_visual_crop_set(
-            authorization=authorization,
-            plan=plan,
-            result=result,
-            inventory=inventory,
-            crop_set=value,
-        )
+        value: LocalImageScienceVisualCropSet | LocalImageScienceVisualCropSetV2
+        if raster_suitability_review is None:
+            value = LocalImageScienceVisualCropSet.model_validate(body)
+            validate_contract("science-visual-crop-set", value.model_dump(mode="json"))
+            validate_science_visual_crop_set(
+                authorization=authorization,
+                plan=plan,
+                result=result,
+                inventory=inventory,
+                crop_set=value,
+            )
+        else:
+            value = LocalImageScienceVisualCropSetV2.model_validate(body)
+            validate_contract("science-visual-crop-set-v2", value.model_dump(mode="json"))
+            validate_science_visual_crop_set_v2(
+                authorization=authorization,
+                plan=plan,
+                result=result,
+                inventory=inventory,
+                raster_suitability_review=raster_suitability_review,
+                crop_set=value,
+            )
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceVisualCropSetPublicationError("SCIENCE_VISUAL_CROP_SET_INVALID") from exc
     return value, selected
@@ -462,6 +557,17 @@ def main() -> int:
         result_receipt_path=result_receipt_path,
         inventory_receipt_path=inventory_receipt_path,
     )
+    raster_review = _load_raster_suitability_review(
+        engine=engine,
+        inventory=inventory,
+        inventory_pointer=inventory_pointer,
+        artifact_id=args.raster_suitability_review_artifact_id,
+        artifact_revision_id=args.raster_suitability_review_artifact_revision_id,
+        artifact_sha256=args.raster_suitability_review_artifact_sha256,
+    )
+    raster_suitability_review, raster_suitability_review_pointer = (
+        raster_review if raster_review is not None else (None, None)
+    )
     crop_set, selected = _build_crop_set(
         authorization=authorization,
         plan=plan,
@@ -469,6 +575,8 @@ def main() -> int:
         inventory=inventory,
         inventory_pointer=inventory_pointer,
         plan_pointer=plan_pointer,
+        raster_suitability_review=raster_suitability_review,
+        raster_suitability_review_pointer=raster_suitability_review_pointer,
         workspace=workspace,
         created_at=created_at,
         created_by=args.created_by,
@@ -482,6 +590,11 @@ def main() -> int:
         "crop_set_id": crop_set.crop_set_id,
         "crop_set_sha256": crop_set.crop_set_sha256,
         "eligible_candidates": inventory.lora_eligible_count,
+        "raster_suitability_review": (
+            raster_suitability_review_pointer.model_dump(mode="json")
+            if raster_suitability_review_pointer is not None
+            else None
+        ),
         "selected_groups": len(selected),
         "partition_counts": partition_counts,
     }
@@ -498,7 +611,11 @@ def main() -> int:
             source=manifest_path,
             sha256=sha256_bytes(manifest_path.read_bytes()),
             bytes=manifest_path.stat().st_size,
-            schema_ref=CROP_SET_SCHEMA_REF,
+            schema_ref=(
+                CROP_SET_V2_SCHEMA_REF
+                if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+                else CROP_SET_SCHEMA_REF
+            ),
             media_type="application/json",
         )
         crop_members = tuple(
@@ -516,9 +633,21 @@ def main() -> int:
         published = ControlFileSetPublisher(engine, Settings.from_environment()).publish(
             members=members,
             primary_file=manifest_member.file_name,
-            artifact_type="control_local_image_science_visual_crop_set",
-            manifest_version="local-image-science-visual-crop-set-files/1.0",
-            idempotency_key=f"science-visual-crop-set:{crop_set.crop_set_id}",
+            artifact_type=(
+                "control_local_image_science_visual_raster_reviewed_crop_set"
+                if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+                else "control_local_image_science_visual_crop_set"
+            ),
+            manifest_version=(
+                "local-image-science-visual-crop-set-files/1.1"
+                if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+                else "local-image-science-visual-crop-set-files/1.0"
+            ),
+            idempotency_key=(
+                f"science-visual-raster-reviewed-crop-set:{crop_set.crop_set_id}"
+                if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+                else f"science-visual-crop-set:{crop_set.crop_set_id}"
+            ),
             source_commit=args.source_commit,
             created_at=created_at,
         )
@@ -526,12 +655,20 @@ def main() -> int:
         artifact_id=published.artifact_id,
         artifact_revision_id=published.artifact_revision_id,
         member_path=published.primary_file,
-        schema_ref=CROP_SET_SCHEMA_REF,
+        schema_ref=(
+            CROP_SET_V2_SCHEMA_REF
+            if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+            else CROP_SET_SCHEMA_REF
+        ),
         media_type="application/json",
         sha256=published.primary_sha256,
     )
     receipt = {
-        "schema_version": "science-visual-crop-set-publication-receipt/1.0",
+        "schema_version": (
+            "science-visual-raster-reviewed-crop-set-publication-receipt/1.0"
+            if isinstance(crop_set, LocalImageScienceVisualCropSetV2)
+            else "science-visual-crop-set-publication-receipt/1.0"
+        ),
         **summary,
         "crop_set_artifact": pointer.model_dump(mode="json"),
         "file_set_manifest_sha256": published.manifest_sha256,

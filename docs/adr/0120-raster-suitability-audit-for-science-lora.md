@@ -48,7 +48,7 @@ or augment samples to meet it.
 ```text
 pinned visual-pattern inventory
   -> complete raster-suitability review
-  -> successor crop-set selection (future)
+  -> successor raster-reviewed crop-set selection (V1.1)
   -> offline local trainer / fixed holdout evaluation
 ```
 
@@ -62,6 +62,13 @@ map/set once and run in `O(n)` time and space for at most 512 reviewed candidate
 There is no database table, index, queue, or worker-to-worker channel. A future
 Orchestrator-owned publisher may commit the review; workers continue to see only staged
 local input and return local results.
+
+`local-image-science-visual-crop-set/1.1` is the selector contract. It pins both the
+pattern-inventory and raster-suitability-review artifact/file and semantic hashes. Its
+validator resolves selected members through indexed candidate/review maps and requires
+`GPU_RASTER_ELIGIBLE`, `VERIFIED`, and the exact reviewed caption. The existing V1 crop
+set remains historical micro-probe evidence; it is not silently upgraded or reused as a
+V1.1 input.
 
 ## Failure and rollout
 
