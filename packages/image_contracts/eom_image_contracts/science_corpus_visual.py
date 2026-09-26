@@ -74,6 +74,12 @@ CORPUS_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
 CORPUS_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0"
 )
+CORPUS_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-raster-refinement-plan/1.0"
+)
+CORPUS_CAMPAIGN_CROP_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.0"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -1629,6 +1635,115 @@ class LocalImageScienceVisualRasterRefinementPlan(FrozenModel):
         return self
 
 
+class ScienceVisualCampaignRasterRefinementProposal(FrozenModel):
+    """One literal crop of a pinned campaign candidate in its original partition."""
+
+    refinement_id: str = Field(pattern=r"^imgsciviscampaignrefine_[0-9a-f]{32}$")
+    parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    parent_candidate_sha256: Sha256
+    crop_bounding_box: ImageEvaluationBoundingBox
+    caption_en: str = Field(
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256
+    partition: ScienceVisualPartition
+    pattern_family: ScienceVisualRasterPatternFamily
+    refinement_reasons: tuple[Literal["BORDER_TRIM", "PANEL_SPLIT"], ...] = Field(
+        min_length=1,
+        max_length=2,
+    )
+
+    @model_validator(mode="after")
+    def proposal_is_canonical(self) -> ScienceVisualCampaignRasterRefinementProposal:
+        if self.refinement_reasons != tuple(sorted(set(self.refinement_reasons))):
+            raise ValueError("science campaign refinement reasons must be uniquely sorted")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("science campaign refinement caption hash mismatch")
+        if (
+            self.crop_bounding_box.right - self.crop_bounding_box.left < 500
+            or self.crop_bounding_box.bottom - self.crop_bounding_box.top < 500
+        ):
+            raise ValueError("science campaign refinement crop is too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"refinement_id"})
+        ).removeprefix("sha256:")
+        if self.refinement_id != "imgsciviscampaignrefine_" + identity[:32]:
+            raise ValueError("science campaign refinement ID does not bind its content")
+        return self
+
+
+class LocalImageScienceVisualCampaignRasterRefinementPlan(FrozenModel):
+    """Immutable literal-crop plan for a complete reviewed visual campaign."""
+
+    schema_version: Literal["local-image-science-campaign-raster-refinement-plan/1.0"]
+    refinement_plan_id: str = Field(pattern=r"^imgsciviscampaignrefineplan_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    raster_suitability_review: ImageEvaluationArtifactMember
+    raster_suitability_review_sha256: Sha256
+    training_authorization: ImageEvaluationArtifactMember
+    proposals: tuple[ScienceVisualCampaignRasterRefinementProposal, ...] = Field(
+        min_length=1,
+        max_length=1024,
+    )
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    plan_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def plan_is_coherent(self) -> LocalImageScienceVisualCampaignRasterRefinementPlan:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.raster_suitability_review,
+            schema_ref=CORPUS_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-campaign-raster-suitability-review.json",
+        )
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=CORPUS_AUTHORIZATION_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-corpus-training-authorization.json",
+        )
+        proposal_ids = tuple(value.refinement_id for value in self.proposals)
+        if proposal_ids != tuple(sorted(set(proposal_ids))):
+            raise ValueError("science campaign refinements must be uniquely sorted")
+        parent_boxes = tuple(
+            (
+                value.parent_candidate_id,
+                value.crop_bounding_box.left,
+                value.crop_bounding_box.top,
+                value.crop_bounding_box.right,
+                value.crop_bounding_box.bottom,
+            )
+            for value in self.proposals
+        )
+        if len(parent_boxes) != len(set(parent_boxes)):
+            raise ValueError("science campaign refinement plan repeats a crop")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"refinement_plan_id", "plan_sha256"})
+        ).removeprefix("sha256:")
+        if self.refinement_plan_id != "imgsciviscampaignrefineplan_" + identity[:32]:
+            raise ValueError("science campaign refinement plan ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"plan_sha256"}))
+        if self.plan_sha256 != expected:
+            raise ValueError("science campaign refinement plan hash mismatch")
+        return self
+
+
 class ScienceVisualReviewedCropMember(FrozenModel):
     """One exact post-review PNG member; the containing Artifact owns its bytes."""
 
@@ -1831,6 +1946,138 @@ class LocalImageScienceVisualCropSetV2(FrozenModel):
         return self
 
 
+class ScienceVisualCampaignReviewedCropMember(FrozenModel):
+    """One canonical direct or literal-refinement PNG in a campaign crop set."""
+
+    sample_id: str = Field(pattern=r"^imgsciviscampaigncrop_[0-9a-f]{32}$")
+    source_kind: Literal["DIRECT", "REFINED"]
+    parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    parent_candidate_sha256: Sha256
+    refinement_id: str | None = Field(
+        default=None,
+        pattern=r"^imgsciviscampaignrefine_[0-9a-f]{32}$",
+    )
+    crop_bounding_box: ImageEvaluationBoundingBox | None = None
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    physical_page: int = Field(ge=1, le=512)
+    exam_group_sha256: Sha256
+    partition: ScienceVisualPartition
+    pattern_family: ScienceVisualRasterPatternFamily
+    member_path: str = Field(pattern=r"^crops/imgsciviscampaigncrop_[0-9a-f]{32}\.png$")
+    media_type: Literal["image/png"]
+    width_px: int = Field(ge=32, le=10_000)
+    height_px: int = Field(ge=32, le=10_000)
+    size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
+    sha256: Sha256
+    caption_en: str = Field(
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256
+    perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+    @model_validator(mode="after")
+    def immutable_member_is_coherent(self) -> ScienceVisualCampaignReviewedCropMember:
+        if self.member_path != f"crops/{self.sample_id}.png":
+            raise ValueError("science campaign crop path differs from sample identity")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("science campaign crop caption hash mismatch")
+        if self.source_kind == "DIRECT":
+            if self.refinement_id is not None or self.crop_bounding_box is not None:
+                raise ValueError("direct science campaign crop carries refinement metadata")
+        elif self.refinement_id is None or self.crop_bounding_box is None:
+            raise ValueError("refined science campaign crop omits refinement metadata")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"sample_id", "member_path"})
+        ).removeprefix("sha256:")
+        if self.sample_id != "imgsciviscampaigncrop_" + identity[:32]:
+            raise ValueError("science campaign crop ID does not bind its content")
+        return self
+
+
+class LocalImageScienceVisualCampaignCropSet(FrozenModel):
+    """Group-deduplicated canonical crop set for one complete visual campaign."""
+
+    schema_version: Literal["local-image-science-visual-campaign-crop-set/1.0"]
+    crop_set_id: str = Field(pattern=r"^imgsciviscampaigncropset_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    raster_suitability_review: ImageEvaluationArtifactMember
+    raster_suitability_review_sha256: Sha256
+    refinement_plan: ImageEvaluationArtifactMember
+    refinement_plan_sha256: Sha256
+    training_authorization: ImageEvaluationArtifactMember
+    members: tuple[ScienceVisualCampaignReviewedCropMember, ...] = Field(
+        min_length=15,
+        max_length=256,
+    )
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    crop_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_crop_set_is_coherent(self) -> LocalImageScienceVisualCampaignCropSet:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.raster_suitability_review,
+            schema_ref=CORPUS_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-campaign-raster-suitability-review.json",
+        )
+        _require_pointer(
+            self.refinement_plan,
+            schema_ref=CORPUS_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-campaign-raster-refinement-plan.json",
+        )
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=CORPUS_AUTHORIZATION_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-corpus-training-authorization.json",
+        )
+        sample_ids = tuple(value.sample_id for value in self.members)
+        if sample_ids != tuple(sorted(set(sample_ids))):
+            raise ValueError("science campaign crop members must be uniquely sorted")
+        for label, values in (
+            ("documents", (value.document_id for value in self.members)),
+            ("exam groups", (value.exam_group_sha256 for value in self.members)),
+            ("crop hashes", (value.sha256 for value in self.members)),
+            ("perceptual hashes", (value.perceptual_hash for value in self.members)),
+        ):
+            sequence = tuple(values)
+            if len(sequence) != len(set(sequence)):
+                raise ValueError(f"science campaign crop set repeats {label}")
+        partition_counts = Counter(value.partition for value in self.members)
+        if (
+            partition_counts["TRAIN"] < 12
+            or partition_counts["VALIDATION"] < 1
+            or partition_counts["HOLDOUT"] < 2
+        ):
+            raise ValueError("science campaign crop partitions are too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_set_id", "crop_set_sha256"})
+        ).removeprefix("sha256:")
+        if self.crop_set_id != "imgsciviscampaigncropset_" + identity[:32]:
+            raise ValueError("science campaign crop-set ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
+        if self.crop_set_sha256 != expected:
+            raise ValueError("science campaign crop-set hash mismatch")
+        return self
+
+
 def validate_science_visual_crop_set(
     *,
     authorization: LocalImageScienceCorpusTrainingAuthorization,
@@ -1992,6 +2239,192 @@ def validate_science_visual_raster_refinement_plan(
                 raise ValueError("science panel refinement requires PANEL_SPLIT")
         elif proposal.refinement_reasons != ("BORDER_TRIM",):
             raise ValueError("single raster refinement may only trim a border")
+
+
+def _resolved_campaign_candidates(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+) -> dict[str, tuple[ScienceVisualCandidate, ScienceVisualPilotSource]]:
+    validate_science_visual_campaign_pattern_inventory(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+    )
+    resolved: dict[str, tuple[ScienceVisualCandidate, ScienceVisualPilotSource]] = {}
+    for plan, result in zip(plans, results, strict=True):
+        sources = {value.document_id: value for value in plan.selected_sources}
+        for candidate in result.visual_candidates:
+            source = sources.get(candidate.document_id)
+            if source is None or candidate.candidate_id in resolved:
+                raise ValueError("science campaign candidate source resolution differs")
+            resolved[candidate.candidate_id] = (candidate, source)
+    return resolved
+
+
+def validate_science_visual_campaign_raster_refinement_plan(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    raster_suitability_review: LocalImageScienceVisualCampaignRasterSuitabilityReview,
+    plan: LocalImageScienceVisualCampaignRasterRefinementPlan,
+) -> None:
+    """Bind literal crops to exact campaign candidates and original partitions."""
+
+    validate_science_visual_campaign_raster_suitability_review(
+        inventory,
+        raster_suitability_review,
+    )
+    candidates = _resolved_campaign_candidates(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+    )
+    authorizations = {value.training_authorization for value in plans}
+    if (
+        plan.campaign_id != inventory.campaign_id
+        or plan.pattern_inventory != raster_suitability_review.pattern_inventory
+        or plan.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or plan.raster_suitability_review.sha256
+        != content_sha256(raster_suitability_review.model_dump(mode="json"))
+        or plan.raster_suitability_review_sha256 != raster_suitability_review.review_sha256
+        or len(authorizations) != 1
+        or plan.training_authorization not in authorizations
+    ):
+        raise ValueError("science campaign refinement plan source binding differs")
+    broad_reviews = {value.candidate_id: value for value in inventory.reviews}
+    raster_reviews = {value.candidate_id: value for value in raster_suitability_review.entries}
+    for proposal in plan.proposals:
+        resolved = candidates.get(proposal.parent_candidate_id)
+        broad_review = broad_reviews.get(proposal.parent_candidate_id)
+        raster_review = raster_reviews.get(proposal.parent_candidate_id)
+        if resolved is None or broad_review is None or raster_review is None:
+            raise ValueError("science campaign refinement parent is unresolved")
+        candidate, source = resolved
+        removable_reasons = {
+            "CAPTION_MISMATCH",
+            "PANEL_COMPOSITION",
+            "REDACTION_OR_MASK",
+            "TEXT_OR_LABEL",
+        }
+        if (
+            broad_review.decision != "LORA_ELIGIBLE"
+            or raster_review.decision == "PYTHON_SVG_REQUIRED"
+            or candidate.authority_class == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
+            or candidate.representation_kind in {"PLOT", "TABLE"}
+            or proposal.parent_candidate_sha256 != candidate.sha256
+            or proposal.partition != source.partition
+            or proposal.pattern_family != broad_review.pattern_family
+        ):
+            raise ValueError("science campaign refinement parent is not raster eligible")
+        if raster_review.decision == "EXCLUDED":
+            if (
+                not removable_reasons.intersection(raster_review.reasons)
+                or "PANEL_SPLIT" not in proposal.refinement_reasons
+            ):
+                raise ValueError("science campaign excluded parent lacks a panel refinement")
+        elif proposal.refinement_reasons != ("BORDER_TRIM",):
+            raise ValueError("science campaign direct raster may only trim a border")
+
+
+def validate_science_visual_campaign_crop_set(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    raster_suitability_review: LocalImageScienceVisualCampaignRasterSuitabilityReview,
+    refinement_plan: LocalImageScienceVisualCampaignRasterRefinementPlan,
+    crop_set: LocalImageScienceVisualCampaignCropSet,
+) -> None:
+    """Validate direct and refined members against exact campaign sources."""
+
+    validate_science_visual_campaign_raster_refinement_plan(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+        raster_suitability_review=raster_suitability_review,
+        plan=refinement_plan,
+    )
+    if (
+        crop_set.campaign_id != inventory.campaign_id
+        or crop_set.pattern_inventory != refinement_plan.pattern_inventory
+        or crop_set.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or crop_set.raster_suitability_review != refinement_plan.raster_suitability_review
+        or crop_set.raster_suitability_review_sha256 != raster_suitability_review.review_sha256
+        or crop_set.refinement_plan.sha256
+        != content_sha256(refinement_plan.model_dump(mode="json"))
+        or crop_set.refinement_plan_sha256 != refinement_plan.plan_sha256
+        or crop_set.training_authorization != refinement_plan.training_authorization
+    ):
+        raise ValueError("science campaign crop-set source binding differs")
+    candidates = _resolved_campaign_candidates(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+    )
+    broad_reviews = {value.candidate_id: value for value in inventory.reviews}
+    raster_reviews = {value.candidate_id: value for value in raster_suitability_review.entries}
+    proposals = {value.refinement_id: value for value in refinement_plan.proposals}
+    used_refinements: set[str] = set()
+    for member in crop_set.members:
+        resolved = candidates.get(member.parent_candidate_id)
+        broad_review = broad_reviews.get(member.parent_candidate_id)
+        raster_review = raster_reviews.get(member.parent_candidate_id)
+        if resolved is None or broad_review is None or raster_review is None:
+            raise ValueError("science campaign crop member parent is unresolved")
+        candidate, source = resolved
+        if (
+            member.parent_candidate_sha256 != candidate.sha256
+            or member.document_id != candidate.document_id
+            or member.physical_page != candidate.physical_page
+            or member.exam_group_sha256 != source.exam_group_sha256
+            or member.partition != source.partition
+            or member.pattern_family != broad_review.pattern_family
+        ):
+            raise ValueError("science campaign crop member source metadata differs")
+        if member.source_kind == "DIRECT":
+            if (
+                raster_review.decision != "GPU_RASTER_ELIGIBLE"
+                or raster_review.semantic_alignment != "VERIFIED"
+                or member.sha256 != candidate.sha256
+                or member.size_bytes != candidate.size_bytes
+                or member.caption_en != raster_review.caption_en
+                or member.caption_sha256 != raster_review.caption_sha256
+            ):
+                raise ValueError("direct science campaign crop differs from strict review")
+            continue
+        proposal = proposals.get(member.refinement_id or "")
+        if (
+            proposal is None
+            or proposal.refinement_id in used_refinements
+            or proposal.parent_candidate_id != member.parent_candidate_id
+            or proposal.parent_candidate_sha256 != member.parent_candidate_sha256
+            or proposal.crop_bounding_box != member.crop_bounding_box
+            or proposal.caption_en != member.caption_en
+            or proposal.caption_sha256 != member.caption_sha256
+            or proposal.partition != member.partition
+            or proposal.pattern_family != member.pattern_family
+        ):
+            raise ValueError("refined science campaign crop differs from its proposal")
+        used_refinements.add(proposal.refinement_id)
+    if used_refinements != set(proposals):
+        raise ValueError("science campaign crop set omits a planned refinement")
 
 
 def _validate_pattern_inventory_against_result(

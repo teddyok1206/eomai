@@ -26,7 +26,9 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbeCommand,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
+    LocalImageScienceVisualCampaignCropSet,
     LocalImageScienceVisualCampaignPatternInventory,
+    LocalImageScienceVisualCampaignRasterRefinementPlan,
     LocalImageScienceVisualCampaignRasterSuitabilityReview,
     LocalImageScienceVisualCampaignReviewBatchCommand,
     LocalImageScienceVisualCampaignReviewBatchResult,
@@ -47,7 +49,9 @@ from eom_image_contracts import (
     validate_science_micro_probe_plan_sources,
     validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
+    validate_science_visual_campaign_crop_set,
     validate_science_visual_campaign_pattern_inventory,
+    validate_science_visual_campaign_raster_refinement_plan,
     validate_science_visual_campaign_raster_suitability_review,
     validate_science_visual_campaign_review_batch,
     validate_science_visual_crop_set,
@@ -1258,6 +1262,287 @@ def test_campaign_raster_review_rejects_missing_broad_candidate() -> None:
 
     with pytest.raises(ValueError, match="does not cover every broad candidate"):
         validate_science_visual_campaign_raster_suitability_review(inventory, review)
+
+
+def _campaign_crop_successor_values() -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    inventory, plan_values, result_values, plan_pointers, result_pointers = (
+        _campaign_inventory_value()
+    )
+    _, review = _campaign_raster_review_value()
+    sources: dict[str, dict[str, object]] = {}
+    candidates: dict[str, dict[str, object]] = {}
+    for plan_value, result_value in zip(plan_values, result_values, strict=True):
+        selected_sources = plan_value["selected_sources"]
+        visual_candidates = result_value["visual_candidates"]
+        assert isinstance(selected_sources, list)
+        assert isinstance(visual_candidates, list)
+        for source in selected_sources:
+            assert isinstance(source, dict)
+            sources[str(source["document_id"])] = source
+        for candidate in visual_candidates:
+            assert isinstance(candidate, dict)
+            candidates[str(candidate["candidate_id"])] = candidate
+    inventory_reviews = inventory["reviews"]
+    review_entries = review["entries"]
+    assert isinstance(inventory_reviews, list)
+    assert isinstance(review_entries, list)
+    broad = {str(value["candidate_id"]): value for value in inventory_reviews}
+    strict = {str(value["candidate_id"]): value for value in review_entries}
+    by_partition: dict[str, list[str]] = {"TRAIN": [], "VALIDATION": [], "HOLDOUT": []}
+    for candidate_id, candidate in sorted(candidates.items()):
+        broad_review = broad[candidate_id]
+        if broad_review["decision"] != "LORA_ELIGIBLE":
+            continue
+        source = sources[str(candidate["document_id"])]
+        by_partition[str(source["partition"])].append(candidate_id)
+    selected = (
+        by_partition["TRAIN"][:12] + by_partition["VALIDATION"][:1] + by_partition["HOLDOUT"][:2]
+    )
+    assert len(selected) == 15
+    for candidate_id in selected:
+        entry = strict[candidate_id]
+        entry.update(
+            {
+                "decision": "EXCLUDED",
+                "semantic_alignment": "VERIFIED",
+                "reasons": ["PANEL_COMPOSITION"],
+                "caption_en": None,
+                "caption_sha256": None,
+            }
+        )
+    review["gpu_raster_eligible_count"] = len(review_entries) - len(selected)
+    review["excluded_count"] = len(selected)
+    review_body = {
+        key: value for key, value in review.items() if key not in {"review_id", "review_sha256"}
+    }
+    review["review_id"] = (
+        "imgsciviscampaignrasterreview_" + content_sha256(review_body).removeprefix("sha256:")[:32]
+    )
+    review["review_sha256"] = content_sha256(
+        {key: value for key, value in review.items() if key != "review_sha256"}
+    )
+    review_pointer = _pointer(
+        "f",
+        member_path="manifests/science-campaign-raster-suitability-review.json",
+        schema_ref=(
+            "eom://schemas/image-provider/"
+            "local-image-science-campaign-raster-suitability-review/1.0"
+        ),
+        sha256=content_sha256(review),
+    )
+    proposals: list[dict[str, object]] = []
+    for index, candidate_id in enumerate(selected):
+        candidate = candidates[candidate_id]
+        source = sources[str(candidate["document_id"])]
+        caption = f"Grayscale reviewed science raster crop {index + 1}"
+        proposal: dict[str, object] = {
+            "parent_candidate_id": candidate_id,
+            "parent_candidate_sha256": candidate["sha256"],
+            "crop_bounding_box": {"left": 1000, "top": 1000, "right": 9000, "bottom": 9000},
+            "caption_en": caption,
+            "caption_sha256": text_sha256(caption),
+            "partition": source["partition"],
+            "pattern_family": broad[candidate_id]["pattern_family"],
+            "refinement_reasons": ["PANEL_SPLIT"],
+        }
+        proposal["refinement_id"] = (
+            "imgsciviscampaignrefine_" + content_sha256(proposal).removeprefix("sha256:")[:32]
+        )
+        proposals.append(proposal)
+    proposals.sort(key=lambda value: str(value["refinement_id"]))
+    plan_body: dict[str, object] = {
+        "schema_version": "local-image-science-campaign-raster-refinement-plan/1.0",
+        "campaign_id": inventory["campaign_id"],
+        "pattern_inventory": review["pattern_inventory"],
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "raster_suitability_review": review_pointer,
+        "raster_suitability_review_sha256": review["review_sha256"],
+        "training_authorization": plan_values[0]["training_authorization"],
+        "proposals": proposals,
+        "created_at": "2026-09-26T18:40:00Z",
+        "created_by": "orchestrator_campaign_refinement",
+    }
+    plan_body["refinement_plan_id"] = (
+        "imgsciviscampaignrefineplan_" + content_sha256(plan_body).removeprefix("sha256:")[:32]
+    )
+    refinement_plan = {**plan_body, "plan_sha256": content_sha256(plan_body)}
+    refinement_pointer = _pointer(
+        "d",
+        member_path="manifests/science-campaign-raster-refinement-plan.json",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-campaign-raster-refinement-plan/1.0"
+        ),
+        sha256=content_sha256(refinement_plan),
+    )
+    members: list[dict[str, object]] = []
+    for index, proposal in enumerate(proposals):
+        candidate_id = str(proposal["parent_candidate_id"])
+        candidate = candidates[candidate_id]
+        source = sources[str(candidate["document_id"])]
+        output_sha256 = content_sha256({"fixture_refinement_id": proposal["refinement_id"]})
+        member: dict[str, object] = {
+            "source_kind": "REFINED",
+            "parent_candidate_id": candidate_id,
+            "parent_candidate_sha256": candidate["sha256"],
+            "refinement_id": proposal["refinement_id"],
+            "crop_bounding_box": proposal["crop_bounding_box"],
+            "document_id": candidate["document_id"],
+            "physical_page": candidate["physical_page"],
+            "exam_group_sha256": source["exam_group_sha256"],
+            "partition": source["partition"],
+            "pattern_family": proposal["pattern_family"],
+            "media_type": "image/png",
+            "width_px": 96,
+            "height_px": 96,
+            "size_bytes": 1024 + index,
+            "sha256": output_sha256,
+            "caption_en": proposal["caption_en"],
+            "caption_sha256": proposal["caption_sha256"],
+            "perceptual_hash": f"{index + 1:016x}",
+        }
+        member["sample_id"] = (
+            "imgsciviscampaigncrop_" + content_sha256(member).removeprefix("sha256:")[:32]
+        )
+        member["member_path"] = f"crops/{member['sample_id']}.png"
+        members.append(member)
+    members.sort(key=lambda value: str(value["sample_id"]))
+    crop_body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-campaign-crop-set/1.0",
+        "campaign_id": inventory["campaign_id"],
+        "pattern_inventory": review["pattern_inventory"],
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "raster_suitability_review": review_pointer,
+        "raster_suitability_review_sha256": review["review_sha256"],
+        "refinement_plan": refinement_pointer,
+        "refinement_plan_sha256": refinement_plan["plan_sha256"],
+        "training_authorization": plan_values[0]["training_authorization"],
+        "members": members,
+        "created_at": "2026-09-26T18:41:00Z",
+        "created_by": "orchestrator_campaign_crop_set",
+    }
+    crop_body["crop_set_id"] = (
+        "imgsciviscampaigncropset_" + content_sha256(crop_body).removeprefix("sha256:")[:32]
+    )
+    crop_set = {**crop_body, "crop_set_sha256": content_sha256(crop_body)}
+    return (
+        plan_values,
+        result_values,
+        plan_pointers,
+        result_pointers,
+        inventory,
+        review,
+        refinement_plan,
+        crop_set,
+    )
+
+
+def test_campaign_refinement_and_crop_set_preserve_exact_source_partitions() -> None:
+    (
+        plan_values,
+        result_values,
+        plan_pointer_values,
+        result_pointer_values,
+        inventory_value,
+        review_value,
+        refinement_value,
+        crop_set_value,
+    ) = _campaign_crop_successor_values()
+    validate_contract("science-campaign-raster-refinement-plan", refinement_value)
+    validate_contract("science-visual-campaign-crop-set", crop_set_value)
+    plans = tuple(LocalImageScienceCorpusVisualPilotPlanV3.model_validate(v) for v in plan_values)
+    results = tuple(
+        LocalImageScienceCorpusVisualPilotResult.model_validate(v) for v in result_values
+    )
+    plan_pointers = tuple(
+        ImageEvaluationArtifactMember.model_validate(v) for v in plan_pointer_values
+    )
+    result_pointers = tuple(
+        ImageEvaluationArtifactMember.model_validate(v) for v in result_pointer_values
+    )
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value)
+    review = LocalImageScienceVisualCampaignRasterSuitabilityReview.model_validate(review_value)
+    refinement = LocalImageScienceVisualCampaignRasterRefinementPlan.model_validate(
+        refinement_value
+    )
+    crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(crop_set_value)
+
+    validate_science_visual_campaign_raster_refinement_plan(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+        raster_suitability_review=review,
+        plan=refinement,
+    )
+    validate_science_visual_campaign_crop_set(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+        raster_suitability_review=review,
+        refinement_plan=refinement,
+        crop_set=crop_set,
+    )
+
+
+def test_campaign_refinement_rejects_partition_or_parent_hash_drift() -> None:
+    values = _campaign_crop_successor_values()
+    plan_values, result_values, plan_pointer_values, result_pointer_values = values[:4]
+    inventory_value, review_value, refinement_value = values[4:7]
+    drifted = copy.deepcopy(refinement_value)
+    proposals = drifted["proposals"]
+    assert isinstance(proposals, list)
+    proposals[0]["partition"] = "HOLDOUT" if proposals[0]["partition"] != "HOLDOUT" else "TRAIN"
+    proposal_body = {key: value for key, value in proposals[0].items() if key != "refinement_id"}
+    proposals[0]["refinement_id"] = (
+        "imgsciviscampaignrefine_" + content_sha256(proposal_body).removeprefix("sha256:")[:32]
+    )
+    proposals.sort(key=lambda value: str(value["refinement_id"]))
+    body = {
+        key: value
+        for key, value in drifted.items()
+        if key not in {"refinement_plan_id", "plan_sha256"}
+    }
+    drifted["refinement_plan_id"] = (
+        "imgsciviscampaignrefineplan_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    drifted["plan_sha256"] = content_sha256(
+        {key: value for key, value in drifted.items() if key != "plan_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="not raster eligible"):
+        validate_science_visual_campaign_raster_refinement_plan(
+            plans=tuple(
+                LocalImageScienceCorpusVisualPilotPlanV3.model_validate(v) for v in plan_values
+            ),
+            plan_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(v) for v in plan_pointer_values
+            ),
+            results=tuple(
+                LocalImageScienceCorpusVisualPilotResult.model_validate(v) for v in result_values
+            ),
+            result_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(v) for v in result_pointer_values
+            ),
+            inventory=LocalImageScienceVisualCampaignPatternInventory.model_validate(
+                inventory_value
+            ),
+            raster_suitability_review=(
+                LocalImageScienceVisualCampaignRasterSuitabilityReview.model_validate(review_value)
+            ),
+            plan=LocalImageScienceVisualCampaignRasterRefinementPlan.model_validate(drifted),
+        )
 
 
 def test_campaign_review_batch_publisher_preflights_exact_command(
