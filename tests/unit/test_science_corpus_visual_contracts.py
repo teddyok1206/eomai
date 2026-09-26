@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from eom_image_contracts import (
+    ImageEvaluationArtifactMember,
     LocalImageScienceCorpusTrainingAuthorization,
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
@@ -21,6 +22,7 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbeCommand,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
+    LocalImageScienceVisualCampaignPatternInventory,
     LocalImageScienceVisualCropSet,
     LocalImageScienceVisualCropSetV2,
     LocalImageScienceVisualPatternInventory,
@@ -35,6 +37,7 @@ from eom_image_contracts import (
     validate_science_micro_probe_plan_sources,
     validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
+    validate_science_visual_campaign_pattern_inventory,
     validate_science_visual_crop_set,
     validate_science_visual_crop_set_v2,
     validate_science_visual_pattern_inventory,
@@ -545,6 +548,242 @@ def _inventory_v2_value() -> dict[str, object]:
         {key: item for key, item in value.items() if key != "inventory_sha256"}
     )
     return value
+
+
+def _campaign_plan_result_value(shard_index: int) -> tuple[dict[str, object], dict[str, object]]:
+    """Three disjoint V1.2 fixture shards with their own source/result identities."""
+
+    plan = copy.deepcopy(_plan_v3_value())
+    plan["campaign_shard_index"] = shard_index
+    plan["selected_sources"] = sorted(
+        [
+            _source(
+                shard_index * 12 + index,
+                "TRAIN" if index < 6 else "VALIDATION" if index < 9 else "HOLDOUT",
+            )
+            for index in range(12)
+        ],
+        key=lambda value: value["document_id"],
+    )
+    plan_body = {
+        key: value for key, value in plan.items() if key not in {"pilot_id", "plan_sha256"}
+    }
+    plan["pilot_id"] = "imgscivispilot_" + content_sha256(plan_body).removeprefix("sha256:")[:32]
+    plan["plan_sha256"] = content_sha256(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
+
+    pages: list[dict[str, object]] = []
+    candidates: list[dict[str, object]] = []
+    for index, source in enumerate(plan["selected_sources"]):
+        page_hash = "sha256:" + f"{shard_index * 100 + index + 900:064x}"
+        document_id = str(source["document_id"])
+        pages.append(
+            {
+                "document_id": document_id,
+                "physical_page": 1,
+                "member_path": f"pages/{document_id}/page-1.png",
+                "sha256": page_hash,
+                "size_bytes": 8192 + index,
+                "width_px": 1191,
+                "height_px": 1684,
+            }
+        )
+        candidates.append(_candidate(document_id, page_hash, index))
+    candidates.sort(key=lambda value: value["candidate_id"])
+    result_body: dict[str, object] = {
+        "schema_version": "local-image-science-corpus-visual-pilot-result/1.0",
+        "pilot_id": plan["pilot_id"],
+        "plan_sha256": plan["plan_sha256"],
+        "status": "SUCCEEDED",
+        "page_images": pages,
+        "visual_candidates": candidates,
+        "omissions": [],
+        "runtime": {
+            "python_version": "3.11",
+            "pillow_version": "11.3",
+            "opencv_version": "4.11",
+            "tesseract_version": "5.3",
+            "pdftoppm_version": "24.02",
+        },
+        "error_code": None,
+        "started_at": "2026-09-26T12:00:00Z",
+        "completed_at": "2026-09-26T12:01:00Z",
+    }
+    return plan, {**result_body, "result_sha256": content_sha256(result_body)}
+
+
+def _campaign_inventory_value() -> tuple[
+    dict[str, object],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
+    plans: list[dict[str, object]] = []
+    results: list[dict[str, object]] = []
+    plan_pointers: list[dict[str, object]] = []
+    result_pointers: list[dict[str, object]] = []
+    pilots: list[dict[str, object]] = []
+    reviews: list[dict[str, object]] = []
+    for shard_index in range(3):
+        plan, result = _campaign_plan_result_value(shard_index)
+        plan_pointer = _pointer(
+            f"{shard_index + 1:x}",
+            member_path="manifests/visual-pilot-plan.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
+            ),
+            sha256=_sha(f"{shard_index + 1:x}"),
+        )
+        result_pointer = _pointer(
+            f"{shard_index + 7:x}",
+            member_path="manifests/visual-pilot-result.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
+            ),
+            sha256=_sha(f"{shard_index + 7:x}"),
+        )
+        pilots.append(
+            {
+                "attempt_id": "imgscivisattempt_" + f"{shard_index + 1:032x}",
+                "campaign_shard_index": shard_index,
+                "campaign_shard_count": 3,
+                "pilot_plan": plan_pointer,
+                "pilot_plan_file_sha256": plan_pointer["sha256"],
+                "pilot_plan_semantic_sha256": plan["plan_sha256"],
+                "pilot_result": result_pointer,
+                "pilot_result_file_sha256": result_pointer["sha256"],
+                "pilot_result_semantic_sha256": result["result_sha256"],
+            }
+        )
+        for candidate in result["visual_candidates"]:
+            if candidate["authority_class"] == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY":
+                decision, family, caption = "DETERMINISTIC_RENDERER_ONLY", "PLOT", None
+            else:
+                decision = "LORA_ELIGIBLE"
+                family = "ORGANISM"
+                caption = "black and white science assessment organism illustration"
+            reviews.append(
+                {
+                    "candidate_id": candidate["candidate_id"],
+                    "decision": decision,
+                    "pattern_family": family,
+                    "visual_features": candidate["visual_features"],
+                    "caption_en": caption,
+                    "caption_sha256": None if caption is None else text_sha256(caption),
+                    "reviewed_by": "reviewer_user",
+                    "reviewed_at": "2026-09-26T12:02:00Z",
+                }
+            )
+        plans.append(plan)
+        results.append(result)
+        plan_pointers.append(plan_pointer)
+        result_pointers.append(result_pointer)
+    reviews.sort(key=lambda value: value["candidate_id"])
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-campaign-pattern-inventory/1.0",
+        "campaign_id": plans[0]["campaign_id"],
+        "pilot_results": pilots,
+        "reviews": reviews,
+        "primitive_recommendations": [
+            {
+                "primitive_key": "AXIS_PLOT",
+                "support_count": 6,
+                "visual_features": ["AXES", "LABELS"],
+                "geometry_authority": "AUTHORITATIVE",
+                "render_route": "PYTHON_SVG",
+            }
+        ],
+        "lora_eligible_count": 30,
+        "deterministic_renderer_count": 6,
+        "excluded_count": 0,
+        "created_at": "2026-09-26T12:03:00Z",
+        "created_by": "reviewer_user",
+    }
+    body["inventory_id"] = (
+        "imgsciviscampaigninventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    return (
+        {**body, "inventory_sha256": content_sha256(body)},
+        plans,
+        results,
+        plan_pointers,
+        result_pointers,
+    )
+
+
+def test_campaign_pattern_inventory_binds_complete_disjoint_campaign() -> None:
+    value, plan_values, result_values, plan_pointer_values, result_pointer_values = (
+        _campaign_inventory_value()
+    )
+    validate_contract("science-visual-campaign-pattern-inventory", value)
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(value)
+    validate_science_visual_campaign_pattern_inventory(
+        plans=tuple(
+            LocalImageScienceCorpusVisualPilotPlanV3.model_validate(plan) for plan in plan_values
+        ),
+        plan_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(pointer) for pointer in plan_pointer_values
+        ),
+        results=tuple(
+            LocalImageScienceCorpusVisualPilotResult.model_validate(result)
+            for result in result_values
+        ),
+        result_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(pointer)
+            for pointer in result_pointer_values
+        ),
+        inventory=inventory,
+    )
+
+
+def test_campaign_pattern_inventory_rejects_missing_candidate_review() -> None:
+    value, _, _, _, _ = _campaign_inventory_value()
+    reviews = value["reviews"]
+    assert isinstance(reviews, list)
+    removed = reviews.pop()
+    assert isinstance(removed, dict)
+    decision = str(removed["decision"])
+    count_key = {
+        "LORA_ELIGIBLE": "lora_eligible_count",
+        "DETERMINISTIC_RENDERER_ONLY": "deterministic_renderer_count",
+        "EXCLUDED": "excluded_count",
+    }[decision]
+    value[count_key] = int(value[count_key]) - 1
+    body = {
+        key: item for key, item in value.items() if key not in {"inventory_id", "inventory_sha256"}
+    }
+    value["inventory_id"] = (
+        "imgsciviscampaigninventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    value["inventory_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "inventory_sha256"}
+    )
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(value)
+    _, plan_values, result_values, plan_pointer_values, result_pointer_values = (
+        _campaign_inventory_value()
+    )
+    with pytest.raises(ValueError, match="does not review every candidate"):
+        validate_science_visual_campaign_pattern_inventory(
+            plans=tuple(
+                LocalImageScienceCorpusVisualPilotPlanV3.model_validate(plan)
+                for plan in plan_values
+            ),
+            plan_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(pointer)
+                for pointer in plan_pointer_values
+            ),
+            results=tuple(
+                LocalImageScienceCorpusVisualPilotResult.model_validate(result)
+                for result in result_values
+            ),
+            result_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(pointer)
+                for pointer in result_pointer_values
+            ),
+            inventory=inventory,
+        )
 
 
 def _crop_set_sources() -> list[dict[str, object]]:
@@ -1227,6 +1466,11 @@ def _science_micro_evaluation_result_value() -> dict[str, object]:
             _inventory_v2_value,
         ),
         (
+            "science-visual-campaign-pattern-inventory",
+            LocalImageScienceVisualCampaignPatternInventory,
+            lambda: _campaign_inventory_value()[0],
+        ),
+        (
             "science-visual-crop-set",
             LocalImageScienceVisualCropSet,
             _crop_set_value,
@@ -1864,6 +2108,9 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         ),
         "local-image-science-visual-pattern-inventory-v2.schema.json": (
             "e2c89de1a67b461a7eb0c6e59a7fdcb9d9dae95e597fa80c6b989e02021ba646"
+        ),
+        "local-image-science-visual-campaign-pattern-inventory-v1.schema.json": (
+            "912839c7fa1cdda4701c1a1aecf865f1fc94368510863de64a1b3e7b1b538b1b"
         ),
         "local-image-science-visual-crop-set-v1.schema.json": (
             "bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"

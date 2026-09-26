@@ -50,6 +50,9 @@ CORPUS_PATTERN_INVENTORY_SCHEMA_REF = (
 CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
 )
+CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-pattern-inventory/1.0"
+)
 CORPUS_REVIEWED_CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
 )
@@ -878,6 +881,7 @@ def _validate_pattern_inventory_common(
     deterministic_renderer_count: int,
     excluded_count: int,
     inventory_sha256: Sha256,
+    inventory_prefix: str = "imgscivisinventory_",
 ) -> None:
     review_ids = tuple(value.candidate_id for value in reviews)
     if review_ids != tuple(sorted(set(review_ids))):
@@ -903,7 +907,7 @@ def _validate_pattern_inventory_common(
     identity = content_sha256(
         inventory.model_dump(mode="json", exclude={"inventory_id", "inventory_sha256"})
     ).removeprefix("sha256:")
-    if inventory_id != "imgscivisinventory_" + identity[:32]:
+    if inventory_id != inventory_prefix + identity[:32]:
         raise ValueError("science visual inventory ID does not bind its content")
     expected = content_sha256(inventory.model_dump(mode="json", exclude={"inventory_sha256"}))
     if inventory_sha256 != expected:
@@ -997,6 +1001,101 @@ class LocalImageScienceVisualPatternInventoryV2(FrozenModel):
             deterministic_renderer_count=self.deterministic_renderer_count,
             excluded_count=self.excluded_count,
             inventory_sha256=self.inventory_sha256,
+        )
+        return self
+
+
+class ScienceVisualCampaignPilotResult(FrozenModel):
+    """One immutable V1.2 shard/result pair in a bounded campaign inventory."""
+
+    attempt_id: str = Field(pattern=r"^imgscivisattempt_[0-9a-f]{32}$")
+    campaign_shard_index: int = Field(ge=0, le=3)
+    campaign_shard_count: int = Field(ge=2, le=4)
+    pilot_plan: ImageEvaluationArtifactMember
+    pilot_plan_file_sha256: Sha256
+    pilot_plan_semantic_sha256: Sha256
+    pilot_result: ImageEvaluationArtifactMember
+    pilot_result_file_sha256: Sha256
+    pilot_result_semantic_sha256: Sha256
+
+    @model_validator(mode="after")
+    def source_pointers_are_exact(self) -> ScienceVisualCampaignPilotResult:
+        if self.campaign_shard_index >= self.campaign_shard_count:
+            raise ValueError("science visual campaign inventory shard index is invalid")
+        _require_pointer(
+            self.pilot_plan,
+            schema_ref=CORPUS_PILOT_PLAN_V3_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-plan.json",
+        )
+        _require_pointer(
+            self.pilot_result,
+            schema_ref=CORPUS_PILOT_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-result.json",
+        )
+        if (
+            self.pilot_plan.sha256 != self.pilot_plan_file_sha256
+            or self.pilot_result.sha256 != self.pilot_result_file_sha256
+        ):
+            raise ValueError("science visual campaign inventory file hash differs from pointer")
+        return self
+
+
+class LocalImageScienceVisualCampaignPatternInventory(FrozenModel):
+    """Complete broad classification of a bounded, disjoint V1.2 campaign."""
+
+    schema_version: Literal["local-image-science-visual-campaign-pattern-inventory/1.0"]
+    inventory_id: str = Field(pattern=r"^imgsciviscampaigninventory_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pilot_results: tuple[ScienceVisualCampaignPilotResult, ...] = Field(min_length=2, max_length=4)
+    reviews: tuple[ScienceVisualPatternReview, ...] = Field(min_length=1, max_length=2048)
+    primitive_recommendations: tuple[ScienceRendererPrimitiveRecommendation, ...] = Field(
+        max_length=32
+    )
+    lora_eligible_count: int = Field(ge=0, le=2048)
+    deterministic_renderer_count: int = Field(ge=0, le=2048)
+    excluded_count: int = Field(ge=0, le=2048)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    inventory_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_inventory_is_coherent(self) -> LocalImageScienceVisualCampaignPatternInventory:
+        shard_indices = tuple(value.campaign_shard_index for value in self.pilot_results)
+        if shard_indices != tuple(sorted(set(shard_indices))):
+            raise ValueError("science visual campaign inventory shards must be uniquely sorted")
+        shard_counts = {value.campaign_shard_count for value in self.pilot_results}
+        if len(shard_counts) != 1:
+            raise ValueError("science visual campaign inventory shard counts differ")
+        shard_count = shard_counts.pop()
+        if len(self.pilot_results) != shard_count or shard_indices != tuple(range(shard_count)):
+            raise ValueError("science visual campaign inventory is not a complete campaign")
+        plan_revisions = tuple(
+            value.pilot_plan.artifact_revision_id for value in self.pilot_results
+        )
+        result_revisions = tuple(
+            value.pilot_result.artifact_revision_id for value in self.pilot_results
+        )
+        if len(plan_revisions) != len(set(plan_revisions)) or len(result_revisions) != len(
+            set(result_revisions)
+        ):
+            raise ValueError("science visual campaign inventory repeats a source revision")
+        _validate_pattern_inventory_common(
+            inventory=self,
+            inventory_id=self.inventory_id,
+            reviews=self.reviews,
+            primitive_recommendations=self.primitive_recommendations,
+            lora_eligible_count=self.lora_eligible_count,
+            deterministic_renderer_count=self.deterministic_renderer_count,
+            excluded_count=self.excluded_count,
+            inventory_sha256=self.inventory_sha256,
+            inventory_prefix="imgsciviscampaigninventory_",
         )
         return self
 
@@ -1641,6 +1740,90 @@ def validate_science_visual_pattern_inventory_v2(
         semantic_sha256=inventory.pilot_result_semantic_sha256,
         reviews=inventory.reviews,
     )
+
+
+def validate_science_visual_campaign_pattern_inventory(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+) -> None:
+    """Bind one complete campaign inventory to exact resolved shard plan/result pairs.
+
+    The control artifact deliberately carries only pointers.  This validator is the
+    resolution boundary that proves those pointers cover the same campaign and every
+    candidate exactly once before the Orchestrator can publish the inventory.
+    """
+
+    if not (
+        len(plans)
+        == len(plan_pointers)
+        == len(results)
+        == len(result_pointers)
+        == len(inventory.pilot_results)
+    ):
+        raise ValueError("science visual campaign inventory source cardinality differs")
+
+    by_index = {
+        plan.campaign_shard_index: (plan, plan_pointer, result, result_pointer)
+        for plan, plan_pointer, result, result_pointer in zip(
+            plans, plan_pointers, results, result_pointers, strict=True
+        )
+    }
+    if len(by_index) != len(plans):
+        raise ValueError("science visual campaign inventory resolved shards repeat")
+
+    all_candidates: dict[str, ScienceVisualCandidate] = {}
+    source_documents: set[str] = set()
+    source_pdfs: set[Sha256] = set()
+    for source in inventory.pilot_results:
+        resolved = by_index.get(source.campaign_shard_index)
+        if resolved is None:
+            raise ValueError("science visual campaign inventory shard is unresolved")
+        plan, plan_pointer, result, result_pointer = resolved
+        if (
+            plan.campaign_id != inventory.campaign_id
+            or plan.campaign_shard_count != source.campaign_shard_count
+            or plan.campaign_shard_index != source.campaign_shard_index
+            or plan_pointer != source.pilot_plan
+            or plan_pointer.sha256 != source.pilot_plan_file_sha256
+            or plan.plan_sha256 != source.pilot_plan_semantic_sha256
+            or result_pointer != source.pilot_result
+            or result_pointer.sha256 != source.pilot_result_file_sha256
+            or result.result_sha256 != source.pilot_result_semantic_sha256
+        ):
+            raise ValueError("science visual campaign inventory source binding differs")
+        validate_science_visual_pilot_result(plan, result)
+        for pilot_source in plan.selected_sources:
+            if (
+                pilot_source.document_id in source_documents
+                or pilot_source.pdf.sha256 in source_pdfs
+            ):
+                raise ValueError("science visual campaign inventory source overlap")
+            source_documents.add(pilot_source.document_id)
+            source_pdfs.add(pilot_source.pdf.sha256)
+        for candidate in result.visual_candidates:
+            if candidate.candidate_id in all_candidates:
+                raise ValueError("science visual campaign inventory candidate overlap")
+            all_candidates[candidate.candidate_id] = candidate
+
+    review_ids = {value.candidate_id for value in inventory.reviews}
+    if review_ids != set(all_candidates):
+        raise ValueError("science visual campaign inventory does not review every candidate")
+    for review in inventory.reviews:
+        candidate = all_candidates[review.candidate_id]
+        if review.decision == "LORA_ELIGIBLE" and (
+            candidate.authority_class == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
+            or candidate.representation_kind in {"PLOT", "TABLE"}
+        ):
+            raise ValueError("science visual campaign LoRA review selects authoritative content")
+        if (
+            review.decision == "DETERMINISTIC_RENDERER_ONLY"
+            and candidate.authority_class == "NON_AUTHORITATIVE_RASTER_STYLE"
+        ):
+            raise ValueError("science visual campaign renderer review selects raster content")
 
 
 def validate_science_visual_raster_suitability_review(

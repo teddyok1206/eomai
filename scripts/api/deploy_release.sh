@@ -1884,6 +1884,7 @@ image_resources = {
     "local-image-science-corpus-visual-pilot-plan-v2.schema.json": "schemas/image-provider/local-image-science-corpus-visual-pilot-plan-v2.schema.json",
     "local-image-science-corpus-visual-pilot-plan-v3.schema.json": "schemas/image-provider/local-image-science-corpus-visual-pilot-plan-v3.schema.json",
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": "schemas/image-provider/local-image-science-corpus-visual-pilot-result-v1.schema.json",
+    "local-image-science-visual-campaign-pattern-inventory-v1.schema.json": "schemas/image-provider/local-image-science-visual-campaign-pattern-inventory-v1.schema.json",
     "local-image-science-visual-pattern-inventory-v1.schema.json": "schemas/image-provider/local-image-science-visual-pattern-inventory-v1.schema.json",
     "local-image-science-visual-pattern-inventory-v2.schema.json": "schemas/image-provider/local-image-science-visual-pattern-inventory-v2.schema.json",
     "local-image-science-visual-crop-set-v1.schema.json": "schemas/image-provider/local-image-science-visual-crop-set-v1.schema.json",

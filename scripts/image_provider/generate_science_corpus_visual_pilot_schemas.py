@@ -998,6 +998,104 @@ def _pattern_inventory_v2() -> dict[str, Any]:
     return schema
 
 
+def _campaign_pattern_inventory() -> dict[str, Any]:
+    """Aggregate a complete, bounded V1.2 campaign without mutating V1/V2."""
+
+    schema = _pattern_inventory_v2()
+    schema["title"] = "EOM Science Corpus Visual Campaign Pattern Inventory V1"
+    schema["$id"] = (
+        "eom://schemas/image-provider/local-image-science-visual-campaign-pattern-inventory/1.0"
+    )
+    definitions = schema["$defs"]
+    assert isinstance(definitions, dict)
+    definitions["campaignPilot"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "attempt_id",
+            "campaign_shard_index",
+            "campaign_shard_count",
+            "pilot_plan",
+            "pilot_plan_file_sha256",
+            "pilot_plan_semantic_sha256",
+            "pilot_result",
+            "pilot_result_file_sha256",
+            "pilot_result_semantic_sha256",
+        ],
+        "properties": {
+            "attempt_id": {
+                "type": "string",
+                "pattern": "^imgscivisattempt_[0-9a-f]{32}$",
+            },
+            "campaign_shard_index": {"type": "integer", "minimum": 0, "maximum": 3},
+            "campaign_shard_count": {"type": "integer", "minimum": 2, "maximum": 4},
+            "pilot_plan": {"$ref": "#/$defs/artifactMember"},
+            "pilot_plan_file_sha256": {"$ref": "#/$defs/sha256"},
+            "pilot_plan_semantic_sha256": {"$ref": "#/$defs/sha256"},
+            "pilot_result": {"$ref": "#/$defs/artifactMember"},
+            "pilot_result_file_sha256": {"$ref": "#/$defs/sha256"},
+            "pilot_result_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        },
+    }
+    primitive = definitions["primitive"]
+    assert isinstance(primitive, dict)
+    primitive_properties = primitive["properties"]
+    assert isinstance(primitive_properties, dict)
+    primitive_support = primitive_properties["support_count"]
+    assert isinstance(primitive_support, dict)
+    primitive_support["maximum"] = 2048
+
+    schema["required"] = [
+        "schema_version",
+        "inventory_id",
+        "campaign_id",
+        "pilot_results",
+        "reviews",
+        "primitive_recommendations",
+        "lora_eligible_count",
+        "deterministic_renderer_count",
+        "excluded_count",
+        "created_at",
+        "created_by",
+        "inventory_sha256",
+    ]
+    properties = schema["properties"]
+    assert isinstance(properties, dict)
+    properties["schema_version"] = {
+        "const": "local-image-science-visual-campaign-pattern-inventory/1.0"
+    }
+    properties["inventory_id"] = {
+        "type": "string",
+        "pattern": "^imgsciviscampaigninventory_[0-9a-f]{32}$",
+    }
+    properties["campaign_id"] = {
+        "type": "string",
+        "pattern": "^imgsciviscampaign_[0-9a-f]{32}$",
+    }
+    properties.pop("pilot_result")
+    properties.pop("pilot_result_file_sha256")
+    properties.pop("pilot_result_semantic_sha256")
+    properties["pilot_results"] = {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 4,
+        "items": {"$ref": "#/$defs/campaignPilot"},
+    }
+    properties["reviews"] = {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 2048,
+        "items": {"$ref": "#/$defs/review"},
+    }
+    for name in (
+        "lora_eligible_count",
+        "deterministic_renderer_count",
+        "excluded_count",
+    ):
+        properties[name] = {"type": "integer", "minimum": 0, "maximum": 2048}
+    return schema
+
+
 def _reviewed_crop_set() -> dict[str, Any]:
     """Describe the exact reviewed PNG members committed as one immutable file set."""
 
@@ -2035,6 +2133,9 @@ SCHEMAS = {
     "local-image-science-corpus-visual-pilot-result-v1.schema.json": _pilot_result(),
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
+    "local-image-science-visual-campaign-pattern-inventory-v1.schema.json": (
+        _campaign_pattern_inventory()
+    ),
     "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
     "local-image-science-visual-crop-set-v2.schema.json": _raster_reviewed_crop_set_v2(),
     "local-image-science-raster-suitability-review-v1.schema.json": _raster_suitability_review(),

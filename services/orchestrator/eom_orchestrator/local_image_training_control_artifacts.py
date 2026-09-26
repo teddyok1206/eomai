@@ -16,6 +16,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroProbePlan,
+    LocalImageScienceVisualCampaignPatternInventory,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
     LocalImageScienceVisualRasterRefinementPlan,
@@ -87,6 +88,15 @@ SCIENCE_VISUAL_PATTERN_INVENTORY_V2_SCHEMA_REF = (
 )
 SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE = (
     "control_local_image_science_visual_pattern_inventory_v2"
+)
+SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_MEMBER = (
+    "manifests/science-visual-campaign-pattern-inventory.json"
+)
+SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-pattern-inventory/1.0"
+)
+SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_campaign_pattern_inventory"
 )
 SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER = "manifests/science-raster-suitability-review.json"
 SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
@@ -303,6 +313,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_VISUAL_PATTERN_INVENTORY_V2_SCHEMA_REF,
             artifact_type=SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-visual-pattern-inventory-v2",
+            identity_sha256=inventory.inventory_sha256,
+            created_at=inventory.created_at,
+        )
+
+    def commit_science_visual_campaign_pattern_inventory(
+        self,
+        inventory: LocalImageScienceVisualCampaignPatternInventory,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=inventory,
+            contract_name="science-visual-campaign-pattern-inventory",
+            member=SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_MEMBER,
+            schema_ref=SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-campaign-pattern-inventory",
             identity_sha256=inventory.inventory_sha256,
             created_at=inventory.created_at,
         )
