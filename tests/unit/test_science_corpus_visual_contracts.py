@@ -35,6 +35,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualPatternInventoryV2,
     LocalImageScienceVisualRasterRefinementPlan,
     LocalImageScienceVisualRasterSuitabilityReview,
+    ScienceVisualPatternReview,
     content_json_bytes,
     content_sha256,
     text_sha256,
@@ -58,6 +59,9 @@ from eom_image_contracts import (
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
+from scripts.image_trainer import (
+    assemble_science_visual_campaign_review_batch_result as batch_assembler,
+)
 from scripts.image_trainer import (
     publish_science_visual_campaign_pattern_inventory as campaign_publisher,
 )
@@ -1095,6 +1099,62 @@ def test_campaign_review_batch_publisher_preflights_exact_result(
     )
     assert batch_publisher.main() == 0
     assert json.loads(capsys.readouterr().out)["preflight"] == "PASS"
+
+
+def test_campaign_review_batch_assembler_binds_published_command() -> None:
+    command_value, result_value, plans, results, plan_pointers, result_pointers = (
+        _campaign_review_batch_values()
+    )
+    command_payload = content_json_bytes(command_value)
+    command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+    command_pointer = ImageEvaluationArtifactMember.model_validate(
+        _pointer(
+            "d",
+            member_path="manifests/science-visual-campaign-review-batch-command.json",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-visual-campaign-review-batch-command/1.0"
+            ),
+            sha256=sha256_bytes(command_payload),
+        )
+    )
+    campaign = batch_stager.ResolvedScienceVisualCampaign(
+        campaign_id=command.campaign_id,
+        pilots=command.pilot_results,
+        candidate_ids=tuple(
+            sorted(
+                candidate["candidate_id"]
+                for result in results
+                for candidate in result["visual_candidates"]
+            )
+        ),
+        plans=tuple(
+            LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value) for value in plans
+        ),
+        plan_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in plan_pointers
+        ),
+        results=tuple(
+            LocalImageScienceCorpusVisualPilotResult.model_validate(value) for value in results
+        ),
+        result_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in result_pointers
+        ),
+    )
+    reviews = tuple(
+        ScienceVisualPatternReview.model_validate(value) for value in result_value["reviews"]
+    )
+    assembled = batch_assembler._assemble_result(
+        command=command,
+        command_pointer=command_pointer,
+        reviews=reviews,
+        completed_at="2026-09-26T12:05:00Z",
+        completed_by="reviewer_user",
+        campaign=campaign,
+    )
+    assert assembled.review_batch == command_pointer
+    assert assembled.command_sha256 == command.command_sha256
+    assert tuple(value.candidate_id for value in assembled.reviews) == command.candidate_ids
 
 
 def test_campaign_inventory_publisher_resolves_stage_and_result_receipts(
