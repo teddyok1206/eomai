@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -972,6 +973,31 @@ def test_campaign_review_batch_publisher_preflights_exact_command(
     )
     assert batch_publisher.main() == 0
     assert json.loads(capsys.readouterr().out)["preflight"] == "PASS"
+
+
+def test_campaign_review_batch_publisher_imports_under_isolated_python() -> None:
+    bootstrap = (
+        "import runpy,sys;"
+        "service_root,script=sys.argv[1:3];"
+        "sys.path.insert(0,service_root);"
+        "sys.argv=[script,'--help'];"
+        "runpy.run_path(script,run_name='__main__')"
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            bootstrap,
+            str(ROOT / "services/orchestrator"),
+            str(ROOT / "scripts/image_trainer/publish_science_visual_campaign_review_batch.py"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--preflight-only" in completed.stdout
 
 
 def test_campaign_review_batch_publisher_preflights_exact_result(

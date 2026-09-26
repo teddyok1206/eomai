@@ -24,18 +24,19 @@ from eom_orchestrator.database import build_engine
 from eom_orchestrator.local_image_training_control_artifacts import (
     LocalImageTrainingControlArtifactPublisher,
 )
+from eom_orchestrator.science_visual_campaign_resolution import (
+    ResolvedScienceVisualCampaign,
+    ScienceVisualCampaignResolutionError,
+    parse_science_visual_campaign_object,
+    resolve_science_visual_campaign,
+    safe_read_science_visual_campaign_member,
+)
 from eom_orchestrator.settings import Settings
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 
-from scripts.image_trainer.stage_science_visual_campaign_review_batches import (
-    ReviewBatchStagingError,
-    _load_campaign,
-    _object,
-    _safe_read,
-)
-
 STATE_ROOT = Path("/var/lib/eom-workflow-runner")
+WORKSPACE_PARENT = Path("/srv/eom/image-training-workspaces")
 _ATTEMPT = re.compile(r"^imgscivisattempt_[0-9a-f]{32}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _COMMAND_RECEIPT_SCHEMA = "science-visual-campaign-review-command-publication-receipt/1.0"
@@ -44,6 +45,22 @@ _RESULT_RECEIPT_SCHEMA = "science-visual-campaign-review-result-publication-rece
 
 class ReviewBatchPublicationError(RuntimeError):
     """Stable operator-facing publication failure."""
+
+
+def _safe_read(path: Path) -> bytes:
+    return safe_read_science_visual_campaign_member(path)
+
+
+def _object(payload: bytes) -> dict[str, object]:
+    return parse_science_visual_campaign_object(payload)
+
+
+def _load_campaign(attempt_ids: tuple[str, ...]) -> ResolvedScienceVisualCampaign:
+    return resolve_science_visual_campaign(
+        attempt_ids,
+        workspace_parent=WORKSPACE_PARENT,
+        state_root=STATE_ROOT,
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -117,7 +134,7 @@ def main() -> int:
     except (
         JsonSchemaValidationError,
         PydanticValidationError,
-        ReviewBatchStagingError,
+        ScienceVisualCampaignResolutionError,
         KeyError,
         TypeError,
         ValueError,
@@ -202,7 +219,7 @@ def main() -> int:
     except (
         JsonSchemaValidationError,
         PydanticValidationError,
-        ReviewBatchStagingError,
+        ScienceVisualCampaignResolutionError,
         KeyError,
         TypeError,
         ValueError,
