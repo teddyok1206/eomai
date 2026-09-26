@@ -13,6 +13,7 @@ import json
 import os
 import re
 import stat
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -39,6 +40,17 @@ _REVIEWER = re.compile(r"^[A-Za-z0-9._:@-]+$")
 
 class ReviewBatchStagingError(RuntimeError):
     """Stable failure that preserves the source campaign for investigation."""
+
+
+@dataclass(frozen=True)
+class ResolvedScienceVisualCampaign:
+    campaign_id: str
+    pilots: tuple[ScienceVisualCampaignPilotResult, ...]
+    candidate_ids: tuple[str, ...]
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...]
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...]
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...]
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -104,11 +116,15 @@ def _result_receipt(attempt_id: str) -> Path:
 
 def _load_campaign(
     attempt_ids: tuple[str, ...],
-) -> tuple[str, tuple[ScienceVisualCampaignPilotResult, ...], tuple[str, ...]]:
+) -> ResolvedScienceVisualCampaign:
     pilots: list[ScienceVisualCampaignPilotResult] = []
     candidate_ids: list[str] = []
     source_documents: set[str] = set()
     campaign_id: str | None = None
+    plans: list[LocalImageScienceCorpusVisualPilotPlanV3] = []
+    plan_pointers: list[ImageEvaluationArtifactMember] = []
+    results: list[LocalImageScienceCorpusVisualPilotResult] = []
+    result_pointers: list[ImageEvaluationArtifactMember] = []
     for attempt_id in attempt_ids:
         workspace = WORKSPACE_PARENT / attempt_id
         try:
@@ -159,17 +175,32 @@ def _load_campaign(
                     pilot_result_semantic_sha256=result.result_sha256,
                 )
             )
+            plans.append(plan)
+            plan_pointers.append(plan_pointer)
+            results.append(result)
+            result_pointers.append(result_pointer)
             candidate_ids.extend(candidate.candidate_id for candidate in result.visual_candidates)
         except ReviewBatchStagingError:
             raise
         except (KeyError, TypeError, ValidationError, ValueError) as exc:
             raise ReviewBatchStagingError("SCIENCE_VISUAL_REVIEW_BATCH_INPUT_INVALID") from exc
-    pilots.sort(key=lambda value: value.campaign_shard_index)
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ReviewBatchStagingError("SCIENCE_VISUAL_REVIEW_BATCH_CANDIDATE_OVERLAP")
     if campaign_id is None:
         raise ReviewBatchStagingError("SCIENCE_VISUAL_REVIEW_BATCH_INPUT_INVALID")
-    return campaign_id, tuple(pilots), tuple(sorted(candidate_ids))
+    ordered = sorted(
+        zip(pilots, plans, plan_pointers, results, result_pointers, strict=True),
+        key=lambda value: value[0].campaign_shard_index,
+    )
+    return ResolvedScienceVisualCampaign(
+        campaign_id=campaign_id,
+        pilots=tuple(value[0] for value in ordered),
+        candidate_ids=tuple(sorted(candidate_ids)),
+        plans=tuple(value[1] for value in ordered),
+        plan_pointers=tuple(value[2] for value in ordered),
+        results=tuple(value[3] for value in ordered),
+        result_pointers=tuple(value[4] for value in ordered),
+    )
 
 
 def _write_new(path: Path, payload: bytes) -> None:
@@ -206,7 +237,10 @@ def main() -> int:
     ):
         raise ReviewBatchStagingError("SCIENCE_VISUAL_REVIEW_BATCH_ARGUMENT_INVALID")
 
-    campaign_id, pilots, candidate_ids = _load_campaign(attempt_ids)
+    campaign = _load_campaign(attempt_ids)
+    campaign_id = campaign.campaign_id
+    pilots = campaign.pilots
+    candidate_ids = campaign.candidate_ids
     if len(candidate_ids) % args.batch_size:
         raise ReviewBatchStagingError("SCIENCE_VISUAL_REVIEW_BATCH_CARDINALITY_INVALID")
     args.output_dir.mkdir(mode=0o700)

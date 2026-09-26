@@ -1923,29 +1923,16 @@ def validate_science_visual_campaign_pattern_inventory(
             raise ValueError("science visual campaign renderer review selects raster content")
 
 
-def validate_science_visual_campaign_review_batch(
+def validate_science_visual_campaign_review_batch_command(
     *,
     command: LocalImageScienceVisualCampaignReviewBatchCommand,
-    command_pointer: ImageEvaluationArtifactMember,
     plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
     plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
     results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
     result_pointers: tuple[ImageEvaluationArtifactMember, ...],
-    review_result: LocalImageScienceVisualCampaignReviewBatchResult,
-) -> None:
-    """Resolve a bounded review result before it can feed a campaign inventory.
+) -> dict[str, ScienceVisualCandidate]:
+    """Resolve a bounded command to exact campaign candidates before publication."""
 
-    This is intentionally a separate boundary from the final-inventory validator:
-    every reviewer result can be checked and retained without relaxing final campaign
-    coverage or allowing a worker to resolve storage paths on its own.
-    """
-
-    _require_pointer(
-        command_pointer,
-        schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
-        media_type="application/json",
-        member_path="manifests/science-visual-campaign-review-batch-command.json",
-    )
     if not (
         len(plans)
         == len(plan_pointers)
@@ -1954,12 +1941,6 @@ def validate_science_visual_campaign_review_batch(
         == len(command.pilot_results)
     ):
         raise ValueError("science visual campaign review batch source cardinality differs")
-    if (
-        review_result.batch_id != command.batch_id
-        or review_result.review_batch != command_pointer
-        or review_result.command_sha256 != command.command_sha256
-    ):
-        raise ValueError("science visual campaign review batch result does not bind command")
 
     resolved_by_index = {
         plan.campaign_shard_index: (plan, plan_pointer, result, result_pointer)
@@ -2006,6 +1987,40 @@ def validate_science_visual_campaign_review_batch(
 
     if not set(command.candidate_ids).issubset(candidates):
         raise ValueError("science visual campaign review batch selects an unknown candidate")
+    return candidates
+
+
+def validate_science_visual_campaign_review_batch(
+    *,
+    command: LocalImageScienceVisualCampaignReviewBatchCommand,
+    command_pointer: ImageEvaluationArtifactMember,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    review_result: LocalImageScienceVisualCampaignReviewBatchResult,
+) -> None:
+    """Resolve a bounded review result before it can feed a campaign inventory."""
+
+    _require_pointer(
+        command_pointer,
+        schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
+        media_type="application/json",
+        member_path="manifests/science-visual-campaign-review-batch-command.json",
+    )
+    if (
+        review_result.batch_id != command.batch_id
+        or review_result.review_batch != command_pointer
+        or review_result.command_sha256 != command.command_sha256
+    ):
+        raise ValueError("science visual campaign review batch result does not bind command")
+    candidates = validate_science_visual_campaign_review_batch_command(
+        command=command,
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+    )
     review_ids = tuple(value.candidate_id for value in review_result.reviews)
     if review_ids != command.candidate_ids:
         raise ValueError("science visual campaign review batch result coverage differs")

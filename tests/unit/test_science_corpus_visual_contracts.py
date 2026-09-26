@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -57,6 +59,12 @@ from pydantic import ValidationError
 
 from scripts.image_trainer import (
     publish_science_visual_campaign_pattern_inventory as campaign_publisher,
+)
+from scripts.image_trainer import (
+    publish_science_visual_campaign_review_batch as batch_publisher,
+)
+from scripts.image_trainer import (
+    stage_science_visual_campaign_review_batches as batch_stager,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -905,6 +913,162 @@ def test_campaign_review_batch_rejects_extra_candidate() -> None:
             ),
             review_result=result,
         )
+
+
+def test_campaign_review_batch_publisher_preflights_exact_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command_value, _, plans, results, plan_pointers, result_pointers = (
+        _campaign_review_batch_values()
+    )
+    command_path = tmp_path / "command.json"
+    command_path.write_bytes(content_json_bytes(command_value))
+    command_path.chmod(0o600)
+    command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+    resolved = batch_stager.ResolvedScienceVisualCampaign(
+        campaign_id=command.campaign_id,
+        pilots=command.pilot_results,
+        candidate_ids=tuple(
+            sorted(
+                candidate["candidate_id"]
+                for result in results
+                for candidate in result["visual_candidates"]
+            )
+        ),
+        plans=tuple(
+            LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value) for value in plans
+        ),
+        plan_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in plan_pointers
+        ),
+        results=tuple(
+            LocalImageScienceCorpusVisualPilotResult.model_validate(value) for value in results
+        ),
+        result_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in result_pointers
+        ),
+    )
+    monkeypatch.setattr(batch_publisher.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(batch_publisher, "_load_campaign", lambda _attempts: resolved)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "publish_science_visual_campaign_review_batch.py",
+            "--attempt-id",
+            "imgscivisattempt_" + "1" * 32,
+            "--attempt-id",
+            "imgscivisattempt_" + "2" * 32,
+            "--attempt-id",
+            "imgscivisattempt_" + "3" * 32,
+            "--command",
+            str(command_path),
+            "--source-commit",
+            "a" * 40,
+            "--preflight-only",
+        ],
+    )
+    assert batch_publisher.main() == 0
+    assert json.loads(capsys.readouterr().out)["preflight"] == "PASS"
+
+
+def test_campaign_review_batch_publisher_preflights_exact_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    command_value, result_value, plans, results, plan_pointers, result_pointers = (
+        _campaign_review_batch_values()
+    )
+    command_payload = content_json_bytes(command_value)
+    command_path = tmp_path / "command.json"
+    command_path.write_bytes(command_payload)
+    command_path.chmod(0o600)
+    command_pointer_value = _pointer(
+        "e",
+        member_path="manifests/science-visual-campaign-review-batch-command.json",
+        schema_ref=(
+            "eom://schemas/image-provider/"
+            "local-image-science-visual-campaign-review-batch-command/1.0"
+        ),
+        sha256=sha256_bytes(command_payload),
+    )
+    result_value["review_batch"] = command_pointer_value
+    result_body = {key: value for key, value in result_value.items() if key != "result_sha256"}
+    result_value["result_sha256"] = content_sha256(result_body)
+    result_path = tmp_path / "result.json"
+    result_path.write_bytes(content_json_bytes(result_value))
+    result_path.chmod(0o600)
+
+    command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+    resolved = batch_stager.ResolvedScienceVisualCampaign(
+        campaign_id=command.campaign_id,
+        pilots=command.pilot_results,
+        candidate_ids=tuple(
+            sorted(
+                candidate["candidate_id"]
+                for result in results
+                for candidate in result["visual_candidates"]
+            )
+        ),
+        plans=tuple(
+            LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value) for value in plans
+        ),
+        plan_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in plan_pointers
+        ),
+        results=tuple(
+            LocalImageScienceCorpusVisualPilotResult.model_validate(value) for value in results
+        ),
+        result_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in result_pointers
+        ),
+    )
+    state_root = tmp_path / "state"
+    state_root.mkdir(mode=0o700)
+    receipt_path = state_root / (f"science-visual-campaign-review-command-{command.batch_id}.json")
+    receipt_path.write_bytes(
+        content_json_bytes(
+            {
+                "schema_version": (
+                    "science-visual-campaign-review-command-publication-receipt/1.0"
+                ),
+                "batch_id": command.batch_id,
+                "command_sha256": command.command_sha256,
+                "command_artifact": command_pointer_value,
+                "source_commit": "a" * 40,
+            }
+        )
+    )
+    receipt_path.chmod(0o600)
+
+    monkeypatch.setattr(batch_publisher.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(batch_publisher, "STATE_ROOT", state_root)
+    monkeypatch.setattr(batch_publisher, "_load_campaign", lambda _attempts: resolved)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "publish_science_visual_campaign_review_batch.py",
+            "--attempt-id",
+            "imgscivisattempt_" + "1" * 32,
+            "--attempt-id",
+            "imgscivisattempt_" + "2" * 32,
+            "--attempt-id",
+            "imgscivisattempt_" + "3" * 32,
+            "--command",
+            str(command_path),
+            "--result",
+            str(result_path),
+            "--source-commit",
+            "a" * 40,
+            "--preflight-only",
+        ],
+    )
+    assert batch_publisher.main() == 0
+    assert json.loads(capsys.readouterr().out)["preflight"] == "PASS"
 
 
 def test_campaign_inventory_publisher_resolves_stage_and_result_receipts(
