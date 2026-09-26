@@ -1463,6 +1463,317 @@ def _raster_refinement_plan() -> dict[str, Any]:
     return schema
 
 
+def _campaign_raster_refinement_plan() -> dict[str, Any]:
+    """Bind literal panel crops to the immutable campaign and original partitions."""
+
+    schema = _base(
+        "EOM Science Campaign Raster Refinement Plan V1",
+        "eom://schemas/image-provider/local-image-science-campaign-raster-refinement-plan/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "boundingBox": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["left", "top", "right", "bottom"],
+                "properties": {
+                    "left": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "top": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "right": {"type": "integer", "minimum": 1, "maximum": 10000},
+                    "bottom": {"type": "integer", "minimum": 1, "maximum": 10000},
+                },
+            },
+            "proposal": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "refinement_id",
+                    "parent_candidate_id",
+                    "parent_candidate_sha256",
+                    "crop_bounding_box",
+                    "caption_en",
+                    "caption_sha256",
+                    "partition",
+                    "pattern_family",
+                    "refinement_reasons",
+                ],
+                "properties": {
+                    "refinement_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscampaignrefine_[0-9a-f]{32}$",
+                    },
+                    "parent_candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "parent_candidate_sha256": {"$ref": "#/$defs/sha256"},
+                    "crop_bounding_box": {"$ref": "#/$defs/boundingBox"},
+                    "caption_en": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+                    },
+                    "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    "partition": {"enum": ["HOLDOUT", "TRAIN", "VALIDATION"]},
+                    "pattern_family": {
+                        "enum": [
+                            "ASTRONOMICAL_SCENE",
+                            "FOSSIL",
+                            "GEOLOGIC_TEXTURE",
+                            "MICROSCOPIC_TEXTURE",
+                            "NATURAL_TEXTURE",
+                            "ORGANISM",
+                        ]
+                    },
+                    "refinement_reasons": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 2,
+                        "items": {"enum": ["BORDER_TRIM", "PANEL_SPLIT"]},
+                    },
+                },
+            },
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "refinement_plan_id",
+                "campaign_id",
+                "pattern_inventory",
+                "pattern_inventory_semantic_sha256",
+                "raster_suitability_review",
+                "raster_suitability_review_sha256",
+                "training_authorization",
+                "proposals",
+                "created_at",
+                "created_by",
+                "plan_sha256",
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": "local-image-science-campaign-raster-refinement-plan/1.0"
+                },
+                "refinement_plan_id": {
+                    "type": "string",
+                    "pattern": "^imgsciviscampaignrefineplan_[0-9a-f]{32}$",
+                },
+                "campaign_id": {
+                    "type": "string",
+                    "pattern": "^imgsciviscampaign_[0-9a-f]{32}$",
+                },
+                "pattern_inventory": {"$ref": "#/$defs/artifactMember"},
+                "pattern_inventory_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "raster_suitability_review": {"$ref": "#/$defs/artifactMember"},
+                "raster_suitability_review_sha256": {"$ref": "#/$defs/sha256"},
+                "training_authorization": {"$ref": "#/$defs/artifactMember"},
+                "proposals": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1024,
+                    "items": {"$ref": "#/$defs/proposal"},
+                },
+                "created_at": UTC,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "plan_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _campaign_reviewed_crop_set() -> dict[str, Any]:
+    """Canonical direct and literal-refinement PNG set for one reviewed campaign."""
+
+    schema = _base(
+        "EOM Science Campaign Reviewed Visual Crop Set V1",
+        "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "boundingBox": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["left", "top", "right", "bottom"],
+                "properties": {
+                    "left": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "top": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "right": {"type": "integer", "minimum": 1, "maximum": 10000},
+                    "bottom": {"type": "integer", "minimum": 1, "maximum": 10000},
+                },
+            },
+            "member": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "sample_id",
+                    "source_kind",
+                    "parent_candidate_id",
+                    "parent_candidate_sha256",
+                    "refinement_id",
+                    "crop_bounding_box",
+                    "document_id",
+                    "physical_page",
+                    "exam_group_sha256",
+                    "partition",
+                    "pattern_family",
+                    "member_path",
+                    "media_type",
+                    "width_px",
+                    "height_px",
+                    "size_bytes",
+                    "sha256",
+                    "caption_en",
+                    "caption_sha256",
+                    "perceptual_hash",
+                ],
+                "properties": {
+                    "sample_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscampaigncrop_[0-9a-f]{32}$",
+                    },
+                    "source_kind": {"enum": ["DIRECT", "REFINED"]},
+                    "parent_candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "parent_candidate_sha256": {"$ref": "#/$defs/sha256"},
+                    "refinement_id": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "pattern": "^imgsciviscampaignrefine_[0-9a-f]{32}$",
+                            },
+                            {"type": "null"},
+                        ]
+                    },
+                    "crop_bounding_box": {
+                        "anyOf": [{"$ref": "#/$defs/boundingBox"}, {"type": "null"}]
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "pattern": "^sciencedoc_[0-9a-f]{32}$",
+                    },
+                    "physical_page": {"type": "integer", "minimum": 1, "maximum": 512},
+                    "exam_group_sha256": {"$ref": "#/$defs/sha256"},
+                    "partition": {"enum": ["HOLDOUT", "TRAIN", "VALIDATION"]},
+                    "pattern_family": {
+                        "enum": [
+                            "ASTRONOMICAL_SCENE",
+                            "FOSSIL",
+                            "GEOLOGIC_TEXTURE",
+                            "MICROSCOPIC_TEXTURE",
+                            "NATURAL_TEXTURE",
+                            "ORGANISM",
+                        ]
+                    },
+                    "member_path": {
+                        "type": "string",
+                        "pattern": "^crops/imgsciviscampaigncrop_[0-9a-f]{32}\\.png$",
+                    },
+                    "media_type": {"const": "image/png"},
+                    "width_px": {"type": "integer", "minimum": 32, "maximum": 10000},
+                    "height_px": {"type": "integer", "minimum": 32, "maximum": 10000},
+                    "size_bytes": {
+                        "type": "integer",
+                        "minimum": 64,
+                        "maximum": 67108864,
+                    },
+                    "sha256": {"$ref": "#/$defs/sha256"},
+                    "caption_en": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+                    },
+                    "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    "perceptual_hash": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+                },
+                "allOf": [
+                    {
+                        "if": {"properties": {"source_kind": {"const": "DIRECT"}}},
+                        "then": {
+                            "properties": {
+                                "refinement_id": {"type": "null"},
+                                "crop_bounding_box": {"type": "null"},
+                            }
+                        },
+                        "else": {
+                            "properties": {
+                                "refinement_id": {
+                                    "type": "string",
+                                    "pattern": "^imgsciviscampaignrefine_[0-9a-f]{32}$",
+                                },
+                                "crop_bounding_box": {"$ref": "#/$defs/boundingBox"},
+                            }
+                        },
+                    }
+                ],
+            },
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "crop_set_id",
+                "campaign_id",
+                "pattern_inventory",
+                "pattern_inventory_semantic_sha256",
+                "raster_suitability_review",
+                "raster_suitability_review_sha256",
+                "refinement_plan",
+                "refinement_plan_sha256",
+                "training_authorization",
+                "members",
+                "created_at",
+                "created_by",
+                "crop_set_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-visual-campaign-crop-set/1.0"},
+                "crop_set_id": {
+                    "type": "string",
+                    "pattern": "^imgsciviscampaigncropset_[0-9a-f]{32}$",
+                },
+                "campaign_id": {
+                    "type": "string",
+                    "pattern": "^imgsciviscampaign_[0-9a-f]{32}$",
+                },
+                "pattern_inventory": {"$ref": "#/$defs/artifactMember"},
+                "pattern_inventory_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "raster_suitability_review": {"$ref": "#/$defs/artifactMember"},
+                "raster_suitability_review_sha256": {"$ref": "#/$defs/sha256"},
+                "refinement_plan": {"$ref": "#/$defs/artifactMember"},
+                "refinement_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "training_authorization": {"$ref": "#/$defs/artifactMember"},
+                "members": {
+                    "type": "array",
+                    "minItems": 15,
+                    "maxItems": 256,
+                    "items": {"$ref": "#/$defs/member"},
+                },
+                "created_at": UTC,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "crop_set_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 def _model_pointer() -> dict[str, Any]:
     return {
         "type": "object",
@@ -2140,6 +2451,10 @@ SCHEMAS = {
     "local-image-science-visual-crop-set-v2.schema.json": _raster_reviewed_crop_set_v2(),
     "local-image-science-raster-suitability-review-v1.schema.json": _raster_suitability_review(),
     "local-image-science-raster-refinement-plan-v1.schema.json": _raster_refinement_plan(),
+    "local-image-science-campaign-raster-refinement-plan-v1.schema.json": (
+        _campaign_raster_refinement_plan()
+    ),
+    "local-image-science-visual-campaign-crop-set-v1.schema.json": (_campaign_reviewed_crop_set()),
     "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
     "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": _science_micro_adapter(),
