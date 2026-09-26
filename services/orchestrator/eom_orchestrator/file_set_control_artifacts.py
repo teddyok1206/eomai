@@ -55,7 +55,10 @@ CONTROL_FILE_SET_SCHEMA_HASH = content_sha256(
         "result": "approved Artifact and ArtifactRevision with exact manifest and hashes",
     }
 )
-MAX_FILE_SET_MEMBERS = 64
+# The science visual-pilot result has one primary manifest plus at most 384 rendered
+# pages and 512 candidate crops.  Keep the generic control boundary above that
+# contract while still bounding all callers to a small immutable file set.
+MAX_FILE_SET_MEMBERS = 1024
 MAX_FILE_SET_BYTES = 1024 * 1024 * 1024
 _LOCK_NAMESPACE = "eom:control-file-set-publication"
 _LOCAL_LOCK = threading.Lock()

@@ -211,6 +211,33 @@ def test_load_workspace_accepts_disjoint_campaign_successor(tmp_path: Path) -> N
     assert plan.plan_sha256 == result.plan_sha256
 
 
+def test_members_preserve_result_pages_and_candidate_images(tmp_path: Path) -> None:
+    workspace, expected_members = _stage_complete_workspace(tmp_path, use_v3=True)
+    _command, _plan, result, result_payload, _output_bytes = publication._load_workspace(workspace)
+
+    members = publication._members(workspace, result, result_payload)
+
+    assert len(members) == expected_members
+    assert tuple(member.file_name for member in members) == tuple(
+        sorted(member.file_name for member in members)
+    )
+    result_member = next(
+        member for member in members if member.file_name == "manifests/visual-pilot-result.json"
+    )
+    assert result_member.schema_ref == publication.RESULT_SCHEMA_REF
+    assert result_member.media_type == "application/json"
+    assert result_member.sha256 == sha256_bytes(result_payload)
+    page_members = [member for member in members if member.file_name.startswith("pages/")]
+    candidate_members = [member for member in members if member.file_name.startswith("crops/")]
+    assert len(page_members) == len(result.page_images)
+    assert len(candidate_members) == len(result.visual_candidates)
+    assert {member.schema_ref for member in page_members} == {publication.PAGE_IMAGE_SCHEMA_REF}
+    assert {member.schema_ref for member in candidate_members} == {
+        publication.CANDIDATE_IMAGE_SCHEMA_REF
+    }
+    assert {member.media_type for member in [*page_members, *candidate_members]} == {"image/png"}
+
+
 def test_load_workspace_rejects_an_extra_crop(tmp_path: Path) -> None:
     workspace, _expected_members = _stage_complete_workspace(tmp_path)
     _write(workspace / "crops/untrusted-extra.png", _png(255))

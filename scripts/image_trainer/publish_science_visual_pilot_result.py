@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
+    ImageEvaluationArtifactMember,
     LocalImageScienceCorpusVisualPilotCommand,
     LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotCommandV3,
@@ -28,10 +29,10 @@ from eom_image_contracts import (
     validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
 )
-from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
-from eom_orchestrator.local_image_training_control_artifacts import (
-    LocalImageTrainingControlArtifactPublisher,
+from eom_orchestrator.file_set_control_artifacts import (
+    ControlFileSetMember,
+    ControlFileSetPublisher,
 )
 from eom_orchestrator.settings import Settings
 from pydantic import ValidationError as PydanticValidationError
@@ -41,6 +42,15 @@ STATE_ROOT = Path("/var/lib/eom-workflow-runner")
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_PNG_BYTES = 64 * 1024 * 1024
 MAX_OUTPUT_BYTES = 2 * 1024 * 1024 * 1024
+RESULT_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
+)
+PAGE_IMAGE_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-page-image/1.0"
+)
+CANDIDATE_IMAGE_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-candidate-image/1.0"
+)
 _ATTEMPT = re.compile(r"^imgscivisattempt_[0-9a-f]{32}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -280,6 +290,46 @@ def _load_workspace(
     return command, plan, result, result_payload, output_bytes
 
 
+def _members(
+    workspace: Path,
+    result: LocalImageScienceCorpusVisualPilotResult,
+    result_payload: bytes,
+) -> tuple[ControlFileSetMember, ...]:
+    values: list[ControlFileSetMember] = [
+        ControlFileSetMember(
+            file_name="manifests/visual-pilot-result.json",
+            source=workspace / "manifests/visual-pilot-result.json",
+            sha256=sha256_bytes(result_payload),
+            bytes=len(result_payload),
+            schema_ref=RESULT_SCHEMA_REF,
+            media_type="application/json",
+        )
+    ]
+    for page_record in result.page_images:
+        values.append(
+            ControlFileSetMember(
+                file_name=page_record.member_path,
+                source=_member_path(workspace, page_record.member_path),
+                sha256=page_record.sha256,
+                bytes=page_record.size_bytes,
+                schema_ref=PAGE_IMAGE_SCHEMA_REF,
+                media_type="image/png",
+            )
+        )
+    for candidate_record in result.visual_candidates:
+        values.append(
+            ControlFileSetMember(
+                file_name=candidate_record.member_path,
+                source=_member_path(workspace, candidate_record.member_path),
+                sha256=candidate_record.sha256,
+                bytes=candidate_record.size_bytes,
+                schema_ref=CANDIDATE_IMAGE_SCHEMA_REF,
+                media_type="image/png",
+            )
+        )
+    return tuple(sorted(values, key=lambda value: value.file_name))
+
+
 def _write_receipt(path: Path, payload: bytes) -> None:
     if path.exists() or path.is_symlink():
         if _safe_read(path, maximum_bytes=MAX_JSON_BYTES) != payload:
@@ -306,6 +356,7 @@ def main() -> int:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_ARGUMENT_INVALID")
     workspace = WORKSPACE_PARENT / args.attempt_id
     command, plan, result, result_payload, output_bytes = _load_workspace(workspace)
+    members = _members(workspace, result, result_payload)
     if command.plan_sha256 != plan.plan_sha256:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_RESULT_INVALID")
     summary = {
@@ -313,6 +364,7 @@ def main() -> int:
         "candidate_count": len(result.visual_candidates),
         "output_bytes": output_bytes,
         "page_count": len(result.page_images),
+        "output_member_count": len(members),
         "result_file_sha256": sha256_bytes(result_payload),
         "result_sha256": result.result_sha256,
     }
@@ -321,17 +373,33 @@ def main() -> int:
         return 0
 
     engine = build_engine()
-    adapter = LocalImageTrainingControlArtifactPublisher(
-        ControlArtifactPublisher(engine, Settings.from_environment()),
-        source_commit=args.source_commit,
+    try:
+        published = ControlFileSetPublisher(engine, Settings.from_environment()).publish(
+            members=members,
+            primary_file="manifests/visual-pilot-result.json",
+            artifact_type="control_local_image_science_visual_pilot_output",
+            manifest_version="local-image-science-corpus-visual-pilot-files/1.0",
+            idempotency_key=f"science-visual-pilot-result:{result.result_sha256}",
+            source_commit=args.source_commit,
+            created_at=result.completed_at,
+        )
+    finally:
+        engine.dispose()
+    pointer = ImageEvaluationArtifactMember(
+        artifact_id=published.artifact_id,
+        artifact_revision_id=published.artifact_revision_id,
+        member_path=published.primary_file,
+        schema_ref=RESULT_SCHEMA_REF,
+        media_type="application/json",
+        sha256=published.primary_sha256,
     )
-    pointer = adapter.commit_science_visual_pilot_result(result)
     STATE_ROOT.mkdir(mode=0o750, parents=True, exist_ok=True)
     receipt_path = STATE_ROOT / f"science-visual-pilot-publication-{command.attempt_id}.json"
     receipt_value = {
         "schema_version": "science-visual-pilot-publication-receipt/1.0",
         **summary,
         "result_artifact": pointer.model_dump(mode="json"),
+        "file_set_manifest_sha256": published.manifest_sha256,
         "source_commit": args.source_commit,
     }
     _write_receipt(receipt_path, content_json_bytes(receipt_value))
@@ -343,6 +411,7 @@ def main() -> int:
                 "attempt_id": command.attempt_id,
                 "receipt": str(receipt_path),
                 "result_file_sha256": pointer.sha256,
+                "file_set_manifest_sha256": published.manifest_sha256,
             },
             sort_keys=True,
         )

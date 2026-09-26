@@ -229,3 +229,49 @@ def test_control_file_set_rejects_hash_drift(tmp_path: Path) -> None:
         assert getattr(exc, "code", None) == "CONTROL_FILE_SET_INVALID"
     else:
         raise AssertionError("hash drift was accepted")
+
+
+def test_control_file_set_accepts_bounded_visual_output_scale(tmp_path: Path) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    source_root = tmp_path / "visual-output-sources"
+    source_root.mkdir()
+    result = source_root / "result.json"
+    result.write_bytes(b'{"status":"SUCCEEDED"}')
+    result.chmod(0o600)
+    image = source_root / "page.png"
+    image.write_bytes(b"bounded-png-placeholder")
+    image.chmod(0o600)
+    members = [
+        ControlFileSetMember(
+            file_name="manifests/visual-pilot-result.json",
+            source=result,
+            sha256=sha256_file(result),
+            bytes=result.stat().st_size,
+            schema_ref="eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0",
+            media_type="application/json",
+        )
+    ]
+    for index in range(64):
+        members.append(
+            ControlFileSetMember(
+                file_name=f"pages/document-{index:03d}/page-1.png",
+                source=image,
+                sha256=sha256_file(image),
+                bytes=image.stat().st_size,
+                schema_ref="eom://schemas/image-provider/local-image-science-corpus-visual-pilot-page-image/1.0",
+                media_type="image/png",
+            )
+        )
+    published = publisher.publish(
+        members=tuple(sorted(members, key=lambda member: member.file_name)),
+        primary_file="manifests/visual-pilot-result.json",
+        artifact_type="control_local_image_science_visual_pilot_output",
+        manifest_version="local-image-science-corpus-visual-pilot-files/1.0",
+        idempotency_key="science-visual-pilot-result:" + "c" * 64,
+        source_commit="d" * 40,
+        created_at=datetime(2026, 9, 26, 10, 0, tzinfo=UTC),
+    )
+
+    manifest = Path(published.nas_path, "manifest.json")
+    assert manifest.is_file()
+    assert len(list(Path(published.nas_path, "pages").rglob("*.png"))) == 64
