@@ -37,6 +37,7 @@ from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 if TYPE_CHECKING:
     from eom_image_contracts import (
         LocalImageScienceCampaignLoraMicroProbePlan,
+        LocalImageScienceCampaignLoraMicroProbePlanV2,
         LocalImageScienceVisualCampaignRasterRefinementPlan,
         LocalImageScienceVisualCampaignRasterSuitabilityReview,
     )
@@ -67,6 +68,12 @@ SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_SCHEMA_REF = (
 )
 SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_ARTIFACT_TYPE = (
     "control_local_image_science_campaign_lora_micro_probe_plan"
+)
+SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.1"
+)
+SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_ARTIFACT_TYPE = (
+    "control_local_image_science_campaign_lora_micro_probe_plan_v2"
 )
 SCIENCE_CORPUS_AUTHORIZATION_MEMBER = "manifests/science-corpus-training-authorization.json"
 SCIENCE_CORPUS_AUTHORIZATION_SCHEMA_REF = (
@@ -276,6 +283,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_SCHEMA_REF,
             artifact_type=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-campaign-lora-micro-probe-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_campaign_micro_probe_plan_v2(
+        self,
+        plan: LocalImageScienceCampaignLoraMicroProbePlanV2,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-campaign-lora-micro-probe-plan-v2",
+            member=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_MEMBER,
+            schema_ref=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_SCHEMA_REF,
+            artifact_type=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-campaign-lora-micro-probe-plan-v2",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )

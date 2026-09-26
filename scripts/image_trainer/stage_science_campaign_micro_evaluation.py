@@ -17,17 +17,25 @@ from pathlib import Path
 from eom_image_contracts import (
     LocalImageScienceCampaignLoraMicroEvaluationCase,
     LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     LocalImageScienceCampaignLoraMicroProbeCommand,
+    LocalImageScienceCampaignLoraMicroProbeCommandV2,
     LocalImageScienceCampaignLoraMicroProbePlan,
+    LocalImageScienceCampaignLoraMicroProbePlanV2,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
     LocalImageScienceVisualCampaignCropSet,
+    LocalImageScienceVisualCampaignCropSetV2,
     content_json_bytes,
     content_sha256,
     text_sha256,
     validate_contract,
     validate_science_campaign_micro_evaluation_command,
+    validate_science_campaign_micro_evaluation_command_v2,
     validate_science_campaign_micro_probe_plan_sources,
+    validate_science_campaign_micro_probe_plan_sources_v2,
     validate_science_campaign_micro_probe_worker_result,
+    validate_science_campaign_micro_probe_worker_result_v2,
 )
 from eom_orchestrator.database import build_engine
 from pydantic import ValidationError as PydanticValidationError
@@ -88,8 +96,10 @@ def _load_training(
     workspace: Path,
     expected_result_sha256: str,
 ) -> tuple[
-    LocalImageScienceCampaignLoraMicroProbeCommand,
-    LocalImageScienceCampaignLoraMicroProbeWorkerResult,
+    LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResult
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
 ]:
     command_payload = _safe_read(
         workspace / "command.json",
@@ -104,11 +114,31 @@ def _load_training(
     try:
         command_value = _parse_json(command_payload)
         result_value = _parse_json(result_payload)
-        validate_contract("science-campaign-lora-micro-probe-command", command_value)
-        validate_contract("science-campaign-lora-micro-probe-worker-result", result_value)
-        command = LocalImageScienceCampaignLoraMicroProbeCommand.model_validate(command_value)
-        result = LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(result_value)
-        validate_science_campaign_micro_probe_worker_result(command, result)
+        expanded = command_value.get("schema_version") == (
+            "local-image-science-campaign-lora-micro-probe-command/1.1"
+        )
+        if expanded:
+            validate_contract("science-campaign-lora-micro-probe-command-v2", command_value)
+            validate_contract("science-campaign-lora-micro-probe-worker-result-v2", result_value)
+            command: (
+                LocalImageScienceCampaignLoraMicroProbeCommand
+                | LocalImageScienceCampaignLoraMicroProbeCommandV2
+            ) = LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(command_value)
+            result: (
+                LocalImageScienceCampaignLoraMicroProbeWorkerResult
+                | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+            ) = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(result_value)
+            assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV2)
+            validate_science_campaign_micro_probe_worker_result_v2(command, result)
+        else:
+            validate_contract("science-campaign-lora-micro-probe-command", command_value)
+            validate_contract("science-campaign-lora-micro-probe-worker-result", result_value)
+            command = LocalImageScienceCampaignLoraMicroProbeCommand.model_validate(command_value)
+            result = LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(
+                result_value
+            )
+            validate_science_campaign_micro_probe_worker_result(command, result)
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCampaignMicroEvaluationStageError(
             "IMAGE_EVALUATION_TRAINING_RESULT_INVALID"
@@ -124,8 +154,12 @@ def _load_training(
 
 def _load_sources(
     engine: Engine,
-    training: LocalImageScienceCampaignLoraMicroProbeCommand,
-) -> tuple[LocalImageScienceCampaignLoraMicroProbePlan, LocalImageScienceVisualCampaignCropSet]:
+    training: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+) -> tuple[
+    LocalImageScienceCampaignLoraMicroProbePlan | LocalImageScienceCampaignLoraMicroProbePlanV2,
+    LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
+]:
     plan_payload = _load_artifact_member(
         engine,
         training.probe_plan_pointer,
@@ -139,11 +173,25 @@ def _load_sources(
     try:
         plan_value = _parse_json(plan_payload)
         crop_value = _parse_json(crop_payload)
-        validate_contract("science-campaign-lora-micro-probe-plan", plan_value)
-        validate_contract("science-visual-campaign-crop-set", crop_value)
-        plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(plan_value)
-        crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(crop_value)
-        validate_science_campaign_micro_probe_plan_sources(plan, crop_set)
+        if isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV2):
+            validate_contract("science-campaign-lora-micro-probe-plan-v2", plan_value)
+            validate_contract("science-visual-campaign-crop-set-v2", crop_value)
+            plan: (
+                LocalImageScienceCampaignLoraMicroProbePlan
+                | LocalImageScienceCampaignLoraMicroProbePlanV2
+            ) = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(plan_value)
+            crop_set: (
+                LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2
+            ) = LocalImageScienceVisualCampaignCropSetV2.model_validate(crop_value)
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+            validate_science_campaign_micro_probe_plan_sources_v2(plan, crop_set)
+        else:
+            validate_contract("science-campaign-lora-micro-probe-plan", plan_value)
+            validate_contract("science-visual-campaign-crop-set", crop_value)
+            plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(plan_value)
+            crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(crop_value)
+            validate_science_campaign_micro_probe_plan_sources(plan, crop_set)
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCampaignMicroEvaluationStageError("IMAGE_EVALUATION_HOLDOUT_INVALID") from exc
     if plan != training.probe_plan:
@@ -152,8 +200,9 @@ def _load_sources(
 
 
 def _cases(
-    plan: LocalImageScienceCampaignLoraMicroProbePlan,
-    crop_set: LocalImageScienceVisualCampaignCropSet,
+    plan: LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2,
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
 ) -> tuple[LocalImageScienceCampaignLoraMicroEvaluationCase, ...]:
     members = {value.sample_id: value for value in crop_set.members}
     values = []
@@ -179,16 +228,24 @@ def _cases(
 
 def _build_command(
     *,
-    training: LocalImageScienceCampaignLoraMicroProbeCommand,
-    result: LocalImageScienceCampaignLoraMicroProbeWorkerResult,
-    plan: LocalImageScienceCampaignLoraMicroProbePlan,
-    crop_set: LocalImageScienceVisualCampaignCropSet,
+    training: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    result: LocalImageScienceCampaignLoraMicroProbeWorkerResult
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    plan: LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2,
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
     cases: tuple[LocalImageScienceCampaignLoraMicroEvaluationCase, ...],
     source_commit: str,
-) -> LocalImageScienceCampaignLoraMicroEvaluationCommand:
+) -> (
+    LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
+):
     assert result.adapter_manifest is not None
+    expanded = isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV2)
+    version = "1.1" if expanded else "1.0"
     body = {
-        "schema_version": "local-image-science-campaign-lora-micro-evaluation-command/1.0",
+        "schema_version": (f"local-image-science-campaign-lora-micro-evaluation-command/{version}"),
         "training_run_id": training.training_run_id,
         "probe_plan_pointer": training.probe_plan_pointer.model_dump(mode="json"),
         "probe_plan_sha256": training.probe_plan_sha256,
@@ -212,10 +269,23 @@ def _build_command(
     with_id = {**body, "evaluation_run_id": "imgscicampaignmicroevalrun_" + identity[:32]}
     value = {**with_id, "command_sha256": content_sha256(with_id)}
     try:
+        if expanded:
+            validate_contract("science-campaign-lora-micro-evaluation-command-v2", value)
+            command_v2 = LocalImageScienceCampaignLoraMicroEvaluationCommandV2.model_validate(value)
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV2)
+            validate_science_campaign_micro_evaluation_command_v2(
+                plan, crop_set, result, command_v2
+            )
+            return command_v2
         validate_contract("science-campaign-lora-micro-evaluation-command", value)
-        command = LocalImageScienceCampaignLoraMicroEvaluationCommand.model_validate(value)
-        validate_science_campaign_micro_evaluation_command(plan, crop_set, result, command)
-        return command
+        command_v1 = LocalImageScienceCampaignLoraMicroEvaluationCommand.model_validate(value)
+        assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlan)
+        assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSet)
+        assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResult)
+        validate_science_campaign_micro_evaluation_command(plan, crop_set, result, command_v1)
+        return command_v1
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCampaignMicroEvaluationStageError("IMAGE_EVALUATION_COMMAND_INVALID") from exc
 

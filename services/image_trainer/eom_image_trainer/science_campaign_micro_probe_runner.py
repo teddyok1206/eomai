@@ -14,16 +14,23 @@ from eom_image_contracts import (
     LocalImageLoraTrainingCommand,
     LocalImageLoraTrainingRuntime,
     LocalImageScienceCampaignLoraMicroAdapterManifest,
+    LocalImageScienceCampaignLoraMicroAdapterManifestV2,
     LocalImageScienceCampaignLoraMicroProbeCommand,
+    LocalImageScienceCampaignLoraMicroProbeCommandV2,
     LocalImageScienceCampaignLoraMicroProbePlan,
+    LocalImageScienceCampaignLoraMicroProbePlanV2,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
     LocalImageScienceCampaignLoraMicroRealizedSample,
     LocalImageScienceVisualCampaignCropSet,
+    LocalImageScienceVisualCampaignCropSetV2,
     LocalImageTrainingDatasetManifest,
     content_sha256,
     validate_contract,
     validate_science_campaign_micro_probe_plan_sources,
+    validate_science_campaign_micro_probe_plan_sources_v2,
     validate_science_campaign_micro_probe_worker_result,
+    validate_science_campaign_micro_probe_worker_result_v2,
 )
 from PIL import Image
 
@@ -84,9 +91,17 @@ class _RuntimeDataset:
 
 def load_science_campaign_micro_probe_command(
     path: Path,
-) -> LocalImageScienceCampaignLoraMicroProbeCommand:
+) -> (
+    LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+):
     value = _parse_json(_read_regular(path, maximum_bytes=MAX_JSON_BYTES))
     try:
+        if value.get("schema_version") == (
+            "local-image-science-campaign-lora-micro-probe-command/1.1"
+        ):
+            validate_contract("science-campaign-lora-micro-probe-command-v2", value)
+            return LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(value)
         validate_contract("science-campaign-lora-micro-probe-command", value)
         return LocalImageScienceCampaignLoraMicroProbeCommand.model_validate(value)
     except Exception as exc:
@@ -95,8 +110,9 @@ def load_science_campaign_micro_probe_command(
 
 def _load_plan(
     workspace: Path,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
-) -> LocalImageScienceCampaignLoraMicroProbePlan:
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+) -> LocalImageScienceCampaignLoraMicroProbePlan | LocalImageScienceCampaignLoraMicroProbePlanV2:
     payload = _read_regular(
         _require_member(workspace, command.staged_plan_member),
         maximum_bytes=MAX_JSON_BYTES,
@@ -105,8 +121,15 @@ def _load_plan(
         raise ScienceCampaignMicroProbeRunnerError("IMAGE_TRAINING_PLAN_ARTIFACT_HASH_MISMATCH")
     try:
         value = _parse_json(payload)
-        validate_contract("science-campaign-lora-micro-probe-plan", value)
-        plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(value)
+        if isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2):
+            validate_contract("science-campaign-lora-micro-probe-plan-v2", value)
+            plan: (
+                LocalImageScienceCampaignLoraMicroProbePlan
+                | LocalImageScienceCampaignLoraMicroProbePlanV2
+            ) = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(value)
+        else:
+            validate_contract("science-campaign-lora-micro-probe-plan", value)
+            plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(value)
     except Exception as exc:
         raise ScienceCampaignMicroProbeRunnerError("IMAGE_TRAINING_PLAN_INVALID") from exc
     if plan != command.probe_plan or plan.plan_sha256 != command.probe_plan_sha256:
@@ -116,8 +139,9 @@ def _load_plan(
 
 def _load_crop_set(
     workspace: Path,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
-) -> LocalImageScienceVisualCampaignCropSet:
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+) -> LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2:
     payload = _read_regular(
         _require_member(workspace, command.staged_crop_set_member),
         maximum_bytes=MAX_JSON_BYTES,
@@ -126,9 +150,17 @@ def _load_crop_set(
         raise ScienceCampaignMicroProbeRunnerError("IMAGE_TRAINING_CROP_SET_HASH_MISMATCH")
     try:
         value = _parse_json(payload)
-        validate_contract("science-visual-campaign-crop-set", value)
-        crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(value)
-        validate_science_campaign_micro_probe_plan_sources(command.probe_plan, crop_set)
+        if isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2):
+            validate_contract("science-visual-campaign-crop-set-v2", value)
+            crop_set: (
+                LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2
+            ) = LocalImageScienceVisualCampaignCropSetV2.model_validate(value)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+            validate_science_campaign_micro_probe_plan_sources_v2(command.probe_plan, crop_set)
+        else:
+            validate_contract("science-visual-campaign-crop-set", value)
+            crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(value)
+            validate_science_campaign_micro_probe_plan_sources(command.probe_plan, crop_set)
         return crop_set
     except Exception as exc:
         raise ScienceCampaignMicroProbeRunnerError("IMAGE_TRAINING_CROP_SET_INVALID") from exc
@@ -136,7 +168,8 @@ def _load_crop_set(
 
 def _read_source_crop(
     workspace: Path,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
     *,
     sample_id: str,
     expected_sha256: str,
@@ -151,8 +184,9 @@ def _read_source_crop(
 def _materialize_samples(
     *,
     workspace: Path,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
-    crop_set: LocalImageScienceVisualCampaignCropSet,
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
 ) -> tuple[
     Path,
     _RuntimeDataset,
@@ -225,7 +259,7 @@ def _materialize_samples(
             )
             exact_hashes.add(realized_sha256)
             perceptual.add(perceptual_value)
-        if len(values) != 12:
+        if len(values) != len(command.probe_plan.training_member_ids):
             raise ScienceCampaignMicroProbeRunnerError("IMAGE_TRAINING_MICRO_DATASET_TOO_SMALL")
         values.sort(key=lambda value: value[0].training_sample_id)
         realized_samples = tuple(value[0] for value in values)
@@ -242,7 +276,8 @@ def _materialize_samples(
 
 def _runtime_matches_plan(
     runtime: object,
-    plan: LocalImageScienceCampaignLoraMicroProbePlan,
+    plan: LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2,
 ) -> None:
     for name in type(plan.dependencies).model_fields:
         if getattr(runtime, name) != getattr(plan.dependencies, name):
@@ -251,9 +286,12 @@ def _runtime_matches_plan(
 
 def _result(
     *,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
     status: str,
-    adapter_manifest: LocalImageScienceCampaignLoraMicroAdapterManifest | None,
+    adapter_manifest: LocalImageScienceCampaignLoraMicroAdapterManifest
+    | LocalImageScienceCampaignLoraMicroAdapterManifestV2
+    | None,
     realized_samples: tuple[LocalImageScienceCampaignLoraMicroRealizedSample, ...],
     sample_set_sha256: str | None,
     error_code: str | None,
@@ -262,9 +300,16 @@ def _result(
     final_loss: float | None,
     started_at: datetime,
     completed_at: datetime,
-) -> LocalImageScienceCampaignLoraMicroProbeWorkerResult:
+) -> (
+    LocalImageScienceCampaignLoraMicroProbeWorkerResult
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+):
+    expanded = isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
+    version = "1.1" if expanded else "1.0"
     body = {
-        "schema_version": "local-image-science-campaign-lora-micro-probe-worker-result/1.0",
+        "schema_version": (
+            f"local-image-science-campaign-lora-micro-probe-worker-result/{version}"
+        ),
         "training_run_id": command.training_run_id,
         "probe_plan_pointer": command.probe_plan_pointer.model_dump(mode="json"),
         "probe_plan_sha256": command.probe_plan_sha256,
@@ -284,20 +329,30 @@ def _result(
         "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
     }
     value = {**body, "result_sha256": content_sha256(body)}
+    if expanded:
+        assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
+        validate_contract("science-campaign-lora-micro-probe-worker-result-v2", value)
+        result_v2 = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(value)
+        validate_science_campaign_micro_probe_worker_result_v2(command, result_v2)
+        return result_v2
     validate_contract("science-campaign-lora-micro-probe-worker-result", value)
-    result = LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(value)
-    validate_science_campaign_micro_probe_worker_result(command, result)
-    return result
+    result_v1 = LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(value)
+    validate_science_campaign_micro_probe_worker_result(command, result_v1)
+    return result_v1
 
 
 def run_science_campaign_micro_probe_command(
     *,
     workspace: Path,
     model_store_root: Path,
-    command: LocalImageScienceCampaignLoraMicroProbeCommand,
+    command: LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
     backend: TrainingBackend,
     model_resolver: ModelResolver,
-) -> LocalImageScienceCampaignLoraMicroProbeWorkerResult:
+) -> (
+    LocalImageScienceCampaignLoraMicroProbeWorkerResult
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+):
     """Materialize exact campaign TRAIN crops and run one bounded probe."""
 
     _require_workspace(workspace)
@@ -306,7 +361,14 @@ def run_science_campaign_micro_probe_command(
     plan = _load_plan(workspace, command)
     crop_set = _load_crop_set(workspace, command)
     try:
-        validate_science_campaign_micro_probe_plan_sources(plan, crop_set)
+        if isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2):
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+            validate_science_campaign_micro_probe_plan_sources_v2(plan, crop_set)
+        else:
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlan)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSet)
+            validate_science_campaign_micro_probe_plan_sources(plan, crop_set)
         _manifest, model_directory = model_resolver(model_store_root, plan.base_model)
     except ValueError as exc:
         raise ScienceCampaignMicroProbeRunnerError(
@@ -353,8 +415,12 @@ def run_science_campaign_micro_probe_command(
         revision_identity = content_sha256(
             {"adapter_identity": adapter_identity, "files": files}
         ).removeprefix("sha256:")
+        expanded = isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
+        version = "1.1" if expanded else "1.0"
         manifest_body = {
-            "schema_version": ("local-image-science-campaign-lora-micro-adapter-manifest/1.0"),
+            "schema_version": (
+                f"local-image-science-campaign-lora-micro-adapter-manifest/{version}"
+            ),
             "adapter_id": "imgadapter_" + adapter_identity[:32],
             "adapter_revision_id": "imgadapterrev_" + revision_identity[:32],
             "state": "EVALUATION_ONLY",
@@ -369,8 +435,17 @@ def run_science_campaign_micro_probe_command(
             **manifest_body,
             "manifest_sha256": content_sha256(manifest_body),
         }
-        validate_contract("science-campaign-lora-micro-adapter-manifest", manifest_value)
-        adapter = LocalImageScienceCampaignLoraMicroAdapterManifest.model_validate(manifest_value)
+        if expanded:
+            validate_contract("science-campaign-lora-micro-adapter-manifest-v2", manifest_value)
+            adapter: (
+                LocalImageScienceCampaignLoraMicroAdapterManifest
+                | LocalImageScienceCampaignLoraMicroAdapterManifestV2
+            ) = LocalImageScienceCampaignLoraMicroAdapterManifestV2.model_validate(manifest_value)
+        else:
+            validate_contract("science-campaign-lora-micro-adapter-manifest", manifest_value)
+            adapter = LocalImageScienceCampaignLoraMicroAdapterManifest.model_validate(
+                manifest_value
+            )
         manifest_root = output_root / "manifests"
         manifest_root.mkdir(mode=0o700)
         _write_exclusive(

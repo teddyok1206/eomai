@@ -22,6 +22,7 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     ImageEvaluationBoundingBox,
     LocalImageScienceVisualCampaignCropSet,
+    LocalImageScienceVisualCampaignCropSetV2,
     LocalImageScienceVisualCampaignPatternInventory,
     LocalImageScienceVisualCampaignRasterRefinementPlan,
     LocalImageScienceVisualCampaignRasterSuitabilityReview,
@@ -63,6 +64,9 @@ TRAINER_PYTHON = Path("/srv/eom/conda/envs/eom-image-trainer/bin/python")
 CROP_SCHEMA_REF = "eom://schemas/image-provider/local-image-science-visual-crop/1.0"
 CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.0"
+)
+CROP_SET_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.1"
 )
 _ATTEMPT = re.compile(r"^imgscivisattempt_[0-9a-f]{32}$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
@@ -123,6 +127,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--created-at", type=datetime.fromisoformat, required=True)
     parser.add_argument("--created-by", required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--contract-version", choices=("1.0", "1.1"), default="1.0")
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
@@ -403,28 +408,45 @@ def _build_crop_set(
     temporary: Path,
     created_at: datetime,
     created_by: str,
+    contract_version: str = "1.0",
     process_png: Callable[[bytes, ImageEvaluationBoundingBox | None], _ProcessedPng] = _process_png,
-) -> tuple[LocalImageScienceVisualCampaignCropSet, tuple[_MaterializedMember, ...]]:
+) -> tuple[
+    LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
+    tuple[_MaterializedMember, ...],
+]:
     sources = _candidate_sources(campaign)
     strict_reviews = {value.candidate_id: value for value in review.entries}
     broad_reviews = {value.candidate_id: value for value in inventory.reviews}
     selected: list[_MaterializedMember] = []
-    used_documents: set[str] = set()
-    used_groups: set[str] = set()
+    document_counts: Counter[str] = Counter()
+    group_counts: Counter[str] = Counter()
+    group_partitions: dict[str, str] = {}
+    parent_ids: set[str] = set()
     hashes: set[str] = set()
     perceptual = _PerceptualIndex()
 
     def add(value: ScienceVisualCampaignReviewedCropMember, path: Path, phash: int) -> None:
+        document_limit = 1 if contract_version == "1.0" else 3
+        group_limit = 1 if contract_version == "1.0" else 4
+        existing_partition = group_partitions.get(value.exam_group_sha256)
         if (
-            value.document_id in used_documents
-            or value.exam_group_sha256 in used_groups
+            document_counts[value.document_id] >= document_limit
+            or group_counts[value.exam_group_sha256] >= group_limit
+            or value.parent_candidate_id in parent_ids
             or value.sha256 in hashes
             or perceptual.contains_near_duplicate(phash)
+            or (
+                contract_version == "1.1"
+                and existing_partition is not None
+                and existing_partition != value.partition
+            )
         ):
             raise ScienceCampaignCropSetPublicationError("SCIENCE_CAMPAIGN_CROP_DUPLICATE")
         selected.append(_MaterializedMember(value, path, phash))
-        used_documents.add(value.document_id)
-        used_groups.add(value.exam_group_sha256)
+        document_counts[value.document_id] += 1
+        group_counts[value.exam_group_sha256] += 1
+        group_partitions[value.exam_group_sha256] = value.partition
+        parent_ids.add(value.parent_candidate_id)
         hashes.add(value.sha256)
         perceptual.add(phash)
 
@@ -463,9 +485,9 @@ def _build_crop_set(
         broad = broad_reviews.get(candidate_id)
         if resolved is None or broad is None:
             raise ScienceCampaignCropSetPublicationError("SCIENCE_CAMPAIGN_CROP_SOURCE_INVALID")
-        if (
-            resolved.source.exam_group_sha256 in used_groups
-            or resolved.candidate.document_id in used_documents
+        if contract_version == "1.0" and (
+            group_counts[resolved.source.exam_group_sha256] > 0
+            or document_counts[resolved.candidate.document_id] > 0
         ):
             continue
         parent = _safe_read_png(resolved.path)
@@ -493,7 +515,7 @@ def _build_crop_set(
 
     ordered = tuple(sorted(selected, key=lambda value: value.member.sample_id))
     body: dict[str, object] = {
-        "schema_version": "local-image-science-visual-campaign-crop-set/1.0",
+        "schema_version": f"local-image-science-visual-campaign-crop-set/{contract_version}",
         "campaign_id": inventory.campaign_id,
         "pattern_inventory": refinement_plan.pattern_inventory.model_dump(mode="json"),
         "pattern_inventory_semantic_sha256": inventory.inventory_sha256,
@@ -508,15 +530,27 @@ def _build_crop_set(
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
         "created_by": created_by,
     }
-    crop_set_id = "imgsciviscampaigncropset_" + content_sha256(body).removeprefix("sha256:")[:32]
-    crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(
-        {
-            **body,
-            "crop_set_id": crop_set_id,
-            "crop_set_sha256": content_sha256({**body, "crop_set_id": crop_set_id}),
+    if contract_version == "1.1":
+        body["member_policy"] = {
+            "partition_policy": "PINNED_SOURCE_GROUP_V1",
+            "max_members_per_document": 3,
+            "max_members_per_exam_group": 4,
         }
-    )
-    validate_contract("science-visual-campaign-crop-set", crop_set.model_dump(mode="json"))
+    crop_set_id = "imgsciviscampaigncropset_" + content_sha256(body).removeprefix("sha256:")[:32]
+    crop_value = {
+        **body,
+        "crop_set_id": crop_set_id,
+        "crop_set_sha256": content_sha256({**body, "crop_set_id": crop_set_id}),
+    }
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2
+    if contract_version == "1.1":
+        crop_set_v2 = LocalImageScienceVisualCampaignCropSetV2.model_validate(crop_value)
+        crop_set = crop_set_v2
+        validate_contract("science-visual-campaign-crop-set-v2", crop_set.model_dump(mode="json"))
+    else:
+        crop_set_v1 = LocalImageScienceVisualCampaignCropSet.model_validate(crop_value)
+        crop_set = crop_set_v1
+        validate_contract("science-visual-campaign-crop-set", crop_set.model_dump(mode="json"))
     validate_science_visual_campaign_crop_set(
         plans=campaign.plans,
         plan_pointers=campaign.plan_pointers,
@@ -582,6 +616,7 @@ def main() -> int:
                 temporary=temporary,
                 created_at=created_at,
                 created_by=args.created_by,
+                contract_version=args.contract_version,
             )
             counts = Counter(value.member.partition for value in materialized)
             summary = {
@@ -603,12 +638,15 @@ def main() -> int:
             manifest_path = temporary / "science-visual-campaign-crop-set.json"
             manifest_path.write_bytes(content_json_bytes(crop_set.model_dump(mode="json")))
             manifest_path.chmod(0o600)
+            crop_set_schema_ref = (
+                CROP_SET_V2_SCHEMA_REF if args.contract_version == "1.1" else CROP_SET_SCHEMA_REF
+            )
             manifest_member = ControlFileSetMember(
                 file_name="manifests/science-visual-campaign-crop-set.json",
                 source=manifest_path,
                 sha256=sha256_bytes(manifest_path.read_bytes()),
                 bytes=manifest_path.stat().st_size,
-                schema_ref=CROP_SET_SCHEMA_REF,
+                schema_ref=crop_set_schema_ref,
                 media_type="application/json",
             )
             png_members = tuple(
@@ -628,7 +666,9 @@ def main() -> int:
                 ),
                 primary_file=manifest_member.file_name,
                 artifact_type="control_local_image_science_visual_campaign_crop_set",
-                manifest_version="local-image-science-visual-campaign-crop-set-files/1.0",
+                manifest_version=(
+                    f"local-image-science-visual-campaign-crop-set-files/{args.contract_version}"
+                ),
                 idempotency_key=f"science-visual-campaign-crop-set:{crop_set.crop_set_id}",
                 source_commit=args.source_commit,
                 created_at=created_at,
@@ -639,7 +679,7 @@ def main() -> int:
         artifact_id=published.artifact_id,
         artifact_revision_id=published.artifact_revision_id,
         member_path=published.primary_file,
-        schema_ref=CROP_SET_SCHEMA_REF,
+        schema_ref=crop_set_schema_ref,
         media_type="application/json",
         sha256=published.primary_sha256,
     )
@@ -651,7 +691,9 @@ def main() -> int:
         receipt_path,
         content_json_bytes(
             {
-                "schema_version": "science-visual-campaign-crop-set-publication-receipt/1.0",
+                "schema_version": (
+                    f"science-visual-campaign-crop-set-publication-receipt/{args.contract_version}"
+                ),
                 **summary,
                 "crop_set_artifact": pointer.model_dump(mode="json"),
                 "file_set_manifest_sha256": published.manifest_sha256,

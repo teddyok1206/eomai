@@ -9,11 +9,14 @@ from typing import Any, Literal, Protocol
 
 from eom_image_contracts import (
     LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     LocalImageScienceCampaignLoraMicroEvaluationOutput,
     LocalImageScienceCampaignLoraMicroEvaluationResult,
+    LocalImageScienceCampaignLoraMicroEvaluationResultV2,
     content_sha256,
     validate_contract,
     validate_science_campaign_micro_evaluation_result,
+    validate_science_campaign_micro_evaluation_result_v2,
 )
 from PIL import Image, UnidentifiedImageError
 
@@ -49,15 +52,24 @@ class ScienceCampaignEvaluationBackend(Protocol):
         *,
         model_directory: Path,
         adapter_root: Path,
-        command: LocalImageScienceCampaignLoraMicroEvaluationCommand,
+        command: LocalImageScienceCampaignLoraMicroEvaluationCommand
+        | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     ) -> tuple[GeneratedEvaluationImage, ...]: ...
 
 
 def load_science_campaign_micro_evaluation_command(
     path: Path,
-) -> LocalImageScienceCampaignLoraMicroEvaluationCommand:
+) -> (
+    LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
+):
     value = _parse_json(_read_regular(path, maximum_bytes=MAX_JSON_BYTES))
     try:
+        if value.get("schema_version") == (
+            "local-image-science-campaign-lora-micro-evaluation-command/1.1"
+        ):
+            validate_contract("science-campaign-lora-micro-evaluation-command-v2", value)
+            return LocalImageScienceCampaignLoraMicroEvaluationCommandV2.model_validate(value)
         validate_contract("science-campaign-lora-micro-evaluation-command", value)
         return LocalImageScienceCampaignLoraMicroEvaluationCommand.model_validate(value)
     except Exception as exc:
@@ -66,7 +78,8 @@ def load_science_campaign_micro_evaluation_command(
 
 def _validate_adapter(
     workspace: Path,
-    command: LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
 ) -> Path:
     adapter_root = _require_member(workspace, command.staged_adapter_root)
     try:
@@ -81,7 +94,8 @@ def _validate_adapter(
 
 def _output(
     *,
-    command: LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     generated: GeneratedEvaluationImage,
     workspace: Path,
 ) -> LocalImageScienceCampaignLoraMicroEvaluationOutput:
@@ -120,14 +134,20 @@ def _output(
 
 def _result(
     *,
-    command: LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     status: Literal["FAILED", "SUCCEEDED"],
     outputs: tuple[LocalImageScienceCampaignLoraMicroEvaluationOutput, ...],
     error_code: str | None,
     started_at: datetime,
-) -> LocalImageScienceCampaignLoraMicroEvaluationResult:
+) -> (
+    LocalImageScienceCampaignLoraMicroEvaluationResult
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV2
+):
+    expanded = isinstance(command, LocalImageScienceCampaignLoraMicroEvaluationCommandV2)
+    version = "1.1" if expanded else "1.0"
     body = {
-        "schema_version": "local-image-science-campaign-lora-micro-evaluation-result/1.0",
+        "schema_version": f"local-image-science-campaign-lora-micro-evaluation-result/{version}",
         "evaluation_run_id": command.evaluation_run_id,
         "command_sha256": command.command_sha256,
         "training_result_sha256": command.training_result_sha256,
@@ -139,20 +159,30 @@ def _result(
         "completed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
     value = {**body, "result_sha256": content_sha256(body)}
+    if expanded:
+        assert isinstance(command, LocalImageScienceCampaignLoraMicroEvaluationCommandV2)
+        validate_contract("science-campaign-lora-micro-evaluation-result-v2", value)
+        result_v2 = LocalImageScienceCampaignLoraMicroEvaluationResultV2.model_validate(value)
+        validate_science_campaign_micro_evaluation_result_v2(command, result_v2)
+        return result_v2
     validate_contract("science-campaign-lora-micro-evaluation-result", value)
-    result = LocalImageScienceCampaignLoraMicroEvaluationResult.model_validate(value)
-    validate_science_campaign_micro_evaluation_result(command, result)
-    return result
+    result_v1 = LocalImageScienceCampaignLoraMicroEvaluationResult.model_validate(value)
+    validate_science_campaign_micro_evaluation_result(command, result_v1)
+    return result_v1
 
 
 def run_science_campaign_micro_evaluation_command(
     *,
     workspace: Path,
     model_store_root: Path,
-    command: LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommand
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
     backend: ScienceCampaignEvaluationBackend,
     model_resolver: Any,
-) -> LocalImageScienceCampaignLoraMicroEvaluationResult:
+) -> (
+    LocalImageScienceCampaignLoraMicroEvaluationResult
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV2
+):
     """Generate exact BASE/ADAPTER pairs and write one terminal typed result."""
 
     _require_workspace(workspace)

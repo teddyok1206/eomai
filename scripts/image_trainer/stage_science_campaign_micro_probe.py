@@ -20,11 +20,15 @@ from eom_identifiers import canonical_json_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCampaignLoraMicroProbeCommand,
+    LocalImageScienceCampaignLoraMicroProbeCommandV2,
     LocalImageScienceCampaignLoraMicroProbePlan,
+    LocalImageScienceCampaignLoraMicroProbePlanV2,
     LocalImageScienceVisualCampaignCropSet,
+    LocalImageScienceVisualCampaignCropSetV2,
     content_sha256,
     validate_contract,
     validate_science_campaign_micro_probe_plan_sources,
+    validate_science_campaign_micro_probe_plan_sources_v2,
 )
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
@@ -65,6 +69,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--created-by", required=True)
     parser.add_argument("--seed", type=int, default=20260926)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--contract-version", choices=("1.0", "1.1"), default="1.0")
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
@@ -76,12 +81,13 @@ def _utc(value: datetime) -> datetime:
 
 
 def _crop_set_pointer(args: argparse.Namespace) -> ImageEvaluationArtifactMember:
+    version = args.contract_version
     return ImageEvaluationArtifactMember(
         artifact_id=args.crop_set_artifact_id,
         artifact_revision_id=args.crop_set_artifact_revision_id,
         member_path="manifests/science-visual-campaign-crop-set.json",
         schema_ref=(
-            "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.0"
+            f"eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/{version}"
         ),
         media_type="application/json",
         sha256=args.crop_set_artifact_sha256,
@@ -91,10 +97,13 @@ def _crop_set_pointer(args: argparse.Namespace) -> ImageEvaluationArtifactMember
 def _load_crop_set(
     engine: Engine,
     pointer: ImageEvaluationArtifactMember,
-) -> LocalImageScienceVisualCampaignCropSet:
+) -> LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2:
     payload = _load_artifact_member(engine, pointer, maximum_bytes=MAX_JSON_BYTES)
     try:
         value = _parse_json(payload)
+        if pointer.schema_ref.endswith("/1.1"):
+            validate_contract("science-visual-campaign-crop-set-v2", value)
+            return LocalImageScienceVisualCampaignCropSetV2.model_validate(value)
         validate_contract("science-visual-campaign-crop-set", value)
         return LocalImageScienceVisualCampaignCropSet.model_validate(value)
     except (PydanticValidationError, TypeError, ValueError) as exc:
@@ -143,8 +152,8 @@ def _build_plan(
     *,
     args: argparse.Namespace,
     crop_set_pointer: ImageEvaluationArtifactMember,
-    crop_set: LocalImageScienceVisualCampaignCropSet,
-) -> LocalImageScienceCampaignLoraMicroProbePlan:
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
+) -> LocalImageScienceCampaignLoraMicroProbePlan | LocalImageScienceCampaignLoraMicroProbePlanV2:
     if args.authorization_reference_sha256 != crop_set.training_authorization.sha256:
         raise ScienceCampaignMicroProbeStageError("IMAGE_TRAINING_AUTHORIZATION_MISMATCH")
     binding = load_local_image_provider_binding(
@@ -156,8 +165,10 @@ def _build_plan(
         )
         for partition in ("TRAIN", "VALIDATION", "HOLDOUT")
     }
+    expanded = isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+    version = "1.1" if expanded else "1.0"
     body = {
-        "schema_version": "local-image-science-campaign-lora-micro-probe-plan/1.0",
+        "schema_version": f"local-image-science-campaign-lora-micro-probe-plan/{version}",
         "crop_set": crop_set_pointer.model_dump(mode="json"),
         "crop_set_sha256": crop_set.crop_set_sha256,
         "base_model": binding.model.model_dump(mode="json"),
@@ -165,7 +176,7 @@ def _build_plan(
         "validation_member_ids": partitions["VALIDATION"],
         "holdout_member_ids": partitions["HOLDOUT"],
         "preprocessing_revision": "local-image-science-crop-preprocess/1.0",
-        "trainer_contract": "eom-local-image-science-campaign-lora-micro-trainer/1.0",
+        "trainer_contract": f"eom-local-image-science-campaign-lora-micro-trainer/{version}",
         "dependencies": _trainer_dependencies(),
         "hyperparameters": {
             "adapter_type": "UNET_LORA",
@@ -186,7 +197,11 @@ def _build_plan(
             "train_vae": False,
         },
         "seed": args.seed,
-        "purpose": "EVALUATION_ONLY_SCIENCE_CAMPAIGN_MICRO_PROBE",
+        "purpose": (
+            "EVALUATION_ONLY_SCIENCE_CAMPAIGN_EXPANDED_PROBE"
+            if expanded
+            else "EVALUATION_ONLY_SCIENCE_CAMPAIGN_MICRO_PROBE"
+        ),
         "activation_policy": "FORBIDDEN",
         "authorized_at": _utc(args.authorized_at).isoformat().replace("+00:00", "Z"),
         "authorized_by": args.authorized_by,
@@ -199,19 +214,32 @@ def _build_plan(
     with_id = {**body, "probe_id": "imgscicampaignmicroprobe_" + identity[:32]}
     value = {**with_id, "plan_sha256": content_sha256(with_id)}
     try:
+        if expanded:
+            validate_contract("science-campaign-lora-micro-probe-plan-v2", value)
+            plan_v2 = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(value)
+            assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
+            validate_science_campaign_micro_probe_plan_sources_v2(plan_v2, crop_set)
+            return plan_v2
         validate_contract("science-campaign-lora-micro-probe-plan", value)
-        plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(value)
-        validate_science_campaign_micro_probe_plan_sources(plan, crop_set)
-        return plan
+        plan_v1 = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(value)
+        assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSet)
+        validate_science_campaign_micro_probe_plan_sources(plan_v1, crop_set)
+        return plan_v1
     except (PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCampaignMicroProbeStageError("IMAGE_TRAINING_MICRO_PLAN_INVALID") from exc
 
 
 def _build_command(
     *,
-    plan: LocalImageScienceCampaignLoraMicroProbePlan,
+    plan: LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2,
     plan_pointer: ImageEvaluationArtifactMember,
-) -> LocalImageScienceCampaignLoraMicroProbeCommand:
+) -> (
+    LocalImageScienceCampaignLoraMicroProbeCommand
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+):
+    expanded = isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
+    version = "1.1" if expanded else "1.0"
     identity = content_sha256(
         {
             "probe_plan_pointer": plan_pointer.model_dump(mode="json"),
@@ -220,7 +248,7 @@ def _build_command(
         }
     ).removeprefix("sha256:")
     body = {
-        "schema_version": "local-image-science-campaign-lora-micro-probe-command/1.0",
+        "schema_version": f"local-image-science-campaign-lora-micro-probe-command/{version}",
         "training_run_id": "imgscicampaignmicrotrainrun_" + identity[:32],
         "probe_plan_pointer": plan_pointer.model_dump(mode="json"),
         "probe_plan_sha256": plan.plan_sha256,
@@ -236,6 +264,9 @@ def _build_command(
     }
     value = {**body, "command_sha256": content_sha256(body)}
     try:
+        if expanded:
+            validate_contract("science-campaign-lora-micro-probe-command-v2", value)
+            return LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(value)
         validate_contract("science-campaign-lora-micro-probe-command", value)
         return LocalImageScienceCampaignLoraMicroProbeCommand.model_validate(value)
     except (PydanticValidationError, TypeError, ValueError) as exc:
@@ -296,7 +327,10 @@ def main() -> None:
             ControlArtifactPublisher(engine, Settings.from_environment()),
             source_commit=args.source_commit,
         )
-        plan_pointer = publisher.commit_science_campaign_micro_probe_plan(plan)
+        if isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2):
+            plan_pointer = publisher.commit_science_campaign_micro_probe_plan_v2(plan)
+        else:
+            plan_pointer = publisher.commit_science_campaign_micro_probe_plan(plan)
         command = _build_command(plan=plan, plan_pointer=plan_pointer)
         temporary = Path(
             tempfile.mkdtemp(prefix=".science-campaign-micro-probe.", dir=WORKSPACE_PARENT)
