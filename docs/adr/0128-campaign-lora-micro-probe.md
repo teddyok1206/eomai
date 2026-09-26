@@ -1,4 +1,4 @@
-# ADR 0128: Train an evaluation-only LoRA probe from the reviewed campaign crop set
+# ADR 0128: Train and evaluate a LoRA probe from the reviewed campaign crop set
 
 - Status: Accepted for protocol-first implementation
 - Date: 2026-09-26 UTC
@@ -65,6 +65,15 @@ The subsequent evaluation renders BASE and ADAPTER variants for the two exact HO
 identical prompts, seeds, model revision, scheduler, dimensions, inference steps, and guidance. A
 probe may advance only after integrity checks, leakage checks, fixed metrics, and a recorded visual
 review. Training loss alone is not an activation criterion.
+
+The evaluation has additive command and result schemas because campaign crop IDs are the canonical
+holdout identity. Its dominant operations are exact sample lookup and exact paired-coverage
+membership. They use a dictionary and sets, so validation is `O(n)` for two cases and four outputs.
+The stage boundary resolves the immutable training result, campaign plan, crop set, and adapter
+files; the isolated evaluator receives only the adapter materialization and typed command. BASE and
+ADAPTER generations share the same prompt and seed, preventing unpaired comparisons. The output
+Artifact is published only after schema, Pydantic, file hash, dimensions, and exact pair validation.
+No evaluation output is an activation instruction.
 
 ## Transaction, retry, and failure
 
