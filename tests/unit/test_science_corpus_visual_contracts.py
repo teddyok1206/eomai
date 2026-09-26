@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualCropSet,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
+    LocalImageScienceVisualRasterSuitabilityReview,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -34,6 +36,7 @@ from eom_image_contracts import (
     validate_science_visual_pattern_inventory_v2,
     validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
+    validate_science_visual_raster_suitability_review,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -598,6 +601,60 @@ def _crop_set_inventory_value() -> dict[str, object]:
     return {**body, "inventory_sha256": content_sha256(body)}
 
 
+def _raster_suitability_review_value() -> dict[str, object]:
+    inventory = _crop_set_inventory_value()
+    reviews = inventory["reviews"]
+    assert isinstance(reviews, list)
+    entries: list[dict[str, object]] = []
+    for index, source_review in enumerate(reviews):
+        assert isinstance(source_review, dict)
+        if index < 15:
+            entries.append(
+                {
+                    "candidate_id": source_review["candidate_id"],
+                    "decision": "GPU_RASTER_ELIGIBLE",
+                    "semantic_alignment": "VERIFIED",
+                    "reasons": [],
+                    "caption_en": source_review["caption_en"],
+                    "caption_sha256": source_review["caption_sha256"],
+                }
+            )
+        else:
+            entries.append(
+                {
+                    "candidate_id": source_review["candidate_id"],
+                    "decision": "EXCLUDED",
+                    "semantic_alignment": "NOT_APPLICABLE",
+                    "reasons": ["PANEL_COMPOSITION"],
+                    "caption_en": None,
+                    "caption_sha256": None,
+                }
+            )
+    entries.sort(key=lambda item: str(item["candidate_id"]))
+    inventory_file_sha256 = _sha("e")
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-raster-suitability-review/1.0",
+        "pattern_inventory": _pointer(
+            "e",
+            member_path="manifests/science-visual-pattern-inventory.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-visual-pattern-inventory/1.1"
+            ),
+            sha256=inventory_file_sha256,
+        ),
+        "pattern_inventory_file_sha256": inventory_file_sha256,
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "entries": entries,
+        "gpu_raster_eligible_count": 15,
+        "python_svg_required_count": 0,
+        "excluded_count": 3,
+        "reviewed_at": "2026-09-26T06:05:00Z",
+        "reviewed_by": "reviewer_user",
+    }
+    body["review_id"] = "imgscivisrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
+    return {**body, "review_sha256": content_sha256(body)}
+
+
 def _crop_set_value() -> dict[str, object]:
     plan = _crop_set_plan_value()
     result = _crop_set_result_value()
@@ -1065,6 +1122,63 @@ def test_science_visual_crop_set_binds_reviewed_group_deduplicated_members() -> 
     )
     assert len(crop_set.members) == 15
     assert len({value.exam_group_sha256 for value in crop_set.members}) == 15
+
+
+def test_science_raster_suitability_review_covers_exact_broad_population() -> None:
+    inventory_value = _crop_set_inventory_value()
+    review_value = _raster_suitability_review_value()
+    validate_contract("science-raster-suitability-review", review_value)
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(inventory_value)
+    review = LocalImageScienceVisualRasterSuitabilityReview.model_validate(review_value)
+
+    validate_science_visual_raster_suitability_review(inventory, review)
+    assert review.gpu_raster_eligible_count == 15
+    assert review.excluded_count == 3
+
+
+def test_science_raster_suitability_review_rejects_missing_or_unsafe_member() -> None:
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(
+        _crop_set_inventory_value()
+    )
+    missing = _raster_suitability_review_value()
+    entries = missing["entries"]
+    assert isinstance(entries, list)
+    missing["entries"] = entries[:-1]
+    counts = Counter(str(value["decision"]) for value in missing["entries"])
+    missing["gpu_raster_eligible_count"] = counts["GPU_RASTER_ELIGIBLE"]
+    missing["python_svg_required_count"] = counts["PYTHON_SVG_REQUIRED"]
+    missing["excluded_count"] = counts["EXCLUDED"]
+    body = {
+        key: value for key, value in missing.items() if key not in {"review_id", "review_sha256"}
+    }
+    missing["review_id"] = (
+        "imgscivisrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    missing["review_sha256"] = content_sha256(
+        {key: value for key, value in missing.items() if key != "review_sha256"}
+    )
+    review = LocalImageScienceVisualRasterSuitabilityReview.model_validate(missing)
+    with pytest.raises(ValueError, match="does not cover every broad raster candidate"):
+        validate_science_visual_raster_suitability_review(inventory, review)
+
+    unsafe = _raster_suitability_review_value()
+    unsafe_entries = unsafe["entries"]
+    assert isinstance(unsafe_entries, list)
+    gpu_entry = next(
+        value for value in unsafe_entries if value["decision"] == "GPU_RASTER_ELIGIBLE"
+    )
+    gpu_entry["semantic_alignment"] = "MISMATCH"
+    body = {
+        key: value for key, value in unsafe.items() if key not in {"review_id", "review_sha256"}
+    }
+    unsafe["review_id"] = (
+        "imgscivisrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    unsafe["review_sha256"] = content_sha256(
+        {key: value for key, value in unsafe.items() if key != "review_sha256"}
+    )
+    with pytest.raises(ValidationError, match="GPU raster eligibility requires"):
+        LocalImageScienceVisualRasterSuitabilityReview.model_validate(unsafe)
 
 
 def test_science_micro_probe_binds_all_partitioned_crop_members_and_result() -> None:

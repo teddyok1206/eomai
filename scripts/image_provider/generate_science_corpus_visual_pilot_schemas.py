@@ -1084,6 +1084,118 @@ def _reviewed_crop_set() -> dict[str, Any]:
     return schema
 
 
+def _raster_suitability_review() -> dict[str, Any]:
+    """Second-pass audit that narrows broad LoRA eligibility without rewriting history."""
+
+    schema = _base(
+        "EOM Science Corpus Raster Suitability Review V1",
+        "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "rasterSuitabilityEntry": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "candidate_id",
+                    "decision",
+                    "semantic_alignment",
+                    "reasons",
+                    "caption_en",
+                    "caption_sha256",
+                ],
+                "properties": {
+                    "candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "decision": {
+                        "enum": [
+                            "EXCLUDED",
+                            "GPU_RASTER_ELIGIBLE",
+                            "PYTHON_SVG_REQUIRED",
+                        ]
+                    },
+                    "semantic_alignment": {"enum": ["MISMATCH", "NOT_APPLICABLE", "VERIFIED"]},
+                    "reasons": {
+                        "type": "array",
+                        "maxItems": 8,
+                        "items": {
+                            "enum": [
+                                "AUTHORITATIVE_STRUCTURE",
+                                "CAPTION_MISMATCH",
+                                "INSUFFICIENT_IMAGE_CONTENT",
+                                "NON_RASTER_STYLE",
+                                "PANEL_COMPOSITION",
+                                "REDACTION_OR_MASK",
+                                "TEXT_OR_LABEL",
+                            ]
+                        },
+                    },
+                    "caption_en": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "minLength": 3,
+                                "maxLength": 240,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+                            },
+                            {"type": "null"},
+                        ]
+                    },
+                    "caption_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+                },
+            }
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "review_id",
+                "pattern_inventory",
+                "pattern_inventory_file_sha256",
+                "pattern_inventory_semantic_sha256",
+                "entries",
+                "gpu_raster_eligible_count",
+                "python_svg_required_count",
+                "excluded_count",
+                "reviewed_at",
+                "reviewed_by",
+                "review_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-raster-suitability-review/1.0"},
+                "review_id": {
+                    "type": "string",
+                    "pattern": "^imgscivisrasterreview_[0-9a-f]{32}$",
+                },
+                "pattern_inventory": {"$ref": "#/$defs/artifactMember"},
+                "pattern_inventory_file_sha256": {"$ref": "#/$defs/sha256"},
+                "pattern_inventory_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "entries": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 512,
+                    "items": {"$ref": "#/$defs/rasterSuitabilityEntry"},
+                },
+                "gpu_raster_eligible_count": {"type": "integer", "minimum": 0, "maximum": 512},
+                "python_svg_required_count": {"type": "integer", "minimum": 0, "maximum": 512},
+                "excluded_count": {"type": "integer", "minimum": 0, "maximum": 512},
+                "reviewed_at": UTC,
+                "reviewed_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "review_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 def _model_pointer() -> dict[str, Any]:
     return {
         "type": "object",
@@ -1753,6 +1865,7 @@ SCHEMAS = {
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
     "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
+    "local-image-science-raster-suitability-review-v1.schema.json": _raster_suitability_review(),
     "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
     "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": _science_micro_adapter(),

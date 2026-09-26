@@ -17,6 +17,7 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
+    LocalImageScienceVisualRasterSuitabilityReview,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
     LocalImageTrainingCropReview,
@@ -80,6 +81,13 @@ SCIENCE_VISUAL_PATTERN_INVENTORY_V2_SCHEMA_REF = (
 )
 SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE = (
     "control_local_image_science_visual_pattern_inventory_v2"
+)
+SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER = "manifests/science-raster-suitability-review.json"
+SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
+)
+SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
+    "control_local_image_science_raster_suitability_review"
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -271,6 +279,21 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-visual-pattern-inventory-v2",
             identity_sha256=inventory.inventory_sha256,
             created_at=inventory.created_at,
+        )
+
+    def commit_science_raster_suitability_review(
+        self,
+        review: LocalImageScienceVisualRasterSuitabilityReview,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=review,
+            contract_name="science-raster-suitability-review",
+            member=SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER,
+            schema_ref=SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            artifact_type=SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-raster-suitability-review",
+            identity_sha256=review.review_sha256,
+            created_at=review.reviewed_at,
         )
 
     def _commit_document(

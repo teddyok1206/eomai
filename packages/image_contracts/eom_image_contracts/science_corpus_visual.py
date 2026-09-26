@@ -47,6 +47,9 @@ CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
 CORPUS_REVIEWED_CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
 )
+CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -921,6 +924,117 @@ ScienceVisualRasterPatternFamily = Literal[
     "ORGANISM",
 ]
 
+ScienceVisualRasterSuitabilityDecision = Literal[
+    "EXCLUDED",
+    "GPU_RASTER_ELIGIBLE",
+    "PYTHON_SVG_REQUIRED",
+]
+ScienceVisualRasterSemanticAlignment = Literal["MISMATCH", "NOT_APPLICABLE", "VERIFIED"]
+ScienceVisualRasterSuitabilityReason = Literal[
+    "AUTHORITATIVE_STRUCTURE",
+    "CAPTION_MISMATCH",
+    "INSUFFICIENT_IMAGE_CONTENT",
+    "NON_RASTER_STYLE",
+    "PANEL_COMPOSITION",
+    "REDACTION_OR_MASK",
+    "TEXT_OR_LABEL",
+]
+
+
+class ScienceVisualRasterSuitabilityEntry(FrozenModel):
+    """One second-pass decision for a previously LoRA-eligible crop.
+
+    The original broad inventory remains immutable. This successor review is deliberately
+    strict: only one verified, single-subject raster can carry a training caption.
+    """
+
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    decision: ScienceVisualRasterSuitabilityDecision
+    semantic_alignment: ScienceVisualRasterSemanticAlignment
+    reasons: tuple[ScienceVisualRasterSuitabilityReason, ...] = Field(max_length=8)
+    caption_en: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256 | None = None
+
+    @model_validator(mode="after")
+    def decision_is_safe_for_training(self) -> ScienceVisualRasterSuitabilityEntry:
+        if self.reasons != tuple(sorted(set(self.reasons))):
+            raise ValueError("science raster-suitability reasons must be sorted and unique")
+        if self.decision == "GPU_RASTER_ELIGIBLE":
+            if (
+                self.semantic_alignment != "VERIFIED"
+                or self.reasons
+                or self.caption_en is None
+                or self.caption_sha256 != text_sha256(self.caption_en)
+            ):
+                raise ValueError("GPU raster eligibility requires a verified exact caption")
+        else:
+            if self.caption_en is not None or self.caption_sha256 is not None:
+                raise ValueError("non-GPU raster decision cannot carry a training caption")
+            if not self.reasons:
+                raise ValueError("non-GPU raster decision requires a disqualification reason")
+            if self.semantic_alignment == "MISMATCH" and "CAPTION_MISMATCH" not in self.reasons:
+                raise ValueError("caption mismatch requires its explicit reason")
+        return self
+
+
+class LocalImageScienceVisualRasterSuitabilityReview(FrozenModel):
+    """Complete immutable second-pass audit of a pinned broad LoRA population."""
+
+    schema_version: Literal["local-image-science-raster-suitability-review/1.0"]
+    review_id: str = Field(pattern=r"^imgscivisrasterreview_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_file_sha256: Sha256
+    pattern_inventory_semantic_sha256: Sha256
+    entries: tuple[ScienceVisualRasterSuitabilityEntry, ...] = Field(min_length=1, max_length=512)
+    gpu_raster_eligible_count: int = Field(ge=0, le=512)
+    python_svg_required_count: int = Field(ge=0, le=512)
+    excluded_count: int = Field(ge=0, le=512)
+    reviewed_at: datetime
+    reviewed_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    review_sha256: Sha256
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def utc_review(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def complete_immutable_review_is_coherent(
+        self,
+    ) -> LocalImageScienceVisualRasterSuitabilityReview:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-pattern-inventory.json",
+        )
+        if self.pattern_inventory.sha256 != self.pattern_inventory_file_sha256:
+            raise ValueError("science raster-suitability inventory file hash differs from pointer")
+        entry_ids = tuple(value.candidate_id for value in self.entries)
+        if entry_ids != tuple(sorted(set(entry_ids))):
+            raise ValueError("science raster-suitability entries must be uniquely sorted")
+        counts = Counter(value.decision for value in self.entries)
+        if (
+            self.gpu_raster_eligible_count != counts["GPU_RASTER_ELIGIBLE"]
+            or self.python_svg_required_count != counts["PYTHON_SVG_REQUIRED"]
+            or self.excluded_count != counts["EXCLUDED"]
+        ):
+            raise ValueError("science raster-suitability counts differ from entries")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"review_id", "review_sha256"})
+        ).removeprefix("sha256:")
+        if self.review_id != "imgscivisrasterreview_" + identity[:32]:
+            raise ValueError("science raster-suitability review ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("science raster-suitability review hash mismatch")
+        return self
+
 
 class ScienceVisualReviewedCropMember(FrozenModel):
     """One exact post-review PNG member; the containing Artifact owns its bytes."""
@@ -1127,6 +1241,24 @@ def validate_science_visual_pattern_inventory_v2(
         semantic_sha256=inventory.pilot_result_semantic_sha256,
         reviews=inventory.reviews,
     )
+
+
+def validate_science_visual_raster_suitability_review(
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+    review: LocalImageScienceVisualRasterSuitabilityReview,
+) -> None:
+    """Require a complete second-pass audit of exactly the broad raster population."""
+
+    if review.pattern_inventory_semantic_sha256 != inventory.inventory_sha256:
+        raise ValueError("science raster-suitability review source binding differs")
+    eligible_ids = {
+        value.candidate_id for value in inventory.reviews if value.decision == "LORA_ELIGIBLE"
+    }
+    actual_ids = {value.candidate_id for value in review.entries}
+    if actual_ids != eligible_ids:
+        raise ValueError(
+            "science raster-suitability review does not cover every broad raster candidate"
+        )
 
 
 def validate_science_visual_authorization_plan(
