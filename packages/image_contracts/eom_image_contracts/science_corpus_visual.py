@@ -6,7 +6,7 @@ import re
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -79,6 +79,9 @@ CORPUS_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
 )
 CORPUS_CAMPAIGN_CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.0"
+)
+CORPUS_CAMPAIGN_CROP_SET_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.1"
 )
 
 ScienceSubjectFamily = Literal[
@@ -1999,6 +2002,15 @@ class ScienceVisualCampaignReviewedCropMember(FrozenModel):
 class LocalImageScienceVisualCampaignCropSet(FrozenModel):
     """Group-deduplicated canonical crop set for one complete visual campaign."""
 
+    max_members_per_document: ClassVar[int] = 1
+    max_members_per_exam_group: ClassVar[int] = 1
+    minimum_partition_counts: ClassVar[dict[ScienceVisualPartition, int]] = {
+        "TRAIN": 12,
+        "VALIDATION": 1,
+        "HOLDOUT": 2,
+    }
+    require_group_partition_stability: ClassVar[bool] = False
+
     schema_version: Literal["local-image-science-visual-campaign-crop-set/1.0"]
     crop_set_id: str = Field(pattern=r"^imgsciviscampaigncropset_[0-9a-f]{32}$")
     campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
@@ -2052,19 +2064,28 @@ class LocalImageScienceVisualCampaignCropSet(FrozenModel):
         if sample_ids != tuple(sorted(set(sample_ids))):
             raise ValueError("science campaign crop members must be uniquely sorted")
         for label, values in (
-            ("documents", (value.document_id for value in self.members)),
-            ("exam groups", (value.exam_group_sha256 for value in self.members)),
             ("crop hashes", (value.sha256 for value in self.members)),
             ("perceptual hashes", (value.perceptual_hash for value in self.members)),
         ):
             sequence = tuple(values)
             if len(sequence) != len(set(sequence)):
                 raise ValueError(f"science campaign crop set repeats {label}")
+        document_counts = Counter(value.document_id for value in self.members)
+        if max(document_counts.values(), default=0) > self.max_members_per_document:
+            raise ValueError("science campaign crop set exceeds its document member bound")
+        group_counts = Counter(value.exam_group_sha256 for value in self.members)
+        if max(group_counts.values(), default=0) > self.max_members_per_exam_group:
+            raise ValueError("science campaign crop set exceeds its exam-group member bound")
+        if self.require_group_partition_stability:
+            group_partitions: dict[Sha256, set[ScienceVisualPartition]] = {}
+            for member in self.members:
+                group_partitions.setdefault(member.exam_group_sha256, set()).add(member.partition)
+            if any(len(partitions) != 1 for partitions in group_partitions.values()):
+                raise ValueError("science campaign crop set crosses an exam-group partition")
         partition_counts = Counter(value.partition for value in self.members)
-        if (
-            partition_counts["TRAIN"] < 12
-            or partition_counts["VALIDATION"] < 1
-            or partition_counts["HOLDOUT"] < 2
+        if any(
+            partition_counts[partition] < minimum
+            for partition, minimum in self.minimum_partition_counts.items()
         ):
             raise ValueError("science campaign crop partitions are too small")
         identity = content_sha256(
@@ -2075,6 +2096,44 @@ class LocalImageScienceVisualCampaignCropSet(FrozenModel):
         expected = content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
         if self.crop_set_sha256 != expected:
             raise ValueError("science campaign crop-set hash mismatch")
+        return self
+
+
+class LocalImageScienceVisualCampaignMemberPolicy(FrozenModel):
+    """Bounded successor policy for multiple independent crops per source group."""
+
+    partition_policy: Literal["PINNED_SOURCE_GROUP_V1"]
+    max_members_per_document: Literal[3]
+    max_members_per_exam_group: Literal[4]
+
+
+class LocalImageScienceVisualCampaignCropSetV2(LocalImageScienceVisualCampaignCropSet):
+    """Expanded crop set without weakening byte or partition deduplication."""
+
+    max_members_per_document: ClassVar[int] = 3
+    max_members_per_exam_group: ClassVar[int] = 4
+    minimum_partition_counts: ClassVar[dict[ScienceVisualPartition, int]] = {
+        "TRAIN": 16,
+        "VALIDATION": 4,
+        "HOLDOUT": 4,
+    }
+    require_group_partition_stability: ClassVar[bool] = True
+
+    # Pydantic successor models narrow the immutable wire discriminator.
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-visual-campaign-crop-set/1.1"
+    ]
+    member_policy: LocalImageScienceVisualCampaignMemberPolicy
+    members: tuple[ScienceVisualCampaignReviewedCropMember, ...] = Field(
+        min_length=24,
+        max_length=256,
+    )
+
+    @model_validator(mode="after")
+    def expanded_members_are_independent(self) -> LocalImageScienceVisualCampaignCropSetV2:
+        parent_ids = tuple(value.parent_candidate_id for value in self.members)
+        if len(parent_ids) != len(set(parent_ids)):
+            raise ValueError("science campaign crop set repeats a parent candidate")
         return self
 
 
@@ -2346,7 +2405,7 @@ def validate_science_visual_campaign_crop_set(
     inventory: LocalImageScienceVisualCampaignPatternInventory,
     raster_suitability_review: LocalImageScienceVisualCampaignRasterSuitabilityReview,
     refinement_plan: LocalImageScienceVisualCampaignRasterRefinementPlan,
-    crop_set: LocalImageScienceVisualCampaignCropSet,
+    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
 ) -> None:
     """Validate direct and refined members against exact campaign sources."""
 
