@@ -247,6 +247,22 @@ class Ssd1bMicroEvaluationBackend:
             identity=lambda case: cast(str, case.candidate_id),
         )
 
+    def generate_campaign_pairs(
+        self,
+        *,
+        model_directory: Path,
+        adapter_root: Path,
+        command: Any,
+    ) -> tuple[GeneratedEvaluationImage, ...]:
+        """Generate campaign holdout pairs using immutable campaign crop identity."""
+
+        return self._generate_with_identity(
+            model_directory=model_directory,
+            adapter_root=adapter_root,
+            command=command,
+            identity=lambda case: cast(str, case.sample_id),
+        )
+
     def _generate_with_identity(
         self,
         *,

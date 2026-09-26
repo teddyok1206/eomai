@@ -8,17 +8,22 @@ from types import SimpleNamespace
 import pytest
 from eom_image_contracts import (
     LocalImageModelPointer,
+    LocalImageScienceCampaignLoraMicroEvaluationCommand,
+    LocalImageScienceCampaignLoraMicroEvaluationResult,
     LocalImageScienceCampaignLoraMicroProbeCommand,
     LocalImageScienceCampaignLoraMicroProbePlan,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult,
     LocalImageScienceVisualCampaignCropSet,
     content_sha256,
     validate_contract,
+    validate_science_campaign_micro_evaluation_command,
+    validate_science_campaign_micro_evaluation_result,
     validate_science_campaign_micro_probe_plan_sources,
     validate_science_campaign_micro_probe_worker_result,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 
+from scripts.image_trainer import stage_science_campaign_micro_evaluation as stage_evaluation
 from scripts.image_trainer import stage_science_campaign_micro_probe as stage
 from tests.unit.test_science_corpus_visual_contracts import (
     _campaign_crop_successor_values,
@@ -207,6 +212,62 @@ def _result_value() -> dict[str, object]:
     return {**body, "result_sha256": content_sha256(body)}
 
 
+def _evaluation_command_value() -> dict[str, object]:
+    training = _command_value()
+    result = _result_value()
+    plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(training["probe_plan"])
+    crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(
+        _campaign_crop_successor_values()[-1]
+    )
+    cases = stage_evaluation._cases(plan, crop_set)
+    return stage_evaluation._build_command(
+        training=LocalImageScienceCampaignLoraMicroProbeCommand.model_validate(training),
+        result=LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(result),
+        plan=plan,
+        crop_set=crop_set,
+        cases=cases,
+        source_commit="f" * 40,
+    ).model_dump(mode="json")
+
+
+def _evaluation_result_value() -> dict[str, object]:
+    command = _evaluation_command_value()
+    cases = command["cases"]
+    assert isinstance(cases, list)
+    outputs = []
+    for index, case in enumerate(cases):
+        assert isinstance(case, dict)
+        for variant in ("ADAPTER", "BASE"):
+            sample_id = str(case["sample_id"])
+            outputs.append(
+                {
+                    "sample_id": sample_id,
+                    "variant": variant,
+                    "member_path": f"outputs/{sample_id}-{variant.lower()}.png",
+                    "sha256": f"sha256:{index * 2 + (variant == 'BASE') + 1:064x}",
+                    "size_bytes": 1024,
+                    "width_px": 800,
+                    "height_px": 500,
+                }
+            )
+    outputs.sort(key=lambda value: (str(value["sample_id"]), str(value["variant"])))
+    adapter = command["adapter_manifest"]
+    assert isinstance(adapter, dict)
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-campaign-lora-micro-evaluation-result/1.0",
+        "evaluation_run_id": command["evaluation_run_id"],
+        "command_sha256": command["command_sha256"],
+        "training_result_sha256": command["training_result_sha256"],
+        "adapter_manifest_sha256": adapter["manifest_sha256"],
+        "status": "SUCCEEDED",
+        "outputs": outputs,
+        "error_code": None,
+        "started_at": "2026-09-26T18:11:00Z",
+        "completed_at": "2026-09-26T18:12:00Z",
+    }
+    return {**body, "result_sha256": content_sha256(body)}
+
+
 def test_campaign_micro_contracts_bind_exact_partitions_and_result() -> None:
     plan_value = _plan_value()
     command_value = _command_value()
@@ -328,3 +389,61 @@ def test_campaign_micro_stage_plan_binds_exact_authorization_and_partitions(
             crop_set_pointer=pointer,
             crop_set=crop_set,
         )
+
+
+def test_campaign_evaluation_contracts_bind_exact_holdout_pairs() -> None:
+    command_value = _evaluation_command_value()
+    result_value = _evaluation_result_value()
+    validate_contract("science-campaign-lora-micro-evaluation-command", command_value)
+    validate_contract("science-campaign-lora-micro-evaluation-result", result_value)
+    command = LocalImageScienceCampaignLoraMicroEvaluationCommand.model_validate(command_value)
+    result = LocalImageScienceCampaignLoraMicroEvaluationResult.model_validate(result_value)
+    training = LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(_result_value())
+    plan = LocalImageScienceCampaignLoraMicroProbePlan.model_validate(_plan_value())
+    crop_set = LocalImageScienceVisualCampaignCropSet.model_validate(
+        _campaign_crop_successor_values()[-1]
+    )
+    validate_science_campaign_micro_evaluation_command(plan, crop_set, training, command)
+    validate_science_campaign_micro_evaluation_result(command, result)
+    assert {value.variant for value in result.outputs} == {"ADAPTER", "BASE"}
+    assert {value.sample_id for value in result.outputs} == set(plan.holdout_member_ids)
+
+
+def test_campaign_evaluation_rejects_training_member_leakage() -> None:
+    value = _evaluation_command_value()
+    cases = value["cases"]
+    assert isinstance(cases, list)
+    cases[0]["sample_id"] = str(_plan_value()["training_member_ids"][0])
+    body = {
+        key: item
+        for key, item in value.items()
+        if key not in {"evaluation_run_id", "command_sha256"}
+    }
+    identity = content_sha256(body).removeprefix("sha256:")
+    value["evaluation_run_id"] = "imgscicampaignmicroevalrun_" + identity[:32]
+    value["command_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "command_sha256"}
+    )
+    command = LocalImageScienceCampaignLoraMicroEvaluationCommand.model_validate(value)
+    with pytest.raises(ValueError, match="exact holdout coverage"):
+        validate_science_campaign_micro_evaluation_command(
+            LocalImageScienceCampaignLoraMicroProbePlan.model_validate(_plan_value()),
+            LocalImageScienceVisualCampaignCropSet.model_validate(
+                _campaign_crop_successor_values()[-1]
+            ),
+            LocalImageScienceCampaignLoraMicroProbeWorkerResult.model_validate(_result_value()),
+            command,
+        )
+
+
+def test_campaign_evaluation_result_rejects_missing_pair() -> None:
+    value = _evaluation_result_value()
+    outputs = value["outputs"]
+    assert isinstance(outputs, list)
+    outputs.pop()
+    body = {key: item for key, item in value.items() if key != "result_sha256"}
+    value["result_sha256"] = content_sha256(body)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("science-campaign-lora-micro-evaluation-result", value)
+    with pytest.raises(ValueError, match="incomplete"):
+        LocalImageScienceCampaignLoraMicroEvaluationResult.model_validate(value)

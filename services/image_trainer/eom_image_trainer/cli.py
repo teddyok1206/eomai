@@ -33,6 +33,11 @@ from eom_image_trainer.runner import (
     load_training_command,
     run_training_command,
 )
+from eom_image_trainer.science_campaign_micro_evaluation_runner import (
+    ScienceCampaignMicroEvaluationRunnerError,
+    load_science_campaign_micro_evaluation_command,
+    run_science_campaign_micro_evaluation_command,
+)
 from eom_image_trainer.science_campaign_micro_probe_runner import (
     ScienceCampaignMicroProbeRunnerError,
     load_science_campaign_micro_probe_command,
@@ -90,6 +95,11 @@ def _parser() -> argparse.ArgumentParser:
     science_evaluate.add_argument("--model-store-root", required=True, type=Path)
     science_evaluate.add_argument("--workspace", required=True, type=Path)
     science_evaluate.add_argument("--gpu-lock", required=True, type=Path)
+    campaign_evaluate = subcommands.add_parser("evaluate-science-campaign-micro-probe")
+    campaign_evaluate.add_argument("--command", required=True, type=Path)
+    campaign_evaluate.add_argument("--model-store-root", required=True, type=Path)
+    campaign_evaluate.add_argument("--workspace", required=True, type=Path)
+    campaign_evaluate.add_argument("--gpu-lock", required=True, type=Path)
     locate = subcommands.add_parser("locate-crops")
     locate.add_argument("--command", required=True, type=Path)
     locate.add_argument("--workspace", required=True, type=Path)
@@ -214,6 +224,28 @@ def main() -> None:
             os.close(lock_descriptor)
         if science_evaluation_result.status != "SUCCEEDED":
             raise SystemExit(science_evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED")
+        return
+    if args.operation == "evaluate-science-campaign-micro-probe":
+        campaign_evaluation_command = load_science_campaign_micro_evaluation_command(args.command)
+        if args.workspace.name != campaign_evaluation_command.evaluation_run_id:
+            raise SystemExit("IMAGE_EVALUATION_WORKSPACE_ID_MISMATCH")
+        lock_descriptor = _lock_gpu(args.gpu_lock)
+        try:
+            campaign_evaluation_result = run_science_campaign_micro_evaluation_command(
+                workspace=args.workspace,
+                model_store_root=args.model_store_root,
+                command=campaign_evaluation_command,
+                backend=Ssd1bMicroEvaluationBackend(),
+                model_resolver=verify_model_revision,
+            )
+        except (TrainingRunnerError, ScienceCampaignMicroEvaluationRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        finally:
+            os.close(lock_descriptor)
+        if campaign_evaluation_result.status != "SUCCEEDED":
+            raise SystemExit(
+                campaign_evaluation_result.error_code or "IMAGE_EVALUATION_EXEC_FAILED"
+            )
         return
     if args.operation == "micro-probe":
         micro_command = load_micro_probe_command(args.command)
