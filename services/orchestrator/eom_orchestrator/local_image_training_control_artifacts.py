@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
@@ -32,6 +33,9 @@ from eom_image_contracts import (
 from pydantic import BaseModel
 
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
+
+if TYPE_CHECKING:
+    from eom_image_contracts import LocalImageScienceVisualCampaignRasterSuitabilityReview
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
 AUTHORIZATION_SCHEMA_REF = "eom://schemas/image-provider/local-image-training-authorization/1.0"
@@ -124,6 +128,15 @@ SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
 )
 SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
     "control_local_image_science_raster_suitability_review"
+)
+SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_MEMBER = (
+    "manifests/science-campaign-raster-suitability-review.json"
+)
+SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-raster-suitability-review/1.0"
+)
+SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
+    "control_local_image_science_campaign_raster_suitability_review"
 )
 SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER = "manifests/science-raster-refinement-plan.json"
 SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
@@ -393,6 +406,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
             artifact_type=SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-raster-suitability-review",
+            identity_sha256=review.review_sha256,
+            created_at=review.reviewed_at,
+        )
+
+    def commit_science_campaign_raster_suitability_review(
+        self,
+        review: LocalImageScienceVisualCampaignRasterSuitabilityReview,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=review,
+            contract_name="science-campaign-raster-suitability-review",
+            member=SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_MEMBER,
+            schema_ref=SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            artifact_type=SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-campaign-raster-suitability-review",
             identity_sha256=review.review_sha256,
             created_at=review.reviewed_at,
         )

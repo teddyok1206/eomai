@@ -68,6 +68,9 @@ CORPUS_RASTER_REVIEWED_CROP_SET_SCHEMA_REF = (
 CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
 )
+CORPUS_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-raster-suitability-review/1.0"
+)
 CORPUS_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0"
 )
@@ -1461,6 +1464,64 @@ class LocalImageScienceVisualRasterSuitabilityReview(FrozenModel):
         return self
 
 
+class LocalImageScienceVisualCampaignRasterSuitabilityReview(FrozenModel):
+    """Complete second-pass audit of one immutable campaign broad-raster population."""
+
+    schema_version: Literal["local-image-science-campaign-raster-suitability-review/1.0"]
+    review_id: str = Field(pattern=r"^imgsciviscampaignrasterreview_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_file_sha256: Sha256
+    pattern_inventory_semantic_sha256: Sha256
+    entries: tuple[ScienceVisualRasterSuitabilityEntry, ...] = Field(min_length=1, max_length=2048)
+    gpu_raster_eligible_count: int = Field(ge=0, le=2048)
+    python_svg_required_count: int = Field(ge=0, le=2048)
+    excluded_count: int = Field(ge=0, le=2048)
+    reviewed_at: datetime
+    reviewed_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    review_sha256: Sha256
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def utc_review(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def complete_immutable_review_is_coherent(
+        self,
+    ) -> LocalImageScienceVisualCampaignRasterSuitabilityReview:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+        )
+        if self.pattern_inventory.sha256 != self.pattern_inventory_file_sha256:
+            raise ValueError(
+                "science campaign raster-suitability inventory file hash differs from pointer"
+            )
+        entry_ids = tuple(value.candidate_id for value in self.entries)
+        if entry_ids != tuple(sorted(set(entry_ids))):
+            raise ValueError("science campaign raster-suitability entries must be uniquely sorted")
+        counts = Counter(value.decision for value in self.entries)
+        if (
+            self.gpu_raster_eligible_count != counts["GPU_RASTER_ELIGIBLE"]
+            or self.python_svg_required_count != counts["PYTHON_SVG_REQUIRED"]
+            or self.excluded_count != counts["EXCLUDED"]
+        ):
+            raise ValueError("science campaign raster-suitability counts differ from entries")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"review_id", "review_sha256"})
+        ).removeprefix("sha256:")
+        if self.review_id != "imgsciviscampaignrasterreview_" + identity[:32]:
+            raise ValueError(
+                "science campaign raster-suitability review ID does not bind its content"
+            )
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("science campaign raster-suitability review hash mismatch")
+        return self
+
+
 class ScienceVisualRasterRefinementProposal(FrozenModel):
     """One reviewed panel-level crop derived from a pinned parent candidate."""
 
@@ -2198,6 +2259,24 @@ def validate_science_visual_raster_suitability_review(
     if actual_ids != eligible_ids:
         raise ValueError(
             "science raster-suitability review does not cover every broad raster candidate"
+        )
+
+
+def validate_science_visual_campaign_raster_suitability_review(
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    review: LocalImageScienceVisualCampaignRasterSuitabilityReview,
+) -> None:
+    """Require exact second-pass coverage of the campaign broad-raster population."""
+
+    if review.pattern_inventory_semantic_sha256 != inventory.inventory_sha256:
+        raise ValueError("science campaign raster-suitability source binding differs")
+    eligible_ids = {
+        value.candidate_id for value in inventory.reviews if value.decision == "LORA_ELIGIBLE"
+    }
+    actual_ids = {value.candidate_id for value in review.entries}
+    if actual_ids != eligible_ids:
+        raise ValueError(
+            "science campaign raster-suitability review does not cover every broad candidate"
         )
 
 

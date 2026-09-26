@@ -27,6 +27,7 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
     LocalImageScienceVisualCampaignPatternInventory,
+    LocalImageScienceVisualCampaignRasterSuitabilityReview,
     LocalImageScienceVisualCampaignReviewBatchCommand,
     LocalImageScienceVisualCampaignReviewBatchResult,
     LocalImageScienceVisualCropSet,
@@ -47,6 +48,7 @@ from eom_image_contracts import (
     validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
     validate_science_visual_campaign_pattern_inventory,
+    validate_science_visual_campaign_raster_suitability_review,
     validate_science_visual_campaign_review_batch,
     validate_science_visual_crop_set,
     validate_science_visual_crop_set_v2,
@@ -1180,6 +1182,82 @@ def test_campaign_inventory_batch_publisher_resolves_exact_artifact_bytes(
     assert loaded[2] == (review_result,)
     assert loaded[3] == (result_pointer,)
     assert loaded[4][0]["batch_id"] == command.batch_id
+
+
+def _campaign_raster_review_value() -> tuple[dict[str, object], dict[str, object]]:
+    inventory, _, _, _, _ = _campaign_inventory_value()
+    reviews = inventory["reviews"]
+    assert isinstance(reviews, list)
+    entries = [
+        {
+            "candidate_id": review["candidate_id"],
+            "decision": "GPU_RASTER_ELIGIBLE",
+            "semantic_alignment": "VERIFIED",
+            "reasons": [],
+            "caption_en": review["caption_en"],
+            "caption_sha256": review["caption_sha256"],
+        }
+        for review in reviews
+        if review["decision"] == "LORA_ELIGIBLE"
+    ]
+    inventory_file_sha256 = content_sha256(inventory)
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-campaign-raster-suitability-review/1.0",
+        "pattern_inventory": _pointer(
+            "e",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-visual-campaign-pattern-inventory/1.0"
+            ),
+            sha256=inventory_file_sha256,
+        ),
+        "pattern_inventory_file_sha256": inventory_file_sha256,
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "entries": entries,
+        "gpu_raster_eligible_count": len(entries),
+        "python_svg_required_count": 0,
+        "excluded_count": 0,
+        "reviewed_at": "2026-09-26T18:20:00Z",
+        "reviewed_by": "reviewer_user",
+    }
+    body["review_id"] = (
+        "imgsciviscampaignrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    return inventory, {**body, "review_sha256": content_sha256(body)}
+
+
+def test_campaign_raster_review_covers_broad_population() -> None:
+    inventory_value, review_value = _campaign_raster_review_value()
+    validate_contract("science-campaign-raster-suitability-review", review_value)
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value)
+    review = LocalImageScienceVisualCampaignRasterSuitabilityReview.model_validate(review_value)
+
+    validate_science_visual_campaign_raster_suitability_review(inventory, review)
+
+
+def test_campaign_raster_review_rejects_missing_broad_candidate() -> None:
+    inventory_value, review_value = _campaign_raster_review_value()
+    entries = review_value["entries"]
+    assert isinstance(entries, list)
+    entries.pop()
+    review_value["gpu_raster_eligible_count"] = len(entries)
+    body = {
+        key: value
+        for key, value in review_value.items()
+        if key not in {"review_id", "review_sha256"}
+    }
+    review_value["review_id"] = (
+        "imgsciviscampaignrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    review_value["review_sha256"] = content_sha256(
+        {key: value for key, value in review_value.items() if key != "review_sha256"}
+    )
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value)
+    review = LocalImageScienceVisualCampaignRasterSuitabilityReview.model_validate(review_value)
+
+    with pytest.raises(ValueError, match="does not cover every broad candidate"):
+        validate_science_visual_campaign_raster_suitability_review(inventory, review)
 
 
 def test_campaign_review_batch_publisher_preflights_exact_command(

@@ -84,6 +84,9 @@ SCHEMA_FILES = {
     "science-raster-suitability-review": (
         "local-image-science-raster-suitability-review-v1.schema.json"
     ),
+    "science-campaign-raster-suitability-review": (
+        "local-image-science-campaign-raster-suitability-review-v1.schema.json"
+    ),
     "science-raster-refinement-plan": ("local-image-science-raster-refinement-plan-v1.schema.json"),
     "science-lora-micro-probe-plan": ("local-image-science-lora-micro-probe-plan-v1.schema.json"),
     "science-lora-micro-probe-command": (
@@ -222,6 +225,9 @@ SCHEMA_SHA256 = {
     ),
     "science-raster-suitability-review": (
         "sha256:b386137ac8f1188aa01b12a075f8e1ba3696621d299cbf599bce8760f92b3713"
+    ),
+    "science-campaign-raster-suitability-review": (
+        "sha256:e8ec84c1cb790b07f24fe033875f105fcac2ecce10529384adec7843aaa8dfaa"
     ),
     "science-raster-refinement-plan": (
         "sha256:419679adabbb30229386bf63bb2221dc1d599a7681b2e9de56f8ce5f15c6072b"

@@ -13,6 +13,8 @@ from eom_image_contracts import (
 )
 from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
+    SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
+    SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_MEMBER,
     SCIENCE_CORPUS_AUTHORIZATION_ARTIFACT_TYPE,
     SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
     SCIENCE_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
@@ -284,6 +286,16 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     assert publisher.arguments["artifact_type"] == SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE
     assert publisher.arguments["logical_name"] == SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER
     assert raster_review_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    campaign_raster_review_pointer = adapter.commit_science_campaign_raster_suitability_review(
+        raster_review  # type: ignore[arg-type]
+    )
+    assert (
+        publisher.arguments["artifact_type"]
+        == SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE
+    )
+    assert publisher.arguments["logical_name"] == SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_MEMBER
+    assert campaign_raster_review_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     refinement_plan = _ScienceRasterRefinementPlan(
         plan_sha256="sha256:" + "0" * 64,
