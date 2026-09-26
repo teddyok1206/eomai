@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-command/1.0",
+  "title": "EOM Science Campaign LoRA Micro-Probe Command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "modelPointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version"
+      ],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "torch_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "diffusers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "transformers_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "accelerate_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "peft_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "bitsandbytes_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "hyperparameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter_type",
+        "rank",
+        "alpha",
+        "resolution_width",
+        "resolution_height",
+        "train_batch_size",
+        "gradient_accumulation_steps",
+        "gradient_checkpointing",
+        "mixed_precision",
+        "optimizer",
+        "learning_rate",
+        "max_train_steps",
+        "checkpointing_steps",
+        "random_flip",
+        "train_text_encoders",
+        "train_vae"
+      ],
+      "properties": {
+        "adapter_type": {
+          "const": "UNET_LORA"
+        },
+        "rank": {
+          "const": 8
+        },
+        "alpha": {
+          "const": 8
+        },
+        "resolution_width": {
+          "const": 768
+        },
+        "resolution_height": {
+          "const": 512
+        },
+        "train_batch_size": {
+          "const": 1
+        },
+        "gradient_accumulation_steps": {
+          "const": 4
+        },
+        "gradient_checkpointing": {
+          "const": true
+        },
+        "mixed_precision": {
+          "const": "fp16"
+        },
+        "optimizer": {
+          "const": "adamw_8bit"
+        },
+        "learning_rate": {
+          "const": "1e-4"
+        },
+        "max_train_steps": {
+          "const": 200
+        },
+        "checkpointing_steps": {
+          "const": 200
+        },
+        "random_flip": {
+          "const": false
+        },
+        "train_text_encoders": {
+          "const": false
+        },
+        "train_vae": {
+          "const": false
+        }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "probe_id",
+        "crop_set",
+        "crop_set_sha256",
+        "base_model",
+        "training_member_ids",
+        "validation_member_ids",
+        "holdout_member_ids",
+        "preprocessing_revision",
+        "trainer_contract",
+        "dependencies",
+        "hyperparameters",
+        "seed",
+        "purpose",
+        "activation_policy",
+        "authorized_at",
+        "authorized_by",
+        "authorization_reference_sha256",
+        "created_at",
+        "created_by",
+        "source_commit",
+        "plan_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "local-image-science-campaign-lora-micro-probe-plan/1.0"
+        },
+        "probe_id": {
+          "type": "string",
+          "pattern": "^imgscicampaignmicroprobe_[0-9a-f]{32}$"
+        },
+        "crop_set": {
+          "$ref": "#/$defs/artifactMember"
+        },
+        "crop_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "base_model": {
+          "$ref": "#/$defs/modelPointer"
+        },
+        "training_member_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^imgsciviscampaigncrop_[0-9a-f]{32}$"
+          },
+          "minItems": 12,
+          "maxItems": 12
+        },
+        "validation_member_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^imgsciviscampaigncrop_[0-9a-f]{32}$"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "holdout_member_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^imgsciviscampaigncrop_[0-9a-f]{32}$"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "preprocessing_revision": {
+          "const": "local-image-science-crop-preprocess/1.0"
+        },
+        "trainer_contract": {
+          "const": "eom-local-image-science-campaign-lora-micro-trainer/1.0"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/dependencies"
+        },
+        "hyperparameters": {
+          "$ref": "#/$defs/hyperparameters"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "purpose": {
+          "const": "EVALUATION_ONLY_SCIENCE_CAMPAIGN_MICRO_PROBE"
+        },
+        "activation_policy": {
+          "const": "FORBIDDEN"
+        },
+        "authorized_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "authorized_by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:@-]+$"
+        },
+        "authorization_reference_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:@-]+$"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "plan_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "probe_plan_pointer",
+    "probe_plan_sha256",
+    "probe_plan",
+    "attempt",
+    "staged_plan_member",
+    "staged_crop_set_member",
+    "staged_crops_root",
+    "runtime_dataset_root",
+    "output_root_member",
+    "checkpoint_root_member",
+    "timeout_seconds",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-probe-command/1.0"
+    },
+    "training_run_id": {
+      "type": "string",
+      "pattern": "^imgscicampaignmicrotrainrun_[0-9a-f]{32}$"
+    },
+    "probe_plan_pointer": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "probe_plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "probe_plan": {
+      "$ref": "#/$defs/plan"
+    },
+    "attempt": {
+      "const": 1
+    },
+    "staged_plan_member": {
+      "const": "inputs/science-campaign-micro-probe-plan.json"
+    },
+    "staged_crop_set_member": {
+      "const": "inputs/science-visual-campaign-crop-set.json"
+    },
+    "staged_crops_root": {
+      "const": "inputs/crops"
+    },
+    "runtime_dataset_root": {
+      "const": "runtime-dataset"
+    },
+    "output_root_member": {
+      "const": "outputs"
+    },
+    "checkpoint_root_member": {
+      "const": "checkpoints"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 600,
+      "maximum": 14400
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}
