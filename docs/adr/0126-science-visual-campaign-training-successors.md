@@ -81,6 +81,9 @@ Artifact revision and receipt. Same semantic input is idempotent; different inpu
 identity conflicts. A failed worker attempt stays failed. Missing/stale/hash/schema/media/lifecycle
 pointers, batch overlap or gaps, duplicate source groups, rights drift, fewer than the required
 partitions, GPU/runtime drift, non-finite loss, or unconfirmed outcomes stop further side effects.
+Historical Control Artifact members retain the publisher's `0660` mode. Resolution therefore uses
+an approved pinned revision, `O_NOFOLLOW`, regular/single-link and stable-descriptor checks, bounded
+reads, manifest metadata equality, and the exact content hash instead of rewriting historical modes.
 
 ## Simpler alternatives rejected
 

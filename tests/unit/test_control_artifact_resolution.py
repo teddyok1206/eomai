@@ -72,7 +72,10 @@ def test_resolve_control_artifact_member_checks_pointer_manifest_and_bytes(
     member = tmp_path / "manifests" / "review.json"
     member.parent.mkdir()
     member.write_bytes(payload)
-    member.chmod(0o600)
+    # ControlArtifactPublisher currently materializes final NAS members as 0660.
+    # Approved metadata, stable descriptor identity, and the exact SHA protect
+    # dereferencing; historical immutable revisions are not rewritten for mode.
+    member.chmod(0o660)
     pointer = _pointer(payload)
     row: dict[str, object] = {
         "nas_path": str(tmp_path),

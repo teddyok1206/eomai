@@ -59,7 +59,6 @@ def _safe_read_beneath(root: Path, member_path: str, *, maximum_bytes: int) -> b
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
             or not 0 < before.st_size <= maximum_bytes
-            or stat.S_IMODE(before.st_mode) & 0o022
         ):
             raise ControlArtifactResolutionError("CONTROL_ARTIFACT_MEMBER_INVALID")
         payload = bytearray()
