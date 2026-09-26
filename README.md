@@ -50,6 +50,15 @@ readiness가 정본입니다.
 | 교육 문서 검토 | `pdf-document-review@1.2.0`, role `workflow-role/1.27.0`, result `@3.0`, plan `15.0` |
 | PDF 검토 주석 | request `document-review-pdf-annotation/3.0`, Catalog protocol `catalog/1.22` |
 
+과학 기출 이미지의 로컬 SSD-1B LoRA 학습은 외부 API 없이 별도 격리 경계에서 수행합니다.
+2026-09-26 확장 campaign은 검토된 24개 raster crop(훈련 16, 검증 4, holdout 4)으로 200-step
+학습과 4개 BASE/ADAPTER 고정 비교를 완료했습니다. 결과 weights와 8개 비교 PNG는 Orchestrator가
+불변 Artifact Revision으로 게시했고, 비교 판정은 개선 3건·동등 1건·차단 회귀 0건입니다. 작은
+데이터에 대한 추가 과적합을 피하려고 3차 학습은 하지 않았습니다. 이 adapter는 현재
+`EVALUATION_ONLY`이며 기존 base-only provider binding은 바꾸지 않았습니다. 상세 ID·hash·활성화
+선행조건은 [확장 LoRA campaign 상태](docs/status/SCIENCE_LORA_EXPANDED_CAMPAIGN_2026-09-26.md)에
+기록합니다.
+
 단일 문항의 최신 Graph 검증 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
 각각 독립 판정합니다. Review worker는 verdict 전에 검증 대상과 필요한 source class를 계획하고,
 시각자료가 있으면 이미지·표와 본문·선택지·해설의 일치를 먼저 확인합니다. 의심 사항은

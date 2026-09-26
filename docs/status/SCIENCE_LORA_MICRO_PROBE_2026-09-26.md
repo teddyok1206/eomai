@@ -1,5 +1,9 @@
 # Science image LoRA micro-probe status — 2026-09-26 UTC
 
+> Historical first probe. The expanded successor campaign is recorded in
+> [Expanded science-image LoRA campaign](SCIENCE_LORA_EXPANDED_CAMPAIGN_2026-09-26.md). This file's
+> original evidence and activation decision remain unchanged.
+
 ## Outcome
 
 `TECHNICAL_PASS / DO_NOT_ACTIVATE / DO_NOT_SCALE_CURRENT_DATASET`
