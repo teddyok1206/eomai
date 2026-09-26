@@ -75,6 +75,12 @@ SCHEMA_FILES = {
     "science-lora-micro-probe-worker-result": (
         "local-image-science-lora-micro-probe-worker-result-v1.schema.json"
     ),
+    "science-lora-micro-evaluation-command": (
+        "local-image-science-lora-micro-evaluation-command-v1.schema.json"
+    ),
+    "science-lora-micro-evaluation-result": (
+        "local-image-science-lora-micro-evaluation-result-v1.schema.json"
+    ),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -187,6 +193,12 @@ SCHEMA_SHA256 = {
     ),
     "science-lora-micro-probe-worker-result": (
         "sha256:4dc0aa5f491448d27f24c652250bdb3eed7098a9d590fa7bc262dd3215876080"
+    ),
+    "science-lora-micro-evaluation-command": (
+        "sha256:715e3f8495698b9e3db7601ec954a38774011ab67a649c19190e9bfe6774b019"
+    ),
+    "science-lora-micro-evaluation-result": (
+        "sha256:2477a3f12e6396b3224d1812ce84d513eec607a768cb69f3f66d78ceafe76399"
     ),
 }
 

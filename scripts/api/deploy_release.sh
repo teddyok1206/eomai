@@ -1889,6 +1889,8 @@ image_resources = {
     "local-image-science-lora-micro-probe-command-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-probe-command-v1.schema.json",
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-adapter-manifest-v1.schema.json",
     "local-image-science-lora-micro-probe-worker-result-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-probe-worker-result-v1.schema.json",
+    "local-image-science-lora-micro-evaluation-command-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-evaluation-command-v1.schema.json",
+    "local-image-science-lora-micro-evaluation-result-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-evaluation-result-v1.schema.json",
     "local-image-training-authorization-v1.schema.json": "schemas/image-provider/local-image-training-authorization-v1.schema.json",
     "local-image-training-candidate-inventory-v1.schema.json": "schemas/image-provider/local-image-training-candidate-inventory-v1.schema.json",
     "local-image-training-crop-proposal-set-v1.schema.json": "schemas/image-provider/local-image-training-crop-proposal-set-v1.schema.json",
