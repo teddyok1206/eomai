@@ -105,6 +105,28 @@ def materialize_training_crop(
     return canvas.convert("RGB")
 
 
+def materialize_literal_crop(
+    source: Image.Image,
+    *,
+    crop_box: ImageEvaluationBoundingBox,
+) -> Image.Image:
+    """Return only the exact rectangular source pixels selected by a normalized box.
+
+    Campaign refinement uses this before a canonical crop-set publication.  It deliberately
+    performs no resize, padding, redaction, color conversion, or reconstruction; those operations
+    belong to later trainer workspace materialization and must not alter the canonical sample.
+    """
+
+    left, top, right, bottom = _pixel_box(
+        crop_box,
+        width=source.width,
+        height=source.height,
+    )
+    if right - left < 32 or bottom - top < 32:
+        raise CropProcessingError("IMAGE_TRAINING_LITERAL_CROP_TOO_SMALL")
+    return source.crop((left, top, right, bottom))
+
+
 def png_bytes(image: Image.Image) -> bytes:
     target = io.BytesIO()
     image.save(target, format="PNG", optimize=False, compress_level=9)

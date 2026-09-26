@@ -18,6 +18,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualCampaignPatternInventory,
+    LocalImageScienceVisualCampaignRasterRefinementPlan,
     LocalImageScienceVisualCampaignReviewBatchCommand,
     LocalImageScienceVisualCampaignReviewBatchResult,
     LocalImageScienceVisualPatternInventory,
@@ -143,6 +144,15 @@ SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0"
 )
 SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE = "control_local_image_science_raster_refinement_plan"
+SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_MEMBER = (
+    "manifests/science-campaign-raster-refinement-plan.json"
+)
+SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-raster-refinement-plan/1.0"
+)
+SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE = (
+    "control_local_image_science_campaign_raster_refinement_plan"
+)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -438,6 +448,23 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF,
             artifact_type=SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-raster-refinement-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_campaign_raster_refinement_plan(
+        self,
+        plan: LocalImageScienceVisualCampaignRasterRefinementPlan,
+    ) -> ImageEvaluationArtifactMember:
+        """Publish a validated campaign crop plan through the sole NAS writer."""
+
+        return self._commit_document(
+            value=plan,
+            contract_name="science-campaign-raster-refinement-plan",
+            member=SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_MEMBER,
+            schema_ref=SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-campaign-raster-refinement-plan",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )
