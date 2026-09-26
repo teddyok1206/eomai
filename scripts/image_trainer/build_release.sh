@@ -69,6 +69,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-plan-v2.schema.json",
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-crop-set-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-visual-crop-set-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-science-raster-suitability-review-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-adapter-manifest-v1.schema.json",
