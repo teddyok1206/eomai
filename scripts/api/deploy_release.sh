@@ -1887,6 +1887,7 @@ image_resources = {
     "local-image-science-visual-crop-set-v1.schema.json": "schemas/image-provider/local-image-science-visual-crop-set-v1.schema.json",
     "local-image-science-visual-crop-set-v2.schema.json": "schemas/image-provider/local-image-science-visual-crop-set-v2.schema.json",
     "local-image-science-raster-suitability-review-v1.schema.json": "schemas/image-provider/local-image-science-raster-suitability-review-v1.schema.json",
+    "local-image-science-raster-refinement-plan-v1.schema.json": "schemas/image-provider/local-image-science-raster-refinement-plan-v1.schema.json",
     "local-image-science-lora-micro-probe-plan-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-probe-plan-v1.schema.json",
     "local-image-science-lora-micro-probe-command-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-probe-command-v1.schema.json",
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": "schemas/image-provider/local-image-science-lora-micro-adapter-manifest-v1.schema.json",

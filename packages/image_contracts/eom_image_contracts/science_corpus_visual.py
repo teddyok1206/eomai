@@ -53,6 +53,9 @@ CORPUS_RASTER_REVIEWED_CROP_SET_SCHEMA_REF = (
 CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
 )
+CORPUS_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -1039,6 +1042,113 @@ class LocalImageScienceVisualRasterSuitabilityReview(FrozenModel):
         return self
 
 
+class ScienceVisualRasterRefinementProposal(FrozenModel):
+    """One reviewed panel-level crop derived from a pinned parent candidate."""
+
+    refinement_id: str = Field(pattern=r"^imgscivisrefine_[0-9a-f]{32}$")
+    parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    crop_bounding_box: ImageEvaluationBoundingBox
+    caption_en: str = Field(
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256
+    partition: Literal["TRAIN"]
+    refinement_reasons: tuple[Literal["BORDER_TRIM", "PANEL_SPLIT"], ...] = Field(
+        min_length=1,
+        max_length=2,
+    )
+
+    @model_validator(mode="after")
+    def proposal_is_canonical(self) -> ScienceVisualRasterRefinementProposal:
+        if self.refinement_reasons != tuple(sorted(set(self.refinement_reasons))):
+            raise ValueError("science raster refinement reasons must be uniquely sorted")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("science raster refinement caption hash mismatch")
+        if (
+            self.crop_bounding_box.right - self.crop_bounding_box.left < 500
+            or self.crop_bounding_box.bottom - self.crop_bounding_box.top < 500
+        ):
+            raise ValueError("science raster refinement crop is too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"refinement_id"})
+        ).removeprefix("sha256:")
+        if self.refinement_id != "imgscivisrefine_" + identity[:32]:
+            raise ValueError("science raster refinement ID does not bind its content")
+        return self
+
+
+class LocalImageScienceVisualRasterRefinementPlan(FrozenModel):
+    """Immutable review plan for train-only crops from natural-image panels."""
+
+    schema_version: Literal["local-image-science-raster-refinement-plan/1.0"]
+    refinement_plan_id: str = Field(pattern=r"^imgscivisrefineplan_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    raster_suitability_review: ImageEvaluationArtifactMember
+    raster_suitability_review_sha256: Sha256
+    pilot_result: ImageEvaluationArtifactMember
+    pilot_result_semantic_sha256: Sha256
+    proposals: tuple[ScienceVisualRasterRefinementProposal, ...] = Field(
+        min_length=1,
+        max_length=1024,
+    )
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    plan_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def plan_is_coherent(self) -> LocalImageScienceVisualRasterRefinementPlan:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.raster_suitability_review,
+            schema_ref=CORPUS_RASTER_SUITABILITY_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-raster-suitability-review.json",
+        )
+        _require_pointer(
+            self.pilot_result,
+            schema_ref=CORPUS_PILOT_RESULT_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/visual-pilot-result.json",
+        )
+        proposal_ids = tuple(value.refinement_id for value in self.proposals)
+        if proposal_ids != tuple(sorted(set(proposal_ids))):
+            raise ValueError("science raster refinements must be uniquely sorted")
+        parent_boxes = tuple(
+            (
+                value.parent_candidate_id,
+                value.crop_bounding_box.left,
+                value.crop_bounding_box.top,
+                value.crop_bounding_box.right,
+                value.crop_bounding_box.bottom,
+            )
+            for value in self.proposals
+        )
+        if len(parent_boxes) != len(set(parent_boxes)):
+            raise ValueError("science raster refinement plan repeats a crop")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"refinement_plan_id", "plan_sha256"})
+        ).removeprefix("sha256:")
+        if self.refinement_plan_id != "imgscivisrefineplan_" + identity[:32]:
+            raise ValueError("science raster refinement plan ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"plan_sha256"}))
+        if self.plan_sha256 != expected:
+            raise ValueError("science raster refinement plan hash mismatch")
+        return self
+
+
 class ScienceVisualReviewedCropMember(FrozenModel):
     """One exact post-review PNG member; the containing Artifact owns its bytes."""
 
@@ -1353,6 +1463,55 @@ def validate_science_visual_crop_set_v2(
             or raster_review.caption_sha256 != member.caption_sha256
         ):
             raise ValueError("science crop member differs from raster suitability evidence")
+
+
+def validate_science_visual_raster_refinement_plan(
+    *,
+    result: LocalImageScienceCorpusVisualPilotResult,
+    inventory: LocalImageScienceVisualPatternInventoryV2,
+    raster_suitability_review: LocalImageScienceVisualRasterSuitabilityReview,
+    plan: LocalImageScienceVisualRasterRefinementPlan,
+) -> None:
+    """Bind train-only panel splits to non-authoritative reviewed raster parents."""
+
+    validate_science_visual_pattern_inventory_v2(result, inventory)
+    validate_science_visual_raster_suitability_review(inventory, raster_suitability_review)
+    if (
+        plan.pattern_inventory != raster_suitability_review.pattern_inventory
+        or plan.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or plan.raster_suitability_review.sha256
+        != content_sha256(raster_suitability_review.model_dump(mode="json"))
+        or plan.raster_suitability_review_sha256 != raster_suitability_review.review_sha256
+        or plan.pilot_result != inventory.pilot_result
+        or plan.pilot_result_semantic_sha256 != result.result_sha256
+    ):
+        raise ValueError("science raster refinement plan source hash differs")
+    candidates = {value.candidate_id: value for value in result.visual_candidates}
+    broad_reviews = {value.candidate_id: value for value in inventory.reviews}
+    raster_reviews = {value.candidate_id: value for value in raster_suitability_review.entries}
+    for proposal in plan.proposals:
+        candidate = candidates.get(proposal.parent_candidate_id)
+        broad_review = broad_reviews.get(proposal.parent_candidate_id)
+        raster_review = raster_reviews.get(proposal.parent_candidate_id)
+        if (
+            candidate is None
+            or broad_review is None
+            or raster_review is None
+            or broad_review.decision != "LORA_ELIGIBLE"
+            or candidate.authority_class != "NON_AUTHORITATIVE_RASTER_STYLE"
+            or candidate.representation_kind in {"PLOT", "TABLE"}
+            or (
+                raster_review.decision == "EXCLUDED"
+                and "PANEL_COMPOSITION" not in raster_review.reasons
+            )
+            or raster_review.decision not in {"EXCLUDED", "GPU_RASTER_ELIGIBLE"}
+        ):
+            raise ValueError("science raster refinement parent is not an eligible raster source")
+        if raster_review.decision == "EXCLUDED":
+            if "PANEL_SPLIT" not in proposal.refinement_reasons:
+                raise ValueError("science panel refinement requires PANEL_SPLIT")
+        elif proposal.refinement_reasons != ("BORDER_TRIM",):
+            raise ValueError("single raster refinement may only trim a border")
 
 
 def _validate_pattern_inventory_against_result(

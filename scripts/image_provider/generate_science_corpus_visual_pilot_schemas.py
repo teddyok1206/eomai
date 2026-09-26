@@ -1217,6 +1217,114 @@ def _raster_suitability_review() -> dict[str, Any]:
     return schema
 
 
+def _raster_refinement_plan() -> dict[str, Any]:
+    """Plan deterministic train-only panel crops without rewriting the source crop."""
+
+    schema = _base(
+        "EOM Science Raster Refinement Plan V1",
+        "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "boundingBox": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["left", "top", "right", "bottom"],
+                "properties": {
+                    "left": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "top": {"type": "integer", "minimum": 0, "maximum": 9999},
+                    "right": {"type": "integer", "minimum": 1, "maximum": 10000},
+                    "bottom": {"type": "integer", "minimum": 1, "maximum": 10000},
+                },
+            },
+            "proposal": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "refinement_id",
+                    "parent_candidate_id",
+                    "crop_bounding_box",
+                    "caption_en",
+                    "caption_sha256",
+                    "partition",
+                    "refinement_reasons",
+                ],
+                "properties": {
+                    "refinement_id": {
+                        "type": "string",
+                        "pattern": "^imgscivisrefine_[0-9a-f]{32}$",
+                    },
+                    "parent_candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "crop_bounding_box": {"$ref": "#/$defs/boundingBox"},
+                    "caption_en": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 240,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+                    },
+                    "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    "partition": {"const": "TRAIN"},
+                    "refinement_reasons": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 2,
+                        "items": {"enum": ["BORDER_TRIM", "PANEL_SPLIT"]},
+                    },
+                },
+            },
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "refinement_plan_id",
+                "pattern_inventory",
+                "pattern_inventory_semantic_sha256",
+                "raster_suitability_review",
+                "raster_suitability_review_sha256",
+                "pilot_result",
+                "pilot_result_semantic_sha256",
+                "proposals",
+                "created_at",
+                "created_by",
+                "plan_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-raster-refinement-plan/1.0"},
+                "refinement_plan_id": {
+                    "type": "string",
+                    "pattern": "^imgscivisrefineplan_[0-9a-f]{32}$",
+                },
+                "pattern_inventory": {"$ref": "#/$defs/artifactMember"},
+                "pattern_inventory_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "raster_suitability_review": {"$ref": "#/$defs/artifactMember"},
+                "raster_suitability_review_sha256": {"$ref": "#/$defs/sha256"},
+                "pilot_result": {"$ref": "#/$defs/artifactMember"},
+                "pilot_result_semantic_sha256": {"$ref": "#/$defs/sha256"},
+                "proposals": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1024,
+                    "items": {"$ref": "#/$defs/proposal"},
+                },
+                "created_at": UTC,
+                "created_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "plan_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 def _model_pointer() -> dict[str, Any]:
     return {
         "type": "object",
@@ -1888,6 +1996,7 @@ SCHEMAS = {
     "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
     "local-image-science-visual-crop-set-v2.schema.json": _raster_reviewed_crop_set_v2(),
     "local-image-science-raster-suitability-review-v1.schema.json": _raster_suitability_review(),
+    "local-image-science-raster-refinement-plan-v1.schema.json": _raster_refinement_plan(),
     "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
     "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),
     "local-image-science-lora-micro-adapter-manifest-v1.schema.json": _science_micro_adapter(),

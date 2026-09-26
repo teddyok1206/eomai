@@ -17,6 +17,8 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
     SCIENCE_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
     SCIENCE_MICRO_PROBE_PLAN_MEMBER,
+    SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
+    SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER,
     SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
     SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER,
     SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE,
@@ -145,6 +147,10 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
         review_sha256: str
         reviewed_at: datetime
 
+    class _ScienceRasterRefinementPlan(BaseModel):
+        plan_sha256: str
+        created_at: datetime
+
     monkeypatch.setattr(control_artifacts, "validate_contract", lambda *_args: None)
     publisher = _Publisher()
     adapter = LocalImageTrainingControlArtifactPublisher(
@@ -224,3 +230,14 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     assert publisher.arguments["artifact_type"] == SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE
     assert publisher.arguments["logical_name"] == SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER
     assert raster_review_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    refinement_plan = _ScienceRasterRefinementPlan(
+        plan_sha256="sha256:" + "0" * 64,
+        created_at=datetime(2026, 9, 26, 7, 0, tzinfo=UTC),
+    )
+    refinement_pointer = adapter.commit_science_raster_refinement_plan(
+        refinement_plan  # type: ignore[arg-type]
+    )
+    assert publisher.arguments["artifact_type"] == SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE
+    assert publisher.arguments["logical_name"] == SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER
+    assert refinement_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])

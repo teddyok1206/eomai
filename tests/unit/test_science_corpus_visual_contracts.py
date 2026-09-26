@@ -23,6 +23,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualCropSetV2,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
+    LocalImageScienceVisualRasterRefinementPlan,
     LocalImageScienceVisualRasterSuitabilityReview,
     content_sha256,
     text_sha256,
@@ -38,6 +39,7 @@ from eom_image_contracts import (
     validate_science_visual_pattern_inventory_v2,
     validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
+    validate_science_visual_raster_refinement_plan,
     validate_science_visual_raster_suitability_review,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -797,6 +799,54 @@ def _crop_set_v2_value() -> dict[str, object]:
     return value
 
 
+def _raster_refinement_plan_value() -> dict[str, object]:
+    """One panel split from a pinned, broadly eligible parent crop."""
+
+    result = _crop_set_result_value()
+    inventory = _crop_set_inventory_value()
+    review = _raster_suitability_review_value()
+    entries = review["entries"]
+    assert isinstance(entries, list)
+    panel_entry = next(entry for entry in entries if entry["decision"] == "EXCLUDED")
+    caption = "grayscale volcanic crater reference photograph"
+    proposal: dict[str, object] = {
+        "parent_candidate_id": panel_entry["candidate_id"],
+        "crop_bounding_box": {"left": 600, "top": 700, "right": 9200, "bottom": 9100},
+        "caption_en": caption,
+        "caption_sha256": text_sha256(caption),
+        "partition": "TRAIN",
+        "refinement_reasons": ["PANEL_SPLIT"],
+    }
+    proposal["refinement_id"] = (
+        "imgscivisrefine_" + content_sha256(proposal).removeprefix("sha256:")[:32]
+    )
+    body: dict[str, object] = {
+        "schema_version": "local-image-science-raster-refinement-plan/1.0",
+        "pattern_inventory": review["pattern_inventory"],
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "raster_suitability_review": _pointer(
+            "c",
+            member_path="manifests/science-raster-suitability-review.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-raster-suitability-review/1.0"
+            ),
+            sha256=content_sha256(review),
+        ),
+        "raster_suitability_review_sha256": review["review_sha256"],
+        "pilot_result": inventory["pilot_result"],
+        "pilot_result_semantic_sha256": result["result_sha256"],
+        "proposals": [proposal],
+        "created_at": "2026-09-26T07:00:00Z",
+        "created_by": "reviewer_user",
+    }
+    body["refinement_plan_id"] = (
+        "imgscivisrefineplan_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    value = {**body, "plan_sha256": content_sha256(body)}
+    value["_raster_suitability_review"] = review
+    return value
+
+
 def _science_micro_plan_value() -> dict[str, object]:
     crop_set = _crop_set_value()
     members = crop_set["members"]
@@ -1329,6 +1379,54 @@ def test_raster_reviewed_crop_set_requires_verified_gpu_raster_evidence() -> Non
                 review_value
             ),
             crop_set=LocalImageScienceVisualCropSetV2.model_validate(unsafe),
+        )
+
+
+def test_raster_refinement_plan_binds_only_reviewed_train_panel_splits() -> None:
+    result = LocalImageScienceCorpusVisualPilotResult.model_validate(_crop_set_result_value())
+    inventory = LocalImageScienceVisualPatternInventoryV2.model_validate(
+        _crop_set_inventory_value()
+    )
+    value = _raster_refinement_plan_value()
+    review_value = value.pop("_raster_suitability_review")
+    assert isinstance(review_value, dict)
+    review = LocalImageScienceVisualRasterSuitabilityReview.model_validate(review_value)
+    validate_contract("science-raster-refinement-plan", value)
+    plan = LocalImageScienceVisualRasterRefinementPlan.model_validate(value)
+
+    validate_science_visual_raster_refinement_plan(
+        result=result,
+        inventory=inventory,
+        raster_suitability_review=review,
+        plan=plan,
+    )
+    assert plan.proposals[0].partition == "TRAIN"
+
+    unsafe = copy.deepcopy(value)
+    proposals = unsafe["proposals"]
+    assert isinstance(proposals, list)
+    proposals[0]["refinement_reasons"] = ["BORDER_TRIM"]
+    proposal_body = {key: item for key, item in proposals[0].items() if key != "refinement_id"}
+    proposals[0]["refinement_id"] = (
+        "imgscivisrefine_" + content_sha256(proposal_body).removeprefix("sha256:")[:32]
+    )
+    plan_body = {
+        key: item
+        for key, item in unsafe.items()
+        if key not in {"refinement_plan_id", "plan_sha256"}
+    }
+    unsafe["refinement_plan_id"] = (
+        "imgscivisrefineplan_" + content_sha256(plan_body).removeprefix("sha256:")[:32]
+    )
+    unsafe["plan_sha256"] = content_sha256(
+        {key: item for key, item in unsafe.items() if key != "plan_sha256"}
+    )
+    with pytest.raises(ValueError, match="requires PANEL_SPLIT"):
+        validate_science_visual_raster_refinement_plan(
+            result=result,
+            inventory=inventory,
+            raster_suitability_review=review,
+            plan=LocalImageScienceVisualRasterRefinementPlan.model_validate(unsafe),
         )
 
 

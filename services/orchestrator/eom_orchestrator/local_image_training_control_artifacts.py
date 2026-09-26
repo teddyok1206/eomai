@@ -17,6 +17,7 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
+    LocalImageScienceVisualRasterRefinementPlan,
     LocalImageScienceVisualRasterSuitabilityReview,
     LocalImageTrainingAuthorization,
     LocalImageTrainingCropProposalSet,
@@ -89,6 +90,11 @@ SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
 SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
     "control_local_image_science_raster_suitability_review"
 )
+SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER = "manifests/science-raster-refinement-plan.json"
+SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-raster-refinement-plan/1.0"
+)
+SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE = "control_local_image_science_raster_refinement_plan"
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -294,6 +300,23 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-raster-suitability-review",
             identity_sha256=review.review_sha256,
             created_at=review.reviewed_at,
+        )
+
+    def commit_science_raster_refinement_plan(
+        self,
+        plan: LocalImageScienceVisualRasterRefinementPlan,
+    ) -> ImageEvaluationArtifactMember:
+        """Publish a validated immutable refinement plan through the NAS owner."""
+
+        return self._commit_document(
+            value=plan,
+            contract_name="science-raster-refinement-plan",
+            member=SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER,
+            schema_ref=SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-raster-refinement-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
         )
 
     def _commit_document(
