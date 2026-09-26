@@ -23,6 +23,10 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER,
     SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_ARTIFACT_TYPE,
     SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_MEMBER,
+    SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_MEMBER,
+    SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_ARTIFACT_TYPE,
+    SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_MEMBER,
     SCIENCE_VISUAL_PATTERN_INVENTORY_ARTIFACT_TYPE,
     SCIENCE_VISUAL_PATTERN_INVENTORY_MEMBER,
     SCIENCE_VISUAL_PATTERN_INVENTORY_V2_ARTIFACT_TYPE,
@@ -142,6 +146,10 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
         result_sha256: str
         completed_at: datetime
 
+    class _ScienceCampaignBatchCommand(BaseModel):
+        command_sha256: str
+        created_at: datetime
+
     class _ScienceInventory(BaseModel):
         inventory_sha256: str
         created_at: datetime
@@ -239,6 +247,32 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     )
     assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_MEMBER
     assert campaign_inventory_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    campaign_batch_command = _ScienceCampaignBatchCommand(
+        command_sha256="sha256:" + "d" * 64,
+        created_at=datetime(2026, 9, 25, 18, 11, tzinfo=UTC),
+    )
+    campaign_batch_command_pointer = adapter.commit_science_visual_campaign_review_batch_command(
+        campaign_batch_command  # type: ignore[arg-type]
+    )
+    assert (
+        publisher.arguments["artifact_type"]
+        == SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_ARTIFACT_TYPE
+    )
+    assert (
+        publisher.arguments["logical_name"] == SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_MEMBER
+    )
+    assert campaign_batch_command_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    campaign_batch_result_pointer = adapter.commit_science_visual_campaign_review_batch_result(
+        result  # type: ignore[arg-type]
+    )
+    assert (
+        publisher.arguments["artifact_type"]
+        == SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_ARTIFACT_TYPE
+    )
+    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_MEMBER
+    assert campaign_batch_result_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     raster_review = _ScienceRasterSuitabilityReview(
         review_sha256="sha256:" + "f" * 64,

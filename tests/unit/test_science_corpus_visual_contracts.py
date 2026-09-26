@@ -24,6 +24,8 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
     LocalImageScienceVisualCampaignPatternInventory,
+    LocalImageScienceVisualCampaignReviewBatchCommand,
+    LocalImageScienceVisualCampaignReviewBatchResult,
     LocalImageScienceVisualCropSet,
     LocalImageScienceVisualCropSetV2,
     LocalImageScienceVisualPatternInventory,
@@ -40,6 +42,7 @@ from eom_image_contracts import (
     validate_science_micro_probe_worker_result,
     validate_science_visual_authorization_plan,
     validate_science_visual_campaign_pattern_inventory,
+    validate_science_visual_campaign_review_batch,
     validate_science_visual_crop_set,
     validate_science_visual_crop_set_v2,
     validate_science_visual_pattern_inventory,
@@ -789,6 +792,118 @@ def test_campaign_pattern_inventory_rejects_missing_candidate_review() -> None:
                 for pointer in result_pointer_values
             ),
             inventory=inventory,
+        )
+
+
+def _campaign_review_batch_values() -> tuple[
+    dict[str, object],
+    dict[str, object],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
+    inventory, plans, results, plan_pointers, result_pointers = _campaign_inventory_value()
+    reviews = inventory["reviews"]
+    pilots = inventory["pilot_results"]
+    assert isinstance(reviews, list)
+    assert isinstance(pilots, list)
+    selected = copy.deepcopy(reviews[:12])
+    candidate_ids = [str(value["candidate_id"]) for value in selected]
+    command_body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-campaign-review-batch-command/1.0",
+        "campaign_id": inventory["campaign_id"],
+        "pilot_results": copy.deepcopy(pilots),
+        "candidate_ids": candidate_ids,
+        "created_at": "2026-09-26T12:04:00Z",
+        "created_by": "reviewer_user",
+    }
+    command_body["batch_id"] = (
+        "imgscivisreviewbatch_" + content_sha256(command_body).removeprefix("sha256:")[:32]
+    )
+    command = {**command_body, "command_sha256": content_sha256(command_body)}
+    command_pointer = _pointer(
+        "f",
+        member_path="manifests/science-visual-campaign-review-batch-command.json",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-command/1.0"
+        ),
+    )
+    result_body: dict[str, object] = {
+        "schema_version": "local-image-science-visual-campaign-review-batch-result/1.0",
+        "batch_id": command["batch_id"],
+        "review_batch": command_pointer,
+        "command_sha256": command["command_sha256"],
+        "reviews": selected,
+        "completed_at": "2026-09-26T12:05:00Z",
+        "completed_by": "reviewer_user",
+    }
+    return (
+        command,
+        {**result_body, "result_sha256": content_sha256(result_body)},
+        plans,
+        results,
+        plan_pointers,
+        result_pointers,
+    )
+
+
+def test_campaign_review_batch_binds_exact_candidate_subset() -> None:
+    command_value, result_value, plans, results, plan_pointers, result_pointers = (
+        _campaign_review_batch_values()
+    )
+    validate_contract("science-visual-campaign-review-batch-command", command_value)
+    validate_contract("science-visual-campaign-review-batch-result", result_value)
+    command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+    result = LocalImageScienceVisualCampaignReviewBatchResult.model_validate(result_value)
+    validate_science_visual_campaign_review_batch(
+        command=command,
+        command_pointer=result.review_batch,
+        plans=tuple(
+            LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value) for value in plans
+        ),
+        plan_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in plan_pointers
+        ),
+        results=tuple(
+            LocalImageScienceCorpusVisualPilotResult.model_validate(value) for value in results
+        ),
+        result_pointers=tuple(
+            ImageEvaluationArtifactMember.model_validate(value) for value in result_pointers
+        ),
+        review_result=result,
+    )
+
+
+def test_campaign_review_batch_rejects_extra_candidate() -> None:
+    command_value, result_value, plans, results, plan_pointers, result_pointers = (
+        _campaign_review_batch_values()
+    )
+    reviews = result_value["reviews"]
+    assert isinstance(reviews, list)
+    reviews[-1]["candidate_id"] = "imgsciviscandidate_" + "f" * 32
+    reviews.sort(key=lambda value: str(value["candidate_id"]))
+    result_body = {key: value for key, value in result_value.items() if key != "result_sha256"}
+    result_value["result_sha256"] = content_sha256(result_body)
+    command = LocalImageScienceVisualCampaignReviewBatchCommand.model_validate(command_value)
+    result = LocalImageScienceVisualCampaignReviewBatchResult.model_validate(result_value)
+    with pytest.raises(ValueError, match="coverage differs"):
+        validate_science_visual_campaign_review_batch(
+            command=command,
+            command_pointer=result.review_batch,
+            plans=tuple(
+                LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value) for value in plans
+            ),
+            plan_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(value) for value in plan_pointers
+            ),
+            results=tuple(
+                LocalImageScienceCorpusVisualPilotResult.model_validate(value) for value in results
+            ),
+            result_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(value) for value in result_pointers
+            ),
+            review_result=result,
         )
 
 
@@ -2206,6 +2321,12 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         ),
         "local-image-science-visual-campaign-pattern-inventory-v1.schema.json": (
             "912839c7fa1cdda4701c1a1aecf865f1fc94368510863de64a1b3e7b1b538b1b"
+        ),
+        "local-image-science-visual-campaign-review-batch-command-v1.schema.json": (
+            "f62d1ee93dcd4125634ac4ddd1d89edb1b11c3f6f19fd197b94b13164bd375fd"
+        ),
+        "local-image-science-visual-campaign-review-batch-result-v1.schema.json": (
+            "c81561b3de9fc99fc198a3bae61ffe5d4423263804d07440aa7195973722652d"
         ),
         "local-image-science-visual-crop-set-v1.schema.json": (
             "bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"

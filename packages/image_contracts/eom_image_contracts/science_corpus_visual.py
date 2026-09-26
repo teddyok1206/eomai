@@ -53,6 +53,12 @@ CORPUS_PATTERN_INVENTORY_V2_SCHEMA_REF = (
 CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-campaign-pattern-inventory/1.0"
 )
+CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-command/1.0"
+)
+CORPUS_CAMPAIGN_REVIEW_BATCH_RESULT_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-result/1.0"
+)
 CORPUS_REVIEWED_CROP_SET_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-crop-set/1.0"
 )
@@ -1100,6 +1106,97 @@ class LocalImageScienceVisualCampaignPatternInventory(FrozenModel):
         return self
 
 
+def _validate_complete_campaign_pilots(
+    pilot_results: tuple[ScienceVisualCampaignPilotResult, ...],
+) -> None:
+    """Keep every batch bound to the same complete, bounded campaign."""
+
+    shard_indices = tuple(value.campaign_shard_index for value in pilot_results)
+    if shard_indices != tuple(sorted(set(shard_indices))):
+        raise ValueError("science visual campaign review batch shards must be uniquely sorted")
+    shard_counts = {value.campaign_shard_count for value in pilot_results}
+    if len(shard_counts) != 1:
+        raise ValueError("science visual campaign review batch shard counts differ")
+    shard_count = shard_counts.pop()
+    if len(pilot_results) != shard_count or shard_indices != tuple(range(shard_count)):
+        raise ValueError("science visual campaign review batch is not a complete campaign")
+    plan_revisions = tuple(value.pilot_plan.artifact_revision_id for value in pilot_results)
+    result_revisions = tuple(value.pilot_result.artifact_revision_id for value in pilot_results)
+    if len(plan_revisions) != len(set(plan_revisions)) or len(result_revisions) != len(
+        set(result_revisions)
+    ):
+        raise ValueError("science visual campaign review batch repeats a source revision")
+
+
+class LocalImageScienceVisualCampaignReviewBatchCommand(FrozenModel):
+    """One bounded, staged-only reviewer input for a complete visual campaign."""
+
+    schema_version: Literal["local-image-science-visual-campaign-review-batch-command/1.0"]
+    batch_id: str = Field(pattern=r"^imgscivisreviewbatch_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pilot_results: tuple[ScienceVisualCampaignPilotResult, ...] = Field(min_length=2, max_length=4)
+    candidate_ids: tuple[str, ...] = Field(min_length=12, max_length=48)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    command_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def command_is_coherent(self) -> LocalImageScienceVisualCampaignReviewBatchCommand:
+        _validate_complete_campaign_pilots(self.pilot_results)
+        if self.candidate_ids != tuple(sorted(set(self.candidate_ids))):
+            raise ValueError(
+                "science visual campaign review batch candidate IDs must be uniquely sorted"
+            )
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"batch_id", "command_sha256"})
+        ).removeprefix("sha256:")
+        if self.batch_id != "imgscivisreviewbatch_" + identity[:32]:
+            raise ValueError("science visual campaign review batch ID does not bind its inputs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("science visual campaign review batch command hash mismatch")
+        return self
+
+
+class LocalImageScienceVisualCampaignReviewBatchResult(FrozenModel):
+    """Structured local reviewer result; only the orchestrator may publish it."""
+
+    schema_version: Literal["local-image-science-visual-campaign-review-batch-result/1.0"]
+    batch_id: str = Field(pattern=r"^imgscivisreviewbatch_[0-9a-f]{32}$")
+    review_batch: ImageEvaluationArtifactMember
+    command_sha256: Sha256
+    reviews: tuple[ScienceVisualPatternReview, ...] = Field(min_length=12, max_length=48)
+    completed_at: datetime
+    completed_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    result_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def result_is_coherent(self) -> LocalImageScienceVisualCampaignReviewBatchResult:
+        _require_pointer(
+            self.review_batch,
+            schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-review-batch-command.json",
+        )
+        review_ids = tuple(value.candidate_id for value in self.reviews)
+        if review_ids != tuple(sorted(set(review_ids))):
+            raise ValueError("science visual campaign review batch results must be uniquely sorted")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("science visual campaign review batch result hash mismatch")
+        return self
+
+
 ScienceVisualRasterPatternFamily = Literal[
     "ASTRONOMICAL_SCENE",
     "FOSSIL",
@@ -1824,6 +1921,108 @@ def validate_science_visual_campaign_pattern_inventory(
             and candidate.authority_class == "NON_AUTHORITATIVE_RASTER_STYLE"
         ):
             raise ValueError("science visual campaign renderer review selects raster content")
+
+
+def validate_science_visual_campaign_review_batch(
+    *,
+    command: LocalImageScienceVisualCampaignReviewBatchCommand,
+    command_pointer: ImageEvaluationArtifactMember,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    review_result: LocalImageScienceVisualCampaignReviewBatchResult,
+) -> None:
+    """Resolve a bounded review result before it can feed a campaign inventory.
+
+    This is intentionally a separate boundary from the final-inventory validator:
+    every reviewer result can be checked and retained without relaxing final campaign
+    coverage or allowing a worker to resolve storage paths on its own.
+    """
+
+    _require_pointer(
+        command_pointer,
+        schema_ref=CORPUS_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
+        media_type="application/json",
+        member_path="manifests/science-visual-campaign-review-batch-command.json",
+    )
+    if not (
+        len(plans)
+        == len(plan_pointers)
+        == len(results)
+        == len(result_pointers)
+        == len(command.pilot_results)
+    ):
+        raise ValueError("science visual campaign review batch source cardinality differs")
+    if (
+        review_result.batch_id != command.batch_id
+        or review_result.review_batch != command_pointer
+        or review_result.command_sha256 != command.command_sha256
+    ):
+        raise ValueError("science visual campaign review batch result does not bind command")
+
+    resolved_by_index = {
+        plan.campaign_shard_index: (plan, plan_pointer, result, result_pointer)
+        for plan, plan_pointer, result, result_pointer in zip(
+            plans, plan_pointers, results, result_pointers, strict=True
+        )
+    }
+    if len(resolved_by_index) != len(plans):
+        raise ValueError("science visual campaign review batch resolved shards repeat")
+
+    candidates: dict[str, ScienceVisualCandidate] = {}
+    source_documents: set[str] = set()
+    source_pdfs: set[Sha256] = set()
+    for source in command.pilot_results:
+        resolved = resolved_by_index.get(source.campaign_shard_index)
+        if resolved is None:
+            raise ValueError("science visual campaign review batch shard is unresolved")
+        plan, plan_pointer, pilot_result, result_pointer = resolved
+        if (
+            plan.campaign_id != command.campaign_id
+            or plan.campaign_shard_count != source.campaign_shard_count
+            or plan.campaign_shard_index != source.campaign_shard_index
+            or plan_pointer != source.pilot_plan
+            or plan_pointer.sha256 != source.pilot_plan_file_sha256
+            or plan.plan_sha256 != source.pilot_plan_semantic_sha256
+            or result_pointer != source.pilot_result
+            or result_pointer.sha256 != source.pilot_result_file_sha256
+            or pilot_result.result_sha256 != source.pilot_result_semantic_sha256
+        ):
+            raise ValueError("science visual campaign review batch source binding differs")
+        validate_science_visual_pilot_result(plan, pilot_result)
+        for pilot_source in plan.selected_sources:
+            if (
+                pilot_source.document_id in source_documents
+                or pilot_source.pdf.sha256 in source_pdfs
+            ):
+                raise ValueError("science visual campaign review batch source overlap")
+            source_documents.add(pilot_source.document_id)
+            source_pdfs.add(pilot_source.pdf.sha256)
+        for candidate in pilot_result.visual_candidates:
+            if candidate.candidate_id in candidates:
+                raise ValueError("science visual campaign review batch candidate overlap")
+            candidates[candidate.candidate_id] = candidate
+
+    if not set(command.candidate_ids).issubset(candidates):
+        raise ValueError("science visual campaign review batch selects an unknown candidate")
+    review_ids = tuple(value.candidate_id for value in review_result.reviews)
+    if review_ids != command.candidate_ids:
+        raise ValueError("science visual campaign review batch result coverage differs")
+    for review in review_result.reviews:
+        candidate = candidates[review.candidate_id]
+        if review.decision == "LORA_ELIGIBLE" and (
+            candidate.authority_class == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
+            or candidate.representation_kind in {"PLOT", "TABLE"}
+        ):
+            raise ValueError("science visual campaign review batch selects authoritative content")
+        if (
+            review.decision == "DETERMINISTIC_RENDERER_ONLY"
+            and candidate.authority_class == "NON_AUTHORITATIVE_RASTER_STYLE"
+        ):
+            raise ValueError(
+                "science visual campaign review batch routes raster content to renderer"
+            )
 
 
 def validate_science_visual_raster_suitability_review(

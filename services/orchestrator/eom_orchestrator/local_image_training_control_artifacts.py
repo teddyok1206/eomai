@@ -17,6 +17,8 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceVisualCampaignPatternInventory,
+    LocalImageScienceVisualCampaignReviewBatchCommand,
+    LocalImageScienceVisualCampaignReviewBatchResult,
     LocalImageScienceVisualPatternInventory,
     LocalImageScienceVisualPatternInventoryV2,
     LocalImageScienceVisualRasterRefinementPlan,
@@ -97,6 +99,24 @@ SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF = (
 )
 SCIENCE_VISUAL_CAMPAIGN_PATTERN_INVENTORY_ARTIFACT_TYPE = (
     "control_local_image_science_visual_campaign_pattern_inventory"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_MEMBER = (
+    "manifests/science-visual-campaign-review-batch-command.json"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-command/1.0"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_campaign_review_batch_command"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_MEMBER = (
+    "manifests/science-visual-campaign-review-batch-result.json"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-result/1.0"
+)
+SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_campaign_review_batch_result"
 )
 SCIENCE_RASTER_SUITABILITY_REVIEW_MEMBER = "manifests/science-raster-suitability-review.json"
 SCIENCE_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
@@ -330,6 +350,36 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-visual-campaign-pattern-inventory",
             identity_sha256=inventory.inventory_sha256,
             created_at=inventory.created_at,
+        )
+
+    def commit_science_visual_campaign_review_batch_command(
+        self,
+        command: LocalImageScienceVisualCampaignReviewBatchCommand,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="science-visual-campaign-review-batch-command",
+            member=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_MEMBER,
+            schema_ref=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_COMMAND_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-campaign-review-batch-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_science_visual_campaign_review_batch_result(
+        self,
+        result: LocalImageScienceVisualCampaignReviewBatchResult,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=result,
+            contract_name="science-visual-campaign-review-batch-result",
+            member=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_MEMBER,
+            schema_ref=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_CAMPAIGN_REVIEW_BATCH_RESULT_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-campaign-review-batch-result",
+            identity_sha256=result.result_sha256,
+            created_at=result.completed_at,
         )
 
     def commit_science_raster_suitability_review(

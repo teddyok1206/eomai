@@ -73,6 +73,12 @@ SCHEMA_FILES = {
     "science-visual-campaign-pattern-inventory": (
         "local-image-science-visual-campaign-pattern-inventory-v1.schema.json"
     ),
+    "science-visual-campaign-review-batch-command": (
+        "local-image-science-visual-campaign-review-batch-command-v1.schema.json"
+    ),
+    "science-visual-campaign-review-batch-result": (
+        "local-image-science-visual-campaign-review-batch-result-v1.schema.json"
+    ),
     "science-visual-crop-set": "local-image-science-visual-crop-set-v1.schema.json",
     "science-visual-crop-set-v2": "local-image-science-visual-crop-set-v2.schema.json",
     "science-raster-suitability-review": (
@@ -201,6 +207,12 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-campaign-pattern-inventory": (
         "sha256:912839c7fa1cdda4701c1a1aecf865f1fc94368510863de64a1b3e7b1b538b1b"
+    ),
+    "science-visual-campaign-review-batch-command": (
+        "sha256:f62d1ee93dcd4125634ac4ddd1d89edb1b11c3f6f19fd197b94b13164bd375fd"
+    ),
+    "science-visual-campaign-review-batch-result": (
+        "sha256:c81561b3de9fc99fc198a3bae61ffe5d4423263804d07440aa7195973722652d"
     ),
     "science-visual-crop-set": (
         "sha256:bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"

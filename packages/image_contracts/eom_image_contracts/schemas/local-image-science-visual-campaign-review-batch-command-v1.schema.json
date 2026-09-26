@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-visual-campaign-review-batch-command/1.0",
+  "title": "EOM Science Visual Campaign Review Batch Command V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "campaign_id", "pilot_results", "candidate_ids", "created_at", "created_by", "command_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-science-visual-campaign-review-batch-command/1.0"},
+    "batch_id": {"type": "string", "pattern": "^imgscivisreviewbatch_[0-9a-f]{32}$"},
+    "campaign_id": {"type": "string", "pattern": "^imgsciviscampaign_[0-9a-f]{32}$"},
+    "pilot_results": {"type": "array", "minItems": 2, "maxItems": 4, "items": {"$ref": "#/$defs/campaignPilot"}},
+    "candidate_ids": {"type": "array", "minItems": 12, "maxItems": 48, "uniqueItems": true, "items": {"type": "string", "pattern": "^imgsciviscandidate_[0-9a-f]{32}$"}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:@-]+$"},
+    "command_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifactMember": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+        "schema_ref": {"type": "string", "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"},
+        "media_type": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "campaignPilot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "campaign_shard_index", "campaign_shard_count", "pilot_plan", "pilot_plan_file_sha256", "pilot_plan_semantic_sha256", "pilot_result", "pilot_result_file_sha256", "pilot_result_semantic_sha256"],
+      "properties": {
+        "attempt_id": {"type": "string", "pattern": "^imgscivisattempt_[0-9a-f]{32}$"},
+        "campaign_shard_index": {"type": "integer", "minimum": 0, "maximum": 3},
+        "campaign_shard_count": {"type": "integer", "minimum": 2, "maximum": 4},
+        "pilot_plan": {"$ref": "#/$defs/artifactMember"},
+        "pilot_plan_file_sha256": {"$ref": "#/$defs/sha256"},
+        "pilot_plan_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "pilot_result": {"$ref": "#/$defs/artifactMember"},
+        "pilot_result_file_sha256": {"$ref": "#/$defs/sha256"},
+        "pilot_result_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
