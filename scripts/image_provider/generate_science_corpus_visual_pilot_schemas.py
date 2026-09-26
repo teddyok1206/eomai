@@ -1084,6 +1084,460 @@ def _reviewed_crop_set() -> dict[str, Any]:
     return schema
 
 
+def _model_pointer() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "model_id",
+            "model_revision_id",
+            "manifest_sha256",
+            "provider_family",
+            "runtime_contract_version",
+        ],
+        "properties": {
+            "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+            "model_revision_id": {
+                "type": "string",
+                "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+            },
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "provider_family": {"const": "diffusers-ssd-1b"},
+            "runtime_contract_version": {"const": "eom-local-image-provider/1.0"},
+        },
+    }
+
+
+def _trainer_dependencies(*, runtime: bool = False) -> dict[str, Any]:
+    names = [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version",
+    ]
+    if runtime:
+        names.extend(["cuda_version", "gpu_name"])
+    required: list[str] = list(names)
+    properties: dict[str, Any] = {
+        name: {"type": "string", "minLength": 1, "maxLength": 128} for name in names
+    }
+    if runtime:
+        required.extend(["compute_capability", "peak_gpu_memory_bytes"])
+        properties.update(
+            {
+                "compute_capability": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+$"},
+                "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1},
+            }
+        )
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": required,
+        "properties": properties,
+    }
+
+
+def _micro_hyperparameters() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "adapter_type",
+            "rank",
+            "alpha",
+            "resolution_width",
+            "resolution_height",
+            "train_batch_size",
+            "gradient_accumulation_steps",
+            "gradient_checkpointing",
+            "mixed_precision",
+            "optimizer",
+            "learning_rate",
+            "max_train_steps",
+            "checkpointing_steps",
+            "random_flip",
+            "train_text_encoders",
+            "train_vae",
+        ],
+        "properties": {
+            "adapter_type": {"const": "UNET_LORA"},
+            "rank": {"const": 8},
+            "alpha": {"const": 8},
+            "resolution_width": {"const": 768},
+            "resolution_height": {"const": 512},
+            "train_batch_size": {"const": 1},
+            "gradient_accumulation_steps": {"const": 4},
+            "gradient_checkpointing": {"const": True},
+            "mixed_precision": {"const": "fp16"},
+            "optimizer": {"const": "adamw_8bit"},
+            "learning_rate": {"const": "1e-4"},
+            "max_train_steps": {"const": 200},
+            "checkpointing_steps": {"const": 200},
+            "random_flip": {"const": False},
+            "train_text_encoders": {"const": False},
+            "train_vae": {"const": False},
+        },
+    }
+
+
+def _science_micro_plan_object() -> dict[str, Any]:
+    member_ids = {
+        "type": "array",
+        "items": {"type": "string", "pattern": "^imgsciviscandidate_[0-9a-f]{32}$"},
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "schema_version",
+            "probe_id",
+            "crop_set",
+            "crop_set_sha256",
+            "base_model",
+            "training_member_ids",
+            "validation_member_ids",
+            "holdout_member_ids",
+            "preprocessing_revision",
+            "trainer_contract",
+            "dependencies",
+            "hyperparameters",
+            "seed",
+            "purpose",
+            "activation_policy",
+            "authorized_at",
+            "authorized_by",
+            "authorization_reference_sha256",
+            "created_at",
+            "created_by",
+            "source_commit",
+            "plan_sha256",
+        ],
+        "properties": {
+            "schema_version": {"const": "local-image-science-lora-micro-probe-plan/1.0"},
+            "probe_id": {"type": "string", "pattern": "^imgscimicroprobe_[0-9a-f]{32}$"},
+            "crop_set": {"$ref": "#/$defs/artifactMember"},
+            "crop_set_sha256": {"$ref": "#/$defs/sha256"},
+            "base_model": {"$ref": "#/$defs/modelPointer"},
+            "training_member_ids": {**member_ids, "minItems": 12, "maxItems": 12},
+            "validation_member_ids": {**member_ids, "minItems": 1, "maxItems": 1},
+            "holdout_member_ids": {**member_ids, "minItems": 2, "maxItems": 2},
+            "preprocessing_revision": {"const": "local-image-science-crop-preprocess/1.0"},
+            "trainer_contract": {"const": "eom-local-image-science-lora-micro-trainer/1.0"},
+            "dependencies": {"$ref": "#/$defs/dependencies"},
+            "hyperparameters": {"$ref": "#/$defs/hyperparameters"},
+            "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+            "purpose": {"const": "EVALUATION_ONLY_SCIENCE_MICRO_PROBE"},
+            "activation_policy": {"const": "FORBIDDEN"},
+            "authorized_at": UTC,
+            "authorized_by": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9._:@-]+$",
+            },
+            "authorization_reference_sha256": {"$ref": "#/$defs/sha256"},
+            "created_at": UTC,
+            "created_by": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9._:@-]+$",
+            },
+            "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "plan_sha256": {"$ref": "#/$defs/sha256"},
+        },
+    }
+
+
+def _science_micro_plan() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Visual LoRA Micro-Probe Plan V1",
+        "eom://schemas/image-provider/local-image-science-lora-micro-probe-plan/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "modelPointer": _model_pointer(),
+            "dependencies": _trainer_dependencies(),
+            "hyperparameters": _micro_hyperparameters(),
+        }
+    )
+    schema.update(
+        {
+            key: value
+            for key, value in _science_micro_plan_object().items()
+            if key not in {"type", "additionalProperties"}
+        }
+    )
+    return schema
+
+
+def _science_micro_command() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Visual LoRA Micro-Probe Command V1",
+        "eom://schemas/image-provider/local-image-science-lora-micro-probe-command/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "modelPointer": _model_pointer(),
+            "dependencies": _trainer_dependencies(),
+            "hyperparameters": _micro_hyperparameters(),
+            "plan": _science_micro_plan_object(),
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "training_run_id",
+                "probe_plan_pointer",
+                "probe_plan_sha256",
+                "probe_plan",
+                "attempt",
+                "staged_plan_member",
+                "staged_crop_set_member",
+                "staged_crops_root",
+                "runtime_dataset_root",
+                "output_root_member",
+                "checkpoint_root_member",
+                "timeout_seconds",
+                "command_sha256",
+            ],
+            "properties": {
+                "schema_version": {"const": "local-image-science-lora-micro-probe-command/1.0"},
+                "training_run_id": {
+                    "type": "string",
+                    "pattern": "^imgscimicrotrainrun_[0-9a-f]{32}$",
+                },
+                "probe_plan_pointer": {"$ref": "#/$defs/artifactMember"},
+                "probe_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "probe_plan": {"$ref": "#/$defs/plan"},
+                "attempt": {"const": 1},
+                "staged_plan_member": {"const": "inputs/science-micro-probe-plan.json"},
+                "staged_crop_set_member": {"const": "inputs/science-visual-crop-set.json"},
+                "staged_crops_root": {"const": "inputs/crops"},
+                "runtime_dataset_root": {"const": "runtime-dataset"},
+                "output_root_member": {"const": "outputs"},
+                "checkpoint_root_member": {"const": "checkpoints"},
+                "timeout_seconds": {"type": "integer", "minimum": 600, "maximum": 14400},
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
+def _adapter_file() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["relative_path", "size_bytes", "sha256"],
+        "properties": {
+            "relative_path": {"enum": ["adapter_config.json", "adapter_model.safetensors"]},
+            "size_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+            "sha256": {"$ref": "#/$defs/sha256"},
+        },
+    }
+
+
+def _science_micro_adapter_object() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "schema_version",
+            "adapter_id",
+            "adapter_revision_id",
+            "state",
+            "activation_policy",
+            "base_model",
+            "probe_plan",
+            "sample_set_sha256",
+            "files",
+            "created_at",
+            "manifest_sha256",
+        ],
+        "properties": {
+            "schema_version": {"const": "local-image-science-lora-micro-adapter-manifest/1.0"},
+            "adapter_id": {"type": "string", "pattern": "^imgadapter_[0-9a-f]{32}$"},
+            "adapter_revision_id": {
+                "type": "string",
+                "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+            },
+            "state": {"const": "EVALUATION_ONLY"},
+            "activation_policy": {"const": "FORBIDDEN"},
+            "base_model": {"$ref": "#/$defs/modelPointer"},
+            "probe_plan": {"$ref": "#/$defs/artifactMember"},
+            "sample_set_sha256": {"$ref": "#/$defs/sha256"},
+            "files": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {"$ref": "#/$defs/adapterFile"},
+            },
+            "created_at": UTC,
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        },
+    }
+
+
+def _science_micro_adapter() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Visual LoRA Micro Adapter Manifest V1",
+        "eom://schemas/image-provider/local-image-science-lora-micro-adapter-manifest/1.0",
+    )
+    schema["$defs"].update({"modelPointer": _model_pointer(), "adapterFile": _adapter_file()})
+    schema.update(
+        {
+            key: value
+            for key, value in _science_micro_adapter_object().items()
+            if key not in {"type", "additionalProperties"}
+        }
+    )
+    return schema
+
+
+def _science_micro_worker_result() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Visual LoRA Micro-Probe Worker Result V1",
+        "eom://schemas/image-provider/local-image-science-lora-micro-probe-worker-result/1.0",
+    )
+    schema["$defs"].update(
+        {
+            "modelPointer": _model_pointer(),
+            "adapterFile": _adapter_file(),
+            "adapter": _science_micro_adapter_object(),
+            "runtime": _trainer_dependencies(runtime=True),
+            "realizedSample": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "candidate_id",
+                    "document_id",
+                    "exam_group_sha256",
+                    "training_sample_id",
+                    "source_crop_sha256",
+                    "realized_crop_sha256",
+                    "caption_sha256",
+                    "perceptual_hash",
+                ],
+                "properties": {
+                    "candidate_id": {
+                        "type": "string",
+                        "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "pattern": "^sciencedoc_[0-9a-f]{32}$",
+                    },
+                    "exam_group_sha256": {"$ref": "#/$defs/sha256"},
+                    "training_sample_id": {
+                        "type": "string",
+                        "pattern": "^imgtrainsample_[0-9a-f]{32}$",
+                    },
+                    "source_crop_sha256": {"$ref": "#/$defs/sha256"},
+                    "realized_crop_sha256": {"$ref": "#/$defs/sha256"},
+                    "caption_sha256": {"$ref": "#/$defs/sha256"},
+                    "perceptual_hash": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+                },
+            },
+        }
+    )
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "training_run_id",
+                "probe_plan_pointer",
+                "probe_plan_sha256",
+                "command_sha256",
+                "attempt",
+                "status",
+                "adapter_manifest",
+                "realized_samples",
+                "sample_set_sha256",
+                "error_code",
+                "runtime",
+                "completed_steps",
+                "final_loss",
+                "started_at",
+                "completed_at",
+                "result_sha256",
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": "local-image-science-lora-micro-probe-worker-result/1.0"
+                },
+                "training_run_id": {
+                    "type": "string",
+                    "pattern": "^imgscimicrotrainrun_[0-9a-f]{32}$",
+                },
+                "probe_plan_pointer": {"$ref": "#/$defs/artifactMember"},
+                "probe_plan_sha256": {"$ref": "#/$defs/sha256"},
+                "command_sha256": {"$ref": "#/$defs/sha256"},
+                "attempt": {"const": 1},
+                "status": {"enum": ["SUCCEEDED", "FAILED", "CANCELLED"]},
+                "adapter_manifest": {"anyOf": [{"$ref": "#/$defs/adapter"}, {"type": "null"}]},
+                "realized_samples": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 12,
+                    "items": {"$ref": "#/$defs/realizedSample"},
+                },
+                "sample_set_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+                "error_code": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+                        },
+                        {"type": "null"},
+                    ]
+                },
+                "runtime": {"anyOf": [{"$ref": "#/$defs/runtime"}, {"type": "null"}]},
+                "completed_steps": {"type": "integer", "minimum": 0, "maximum": 200},
+                "final_loss": {
+                    "anyOf": [
+                        {"type": "number", "minimum": 0, "maximum": 1000000},
+                        {"type": "null"},
+                    ]
+                },
+                "started_at": UTC,
+                "completed_at": UTC,
+                "result_sha256": {"$ref": "#/$defs/sha256"},
+            },
+            "allOf": [
+                {
+                    "if": {"properties": {"status": {"const": "SUCCEEDED"}}},
+                    "then": {
+                        "properties": {
+                            "adapter_manifest": {"$ref": "#/$defs/adapter"},
+                            "realized_samples": {"minItems": 12, "maxItems": 12},
+                            "sample_set_sha256": {"$ref": "#/$defs/sha256"},
+                            "error_code": {"type": "null"},
+                            "runtime": {"$ref": "#/$defs/runtime"},
+                            "completed_steps": {"const": 200},
+                            "final_loss": {"type": "number", "minimum": 0},
+                        }
+                    },
+                    "else": {
+                        "properties": {
+                            "adapter_manifest": {"type": "null"},
+                            "error_code": {
+                                "type": "string",
+                                "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+                            },
+                        }
+                    },
+                }
+            ],
+        }
+    )
+    return schema
+
+
 SCHEMAS = {
     "local-image-science-corpus-training-authorization-v1.schema.json": _authorization(),
     "local-image-science-corpus-visual-pilot-plan-v1.schema.json": _pilot_plan(),
@@ -1094,6 +1548,12 @@ SCHEMAS = {
     "local-image-science-visual-pattern-inventory-v1.schema.json": _pattern_inventory(),
     "local-image-science-visual-pattern-inventory-v2.schema.json": _pattern_inventory_v2(),
     "local-image-science-visual-crop-set-v1.schema.json": _reviewed_crop_set(),
+    "local-image-science-lora-micro-probe-plan-v1.schema.json": _science_micro_plan(),
+    "local-image-science-lora-micro-probe-command-v1.schema.json": _science_micro_command(),
+    "local-image-science-lora-micro-adapter-manifest-v1.schema.json": _science_micro_adapter(),
+    "local-image-science-lora-micro-probe-worker-result-v1.schema.json": (
+        _science_micro_worker_result()
+    ),
 }
 
 

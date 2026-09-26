@@ -69,6 +69,10 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-plan-v2.schema.json",
         "eom_image_contracts/schemas/local-image-science-corpus-visual-pilot-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-crop-set-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-lora-micro-probe-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-lora-micro-probe-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-lora-micro-adapter-manifest-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-lora-micro-probe-worker-result-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")

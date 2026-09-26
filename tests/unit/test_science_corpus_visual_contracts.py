@@ -1061,6 +1061,18 @@ def test_science_visual_schema_mirrors_are_exact_and_hash_pinned() -> None:
         "local-image-science-visual-crop-set-v1.schema.json": (
             "bc3f82e49d96dc6fe467d659c700c6a9bd12d044873b806d4b6017a8bde4d574"
         ),
+        "local-image-science-lora-micro-probe-plan-v1.schema.json": (
+            "70629fa7c1c2d427ace089cdfd0089c0f110e28a10627499da2ed1d1c5f5e1f8"
+        ),
+        "local-image-science-lora-micro-probe-command-v1.schema.json": (
+            "d4ab0f2f962f84c18422b32030ac13feb5fd82e5036e0e8f8348b2fad5f7aae6"
+        ),
+        "local-image-science-lora-micro-adapter-manifest-v1.schema.json": (
+            "fab3939a63f27123811c129335841e2a927bc88757828708775de599a84d1d8e"
+        ),
+        "local-image-science-lora-micro-probe-worker-result-v1.schema.json": (
+            "4dc0aa5f491448d27f24c652250bdb3eed7098a9d590fa7bc262dd3215876080"
+        ),
     }
     for filename, digest in expected.items():
         canonical = ROOT / "schemas" / "image-provider" / filename
