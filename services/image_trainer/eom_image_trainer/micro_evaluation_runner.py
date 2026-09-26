@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import io
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -76,7 +77,7 @@ def _validate_adapter(
     workspace: Path,
     command: LocalImageLoraMicroEvaluationCommand,
 ) -> Path:
-    adapter_root = cast(Path, _require_member(workspace, command.staged_adapter_root))
+    adapter_root = _require_member(workspace, command.staged_adapter_root)
     try:
         actual = validate_adapter_files(adapter_root)
     except TrainingRunnerError as exc:
@@ -223,6 +224,37 @@ class Ssd1bMicroEvaluationBackend:
         adapter_root: Path,
         command: LocalImageLoraMicroEvaluationCommand,
     ) -> tuple[GeneratedEvaluationImage, ...]:
+        return self._generate_with_identity(
+            model_directory=model_directory,
+            adapter_root=adapter_root,
+            command=command,
+            identity=lambda case: cast(str, case.sample_id),
+        )
+
+    def generate_science_pairs(
+        self,
+        *,
+        model_directory: Path,
+        adapter_root: Path,
+        command: Any,
+    ) -> tuple[GeneratedEvaluationImage, ...]:
+        """Generate science holdout pairs through the same immutable SSD-1B pipeline."""
+
+        return self._generate_with_identity(
+            model_directory=model_directory,
+            adapter_root=adapter_root,
+            command=command,
+            identity=lambda case: cast(str, case.candidate_id),
+        )
+
+    def _generate_with_identity(
+        self,
+        *,
+        model_directory: Path,
+        adapter_root: Path,
+        command: Any,
+        identity: Callable[[Any], str],
+    ) -> tuple[GeneratedEvaluationImage, ...]:
         try:
             import torch
             from diffusers import DiffusionPipeline
@@ -259,7 +291,13 @@ class Ssd1bMicroEvaluationBackend:
             _require_untruncated_prompts(pipeline, command)
             pipeline.set_progress_bar_config(disable=True)
             pipeline.to("cuda")
-            values = _generate_variant(pipeline, command, "BASE", torch)
+            values = _generate_variant(
+                pipeline,
+                command,
+                "BASE",
+                torch,
+                identity=identity,
+            )
             pipeline.unet.add_adapter(
                 LoraConfig(
                     r=8,
@@ -279,7 +317,13 @@ class Ssd1bMicroEvaluationBackend:
             if missing_adapter or incompatible.unexpected_keys:
                 raise MicroEvaluationRunnerError("IMAGE_EVALUATION_ADAPTER_INVALID")
             pipeline.unet.set_adapter("micro_probe")
-            values += _generate_variant(pipeline, command, "ADAPTER", torch)
+            values += _generate_variant(
+                pipeline,
+                command,
+                "ADAPTER",
+                torch,
+                identity=identity,
+            )
             return tuple(sorted(values, key=lambda value: (value.sample_id, value.variant)))
         except MicroEvaluationRunnerError:
             raise
@@ -297,9 +341,11 @@ class Ssd1bMicroEvaluationBackend:
 
 def _generate_variant(
     pipeline: Any,
-    command: LocalImageLoraMicroEvaluationCommand,
+    command: Any,
     variant: Literal["ADAPTER", "BASE"],
     torch: Any,
+    *,
+    identity: Callable[[Any], str],
 ) -> tuple[GeneratedEvaluationImage, ...]:
     values = []
     for case in command.cases:
@@ -319,7 +365,7 @@ def _generate_variant(
         image.save(output, format="PNG", optimize=False, compress_level=9)
         values.append(
             GeneratedEvaluationImage(
-                sample_id=case.sample_id,
+                sample_id=identity(case),
                 variant=variant,
                 png_bytes=output.getvalue(),
             )
@@ -329,7 +375,7 @@ def _generate_variant(
 
 def _require_untruncated_prompts(
     pipeline: Any,
-    command: LocalImageLoraMicroEvaluationCommand,
+    command: Any,
 ) -> None:
     for name in ("tokenizer", "tokenizer_2"):
         tokenizer = getattr(pipeline, name, None)

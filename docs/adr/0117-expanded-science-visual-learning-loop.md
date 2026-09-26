@@ -277,6 +277,17 @@ attempt. Adapter files remain local, evaluation-only outputs until a later Orche
 and fixed base-versus-adapter evaluation succeed. This phase does not create or activate a provider
 binding.
 
+That fixed comparison uses the additive
+`local-image-science-lora-micro-evaluation-{command,result}/1.0` contracts. The staging use case
+resolves the exact plan and crop-set Artifact Revisions again, validates the terminal training
+result and adapter file hashes, and selects exactly the two reserved HOLDOUT candidates through an
+`O(n)` candidate map. Each case pins its document, exam-group, English crop caption, prompt hashes,
+and seed. The isolated worker reuses the same SSD-1B evaluation backend to generate BASE and ADAPTER
+variants with identical prompt, negative prompt, seed, scheduler, dimensions, inference steps, and
+guidance. Four local PNGs and one typed terminal result are produced; no network, NAS, provider
+binding, or production activation is available at that boundary. An existing workspace/result,
+pointer drift, non-holdout candidate, adapter drift, missing pair, or malformed PNG fails closed.
+
 Reusing the older page/proposal micro-probe command without an additive contract was rejected. It
 would lose the reviewed crop-set revision, exam-group partitions, reserved validation/holdout IDs,
 and the explicit activation prohibition. Building a second training backend was also rejected: the

@@ -143,6 +143,26 @@ def test_local_image_micro_evaluation_unit_is_isolated_and_nas_inaccessible() ->
     assert "Restart=no" in source
 
 
+def test_science_micro_evaluation_unit_is_isolated_and_nas_inaccessible() -> None:
+    source = (ROOT / "infra/systemd/eom-image-science-lora-micro-evaluation@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image" in source
+    assert "Group=eom-image" in source
+    assert "eom-local-image-trainer evaluate-science-micro-probe" in source
+    assert "/srv/eom/image-training-workspaces/%i/command.json" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8" in source
+    assert "PrivateNetwork=true" in source
+    assert "NoNewPrivileges=true" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadWritePaths=/srv/eom/image-training-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     source = (ROOT / "infra/polkit/50-eom-worker-units.rules").read_text(encoding="utf-8")
 
@@ -151,6 +171,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
     assert "eom-image-science-lora-micro-probe@imgscimicrotrainrun_" in source
     assert "eom-image-lora-micro-evaluation@imgmicroevalrun_" in source
+    assert "eom-image-science-lora-micro-evaluation@imgscimicroevalrun_" in source
     assert "eom-image-crop-locator@imgcroplocator_" in source
     assert "eom-image-science-visual-pilot@imgscivisattempt_" in source
     assert "localImageUnit.test(unit)" in source
@@ -197,7 +218,9 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     trainer_build = (ROOT / "scripts/image_trainer/build_release.sh").read_text(encoding="utf-8")
     trainer_deploy = (ROOT / "scripts/image_trainer/deploy_runtime.sh").read_text(encoding="utf-8")
     assert "eom_image_trainer/science_micro_probe_runner.py" in trainer_build
+    assert "eom_image_trainer/science_micro_evaluation_runner.py" in trainer_build
     assert "eom-image-science-lora-micro-probe@.service" in trainer_deploy
+    assert "eom-image-science-lora-micro-evaluation@.service" in trainer_deploy
     assert '"${SCIENCE_MICRO_PROBE_UNIT_TARGET}"' in trainer_deploy
 
 
@@ -233,6 +256,7 @@ def test_local_image_release_scripts_have_valid_syntax() -> None:
         "scripts/image_trainer/stage_micro_probe.py",
         "scripts/image_trainer/stage_science_micro_probe.py",
         "scripts/image_trainer/stage_micro_evaluation.py",
+        "scripts/image_trainer/stage_science_micro_evaluation.py",
     ):
         compile(
             (ROOT / relative).read_text(encoding="utf-8"),
@@ -274,6 +298,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-science-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-evaluation@.service",
+        ROOT / "infra/systemd/eom-image-science-lora-micro-evaluation@.service",
         ROOT / "infra/systemd/eom-image-crop-locator@.service",
         ROOT / "infra/systemd/eom-image-science-visual-pilot@.service",
     ):
@@ -285,6 +310,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
                 "eom-image-lora-micro-probe@.service",
                 "eom-image-science-lora-micro-probe@.service",
                 "eom-image-lora-micro-evaluation@.service",
+                "eom-image-science-lora-micro-evaluation@.service",
                 "eom-image-crop-locator@.service",
                 "eom-image-science-visual-pilot@.service",
             }
