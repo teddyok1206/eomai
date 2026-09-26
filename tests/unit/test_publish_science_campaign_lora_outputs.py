@@ -87,7 +87,7 @@ def _training_workspace(root: Path) -> None:
         {key: value for key, value in result.items() if key != "result_sha256"}
     )
     _write(root / "command.json", content_json_bytes(command))
-    _write(root / "result.json", content_json_bytes(result))
+    _write(root / "result.json", content_json_bytes(result) + b"\n")
     _write(root / "outputs" / "adapter_config.json", config)
     _write(root / "outputs" / "adapter_model.safetensors", weights)
     _write(
@@ -111,7 +111,7 @@ def _evaluation_workspace(root: Path) -> None:
         {key: value for key, value in result.items() if key != "result_sha256"}
     )
     _write(root / "command.json", content_json_bytes(command))
-    _write(root / "result.json", content_json_bytes(result))
+    _write(root / "result.json", content_json_bytes(result) + b"\n")
 
 
 def test_campaign_training_publication_validates_exact_file_set(tmp_path: Path) -> None:

@@ -171,7 +171,7 @@ def _load_result(
         ) from exc
     if (
         result.status != "SUCCEEDED"
-        or content_json_bytes(result.model_dump(mode="json")) != result_payload
+        or content_json_bytes(result.model_dump(mode="json")) + b"\n" != result_payload
     ):
         raise ScienceCampaignMicroEvaluationPublicationError("IMAGE_EVALUATION_RESULT_INVALID")
     return command, result, result_payload, result_schema_ref

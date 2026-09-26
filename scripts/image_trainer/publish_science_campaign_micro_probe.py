@@ -147,7 +147,7 @@ def _load_result(
         result.status != "SUCCEEDED"
         or result.adapter_manifest is None
         or result.completed_steps != 200
-        or content_json_bytes(result.model_dump(mode="json")) != result_payload
+        or content_json_bytes(result.model_dump(mode="json")) + b"\n" != result_payload
     ):
         raise ScienceCampaignMicroProbePublicationError("IMAGE_TRAINING_RESULT_INVALID")
     return command, result, result_payload, result_schema_ref
