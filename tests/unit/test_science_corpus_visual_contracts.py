@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusTrainingAuthorization,
@@ -29,6 +30,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualPatternInventoryV2,
     LocalImageScienceVisualRasterRefinementPlan,
     LocalImageScienceVisualRasterSuitabilityReview,
+    content_json_bytes,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -49,6 +51,10 @@ from eom_image_contracts import (
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
+
+from scripts.image_trainer import (
+    publish_science_visual_campaign_pattern_inventory as campaign_publisher,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -784,6 +790,95 @@ def test_campaign_pattern_inventory_rejects_missing_candidate_review() -> None:
             ),
             inventory=inventory,
         )
+
+
+def test_campaign_inventory_publisher_resolves_stage_and_result_receipts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inventory_value, plan_values, result_values, plan_pointers, result_pointers = (
+        _campaign_inventory_value()
+    )
+    pilots = inventory_value["pilot_results"]
+    assert isinstance(pilots, list)
+    for index, (plan, plan_pointer, result_pointer) in enumerate(
+        zip(plan_values, plan_pointers, result_pointers, strict=True)
+    ):
+        plan_pointer["sha256"] = sha256_bytes(content_json_bytes(plan))
+        pilot = pilots[index]
+        assert isinstance(pilot, dict)
+        pilot["pilot_plan"] = plan_pointer
+        pilot["pilot_plan_file_sha256"] = plan_pointer["sha256"]
+        pilot["pilot_result"] = result_pointer
+        pilot["pilot_result_file_sha256"] = result_pointer["sha256"]
+    body = {
+        key: value
+        for key, value in inventory_value.items()
+        if key not in {"inventory_id", "inventory_sha256"}
+    }
+    inventory_value["inventory_id"] = (
+        "imgsciviscampaigninventory_" + content_sha256(body).removeprefix("sha256:")[:32]
+    )
+    inventory_value["inventory_sha256"] = content_sha256(
+        {key: value for key, value in inventory_value.items() if key != "inventory_sha256"}
+    )
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value)
+
+    workspace_parent = tmp_path / "workspaces"
+    state_root = tmp_path / "state"
+    state_root.mkdir(mode=0o750)
+    attempt_ids = tuple(str(pilot["attempt_id"]) for pilot in pilots)
+    for attempt_id, plan, result, plan_pointer, result_pointer in zip(
+        attempt_ids, plan_values, result_values, plan_pointers, result_pointers, strict=True
+    ):
+        workspace = workspace_parent / attempt_id
+        (workspace / "input").mkdir(parents=True, mode=0o700)
+        (workspace / "manifests").mkdir(mode=0o700)
+        plan_payload = content_json_bytes(plan)
+        result_payload = content_json_bytes(result)
+        (workspace / "input/visual-pilot-plan.json").write_bytes(plan_payload)
+        (workspace / "manifests/visual-pilot-result.json").write_bytes(result_payload)
+        (workspace / "input/visual-pilot-plan.json").chmod(0o600)
+        (workspace / "manifests/visual-pilot-result.json").chmod(0o600)
+        (state_root / f"science-visual-pilot-stage-{attempt_id}.json").write_bytes(
+            content_json_bytes(
+                {
+                    "schema_version": "science-visual-pilot-stage-receipt/1.0",
+                    "attempt_id": attempt_id,
+                    "command_sha256": _sha("a"),
+                    "plan": plan_pointer,
+                    "training_authorization": plan["training_authorization"],
+                    "workspace": str(workspace),
+                    "systemd_unit": f"eom-image-science-visual-pilot@{attempt_id}.service",
+                }
+            )
+        )
+        (state_root / f"science-visual-pilot-publication-{attempt_id}.json").write_bytes(
+            content_json_bytes(
+                {
+                    "schema_version": "science-visual-pilot-publication-receipt/1.0",
+                    "attempt_id": attempt_id,
+                    "result_sha256": result["result_sha256"],
+                    "result_file_sha256": sha256_bytes(result_payload),
+                    "result_artifact": result_pointer,
+                    "file_set_manifest_sha256": _sha("b"),
+                    "source_commit": "c" * 40,
+                }
+            )
+        )
+        (state_root / f"science-visual-pilot-stage-{attempt_id}.json").chmod(0o600)
+        (state_root / f"science-visual-pilot-publication-{attempt_id}.json").chmod(0o600)
+    inventory_path = tmp_path / "inventory.json"
+    inventory_path.write_bytes(content_json_bytes(inventory.model_dump(mode="json")))
+    inventory_path.chmod(0o600)
+    monkeypatch.setattr(campaign_publisher, "WORKSPACE_PARENT", workspace_parent)
+    monkeypatch.setattr(campaign_publisher, "STATE_ROOT", state_root)
+
+    loaded, plans, _, results, _ = campaign_publisher._load_inputs(
+        attempt_ids=attempt_ids,
+        inventory_path=inventory_path,
+    )
+    assert loaded.inventory_id == inventory.inventory_id
+    assert len(plans) == len(results) == 3
 
 
 def _crop_set_sources() -> list[dict[str, object]]:
