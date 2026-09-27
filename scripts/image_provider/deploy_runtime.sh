@@ -10,6 +10,8 @@ PROVIDER_SHA256=${4:-}
 SOURCE_COMMIT=${5:-}
 UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
 UNIT_TARGET=/etc/systemd/system/eom-image-provider@.service
+REFERENCE_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-acquirer@.service
+REFERENCE_UNIT_TARGET=/etc/systemd/system/eom-image-reference-acquirer@.service
 RUNNER_SOURCE=${REPOSITORY}/infra/systemd/eom-workflow-runner.service
 RUNNER_TARGET=/etc/systemd/system/eom-workflow-runner.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
@@ -42,7 +44,7 @@ done
 [[ -f "${BINDING_SOURCE}" && ! -L "${BINDING_SOURCE}" ]] || \
   fail "LOCAL_IMAGE_BINDING_SOURCE_INVALID"
 if systemctl list-units --type=service --state=activating,active --no-legend \
-  'eom-image-provider@*.service' | grep -q .; then
+  'eom-image-provider@*.service' 'eom-image-reference-acquirer@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_PROVIDER_ACTIVE"
 fi
 
@@ -57,7 +59,20 @@ for forbidden in eom sudo docker lxd adm; do
     fail "LOCAL_IMAGE_IDENTITY_OVERPRIVILEGED"
   fi
 done
+getent group eom-image-reference >/dev/null || groupadd --system eom-image-reference
+if ! getent passwd eom-image-reference >/dev/null; then
+  useradd --system --gid eom-image-reference --home-dir /var/lib/eom-image-reference \
+    --no-create-home --shell /usr/sbin/nologin eom-image-reference
+fi
+[[ "$(id -gn eom-image-reference)" == "eom-image-reference" ]] || \
+  fail "LOCAL_IMAGE_REFERENCE_IDENTITY_INVALID"
+for forbidden in eom sudo docker lxd adm eom-image; do
+  if id -nG eom-image-reference | tr ' ' '\n' | grep -Fxq "${forbidden}"; then
+    fail "LOCAL_IMAGE_REFERENCE_IDENTITY_OVERPRIVILEGED"
+  fi
+done
 usermod --append --groups eom-image eom-workflow-runner
+usermod --append --groups eom-image-reference eom-workflow-runner
 
 [[ -d /etc/eom && ! -L /etc/eom ]] || fail "LOCAL_IMAGE_SHARED_CONFIG_ROOT_INVALID"
 [[ "$(stat -c '%U:%G:%a' /etc/eom)" == "root:root:755" ]] || \
@@ -68,6 +83,7 @@ install -o root -g root -m 0644 "${BINDING_SOURCE}" "${binding_temporary}"
 mv -f "${binding_temporary}" "${BINDING_TARGET}"
 trap - EXIT
 install -d -o root -g eom-image -m 03770 /srv/eom/image-workspaces
+install -d -o root -g eom-image-reference -m 03770 /srv/eom/image-reference-workspaces
 
 "${IMAGE_ENV}/bin/python" -m pip install --no-deps --force-reinstall "${CONTRACT_WHEEL}"
 "${IMAGE_ENV}/bin/python" -m pip install --no-deps --force-reinstall "${PROVIDER_WHEEL}"
@@ -75,11 +91,15 @@ install -d -o root -g eom-image -m 03770 /srv/eom/image-workspaces
   --binding "${BINDING_TARGET}" --model-store-root /srv/eom/models/image
 
 install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
+install -o root -g root -m 0644 "${REFERENCE_UNIT_SOURCE}" "${REFERENCE_UNIT_TARGET}"
 install -o root -g root -m 0644 "${RUNNER_SOURCE}" "${RUNNER_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${UNIT_TARGET}"
+systemd-analyze verify "${REFERENCE_UNIT_TARGET}"
 cmp -s "${UNIT_SOURCE}" "${UNIT_TARGET}" || fail "LOCAL_IMAGE_UNIT_DRIFT"
+cmp -s "${REFERENCE_UNIT_SOURCE}" "${REFERENCE_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_REFERENCE_UNIT_DRIFT"
 cmp -s "${RUNNER_SOURCE}" "${RUNNER_TARGET}" || fail "LOCAL_IMAGE_RUNNER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || fail "LOCAL_IMAGE_POLKIT_DRIFT"
 cmp -s "${BINDING_SOURCE}" "${BINDING_TARGET}" || fail "LOCAL_IMAGE_BINDING_DRIFT"
@@ -94,6 +114,7 @@ printf 'SOURCE_COMMIT=%s\n' "${SOURCE_COMMIT}"
 printf 'CONTRACT_WHEEL_SHA256=%s\n' "${CONTRACT_SHA256}"
 printf 'PROVIDER_WHEEL_SHA256=%s\n' "${PROVIDER_SHA256}"
 printf 'WORKSPACE_ROOT=root:eom-image:3770\n'
+printf 'REFERENCE_WORKSPACE_ROOT=root:eom-image-reference:3770\n'
 printf 'MODEL_STORE=root:eom-image:0750_0640\n'
 printf 'RUNNER_RESTART_REQUIRED=YES\n'
 printf 'CONTENT_PACK_ACTIVATION_REQUIRED=generated-knowledge-item@1.8.0\n'

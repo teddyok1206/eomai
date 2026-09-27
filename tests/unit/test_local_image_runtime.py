@@ -28,6 +28,26 @@ def test_local_image_unit_is_fixed_hardened_and_nas_inaccessible() -> None:
     assert "Restart=no" in source
 
 
+def test_visual_reference_acquirer_has_network_but_no_gpu_model_nas_or_repo_access() -> None:
+    source = (ROOT / "infra/systemd/eom-image-reference-acquirer@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image-reference" in source
+    assert "Group=eom-image-reference" in source
+    assert "eom-local-image acquire-reference" in source
+    assert "/srv/eom/image-reference-workspaces/%i/command.json" in source
+    assert "PrivateNetwork=false" in source
+    assert "PrivateDevices=true" in source
+    assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6" in source
+    assert "--gpu-lock" not in source
+    assert "ReadWritePaths=/srv/eom/image-reference-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/srv/eom/models" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock() -> None:
     source = (ROOT / "infra/systemd/eom-image-trainer@.service").read_text(encoding="utf-8")
 
@@ -227,6 +247,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     source = (ROOT / "infra/polkit/50-eom-worker-units.rules").read_text(encoding="utf-8")
 
     assert "eom-image-provider@imgreq_" in source
+    assert "eom-image-reference-acquirer@imgrefcmd_" in source
     assert "eom-image-trainer@imgtrainrun_" in source
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
     assert "eom-image-science-lora-micro-probe@imgscimicrotrainrun_" in source
@@ -250,8 +271,10 @@ def test_runner_can_stage_handoff_but_cannot_read_model_bytes() -> None:
     source = (ROOT / "infra/systemd/eom-workflow-runner.service").read_text(encoding="utf-8")
 
     assert "SupplementaryGroups=" in source and "eom-image" in source
+    assert "eom-image-reference" in source
     assert "ReadOnlyPaths=/etc/eom/local-image-provider.json" in source
     assert "ReadWritePaths=/srv/eom/image-workspaces" in source
+    assert "ReadWritePaths=/srv/eom/image-reference-workspaces" in source
     assert "InaccessiblePaths=/srv/eom/models/image" in source
     assert "PrivateDevices=true" in source
 
@@ -267,6 +290,8 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert 'git -C "${REPOSITORY}" archive' in build
     assert "curl" not in build and "wget" not in build
     assert "--no-deps --force-reinstall" in deploy
+    assert "eom-image-reference-acquirer@.service" in deploy
+    assert "eom-image-reference" in deploy
     assert "RUNNER_RESTART_REQUIRED=YES" in deploy
     assert "systemctl restart" not in deploy
     assert "chmod -R" not in deploy and "chown -R" not in deploy
@@ -373,6 +398,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
         return
     for unit in (
         ROOT / "infra/systemd/eom-image-provider@.service",
+        ROOT / "infra/systemd/eom-image-reference-acquirer@.service",
         ROOT / "infra/systemd/eom-image-trainer@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-science-lora-micro-probe@.service",

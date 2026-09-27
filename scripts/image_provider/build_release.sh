@@ -63,6 +63,12 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-lora-training-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-lora-training-worker-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-intent-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-bundle-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-acquisition-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-acquisition-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_CONTRACT_WHEEL_INVALID")
@@ -72,6 +78,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/cli.py",
         "eom_image_provider/provider.py",
         "eom_image_provider/diffusers_backend.py",
+        "eom_image_provider/reference_acquisition.py",
     }.issubset(names):
         raise SystemExit("LOCAL_IMAGE_PROVIDER_WHEEL_INVALID")
 PY

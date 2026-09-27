@@ -228,6 +228,14 @@ class VisualReferenceSource(FrozenModel):
             path_prefix="/",
         )
 
+    @model_validator(mode="after")
+    def bounded_pixel_population(self) -> VisualReferenceSource:
+        # Width and height are independently bounded by JSON Schema.  Their product is
+        # the actual decompression risk and therefore belongs in the semantic model.
+        if self.original_width_px * self.original_height_px > 40_000_000:
+            raise ValueError("visual-reference source exceeds the reviewed pixel bound")
+        return self
+
 
 class NormalizedVisualReferenceMember(FrozenModel):
     member_path: Literal["references/primary.png"] = "references/primary.png"

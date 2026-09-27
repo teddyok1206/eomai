@@ -11,6 +11,7 @@ polkit.addRule(function(action, subject) {
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
     var contentTeamUnit = /^eom-hwpx-content-team@hwpxbuild_[0-9a-f]{32}\.service$/;
     var localImageUnit = /^eom-image-provider@imgreq_[0-9a-f]{32}\.service$/;
+    var localImageReferenceUnit = /^eom-image-reference-acquirer@imgrefcmd_[0-9a-f]{32}\.service$/;
     var localImageTrainerUnit = /^eom-image-trainer@imgtrainrun_[0-9a-f]{32}\.service$/;
     var localImageMicroProbeUnit = /^eom-image-lora-micro-probe@imgmicrotrainrun_[0-9a-f]{32}\.service$/;
     var localImageScienceMicroProbeUnit = /^eom-image-science-lora-micro-probe@imgscimicrotrainrun_[0-9a-f]{32}\.service$/;
@@ -34,6 +35,7 @@ polkit.addRule(function(action, subject) {
             || documentReviewWorkerUnit.test(unit)
             || probeUnit.test(unit) || authUnit.test(unit)
             || loginUnit.test(unit) || usageUnit.test(unit) || localImageUnit.test(unit)
+            || localImageReferenceUnit.test(unit)
             || localImageTrainerUnit.test(unit) || localImageMicroProbeUnit.test(unit)
             || localImageScienceMicroProbeUnit.test(unit)
             || localImageMicroEvaluationUnit.test(unit)

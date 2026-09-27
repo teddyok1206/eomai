@@ -23,6 +23,11 @@ from eom_image_provider.provider import (
     load_json_object,
     reuse_composite_handoff,
 )
+from eom_image_provider.reference_acquisition import (
+    VisualReferenceAcquisitionError,
+    load_acquisition_inputs,
+    run_visual_reference_acquisition,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,6 +42,9 @@ def _parser() -> argparse.ArgumentParser:
     composite.add_argument("--model-store-root", type=Path, required=True)
     composite.add_argument("--workspace", type=Path, required=True)
     composite.add_argument("--gpu-lock", type=Path, required=True)
+    reference = subparsers.add_parser("acquire-reference")
+    reference.add_argument("--command", type=Path, required=True)
+    reference.add_argument("--workspace", type=Path, required=True)
     manifest = subparsers.add_parser("create-manifest")
     manifest.add_argument("--revision-directory", type=Path, required=True)
     manifest.add_argument("--model-id", required=True)
@@ -67,7 +75,7 @@ def main() -> None:
                 backend=Ssd1bDiffusersBackend(),
             )
             result = generation_receipt.model_dump(mode="json")
-        else:
+        elif args.operation == "generate-composite":
             value = load_json_object(args.request, maximum_bytes=128 * 1024)
             validate_contract("composite-request", value)
             composite_request = LocalImageCompositeRequest.model_validate(value)
@@ -84,8 +92,23 @@ def main() -> None:
                         backend=Ssd1bDiffusersBackend(),
                     )
             result = composite_receipt.model_dump(mode="json")
+        else:
+            command, intent = load_acquisition_inputs(
+                command_path=args.command,
+                workspace=args.workspace,
+            )
+            acquisition = run_visual_reference_acquisition(
+                command=command,
+                intent=intent,
+                workspace=args.workspace,
+            )
+            result = acquisition.result.model_dump(mode="json")
     except Exception as exc:
-        code = exc.code if isinstance(exc, ProviderError) else "LOCAL_IMAGE_PROVIDER_FAILED"
+        code = (
+            exc.code
+            if isinstance(exc, (ProviderError, VisualReferenceAcquisitionError))
+            else "LOCAL_IMAGE_PROVIDER_FAILED"
+        )
         print(code, file=sys.stderr)
         raise SystemExit(1) from None
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
