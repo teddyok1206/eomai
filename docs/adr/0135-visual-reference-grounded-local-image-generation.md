@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted for protocol-first implementation on 2026-09-27 UTC. This decision does not activate a
-LoRA adapter, permit arbitrary Internet crawling, or change any released Content Pack, image-result,
-provider request, or production binding.
+Implemented and source-verified on 2026-09-27 UTC. Production activation remains gated because the
+current science adapter is evaluation-only and its three-seed review forbids global activation.
+This decision does not promote that adapter, permit arbitrary Internet crawling, or reinterpret any
+released Content Pack, image-result, provider request, or production binding.
 
 ## Responsibility and boundary
 
