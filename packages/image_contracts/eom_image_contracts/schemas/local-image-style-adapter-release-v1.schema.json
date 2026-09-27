@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-style-adapter-release/1.0",
+  "title": "EOM local image production style adapter release v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "source_adapter_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "manifests/adapter-manifest.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    },
+    "evaluation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "result.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-result/1.1"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    },
+    "model_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "adapter_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ]
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "release_id",
+    "release_revision_id",
+    "state",
+    "adapter_contract",
+    "adapter_id",
+    "adapter_revision_id",
+    "base_model",
+    "source_adapter_manifest",
+    "evaluation_result",
+    "files",
+    "lora_scale",
+    "approved_at",
+    "approved_by",
+    "release_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-style-adapter-release/1.0"
+    },
+    "release_id": {
+      "type": "string",
+      "pattern": "^imgstylerelease_[0-9a-f]{32}$"
+    },
+    "release_revision_id": {
+      "type": "string",
+      "pattern": "^imgstylereleaserev_[0-9a-f]{32}$"
+    },
+    "state": {
+      "const": "RELEASED"
+    },
+    "adapter_contract": {
+      "const": "eom-assessment-style-lora/1.0"
+    },
+    "adapter_id": {
+      "type": "string",
+      "pattern": "^imgadapter_[0-9a-f]{32}$"
+    },
+    "adapter_revision_id": {
+      "type": "string",
+      "pattern": "^imgadapterrev_[0-9a-f]{32}$"
+    },
+    "base_model": {
+      "$ref": "#/$defs/model_pointer"
+    },
+    "source_adapter_manifest": {
+      "$ref": "#/$defs/source_adapter_manifest"
+    },
+    "evaluation_result": {
+      "$ref": "#/$defs/evaluation_result"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/adapter_file"
+      }
+    },
+    "lora_scale": {
+      "const": 0.8
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "approved_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "release_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -570,6 +571,229 @@ def acquisition_result_schema() -> dict[str, Any]:
     return value
 
 
+def style_adapter_release_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-style-adapter-release/1.0",
+        "EOM local image production style adapter release v1",
+    )
+
+    def artifact_member(
+        *, member_path: str, schema_ref: str, maximum_bytes: int = 16777216
+    ) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "artifact_id",
+                "artifact_revision_id",
+                "member_path",
+                "schema_ref",
+                "media_type",
+                "sha256",
+                "size_bytes",
+            ],
+            "properties": {
+                "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+                "artifact_revision_id": {
+                    "type": "string",
+                    "pattern": "^rev_[0-9a-f]{32}$",
+                },
+                "member_path": {"const": member_path},
+                "schema_ref": {"const": schema_ref},
+                "media_type": {"const": "application/json"},
+                "sha256": SHA256,
+                "size_bytes": {"type": "integer", "minimum": 1, "maximum": maximum_bytes},
+            },
+        }
+
+    model_pointer = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "model_id",
+            "model_revision_id",
+            "manifest_sha256",
+            "provider_family",
+            "runtime_contract_version",
+        ],
+        "properties": {
+            "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+            "model_revision_id": {
+                "type": "string",
+                "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+            },
+            "manifest_sha256": SHA256,
+            "provider_family": {"const": "diffusers-ssd-1b"},
+            "runtime_contract_version": {"const": "eom-local-image-provider/1.0"},
+        },
+    }
+    value["$defs"] = {
+        "source_adapter_manifest": artifact_member(
+            member_path="manifests/adapter-manifest.json",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+            ),
+        ),
+        "evaluation_result": artifact_member(
+            member_path="result.json",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-campaign-lora-micro-evaluation-result/1.1"
+            ),
+        ),
+        "model_pointer": model_pointer,
+        "adapter_file": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["relative_path", "size_bytes", "sha256"],
+            "properties": {
+                "relative_path": {"enum": ["adapter_config.json", "adapter_model.safetensors"]},
+                "size_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1073741824,
+                },
+                "sha256": SHA256,
+            },
+        },
+    }
+    value["required"] = [
+        "schema_version",
+        "release_id",
+        "release_revision_id",
+        "state",
+        "adapter_contract",
+        "adapter_id",
+        "adapter_revision_id",
+        "base_model",
+        "source_adapter_manifest",
+        "evaluation_result",
+        "files",
+        "lora_scale",
+        "approved_at",
+        "approved_by",
+        "release_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-style-adapter-release/1.0"},
+        "release_id": {"type": "string", "pattern": "^imgstylerelease_[0-9a-f]{32}$"},
+        "release_revision_id": {
+            "type": "string",
+            "pattern": "^imgstylereleaserev_[0-9a-f]{32}$",
+        },
+        "state": {"const": "RELEASED"},
+        "adapter_contract": {"const": "eom-assessment-style-lora/1.0"},
+        "adapter_id": {"type": "string", "pattern": "^imgadapter_[0-9a-f]{32}$"},
+        "adapter_revision_id": {
+            "type": "string",
+            "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+        },
+        "base_model": {"$ref": "#/$defs/model_pointer"},
+        "source_adapter_manifest": {"$ref": "#/$defs/source_adapter_manifest"},
+        "evaluation_result": {"$ref": "#/$defs/evaluation_result"},
+        "files": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "uniqueItems": True,
+            "items": {"$ref": "#/$defs/adapter_file"},
+        },
+        "lora_scale": {"const": 0.8},
+        "approved_at": UTC,
+        "approved_by": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._:@-]+$",
+        },
+        "release_sha256": SHA256,
+    }
+    return value
+
+
+def provider_binding_v2_schema() -> dict[str, Any]:
+    predecessor = json.loads(
+        (CANONICAL / "local-image-provider-binding-v1.schema.json").read_text()
+    )
+    value = copy.deepcopy(predecessor)
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/2.0"
+    value["title"] = "EOM reference-conditioned local image provider binding v2"
+    value["required"] = [
+        "schema_version",
+        "state",
+        "route_contract",
+        "model",
+        "style_adapter",
+        "reference_policy",
+        "sampler",
+        "timeout_seconds",
+        "binding_sha256",
+    ]
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/2.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-reference-conditioned-background/2.0"
+    }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+    }
+    value["properties"]["reference_policy"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "intent_source",
+            "provider",
+            "license_policy",
+            "candidate_limit",
+            "conditioning_contract",
+            "conditioning_strength",
+            "failure_policy",
+        ],
+        "properties": {
+            "intent_source": {"const": "DRAWING_ALT_TEXT"},
+            "provider": {"const": "WIKIMEDIA_COMMONS"},
+            "license_policy": {"const": "PUBLIC_DOMAIN_OR_CC0"},
+            "candidate_limit": {"const": 5},
+            "conditioning_contract": {"const": "sdxl-img2img/1.0"},
+            "conditioning_strength": {"const": 0.35},
+            "failure_policy": {"const": "FAIL_CLOSED"},
+        },
+    }
+    return value
+
+
+def conditioned_request_v2_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/2.0"
+    )
+    value["title"] = "EOM LoRA style and reference-conditioned composite request v2"
+    value["required"].insert(-1, "style_adapter")
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/2.0"
+    }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+    }
+    return value
+
+
+def conditioned_receipt_v2_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/2.0"
+    )
+    value["title"] = "EOM LoRA style and reference-conditioned composite receipt v2"
+    value["required"].insert(-2, "style_adapter")
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/2.0"
+    }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+    }
+    return value
+
+
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
@@ -583,6 +807,14 @@ SCHEMAS = {
         acquisition_command_schema()
     ),
     "local-image-visual-reference-acquisition-result-v1.schema.json": (acquisition_result_schema()),
+    "local-image-style-adapter-release-v1.schema.json": style_adapter_release_schema(),
+    "local-image-provider-binding-v2.schema.json": provider_binding_v2_schema(),
+    "local-image-reference-conditioned-composite-request-v2.schema.json": (
+        conditioned_request_v2_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v2.schema.json": (
+        conditioned_receipt_v2_schema()
+    ),
 }
 
 

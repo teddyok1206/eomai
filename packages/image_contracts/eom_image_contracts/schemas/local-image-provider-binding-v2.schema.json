@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-provider-binding/2.0",
+  "title": "EOM reference-conditioned local image provider binding v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "route_contract",
+    "model",
+    "style_adapter",
+    "reference_policy",
+    "sampler",
+    "timeout_seconds",
+    "binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-provider-binding/2.0"
+    },
+    "state": {
+      "const": "ENABLED"
+    },
+    "route_contract": {
+      "const": "eom-local-reference-conditioned-background/2.0"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "sampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "inference_steps",
+        "guidance_scale",
+        "dtype"
+      ],
+      "properties": {
+        "contract": {
+          "const": "euler-discrete/ssd-1b-v1"
+        },
+        "inference_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "guidance_scale": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "dtype": {
+          "const": "float16"
+        }
+      }
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 900
+    },
+    "binding_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "style_adapter": {
+      "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+    },
+    "reference_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent_source",
+        "provider",
+        "license_policy",
+        "candidate_limit",
+        "conditioning_contract",
+        "conditioning_strength",
+        "failure_policy"
+      ],
+      "properties": {
+        "intent_source": {
+          "const": "DRAWING_ALT_TEXT"
+        },
+        "provider": {
+          "const": "WIKIMEDIA_COMMONS"
+        },
+        "license_policy": {
+          "const": "PUBLIC_DOMAIN_OR_CC0"
+        },
+        "candidate_limit": {
+          "const": 5
+        },
+        "conditioning_contract": {
+          "const": "sdxl-img2img/1.0"
+        },
+        "conditioning_strength": {
+          "const": 0.35
+        },
+        "failure_policy": {
+          "const": "FAIL_CLOSED"
+        }
+      }
+    }
+  }
+}
