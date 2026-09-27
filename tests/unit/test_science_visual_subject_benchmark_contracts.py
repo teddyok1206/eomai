@@ -786,6 +786,9 @@ def test_subject_multiseed_builder_derives_only_fixed_additional_seeds() -> None
 
     assert plan.initial_quality_review == review_pointer
     assert len(plan.cases) == 2
+    assert tuple(case.case_id for case in plan.cases) == tuple(
+        sorted(case.case_id for case in plan.cases)
+    )
     assert {case.seed_ordinal for case in plan.cases} == {1, 2}
     original_seed = next(case.seed for case in initial_plan.cases if case.case_kind == "QUALITY")
     assert all(case.seed != original_seed for case in plan.cases)

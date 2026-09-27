@@ -483,7 +483,7 @@ def validate_science_visual_subject_multiseed_plan(
             subject is None
             or subject.subject_key != review.subject_key
             or subject.render_route != review.render_route
-            or tuple(value.seed_ordinal for value in cases) != (1, 2)
+            or tuple(sorted(value.seed_ordinal for value in cases)) != (1, 2)
             or any(
                 value.subject_key != subject.subject_key
                 or value.render_route != subject.render_route
