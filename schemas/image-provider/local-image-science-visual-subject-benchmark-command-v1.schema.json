@@ -78,6 +78,9 @@
     },
     "staged_plan_path": {
       "const": "inputs/subject-benchmark-plan.json"
+    },
+    "staged_subject_inventory_path": {
+      "const": "inputs/science-visual-subject-inventory.json"
     }
   },
   "required": [
@@ -86,6 +89,7 @@
     "plan",
     "plan_sha256",
     "staged_plan_path",
+    "staged_subject_inventory_path",
     "staged_model_path",
     "staged_adapter_model_path",
     "staged_adapter_config_path",

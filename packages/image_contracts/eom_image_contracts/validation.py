@@ -356,10 +356,10 @@ SCHEMA_SHA256 = {
         "sha256:5b5d5aed3224e601cfe7353f2eea693ef0eae79f6529db16409698a5a9028f6b"
     ),
     "science-visual-subject-benchmark-plan": (
-        "sha256:4e3eeea046c4bd583e3bb0010457fb449131fb7b182d3b7f8d936eecf2d048cc"
+        "sha256:bd03a94b3b34458f3a73d5ac693257e4988b8d9f300a2b5a75c2df7487ef4798"
     ),
     "science-visual-subject-benchmark-command": (
-        "sha256:6af9fd7b70487bb343c9b04e77fe321c189550419f0b3868aff3d93296849322"
+        "sha256:d40e2c0daccaf784eaae00010613916a8d16d2123e6e1008102538124f272ddb"
     ),
     "science-visual-subject-benchmark-result": (
         "sha256:c62502a11e133329b72f4bb99aa331c1a535dffab63ab1eefd51dcee3d213525"

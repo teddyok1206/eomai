@@ -12,6 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from eom_image_contracts.models import (
     FrozenModel,
     ImageEvaluationArtifactMember,
+    LocalImageModelPointer,
     Sha256,
     content_sha256,
     text_sha256,
@@ -35,9 +36,8 @@ TRAINING_AUTHORIZATION_SCHEMA_REF = (
 PATTERN_INVENTORY_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-campaign-pattern-inventory/1.0"
 )
-MODEL_MANIFEST_SCHEMA_REF = "eom://schemas/image-provider/local-image-model-manifest/1.0"
 ADAPTER_MANIFEST_SCHEMA_REF = (
-    "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/2.0"
+    "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1"
 )
 
 ScienceVisualSubjectFamily = Literal[
@@ -372,7 +372,7 @@ class LocalImageScienceVisualSubjectBenchmarkPlan(FrozenModel):
     plan_id: str = Field(pattern=r"^imgscisubjectbenchmark_[0-9a-f]{32}$")
     subject_inventory: ImageEvaluationArtifactMember
     subject_inventory_sha256: Sha256
-    base_model_manifest: ImageEvaluationArtifactMember
+    base_model: LocalImageModelPointer
     adapter_manifest: ImageEvaluationArtifactMember
     width_px: Literal[800]
     height_px: Literal[500]
@@ -391,7 +391,6 @@ class LocalImageScienceVisualSubjectBenchmarkPlan(FrozenModel):
     @model_validator(mode="after")
     def pinned_unique_plan(self) -> Self:
         _require_pointer(self.subject_inventory, schema_ref=SUBJECT_INVENTORY_SCHEMA_REF)
-        _require_pointer(self.base_model_manifest, schema_ref=MODEL_MANIFEST_SCHEMA_REF)
         _require_pointer(self.adapter_manifest, schema_ref=ADAPTER_MANIFEST_SCHEMA_REF)
         if self.subject_inventory_sha256 != self.subject_inventory.sha256:
             raise ValueError("subject inventory hash pin mismatch")
@@ -417,6 +416,7 @@ class LocalImageScienceVisualSubjectBenchmarkCommand(FrozenModel):
     plan: ImageEvaluationArtifactMember
     plan_sha256: Sha256
     staged_plan_path: Literal["inputs/subject-benchmark-plan.json"]
+    staged_subject_inventory_path: Literal["inputs/science-visual-subject-inventory.json"]
     staged_model_path: Literal["inputs/model"]
     staged_adapter_model_path: Literal["inputs/adapter/adapter_model.safetensors"]
     staged_adapter_config_path: Literal["inputs/adapter/adapter_config.json"]

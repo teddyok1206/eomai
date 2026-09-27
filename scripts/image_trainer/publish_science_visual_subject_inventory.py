@@ -45,7 +45,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _safe_read(path: Path) -> bytes:
+def safe_read_subject_inventory(path: Path) -> bytes:
     if not path.is_absolute():
         raise ScienceVisualSubjectInventoryPublicationError(
             "SCIENCE_VISUAL_SUBJECT_INVENTORY_PATH_INVALID"
@@ -100,7 +100,7 @@ def _safe_read(path: Path) -> bytes:
     return bytes(payload)
 
 
-def _load_inventory(payload: bytes) -> LocalImageScienceVisualSubjectInventory:
+def load_subject_inventory(payload: bytes) -> LocalImageScienceVisualSubjectInventory:
     try:
         value = json.loads(payload)
         if not isinstance(value, dict):
@@ -126,7 +126,7 @@ def _load_inventory(payload: bytes) -> LocalImageScienceVisualSubjectInventory:
 
 def _write_receipt(path: Path, payload: bytes) -> None:
     if path.exists() or path.is_symlink():
-        if _safe_read(path) != payload:
+        if safe_read_subject_inventory(path) != payload:
             raise ScienceVisualSubjectInventoryPublicationError(
                 "SCIENCE_VISUAL_SUBJECT_INVENTORY_RECEIPT_CONFLICT"
             )
@@ -150,8 +150,8 @@ def main() -> int:
         raise ScienceVisualSubjectInventoryPublicationError(
             "SCIENCE_VISUAL_SUBJECT_SOURCE_COMMIT_INVALID"
         )
-    payload = _safe_read(args.inventory)
-    inventory = _load_inventory(payload)
+    payload = safe_read_subject_inventory(args.inventory)
+    inventory = load_subject_inventory(payload)
     engine = build_engine()
     try:
         rebuilt = build_science_visual_subject_inventory(

@@ -41,8 +41,13 @@ Item Revision
 
 The inventory stores bounded labels, aliases, route decisions, and hashes of the two source
 descriptions. It does not copy source pages, complete items, analysis results, or image bytes.
-Benchmark plans, commands, and results pin the inventory Artifact Revision. They never resolve an
-implicit latest inventory or adapter.
+Benchmark plans, commands, and results pin the inventory and adapter-manifest Artifact Revisions.
+The SSD-1B base model remains the existing small immutable `LocalImageModelPointer`, because the
+approved local model store has its own revision/hash lifecycle and is not a control Artifact. They
+never resolve an implicit latest inventory, model, or adapter. The already published adapter
+manifest has the worker's historical single trailing-newline framing; resolution accepts exactly
+canonical JSON bytes or canonical JSON plus that one newline while still pinning the exact member
+SHA-256.
 
 ## Subject routes
 

@@ -171,6 +171,36 @@
       ],
       "type": "object"
     },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
     "sha256": {
       "pattern": "^sha256:[0-9a-f]{64}$",
       "type": "string"
@@ -183,8 +213,8 @@
     "adapter_manifest": {
       "$ref": "#/$defs/artifactMember"
     },
-    "base_model_manifest": {
-      "$ref": "#/$defs/artifactMember"
+    "base_model": {
+      "$ref": "#/$defs/modelPointer"
     },
     "cases": {
       "items": {
@@ -242,7 +272,7 @@
     "plan_id",
     "subject_inventory",
     "subject_inventory_sha256",
-    "base_model_manifest",
+    "base_model",
     "adapter_manifest",
     "width_px",
     "height_px",

@@ -79,6 +79,30 @@ def _artifact_member() -> dict[str, Any]:
     }
 
 
+def _model_pointer() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "model_id",
+            "model_revision_id",
+            "manifest_sha256",
+            "provider_family",
+            "runtime_contract_version",
+        ],
+        "properties": {
+            "model_id": {"type": "string", "pattern": "^imgmodel_[0-9a-f]{32}$"},
+            "model_revision_id": {
+                "type": "string",
+                "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+            },
+            "manifest_sha256": {"$ref": "#/$defs/sha256"},
+            "provider_family": {"const": "diffusers-ssd-1b"},
+            "runtime_contract_version": {"const": "eom-local-image-provider/1.0"},
+        },
+    }
+
+
 def _base(title: str, identifier: str) -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -413,7 +437,7 @@ def _plan() -> dict[str, Any]:
         "EOM Science Visual Subject Benchmark Plan V1",
         "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-plan/1.0",
     )
-    schema["$defs"]["case"] = _case()
+    schema["$defs"].update({"case": _case(), "modelPointer": _model_pointer()})
     schema.update(
         {
             "required": [
@@ -421,7 +445,7 @@ def _plan() -> dict[str, Any]:
                 "plan_id",
                 "subject_inventory",
                 "subject_inventory_sha256",
-                "base_model_manifest",
+                "base_model",
                 "adapter_manifest",
                 "width_px",
                 "height_px",
@@ -442,7 +466,7 @@ def _plan() -> dict[str, Any]:
                 },
                 "subject_inventory": {"$ref": "#/$defs/artifactMember"},
                 "subject_inventory_sha256": {"$ref": "#/$defs/sha256"},
-                "base_model_manifest": {"$ref": "#/$defs/artifactMember"},
+                "base_model": {"$ref": "#/$defs/modelPointer"},
                 "adapter_manifest": {"$ref": "#/$defs/artifactMember"},
                 "width_px": {"const": 800},
                 "height_px": {"const": 500},
@@ -485,6 +509,7 @@ def _command() -> dict[str, Any]:
                 "plan",
                 "plan_sha256",
                 "staged_plan_path",
+                "staged_subject_inventory_path",
                 "staged_model_path",
                 "staged_adapter_model_path",
                 "staged_adapter_config_path",
@@ -502,6 +527,9 @@ def _command() -> dict[str, Any]:
                 "plan": {"$ref": "#/$defs/artifactMember"},
                 "plan_sha256": {"$ref": "#/$defs/sha256"},
                 "staged_plan_path": {"const": "inputs/subject-benchmark-plan.json"},
+                "staged_subject_inventory_path": {
+                    "const": "inputs/science-visual-subject-inventory.json"
+                },
                 "staged_model_path": {"const": "inputs/model"},
                 "staged_adapter_model_path": {"const": "inputs/adapter/adapter_model.safetensors"},
                 "staged_adapter_config_path": {"const": "inputs/adapter/adapter_config.json"},
