@@ -142,6 +142,7 @@ def _plan() -> dict[str, Any]:
                 "schema_version",
                 "plan_id",
                 "subject_inventory",
+                "initial_benchmark_plan",
                 "initial_quality_review",
                 "base_model",
                 "adapter_manifest",
@@ -167,6 +168,7 @@ def _plan() -> dict[str, Any]:
                     "pattern": "^imgscisubjectmultiseed_[0-9a-f]{32}$",
                 },
                 "subject_inventory": {"$ref": "#/$defs/artifactMember"},
+                "initial_benchmark_plan": {"$ref": "#/$defs/artifactMember"},
                 "initial_quality_review": {"$ref": "#/$defs/artifactMember"},
                 "base_model": {"$ref": "#/$defs/modelPointer"},
                 "adapter_manifest": {"$ref": "#/$defs/artifactMember"},
@@ -212,6 +214,7 @@ def _command() -> dict[str, Any]:
                 "plan_sha256",
                 "staged_plan_path",
                 "staged_subject_inventory_path",
+                "staged_initial_benchmark_plan_path",
                 "staged_initial_quality_review_path",
                 "staged_adapter_manifest_path",
                 "staged_adapter_model_path",
@@ -233,6 +236,9 @@ def _command() -> dict[str, Any]:
                 "staged_plan_path": {"const": "inputs/subject-multiseed-plan.json"},
                 "staged_subject_inventory_path": {
                     "const": "inputs/science-visual-subject-inventory.json"
+                },
+                "staged_initial_benchmark_plan_path": {
+                    "const": "inputs/science-visual-subject-benchmark-plan.json"
                 },
                 "staged_initial_quality_review_path": {
                     "const": "inputs/science-visual-subject-benchmark-review.json"

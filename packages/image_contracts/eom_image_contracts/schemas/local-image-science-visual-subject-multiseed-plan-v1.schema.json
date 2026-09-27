@@ -187,6 +187,9 @@
     "inference_steps": {
       "const": 20
     },
+    "initial_benchmark_plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
     "initial_quality_review": {
       "$ref": "#/$defs/artifactMember"
     },
@@ -211,6 +214,7 @@
     "schema_version",
     "plan_id",
     "subject_inventory",
+    "initial_benchmark_plan",
     "initial_quality_review",
     "base_model",
     "adapter_manifest",

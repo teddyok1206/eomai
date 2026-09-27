@@ -15,20 +15,28 @@ from eom_image_contracts import (
     LocalImageScienceVisualSubjectBenchmarkResult,
     LocalImageScienceVisualSubjectBenchmarkReview,
     LocalImageScienceVisualSubjectInventory,
+    LocalImageScienceVisualSubjectMultiseedCommand,
+    LocalImageScienceVisualSubjectMultiseedPlan,
+    LocalImageScienceVisualSubjectMultiseedResult,
     ScienceVisualSubject,
     ScienceVisualSubjectBenchmarkCase,
     ScienceVisualSubjectBenchmarkOutcome,
     ScienceVisualSubjectBenchmarkOutput,
+    ScienceVisualSubjectMultiseedCase,
+    ScienceVisualSubjectMultiseedOutput,
     ScienceVisualSubjectOmission,
     ScienceVisualSubjectQualityReviewEntry,
     ScienceVisualSubjectSourceReference,
     content_json_bytes,
     content_sha256,
+    science_subject_multiseed_value,
     text_sha256,
     validate_contract,
     validate_science_visual_subject_benchmark_plan,
     validate_science_visual_subject_benchmark_result,
     validate_science_visual_subject_benchmark_review,
+    validate_science_visual_subject_multiseed_plan,
+    validate_science_visual_subject_multiseed_result,
 )
 from pydantic import ValidationError
 
@@ -551,6 +559,226 @@ def test_subject_quality_review_rejects_diagnostic_as_production_variant() -> No
             failure_reasons=("PRODUCTION_PATH_NOT_EXERCISED",),
             next_actions=("BUILD_PRODUCTION_VECTOR_FIXTURE",),
         )
+
+
+def _multiseed_initials() -> tuple[
+    LocalImageScienceVisualSubjectInventory,
+    LocalImageScienceVisualSubjectBenchmarkPlan,
+    LocalImageScienceVisualSubjectBenchmarkReview,
+]:
+    inventory = _inventory()
+    adapter = _adapter_manifest()
+    inventory_pointer = _pointer(
+        "a",
+        schema_ref="eom://schemas/image-provider/local-image-science-visual-subject-inventory/1.0",
+        member_path="manifests/science-visual-subject-inventory.json",
+        sha256=content_sha256(inventory.model_dump(mode="json")),
+    )
+    adapter_pointer = _pointer(
+        "b",
+        schema_ref=(
+            "eom://schemas/image-provider/"
+            "local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+        ),
+        member_path="manifests/adapter-manifest.json",
+        sha256=content_sha256(adapter.model_dump(mode="json")),
+    )
+    initial_plan = build_science_visual_subject_benchmark_plan(
+        inventory=inventory,
+        inventory_pointer=inventory_pointer,
+        adapter_manifest=adapter,
+        adapter_manifest_pointer=adapter_pointer,
+        created_at=NOW,
+        created_by="contract_test",
+    )
+    initial_result = _result(initial_plan, _command(initial_plan))
+    initial_review = _review(inventory, initial_plan, initial_result)
+    return inventory, initial_plan, initial_review
+
+
+def _multiseed_plan(
+    inventory: LocalImageScienceVisualSubjectInventory,
+    initial_plan: LocalImageScienceVisualSubjectBenchmarkPlan,
+    initial_review: LocalImageScienceVisualSubjectBenchmarkReview,
+) -> LocalImageScienceVisualSubjectMultiseedPlan:
+    subjects = {
+        value.subject_id: value
+        for value in inventory.subjects
+        if value.render_route in {"HYBRID", "LORA_RASTER"}
+    }
+    originals = {
+        value.subject_id: value for value in initial_plan.cases if value.case_kind == "QUALITY"
+    }
+    cases = []
+    for subject_id, subject in subjects.items():
+        original = originals[subject_id]
+        assert subject.raster_prompt_en is not None
+        assert original.negative_prompt_en is not None
+        for ordinal in (1, 2):
+            seed = science_subject_multiseed_value(subject.subject_key, ordinal)
+            identity = content_sha256(
+                {"seed": seed, "seed_ordinal": ordinal, "subject_id": subject.subject_id}
+            ).removeprefix("sha256:")[:32]
+            cases.append(
+                ScienceVisualSubjectMultiseedCase(
+                    case_id=f"imgscisubjectseedcase_{identity}",
+                    subject_id=subject.subject_id,
+                    subject_key=subject.subject_key,
+                    render_route=subject.render_route,
+                    seed_ordinal=ordinal,
+                    seed=seed,
+                    prompt_en=subject.raster_prompt_en,
+                    prompt_sha256=text_sha256(subject.raster_prompt_en),
+                    negative_prompt_en=original.negative_prompt_en,
+                    negative_prompt_sha256=text_sha256(original.negative_prompt_en),
+                )
+            )
+    body = {
+        "schema_version": "local-image-science-visual-subject-multiseed-plan/1.0",
+        "subject_inventory": initial_plan.subject_inventory.model_dump(mode="json"),
+        "initial_benchmark_plan": initial_review.benchmark_plan.model_dump(mode="json"),
+        "initial_quality_review": _pointer(
+            "4",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-visual-subject-benchmark-review/1.0"
+            ),
+            member_path="manifests/science-visual-subject-benchmark-review.json",
+            sha256=content_sha256(initial_review.model_dump(mode="json")),
+        ).model_dump(mode="json"),
+        "base_model": initial_plan.base_model.model_dump(mode="json"),
+        "adapter_manifest": initial_plan.adapter_manifest.model_dump(mode="json"),
+        "generation_width_px": 800,
+        "generation_height_px": 504,
+        "delivery_width_px": 800,
+        "delivery_height_px": 500,
+        "inference_steps": 20,
+        "guidance_scale_milli": 7500,
+        "seeds_per_subject": 2,
+        "cases": tuple(
+            value.model_dump(mode="json") for value in sorted(cases, key=lambda item: item.case_id)
+        ),
+        "activation_policy": "FORBIDDEN",
+        "created_at": NOW.isoformat().replace("+00:00", "Z"),
+        "created_by": "contract_test",
+    }
+    identity = content_sha256(
+        {key: value for key, value in body.items() if key not in {"created_at", "created_by"}}
+    ).removeprefix("sha256:")[:32]
+    with_id = {**body, "plan_id": f"imgscisubjectmultiseed_{identity}"}
+    return LocalImageScienceVisualSubjectMultiseedPlan.model_validate(
+        {**with_id, "plan_sha256": content_sha256(with_id)}
+    )
+
+
+def _multiseed_command(
+    plan: LocalImageScienceVisualSubjectMultiseedPlan,
+) -> LocalImageScienceVisualSubjectMultiseedCommand:
+    body = {
+        "schema_version": "local-image-science-visual-subject-multiseed-command/1.0",
+        "plan": _pointer(
+            "5",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-plan/1.0"
+            ),
+            member_path="manifests/science-visual-subject-multiseed-plan.json",
+            sha256=content_sha256(plan.model_dump(mode="json")),
+        ).model_dump(mode="json"),
+        "plan_sha256": plan.plan_sha256,
+        "staged_plan_path": "inputs/subject-multiseed-plan.json",
+        "staged_subject_inventory_path": "inputs/science-visual-subject-inventory.json",
+        "staged_initial_benchmark_plan_path": "inputs/science-visual-subject-benchmark-plan.json",
+        "staged_initial_quality_review_path": (
+            "inputs/science-visual-subject-benchmark-review.json"
+        ),
+        "staged_adapter_manifest_path": "inputs/adapter/adapter-manifest.json",
+        "staged_adapter_model_path": "inputs/adapter/adapter_model.safetensors",
+        "staged_adapter_config_path": "inputs/adapter/adapter_config.json",
+        "output_directory": "outputs",
+        "source_commit": "f" * 40,
+    }
+    identity = content_sha256(body).removeprefix("sha256:")[:32]
+    with_id = {**body, "run_id": f"imgscisubjectmultiseedrun_{identity}"}
+    return LocalImageScienceVisualSubjectMultiseedCommand.model_validate(
+        {**with_id, "command_sha256": content_sha256(with_id)}
+    )
+
+
+def _multiseed_result(
+    plan: LocalImageScienceVisualSubjectMultiseedPlan,
+    command: LocalImageScienceVisualSubjectMultiseedCommand,
+) -> LocalImageScienceVisualSubjectMultiseedResult:
+    outputs = tuple(
+        ScienceVisualSubjectMultiseedOutput(
+            case_id=case.case_id,
+            variant=variant,
+            relative_path=f"outputs/{case.case_id}-{variant.lower()}.png",
+            media_type="image/png",
+            bytes=100,
+            sha256="sha256:" + ("a" if variant == "ADAPTER" else "b") * 64,
+            width_px=800,
+            height_px=500,
+        )
+        for case in plan.cases
+        for variant in ("ADAPTER", "BASE")
+    )
+    ordered = tuple(sorted(outputs, key=lambda value: (value.case_id, value.variant)))
+    body = {
+        "schema_version": "local-image-science-visual-subject-multiseed-result/1.0",
+        "run_id": command.run_id,
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "command_sha256": command.command_sha256,
+        "status": "SUCCEEDED",
+        "error_code": None,
+        "outputs": tuple(value.model_dump(mode="json") for value in ordered),
+        "started_at": NOW.isoformat().replace("+00:00", "Z"),
+        "completed_at": (NOW + timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+    }
+    return LocalImageScienceVisualSubjectMultiseedResult.model_validate(
+        {**body, "result_sha256": content_sha256(body)}
+    )
+
+
+def test_subject_multiseed_contract_closes_exact_raster_population() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    command = _multiseed_command(plan)
+    result = _multiseed_result(plan, command)
+
+    validate_contract("science-visual-subject-multiseed-plan", plan.model_dump(mode="json"))
+    validate_contract("science-visual-subject-multiseed-command", command.model_dump(mode="json"))
+    validate_contract("science-visual-subject-multiseed-result", result.model_dump(mode="json"))
+    validate_science_visual_subject_multiseed_plan(inventory, initial_plan, initial_review, plan)
+    validate_science_visual_subject_multiseed_result(plan, command, result)
+    assert len(plan.cases) == 2
+    assert len(result.outputs) == 4
+    assert plan.activation_policy == "FORBIDDEN"
+
+
+def test_subject_multiseed_plan_rejects_original_seed_reuse() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    value = plan.model_dump(mode="json")
+    original = next(case for case in initial_plan.cases if case.case_kind == "QUALITY")
+    value["cases"][0]["seed"] = original.seed
+    with pytest.raises(ValidationError, match="prompt or seed mismatch"):
+        LocalImageScienceVisualSubjectMultiseedPlan.model_validate(value)
+
+
+def test_subject_multiseed_result_rejects_missing_pair() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    command = _multiseed_command(plan)
+    result = _multiseed_result(plan, command)
+    value = result.model_dump(mode="json")
+    value["outputs"] = value["outputs"][:-1]
+    value["result_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "result_sha256"}
+    )
+    parsed = LocalImageScienceVisualSubjectMultiseedResult.model_validate(value)
+    with pytest.raises(ValueError, match="exact paired coverage"):
+        validate_science_visual_subject_multiseed_result(plan, command, parsed)
 
 
 def test_subject_benchmark_failed_result_is_typed_and_empty() -> None:

@@ -164,6 +164,18 @@ SCHEMA_FILES = {
     "science-visual-subject-benchmark-review": (
         "local-image-science-visual-subject-benchmark-review-v1.schema.json"
     ),
+    "science-visual-subject-multiseed-plan": (
+        "local-image-science-visual-subject-multiseed-plan-v1.schema.json"
+    ),
+    "science-visual-subject-multiseed-command": (
+        "local-image-science-visual-subject-multiseed-command-v1.schema.json"
+    ),
+    "science-visual-subject-multiseed-result": (
+        "local-image-science-visual-subject-multiseed-result-v1.schema.json"
+    ),
+    "science-visual-subject-multiseed-review": (
+        "local-image-science-visual-subject-multiseed-review-v1.schema.json"
+    ),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -369,6 +381,18 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-subject-benchmark-review": (
         "sha256:309d059b24f07ca0a6a6c8e088a5e57e03c0569a06dfa5c283aa0ff408513740"
+    ),
+    "science-visual-subject-multiseed-plan": (
+        "sha256:b17c5c8294e79ab9fa8161f6a9d070fefd96e922a9d4835a8a819a48a6b26726"
+    ),
+    "science-visual-subject-multiseed-command": (
+        "sha256:a98220ae623410160ece500f7a2551e73c7c6738a0e6c28e40e0979a852c24be"
+    ),
+    "science-visual-subject-multiseed-result": (
+        "sha256:24809d3cb85b8a166c7555af1e8fbfb722a6c36f37c2c72dcdfe0e40592a288e"
+    ),
+    "science-visual-subject-multiseed-review": (
+        "sha256:a84ac26745df3e56c22cc288ba8c555fda8411868aaf0f49f2e790227e92a882"
     ),
 }
 

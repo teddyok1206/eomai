@@ -80,6 +80,9 @@
     "staged_adapter_model_path": {
       "const": "inputs/adapter/adapter_model.safetensors"
     },
+    "staged_initial_benchmark_plan_path": {
+      "const": "inputs/science-visual-subject-benchmark-plan.json"
+    },
     "staged_initial_quality_review_path": {
       "const": "inputs/science-visual-subject-benchmark-review.json"
     },
@@ -97,6 +100,7 @@
     "plan_sha256",
     "staged_plan_path",
     "staged_subject_inventory_path",
+    "staged_initial_benchmark_plan_path",
     "staged_initial_quality_review_path",
     "staged_adapter_manifest_path",
     "staged_adapter_model_path",
