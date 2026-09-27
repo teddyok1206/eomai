@@ -12,6 +12,15 @@ from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirementV1
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
+from eom_image_contracts import (
+    LocalImageVisualReferencePublicationReceipt,
+    VisualReferenceImageResultArtifactPointer,
+    VisualReferencePublicationEntry,
+    text_sha256,
+)
+from eom_image_contracts import (
+    validate_contract as validate_image_contract,
+)
 from eom_protocol import (
     ArtifactSpec,
     ErrorCode,
@@ -40,7 +49,9 @@ from eom_workflow.document_review import (
 )
 from eom_workflow.models import (
     ArtifactPointer,
+    ContentTeamImageRoleResultV12,
     CustomerSupportWorkerRequest,
+    GeneratedVectorDrawingV6,
     KnowledgeAnalysisProposalRoleResult,
     KnowledgeAnalysisProposalRoleResultV2,
     KnowledgeAnalysisProposalRoleResultV3,
@@ -100,6 +111,7 @@ from eom_orchestrator.execution_materializer import (
     authorized_execution_artifact_revisions,
     materialize_execution_step,
 )
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
 from eom_orchestrator.legacy_item_editorial_compatibility_artifact import (
     stage_legacy_item_editorial_compatibility_proposal,
@@ -120,6 +132,10 @@ from eom_orchestrator.repository import (
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
+from eom_orchestrator.visual_reference_acquisition import (
+    VisualReferenceAcquisitionCoordinator,
+    VisualReferenceCoordinatorError,
+)
 from eom_orchestrator.worker import CodexWorkerAdapter, WorkerRun, load_worker_result
 from eom_orchestrator.worker_registry import WorkerSlot
 
@@ -266,12 +282,22 @@ class Orchestrator:
         engine: Engine,
         settings: Settings | None = None,
         worker_adapter: CodexWorkerAdapter | None = None,
+        visual_reference_coordinator: VisualReferenceAcquisitionCoordinator | None = None,
     ) -> None:
         self.settings = settings or Settings.from_environment()
         self.sessions = build_session_factory(engine)
         self.registry = resolve_worker_configuration(self.settings).registry
         self.worker_adapter = worker_adapter or CodexWorkerAdapter(self.settings)
         self.capacity = CodexCapacityController(self.sessions)
+        self.visual_reference_coordinator = visual_reference_coordinator
+        if (
+            self.visual_reference_coordinator is None
+            and self.settings.runtime_source_commit is not None
+        ):
+            self.visual_reference_coordinator = VisualReferenceAcquisitionCoordinator(
+                publisher=ControlFileSetPublisher(engine, self.settings),
+                settings=self.settings,
+            )
 
     def submit(self, message: str, idempotency_key: str | None = None) -> JobRecord:
         request = JobRequest(
@@ -393,6 +419,95 @@ class Orchestrator:
                 raise KeyError(job_id)
             session.expunge(job)
             return job
+
+    def _publish_visual_references(
+        self,
+        *,
+        result: object,
+        result_schema: str,
+        workflow_id: str,
+        step_run_id: str,
+        job_id: str,
+        artifact_id: str,
+        revision_id: str,
+        content_hash: str,
+    ) -> dict[str, object]:
+        """Publish immutable morphology references for latest hybrid image drawings.
+
+        The image result remains the canonical worker output.  This method materializes no
+        provider output and does not alter the content-team prompt; it only publishes the
+        separately typed reference source and binds it to the exact image-result revision.
+        """
+
+        if result_schema != "image-result@12.0" or not isinstance(
+            result, ContentTeamImageRoleResultV12
+        ):
+            return {}
+        hybrid_drawings = tuple(
+            item
+            for item in result.output.drawings
+            if isinstance(item.drawing, GeneratedVectorDrawingV6)
+            and item.drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
+        )
+        if not hybrid_drawings:
+            return {}
+        if self.visual_reference_coordinator is None or self.settings.runtime_source_commit is None:
+            raise VisualReferenceCoordinatorError("VISUAL_REFERENCE_ROUTE_UNAVAILABLE")
+
+        # The worker result timestamp is part of the immutable result envelope.  Reusing it keeps
+        # discovery, acquisition, and the publication receipt byte-stable across recovery replay.
+        published_at = result.completed_at
+        entries: list[VisualReferencePublicationEntry] = []
+        for item in hybrid_drawings:
+            drawing_document = item.drawing.model_dump(mode="json")
+            drawing_sha256 = content_sha256(drawing_document)
+            discovered = self.visual_reference_coordinator.discover_and_acquire(
+                workflow_id=workflow_id,
+                image_step_run_id=step_run_id,
+                image_job_id=job_id,
+                visual_ordinal=item.visual_ordinal,
+                drawing_sha256=drawing_sha256,
+                subject=item.drawing.alt_text,
+                source_commit=self.settings.runtime_source_commit,
+                observed_at=published_at,
+            )
+            entries.append(
+                VisualReferencePublicationEntry(
+                    visual_ordinal=item.visual_ordinal,
+                    drawing_sha256=drawing_sha256,
+                    subject_sha256=text_sha256(item.drawing.alt_text),
+                    discovery_command_sha256=discovered.discovery_command.command_sha256,
+                    discovery_result_sha256=discovered.discovery_result.result_sha256,
+                    intent_sha256=discovered.intent.intent_sha256,
+                    acquisition_command_sha256=discovered.published.command.command_sha256,
+                    acquisition_result_sha256=(
+                        discovered.published.acquisition_result.result_sha256
+                    ),
+                    visual_reference=discovered.published.pointer,
+                )
+            )
+        receipt_body = {
+            "schema_version": "local-image-visual-reference-publication-receipt/1.0",
+            "image_result_artifact": VisualReferenceImageResultArtifactPointer(
+                logical_artifact_id=artifact_id,
+                revision_id=revision_id,
+                content_hash=content_hash,
+            ).model_dump(mode="json"),
+            "entries": [entry.model_dump(mode="json") for entry in entries],
+            "published_at": published_at.isoformat().replace("+00:00", "Z"),
+        }
+        receipt = LocalImageVisualReferencePublicationReceipt.model_validate(
+            {
+                **receipt_body,
+                "receipt_sha256": content_sha256(receipt_body),
+            }
+        )
+        receipt_document = receipt.model_dump(mode="json")
+        validate_image_contract(
+            "visual-reference-publication-receipt",
+            receipt_document,
+        )
+        return {"visual_reference_publication_receipt": receipt_document}
 
     def submit_workflow_role(
         self,
@@ -737,6 +852,7 @@ class Orchestrator:
             result_document = result.model_dump(mode="json")
             evidence_receipt = None
             evidence_event_data: dict[str, object] = {}
+            visual_reference_event_data: dict[str, object] = {}
             if result_schema in {
                 "knowledge-analysis-proposal-result@1.0",
                 "knowledge-analysis-proposal-result@2.0",
@@ -865,6 +981,16 @@ class Orchestrator:
                     staging=staging,
                     worker_slot=slot.slot_id,
                 )
+                visual_reference_event_data = self._publish_visual_references(
+                    result=result,
+                    result_schema=result_schema,
+                    workflow_id=workflow_id,
+                    step_run_id=step_run_id,
+                    job_id=job_id,
+                    artifact_id=artifact.logical_artifact_id,
+                    revision_id=artifact.revision_id,
+                    content_hash=staged.content_hash,
+                )
                 if isinstance(result, PairedDocumentReviewRoleResultV3):
                     with self.sessions() as validation_session:
                         document_review_receipt = validate_document_review_evidence_for_commit(
@@ -968,6 +1094,7 @@ class Orchestrator:
                     "revision_id": artifact.revision_id,
                     "content_hash": content_hash,
                     **evidence_event_data,
+                    **visual_reference_event_data,
                 }
                 transition_job(
                     session,
@@ -980,6 +1107,8 @@ class Orchestrator:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
         except EvidenceUsageValidationError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, exc.code, slot)
+        except VisualReferenceCoordinatorError as exc:
+            self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)
         except ControlPlaneError as exc:
             if exc.code not in RETRYABLE_CONTROL_ADMISSION_ERRORS:
                 self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)

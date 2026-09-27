@@ -84,6 +84,7 @@ class DiscoveredVisualReference:
     discovery_command: LocalImageVisualReferenceDiscoveryCommand
     discovery_result: LocalImageVisualReferenceDiscoveryResult
     discovery_unit_name: str
+    intent: LocalImageVisualReferenceIntent
     published: PublishedVisualReference
 
 
@@ -166,6 +167,7 @@ class VisualReferenceAcquisitionCoordinator:
             discovery_command=command,
             discovery_result=result,
             discovery_unit_name=unit_name,
+            intent=intent,
             published=published,
         )
 

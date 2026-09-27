@@ -69,6 +69,7 @@ class Settings:
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     image_reference_workspace_root: Path = Path("/srv/eom/image-reference-workspaces")
     image_reference_provider_group: str = "eom-image-reference"
+    runtime_source_commit: str | None = None
     codex_binary: Path = Path("/usr/local/bin/codex")
     codex_capability_policy: Path = DEFAULT_CODEX_CAPABILITY_POLICY
     worker_timeout_seconds: int = 1800
@@ -87,6 +88,12 @@ class Settings:
         )
         if not capability_policy.is_absolute():
             raise SettingsError("EOM_CODEX_CAPABILITY_POLICY must be an absolute path")
+        runtime_source_commit = os.environ.get("EOM_RUNTIME_SOURCE_COMMIT")
+        if runtime_source_commit is not None and (
+            len(runtime_source_commit) != 40
+            or any(character not in "0123456789abcdef" for character in runtime_source_commit)
+        ):
+            raise SettingsError("EOM_RUNTIME_SOURCE_COMMIT must be a lowercase Git commit")
         return cls(
             worker_config=worker_config,
             staging_root=Path(os.environ.get("EOM_STAGING_ROOT", "/srv/eom/staging")),
@@ -104,6 +111,7 @@ class Settings:
             image_reference_provider_group=os.environ.get(
                 "EOM_IMAGE_REFERENCE_PROVIDER_GROUP", "eom-image-reference"
             ),
+            runtime_source_commit=runtime_source_commit,
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),
             codex_capability_policy=capability_policy,
             worker_timeout_seconds=int(os.environ.get("EOM_WORKER_TIMEOUT_SECONDS", "1800")),
