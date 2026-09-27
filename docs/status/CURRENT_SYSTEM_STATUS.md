@@ -1,6 +1,19 @@
 # Current System Status
 
-Status date: 2026-09-24 (UTC)
+Status date: 2026-09-27 (UTC)
+
+On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
+subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
+closes 537 observations as 514 covered plus 23 explicit omissions and identifies 87 subjects. The
+benchmark exercised 69 deterministic routes, 18 BASE/ADAPTER pairs, and two forbidden human-raster
+requests; both negative controls were rejected. An independent, pointer-bound review classified
+the results as 69 diagnostic-only, five base-preferred, seven adapter-preferred, and six where
+neither variant is acceptable. The LoRA adapter remains `EVALUATION_ONLY`, activation stays
+`FORBIDDEN`, and the existing base-only provider binding is unchanged. Route diagnostics are not
+production-quality evidence because the real path uses worker-authored safe SVG through the
+Catalog compositor. See
+[Science visual subject benchmark](SCIENCE_VISUAL_SUBJECT_BENCHMARK_2026-09-27.md) and
+[ADR 0132](../adr/0132-science-subject-quality-gate.md).
 
 The repository now contains the protocol-first successor that closes the four limitations observed
 in the live V2 audit. Workflow `pdf-document-review@1.2.0`, role protocol `workflow-role/1.27.0`,

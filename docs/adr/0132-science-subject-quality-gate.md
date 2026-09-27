@@ -77,3 +77,16 @@ the benchmark result would mix worker execution with independent assessment and 
 of a released result contract. A small immutable review contract is the simplest boundary that
 preserves both meanings.
 
+## First accepted review evidence
+
+The first complete benchmark and independent review were published on 2026-09-27 UTC. The run
+covered all 87 inventory subjects and produced 69 deterministic diagnostics, 18 BASE/ADAPTER pairs,
+and two correctly rejected human-raster negative controls. The pinned review classified 69 entries
+as `DIAGNOSTIC_ONLY`, five as `BASE_PREFERRED`, seven as `ADAPTER_PREFERRED`, and six as
+`NEITHER_ACCEPTABLE`. Its activation recommendation is `FORBIDDEN`.
+
+The exact review is `imgscisubjectreview_9acf3bcd62e7321eaf20203c8bf6e579`, semantic SHA-256
+`sha256:50caf73efdd90f0c5116e47bd022546084d32f69016f71931463b81227e46c46`, stored as Artifact
+`artifact_aebc6cf021c149a8bbbe170c7e214dd1` Revision
+`rev_89652f7ba9554499aceefb55f9a0da71`. The result and review evidence are summarized in
+[Science visual subject benchmark status](../status/SCIENCE_VISUAL_SUBJECT_BENCHMARK_2026-09-27.md).

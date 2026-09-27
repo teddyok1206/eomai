@@ -59,6 +59,15 @@ readiness가 정본입니다.
 선행조건은 [확장 LoRA campaign 상태](docs/status/SCIENCE_LORA_EXPANDED_CAMPAIGN_2026-09-26.md)에
 기록합니다.
 
+2026-09-27에는 승인 기출 520문항의 537개 시각 관찰을 87개 과학 요소로 정리해 자동차·사람·비커를
+포함한 전 요소 실행 경로를 검사했습니다. 69개 결정론 경로, 18개 BASE/ADAPTER 쌍, 사람 raster
+금지 2건이 모두 계약대로 종료됐습니다. 다만 전수 육안 판정은 adapter 우세 7, base 우세 5,
+양쪽 부적합 6으로 갈렸고 결정론 결과 69개는 생산 compositor가 아닌 경로 진단입니다. 따라서
+adapter 자동 활성화는 계속 금지하며 추가 seed, 실제 safe-SVG/compositor, 대표 Item/HWPX 검증을
+통과해야 합니다. 정확한 Artifact와 판정은
+[과학 시각 요소 벤치마크 상태](docs/status/SCIENCE_VISUAL_SUBJECT_BENCHMARK_2026-09-27.md)에
+기록합니다.
+
 단일 문항의 최신 Graph 검증 successor는 정답·①~⑤·선택적 ㄱ/ㄴ/ㄷ·해설·교육과정·독창성·시각자료를
 각각 독립 판정합니다. Review worker는 verdict 전에 검증 대상과 필요한 source class를 계획하고,
 시각자료가 있으면 이미지·표와 본문·선택지·해설의 일치를 먼저 확인합니다. 의심 사항은
