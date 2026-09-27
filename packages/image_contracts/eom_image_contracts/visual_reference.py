@@ -300,6 +300,167 @@ class LocalImageVisualReferenceBundle(FrozenModel):
         return self
 
 
+class LocalImageVisualReferenceAcquisitionCommand(FrozenModel):
+    schema_version: Literal["local-image-visual-reference-acquisition-command/1.0"] = (
+        "local-image-visual-reference-acquisition-command/1.0"
+    )
+    command_id: str = Field(pattern=r"^imgrefcmd_[0-9a-f]{32}$")
+    attempt_id: str = Field(pattern=r"^imgrefattempt_[0-9a-f]{32}$")
+    intent: VisualReferenceIntentArtifactPointer
+    intent_member_path: Literal["input/visual-reference-intent.json"] = (
+        "input/visual-reference-intent.json"
+    )
+    observed_at: datetime
+    max_original_bytes: Literal[16_777_216] = 16_777_216
+    timeout_seconds: int = Field(ge=30, le=180)
+    command_sha256: Sha256
+
+    @field_validator("observed_at")
+    @classmethod
+    def utc_observation(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("visual-reference acquisition timestamp must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> LocalImageVisualReferenceAcquisitionCommand:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("visual-reference acquisition command hash mismatch")
+        return self
+
+
+class VisualReferenceAcquisitionOutputFile(FrozenModel):
+    member_path: Literal[
+        "manifests/visual-reference-bundle.json",
+        "references/primary.png",
+    ]
+    schema_ref: Literal[
+        "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+        "eom://schemas/image-provider/normalized-visual-reference/1.0",
+    ]
+    media_type: Literal["application/json", "image/png"]
+    size_bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_member_contract(self) -> VisualReferenceAcquisitionOutputFile:
+        expected = {
+            "manifests/visual-reference-bundle.json": (
+                "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+                "application/json",
+            ),
+            "references/primary.png": (
+                "eom://schemas/image-provider/normalized-visual-reference/1.0",
+                "image/png",
+            ),
+        }[self.member_path]
+        if (self.schema_ref, self.media_type) != expected:
+            raise ValueError("visual-reference acquisition output contract mismatch")
+        return self
+
+
+VisualReferenceAcquisitionErrorCode = Literal[
+    "VISUAL_REFERENCE_INPUT_INVALID",
+    "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+    "VISUAL_REFERENCE_SOURCE_REJECTED",
+    "VISUAL_REFERENCE_LICENSE_REJECTED",
+    "VISUAL_REFERENCE_IMAGE_INVALID",
+    "VISUAL_REFERENCE_OUTPUT_INVALID",
+]
+
+
+class LocalImageVisualReferenceAcquisitionResult(FrozenModel):
+    schema_version: Literal["local-image-visual-reference-acquisition-result/1.0"] = (
+        "local-image-visual-reference-acquisition-result/1.0"
+    )
+    command_id: str = Field(pattern=r"^imgrefcmd_[0-9a-f]{32}$")
+    attempt_id: str = Field(pattern=r"^imgrefattempt_[0-9a-f]{32}$")
+    command_sha256: Sha256
+    status: Literal["SUCCEEDED", "FAILED"]
+    bundle: LocalImageVisualReferenceBundle | None
+    output_files: tuple[VisualReferenceAcquisitionOutputFile, ...] = Field(max_length=2)
+    error_code: VisualReferenceAcquisitionErrorCode | None
+    started_at: datetime
+    completed_at: datetime
+    duration_ms: int = Field(ge=1, le=180_000)
+    result_sha256: Sha256
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("visual-reference acquisition timestamp must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_status_outputs_and_hash(self) -> LocalImageVisualReferenceAcquisitionResult:
+        if self.completed_at < self.started_at:
+            raise ValueError("visual-reference acquisition completion precedes start")
+        paths = tuple(output.member_path for output in self.output_files)
+        if paths != tuple(sorted(set(paths))):
+            raise ValueError("visual-reference acquisition output files must be sorted and unique")
+        if self.status == "SUCCEEDED":
+            if (
+                self.bundle is None
+                or self.error_code is not None
+                or paths
+                != (
+                    "manifests/visual-reference-bundle.json",
+                    "references/primary.png",
+                )
+            ):
+                raise ValueError("successful visual-reference acquisition is incomplete")
+            primary_file = self.output_files[1]
+            if (
+                primary_file.sha256 != self.bundle.normalized_member.sha256
+                or primary_file.size_bytes != self.bundle.normalized_member.size_bytes
+            ):
+                raise ValueError("visual-reference primary output differs from the bundle")
+        elif self.bundle is not None or self.output_files or self.error_code is None:
+            raise ValueError("failed visual-reference acquisition has invalid outputs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("visual-reference acquisition result hash mismatch")
+        return self
+
+
+def validate_visual_reference_acquisition(
+    command: LocalImageVisualReferenceAcquisitionCommand,
+    intent: LocalImageVisualReferenceIntent,
+    result: LocalImageVisualReferenceAcquisitionResult,
+) -> None:
+    """Bind an acquisition result to its staged intent and exact candidate population."""
+
+    if (
+        result.command_id != command.command_id
+        or result.attempt_id != command.attempt_id
+        or result.command_sha256 != command.command_sha256
+    ):
+        raise ValueError("visual-reference acquisition result differs from its command")
+    if result.status == "FAILED":
+        return
+    bundle = result.bundle
+    assert bundle is not None
+    if bundle.intent != command.intent or bundle.subject != intent.subject:
+        raise ValueError("visual-reference bundle differs from its intent")
+    if bundle.observed_at != command.observed_at:
+        raise ValueError("visual-reference bundle observation differs from its command")
+    if len(bundle.sources) != len(intent.candidates):
+        raise ValueError("visual-reference bundle candidate coverage differs")
+    for candidate, source in zip(intent.candidates, bundle.sources, strict=True):
+        if (
+            candidate.rank != source.rank
+            or candidate.page_id != source.page_id
+            or candidate.file_title != source.file_title
+            or candidate.canonical_page_url != source.canonical_page_url
+        ):
+            raise ValueError("visual-reference verified source differs from its candidate")
+    primary = bundle.sources[0]
+    if primary.page_id != intent.primary_candidate_page_id:
+        raise ValueError("visual-reference acquired primary differs from its intent")
+
+
 class VisualReferenceBundleManifestPointer(FrozenModel):
     artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
     artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")

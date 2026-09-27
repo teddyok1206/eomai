@@ -427,6 +427,149 @@ def conditioned_receipt_schema() -> dict[str, Any]:
     return value
 
 
+def acquisition_command_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-visual-reference-acquisition-command/1.0",
+        "EOM local image visual reference acquisition command v1",
+    )
+    value["$defs"] = {
+        "intent_pointer": _artifact_member(
+            path_pattern="^manifests/visual-reference-intent\\.json$",
+            schema_const="eom://schemas/image-provider/local-image-visual-reference-intent/1.0",
+            media_const="application/json",
+        )
+    }
+    value["required"] = [
+        "schema_version",
+        "command_id",
+        "attempt_id",
+        "intent",
+        "intent_member_path",
+        "observed_at",
+        "max_original_bytes",
+        "timeout_seconds",
+        "command_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-visual-reference-acquisition-command/1.0"},
+        "command_id": {"type": "string", "pattern": "^imgrefcmd_[0-9a-f]{32}$"},
+        "attempt_id": {"type": "string", "pattern": "^imgrefattempt_[0-9a-f]{32}$"},
+        "intent": {"$ref": "#/$defs/intent_pointer"},
+        "intent_member_path": {"const": "input/visual-reference-intent.json"},
+        "observed_at": UTC,
+        "max_original_bytes": {"const": 16777216},
+        "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 180},
+        "command_sha256": SHA256,
+    }
+    return value
+
+
+def acquisition_result_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-visual-reference-acquisition-result/1.0",
+        "EOM local image visual reference acquisition result v1",
+    )
+    value["$defs"] = {
+        "output_file": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["member_path", "schema_ref", "media_type", "size_bytes", "sha256"],
+            "properties": {
+                "member_path": {
+                    "enum": [
+                        "manifests/visual-reference-bundle.json",
+                        "references/primary.png",
+                    ]
+                },
+                "schema_ref": {
+                    "enum": [
+                        "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+                        "eom://schemas/image-provider/normalized-visual-reference/1.0",
+                    ]
+                },
+                "media_type": {"enum": ["application/json", "image/png"]},
+                "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+                "sha256": SHA256,
+            },
+        }
+    }
+    value["required"] = [
+        "schema_version",
+        "command_id",
+        "attempt_id",
+        "command_sha256",
+        "status",
+        "bundle",
+        "output_files",
+        "error_code",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "result_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-visual-reference-acquisition-result/1.0"},
+        "command_id": {"type": "string", "pattern": "^imgrefcmd_[0-9a-f]{32}$"},
+        "attempt_id": {"type": "string", "pattern": "^imgrefattempt_[0-9a-f]{32}$"},
+        "command_sha256": SHA256,
+        "status": {"enum": ["SUCCEEDED", "FAILED"]},
+        "bundle": {
+            "oneOf": [
+                {"$ref": ("eom://schemas/image-provider/local-image-visual-reference-bundle/1.0")},
+                {"type": "null"},
+            ]
+        },
+        "output_files": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {"$ref": "#/$defs/output_file"},
+        },
+        "error_code": {
+            "oneOf": [
+                {
+                    "enum": [
+                        "VISUAL_REFERENCE_INPUT_INVALID",
+                        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+                        "VISUAL_REFERENCE_SOURCE_REJECTED",
+                        "VISUAL_REFERENCE_LICENSE_REJECTED",
+                        "VISUAL_REFERENCE_IMAGE_INVALID",
+                        "VISUAL_REFERENCE_OUTPUT_INVALID",
+                    ]
+                },
+                {"type": "null"},
+            ]
+        },
+        "started_at": UTC,
+        "completed_at": UTC,
+        "duration_ms": {"type": "integer", "minimum": 1, "maximum": 180000},
+        "result_sha256": SHA256,
+    }
+    value["allOf"] = [
+        {
+            "if": {"properties": {"status": {"const": "SUCCEEDED"}}},
+            "then": {
+                "properties": {
+                    "bundle": {
+                        "$ref": (
+                            "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+                        )
+                    },
+                    "output_files": {"minItems": 2, "maxItems": 2},
+                    "error_code": {"type": "null"},
+                }
+            },
+            "else": {
+                "properties": {
+                    "bundle": {"type": "null"},
+                    "output_files": {"maxItems": 0},
+                    "error_code": {"type": "string"},
+                }
+            },
+        }
+    ]
+    return value
+
+
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
@@ -436,6 +579,10 @@ SCHEMAS = {
     "local-image-reference-conditioned-composite-receipt-v1.schema.json": (
         conditioned_receipt_schema()
     ),
+    "local-image-visual-reference-acquisition-command-v1.schema.json": (
+        acquisition_command_schema()
+    ),
+    "local-image-visual-reference-acquisition-result-v1.schema.json": (acquisition_result_schema()),
 }
 
 

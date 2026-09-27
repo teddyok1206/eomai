@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-visual-reference-acquisition-result/1.0",
+  "title": "EOM local image visual reference acquisition result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "output_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "member_path": {
+          "enum": [
+            "manifests/visual-reference-bundle.json",
+            "references/primary.png"
+          ]
+        },
+        "schema_ref": {
+          "enum": [
+            "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+            "eom://schemas/image-provider/normalized-visual-reference/1.0"
+          ]
+        },
+        "media_type": {
+          "enum": [
+            "application/json",
+            "image/png"
+          ]
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "command_id",
+    "attempt_id",
+    "command_sha256",
+    "status",
+    "bundle",
+    "output_files",
+    "error_code",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-visual-reference-acquisition-result/1.0"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^imgrefcmd_[0-9a-f]{32}$"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^imgrefattempt_[0-9a-f]{32}$"
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "bundle": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "output_files": {
+      "type": "array",
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/output_file"
+      }
+    },
+    "error_code": {
+      "oneOf": [
+        {
+          "enum": [
+            "VISUAL_REFERENCE_INPUT_INVALID",
+            "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+            "VISUAL_REFERENCE_SOURCE_REJECTED",
+            "VISUAL_REFERENCE_LICENSE_REJECTED",
+            "VISUAL_REFERENCE_IMAGE_INVALID",
+            "VISUAL_REFERENCE_OUTPUT_INVALID"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180000
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "bundle": {
+            "$ref": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+          },
+          "output_files": {
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "error_code": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "bundle": {
+            "type": "null"
+          },
+          "output_files": {
+            "maxItems": 0
+          },
+          "error_code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

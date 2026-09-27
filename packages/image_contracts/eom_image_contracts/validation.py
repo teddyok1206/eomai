@@ -20,6 +20,12 @@ SCHEMA_FILES = {
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
     "visual-reference-intent": "local-image-visual-reference-intent-v1.schema.json",
     "visual-reference-bundle": "local-image-visual-reference-bundle-v1.schema.json",
+    "visual-reference-acquisition-command": (
+        "local-image-visual-reference-acquisition-command-v1.schema.json"
+    ),
+    "visual-reference-acquisition-result": (
+        "local-image-visual-reference-acquisition-result-v1.schema.json"
+    ),
     "reference-conditioned-composite-request": (
         "local-image-reference-conditioned-composite-request-v1.schema.json"
     ),
@@ -200,6 +206,12 @@ SCHEMA_SHA256 = {
     ),
     "visual-reference-bundle": (
         "sha256:d1c41b0b7ebd6f0f459f01920066e4b40481e8f7d5574506d4a44fd5bcb9bd24"
+    ),
+    "visual-reference-acquisition-command": (
+        "sha256:40677d44357c4c3b6767f6b7654589d41ae9fd1b85e9928c0ca134320c185fff"
+    ),
+    "visual-reference-acquisition-result": (
+        "sha256:ac8c083fd573108d46534798d12d090ef33adbf06667dc68a8c56f3351074ea9"
     ),
     "reference-conditioned-composite-request": (
         "sha256:f23558ed1d352e41d800e35bde0fd090a0d33f6d5cafb213bb7593c26b13f40e"

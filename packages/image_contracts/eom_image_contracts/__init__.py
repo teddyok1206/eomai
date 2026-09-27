@@ -235,10 +235,13 @@ from eom_image_contracts.visual_reference import (
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditioning,
+    LocalImageVisualReferenceAcquisitionCommand,
+    LocalImageVisualReferenceAcquisitionResult,
     LocalImageVisualReferenceBundle,
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     NormalizedVisualReferenceMember,
+    VisualReferenceAcquisitionOutputFile,
     VisualReferenceBundleManifestPointer,
     VisualReferenceIntentArtifactPointer,
     VisualReferenceIntentCandidate,
@@ -246,6 +249,7 @@ from eom_image_contracts.visual_reference import (
     VisualReferenceSource,
     safe_visual_reference_member_path,
     validate_reference_conditioned_receipt,
+    validate_visual_reference_acquisition,
 )
 
 __all__ = [
@@ -376,6 +380,8 @@ __all__ = [
     "LocalImageTrainingEligibilityReview",
     "LocalImageTrainingProjectionOmission",
     "LocalImageTrainingSample",
+    "LocalImageVisualReferenceAcquisitionCommand",
+    "LocalImageVisualReferenceAcquisitionResult",
     "LocalImageVisualReferenceBundle",
     "LocalImageVisualReferenceIntent",
     "LocalImageVisualReferencePointer",
@@ -413,6 +419,7 @@ __all__ = [
     "ScienceVisualToolIdentity",
     "ScienceVisualToolSet",
     "UpstreamModel",
+    "VisualReferenceAcquisitionOutputFile",
     "VisualReferenceBundleManifestPointer",
     "VisualReferenceIntentArtifactPointer",
     "VisualReferenceIntentCandidate",
@@ -479,4 +486,5 @@ __all__ = [
     "validate_training_dataset_authorization",
     "validate_training_dataset_inventory",
     "validate_training_inventory_review",
+    "validate_visual_reference_acquisition",
 ]

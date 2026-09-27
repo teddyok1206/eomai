@@ -17,16 +17,20 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
+    LocalImageVisualReferenceAcquisitionCommand,
+    LocalImageVisualReferenceAcquisitionResult,
     LocalImageVisualReferenceBundle,
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     SamplerContract,
+    VisualReferenceAcquisitionOutputFile,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
     content_sha256,
     text_sha256,
     validate_contract,
     validate_reference_conditioned_receipt,
+    validate_visual_reference_acquisition,
 )
 from pydantic import ValidationError as PydanticValidationError
 
@@ -246,6 +250,60 @@ def _conditioned_request() -> LocalImageReferenceConditionedCompositeRequest:
     )
 
 
+def _acquisition_command() -> LocalImageVisualReferenceAcquisitionCommand:
+    body = {
+        "schema_version": "local-image-visual-reference-acquisition-command/1.0",
+        "command_id": "imgrefcmd_" + "1" * 32,
+        "attempt_id": "imgrefattempt_" + "2" * 32,
+        "intent": _bundle().intent.model_dump(mode="json"),
+        "intent_member_path": "input/visual-reference-intent.json",
+        "observed_at": "2026-09-27T12:00:00Z",
+        "max_original_bytes": 16_777_216,
+        "timeout_seconds": 120,
+    }
+    return LocalImageVisualReferenceAcquisitionCommand.model_validate(
+        {**body, "command_sha256": content_sha256(body)}
+    )
+
+
+def _acquisition_result(
+    command: LocalImageVisualReferenceAcquisitionCommand,
+) -> LocalImageVisualReferenceAcquisitionResult:
+    bundle = _bundle()
+    outputs = (
+        VisualReferenceAcquisitionOutputFile(
+            member_path="manifests/visual-reference-bundle.json",
+            schema_ref=("eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"),
+            media_type="application/json",
+            size_bytes=12_000,
+            sha256=_sha(18),
+        ),
+        VisualReferenceAcquisitionOutputFile(
+            member_path="references/primary.png",
+            schema_ref="eom://schemas/image-provider/normalized-visual-reference/1.0",
+            media_type="image/png",
+            size_bytes=bundle.normalized_member.size_bytes,
+            sha256=bundle.normalized_member.sha256,
+        ),
+    )
+    body = {
+        "schema_version": "local-image-visual-reference-acquisition-result/1.0",
+        "command_id": command.command_id,
+        "attempt_id": command.attempt_id,
+        "command_sha256": command.command_sha256,
+        "status": "SUCCEEDED",
+        "bundle": bundle.model_dump(mode="json"),
+        "output_files": [value.model_dump(mode="json") for value in outputs],
+        "error_code": None,
+        "started_at": "2026-09-27T12:00:00Z",
+        "completed_at": "2026-09-27T12:00:01Z",
+        "duration_ms": 1000,
+    }
+    return LocalImageVisualReferenceAcquisitionResult.model_validate(
+        {**body, "result_sha256": content_sha256(body)}
+    )
+
+
 def _conditioned_receipt(
     request: LocalImageReferenceConditionedCompositeRequest,
 ) -> LocalImageReferenceConditionedCompositeReceipt:
@@ -380,3 +438,51 @@ def test_conditioned_receipt_rejects_another_reference_pointer() -> None:
     other = receipt.model_copy(update={"visual_reference": other_reference})
     with pytest.raises(ValueError, match="differs from its request"):
         validate_reference_conditioned_receipt(request, other)
+
+
+def test_visual_reference_acquisition_passes_schema_and_cross_contract_validation() -> None:
+    command = _acquisition_command()
+    intent = _intent()
+    result = _acquisition_result(command)
+    validate_contract(
+        "visual-reference-acquisition-command",
+        command.model_dump(mode="json"),
+    )
+    validate_contract(
+        "visual-reference-acquisition-result",
+        result.model_dump(mode="json"),
+    )
+    validate_visual_reference_acquisition(command, intent, result)
+
+
+def test_visual_reference_acquisition_rejects_candidate_population_drift() -> None:
+    command = _acquisition_command()
+    intent_payload = _intent().model_dump(mode="json")
+    intent_payload["candidates"][1]["page_id"] = 999
+    body = {key: value for key, value in intent_payload.items() if key != "intent_sha256"}
+    intent_payload["intent_sha256"] = content_sha256(body)
+    intent = LocalImageVisualReferenceIntent.model_validate(intent_payload)
+    with pytest.raises(ValueError, match="verified source differs"):
+        validate_visual_reference_acquisition(command, intent, _acquisition_result(command))
+
+
+def test_failed_visual_reference_acquisition_carries_no_outputs() -> None:
+    command = _acquisition_command()
+    body = {
+        "schema_version": "local-image-visual-reference-acquisition-result/1.0",
+        "command_id": command.command_id,
+        "attempt_id": command.attempt_id,
+        "command_sha256": command.command_sha256,
+        "status": "FAILED",
+        "bundle": None,
+        "output_files": [],
+        "error_code": "VISUAL_REFERENCE_LICENSE_REJECTED",
+        "started_at": "2026-09-27T12:00:00Z",
+        "completed_at": "2026-09-27T12:00:01Z",
+        "duration_ms": 1000,
+    }
+    result = LocalImageVisualReferenceAcquisitionResult.model_validate(
+        {**body, "result_sha256": content_sha256(body)}
+    )
+    validate_contract("visual-reference-acquisition-result", result.model_dump(mode="json"))
+    validate_visual_reference_acquisition(command, _intent(), result)

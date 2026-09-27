@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-visual-reference-acquisition-command/1.0",
+  "title": "EOM local image visual reference acquisition command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "intent_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^manifests/visual-reference-intent\\.json$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/local-image-visual-reference-intent/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "command_id",
+    "attempt_id",
+    "intent",
+    "intent_member_path",
+    "observed_at",
+    "max_original_bytes",
+    "timeout_seconds",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-visual-reference-acquisition-command/1.0"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^imgrefcmd_[0-9a-f]{32}$"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^imgrefattempt_[0-9a-f]{32}$"
+    },
+    "intent": {
+      "$ref": "#/$defs/intent_pointer"
+    },
+    "intent_member_path": {
+      "const": "input/visual-reference-intent.json"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "max_original_bytes": {
+      "const": 16777216
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 180
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}
