@@ -13,8 +13,9 @@ import numpy as np  # type: ignore[import-not-found]
 from eom_image_contracts import (
     LocalImageReferenceCompositionEvaluation,
     LocalImageVisualReferencePointer,
+    ReferenceCompositionCandidateMember,
+    ReferenceCompositionConditioningMember,
     ReferenceCompositionEvaluator,
-    ReferenceCompositionImageMember,
     ReferenceCompositionMetrics,
     ReferenceCompositionThresholds,
     composition_failure_reasons,
@@ -45,7 +46,7 @@ class ReferenceCompositionEvaluationError(RuntimeError):
         self.code = code
 
 
-def _safe_png(path: Path) -> tuple[bytes, np.ndarray]:
+def _safe_png(path: Path, *, expected_height: int) -> tuple[bytes, np.ndarray]:
     if not path.is_absolute():
         raise ReferenceCompositionEvaluationError("IMAGE_COMPOSITION_INPUT_PATH_INVALID")
     try:
@@ -78,11 +79,17 @@ def _safe_png(path: Path) -> tuple[bytes, np.ndarray]:
         os.close(descriptor)
     try:
         with Image.open(io.BytesIO(payload)) as source:
-            if source.format != "PNG" or source.size != (_WIDTH, _HEIGHT):
+            if source.format != "PNG" or source.size != (_WIDTH, expected_height):
                 raise ReferenceCompositionEvaluationError("IMAGE_COMPOSITION_INPUT_INVALID")
             source.verify()
         with Image.open(io.BytesIO(payload)) as source:
-            rgb = np.asarray(source.convert("RGB"), dtype=np.uint8)
+            normalized = source.convert("RGB")
+            if expected_height != _HEIGHT:
+                normalized = normalized.resize(
+                    (_WIDTH, _HEIGHT),
+                    resample=Image.Resampling.BILINEAR,
+                )
+            rgb = np.asarray(normalized, dtype=np.uint8)
     except (OSError, UnidentifiedImageError, ValueError) as exc:
         if isinstance(exc, ReferenceCompositionEvaluationError):
             raise
@@ -193,8 +200,8 @@ def evaluate_reference_composition(
 ) -> LocalImageReferenceCompositionEvaluation:
     """Evaluate one exact candidate without model, network, database, or NAS access."""
 
-    reference_payload, reference_rgb = _safe_png(reference_path)
-    candidate_payload, candidate_rgb = _safe_png(candidate_path)
+    reference_payload, reference_rgb = _safe_png(reference_path, expected_height=504)
+    candidate_payload, candidate_rgb = _safe_png(candidate_path, expected_height=500)
     metrics = _measure(reference_rgb, candidate_rgb)
     thresholds = ReferenceCompositionThresholds()
     failures = composition_failure_reasons(metrics, thresholds)
@@ -203,12 +210,12 @@ def evaluate_reference_composition(
         pillow_version=pillow_version,
         numpy_version=np.__version__,
     )
-    reference_member = ReferenceCompositionImageMember(
+    reference_member = ReferenceCompositionConditioningMember(
         member_path="inputs/reference-conditioning.png",
         sha256="sha256:" + hashlib.sha256(reference_payload).hexdigest(),
         size_bytes=len(reference_payload),
     )
-    candidate_member = ReferenceCompositionImageMember(
+    candidate_member = ReferenceCompositionCandidateMember(
         member_path="outputs/candidate.png",
         sha256="sha256:" + hashlib.sha256(candidate_payload).hexdigest(),
         size_bytes=len(candidate_payload),

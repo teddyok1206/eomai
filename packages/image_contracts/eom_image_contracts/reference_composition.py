@@ -26,16 +26,22 @@ class FrozenModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
-class ReferenceCompositionImageMember(FrozenModel):
-    member_path: Literal[
-        "inputs/reference-conditioning.png",
-        "outputs/candidate.png",
-    ]
+class ReferenceCompositionConditioningMember(FrozenModel):
+    member_path: Literal["inputs/reference-conditioning.png"] = "inputs/reference-conditioning.png"
     media_type: Literal["image/png"] = "image/png"
     sha256: Sha256
     size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
     width_px: Literal[800] = 800
     height_px: Literal[504] = 504
+
+
+class ReferenceCompositionCandidateMember(FrozenModel):
+    member_path: Literal["outputs/candidate.png"] = "outputs/candidate.png"
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
 
 
 class ReferenceCompositionMetrics(FrozenModel):
@@ -110,8 +116,8 @@ class LocalImageReferenceCompositionEvaluation(FrozenModel):
     evaluation_id: str = Field(pattern=r"^imgcompositioneval_[0-9a-f]{32}$")
     policy: Literal["COMPOSITION_PRESERVING_LINE_ART"] = "COMPOSITION_PRESERVING_LINE_ART"
     visual_reference: LocalImageVisualReferencePointer
-    reference_conditioning: ReferenceCompositionImageMember
-    candidate_output: ReferenceCompositionImageMember
+    reference_conditioning: ReferenceCompositionConditioningMember
+    candidate_output: ReferenceCompositionCandidateMember
     metrics: ReferenceCompositionMetrics
     thresholds: ReferenceCompositionThresholds
     failure_reasons: tuple[FailureReason, ...] = Field(max_length=8)
@@ -129,10 +135,6 @@ class LocalImageReferenceCompositionEvaluation(FrozenModel):
 
     @model_validator(mode="after")
     def exact_identity_and_outcome(self) -> LocalImageReferenceCompositionEvaluation:
-        if self.reference_conditioning.member_path != "inputs/reference-conditioning.png":
-            raise ValueError("composition reference member path is invalid")
-        if self.candidate_output.member_path != "outputs/candidate.png":
-            raise ValueError("composition candidate member path is invalid")
         failures = composition_failure_reasons(self.metrics, self.thresholds)
         if self.failure_reasons != failures:
             raise ValueError("composition failure reasons differ from measured metrics")

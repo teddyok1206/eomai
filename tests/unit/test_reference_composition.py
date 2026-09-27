@@ -48,8 +48,14 @@ def _visual_reference() -> LocalImageVisualReferencePointer:
     )
 
 
-def _drawing(path: Path, *, offset_x: int = 0, color: tuple[int, int, int] = (0, 0, 0)) -> None:
-    image = Image.new("RGB", (800, 504), "white")
+def _drawing(
+    path: Path,
+    *,
+    height: int = 504,
+    offset_x: int = 0,
+    color: tuple[int, int, int] = (0, 0, 0),
+) -> None:
+    image = Image.new("RGB", (800, height), "white")
     draw = ImageDraw.Draw(image)
     draw.rounded_rectangle(
         (180 + offset_x, 145, 620 + offset_x, 365),
@@ -74,7 +80,7 @@ def test_identical_line_art_passes_schema_and_semantic_contract(tmp_path: Path) 
     reference = tmp_path / "reference.png"
     candidate = tmp_path / "candidate.png"
     _drawing(reference)
-    _drawing(candidate)
+    _drawing(candidate, height=500)
 
     result = evaluate_reference_composition(
         reference_path=reference,
@@ -94,7 +100,7 @@ def test_shifted_colored_candidate_fails_closed(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
     candidate = tmp_path / "candidate.png"
     _drawing(reference)
-    _drawing(candidate, offset_x=100, color=(220, 20, 20))
+    _drawing(candidate, height=500, offset_x=100, color=(220, 20, 20))
 
     result = evaluate_reference_composition(
         reference_path=reference,
@@ -114,7 +120,7 @@ def test_semantic_contract_rejects_repaired_outcome(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
     candidate = tmp_path / "candidate.png"
     _drawing(reference)
-    _drawing(candidate, offset_x=100)
+    _drawing(candidate, height=500, offset_x=100)
     result = evaluate_reference_composition(
         reference_path=reference,
         candidate_path=candidate,
@@ -137,7 +143,7 @@ def test_evaluator_rejects_symlinked_input(tmp_path: Path) -> None:
     reference = tmp_path / "reference.png"
     candidate = tmp_path / "candidate.png"
     _drawing(reference)
-    _drawing(candidate)
+    _drawing(candidate, height=500)
     linked = tmp_path / "linked.png"
     linked.symlink_to(reference)
 

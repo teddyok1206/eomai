@@ -53,8 +53,9 @@ from eom_image_contracts.models import (
 )
 from eom_image_contracts.reference_composition import (
     LocalImageReferenceCompositionEvaluation,
+    ReferenceCompositionCandidateMember,
+    ReferenceCompositionConditioningMember,
     ReferenceCompositionEvaluator,
-    ReferenceCompositionImageMember,
     ReferenceCompositionMetrics,
     ReferenceCompositionThresholds,
     composition_failure_reasons,
@@ -422,8 +423,9 @@ __all__ = [
     "ProductionStyleAdapterEvaluationPointer",
     "ProductionStyleAdapterFile",
     "ProductionStyleAdapterSourceManifestPointer",
+    "ReferenceCompositionCandidateMember",
+    "ReferenceCompositionConditioningMember",
     "ReferenceCompositionEvaluator",
-    "ReferenceCompositionImageMember",
     "ReferenceCompositionMetrics",
     "ReferenceCompositionThresholds",
     "SamplerContract",

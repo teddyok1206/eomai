@@ -114,7 +114,7 @@
         }
       }
     },
-    "member": {
+    "reference_member": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -127,10 +127,7 @@
       ],
       "properties": {
         "member_path": {
-          "enum": [
-            "inputs/reference-conditioning.png",
-            "outputs/candidate.png"
-          ]
+          "const": "inputs/reference-conditioning.png"
         },
         "media_type": {
           "const": "image/png"
@@ -149,6 +146,41 @@
         },
         "height_px": {
           "const": 504
+        }
+      }
+    },
+    "candidate_member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_path",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "member_path": {
+          "const": "outputs/candidate.png"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 67108864
+        },
+        "width_px": {
+          "const": 800
+        },
+        "height_px": {
+          "const": 500
         }
       }
     },
@@ -318,10 +350,10 @@
       "$ref": "#/$defs/reference_pointer"
     },
     "reference_conditioning": {
-      "$ref": "#/$defs/member"
+      "$ref": "#/$defs/reference_member"
     },
     "candidate_output": {
-      "$ref": "#/$defs/member"
+      "$ref": "#/$defs/candidate_member"
     },
     "metrics": {
       "$ref": "#/$defs/metrics"

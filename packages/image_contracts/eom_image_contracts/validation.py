@@ -258,7 +258,7 @@ SCHEMA_SHA256 = {
         "sha256:ce8986fd687998cfef67ff3df72fa98dd45cc5def52e056ab8e2e4ec7dc59961"
     ),
     "reference-composition-evaluation": (
-        "sha256:6709b486dc74f6a95e1509e876204938adfacdcd9928e8c555a4d76fca55fc3b"
+        "sha256:2bf2747b6d2458880c7fa26409b96377756a022bc13f4a75ee1de19340ef1120"
     ),
     "visual-reference-publication-receipt": (
         "sha256:79446191e079598884186344efbbb5a6cfc150a021ba3b929011c6ad707ba2ed"

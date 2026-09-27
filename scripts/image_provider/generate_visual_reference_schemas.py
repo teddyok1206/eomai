@@ -904,26 +904,29 @@ def reference_composition_evaluation_schema() -> dict[str, Any]:
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
         "EOM reference composition-preservation evaluation v1",
     )
-    member = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": [
-            "member_path",
-            "media_type",
-            "sha256",
-            "size_bytes",
-            "width_px",
-            "height_px",
-        ],
-        "properties": {
-            "member_path": {"enum": ["inputs/reference-conditioning.png", "outputs/candidate.png"]},
-            "media_type": {"const": "image/png"},
-            "sha256": SHA256,
-            "size_bytes": {"type": "integer", "minimum": 64, "maximum": 67108864},
-            "width_px": {"const": 800},
-            "height_px": {"const": 504},
-        },
-    }
+
+    def member(*, member_path: str, height_px: int) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "member_path",
+                "media_type",
+                "sha256",
+                "size_bytes",
+                "width_px",
+                "height_px",
+            ],
+            "properties": {
+                "member_path": {"const": member_path},
+                "media_type": {"const": "image/png"},
+                "sha256": SHA256,
+                "size_bytes": {"type": "integer", "minimum": 64, "maximum": 67108864},
+                "width_px": {"const": 800},
+                "height_px": {"const": height_px},
+            },
+        }
+
     metrics = {
         "type": "object",
         "additionalProperties": False,
@@ -993,7 +996,14 @@ def reference_composition_evaluation_schema() -> dict[str, Any]:
     }
     value["$defs"] = {
         "reference_pointer": _conditioning_pointer(),
-        "member": member,
+        "reference_member": member(
+            member_path="inputs/reference-conditioning.png",
+            height_px=504,
+        ),
+        "candidate_member": member(
+            member_path="outputs/candidate.png",
+            height_px=500,
+        ),
         "metrics": metrics,
         "thresholds": thresholds,
         "evaluator": evaluator,
@@ -1018,8 +1028,8 @@ def reference_composition_evaluation_schema() -> dict[str, Any]:
         "evaluation_id": {"type": "string", "pattern": "^imgcompositioneval_[0-9a-f]{32}$"},
         "policy": {"const": "COMPOSITION_PRESERVING_LINE_ART"},
         "visual_reference": {"$ref": "#/$defs/reference_pointer"},
-        "reference_conditioning": {"$ref": "#/$defs/member"},
-        "candidate_output": {"$ref": "#/$defs/member"},
+        "reference_conditioning": {"$ref": "#/$defs/reference_member"},
+        "candidate_output": {"$ref": "#/$defs/candidate_member"},
         "metrics": {"$ref": "#/$defs/metrics"},
         "thresholds": {"$ref": "#/$defs/thresholds"},
         "failure_reasons": {
