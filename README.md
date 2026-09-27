@@ -60,11 +60,13 @@ readiness가 정본입니다.
 기록합니다.
 
 2026-09-27에는 승인 기출 520문항의 537개 시각 관찰을 87개 과학 요소로 정리해 자동차·사람·비커를
-포함한 전 요소 실행 경로를 검사했습니다. 69개 결정론 경로, 18개 BASE/ADAPTER 쌍, 사람 raster
-금지 2건이 모두 계약대로 종료됐습니다. 다만 전수 육안 판정은 adapter 우세 7, base 우세 5,
-양쪽 부적합 6으로 갈렸고 결정론 결과 69개는 생산 compositor가 아닌 경로 진단입니다. 따라서
-adapter 자동 활성화는 계속 금지하며 추가 seed, 실제 safe-SVG/compositor, 대표 Item/HWPX 검증을
-통과해야 합니다. 정확한 Artifact와 판정은
+포함한 전 요소 실행 경로를 검사했습니다. 최초 18개 BASE/ADAPTER 비교에 두 개의 추가 고정 seed를
+더해 총 108개 raster 비교 출력을 판정한 결과, 식물과 화산만 3개 seed 모두 adapter 우세였고 은하와
+지형은 base 우세, 생활제품과 안전장비는 양쪽 모두 부적합, 나머지 12개는 혼합이었습니다. 전역
+adapter 활성화는 계속 금지합니다. 73개 고정 `PYTHON_SVG`/`HYBRID` 정의와 fallback이 쓰는 14개
+primitive는 실제 safe-SVG sanitizer, 고정 font, librsvg 경로에서 유효하고 서로 다른 PNG를 만들었으며,
+HWPX 회귀는 1장/2장 PNG가 외부 경로가 아닌 package 내부 member로 정확히 삽입됨을 다시 확인했습니다.
+이는 실행·출판 경계의 PASS이며 모든 그림의 사람 품질 승인을 뜻하지 않습니다. 정확한 Artifact와 판정은
 [과학 시각 요소 벤치마크 상태](docs/status/SCIENCE_VISUAL_SUBJECT_BENCHMARK_2026-09-27.md)에
 기록합니다.
 
