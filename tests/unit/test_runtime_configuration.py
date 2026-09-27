@@ -89,6 +89,15 @@ def test_relative_worker_configuration_is_rejected(
         Settings.from_environment()
 
 
+def test_runtime_source_commit_is_exact_or_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EOM_RUNTIME_SOURCE_COMMIT", "a" * 40)
+    assert Settings.from_environment().runtime_source_commit == "a" * 40
+
+    monkeypatch.setenv("EOM_RUNTIME_SOURCE_COMMIT", "A" * 40)
+    with pytest.raises(SettingsError, match="lowercase Git commit"):
+        Settings.from_environment()
+
+
 @pytest.mark.parametrize(
     "content",
     [
