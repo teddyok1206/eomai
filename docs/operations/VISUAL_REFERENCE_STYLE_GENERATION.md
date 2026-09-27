@@ -93,6 +93,16 @@ Automobiles, organisms, and natural specimens are appropriate morphology-groundi
 Authoritative laboratory apparatus, circuits, axes, tables, labels, and numeric geometry remain on
 the Python/SVG route even if a raster comparison is useful for research.
 
+The bounded 2026-09-27 evaluation also established an activation limitation. Raw photographic
+conditioning at strength `0.35` preserved morphology but copied color and background detail. A
+deterministic monochrome edge-conditioning experiment removed color and produced a useful isolated
+organism drawing, but cluttered automobile and rock references still leaked background structure;
+raising evaluation-only strength to `0.65` increased unwanted synthesis. These are evaluation
+results, not a new production policy. A future successor must pin a candidate-suitability decision
+and the exact derived conditioning member/hash before changing the released `0.35` policy. Until
+that successor and its review exist, the current adapter remains `EVALUATION_ONLY` and global
+activation stays forbidden.
+
 ## Rollback
 
 Rollback selects the previous immutable base-only V1 binding and restarts only the coordinated
