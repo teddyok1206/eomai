@@ -1,0 +1,202 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "strategy": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_prompt_en": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 20,
+              "pattern": "^[ -~]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate_prompt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate_route": {
+          "enum": [
+            "HYBRID",
+            "LORA_RASTER",
+            "PYTHON_SVG"
+          ]
+        },
+        "evidence_case_ids": {
+          "items": {
+            "pattern": "^imgscisubject(seed)?case_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "production_disposition": {
+          "enum": [
+            "BASE_ONLY",
+            "BLOCK_UNTIL_REFINED"
+          ]
+        },
+        "research_actions": {
+          "items": {
+            "enum": [
+              "ADAPTER_PRODUCTION_CANARY",
+              "DATASET_AUGMENTATION",
+              "KEEP_BASE_ONLY",
+              "PROMPT_REFINEMENT",
+              "ROUTE_RECLASSIFICATION"
+            ]
+          },
+          "maxItems": 8,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_render_route": {
+          "enum": [
+            "HYBRID",
+            "LORA_RASTER"
+          ]
+        },
+        "source_stability": {
+          "enum": [
+            "MIXED",
+            "NEITHER_ACCEPTABLE",
+            "STABLE_ADAPTER_PREFERRED",
+            "STABLE_BASE_PREFERRED"
+          ]
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "subject_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "subject_key",
+        "source_render_route",
+        "source_stability",
+        "evidence_case_ids",
+        "production_disposition",
+        "research_actions",
+        "candidate_route",
+        "candidate_prompt_en",
+        "candidate_prompt_sha256"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-refinement-plan/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "global_adapter_activation": {
+      "const": "FORBIDDEN"
+    },
+    "multiseed_review": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "plan_id": {
+      "pattern": "^imgscisubjectrefinement_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-refinement-plan/1.0"
+    },
+    "strategies": {
+      "items": {
+        "$ref": "#/$defs/strategy"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array"
+    },
+    "subject_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "subject_inventory",
+    "multiseed_review",
+    "strategies",
+    "global_adapter_activation",
+    "created_at",
+    "created_by",
+    "plan_sha256"
+  ],
+  "title": "EOM Science Visual Subject Refinement Plan V1",
+  "type": "object"
+}
