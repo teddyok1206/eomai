@@ -18,6 +18,14 @@ SCHEMA_FILES = {
     "provider-binding": "local-image-provider-binding-v1.schema.json",
     "generation-request": "local-image-generation-request-v1.schema.json",
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
+    "visual-reference-intent": "local-image-visual-reference-intent-v1.schema.json",
+    "visual-reference-bundle": "local-image-visual-reference-bundle-v1.schema.json",
+    "reference-conditioned-composite-request": (
+        "local-image-reference-conditioned-composite-request-v1.schema.json"
+    ),
+    "reference-conditioned-composite-receipt": (
+        "local-image-reference-conditioned-composite-receipt-v1.schema.json"
+    ),
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
     "training-authorization": "local-image-training-authorization-v1.schema.json",
@@ -187,6 +195,18 @@ SCHEMA_SHA256 = {
     "provider-binding": "sha256:5669a9e9d47b0e681b165dd7a8d71500d7f0552c968759273d4107eb488f00be",
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
+    "visual-reference-intent": (
+        "sha256:5040cb4700ba514d580b87fb6616e47b60066af4a73aa33564561e355ac4a05c"
+    ),
+    "visual-reference-bundle": (
+        "sha256:d1c41b0b7ebd6f0f459f01920066e4b40481e8f7d5574506d4a44fd5bcb9bd24"
+    ),
+    "reference-conditioned-composite-request": (
+        "sha256:f23558ed1d352e41d800e35bde0fd090a0d33f6d5cafb213bb7593c26b13f40e"
+    ),
+    "reference-conditioned-composite-receipt": (
+        "sha256:50863b0953358d7b71f3aa909748bf4ac9306418894c34b58c34f1800573568e"
+    ),
     "quality-evaluation-plan": (
         "sha256:d0968b5e3237cef4edd5581f8e72e768c0e9c4c64efd4008d1bdeaed2c1497ca"
     ),

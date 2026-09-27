@@ -375,9 +375,7 @@ def conditioned_request_schema() -> dict[str, Any]:
         "request_sha256",
     ]
     value["properties"] = {
-        "schema_version": {
-            "const": "local-image-reference-conditioned-composite-request/1.0"
-        },
+        "schema_version": {"const": "local-image-reference-conditioned-composite-request/1.0"},
         "composite_request": {
             "$ref": "eom://schemas/image-provider/local-image-composite-request/1.0"
         },
@@ -416,9 +414,7 @@ def conditioned_receipt_schema() -> dict[str, Any]:
         "receipt_sha256",
     ]
     value["properties"] = {
-        "schema_version": {
-            "const": "local-image-reference-conditioned-composite-receipt/1.0"
-        },
+        "schema_version": {"const": "local-image-reference-conditioned-composite-receipt/1.0"},
         "request_sha256": SHA256,
         "composite_receipt": {
             "$ref": "eom://schemas/image-provider/local-image-composite-receipt/1.0"
