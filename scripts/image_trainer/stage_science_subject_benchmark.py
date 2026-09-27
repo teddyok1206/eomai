@@ -36,6 +36,7 @@ from sqlalchemy import Engine
 from scripts.image_trainer.stage_crop_locator import (
     MAX_JSON_BYTES,
     WORKSPACE_PARENT,
+    _make_trainer_readonly_directory,
     _parse_json,
     _require_release,
     _write_exclusive,
@@ -244,11 +245,9 @@ def main() -> int:
         )
         os.chmod(temporary, 0o700)
         inputs = temporary / "inputs"
-        inputs.mkdir(mode=0o550)
-        os.chown(inputs, 0, trainer_gid)
+        _make_trainer_readonly_directory(inputs, trainer_gid=trainer_gid)
         adapter_root = inputs / "adapter"
-        adapter_root.mkdir(mode=0o550)
-        os.chown(adapter_root, 0, trainer_gid)
+        _make_trainer_readonly_directory(adapter_root, trainer_gid=trainer_gid)
         _stage_file(inputs / "subject-benchmark-plan.json", plan_payload, trainer_gid=trainer_gid)
         _stage_file(
             inputs / "science-visual-subject-inventory.json",

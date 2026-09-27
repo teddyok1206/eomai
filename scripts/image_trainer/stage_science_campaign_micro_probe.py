@@ -43,6 +43,7 @@ from scripts.image_trainer.stage_crop_locator import (
     MAX_JSON_BYTES,
     WORKSPACE_PARENT,
     _load_artifact_member,
+    _make_trainer_readonly_directory,
     _parse_json,
     _require_release,
     _write_exclusive,
@@ -337,8 +338,7 @@ def main() -> None:
         )
         os.chmod(temporary, 0o700)
         inputs = temporary / "inputs"
-        inputs.mkdir(mode=0o550)
-        os.chown(inputs, 0, trainer_gid)
+        _make_trainer_readonly_directory(inputs, trainer_gid=trainer_gid)
         _stage_file(
             inputs / "science-campaign-micro-probe-plan.json",
             canonical_json_bytes(plan.model_dump(mode="json")),
@@ -350,8 +350,7 @@ def main() -> None:
             trainer_gid=trainer_gid,
         )
         crops = inputs / "crops"
-        crops.mkdir(mode=0o550)
-        os.chown(crops, 0, trainer_gid)
+        _make_trainer_readonly_directory(crops, trainer_gid=trainer_gid)
         for sample_id, payload in sorted(crop_payloads.items()):
             _stage_file(crops / f"{sample_id}.png", payload, trainer_gid=trainer_gid)
         command_path = temporary / "command.json"

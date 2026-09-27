@@ -45,6 +45,7 @@ from scripts.image_trainer.stage_crop_locator import (
     MAX_JSON_BYTES,
     WORKSPACE_PARENT,
     _load_artifact_member,
+    _make_trainer_readonly_directory,
     _parse_json,
     _require_release,
     _safe_read,
@@ -345,11 +346,9 @@ def main() -> None:
         )
         os.chmod(temporary, 0o700)
         inputs = temporary / "inputs"
-        inputs.mkdir(mode=0o550)
-        os.chown(inputs, 0, trainer_gid)
+        _make_trainer_readonly_directory(inputs, trainer_gid=trainer_gid)
         adapter = inputs / "adapter"
-        adapter.mkdir(mode=0o550)
-        os.chown(adapter, 0, trainer_gid)
+        _make_trainer_readonly_directory(adapter, trainer_gid=trainer_gid)
         for name, payload in sorted(adapter_payloads.items()):
             _stage_file(adapter / name, payload, trainer_gid=trainer_gid)
         _stage_file(

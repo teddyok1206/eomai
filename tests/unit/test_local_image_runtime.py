@@ -1,12 +1,49 @@
 from __future__ import annotations
 
+import os
 import pwd
 import re
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from scripts.image_trainer.stage_crop_locator import _make_trainer_readonly_directory
+
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_training_staging_directory_mode_is_not_filtered_by_operator_umask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(os, "chown", lambda *_args: None)
+    target = tmp_path / "inputs"
+    previous = os.umask(0o077)
+    try:
+        _make_trainer_readonly_directory(target, trainer_gid=980)
+    finally:
+        os.umask(previous)
+
+    assert stat.S_IMODE(target.stat().st_mode) == 0o550
+
+
+def test_training_stagers_use_the_exact_shared_directory_boundary() -> None:
+    for relative in (
+        "scripts/image_trainer/stage_micro_probe.py",
+        "scripts/image_trainer/stage_science_micro_probe.py",
+        "scripts/image_trainer/stage_science_campaign_micro_probe.py",
+        "scripts/image_trainer/stage_micro_evaluation.py",
+        "scripts/image_trainer/stage_science_micro_evaluation.py",
+        "scripts/image_trainer/stage_science_campaign_micro_evaluation.py",
+        "scripts/image_trainer/stage_science_subject_benchmark.py",
+        "scripts/image_trainer/stage_science_subject_multiseed.py",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        assert "_make_trainer_readonly_directory(" in source
+        assert ".mkdir(mode=0o550)" not in source
 
 
 def test_local_image_unit_is_fixed_hardened_and_nas_inaccessible() -> None:

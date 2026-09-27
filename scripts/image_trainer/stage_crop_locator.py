@@ -191,6 +191,19 @@ def _write_exclusive(path: Path, payload: bytes, *, mode: int) -> None:
         os.close(descriptor)
 
 
+def _make_trainer_readonly_directory(path: Path, *, trainer_gid: int) -> None:
+    """Create a root-owned directory readable by the isolated trainer group.
+
+    ``Path.mkdir(mode=...)`` is filtered by the caller's umask.  Staging may be
+    launched from an operator shell with umask 0077, so explicitly apply the
+    contract mode before transferring group ownership.
+    """
+
+    path.mkdir(mode=0o550)
+    os.chmod(path, 0o550)
+    os.chown(path, 0, trainer_gid)
+
+
 def _manifest_member(manifest: object, member_path: str) -> Mapping[str, object]:
     if not isinstance(manifest, dict) or not isinstance(manifest.get("files"), list):
         raise CropLocatorStageError("IMAGE_TRAINING_ARTIFACT_MANIFEST_INVALID")

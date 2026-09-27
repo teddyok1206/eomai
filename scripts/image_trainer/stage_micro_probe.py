@@ -42,6 +42,7 @@ from scripts.image_trainer.stage_crop_locator import (
     MAX_PAGE_BYTES,
     WORKSPACE_PARENT,
     _load_artifact_member,
+    _make_trainer_readonly_directory,
     _parse_json,
     _require_release,
     _safe_read,
@@ -347,8 +348,7 @@ def main() -> None:
         temporary = Path(tempfile.mkdtemp(prefix=".micro-probe-staging.", dir=WORKSPACE_PARENT))
         os.chmod(temporary, 0o700)
         inputs = temporary / "inputs"
-        inputs.mkdir(mode=0o550)
-        os.chown(inputs, 0, trainer_gid)
+        _make_trainer_readonly_directory(inputs, trainer_gid=trainer_gid)
         _stage_file(
             inputs / "micro-probe-plan.json",
             canonical_json_bytes(plan.model_dump(mode="json")),
@@ -365,8 +365,7 @@ def main() -> None:
             trainer_gid=trainer_gid,
         )
         pages = inputs / "pages"
-        pages.mkdir(mode=0o550)
-        os.chown(pages, 0, trainer_gid)
+        _make_trainer_readonly_directory(pages, trainer_gid=trainer_gid)
         for key, pointer in sorted(page_pointers.items()):
             _stage_file(
                 pages / f"{pointer.sha256.removeprefix('sha256:')}.png",
