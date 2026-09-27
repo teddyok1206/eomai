@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from eom_image_contracts import (
     LocalImageVisualReferenceIntent,
+    VisualReferenceIntentCandidate,
     VisualReferenceSource,
     content_json_bytes,
     content_sha256,
@@ -18,7 +19,9 @@ from eom_image_contracts import (
 from eom_image_provider.reference_acquisition import (
     AcquiredReference,
     load_acquisition_inputs,
+    load_discovery_command,
     run_visual_reference_acquisition,
+    run_visual_reference_discovery,
 )
 from eom_orchestrator.file_set_control_artifacts import PublishedControlFileSet
 from eom_orchestrator.settings import Settings
@@ -110,6 +113,28 @@ class _Publisher:
 
 
 class _Client:
+    def discover_candidates(
+        self,
+        *,
+        subject: str,
+        candidate_limit: int,
+        timeout_seconds: int,
+    ) -> tuple[VisualReferenceIntentCandidate, ...]:
+        assert subject == "one compact car in side view isolated on white"
+        assert candidate_limit == 5
+        assert timeout_seconds == 120
+        return (
+            VisualReferenceIntentCandidate(
+                rank=1,
+                page_id=101,
+                file_title="File:Compact car side view.jpg",
+                canonical_page_url=(
+                    "https://commons.wikimedia.org/wiki/File:Compact_car_side_view.jpg"
+                ),
+                selection_rationale="Official search rank 1; raster morphology reference.",
+            ),
+        )
+
     def acquire(self, *_args: object, **_kwargs: object) -> tuple[AcquiredReference, ...]:
         original = b"untrusted-original"
         source = VisualReferenceSource(
@@ -151,10 +176,20 @@ def _coordinator(
     def run(unit_name: str, timeout: int) -> None:
         starts.append(unit_name)
         assert timeout == 120
-        command_id = unit_name.removeprefix("eom-image-reference-acquirer@").removesuffix(
-            ".service"
-        )
+        command_id = unit_name.split("@", maxsplit=1)[1].removesuffix(".service")
         workspace = root / command_id
+        if unit_name.startswith("eom-image-reference-discoverer@"):
+            command = load_discovery_command(
+                command_path=workspace / "command.json",
+                workspace=workspace,
+            )
+            run_visual_reference_discovery(
+                command=command,
+                workspace=workspace,
+                client=_Client(),  # type: ignore[arg-type]
+            )
+            return
+        assert unit_name.startswith("eom-image-reference-acquirer@")
         command, intent = load_acquisition_inputs(
             command_path=workspace / "command.json",
             workspace=workspace,
@@ -253,3 +288,86 @@ def test_coordinator_stages_canonical_intent_without_original_source_bytes(tmp_p
         for path in workspace.rglob("*")
         if path.is_file()
     )
+
+
+def test_coordinator_discovers_then_acquires_one_exact_ranked_reference(tmp_path: Path) -> None:
+    coordinator, publisher, starts = _coordinator(tmp_path)
+    observed_at = datetime(2026, 9, 27, 14, 0, tzinfo=UTC)
+
+    first = coordinator.discover_and_acquire(
+        workflow_id="workflow_" + "2" * 32,
+        image_step_run_id="steprun_" + "3" * 32,
+        image_job_id="job_" + "4" * 32,
+        visual_ordinal=0,
+        drawing_sha256="sha256:" + "5" * 64,
+        subject="one compact car in side view isolated on white",
+        source_commit="1" * 40,
+        observed_at=observed_at,
+    )
+    second = coordinator.discover_and_acquire(
+        workflow_id="workflow_" + "2" * 32,
+        image_step_run_id="steprun_" + "3" * 32,
+        image_job_id="job_" + "4" * 32,
+        visual_ordinal=0,
+        drawing_sha256="sha256:" + "5" * 64,
+        subject="one compact car in side view isolated on white",
+        source_commit="1" * 40,
+        observed_at=observed_at,
+    )
+
+    assert first.discovery_result.status == "SUCCEEDED"
+    assert first.discovery_result.candidates[0].page_id == 101
+    assert first.published.acquisition_result.bundle is not None
+    assert first.published.pointer == second.published.pointer
+    assert first.published.acquisition_result.bundle.primary_reference_id == (
+        first.published.pointer.primary_reference_id
+    )
+    assert publisher.calls == 2
+    assert starts == [
+        f"eom-image-reference-discoverer@{first.discovery_command.command_id}.service",
+        f"eom-image-reference-acquirer@{first.published.command.command_id}.service",
+    ]
+    discovery_workspace = (
+        coordinator.settings.image_reference_workspace_root / first.discovery_command.command_id
+    )
+    assert tuple(sorted(path.name for path in (discovery_workspace / "output").iterdir())) == (
+        "result.json",
+    )
+
+
+def test_coordinator_rejects_discovery_result_drift_before_publication(tmp_path: Path) -> None:
+    coordinator, publisher, _starts = _coordinator(tmp_path)
+    published = coordinator.discover_and_acquire(
+        workflow_id="workflow_" + "2" * 32,
+        image_step_run_id="steprun_" + "3" * 32,
+        image_job_id="job_" + "4" * 32,
+        visual_ordinal=0,
+        drawing_sha256="sha256:" + "5" * 64,
+        subject="one compact car in side view isolated on white",
+        source_commit="1" * 40,
+        observed_at=datetime(2026, 9, 27, 14, 0, tzinfo=UTC),
+    )
+    result_path = (
+        coordinator.settings.image_reference_workspace_root
+        / published.discovery_command.command_id
+        / "output/result.json"
+    )
+    result_path.chmod(0o640)
+    result_path.write_bytes(result_path.read_bytes() + b"\n")
+    result_path.chmod(0o640)
+
+    with pytest.raises(
+        VisualReferenceCoordinatorError,
+        match="VISUAL_REFERENCE_DISCOVERY_INVALID",
+    ):
+        coordinator.discover_and_acquire(
+            workflow_id="workflow_" + "2" * 32,
+            image_step_run_id="steprun_" + "3" * 32,
+            image_job_id="job_" + "4" * 32,
+            visual_ordinal=0,
+            drawing_sha256="sha256:" + "5" * 64,
+            subject="one compact car in side view isolated on white",
+            source_commit="1" * 40,
+            observed_at=datetime(2026, 9, 27, 14, 0, tzinfo=UTC),
+        )
+    assert publisher.calls == 2

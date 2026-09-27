@@ -20,6 +20,8 @@ from typing import Protocol
 from eom_image_contracts import (
     LocalImageVisualReferenceAcquisitionCommand,
     LocalImageVisualReferenceAcquisitionResult,
+    LocalImageVisualReferenceDiscoveryCommand,
+    LocalImageVisualReferenceDiscoveryResult,
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     VisualReferenceBundleManifestPointer,
@@ -29,6 +31,7 @@ from eom_image_contracts import (
     content_sha256,
     validate_contract,
     validate_visual_reference_acquisition,
+    validate_visual_reference_discovery,
 )
 
 from eom_orchestrator.file_set_control_artifacts import (
@@ -76,6 +79,14 @@ class PublishedVisualReference:
     unit_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class DiscoveredVisualReference:
+    discovery_command: LocalImageVisualReferenceDiscoveryCommand
+    discovery_result: LocalImageVisualReferenceDiscoveryResult
+    discovery_unit_name: str
+    published: PublishedVisualReference
+
+
 class VisualReferenceAcquisitionCoordinator:
     """Publish one intent, invoke one fixed acquirer, and publish verified outputs."""
 
@@ -101,6 +112,62 @@ class VisualReferenceAcquisitionCoordinator:
             else provider_gid
         )
         self.workspace_root_uid = workspace_root_uid
+
+    def discover_and_acquire(
+        self,
+        *,
+        workflow_id: str,
+        image_step_run_id: str,
+        image_job_id: str,
+        visual_ordinal: int,
+        drawing_sha256: str,
+        subject: str,
+        source_commit: str,
+        observed_at: datetime,
+        timeout_seconds: int = 120,
+    ) -> DiscoveredVisualReference:
+        """Discover candidate identities, then acquire and publish the pinned primary reference."""
+
+        try:
+            command = _build_discovery_command(
+                workflow_id=workflow_id,
+                image_step_run_id=image_step_run_id,
+                image_job_id=image_job_id,
+                visual_ordinal=visual_ordinal,
+                drawing_sha256=drawing_sha256,
+                subject=subject,
+                observed_at=observed_at,
+                timeout_seconds=timeout_seconds,
+            )
+        except Exception as exc:
+            raise VisualReferenceCoordinatorError("VISUAL_REFERENCE_INPUT_INVALID") from exc
+        workspace = self._prepare_workspace(command.command_id)
+        self._stage_input(
+            workspace,
+            workspace / "command.json",
+            content_json_bytes(command.model_dump(mode="json")),
+        )
+        unit_name = f"eom-image-reference-discoverer@{command.command_id}.service"
+        result_path = workspace / "output" / _RESULT_MEMBER
+        if not result_path.exists() and not result_path.is_symlink():
+            self.unit_runner(unit_name, timeout_seconds)
+        result = self._validate_discovery_output(
+            workspace=workspace,
+            command=command,
+        )
+        intent = _build_intent(command=command, result=result)
+        published = self.acquire(
+            intent=intent,
+            source_commit=source_commit,
+            observed_at=observed_at,
+            timeout_seconds=timeout_seconds,
+        )
+        return DiscoveredVisualReference(
+            discovery_command=command,
+            discovery_result=result,
+            discovery_unit_name=unit_name,
+            published=published,
+        )
 
     def acquire(
         self,
@@ -372,6 +439,39 @@ class VisualReferenceAcquisitionCoordinator:
         _validate_reference_png(reference_bytes)
         return result, bundle_path, reference_path
 
+    def _validate_discovery_output(
+        self,
+        *,
+        workspace: Path,
+        command: LocalImageVisualReferenceDiscoveryCommand,
+    ) -> LocalImageVisualReferenceDiscoveryResult:
+        output = workspace / "output"
+        _require_output_directory(
+            output,
+            expected_uid=self.provider_uid,
+            expected_gid=self.provider_gid,
+        )
+        result_bytes = _read_exact_output(
+            output / _RESULT_MEMBER,
+            maximum_bytes=512 * 1024,
+            expected_uid=self.provider_uid,
+            expected_gid=self.provider_gid,
+        )
+        try:
+            value = json.loads(result_bytes)
+            if not isinstance(value, dict) or content_json_bytes(value) != result_bytes:
+                raise ValueError("discovery result is not canonical JSON")
+            validate_contract("visual-reference-discovery-result", value)
+            result = LocalImageVisualReferenceDiscoveryResult.model_validate(value)
+            validate_visual_reference_discovery(command, result)
+        except Exception as exc:
+            raise VisualReferenceCoordinatorError("VISUAL_REFERENCE_DISCOVERY_INVALID") from exc
+        if result.status != "SUCCEEDED":
+            raise VisualReferenceCoordinatorError(
+                result.error_code or "VISUAL_REFERENCE_DISCOVERY_INVALID"
+            )
+        return result
+
 
 def _build_command(
     *,
@@ -402,6 +502,74 @@ def _build_command(
     )
     validate_contract("visual-reference-acquisition-command", command.model_dump(mode="json"))
     return command
+
+
+def _build_discovery_command(
+    *,
+    workflow_id: str,
+    image_step_run_id: str,
+    image_job_id: str,
+    visual_ordinal: int,
+    drawing_sha256: str,
+    subject: str,
+    observed_at: datetime,
+    timeout_seconds: int,
+) -> LocalImageVisualReferenceDiscoveryCommand:
+    query_term = re.sub(r"[^A-Za-z0-9 .()/_-]+", " ", subject)
+    query_term = re.sub(r"\s+", " ", query_term).strip()
+    if len(query_term) > 80:
+        query_term = query_term[:80].rstrip()
+    identity_body = {
+        "schema_version": "local-image-visual-reference-discovery-command/1.0",
+        "workflow_id": workflow_id,
+        "image_step_run_id": image_step_run_id,
+        "image_job_id": image_job_id,
+        "visual_ordinal": visual_ordinal,
+        "drawing_sha256": drawing_sha256,
+        "subject": subject,
+        "query_terms": [query_term],
+        "candidate_limit": 5,
+        "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
+        "timeout_seconds": timeout_seconds,
+    }
+    identity = content_sha256(identity_body).removeprefix("sha256:")
+    body = {**identity_body, "command_id": "imgrefdiscover_" + identity[:32]}
+    command = LocalImageVisualReferenceDiscoveryCommand.model_validate(
+        {**body, "command_sha256": content_sha256(body)}
+    )
+    validate_contract("visual-reference-discovery-command", command.model_dump(mode="json"))
+    return command
+
+
+def _build_intent(
+    *,
+    command: LocalImageVisualReferenceDiscoveryCommand,
+    result: LocalImageVisualReferenceDiscoveryResult,
+) -> LocalImageVisualReferenceIntent:
+    if result.status != "SUCCEEDED" or not result.candidates:
+        raise VisualReferenceCoordinatorError("VISUAL_REFERENCE_DISCOVERY_INVALID")
+    identity_body = {
+        "workflow_id": command.workflow_id,
+        "image_step_run_id": command.image_step_run_id,
+        "image_job_id": command.image_job_id,
+        "visual_ordinal": command.visual_ordinal,
+        "drawing_sha256": command.drawing_sha256,
+        "subject": command.subject,
+        "query_terms": list(command.query_terms),
+        "candidates": [candidate.model_dump(mode="json") for candidate in result.candidates],
+        "primary_candidate_page_id": result.candidates[0].page_id,
+    }
+    identity = content_sha256(identity_body).removeprefix("sha256:")
+    body = {
+        "schema_version": "local-image-visual-reference-intent/1.0",
+        "intent_id": "imgrefintent_" + identity[:32],
+        **identity_body,
+    }
+    intent = LocalImageVisualReferenceIntent.model_validate(
+        {**body, "intent_sha256": content_sha256(body)}
+    )
+    validate_contract("visual-reference-intent", intent.model_dump(mode="json"))
+    return intent
 
 
 def _write_or_verify(path: Path, payload: bytes, *, mode: int, gid: int | None) -> None:
