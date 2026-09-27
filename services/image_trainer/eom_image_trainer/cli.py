@@ -65,6 +65,11 @@ from eom_image_trainer.science_subject_benchmark_runner import (
     load_science_subject_benchmark_command,
     run_science_subject_benchmark_command,
 )
+from eom_image_trainer.science_subject_multiseed_runner import (
+    ScienceSubjectMultiseedRunnerError,
+    load_science_subject_multiseed_command,
+    run_science_subject_multiseed_command,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -116,6 +121,11 @@ def _parser() -> argparse.ArgumentParser:
     subject_benchmark.add_argument("--model-store-root", required=True, type=Path)
     subject_benchmark.add_argument("--workspace", required=True, type=Path)
     subject_benchmark.add_argument("--gpu-lock", required=True, type=Path)
+    subject_multiseed = subcommands.add_parser("science-subject-multiseed")
+    subject_multiseed.add_argument("--command", required=True, type=Path)
+    subject_multiseed.add_argument("--model-store-root", required=True, type=Path)
+    subject_multiseed.add_argument("--workspace", required=True, type=Path)
+    subject_multiseed.add_argument("--gpu-lock", required=True, type=Path)
     return parser
 
 
@@ -167,6 +177,29 @@ def _lock_gpu(path: Path) -> int:
 
 def main() -> None:
     args = _parser().parse_args()
+    if args.operation == "science-subject-multiseed":
+        try:
+            multiseed_command = load_science_subject_multiseed_command(args.command)
+            if args.workspace.name != multiseed_command.run_id:
+                raise ScienceSubjectMultiseedRunnerError(
+                    "SCIENCE_SUBJECT_MULTISEED_WORKSPACE_ID_MISMATCH"
+                )
+            lock_descriptor = _lock_gpu(args.gpu_lock)
+            try:
+                multiseed_result = run_science_subject_multiseed_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=multiseed_command,
+                    backend=Ssd1bMicroEvaluationBackend(),
+                    model_resolver=verify_model_revision,
+                )
+            finally:
+                os.close(lock_descriptor)
+        except (TrainingRunnerError, ScienceSubjectMultiseedRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        if multiseed_result.status != "SUCCEEDED":
+            raise SystemExit(multiseed_result.error_code or "SCIENCE_SUBJECT_MULTISEED_EXEC_FAILED")
+        return
     if args.operation == "science-subject-benchmark":
         try:
             subject_command = load_science_subject_benchmark_command(args.command)

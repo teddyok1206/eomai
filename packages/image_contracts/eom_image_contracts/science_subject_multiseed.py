@@ -537,8 +537,16 @@ def validate_science_visual_subject_multiseed_review(
         or review.initial_quality_review != initial_review_pointer
         or plan.initial_quality_review != initial_review_pointer
         or initial_review.benchmark_result_sha256 != initial_result.result_sha256
+        or result.status != "SUCCEEDED"
+        or result.plan_id != plan.plan_id
+        or result.plan_sha256 != plan.plan_sha256
     ):
         raise ValueError("science subject multi-seed review source binding mismatch")
+    expected_outputs = {
+        (case.case_id, variant) for case in plan.cases for variant in ("ADAPTER", "BASE")
+    }
+    if {(output.case_id, output.variant) for output in result.outputs} != expected_outputs:
+        raise ValueError("science subject multi-seed review result coverage mismatch")
     initial_cases = {
         value.subject_id: value for value in initial_plan.cases if value.case_kind == "QUALITY"
     }

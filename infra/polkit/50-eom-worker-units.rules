@@ -18,6 +18,7 @@ polkit.addRule(function(action, subject) {
     var localImageScienceMicroEvaluationUnit = /^eom-image-science-lora-micro-evaluation@imgscimicroevalrun_[0-9a-f]{32}\.service$/;
     var localImageScienceCampaignMicroEvaluationUnit = /^eom-image-science-campaign-lora-micro-evaluation@imgscicampaignmicroevalrun_[0-9a-f]{32}\.service$/;
     var localImageScienceSubjectBenchmarkUnit = /^eom-image-science-subject-benchmark@imgscisubjectbenchmarkrun_[0-9a-f]{32}\.service$/;
+    var localImageScienceSubjectMultiseedUnit = /^eom-image-science-subject-multiseed@imgscisubjectmultiseedrun_[0-9a-f]{32}\.service$/;
     var localImageCropLocatorUnit = /^eom-image-crop-locator@imgcroplocator_[0-9a-f]{32}\.service$/;
     var localImageScienceVisualPilotUnit = /^eom-image-science-visual-pilot@imgscivisattempt_[0-9a-f]{32}\.service$/;
     var officeConverterUnit = /^eom-office-converter@officeconv_[0-9a-f]{32}\.service$/;
@@ -39,6 +40,7 @@ polkit.addRule(function(action, subject) {
             || localImageScienceMicroEvaluationUnit.test(unit)
             || localImageScienceCampaignMicroEvaluationUnit.test(unit)
             || localImageScienceSubjectBenchmarkUnit.test(unit)
+            || localImageScienceSubjectMultiseedUnit.test(unit)
             || localImageCropLocatorUnit.test(unit)
             || localImageScienceVisualPilotUnit.test(unit))) {
         return polkit.Result.YES;

@@ -42,6 +42,7 @@ if TYPE_CHECKING:
         LocalImageScienceVisualCampaignRasterSuitabilityReview,
         LocalImageScienceVisualSubjectBenchmarkPlan,
         LocalImageScienceVisualSubjectInventory,
+        LocalImageScienceVisualSubjectMultiseedPlan,
     )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
@@ -187,6 +188,15 @@ SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_SCHEMA_REF = (
 )
 SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_ARTIFACT_TYPE = (
     "control_local_image_science_visual_subject_benchmark_plan"
+)
+SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_MEMBER = (
+    "manifests/science-visual-subject-multiseed-plan.json"
+)
+SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-plan/1.0"
+)
+SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_subject_multiseed_plan"
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -466,6 +476,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_SCHEMA_REF,
             artifact_type=SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-visual-subject-benchmark-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_visual_subject_multiseed_plan(
+        self,
+        plan: LocalImageScienceVisualSubjectMultiseedPlan,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-visual-subject-multiseed-plan",
+            member=SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_MEMBER,
+            schema_ref=SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_SUBJECT_MULTISEED_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-subject-multiseed-plan",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )

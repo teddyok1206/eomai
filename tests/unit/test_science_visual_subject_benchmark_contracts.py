@@ -6,6 +6,9 @@ import pytest
 from eom_catalog_service.science_visual_subject_benchmark import (
     build_science_visual_subject_benchmark_plan,
 )
+from eom_catalog_service.science_visual_subject_multiseed import (
+    build_science_visual_subject_multiseed_plan,
+)
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
@@ -18,14 +21,17 @@ from eom_image_contracts import (
     LocalImageScienceVisualSubjectMultiseedCommand,
     LocalImageScienceVisualSubjectMultiseedPlan,
     LocalImageScienceVisualSubjectMultiseedResult,
+    LocalImageScienceVisualSubjectMultiseedReview,
     ScienceVisualSubject,
     ScienceVisualSubjectBenchmarkCase,
     ScienceVisualSubjectBenchmarkOutcome,
     ScienceVisualSubjectBenchmarkOutput,
     ScienceVisualSubjectMultiseedCase,
     ScienceVisualSubjectMultiseedOutput,
+    ScienceVisualSubjectMultiseedReviewEntry,
     ScienceVisualSubjectOmission,
     ScienceVisualSubjectQualityReviewEntry,
+    ScienceVisualSubjectSeedEvaluation,
     ScienceVisualSubjectSourceReference,
     content_json_bytes,
     content_sha256,
@@ -37,6 +43,7 @@ from eom_image_contracts import (
     validate_science_visual_subject_benchmark_review,
     validate_science_visual_subject_multiseed_plan,
     validate_science_visual_subject_multiseed_result,
+    validate_science_visual_subject_multiseed_review,
 )
 from pydantic import ValidationError
 
@@ -756,6 +763,41 @@ def test_subject_multiseed_contract_closes_exact_raster_population() -> None:
     assert plan.activation_policy == "FORBIDDEN"
 
 
+def test_subject_multiseed_builder_derives_only_fixed_additional_seeds() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    review_pointer = _pointer(
+        "4",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-review/1.0"
+        ),
+        member_path="manifests/science-visual-subject-benchmark-review.json",
+        sha256=content_sha256(initial_review.model_dump(mode="json")),
+    )
+
+    plan = build_science_visual_subject_multiseed_plan(
+        inventory=inventory,
+        initial_plan=initial_plan,
+        initial_plan_pointer=initial_review.benchmark_plan,
+        initial_review=initial_review,
+        initial_review_pointer=review_pointer,
+        created_at=NOW,
+        created_by="contract_test",
+    )
+
+    assert plan.initial_quality_review == review_pointer
+    assert len(plan.cases) == 2
+    assert {case.seed_ordinal for case in plan.cases} == {1, 2}
+    original_seed = next(case.seed for case in initial_plan.cases if case.case_kind == "QUALITY")
+    assert all(case.seed != original_seed for case in plan.cases)
+    assert plan.activation_policy == "FORBIDDEN"
+    validate_science_visual_subject_multiseed_plan(
+        inventory,
+        initial_plan,
+        initial_review,
+        plan,
+    )
+
+
 def test_subject_multiseed_plan_rejects_original_seed_reuse() -> None:
     inventory, initial_plan, initial_review = _multiseed_initials()
     plan = _multiseed_plan(inventory, initial_plan, initial_review)
@@ -779,6 +821,116 @@ def test_subject_multiseed_result_rejects_missing_pair() -> None:
     parsed = LocalImageScienceVisualSubjectMultiseedResult.model_validate(value)
     with pytest.raises(ValueError, match="exact paired coverage"):
         validate_science_visual_subject_multiseed_result(plan, command, parsed)
+
+
+def _multiseed_review(
+    initial_plan: LocalImageScienceVisualSubjectBenchmarkPlan,
+    initial_review: LocalImageScienceVisualSubjectBenchmarkReview,
+    plan: LocalImageScienceVisualSubjectMultiseedPlan,
+    result: LocalImageScienceVisualSubjectMultiseedResult,
+) -> LocalImageScienceVisualSubjectMultiseedReview:
+    original_by_subject = {
+        value.subject_id: value for value in initial_plan.cases if value.case_kind == "QUALITY"
+    }
+    additional_by_subject: dict[str, list[ScienceVisualSubjectMultiseedCase]] = {}
+    for case in plan.cases:
+        additional_by_subject.setdefault(case.subject_id, []).append(case)
+    entries = []
+    for subject_id, additional in additional_by_subject.items():
+        original = original_by_subject[subject_id]
+        entries.append(
+            ScienceVisualSubjectMultiseedReviewEntry(
+                subject_id=subject_id,
+                subject_key=additional[0].subject_key,
+                render_route=additional[0].render_route,
+                evaluations=(
+                    ScienceVisualSubjectSeedEvaluation(
+                        source="INITIAL",
+                        case_id=original.case_id,
+                        seed=original.seed,
+                        decision="BASE",
+                    ),
+                    *(
+                        ScienceVisualSubjectSeedEvaluation(
+                            source="ADDITIONAL",
+                            case_id=value.case_id,
+                            seed=value.seed,
+                            decision="BASE",
+                        )
+                        for value in additional
+                    ),
+                ),
+                stability_status="STABLE_BASE_PREFERRED",
+                next_actions=("KEEP_BASE_ONLY",),
+            )
+        )
+    plan_pointer = _pointer(
+        "8",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-plan/1.0"
+        ),
+        member_path="manifests/science-visual-subject-multiseed-plan.json",
+        sha256=content_sha256(plan.model_dump(mode="json")),
+    )
+    result_pointer = _pointer(
+        "9",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-result/1.0"
+        ),
+        member_path="result.json",
+        sha256=content_sha256(result.model_dump(mode="json")),
+    )
+    identity_body = {
+        "multiseed_plan": plan_pointer.model_dump(mode="json"),
+        "multiseed_result": result_pointer.model_dump(mode="json"),
+        "initial_quality_review": plan.initial_quality_review.model_dump(mode="json"),
+        "reviews": [
+            value.model_dump(mode="json")
+            for value in sorted(entries, key=lambda item: item.subject_key)
+        ],
+        "stable_adapter_preferred_count": 0,
+        "stable_base_preferred_count": len(entries),
+        "mixed_count": 0,
+        "neither_acceptable_count": 0,
+        "adapter_activation_recommendation": "FORBIDDEN",
+    }
+    identity = content_sha256(
+        {
+            "schema_version": "local-image-science-visual-subject-multiseed-review/1.0",
+            **identity_body,
+        }
+    ).removeprefix("sha256:")[:32]
+    body = {
+        "schema_version": "local-image-science-visual-subject-multiseed-review/1.0",
+        "review_id": f"imgscisubjectmultiseedreview_{identity}",
+        **identity_body,
+        "reviewed_at": NOW.isoformat().replace("+00:00", "Z"),
+        "reviewed_by": "contract_test",
+    }
+    return LocalImageScienceVisualSubjectMultiseedReview.model_validate(
+        {**body, "review_sha256": content_sha256(body)}
+    )
+
+
+def test_subject_multiseed_review_binds_exact_predecessors_and_seed_population() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    result = _multiseed_result(plan, _multiseed_command(plan))
+    review = _multiseed_review(initial_plan, initial_review, plan, result)
+
+    validate_contract("science-visual-subject-multiseed-review", review.model_dump(mode="json"))
+    validate_science_visual_subject_multiseed_review(
+        initial_plan,
+        _result(initial_plan, _command(initial_plan)),
+        initial_review,
+        plan,
+        result,
+        review,
+        plan_pointer=review.multiseed_plan,
+        result_pointer=review.multiseed_result,
+        initial_review_pointer=review.initial_quality_review,
+    )
+    assert review.adapter_activation_recommendation == "FORBIDDEN"
 
 
 def test_subject_benchmark_failed_result_is_typed_and_empty() -> None:

@@ -299,6 +299,41 @@ class Ssd1bMicroEvaluationBackend:
             identity=lambda case: cast(str, case.sample_id),
         )
 
+    def generate_subject_multiseed_pairs(
+        self,
+        *,
+        model_directory: Path,
+        adapter_root: Path,
+        command: Any,
+        plan: Any,
+    ) -> tuple[GeneratedEvaluationImage, ...]:
+        """Generate fixed additional-seed BASE/ADAPTER pairs from the successor plan."""
+
+        cases = tuple(
+            _SubjectBenchmarkCaseView(
+                sample_id=case.case_id,
+                positive_prompt=cast(str, case.prompt_en),
+                negative_prompt=cast(str, case.negative_prompt_en),
+                seed=cast(int, case.seed),
+            )
+            for case in plan.cases
+        )
+        view = _SubjectBenchmarkCommandView(
+            cases=cases,
+            generation_width=plan.generation_width_px,
+            generation_height=plan.generation_height_px,
+            delivery_width=plan.delivery_width_px,
+            delivery_height=plan.delivery_height_px,
+            inference_steps=plan.inference_steps,
+            guidance_scale=plan.guidance_scale_milli / 1000,
+        )
+        return self._generate_with_identity(
+            model_directory=model_directory,
+            adapter_root=adapter_root,
+            command=view,
+            identity=lambda case: cast(str, case.sample_id),
+        )
+
     def _generate_with_identity(
         self,
         *,
