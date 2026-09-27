@@ -641,6 +641,65 @@ class LocalImageVisualReferencePointer(FrozenModel):
         return self
 
 
+class VisualReferenceImageResultArtifactPointer(FrozenModel):
+    logical_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    content_hash: Sha256
+    result_schema: Literal["image-result@12.0"] = "image-result@12.0"
+
+
+class VisualReferencePublicationEntry(FrozenModel):
+    visual_ordinal: int = Field(ge=0, le=1)
+    drawing_sha256: Sha256
+    subject_sha256: Sha256
+    discovery_command_sha256: Sha256
+    discovery_result_sha256: Sha256
+    intent_sha256: Sha256
+    acquisition_command_sha256: Sha256
+    acquisition_result_sha256: Sha256
+    visual_reference: LocalImageVisualReferencePointer
+
+
+class LocalImageVisualReferencePublicationReceipt(FrozenModel):
+    schema_version: Literal["local-image-visual-reference-publication-receipt/1.0"] = (
+        "local-image-visual-reference-publication-receipt/1.0"
+    )
+    image_result_artifact: VisualReferenceImageResultArtifactPointer
+    entries: tuple[VisualReferencePublicationEntry, ...] = Field(min_length=1, max_length=2)
+    published_at: datetime
+    receipt_sha256: Sha256
+
+    @field_validator("published_at")
+    @classmethod
+    def utc_publication(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("visual-reference publication must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_order_uniqueness_and_hash(self) -> LocalImageVisualReferencePublicationReceipt:
+        ordinals = tuple(value.visual_ordinal for value in self.entries)
+        if ordinals != tuple(sorted(set(ordinals))):
+            raise ValueError("visual-reference publication ordinals must be sorted and unique")
+        for values, label in (
+            (tuple(value.drawing_sha256 for value in self.entries), "drawing hashes"),
+            (
+                tuple(value.visual_reference.bundle_revision_id for value in self.entries),
+                "bundle revisions",
+            ),
+            (
+                tuple(value.visual_reference.primary_reference_id for value in self.entries),
+                "reference IDs",
+            ),
+        ):
+            if len(values) != len(set(values)):
+                raise ValueError(f"visual-reference publication {label} must be unique")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("visual-reference publication receipt hash mismatch")
+        return self
+
+
 class LocalImageReferenceConditioning(FrozenModel):
     contract: Literal["sdxl-img2img/1.0"] = "sdxl-img2img/1.0"
     strength: float = Field(default=0.35, ge=0.35, le=0.35)

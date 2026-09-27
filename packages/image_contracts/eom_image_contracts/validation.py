@@ -46,6 +46,9 @@ SCHEMA_FILES = {
     "reference-conditioned-composite-receipt-v2": (
         "local-image-reference-conditioned-composite-receipt-v2.schema.json"
     ),
+    "visual-reference-publication-receipt": (
+        "local-image-visual-reference-publication-receipt-v1.schema.json"
+    ),
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
     "training-authorization": "local-image-training-authorization-v1.schema.json",
@@ -250,6 +253,9 @@ SCHEMA_SHA256 = {
     ),
     "reference-conditioned-composite-receipt-v2": (
         "sha256:ce8986fd687998cfef67ff3df72fa98dd45cc5def52e056ab8e2e4ec7dc59961"
+    ),
+    "visual-reference-publication-receipt": (
+        "sha256:79446191e079598884186344efbbb5a6cfc150a021ba3b929011c6ad707ba2ed"
     ),
     "quality-evaluation-plan": (
         "sha256:d0968b5e3237cef4edd5581f8e72e768c0e9c4c64efd4008d1bdeaed2c1497ca"

@@ -27,13 +27,16 @@ from eom_image_contracts import (
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     LocalImageVisualReferencePolicy,
+    LocalImageVisualReferencePublicationReceipt,
     ProductionStyleAdapterEvaluationPointer,
     ProductionStyleAdapterFile,
     ProductionStyleAdapterSourceManifestPointer,
     SamplerContract,
     VisualReferenceAcquisitionOutputFile,
     VisualReferenceBundleManifestPointer,
+    VisualReferenceImageResultArtifactPointer,
     VisualReferencePngArtifactPointer,
+    VisualReferencePublicationEntry,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -589,6 +592,64 @@ def test_visual_reference_acquisition_passes_schema_and_cross_contract_validatio
         result.model_dump(mode="json"),
     )
     validate_visual_reference_acquisition(command, intent, result)
+
+
+def test_visual_reference_publication_receipt_binds_image_result_and_all_handoffs() -> None:
+    entry = VisualReferencePublicationEntry(
+        visual_ordinal=0,
+        drawing_sha256=_sha(40),
+        subject_sha256=_sha(41),
+        discovery_command_sha256=_sha(42),
+        discovery_result_sha256=_sha(43),
+        intent_sha256=_sha(44),
+        acquisition_command_sha256=_sha(45),
+        acquisition_result_sha256=_sha(46),
+        visual_reference=_reference_pointer(),
+    )
+    body = {
+        "schema_version": "local-image-visual-reference-publication-receipt/1.0",
+        "image_result_artifact": VisualReferenceImageResultArtifactPointer(
+            logical_artifact_id="artifact_" + "1" * 32,
+            revision_id="rev_" + "2" * 32,
+            content_hash=_sha(47),
+        ).model_dump(mode="json"),
+        "entries": [entry.model_dump(mode="json")],
+        "published_at": "2026-09-27T15:30:00Z",
+    }
+    receipt = LocalImageVisualReferencePublicationReceipt.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+
+    validate_contract("visual-reference-publication-receipt", receipt.model_dump(mode="json"))
+    assert receipt.entries[0].visual_reference == _reference_pointer()
+
+
+def test_visual_reference_publication_receipt_rejects_duplicate_ordinals() -> None:
+    entry = VisualReferencePublicationEntry(
+        visual_ordinal=0,
+        drawing_sha256=_sha(40),
+        subject_sha256=_sha(41),
+        discovery_command_sha256=_sha(42),
+        discovery_result_sha256=_sha(43),
+        intent_sha256=_sha(44),
+        acquisition_command_sha256=_sha(45),
+        acquisition_result_sha256=_sha(46),
+        visual_reference=_reference_pointer(),
+    )
+    body = {
+        "schema_version": "local-image-visual-reference-publication-receipt/1.0",
+        "image_result_artifact": VisualReferenceImageResultArtifactPointer(
+            logical_artifact_id="artifact_" + "1" * 32,
+            revision_id="rev_" + "2" * 32,
+            content_hash=_sha(47),
+        ).model_dump(mode="json"),
+        "entries": [entry.model_dump(mode="json"), entry.model_dump(mode="json")],
+        "published_at": "2026-09-27T15:30:00Z",
+    }
+    with pytest.raises(PydanticValidationError, match="ordinals must be sorted and unique"):
+        LocalImageVisualReferencePublicationReceipt.model_validate(
+            {**body, "receipt_sha256": content_sha256(body)}
+        )
 
 
 def test_visual_reference_acquisition_rejects_candidate_population_drift() -> None:
