@@ -13,12 +13,14 @@ from eom_image_contracts import (
     LocalImageScienceVisualSubjectBenchmarkCommand,
     LocalImageScienceVisualSubjectBenchmarkPlan,
     LocalImageScienceVisualSubjectBenchmarkResult,
+    LocalImageScienceVisualSubjectBenchmarkReview,
     LocalImageScienceVisualSubjectInventory,
     ScienceVisualSubject,
     ScienceVisualSubjectBenchmarkCase,
     ScienceVisualSubjectBenchmarkOutcome,
     ScienceVisualSubjectBenchmarkOutput,
     ScienceVisualSubjectOmission,
+    ScienceVisualSubjectQualityReviewEntry,
     ScienceVisualSubjectSourceReference,
     content_json_bytes,
     content_sha256,
@@ -26,6 +28,7 @@ from eom_image_contracts import (
     validate_contract,
     validate_science_visual_subject_benchmark_plan,
     validate_science_visual_subject_benchmark_result,
+    validate_science_visual_subject_benchmark_review,
 )
 from pydantic import ValidationError
 
@@ -405,6 +408,82 @@ def _result(
     )
 
 
+def _review(
+    inventory: LocalImageScienceVisualSubjectInventory,
+    plan: LocalImageScienceVisualSubjectBenchmarkPlan,
+    result: LocalImageScienceVisualSubjectBenchmarkResult,
+) -> LocalImageScienceVisualSubjectBenchmarkReview:
+    cases_by_subject: dict[str, list[str]] = {}
+    for case in plan.cases:
+        cases_by_subject.setdefault(case.subject_id, []).append(case.case_id)
+    entries = []
+    for subject in inventory.subjects:
+        if subject.subject_key == "HUMAN_FIGURE":
+            entry = ScienceVisualSubjectQualityReviewEntry(
+                subject_id=subject.subject_id,
+                subject_key=subject.subject_key,
+                render_route=subject.render_route,
+                benchmark_case_ids=tuple(sorted(cases_by_subject[subject.subject_id])),
+                quality_status="DIAGNOSTIC_ONLY",
+                preferred_variant=None,
+                failure_reasons=("PRODUCTION_PATH_NOT_EXERCISED",),
+                next_actions=("BUILD_PRODUCTION_VECTOR_FIXTURE",),
+            )
+        else:
+            entry = ScienceVisualSubjectQualityReviewEntry(
+                subject_id=subject.subject_id,
+                subject_key=subject.subject_key,
+                render_route=subject.render_route,
+                benchmark_case_ids=tuple(sorted(cases_by_subject[subject.subject_id])),
+                quality_status="BASE_PREFERRED",
+                preferred_variant="BASE",
+                failure_reasons=("ADAPTER_SEMANTIC_MISMATCH",),
+                next_actions=("KEEP_BASE_ONLY", "MULTI_SEED_REEVALUATION"),
+            )
+        entries.append(entry)
+    reviews = tuple(sorted(entries, key=lambda value: value.subject_key))
+    benchmark_plan = _pointer(
+        "1",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-plan/1.0"
+        ),
+        member_path="manifests/science-visual-subject-benchmark-plan.json",
+        sha256=content_sha256(plan.model_dump(mode="json")),
+    )
+    benchmark_result = _pointer(
+        "2",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-result/1.0"
+        ),
+        member_path="result.json",
+        sha256=content_sha256(result.model_dump(mode="json")),
+    )
+    identity_body = {
+        "subject_inventory": plan.subject_inventory.model_dump(mode="json"),
+        "benchmark_plan": benchmark_plan.model_dump(mode="json"),
+        "benchmark_result": benchmark_result.model_dump(mode="json"),
+        "benchmark_result_sha256": result.result_sha256,
+        "reviews": [entry.model_dump(mode="json") for entry in reviews],
+    }
+    body = {
+        "schema_version": "local-image-science-visual-subject-benchmark-review/1.0",
+        "review_id": (
+            "imgscisubjectreview_" + content_sha256(identity_body).removeprefix("sha256:")[:32]
+        ),
+        **identity_body,
+        "diagnostic_only_count": 1,
+        "base_preferred_count": 1,
+        "adapter_preferred_count": 0,
+        "neither_acceptable_count": 0,
+        "adapter_activation_recommendation": "FORBIDDEN",
+        "reviewed_at": NOW.isoformat().replace("+00:00", "Z"),
+        "reviewed_by": "contract_test",
+    }
+    return LocalImageScienceVisualSubjectBenchmarkReview.model_validate(
+        {**body, "review_sha256": content_sha256(body)}
+    )
+
+
 def test_subject_inventory_and_benchmark_round_trip_through_both_contract_layers() -> None:
     inventory = _inventory()
     plan = _plan(inventory)
@@ -417,6 +496,61 @@ def test_subject_inventory_and_benchmark_round_trip_through_both_contract_layers
     validate_contract("science-visual-subject-benchmark-result", result.model_dump(mode="json"))
     validate_science_visual_subject_benchmark_plan(inventory, plan)
     validate_science_visual_subject_benchmark_result(plan, command, result)
+
+
+def test_subject_quality_review_closes_exact_subject_and_case_population() -> None:
+    inventory = _inventory()
+    plan = _plan(inventory)
+    command = _command(plan)
+    result = _result(plan, command)
+    review = _review(inventory, plan, result)
+
+    validate_contract("science-visual-subject-benchmark-review", review.model_dump(mode="json"))
+    validate_science_visual_subject_benchmark_review(inventory, plan, result, review)
+    assert review.adapter_activation_recommendation == "FORBIDDEN"
+
+
+def test_subject_quality_review_rejects_missing_subject() -> None:
+    inventory = _inventory()
+    plan = _plan(inventory)
+    result = _result(plan, _command(plan))
+    review = _review(inventory, plan, result)
+    value = review.model_dump(mode="json")
+    value["reviews"] = value["reviews"][:-1]
+    value["diagnostic_only_count"] = 0
+    identity_body = {
+        key: value[key]
+        for key in (
+            "subject_inventory",
+            "benchmark_plan",
+            "benchmark_result",
+            "benchmark_result_sha256",
+            "reviews",
+        )
+    }
+    value["review_id"] = (
+        "imgscisubjectreview_" + content_sha256(identity_body).removeprefix("sha256:")[:32]
+    )
+    value["review_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "review_sha256"}
+    )
+    parsed = LocalImageScienceVisualSubjectBenchmarkReview.model_validate(value)
+    with pytest.raises(ValueError, match="population mismatch"):
+        validate_science_visual_subject_benchmark_review(inventory, plan, result, parsed)
+
+
+def test_subject_quality_review_rejects_diagnostic_as_production_variant() -> None:
+    with pytest.raises(ValidationError, match="status, route, variant"):
+        ScienceVisualSubjectQualityReviewEntry(
+            subject_id="imgscisubject_" + "1" * 32,
+            subject_key="HUMAN_FIGURE",
+            render_route="PYTHON_SVG",
+            benchmark_case_ids=("imgscisubjectcase_" + "2" * 32,),
+            quality_status="DIAGNOSTIC_ONLY",
+            preferred_variant="BASE",
+            failure_reasons=("PRODUCTION_PATH_NOT_EXERCISED",),
+            next_actions=("BUILD_PRODUCTION_VECTOR_FIXTURE",),
+        )
 
 
 def test_subject_benchmark_failed_result_is_typed_and_empty() -> None:

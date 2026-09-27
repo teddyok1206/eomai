@@ -161,6 +161,9 @@ SCHEMA_FILES = {
     "science-visual-subject-benchmark-result": (
         "local-image-science-visual-subject-benchmark-result-v1.schema.json"
     ),
+    "science-visual-subject-benchmark-review": (
+        "local-image-science-visual-subject-benchmark-review-v1.schema.json"
+    ),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -363,6 +366,9 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-subject-benchmark-result": (
         "sha256:471516e78fd47eec687bb276ef95c1e6a2614f50a41bf9efde45a9b8cddf9533"
+    ),
+    "science-visual-subject-benchmark-review": (
+        "sha256:309d059b24f07ca0a6a6c8e088a5e57e03c0569a06dfa5c283aa0ff408513740"
     ),
 }
 

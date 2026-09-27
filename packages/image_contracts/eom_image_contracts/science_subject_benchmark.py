@@ -30,6 +30,9 @@ SUBJECT_BENCHMARK_COMMAND_SCHEMA_REF = (
 SUBJECT_BENCHMARK_RESULT_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-result/1.0"
 )
+SUBJECT_BENCHMARK_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-review/1.0"
+)
 TRAINING_AUTHORIZATION_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-training-authorization/1.0"
 )
@@ -527,6 +530,158 @@ class LocalImageScienceVisualSubjectBenchmarkResult(FrozenModel):
         return self
 
 
+ScienceVisualSubjectQualityStatus = Literal[
+    "ADAPTER_PREFERRED",
+    "BASE_PREFERRED",
+    "DIAGNOSTIC_ONLY",
+    "NEITHER_ACCEPTABLE",
+]
+ScienceVisualSubjectQualityFailureReason = Literal[
+    "ADAPTER_SEMANTIC_MISMATCH",
+    "BASE_SEMANTIC_MISMATCH",
+    "COMPOSITION_ARTIFACT",
+    "EXCESSIVE_DETAIL",
+    "INSUFFICIENT_DETAIL",
+    "NO_SAFE_RENDER_ROUTE",
+    "PRODUCTION_PATH_NOT_EXERCISED",
+    "PSEUDOTEXT",
+    "STYLE_MISMATCH",
+]
+ScienceVisualSubjectQualityNextAction = Literal[
+    "ADAPTER_CANDIDATE_AFTER_CANARY",
+    "BUILD_PRODUCTION_VECTOR_FIXTURE",
+    "DATASET_AUGMENTATION",
+    "KEEP_BASE_ONLY",
+    "MULTI_SEED_REEVALUATION",
+    "PROMPT_REFINEMENT",
+    "ROUTE_RECLASSIFICATION",
+]
+
+
+class ScienceVisualSubjectQualityReviewEntry(FrozenModel):
+    subject_id: str = Field(pattern=r"^imgscisubject_[0-9a-f]{32}$")
+    subject_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")
+    render_route: ScienceVisualSubjectRoute
+    benchmark_case_ids: tuple[str, ...] = Field(max_length=2)
+    quality_status: ScienceVisualSubjectQualityStatus
+    preferred_variant: Literal["ADAPTER", "BASE"] | None
+    failure_reasons: tuple[ScienceVisualSubjectQualityFailureReason, ...] = Field(max_length=16)
+    next_actions: tuple[ScienceVisualSubjectQualityNextAction, ...] = Field(
+        min_length=1, max_length=8
+    )
+
+    @model_validator(mode="after")
+    def review_entry_is_closed(self) -> Self:
+        if self.benchmark_case_ids != tuple(sorted(set(self.benchmark_case_ids))) or any(
+            re.fullmatch(r"imgscisubjectcase_[0-9a-f]{32}", value) is None
+            for value in self.benchmark_case_ids
+        ):
+            raise ValueError("quality-review case IDs must be uniquely sorted")
+        if self.failure_reasons != tuple(sorted(set(self.failure_reasons))):
+            raise ValueError("quality-review reasons must be uniquely sorted")
+        if self.next_actions != tuple(sorted(set(self.next_actions))):
+            raise ValueError("quality-review actions must be uniquely sorted")
+        if self.quality_status == "DIAGNOSTIC_ONLY":
+            valid = (
+                self.render_route == "PYTHON_SVG"
+                and self.preferred_variant is None
+                and "PRODUCTION_PATH_NOT_EXERCISED" in self.failure_reasons
+                and "BUILD_PRODUCTION_VECTOR_FIXTURE" in self.next_actions
+            )
+        elif self.quality_status == "BASE_PREFERRED":
+            valid = (
+                self.render_route in {"HYBRID", "LORA_RASTER"}
+                and self.preferred_variant == "BASE"
+                and "KEEP_BASE_ONLY" in self.next_actions
+                and "MULTI_SEED_REEVALUATION" in self.next_actions
+            )
+        elif self.quality_status == "ADAPTER_PREFERRED":
+            valid = (
+                self.render_route in {"HYBRID", "LORA_RASTER"}
+                and self.preferred_variant == "ADAPTER"
+                and "ADAPTER_CANDIDATE_AFTER_CANARY" in self.next_actions
+                and "MULTI_SEED_REEVALUATION" in self.next_actions
+            )
+        else:
+            valid = (
+                self.preferred_variant is None
+                and bool(self.failure_reasons)
+                and bool(
+                    set(self.next_actions)
+                    & {"DATASET_AUGMENTATION", "PROMPT_REFINEMENT", "ROUTE_RECLASSIFICATION"}
+                )
+            )
+        if not valid:
+            raise ValueError("quality-review status, route, variant, and action mismatch")
+        if self.render_route == "BLOCKED" and (
+            self.quality_status != "NEITHER_ACCEPTABLE"
+            or self.benchmark_case_ids
+            or "NO_SAFE_RENDER_ROUTE" not in self.failure_reasons
+        ):
+            raise ValueError("blocked subject quality review is invalid")
+        return self
+
+
+class LocalImageScienceVisualSubjectBenchmarkReview(FrozenModel):
+    schema_version: Literal["local-image-science-visual-subject-benchmark-review/1.0"]
+    review_id: str = Field(pattern=r"^imgscisubjectreview_[0-9a-f]{32}$")
+    subject_inventory: ImageEvaluationArtifactMember
+    benchmark_plan: ImageEvaluationArtifactMember
+    benchmark_result: ImageEvaluationArtifactMember
+    benchmark_result_sha256: Sha256
+    reviews: tuple[ScienceVisualSubjectQualityReviewEntry, ...] = Field(
+        min_length=1, max_length=256
+    )
+    diagnostic_only_count: int = Field(ge=0, le=256)
+    base_preferred_count: int = Field(ge=0, le=256)
+    adapter_preferred_count: int = Field(ge=0, le=256)
+    neither_acceptable_count: int = Field(ge=0, le=256)
+    adapter_activation_recommendation: Literal["FORBIDDEN"]
+    reviewed_at: datetime
+    reviewed_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    review_sha256: Sha256
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def utc_reviewed_at(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def review_is_canonical(self) -> Self:
+        _require_pointer(self.subject_inventory, schema_ref=SUBJECT_INVENTORY_SCHEMA_REF)
+        _require_pointer(self.benchmark_plan, schema_ref=SUBJECT_BENCHMARK_PLAN_SCHEMA_REF)
+        _require_pointer(self.benchmark_result, schema_ref=SUBJECT_BENCHMARK_RESULT_SCHEMA_REF)
+        keys = tuple(entry.subject_key for entry in self.reviews)
+        if keys != tuple(sorted(set(keys))):
+            raise ValueError("quality reviews must be uniquely sorted by subject key")
+        if len({entry.subject_id for entry in self.reviews}) != len(self.reviews):
+            raise ValueError("quality reviews contain duplicate subject IDs")
+        counts = {
+            "DIAGNOSTIC_ONLY": self.diagnostic_only_count,
+            "BASE_PREFERRED": self.base_preferred_count,
+            "ADAPTER_PREFERRED": self.adapter_preferred_count,
+            "NEITHER_ACCEPTABLE": self.neither_acceptable_count,
+        }
+        for status, declared in counts.items():
+            if declared != sum(entry.quality_status == status for entry in self.reviews):
+                raise ValueError("quality-review summary count mismatch")
+        identity = content_sha256(
+            {
+                "subject_inventory": self.subject_inventory.model_dump(mode="json"),
+                "benchmark_plan": self.benchmark_plan.model_dump(mode="json"),
+                "benchmark_result": self.benchmark_result.model_dump(mode="json"),
+                "benchmark_result_sha256": self.benchmark_result_sha256,
+                "reviews": [entry.model_dump(mode="json") for entry in self.reviews],
+            }
+        ).removeprefix("sha256:")[:32]
+        if self.review_id != f"imgscisubjectreview_{identity}":
+            raise ValueError("quality-review ID mismatch")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("quality-review hash mismatch")
+        return self
+
+
 def validate_science_visual_subject_benchmark_plan(
     inventory: LocalImageScienceVisualSubjectInventory,
     plan: LocalImageScienceVisualSubjectBenchmarkPlan,
@@ -609,3 +764,63 @@ def validate_science_visual_subject_benchmark_result(
             raise ValueError("subject benchmark output variants do not match the plan")
     if set(outputs).difference(outcomes):
         raise ValueError("subject benchmark has output for an unknown case")
+
+
+def validate_science_visual_subject_benchmark_review(
+    inventory: LocalImageScienceVisualSubjectInventory,
+    plan: LocalImageScienceVisualSubjectBenchmarkPlan,
+    result: LocalImageScienceVisualSubjectBenchmarkResult,
+    review: LocalImageScienceVisualSubjectBenchmarkReview,
+) -> None:
+    """Close one quality review over the exact subject/case population in O(S + C + O)."""
+
+    validate_science_visual_subject_benchmark_plan(inventory, plan)
+    if result.status != "SUCCEEDED":
+        raise ValueError("subject quality review requires a successful benchmark")
+    command_stub_matches = result.plan_id == plan.plan_id and result.plan_sha256 == plan.plan_sha256
+    if not command_stub_matches:
+        raise ValueError("subject quality review plan/result mismatch")
+    if (
+        review.subject_inventory != plan.subject_inventory
+        or review.benchmark_plan.sha256 != content_sha256(plan.model_dump(mode="json"))
+        or review.benchmark_result_sha256 != result.result_sha256
+    ):
+        raise ValueError("subject quality review pointer chain mismatch")
+    subjects = {subject.subject_id: subject for subject in inventory.subjects}
+    entries = {entry.subject_id: entry for entry in review.reviews}
+    if set(entries) != set(subjects):
+        raise ValueError("subject quality review population mismatch")
+    cases_by_subject: dict[str, set[str]] = {}
+    cases_by_id = {case.case_id: case for case in plan.cases}
+    for case in plan.cases:
+        cases_by_subject.setdefault(case.subject_id, set()).add(case.case_id)
+    outcome_by_case = {outcome.case_id: outcome for outcome in result.outcomes}
+    output_variants: dict[str, set[str]] = {}
+    for output in result.outputs:
+        output_variants.setdefault(output.case_id, set()).add(output.variant)
+    for subject_id, subject in subjects.items():
+        entry = entries[subject_id]
+        if entry.subject_key != subject.subject_key or entry.render_route != subject.render_route:
+            raise ValueError("subject quality review changes subject identity or route")
+        expected_cases = cases_by_subject.get(subject_id, set())
+        if set(entry.benchmark_case_ids) != expected_cases:
+            raise ValueError("subject quality review case population mismatch")
+        if subject.render_route == "BLOCKED":
+            continue
+        primary = [
+            cases_by_id[case_id]
+            for case_id in expected_cases
+            if cases_by_id[case_id].case_kind != "GPU_POLICY_NEGATIVE"
+        ]
+        if len(primary) != 1:
+            raise ValueError("subject quality review primary case mismatch")
+        primary_case = primary[0]
+        outcome = outcome_by_case.get(primary_case.case_id)
+        if outcome is None or outcome.outcome != primary_case.expected_outcome:
+            raise ValueError("subject quality review benchmark outcome mismatch")
+        variants = output_variants.get(primary_case.case_id, set())
+        if entry.quality_status == "DIAGNOSTIC_ONLY":
+            if primary_case.case_kind != "ROUTE" or variants != {"DETERMINISTIC"}:
+                raise ValueError("diagnostic-only review is not backed by a route case")
+        elif primary_case.case_kind != "QUALITY" or variants != {"BASE", "ADAPTER"}:
+            raise ValueError("raster quality review is not backed by an exact output pair")

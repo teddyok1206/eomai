@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "reviewEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "benchmark_case_ids": {
+          "items": {
+            "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "failure_reasons": {
+          "items": {
+            "enum": [
+              "ADAPTER_SEMANTIC_MISMATCH",
+              "BASE_SEMANTIC_MISMATCH",
+              "COMPOSITION_ARTIFACT",
+              "EXCESSIVE_DETAIL",
+              "INSUFFICIENT_DETAIL",
+              "NO_SAFE_RENDER_ROUTE",
+              "PRODUCTION_PATH_NOT_EXERCISED",
+              "PSEUDOTEXT",
+              "STYLE_MISMATCH"
+            ]
+          },
+          "maxItems": 16,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "next_actions": {
+          "items": {
+            "enum": [
+              "ADAPTER_CANDIDATE_AFTER_CANARY",
+              "BUILD_PRODUCTION_VECTOR_FIXTURE",
+              "DATASET_AUGMENTATION",
+              "KEEP_BASE_ONLY",
+              "MULTI_SEED_REEVALUATION",
+              "PROMPT_REFINEMENT",
+              "ROUTE_RECLASSIFICATION"
+            ]
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "preferred_variant": {
+          "anyOf": [
+            {
+              "enum": [
+                "ADAPTER",
+                "BASE"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quality_status": {
+          "enum": [
+            "ADAPTER_PREFERRED",
+            "BASE_PREFERRED",
+            "DIAGNOSTIC_ONLY",
+            "NEITHER_ACCEPTABLE"
+          ]
+        },
+        "render_route": {
+          "enum": [
+            "BLOCKED",
+            "HYBRID",
+            "LORA_RASTER",
+            "PYTHON_SVG"
+          ]
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "subject_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "subject_key",
+        "render_route",
+        "benchmark_case_ids",
+        "quality_status",
+        "preferred_variant",
+        "failure_reasons",
+        "next_actions"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-review/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_activation_recommendation": {
+      "const": "FORBIDDEN"
+    },
+    "adapter_preferred_count": {
+      "maximum": 256,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "base_preferred_count": {
+      "maximum": 256,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "benchmark_plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "benchmark_result": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "benchmark_result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "diagnostic_only_count": {
+      "maximum": 256,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "neither_acceptable_count": {
+      "maximum": 256,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "review_id": {
+      "pattern": "^imgscisubjectreview_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "review_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "reviewed_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "reviews": {
+      "items": {
+        "$ref": "#/$defs/reviewEntry"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-benchmark-review/1.0"
+    },
+    "subject_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "review_id",
+    "subject_inventory",
+    "benchmark_plan",
+    "benchmark_result",
+    "benchmark_result_sha256",
+    "reviews",
+    "diagnostic_only_count",
+    "base_preferred_count",
+    "adapter_preferred_count",
+    "neither_acceptable_count",
+    "adapter_activation_recommendation",
+    "reviewed_at",
+    "reviewed_by",
+    "review_sha256"
+  ],
+  "title": "EOM Science Visual Subject Benchmark Quality Review V1",
+  "type": "object"
+}

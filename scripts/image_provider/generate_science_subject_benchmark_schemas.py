@@ -676,11 +676,172 @@ def _result() -> dict[str, Any]:
     return schema
 
 
+def _quality_review_entry() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "subject_id",
+            "subject_key",
+            "render_route",
+            "benchmark_case_ids",
+            "quality_status",
+            "preferred_variant",
+            "failure_reasons",
+            "next_actions",
+        ],
+        "properties": {
+            "subject_id": {
+                "type": "string",
+                "pattern": "^imgscisubject_[0-9a-f]{32}$",
+            },
+            "subject_key": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+            },
+            "render_route": {"enum": ROUTES},
+            "benchmark_case_ids": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 2,
+                "uniqueItems": True,
+                "items": {
+                    "type": "string",
+                    "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
+                },
+            },
+            "quality_status": {
+                "enum": [
+                    "ADAPTER_PREFERRED",
+                    "BASE_PREFERRED",
+                    "DIAGNOSTIC_ONLY",
+                    "NEITHER_ACCEPTABLE",
+                ]
+            },
+            "preferred_variant": {"anyOf": [{"enum": ["ADAPTER", "BASE"]}, {"type": "null"}]},
+            "failure_reasons": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": True,
+                "items": {
+                    "enum": [
+                        "ADAPTER_SEMANTIC_MISMATCH",
+                        "BASE_SEMANTIC_MISMATCH",
+                        "COMPOSITION_ARTIFACT",
+                        "EXCESSIVE_DETAIL",
+                        "INSUFFICIENT_DETAIL",
+                        "NO_SAFE_RENDER_ROUTE",
+                        "PRODUCTION_PATH_NOT_EXERCISED",
+                        "PSEUDOTEXT",
+                        "STYLE_MISMATCH",
+                    ]
+                },
+            },
+            "next_actions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "uniqueItems": True,
+                "items": {
+                    "enum": [
+                        "ADAPTER_CANDIDATE_AFTER_CANARY",
+                        "BUILD_PRODUCTION_VECTOR_FIXTURE",
+                        "DATASET_AUGMENTATION",
+                        "KEEP_BASE_ONLY",
+                        "MULTI_SEED_REEVALUATION",
+                        "PROMPT_REFINEMENT",
+                        "ROUTE_RECLASSIFICATION",
+                    ]
+                },
+            },
+        },
+    }
+
+
+def _quality_review() -> dict[str, Any]:
+    schema = _base(
+        "EOM Science Visual Subject Benchmark Quality Review V1",
+        "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-review/1.0",
+    )
+    schema["$defs"].update({"reviewEntry": _quality_review_entry()})
+    schema.update(
+        {
+            "required": [
+                "schema_version",
+                "review_id",
+                "subject_inventory",
+                "benchmark_plan",
+                "benchmark_result",
+                "benchmark_result_sha256",
+                "reviews",
+                "diagnostic_only_count",
+                "base_preferred_count",
+                "adapter_preferred_count",
+                "neither_acceptable_count",
+                "adapter_activation_recommendation",
+                "reviewed_at",
+                "reviewed_by",
+                "review_sha256",
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": "local-image-science-visual-subject-benchmark-review/1.0"
+                },
+                "review_id": {
+                    "type": "string",
+                    "pattern": "^imgscisubjectreview_[0-9a-f]{32}$",
+                },
+                "subject_inventory": {"$ref": "#/$defs/artifactMember"},
+                "benchmark_plan": {"$ref": "#/$defs/artifactMember"},
+                "benchmark_result": {"$ref": "#/$defs/artifactMember"},
+                "benchmark_result_sha256": {"$ref": "#/$defs/sha256"},
+                "reviews": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 256,
+                    "items": {"$ref": "#/$defs/reviewEntry"},
+                },
+                "diagnostic_only_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 256,
+                },
+                "base_preferred_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 256,
+                },
+                "adapter_preferred_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 256,
+                },
+                "neither_acceptable_count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 256,
+                },
+                "adapter_activation_recommendation": {"const": "FORBIDDEN"},
+                "reviewed_at": deepcopy(UTC),
+                "reviewed_by": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9._:@-]+$",
+                },
+                "review_sha256": {"$ref": "#/$defs/sha256"},
+            },
+        }
+    )
+    return schema
+
+
 SCHEMAS = {
     "local-image-science-visual-subject-inventory-v1.schema.json": _inventory(),
     "local-image-science-visual-subject-benchmark-plan-v1.schema.json": _plan(),
     "local-image-science-visual-subject-benchmark-command-v1.schema.json": _command(),
     "local-image-science-visual-subject-benchmark-result-v1.schema.json": _result(),
+    "local-image-science-visual-subject-benchmark-review-v1.schema.json": _quality_review(),
 }
 
 
