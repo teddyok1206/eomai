@@ -21,13 +21,18 @@ from eom_image_contracts import (
     LocalImageCompositeRequest,
     LocalImageGenerationRequest,
     LocalImageModelManifest,
+    LocalImageProductionStyleAdapterRelease,
     LocalImageProviderBinding,
     LocalImageQualityEvaluationPlan,
     LocalImageQualityEvaluationResult,
     LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferencePointer,
+    ProductionStyleAdapterEvaluationPointer,
+    ProductionStyleAdapterFile,
+    ProductionStyleAdapterSourceManifestPointer,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
     content_sha256,
@@ -44,9 +49,12 @@ from eom_image_provider.provider import (
     generate_background,
     generate_composite_handoff,
     generate_reference_conditioned_composite_handoff,
+    generate_reference_conditioned_composite_handoff_v2,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
+    reuse_reference_conditioned_composite_handoff_v2,
     verify_model_revision,
+    verify_style_adapter_release,
 )
 from PIL import Image  # type: ignore[import-not-found]
 
@@ -288,6 +296,87 @@ def _conditioned_request(
     value = {**body, "request_sha256": content_sha256(body)}
     validate_contract("reference-conditioned-composite-request", value)
     return LocalImageReferenceConditionedCompositeRequest.model_validate(value)
+
+
+def _style_store(
+    tmp_path: Path,
+    manifest: LocalImageModelManifest,
+) -> tuple[Path, LocalImageProductionStyleAdapterRelease]:
+    root = tmp_path / "style-adapters"
+    adapter_id = "imgadapter_" + "3" * 32
+    adapter_revision_id = "imgadapterrev_" + "4" * 32
+    files = root / adapter_id / adapter_revision_id / "files"
+    files.mkdir(parents=True, mode=0o750)
+    root.chmod(0o750)
+    (root / adapter_id).chmod(0o750)
+    (root / adapter_id / adapter_revision_id).chmod(0o750)
+    files.chmod(0o750)
+    payloads = {
+        "adapter_config.json": b'{"peft_type":"LORA"}\n',
+        "adapter_model.safetensors": b"exact-style-adapter",
+    }
+    file_contracts = []
+    for relative_path, payload in payloads.items():
+        path = files / relative_path
+        path.write_bytes(payload)
+        path.chmod(0o640)
+        file_contracts.append(
+            ProductionStyleAdapterFile(
+                relative_path=relative_path,  # type: ignore[arg-type]
+                size_bytes=len(payload),
+                sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
+            ).model_dump(mode="json")
+        )
+    model = _request(manifest).model
+    body = {
+        "schema_version": "local-image-style-adapter-release/1.0",
+        "release_id": "imgstylerelease_" + "1" * 32,
+        "release_revision_id": "imgstylereleaserev_" + "2" * 32,
+        "state": "RELEASED",
+        "adapter_contract": "eom-assessment-style-lora/1.0",
+        "adapter_id": adapter_id,
+        "adapter_revision_id": adapter_revision_id,
+        "base_model": model.model_dump(mode="json"),
+        "source_adapter_manifest": ProductionStyleAdapterSourceManifestPointer(
+            artifact_id="artifact_" + "5" * 32,
+            artifact_revision_id="rev_" + "6" * 32,
+            sha256="sha256:" + "7" * 64,
+            size_bytes=5000,
+        ).model_dump(mode="json"),
+        "evaluation_result": ProductionStyleAdapterEvaluationPointer(
+            artifact_id="artifact_" + "8" * 32,
+            artifact_revision_id="rev_" + "9" * 32,
+            sha256="sha256:" + "a" * 64,
+            size_bytes=6000,
+        ).model_dump(mode="json"),
+        "files": file_contracts,
+        "lora_scale": 0.8,
+        "approved_at": "2026-09-27T15:00:00Z",
+        "approved_by": "operator_test",
+    }
+    release = LocalImageProductionStyleAdapterRelease.model_validate(
+        {**body, "release_sha256": content_sha256(body)}
+    )
+    return root, release
+
+
+def _conditioned_request_v2(
+    manifest: LocalImageModelManifest,
+    overlay: bytes,
+    reference: bytes,
+    release: LocalImageProductionStyleAdapterRelease,
+) -> LocalImageReferenceConditionedCompositeRequestV2:
+    v1 = _conditioned_request(manifest, overlay, reference)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/2.0",
+        "composite_request": v1.composite_request.model_dump(mode="json"),
+        "visual_reference": v1.visual_reference.model_dump(mode="json"),
+        "conditioning": v1.conditioning.model_dump(mode="json"),
+        "style_adapter": release.model_dump(mode="json"),
+    }
+    value = {**body, "request_sha256": content_sha256(body)}
+    validate_contract("reference-conditioned-composite-request-v2", value)
+    return LocalImageReferenceConditionedCompositeRequestV2.model_validate(value)
 
 
 def test_contract_resources_are_canonical_mirrors() -> None:
@@ -761,6 +850,94 @@ def test_reference_conditioned_handoff_rejects_reference_hash_drift(tmp_path: Pa
             request=_conditioned_request(manifest, overlay, reference),
             backend=FakeBackend(),  # type: ignore[arg-type]
         )
+
+
+def test_style_reference_handoff_pins_release_files_and_is_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, manifest = _store(tmp_path)
+    style_root, release = _style_store(tmp_path, manifest)
+    workspace = tmp_path / "style-reference-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference)
+    (workspace / "references/primary.png").chmod(0o440)
+    request = _conditioned_request_v2(manifest, overlay, reference, release)
+    calls = 0
+
+    class StyleReferenceBackend:
+        def generate_from_reference_with_style(
+            self,
+            *,
+            model_directory: Path,
+            style_adapter_directory: Path,
+            request: LocalImageGenerationRequest,
+            reference_png: bytes,
+            strength: float,
+            lora_scale: float,
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            assert model_directory.name == "files"
+            assert style_adapter_directory.name == "files"
+            assert reference_png == reference
+            assert strength == 0.35
+            assert lora_scale == 0.8
+            return FakeBackend().generate(model_directory=model_directory, request=request)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda _background, _overlay: _png(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    first = generate_reference_conditioned_composite_handoff_v2(
+        model_store_root=root,
+        style_adapter_store_root=style_root,
+        workspace=workspace,
+        request=request,
+        backend=StyleReferenceBackend(),
+    )
+    second = generate_reference_conditioned_composite_handoff_v2(
+        model_store_root=root,
+        style_adapter_store_root=style_root,
+        workspace=workspace,
+        request=request,
+        backend=StyleReferenceBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.style_adapter == release
+    assert first.visual_reference == request.visual_reference
+    validate_contract("reference-conditioned-composite-receipt-v2", first.model_dump(mode="json"))
+    assert (
+        reuse_reference_conditioned_composite_handoff_v2(
+            workspace=workspace,
+            request=request,
+        )
+        == first
+    )
+
+
+def test_style_release_verification_rejects_weight_hash_drift(tmp_path: Path) -> None:
+    _root, manifest = _store(tmp_path)
+    style_root, release = _style_store(tmp_path, manifest)
+    weights = (
+        style_root
+        / release.adapter_id
+        / release.adapter_revision_id
+        / "files/adapter_model.safetensors"
+    )
+    weights.write_bytes(b"drift")
+    weights.chmod(0o640)
+
+    with pytest.raises(ProviderError, match="LOCAL_IMAGE_STYLE_ADAPTER_HASH_MISMATCH"):
+        verify_style_adapter_release(style_root, release)
 
 
 def test_real_compositor_preserves_background_and_applies_authoritative_overlay(

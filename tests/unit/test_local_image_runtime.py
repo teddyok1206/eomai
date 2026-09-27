@@ -83,6 +83,24 @@ def test_reference_conditioned_provider_has_gpu_but_no_network_nas_or_acquirer_a
     assert "Restart=no" in source
 
 
+def test_style_reference_provider_reads_only_exact_model_and_adapter_stores() -> None:
+    source = (ROOT / "infra/systemd/eom-image-reference-style-provider@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image" in source
+    assert "eom-local-image generate-reference-style-composite" in source
+    assert "--style-adapter-store-root /srv/eom/models/image-style" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "PrivateNetwork=true" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image-style" in source
+    assert "ReadWritePaths=/srv/eom/image-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock() -> None:
     source = (ROOT / "infra/systemd/eom-image-trainer@.service").read_text(encoding="utf-8")
 
@@ -439,6 +457,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
         ROOT / "infra/systemd/eom-image-reference-acquirer@.service",
         ROOT / "infra/systemd/eom-image-reference-discoverer@.service",
         ROOT / "infra/systemd/eom-image-reference-provider@.service",
+        ROOT / "infra/systemd/eom-image-reference-style-provider@.service",
         ROOT / "infra/systemd/eom-image-trainer@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-science-lora-micro-probe@.service",

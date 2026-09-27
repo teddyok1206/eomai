@@ -27,12 +27,17 @@ from eom_image_contracts import (
     LocalImageGenerationRequest,
     LocalImageModelManifest,
     LocalImageOutput,
+    LocalImageProductionStyleAdapterRelease,
     LocalImageReferenceConditionedCompositeReceipt,
+    LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageRuntime,
+    ProductionStyleAdapterFile,
     content_sha256,
     validate_contract,
     validate_reference_conditioned_receipt,
+    validate_reference_conditioned_receipt_v2,
 )
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -69,6 +74,19 @@ class ReferenceImageBackend(Protocol):
         request: LocalImageGenerationRequest,
         reference_png: bytes,
         strength: float,
+    ) -> GeneratedBackground: ...
+
+
+class StyleReferenceImageBackend(Protocol):
+    def generate_from_reference_with_style(
+        self,
+        *,
+        model_directory: Path,
+        style_adapter_directory: Path,
+        request: LocalImageGenerationRequest,
+        reference_png: bytes,
+        strength: float,
+        lora_scale: float,
     ) -> GeneratedBackground: ...
 
 
@@ -204,6 +222,56 @@ def verify_model_revision(
     return manifest, model_directory
 
 
+def verify_style_adapter_release(
+    style_adapter_store_root: Path,
+    release: LocalImageProductionStyleAdapterRelease,
+) -> Path:
+    """Resolve one installed style release without trusting a path from worker output."""
+
+    try:
+        _require_absolute_no_symlink_components(style_adapter_store_root)
+        store_metadata = _require_directory(style_adapter_store_root, mode=0o750)
+        logical_adapter = style_adapter_store_root / release.adapter_id
+        logical_metadata = _require_directory(logical_adapter, mode=0o750)
+        revision = logical_adapter / release.adapter_revision_id
+        _require_beneath(style_adapter_store_root, revision)
+        revision_metadata = _require_directory(revision, mode=0o750)
+        files = revision / "files"
+        files_metadata = _require_directory(files, mode=0o750)
+        expected_identity = (store_metadata.st_uid, store_metadata.st_gid)
+        if any(
+            (metadata.st_uid, metadata.st_gid) != expected_identity
+            for metadata in (logical_metadata, revision_metadata, files_metadata)
+        ):
+            raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_UNAVAILABLE")
+        expected: dict[str, ProductionStyleAdapterFile] = {
+            value.relative_path: value for value in release.files
+        }
+        observed: set[str] = set()
+        for child in files.iterdir():
+            entry = expected.get(child.name)
+            if entry is None:
+                raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_HASH_MISMATCH")
+            metadata = _require_regular_file(child, maximum_bytes=1024 * 1024 * 1024)
+            if (
+                stat.S_IMODE(metadata.st_mode) != 0o640
+                or (metadata.st_uid, metadata.st_gid) != expected_identity
+                or metadata.st_size != entry.size_bytes
+                or _sha256_file(child) != entry.sha256
+            ):
+                raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_HASH_MISMATCH")
+            observed.add(child.name)
+        if observed != set(expected):
+            raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_HASH_MISMATCH")
+        return files
+    except ProviderError as exc:
+        if exc.code.startswith("LOCAL_IMAGE_STYLE_ADAPTER_"):
+            raise
+        raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_UNAVAILABLE") from exc
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_UNAVAILABLE") from exc
+
+
 def generate_background(
     *,
     model_store_root: Path,
@@ -334,6 +402,85 @@ def generate_reference_conditioned_composite_handoff(
     )
 
 
+def generate_reference_conditioned_composite_handoff_v2(
+    *,
+    model_store_root: Path,
+    style_adapter_store_root: Path,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV2,
+    backend: StyleReferenceImageBackend,
+) -> LocalImageReferenceConditionedCompositeReceiptV2:
+    """Generate one reference-conditioned background with one exact released style adapter."""
+
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    completed = _completed_reference_composite_v2(workspace, request)
+    if completed is not None:
+        return completed
+    composite = request.composite_request
+    wrapper_receipt_path = workspace / "reference-conditioned-receipt.json"
+    recovered_composite = _completed_composite(workspace, composite)
+    if recovered_composite is not None:
+        pointer = request.visual_reference.reference_member
+        recovered_reference = _load_exact_handoff_input(
+            workspace / pointer.member_path,
+            size_bytes=pointer.size_bytes,
+            sha256=pointer.sha256,
+        )
+        _validate_reference_png(recovered_reference)
+        verify_style_adapter_release(style_adapter_store_root, request.style_adapter)
+        return _write_reference_conditioned_receipt_v2(
+            workspace=workspace,
+            request=request,
+            composite_receipt=recovered_composite,
+        )
+    output_paths = (
+        workspace / composite.generation.output_member,
+        workspace / "generation-receipt.json",
+        workspace / composite.final_output_member,
+        workspace / "composite-receipt.json",
+        wrapper_receipt_path,
+    )
+    if any(path.exists() or path.is_symlink() for path in output_paths):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    overlay_path = workspace / composite.overlay.member_path
+    _require_handoff_input(overlay_path, composite.overlay.size_bytes, composite.overlay.sha256)
+    reference_pointer = request.visual_reference.reference_member
+    reference_png = _load_exact_handoff_input(
+        workspace / reference_pointer.member_path,
+        size_bytes=reference_pointer.size_bytes,
+        sha256=reference_pointer.sha256,
+    )
+    _validate_reference_png(reference_png)
+    style_adapter_directory = verify_style_adapter_release(
+        style_adapter_store_root,
+        request.style_adapter,
+    )
+    started_clock = time.monotonic_ns()
+    generation = _generate_background_from_reference_with_style(
+        model_store_root=model_store_root,
+        workspace=workspace,
+        request=composite.generation,
+        reference_png=reference_png,
+        strength=request.conditioning.strength,
+        style_adapter_directory=style_adapter_directory,
+        lora_scale=request.style_adapter.lora_scale,
+        backend=backend,
+        output_mode=0o640,
+    )
+    composite_receipt = _complete_composite_handoff(
+        workspace=workspace,
+        request=composite,
+        generation=generation,
+        started_clock=started_clock,
+    )
+    return _write_reference_conditioned_receipt_v2(
+        workspace=workspace,
+        request=request,
+        composite_receipt=composite_receipt,
+    )
+
+
 def _write_reference_conditioned_receipt(
     *,
     workspace: Path,
@@ -364,6 +511,37 @@ def _write_reference_conditioned_receipt(
     return receipt
 
 
+def _write_reference_conditioned_receipt_v2(
+    *,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV2,
+    composite_receipt: LocalImageCompositeReceipt,
+) -> LocalImageReferenceConditionedCompositeReceiptV2:
+    wrapper_receipt_path = workspace / "reference-conditioned-receipt.json"
+    completed_at = datetime.now(UTC)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/2.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+    }
+    receipt = LocalImageReferenceConditionedCompositeReceiptV2.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+    validate_reference_conditioned_receipt_v2(request, receipt)
+    value = receipt.model_dump(mode="json")
+    validate_contract("reference-conditioned-composite-receipt-v2", value)
+    _write_exclusive(
+        wrapper_receipt_path,
+        (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+        mode=0o640,
+    )
+    return receipt
+
+
 def reuse_reference_conditioned_composite_handoff(
     *,
     workspace: Path,
@@ -372,6 +550,16 @@ def reuse_reference_conditioned_composite_handoff(
     _require_absolute_no_symlink_components(workspace)
     _require_handoff_directory(workspace)
     return _completed_reference_composite(workspace, request)
+
+
+def reuse_reference_conditioned_composite_handoff_v2(
+    *,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV2,
+) -> LocalImageReferenceConditionedCompositeReceiptV2 | None:
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    return _completed_reference_composite_v2(workspace, request)
 
 
 def _complete_composite_handoff(
@@ -555,6 +743,77 @@ def _generate_background_from_reference(
     return receipt
 
 
+def _generate_background_from_reference_with_style(
+    *,
+    model_store_root: Path,
+    workspace: Path,
+    request: LocalImageGenerationRequest,
+    reference_png: bytes,
+    strength: float,
+    style_adapter_directory: Path,
+    lora_scale: float,
+    backend: StyleReferenceImageBackend,
+    output_mode: int,
+) -> LocalImageGenerationReceipt:
+    manifest, model_directory = verify_model_revision(model_store_root, request.model)
+    if manifest.state != "APPROVED":
+        raise ProviderError("LOCAL_IMAGE_MODEL_UNAVAILABLE")
+    output_path = workspace / request.output_member
+    receipt_path = workspace / "generation-receipt.json"
+    if (
+        output_path.exists()
+        or output_path.is_symlink()
+        or receipt_path.exists()
+        or receipt_path.is_symlink()
+    ):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    started = datetime.now(UTC)
+    started_clock = time.monotonic_ns()
+    generated = backend.generate_from_reference_with_style(
+        model_directory=model_directory,
+        style_adapter_directory=style_adapter_directory,
+        request=request,
+        reference_png=reference_png,
+        strength=strength,
+        lora_scale=lora_scale,
+    )
+    completed = datetime.now(UTC)
+    duration_ms = max(1, (time.monotonic_ns() - started_clock) // 1_000_000)
+    if duration_ms > request.timeout_seconds * 1000:
+        raise ProviderError("LOCAL_IMAGE_PROVIDER_TIMEOUT")
+    _validate_png(generated.png_bytes)
+    _write_exclusive(output_path, generated.png_bytes, mode=output_mode)
+    output = LocalImageOutput(
+        size_bytes=len(generated.png_bytes),
+        sha256="sha256:" + hashlib.sha256(generated.png_bytes).hexdigest(),
+    )
+    body = {
+        "schema_version": "local-image-generation-receipt/1.0",
+        "request_id": request.request_id,
+        "request_sha256": request.request_sha256,
+        "model": request.model.model_dump(mode="json"),
+        "prompt_sha256": request.prompt_sha256,
+        "negative_prompt_sha256": request.negative_prompt_sha256,
+        "seed": request.seed,
+        "sampler": request.sampler.model_dump(mode="json"),
+        "output": output.model_dump(mode="json"),
+        "runtime": generated.runtime.model_dump(mode="json"),
+        "started_at": started.isoformat().replace("+00:00", "Z"),
+        "completed_at": completed.isoformat().replace("+00:00", "Z"),
+        "duration_ms": duration_ms,
+    }
+    receipt = LocalImageGenerationReceipt.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+    receipt_value = receipt.model_dump(mode="json")
+    validate_contract("generation-receipt", receipt_value)
+    receipt_bytes = (
+        json.dumps(receipt_value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+    _write_exclusive(receipt_path, receipt_bytes, mode=output_mode)
+    return receipt
+
+
 def _require_handoff_directory(path: Path) -> None:
     try:
         metadata = path.lstat()
@@ -660,6 +919,34 @@ def _completed_reference_composite(
         validate_contract("reference-conditioned-composite-receipt", value)
         receipt = LocalImageReferenceConditionedCompositeReceipt.model_validate(value)
         validate_reference_conditioned_receipt(request, receipt)
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    composite = _completed_composite(workspace, request.composite_request)
+    if composite is None or composite != receipt.composite_receipt:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    pointer = request.visual_reference.reference_member
+    reference_png = _load_exact_handoff_input(
+        workspace / pointer.member_path,
+        size_bytes=pointer.size_bytes,
+        sha256=pointer.sha256,
+    )
+    _validate_reference_png(reference_png)
+    return receipt
+
+
+def _completed_reference_composite_v2(
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV2,
+) -> LocalImageReferenceConditionedCompositeReceiptV2 | None:
+    receipt_path = workspace / "reference-conditioned-receipt.json"
+    if not receipt_path.exists() and not receipt_path.is_symlink():
+        return None
+    _require_handoff_output(receipt_path)
+    value = load_json_object(receipt_path, maximum_bytes=512 * 1024)
+    try:
+        validate_contract("reference-conditioned-composite-receipt-v2", value)
+        receipt = LocalImageReferenceConditionedCompositeReceiptV2.model_validate(value)
+        validate_reference_conditioned_receipt_v2(request, receipt)
     except Exception as exc:
         raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
     composite = _completed_composite(workspace, request.composite_request)

@@ -11,6 +11,7 @@ from eom_image_contracts import (
     LocalImageCompositeRequest,
     LocalImageGenerationRequest,
     LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditionedCompositeRequestV2,
     validate_contract,
 )
 
@@ -22,9 +23,11 @@ from eom_image_provider.provider import (
     generate_background,
     generate_composite_handoff,
     generate_reference_conditioned_composite_handoff,
+    generate_reference_conditioned_composite_handoff_v2,
     load_json_object,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
+    reuse_reference_conditioned_composite_handoff_v2,
 )
 from eom_image_provider.reference_acquisition import (
     VisualReferenceAcquisitionError,
@@ -52,6 +55,12 @@ def _parser() -> argparse.ArgumentParser:
     conditioned.add_argument("--model-store-root", type=Path, required=True)
     conditioned.add_argument("--workspace", type=Path, required=True)
     conditioned.add_argument("--gpu-lock", type=Path, required=True)
+    styled = subparsers.add_parser("generate-reference-style-composite")
+    styled.add_argument("--request", type=Path, required=True)
+    styled.add_argument("--model-store-root", type=Path, required=True)
+    styled.add_argument("--style-adapter-store-root", type=Path, required=True)
+    styled.add_argument("--workspace", type=Path, required=True)
+    styled.add_argument("--gpu-lock", type=Path, required=True)
     reference = subparsers.add_parser("acquire-reference")
     reference.add_argument("--command", type=Path, required=True)
     reference.add_argument("--workspace", type=Path, required=True)
@@ -124,6 +133,24 @@ def main() -> None:
                         backend=Ssd1bDiffusersBackend(),
                     )
             result = conditioned_receipt.model_dump(mode="json")
+        elif args.operation == "generate-reference-style-composite":
+            value = load_json_object(args.request, maximum_bytes=512 * 1024)
+            validate_contract("reference-conditioned-composite-request-v2", value)
+            styled_request = LocalImageReferenceConditionedCompositeRequestV2.model_validate(value)
+            styled_receipt = reuse_reference_conditioned_composite_handoff_v2(
+                workspace=args.workspace,
+                request=styled_request,
+            )
+            if styled_receipt is None:
+                with acquire_gpu_lease(args.gpu_lock):
+                    styled_receipt = generate_reference_conditioned_composite_handoff_v2(
+                        model_store_root=args.model_store_root,
+                        style_adapter_store_root=args.style_adapter_store_root,
+                        workspace=args.workspace,
+                        request=styled_request,
+                        backend=Ssd1bDiffusersBackend(),
+                    )
+            result = styled_receipt.model_dump(mode="json")
         elif args.operation == "acquire-reference":
             command, intent = load_acquisition_inputs(
                 command_path=args.command,

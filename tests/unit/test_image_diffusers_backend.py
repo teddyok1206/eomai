@@ -41,12 +41,26 @@ class _Pipeline:
         self.unet = SimpleNamespace(dtype=dtype)
         self.transferred_to: str | None = None
         self.last_kwargs: dict[str, object] | None = None
+        self.lora_load: tuple[str, str, str] | None = None
+        self.adapters: tuple[list[str], list[float]] | None = None
 
     def set_progress_bar_config(self, *, disable: bool) -> None:
         assert disable is True
 
     def to(self, device: str) -> None:
         self.transferred_to = device
+
+    def load_lora_weights(
+        self,
+        path: str,
+        *,
+        weight_name: str,
+        adapter_name: str,
+    ) -> None:
+        self.lora_load = (path, weight_name, adapter_name)
+
+    def set_adapters(self, names: list[str], *, adapter_weights: list[float]) -> None:
+        self.adapters = (names, adapter_weights)
 
     def __call__(self, **kwargs: object) -> SimpleNamespace:
         self.last_kwargs = kwargs
@@ -273,6 +287,36 @@ def test_ssd1b_reference_conditioning_uses_exact_image_strength_prompt_and_seed(
     assert loaded.last_kwargs["prompt"] == _request().prompt
     assert loaded.last_kwargs["negative_prompt"] == _request().negative_prompt
     assert loaded.last_kwargs["image"].size == (800, 504)
+
+
+def test_ssd1b_style_reference_conditioning_loads_exact_lora_and_keeps_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _torch, pipeline_class = _runtime_modules(monkeypatch, token_count=20)
+    adapter_directory = tmp_path / "adapter"
+
+    generated = Ssd1bDiffusersBackend().generate_from_reference_with_style(
+        model_directory=tmp_path,
+        style_adapter_directory=adapter_directory,
+        request=_request(),
+        reference_png=_reference_png(),
+        strength=0.35,
+        lora_scale=0.8,
+    )
+
+    assert generated.png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    loaded = pipeline_class.from_pretrained(str(tmp_path))
+    assert loaded.lora_load == (
+        str(adapter_directory),
+        "adapter_model.safetensors",
+        "eom_assessment_style",
+    )
+    assert loaded.adapters == (["eom_assessment_style"], [0.8])
+    assert loaded.last_kwargs is not None
+    assert loaded.last_kwargs["prompt"] == _request().prompt
+    assert loaded.last_kwargs["negative_prompt"] == _request().negative_prompt
+    assert loaded.last_kwargs["strength"] == 0.35
 
 
 def test_lora_trainer_requires_exact_deterministic_cublas_workspace(
