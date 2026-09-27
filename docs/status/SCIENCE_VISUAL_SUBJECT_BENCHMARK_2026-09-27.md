@@ -2,7 +2,7 @@
 
 ## Outcome
 
-`ROUTE_COVERAGE_PASS / VISUAL_QUALITY_PARTIAL / ADAPTER_ACTIVATION_FORBIDDEN`
+`ROUTE_COVERAGE_PASS / VISUAL_QUALITY_PARTIAL / GLOBAL_ADAPTER_ACTIVATION_FORBIDDEN`
 
 The occurrence-backed, accepted 520-item science corpus contains 537 visual observations. The
 subject inventory closes that population as 514 covered observations plus 23 explicit text-only or
@@ -67,16 +67,68 @@ clutter, composition artifacts, and insufficient exam-style specificity.
 - review file-set manifest SHA-256:
   `sha256:3d781efc05edfe3362252e970addff7aa3d345f704a29e35553853cebd5275f8`.
 
+## Three-seed stability review
+
+The 18 raster-generating subjects were rendered again with two additional fixed seeds, producing
+72 new BASE/ADAPTER PNGs. Together with the initial seed, each subject therefore has three human
+visual decisions. The successor plan, output set, and review are immutable Orchestrator-owned
+Artifacts; no worker accessed PostgreSQL or NAS.
+
+| Stability | Count | Decision |
+| --- | ---: | --- |
+| `STABLE_ADAPTER_PREFERRED` | 2 | plant organism and volcano may enter a separate bounded production canary |
+| `STABLE_BASE_PREFERRED` | 2 | galaxy/nebula and landscape/terrain remain base-only |
+| `NEITHER_ACCEPTABLE` | 2 | consumer science product and safety equipment require route/data/prompt work |
+| `MIXED` | 12 | no adapter selection; refine and re-evaluate rather than cherry-pick a seed |
+
+The result forbids global adapter activation. A favorable single image or seed is not an
+activation gate.
+
+- multiseed plan: `imgscisubjectmultiseed_78792e2ad9bf73ea19892fd3954b15bd`;
+- plan semantic SHA-256:
+  `sha256:e77599e69eebfd5a8a97c2045c60c7cbe6aeb907a289783c0d98670065d72731`;
+- plan Artifact / Revision: `artifact_187fc040d12847c3b2dc9e9e2fd76641` /
+  `rev_503c9609970a46f989fd4191dfc2e0a1`;
+- run: `imgscisubjectmultiseedrun_e86f54f8ee98150d984e2dc254edcf36`;
+- result semantic SHA-256:
+  `sha256:b67a68a939eeaeaa79ac2ae85883985e802c41f734359827809d81655afb6824`;
+- result Artifact / Revision: `artifact_e268bf5bfcf0438ab956bedbff4a0b8c` /
+  `rev_b01b6ebed2944fdc8dcfb60f9fdc5b96`;
+- result file-set manifest SHA-256:
+  `sha256:c831c2d39c70cf0d0e5cd85d91bab27387eb931e2e21471cf439ced6af1d600f`;
+- multiseed review: `imgscisubjectmultiseedreview_69b7f41e1f117279b7084b6fb37f3404`;
+- review semantic SHA-256:
+  `sha256:5e001944e6d3da5b00c77ee649900d2e6ead0afa55a63437ab5c07d6ae5f242b`;
+- review Artifact / Revision: `artifact_4f4408a0a3304edc9e7cc38ee299ab80` /
+  `rev_b2a69a5df00543e8b95fc1461e10bf9d`;
+- review member SHA-256:
+  `sha256:251652bce381b7f09822662ab733cc08d779091e0c158d3ff39d8a91af889944`;
+- review file-set manifest SHA-256:
+  `sha256:1ffa65502ec8852f7a974f349125f9c29173d1de439b39ae907cb09d8f74e72e`.
+
+## Production SVG and HWPX boundary
+
+The deterministic benchmark PNGs remain diagnostics. A separate focused regression now exercises
+all 14 supported science-diagram primitives through the production safe-SVG sanitizer, pinned font
+set, `rsvg-convert 2.58`, and 800×500 PNG validator. The 73 fixed `PYTHON_SVG`/`HYBRID` subject
+definitions use 13 of those primitives; `TIMELINE` remains the supported fallback for timeline
+observations. All 14 representative outputs were valid and byte-distinct.
+
+The existing HWPX V2/V3 renderer regression was also rerun for one- and two-image documents. It
+verified exact PNG bytes in package-internal `BinData` members, `isEmbeded=1`, no external file
+path relationship, no image-placeholder text, and editable `(가)/(나)` text for two-image layouts.
+This proves the production composition and packaging boundary; it is not a claim that all 69
+diagnostic subjects have individually passed a human quality review.
+
 ## Next gates
 
-1. Re-evaluate all 18 raster-generating subjects with additional fixed seeds through an additive
-   successor contract. A one-seed preference cannot authorize activation.
-2. Exercise representative deterministic subjects through the real worker-authored safe-SVG and
-   Catalog compositor path. Route diagnostics must not be promoted as production fixtures.
-3. Keep base-only production for base-preferred subjects. Refine prompts and augment reviewed,
-   rights-approved training data for the six subjects where neither variant is acceptable.
-4. Only after representative Item, Preview, and package-internal HWPX canaries pass may a successor
-   provider binding be considered. Rollback must select the existing base-only binding.
+1. Keep global production on the base-only binding. The three-seed review forbids global adapter
+   activation.
+2. Keep stable-base subjects base-only. Refine prompts, dataset coverage, or route selection for the
+   12 mixed and two neither-acceptable subjects, then re-evaluate through an additive successor.
+3. If plant and volcano are promoted, use a subject-gated successor binding and bounded Item,
+   Preview, and package-internal HWPX canary. Do not reinterpret the current global binding.
+4. Rollback must select the existing base-only immutable provider binding.
 
 No benchmark or review result activates the LoRA adapter, changes a provider binding, rewrites the
 520 accepted analyses, or requires one HWPX build per subject.
