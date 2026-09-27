@@ -13,6 +13,7 @@ import eom_catalog_service.local_image_adapter as local_image_adapter
 import pytest
 from eom_catalog_service.local_image_adapter import (
     LocalImageAdapterError,
+    _build_reference_conditioned_request,
     _build_request,
     load_local_image_provider_binding,
 )
@@ -28,7 +29,13 @@ from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_RASTER_REQUIREMENTS,
     LocalGpuPromptPlan,
 )
-from eom_image_contracts import LocalImageProviderBinding, content_sha256
+from eom_image_contracts import (
+    LocalImageProviderBinding,
+    LocalImageVisualReferencePointer,
+    VisualReferenceBundleManifestPointer,
+    VisualReferencePngArtifactPointer,
+    content_sha256,
+)
 from eom_workflow.models import (
     CONTENT_TEAM_ILLUSTRATION_PROMPT_PREFIX,
     GeneratedVectorDrawingV5,
@@ -114,6 +121,30 @@ def _hybrid_drawing() -> GeneratedVectorDrawingV6:
         }
     )
     return GeneratedVectorDrawingV6.model_validate(value)
+
+
+def _reference_pointer(
+    *, reference_hash: str = "sha256:" + "9" * 64
+) -> LocalImageVisualReferencePointer:
+    artifact_id = "artifact_" + "a" * 32
+    revision_id = "rev_" + "b" * 32
+    return LocalImageVisualReferencePointer(
+        bundle_id="imgrefbundle_" + "c" * 32,
+        bundle_revision_id="imgrefbundlerev_" + "d" * 32,
+        bundle_manifest=VisualReferenceBundleManifestPointer(
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+            sha256="sha256:" + "e" * 64,
+            size_bytes=1000,
+        ),
+        primary_reference_id="imgref_" + "f" * 32,
+        reference_member=VisualReferencePngArtifactPointer(
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+            sha256=reference_hash,
+            size_bytes=2000,
+        ),
+    )
 
 
 def test_binding_loader_pins_root_controlled_bytes(tmp_path: Path) -> None:
@@ -210,6 +241,40 @@ def test_composite_request_is_deterministic_and_input_pinned(tmp_path: Path) -> 
         overlay_path=path,
     )
     assert changed_request.generation.request_id != first.generation.request_id
+
+
+def test_reference_conditioning_wraps_the_exact_prompt_and_pins_reference_identity(
+    tmp_path: Path,
+) -> None:
+    overlay_path = tmp_path / "generated-overlay.png"
+    overlay_path.write_bytes(_overlay_png())
+    overlay_path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(
+        update={"alt_text": "one fox standing beside sparse grass"}
+    )
+    composite = _build_request(
+        workflow_id="workflow_" + "4" * 32,
+        result_revision_id="rev_" + "5" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=LocalImageProviderBinding.model_validate(_binding_value()),
+        overlay_path=overlay_path,
+        prompt_contract="ASSESSMENT_LINE_ART_V1",
+    )
+
+    first = _build_reference_conditioned_request(composite, _reference_pointer())
+    changed = _build_reference_conditioned_request(
+        composite,
+        _reference_pointer(reference_hash="sha256:" + "8" * 64),
+    )
+
+    assert first.composite_request == composite
+    assert first.composite_request.generation.prompt == composite.generation.prompt
+    assert (
+        first.composite_request.generation.negative_prompt == composite.generation.negative_prompt
+    )
+    assert first.conditioning.strength == 0.35
+    assert first.request_sha256 != changed.request_sha256
 
 
 def test_prompt_policy_revision_is_part_of_provider_request_identity(

@@ -22,9 +22,14 @@ from eom_image_contracts import (
     LocalImageGenerationRequest,
     LocalImageOverlayInput,
     LocalImageProviderBinding,
+    LocalImageReferenceConditionedCompositeReceipt,
+    LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditioning,
+    LocalImageVisualReferencePointer,
     content_sha256,
     text_sha256,
     validate_contract,
+    validate_reference_conditioned_receipt,
 )
 from eom_workflow.models import (
     GeneratedVectorDrawingV5,
@@ -112,6 +117,17 @@ class LocalImageAdapterError(RuntimeError):
 class LocalImageMaterialization:
     request: LocalImageCompositeRequest
     receipt: LocalImageCompositeReceipt
+    background_path: Path
+    final_path: Path
+    receipt_path: Path
+    unit_name: str
+    prompt_policy_revision: str
+
+
+@dataclass(frozen=True)
+class ReferenceConditionedLocalImageMaterialization:
+    request: LocalImageReferenceConditionedCompositeRequest
+    receipt: LocalImageReferenceConditionedCompositeReceipt
     background_path: Path
     final_path: Path
     receipt_path: Path
@@ -208,6 +224,98 @@ class FixedLocalImageProviderAdapter:
             unit_name=unit_name,
             prompt_policy_revision=local_gpu_prompt_policy_revision(prompt_contract),
         )
+
+    def generate_with_reference(
+        self,
+        *,
+        workflow_id: str,
+        result_revision_id: str,
+        drawing_hash: str,
+        drawing: GeneratedVectorDrawingV6,
+        overlay_path: Path,
+        binding: LocalImageProviderBinding,
+        output_directory: Path,
+        prompt_contract: LocalGpuPromptContract,
+        visual_reference: LocalImageVisualReferencePointer,
+        reference_path: Path,
+    ) -> ReferenceConditionedLocalImageMaterialization:
+        """Stage one exact reference without changing the reviewed generation prompt."""
+
+        composite = _build_request(
+            workflow_id=workflow_id,
+            result_revision_id=result_revision_id,
+            drawing_hash=drawing_hash,
+            drawing=drawing,
+            binding=binding,
+            overlay_path=overlay_path,
+            prompt_contract=prompt_contract,
+        )
+        request = _build_reference_conditioned_request(composite, visual_reference)
+        provider_gid = _provider_group_id(self.settings.local_image_provider_group)
+        instance_id = "imgreq_" + request.request_sha256.removeprefix("sha256:")[:32]
+        workspace = _prepare_workspace(
+            self.settings.local_image_workspace_root,
+            instance_id,
+            provider_gid,
+        )
+        _stage_exact_file(
+            workspace / "request.json",
+            _canonical_json(request.model_dump(mode="json")),
+            provider_gid,
+        )
+        _stage_exact_source(workspace / OVERLAY_MEMBER, overlay_path, provider_gid)
+        reference_target = workspace / visual_reference.reference_member.member_path
+        reference_metadata = _require_regular(
+            reference_path,
+            maximum_bytes=8 * 1024 * 1024,
+            mode=0o640,
+        )
+        if (
+            reference_metadata.st_size != visual_reference.reference_member.size_bytes
+            or sha256_file(reference_path) != visual_reference.reference_member.sha256
+        ):
+            raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+        _prepare_input_directory(reference_target.parent, workspace, provider_gid)
+        _stage_exact_source(reference_target, reference_path, provider_gid)
+        conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
+        unit_name = f"eom-image-reference-provider@{instance_id}.service"
+        if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
+            _run_fixed_unit(unit_name, binding.timeout_seconds)
+        receipt = _validate_reference_handoff(
+            workspace,
+            request,
+            provider_gid,
+        )
+        _copy_result(workspace / BACKGROUND_MEMBER, output_directory / BACKGROUND_MEMBER)
+        _copy_result(workspace / FINAL_MEMBER, output_directory / FINAL_MEMBER)
+        receipt_path = output_directory / RECEIPT_MEMBER
+        _copy_result(conditioned_receipt_path, receipt_path)
+        return ReferenceConditionedLocalImageMaterialization(
+            request=request,
+            receipt=receipt,
+            background_path=output_directory / BACKGROUND_MEMBER,
+            final_path=output_directory / FINAL_MEMBER,
+            receipt_path=receipt_path,
+            unit_name=unit_name,
+            prompt_policy_revision=local_gpu_prompt_policy_revision(prompt_contract),
+        )
+
+
+def _build_reference_conditioned_request(
+    composite: LocalImageCompositeRequest,
+    visual_reference: LocalImageVisualReferencePointer,
+) -> LocalImageReferenceConditionedCompositeRequest:
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/1.0",
+        "composite_request": composite.model_dump(mode="json"),
+        "visual_reference": visual_reference.model_dump(mode="json"),
+        "conditioning": LocalImageReferenceConditioning().model_dump(mode="json"),
+    }
+    request = LocalImageReferenceConditionedCompositeRequest.model_validate(
+        {**body, "request_sha256": content_sha256(body)}
+    )
+    validate_contract("reference-conditioned-composite-request", request.model_dump(mode="json"))
+    return request
 
 
 def _build_request(
@@ -404,6 +512,47 @@ def _validate_handoff(
     return receipt
 
 
+def _validate_reference_handoff(
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequest,
+    provider_gid: int,
+) -> LocalImageReferenceConditionedCompositeReceipt:
+    try:
+        provider_uid = pwd.getpwnam("eom-image").pw_uid
+    except KeyError as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+    receipt_path = workspace / "reference-conditioned-receipt.json"
+    value = _load_json(receipt_path, maximum_bytes=256 * 1024)
+    try:
+        validate_contract("reference-conditioned-composite-receipt", value)
+        receipt = LocalImageReferenceConditionedCompositeReceipt.model_validate(value)
+        validate_reference_conditioned_receipt(request, receipt)
+    except Exception as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    composite = _validate_handoff(workspace, request.composite_request, provider_gid)
+    if receipt.composite_receipt != composite:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    reference = request.visual_reference.reference_member
+    reference_path = workspace / reference.member_path
+    metadata = _require_regular(
+        reference_path,
+        maximum_bytes=8 * 1024 * 1024,
+        mode=INPUT_MODE,
+        uid=os.geteuid(),
+        gid=provider_gid,
+    )
+    if metadata.st_size != reference.size_bytes or sha256_file(reference_path) != reference.sha256:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    _require_regular(
+        receipt_path,
+        maximum_bytes=256 * 1024,
+        mode=OUTPUT_MODE,
+        uid=provider_uid,
+        gid=provider_gid,
+    )
+    return receipt
+
+
 def _prepare_workspace(root: Path, request_id: str, provider_gid: int) -> Path:
     try:
         root_metadata = root.lstat()
@@ -435,6 +584,30 @@ def _prepare_workspace(root: Path, request_id: str, provider_gid: int) -> Path:
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_HANDOFF_INVALID")
     return workspace
+
+
+def _prepare_input_directory(path: Path, workspace: Path, provider_gid: int) -> None:
+    try:
+        path.relative_to(workspace)
+        if not path.exists() and not path.is_symlink():
+            path.mkdir(mode=0o700, parents=True)
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | os.O_CLOEXEC
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != os.geteuid():
+                raise OSError("unsafe local image input directory")
+            os.fchown(descriptor, -1, provider_gid)
+            os.fchmod(descriptor, 0o750)
+        finally:
+            os.close(descriptor)
+    except (OSError, ValueError) as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_HANDOFF_INVALID") from exc
 
 
 def _stage_exact_file(path: Path, payload: bytes, provider_gid: int) -> None:
