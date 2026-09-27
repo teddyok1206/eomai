@@ -1,0 +1,255 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "case_kind": {
+          "enum": [
+            "QUALITY",
+            "ROUTE",
+            "GPU_POLICY_NEGATIVE"
+          ]
+        },
+        "expected_outcome": {
+          "enum": [
+            "BASE_ADAPTER_PAIR",
+            "DETERMINISTIC_RENDERED",
+            "POLICY_REJECTED"
+          ]
+        },
+        "negative_prompt_en": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "pattern": "^[ -~]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "negative_prompt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_en": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 20,
+              "pattern": "^[ -~]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "render_route": {
+          "enum": [
+            "BLOCKED",
+            "HYBRID",
+            "LORA_RASTER",
+            "PYTHON_SVG"
+          ]
+        },
+        "renderer_primitive": {
+          "anyOf": [
+            {
+              "enum": [
+                "APPARATUS",
+                "AXIS_PLOT",
+                "CELL_CROSS_SECTION",
+                "CIRCUIT",
+                "GENERIC_LABELLED_DIAGRAM",
+                "GEOLOGIC_SECTION",
+                "MAP_BOUNDARY",
+                "ORBITAL_SYSTEM",
+                "PARTICLE_SYSTEM",
+                "RAY_DIAGRAM",
+                "VECTOR_FIELD"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "subject_id",
+        "render_route",
+        "case_kind",
+        "prompt_en",
+        "prompt_sha256",
+        "negative_prompt_en",
+        "negative_prompt_sha256",
+        "seed",
+        "renderer_primitive",
+        "expected_outcome"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-plan/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_manifest": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "base_model_manifest": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/case"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "guidance_scale_milli": {
+      "maximum": 20000,
+      "minimum": 1000,
+      "type": "integer"
+    },
+    "height_px": {
+      "const": 500
+    },
+    "inference_steps": {
+      "maximum": 100,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "plan_id": {
+      "pattern": "^imgscisubjectbenchmark_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-benchmark-plan/1.0"
+    },
+    "subject_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "subject_inventory_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "width_px": {
+      "const": 800
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "subject_inventory",
+    "subject_inventory_sha256",
+    "base_model_manifest",
+    "adapter_manifest",
+    "width_px",
+    "height_px",
+    "inference_steps",
+    "guidance_scale_milli",
+    "cases",
+    "created_at",
+    "created_by",
+    "plan_sha256"
+  ],
+  "title": "EOM Science Visual Subject Benchmark Plan V1",
+  "type": "object"
+}

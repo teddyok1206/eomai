@@ -1,0 +1,382 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "omission": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "NO_RENDERED_SUBJECT",
+            "TEXT_ONLY_PATTERN"
+          ]
+        },
+        "visual_pattern_id": {
+          "pattern": "^visualpattern_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "visual_pattern_id",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "composition_summary_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "extraction_result": {
+          "$ref": "#/$defs/artifactMember"
+        },
+        "item_proposal_id": {
+          "pattern": "^itemproposal_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "reconstruction_guidance_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "rendering_mode": {
+          "enum": [
+            "MIXED",
+            "RASTER",
+            "TEXT_ONLY",
+            "VECTOR_LIKE"
+          ]
+        },
+        "representation_kind": {
+          "enum": [
+            "APPARATUS",
+            "BAR_GRAPH",
+            "COMPOSITE",
+            "CROSS_SECTION",
+            "DIAGRAM",
+            "FLOW",
+            "LINE_GRAPH",
+            "MAP",
+            "NONE",
+            "OTHER_OBSERVED",
+            "PARTICLE_MODEL",
+            "PHOTOGRAPH",
+            "SCATTER_PLOT",
+            "TABLE",
+            "TIMELINE"
+          ]
+        },
+        "source_anchor_ids": {
+          "items": {
+            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "visual_pattern_id": {
+          "pattern": "^visualpattern_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_revision_id",
+        "extraction_result",
+        "item_proposal_id",
+        "visual_pattern_id",
+        "source_anchor_ids",
+        "representation_kind",
+        "rendering_mode",
+        "composition_summary_sha256",
+        "reconstruction_guidance_sha256"
+      ],
+      "type": "object"
+    },
+    "subject": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases_ko": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "blocked_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "COPYRIGHT_REPRODUCTION_RISK",
+                "NO_SAFE_RENDER_ROUTE",
+                "POLICY_PROHIBITED_CONTENT"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "family": {
+          "enum": [
+            "ABSTRACT_SCIENCE_MODEL",
+            "EARTH_SPACE",
+            "LAB_APPARATUS",
+            "LIVING_ORGANISM",
+            "MICROSCOPIC_STRUCTURE",
+            "PHYSICAL_OBJECT",
+            "REAL_WORLD_SCENE"
+          ]
+        },
+        "label_en": {
+          "maxLength": 160,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        "label_ko": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "raster_prompt_en": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 20,
+              "pattern": "^[ -~]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "raster_prompt_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/sourceReference"
+          },
+          "maxItems": 512,
+          "minItems": 1,
+          "type": "array"
+        },
+        "render_route": {
+          "enum": [
+            "BLOCKED",
+            "HYBRID",
+            "LORA_RASTER",
+            "PYTHON_SVG"
+          ]
+        },
+        "renderer_primitive": {
+          "anyOf": [
+            {
+              "enum": [
+                "APPARATUS",
+                "AXIS_PLOT",
+                "CELL_CROSS_SECTION",
+                "CIRCUIT",
+                "GENERIC_LABELLED_DIAGRAM",
+                "GEOLOGIC_SECTION",
+                "MAP_BOUNDARY",
+                "ORBITAL_SYSTEM",
+                "PARTICLE_SYSTEM",
+                "RAY_DIAGRAM",
+                "VECTOR_FIELD"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "subject_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "subject_key",
+        "label_ko",
+        "label_en",
+        "aliases_ko",
+        "family",
+        "render_route",
+        "renderer_primitive",
+        "raster_prompt_en",
+        "raster_prompt_sha256",
+        "blocked_reason",
+        "references"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-inventory/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "covered_visual_observation_count": {
+      "maximum": 1000000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "inventory_id": {
+      "pattern": "^imgscisubjectinventory_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "inventory_revision_id": {
+      "pattern": "^imgscisubjectinventoryrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "inventory_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "omissions": {
+      "items": {
+        "$ref": "#/$defs/omission"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "pattern_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "previous_revision_id": {
+      "anyOf": [
+        {
+          "pattern": "^imgscisubjectinventoryrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision_number": {
+      "maximum": 100000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-inventory/1.0"
+    },
+    "source_item_count": {
+      "maximum": 1000000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "source_visual_observation_count": {
+      "maximum": 1000000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "subjects": {
+      "items": {
+        "$ref": "#/$defs/subject"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "target_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "inventory_id",
+    "inventory_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "training_authorization",
+    "pattern_inventory",
+    "target_set_sha256",
+    "source_item_count",
+    "source_visual_observation_count",
+    "covered_visual_observation_count",
+    "subjects",
+    "omissions",
+    "created_at",
+    "created_by",
+    "inventory_sha256"
+  ],
+  "title": "EOM Science Visual Subject Inventory V1",
+  "type": "object"
+}

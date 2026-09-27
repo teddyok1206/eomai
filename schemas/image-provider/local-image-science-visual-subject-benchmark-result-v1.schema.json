@@ -1,0 +1,193 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "outcome": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "BASE_ADAPTER_PAIR",
+            "DETERMINISTIC_RENDERED",
+            "POLICY_REJECTED"
+          ]
+        },
+        "stable_code": {
+          "anyOf": [
+            {
+              "const": "LOCAL_IMAGE_HUMAN_SUBJECT_FORBIDDEN"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "case_id",
+        "outcome",
+        "stable_code"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "maximum": 67108864,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "case_id": {
+          "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 500
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "relative_path": {
+          "pattern": "^outputs/imgscisubjectcase_[0-9a-f]{32}-(adapter|base|deterministic)\\.png$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "variant": {
+          "enum": [
+            "ADAPTER",
+            "BASE",
+            "DETERMINISTIC"
+          ]
+        },
+        "width_px": {
+          "const": 800
+        }
+      },
+      "required": [
+        "case_id",
+        "variant",
+        "relative_path",
+        "media_type",
+        "bytes",
+        "sha256",
+        "width_px",
+        "height_px"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-result/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "outcomes": {
+      "items": {
+        "$ref": "#/$defs/outcome"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/output"
+      },
+      "maxItems": 768,
+      "type": "array"
+    },
+    "plan_id": {
+      "pattern": "^imgscisubjectbenchmark_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "run_id": {
+      "pattern": "^imgscisubjectbenchmarkrun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-benchmark-result/1.0"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "status": {
+      "const": "SUCCEEDED"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "plan_id",
+    "plan_sha256",
+    "command_sha256",
+    "status",
+    "outcomes",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "result_sha256"
+  ],
+  "title": "EOM Science Visual Subject Benchmark Result V1",
+  "type": "object"
+}
