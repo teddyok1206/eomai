@@ -24,7 +24,12 @@ from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageQualityEvaluationPlan,
     LocalImageQualityEvaluationResult,
+    LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditioning,
     LocalImageRuntime,
+    LocalImageVisualReferencePointer,
+    VisualReferenceBundleManifestPointer,
+    VisualReferencePngArtifactPointer,
     content_sha256,
     text_sha256,
     validate_contract,
@@ -38,7 +43,9 @@ from eom_image_provider.provider import (
     acquire_gpu_lease,
     generate_background,
     generate_composite_handoff,
+    generate_reference_conditioned_composite_handoff,
     reuse_composite_handoff,
+    reuse_reference_conditioned_composite_handoff,
     verify_model_revision,
 )
 from PIL import Image  # type: ignore[import-not-found]
@@ -82,6 +89,19 @@ def _rgba_png() -> bytes:
             b"\x89PNG\r\n\x1a\n",
             _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)),
             _chunk(b"IDAT", zlib.compress(b"".join(rows), level=9)),
+            _chunk(b"IEND", b""),
+        )
+    )
+
+
+def _reference_png() -> bytes:
+    width, height = 800, 504
+    rows = b"".join(b"\x00" + b"\xd0\xd0\xd0" * width for _ in range(height))
+    return b"".join(
+        (
+            b"\x89PNG\r\n\x1a\n",
+            _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+            _chunk(b"IDAT", zlib.compress(rows, level=9)),
             _chunk(b"IEND", b""),
         )
     )
@@ -233,6 +253,41 @@ def _composite_request(
     value = {**body, "composite_request_sha256": content_sha256(body)}
     validate_contract("composite-request", value)
     return LocalImageCompositeRequest.model_validate(value)
+
+
+def _conditioned_request(
+    manifest: LocalImageModelManifest,
+    overlay: bytes,
+    reference: bytes,
+) -> LocalImageReferenceConditionedCompositeRequest:
+    artifact_id = "artifact_" + "a" * 32
+    artifact_revision_id = "rev_" + "b" * 32
+    pointer = LocalImageVisualReferencePointer(
+        bundle_id="imgrefbundle_" + "c" * 32,
+        bundle_revision_id="imgrefbundlerev_" + "d" * 32,
+        bundle_manifest=VisualReferenceBundleManifestPointer(
+            artifact_id=artifact_id,
+            artifact_revision_id=artifact_revision_id,
+            sha256="sha256:" + "e" * 64,
+            size_bytes=1024,
+        ),
+        primary_reference_id="imgref_" + "f" * 32,
+        reference_member=VisualReferencePngArtifactPointer(
+            artifact_id=artifact_id,
+            artifact_revision_id=artifact_revision_id,
+            sha256="sha256:" + hashlib.sha256(reference).hexdigest(),
+            size_bytes=len(reference),
+        ),
+    )
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/1.0",
+        "composite_request": _composite_request(manifest, overlay).model_dump(mode="json"),
+        "visual_reference": pointer.model_dump(mode="json"),
+        "conditioning": LocalImageReferenceConditioning().model_dump(mode="json"),
+    }
+    value = {**body, "request_sha256": content_sha256(body)}
+    validate_contract("reference-conditioned-composite-request", value)
+    return LocalImageReferenceConditionedCompositeRequest.model_validate(value)
 
 
 def test_contract_resources_are_canonical_mirrors() -> None:
@@ -613,6 +668,99 @@ def test_composite_handoff_is_idempotent_and_manager_readable(
     lock_root.chmod(0o700)
     with acquire_gpu_lease(lock_root / "gpu0.lock"):
         assert reuse_composite_handoff(workspace=workspace, request=request) == first
+
+
+def test_reference_conditioned_handoff_is_pointer_pinned_and_idempotent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "reference-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference)
+    (workspace / "references/primary.png").chmod(0o440)
+    request = _conditioned_request(manifest, overlay, reference)
+    calls = 0
+
+    class ReferenceBackend:
+        def generate_from_reference(
+            self,
+            *,
+            model_directory: Path,
+            request: LocalImageGenerationRequest,
+            reference_png: bytes,
+            strength: float,
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            assert model_directory.name == "files"
+            assert reference_png == reference
+            assert strength == 0.35
+            return FakeBackend().generate(model_directory=model_directory, request=request)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda _background, _overlay: _png(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    first = generate_reference_conditioned_composite_handoff(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=ReferenceBackend(),
+    )
+    second = generate_reference_conditioned_composite_handoff(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=ReferenceBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.request_sha256 == request.request_sha256
+    assert first.visual_reference == request.visual_reference
+    assert first.composite_receipt.generation.prompt_sha256 == (
+        request.composite_request.generation.prompt_sha256
+    )
+    validate_contract("reference-conditioned-composite-receipt", first.model_dump(mode="json"))
+    assert (
+        reuse_reference_conditioned_composite_handoff(workspace=workspace, request=request) == first
+    )
+    (workspace / "reference-conditioned-receipt.json").unlink()
+    recovered = generate_reference_conditioned_composite_handoff(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=ReferenceBackend(),
+    )
+    assert calls == 1
+    assert recovered.composite_receipt == first.composite_receipt
+
+
+def test_reference_conditioned_handoff_rejects_reference_hash_drift(tmp_path: Path) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "reference-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference + b"drift")
+    (workspace / "references/primary.png").chmod(0o440)
+
+    with pytest.raises(ProviderError, match="LOCAL_IMAGE_HANDOFF_INVALID"):
+        generate_reference_conditioned_composite_handoff(
+            model_store_root=root,
+            workspace=workspace,
+            request=_conditioned_request(manifest, overlay, reference),
+            backend=FakeBackend(),  # type: ignore[arg-type]
+        )
 
 
 def test_real_compositor_preserves_background_and_applies_authoritative_overlay(

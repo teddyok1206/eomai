@@ -12,6 +12,8 @@ UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
 UNIT_TARGET=/etc/systemd/system/eom-image-provider@.service
 REFERENCE_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-acquirer@.service
 REFERENCE_UNIT_TARGET=/etc/systemd/system/eom-image-reference-acquirer@.service
+REFERENCE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-provider@.service
+REFERENCE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-provider@.service
 RUNNER_SOURCE=${REPOSITORY}/infra/systemd/eom-workflow-runner.service
 RUNNER_TARGET=/etc/systemd/system/eom-workflow-runner.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
@@ -44,7 +46,8 @@ done
 [[ -f "${BINDING_SOURCE}" && ! -L "${BINDING_SOURCE}" ]] || \
   fail "LOCAL_IMAGE_BINDING_SOURCE_INVALID"
 if systemctl list-units --type=service --state=activating,active --no-legend \
-  'eom-image-provider@*.service' 'eom-image-reference-acquirer@*.service' | grep -q .; then
+  'eom-image-provider@*.service' 'eom-image-reference-provider@*.service' \
+  'eom-image-reference-acquirer@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_PROVIDER_ACTIVE"
 fi
 
@@ -92,14 +95,19 @@ install -d -o root -g eom-image-reference -m 03770 /srv/eom/image-reference-work
 
 install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
 install -o root -g root -m 0644 "${REFERENCE_UNIT_SOURCE}" "${REFERENCE_UNIT_TARGET}"
+install -o root -g root -m 0644 \
+  "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${RUNNER_SOURCE}" "${RUNNER_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${UNIT_TARGET}"
 systemd-analyze verify "${REFERENCE_UNIT_TARGET}"
+systemd-analyze verify "${REFERENCE_PROVIDER_UNIT_TARGET}"
 cmp -s "${UNIT_SOURCE}" "${UNIT_TARGET}" || fail "LOCAL_IMAGE_UNIT_DRIFT"
 cmp -s "${REFERENCE_UNIT_SOURCE}" "${REFERENCE_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_REFERENCE_UNIT_DRIFT"
+cmp -s "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_REFERENCE_PROVIDER_UNIT_DRIFT"
 cmp -s "${RUNNER_SOURCE}" "${RUNNER_TARGET}" || fail "LOCAL_IMAGE_RUNNER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || fail "LOCAL_IMAGE_POLKIT_DRIFT"
 cmp -s "${BINDING_SOURCE}" "${BINDING_TARGET}" || fail "LOCAL_IMAGE_BINDING_DRIFT"

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import binascii
+import struct
 import sys
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -37,6 +40,7 @@ class _Pipeline:
         self.tokenizer_2 = _Tokenizer(token_count=token_count)
         self.unet = SimpleNamespace(dtype=dtype)
         self.transferred_to: str | None = None
+        self.last_kwargs: dict[str, object] | None = None
 
     def set_progress_bar_config(self, *, disable: bool) -> None:
         assert disable is True
@@ -44,7 +48,8 @@ class _Pipeline:
     def to(self, device: str) -> None:
         self.transferred_to = device
 
-    def __call__(self, **_kwargs: object) -> SimpleNamespace:
+    def __call__(self, **kwargs: object) -> SimpleNamespace:
+        self.last_kwargs = kwargs
         return SimpleNamespace(images=[_Image()])
 
 
@@ -166,13 +171,33 @@ def _runtime_modules(
     monkeypatch.setitem(
         sys.modules,
         "diffusers",
-        SimpleNamespace(DiffusionPipeline=DiffusionPipeline),
+        SimpleNamespace(
+            DiffusionPipeline=DiffusionPipeline,
+            StableDiffusionXLImg2ImgPipeline=DiffusionPipeline,
+        ),
     )
     monkeypatch.setattr(
         "eom_image_provider.diffusers_backend.metadata.version",
         lambda name: {"diffusers": "0.35.2", "transformers": "4.56.2"}[name],
     )
     return torch, DiffusionPipeline
+
+
+def _reference_png() -> bytes:
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", binascii.crc32(body))
+
+    width, height = 800, 504
+    rows = b"".join(b"\x00" + b"\xd0\xd0\xd0" * width for _ in range(height))
+    return b"".join(
+        (
+            b"\x89PNG\r\n\x1a\n",
+            chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)),
+            chunk(b"IDAT", zlib.compress(rows, level=9)),
+            chunk(b"IEND", b""),
+        )
+    )
 
 
 def test_ssd1b_uses_consumed_and_verified_float16_loader_argument(
@@ -224,6 +249,30 @@ def test_ssd1b_rejects_a_loader_that_did_not_apply_float16(
             model_directory=tmp_path,
             request=_request(),
         )
+
+
+def test_ssd1b_reference_conditioning_uses_exact_image_strength_prompt_and_seed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _torch, pipeline_class = _runtime_modules(monkeypatch, token_count=20)
+
+    generated = Ssd1bDiffusersBackend().generate_from_reference(
+        model_directory=tmp_path,
+        request=_request(),
+        reference_png=_reference_png(),
+        strength=0.35,
+    )
+
+    assert generated.png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+    assert pipeline_class.call is not None
+    # The fake loader returns the pipeline instance recorded on its class closure.
+    loaded = pipeline_class.from_pretrained(str(tmp_path))
+    assert loaded.last_kwargs is not None
+    assert loaded.last_kwargs["strength"] == 0.35
+    assert loaded.last_kwargs["prompt"] == _request().prompt
+    assert loaded.last_kwargs["negative_prompt"] == _request().negative_prompt
+    assert loaded.last_kwargs["image"].size == (800, 504)
 
 
 def test_lora_trainer_requires_exact_deterministic_cublas_workspace(

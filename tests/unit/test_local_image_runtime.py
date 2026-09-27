@@ -48,6 +48,24 @@ def test_visual_reference_acquirer_has_network_but_no_gpu_model_nas_or_repo_acce
     assert "Restart=no" in source
 
 
+def test_reference_conditioned_provider_has_gpu_but_no_network_nas_or_acquirer_access() -> None:
+    source = (ROOT / "infra/systemd/eom-image-reference-provider@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image" in source
+    assert "eom-local-image generate-reference-composite" in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "PrivateNetwork=true" in source
+    assert "DevicePolicy=closed" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadWritePaths=/srv/eom/image-workspaces/%i" in source
+    assert "InaccessiblePaths=/srv/eom/image-reference-workspaces" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock() -> None:
     source = (ROOT / "infra/systemd/eom-image-trainer@.service").read_text(encoding="utf-8")
 
@@ -248,6 +266,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
 
     assert "eom-image-provider@imgreq_" in source
     assert "eom-image-reference-acquirer@imgrefcmd_" in source
+    assert "eom-image-reference-provider@imgreq_" in source
     assert "eom-image-trainer@imgtrainrun_" in source
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
     assert "eom-image-science-lora-micro-probe@imgscimicrotrainrun_" in source
@@ -399,6 +418,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
     for unit in (
         ROOT / "infra/systemd/eom-image-provider@.service",
         ROOT / "infra/systemd/eom-image-reference-acquirer@.service",
+        ROOT / "infra/systemd/eom-image-reference-provider@.service",
         ROOT / "infra/systemd/eom-image-trainer@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-science-lora-micro-probe@.service",
