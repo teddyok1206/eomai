@@ -46,6 +46,9 @@ SCHEMA_FILES = {
     "reference-conditioned-composite-receipt-v2": (
         "local-image-reference-conditioned-composite-receipt-v2.schema.json"
     ),
+    "reference-composition-evaluation": (
+        "local-image-reference-composition-evaluation-v1.schema.json"
+    ),
     "visual-reference-publication-receipt": (
         "local-image-visual-reference-publication-receipt-v1.schema.json"
     ),
@@ -253,6 +256,9 @@ SCHEMA_SHA256 = {
     ),
     "reference-conditioned-composite-receipt-v2": (
         "sha256:ce8986fd687998cfef67ff3df72fa98dd45cc5def52e056ab8e2e4ec7dc59961"
+    ),
+    "reference-composition-evaluation": (
+        "sha256:6709b486dc74f6a95e1509e876204938adfacdcd9928e8c555a4d76fca55fc3b"
     ),
     "visual-reference-publication-receipt": (
         "sha256:79446191e079598884186344efbbb5a6cfc150a021ba3b929011c6ad707ba2ed"

@@ -51,6 +51,14 @@ from eom_image_contracts.models import (
     text_sha256,
     validate_quality_evaluation_result,
 )
+from eom_image_contracts.reference_composition import (
+    LocalImageReferenceCompositionEvaluation,
+    ReferenceCompositionEvaluator,
+    ReferenceCompositionImageMember,
+    ReferenceCompositionMetrics,
+    ReferenceCompositionThresholds,
+    composition_failure_reasons,
+)
 from eom_image_contracts.safe_svg import SVG_ALLOWED_FONT_FAMILIES, sanitize_svg_overlay
 from eom_image_contracts.science_campaign_micro_training import (
     LocalImageScienceCampaignLoraMicroAdapterManifest,
@@ -322,6 +330,7 @@ __all__ = [
     "LocalImageProviderBindingV2",
     "LocalImageQualityEvaluationPlan",
     "LocalImageQualityEvaluationResult",
+    "LocalImageReferenceCompositionEvaluation",
     "LocalImageReferenceConditionedCompositeReceipt",
     "LocalImageReferenceConditionedCompositeReceiptV2",
     "LocalImageReferenceConditionedCompositeRequest",
@@ -413,6 +422,10 @@ __all__ = [
     "ProductionStyleAdapterEvaluationPointer",
     "ProductionStyleAdapterFile",
     "ProductionStyleAdapterSourceManifestPointer",
+    "ReferenceCompositionEvaluator",
+    "ReferenceCompositionImageMember",
+    "ReferenceCompositionMetrics",
+    "ReferenceCompositionThresholds",
     "SamplerContract",
     "ScienceRendererPrimitiveRecommendation",
     "ScienceVisualCampaignPilotResult",
@@ -456,6 +469,7 @@ __all__ = [
     "assemble_science_visual_campaign_pattern_inventory",
     "build_science_visual_subject_refinement_plan",
     "build_training_crop_review_draft",
+    "composition_failure_reasons",
     "content_json_bytes",
     "content_sha256",
     "load_schema",

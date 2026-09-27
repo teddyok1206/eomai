@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
+  "title": "EOM reference composition-preservation evaluation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "reference_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_manifest",
+        "primary_reference_id",
+        "reference_member"
+      ],
+      "properties": {
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^imgrefbundle_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^imgrefbundlerev_[0-9a-f]{32}$"
+        },
+        "bundle_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^manifests/visual-reference-bundle\\.json$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        },
+        "primary_reference_id": {
+          "type": "string",
+          "pattern": "^imgref_[0-9a-f]{32}$"
+        },
+        "reference_member": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^references/primary\\.png$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/normalized-visual-reference/1.0"
+            },
+            "media_type": {
+              "const": "image/png"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_path",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "member_path": {
+          "enum": [
+            "inputs/reference-conditioning.png",
+            "outputs/candidate.png"
+          ]
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 67108864
+        },
+        "width_px": {
+          "const": 800
+        },
+        "height_px": {
+          "const": 504
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_precision",
+        "edge_recall",
+        "edge_f1",
+        "foreground_bbox_iou",
+        "center_shift_ratio",
+        "width_scale_ratio",
+        "height_scale_ratio",
+        "edge_occupancy_delta_ratio",
+        "mean_chroma_ratio"
+      ],
+      "properties": {
+        "edge_precision": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "edge_recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "edge_f1": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "foreground_bbox_iou": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "center_shift_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5
+        },
+        "width_scale_ratio": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "height_scale_ratio": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "edge_occupancy_delta_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mean_chroma_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_recall_min",
+        "foreground_bbox_iou_min",
+        "center_shift_ratio_max",
+        "width_scale_ratio_min",
+        "width_scale_ratio_max",
+        "height_scale_ratio_min",
+        "height_scale_ratio_max",
+        "edge_occupancy_delta_ratio_max",
+        "mean_chroma_ratio_max"
+      ],
+      "properties": {
+        "edge_recall_min": {
+          "const": 0.8
+        },
+        "foreground_bbox_iou_min": {
+          "const": 0.7
+        },
+        "center_shift_ratio_max": {
+          "const": 0.08
+        },
+        "width_scale_ratio_min": {
+          "const": 0.75
+        },
+        "width_scale_ratio_max": {
+          "const": 1.25
+        },
+        "height_scale_ratio_min": {
+          "const": 0.75
+        },
+        "height_scale_ratio_max": {
+          "const": 1.25
+        },
+        "edge_occupancy_delta_ratio_max": {
+          "const": 0.2
+        },
+        "mean_chroma_ratio_max": {
+          "const": 0.04
+        }
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "source_commit",
+        "pillow_version",
+        "numpy_version"
+      ],
+      "properties": {
+        "contract": {
+          "const": "local-image-reference-composition-evaluator/1.0"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "pillow_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "numpy_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "policy",
+    "visual_reference",
+    "reference_conditioning",
+    "candidate_output",
+    "metrics",
+    "thresholds",
+    "failure_reasons",
+    "outcome",
+    "evaluator",
+    "evaluated_at",
+    "evaluation_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-reference-composition-evaluation/1.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^imgcompositioneval_[0-9a-f]{32}$"
+    },
+    "policy": {
+      "const": "COMPOSITION_PRESERVING_LINE_ART"
+    },
+    "visual_reference": {
+      "$ref": "#/$defs/reference_pointer"
+    },
+    "reference_conditioning": {
+      "$ref": "#/$defs/member"
+    },
+    "candidate_output": {
+      "$ref": "#/$defs/member"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "thresholds": {
+      "$ref": "#/$defs/thresholds"
+    },
+    "failure_reasons": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "CENTER_SHIFT_HIGH",
+          "COLOR_REMAINS",
+          "EDGE_OCCUPANCY_DRIFT",
+          "EDGE_RECALL_LOW",
+          "FOREGROUND_BBOX_IOU_LOW",
+          "HEIGHT_SCALE_DRIFT",
+          "WIDTH_SCALE_DRIFT"
+        ]
+      }
+    },
+    "outcome": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    },
+    "evaluator": {
+      "$ref": "#/$defs/evaluator"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "evaluation_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "PASS"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure_reasons": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "failure_reasons": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

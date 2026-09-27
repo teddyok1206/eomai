@@ -899,6 +899,160 @@ def conditioned_receipt_v2_schema() -> dict[str, Any]:
     return value
 
 
+def reference_composition_evaluation_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
+        "EOM reference composition-preservation evaluation v1",
+    )
+    member = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "member_path",
+            "media_type",
+            "sha256",
+            "size_bytes",
+            "width_px",
+            "height_px",
+        ],
+        "properties": {
+            "member_path": {"enum": ["inputs/reference-conditioning.png", "outputs/candidate.png"]},
+            "media_type": {"const": "image/png"},
+            "sha256": SHA256,
+            "size_bytes": {"type": "integer", "minimum": 64, "maximum": 67108864},
+            "width_px": {"const": 800},
+            "height_px": {"const": 504},
+        },
+    }
+    metrics = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "edge_precision",
+            "edge_recall",
+            "edge_f1",
+            "foreground_bbox_iou",
+            "center_shift_ratio",
+            "width_scale_ratio",
+            "height_scale_ratio",
+            "edge_occupancy_delta_ratio",
+            "mean_chroma_ratio",
+        ],
+        "properties": {
+            "edge_precision": {"type": "number", "minimum": 0, "maximum": 1},
+            "edge_recall": {"type": "number", "minimum": 0, "maximum": 1},
+            "edge_f1": {"type": "number", "minimum": 0, "maximum": 1},
+            "foreground_bbox_iou": {"type": "number", "minimum": 0, "maximum": 1},
+            "center_shift_ratio": {"type": "number", "minimum": 0, "maximum": 1.5},
+            "width_scale_ratio": {"type": "number", "minimum": 0.25, "maximum": 4},
+            "height_scale_ratio": {"type": "number", "minimum": 0.25, "maximum": 4},
+            "edge_occupancy_delta_ratio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+            },
+            "mean_chroma_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+    }
+    thresholds = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "edge_recall_min",
+            "foreground_bbox_iou_min",
+            "center_shift_ratio_max",
+            "width_scale_ratio_min",
+            "width_scale_ratio_max",
+            "height_scale_ratio_min",
+            "height_scale_ratio_max",
+            "edge_occupancy_delta_ratio_max",
+            "mean_chroma_ratio_max",
+        ],
+        "properties": {
+            "edge_recall_min": {"const": 0.8},
+            "foreground_bbox_iou_min": {"const": 0.7},
+            "center_shift_ratio_max": {"const": 0.08},
+            "width_scale_ratio_min": {"const": 0.75},
+            "width_scale_ratio_max": {"const": 1.25},
+            "height_scale_ratio_min": {"const": 0.75},
+            "height_scale_ratio_max": {"const": 1.25},
+            "edge_occupancy_delta_ratio_max": {"const": 0.2},
+            "mean_chroma_ratio_max": {"const": 0.04},
+        },
+    }
+    evaluator = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["contract", "source_commit", "pillow_version", "numpy_version"],
+        "properties": {
+            "contract": {"const": "local-image-reference-composition-evaluator/1.0"},
+            "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64},
+            "numpy_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        },
+    }
+    value["$defs"] = {
+        "reference_pointer": _conditioning_pointer(),
+        "member": member,
+        "metrics": metrics,
+        "thresholds": thresholds,
+        "evaluator": evaluator,
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "policy",
+        "visual_reference",
+        "reference_conditioning",
+        "candidate_output",
+        "metrics",
+        "thresholds",
+        "failure_reasons",
+        "outcome",
+        "evaluator",
+        "evaluated_at",
+        "evaluation_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-reference-composition-evaluation/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgcompositioneval_[0-9a-f]{32}$"},
+        "policy": {"const": "COMPOSITION_PRESERVING_LINE_ART"},
+        "visual_reference": {"$ref": "#/$defs/reference_pointer"},
+        "reference_conditioning": {"$ref": "#/$defs/member"},
+        "candidate_output": {"$ref": "#/$defs/member"},
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "thresholds": {"$ref": "#/$defs/thresholds"},
+        "failure_reasons": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": True,
+            "items": {
+                "enum": [
+                    "CENTER_SHIFT_HIGH",
+                    "COLOR_REMAINS",
+                    "EDGE_OCCUPANCY_DRIFT",
+                    "EDGE_RECALL_LOW",
+                    "FOREGROUND_BBOX_IOU_LOW",
+                    "HEIGHT_SCALE_DRIFT",
+                    "WIDTH_SCALE_DRIFT",
+                ]
+            },
+        },
+        "outcome": {"enum": ["PASS", "FAIL"]},
+        "evaluator": {"$ref": "#/$defs/evaluator"},
+        "evaluated_at": UTC,
+        "evaluation_sha256": SHA256,
+    }
+    value["allOf"] = [
+        {
+            "if": {"properties": {"outcome": {"const": "PASS"}}},
+            "then": {"properties": {"failure_reasons": {"maxItems": 0}}},
+            "else": {"properties": {"failure_reasons": {"minItems": 1}}},
+        }
+    ]
+    return value
+
+
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
@@ -921,6 +1075,9 @@ SCHEMAS = {
     ),
     "local-image-reference-conditioned-composite-receipt-v2.schema.json": (
         conditioned_receipt_v2_schema()
+    ),
+    "local-image-reference-composition-evaluation-v1.schema.json": (
+        reference_composition_evaluation_schema()
     ),
 }
 
