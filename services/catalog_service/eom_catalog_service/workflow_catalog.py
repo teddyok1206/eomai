@@ -40,6 +40,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, 
 from eom_image_contracts import (
     SVG_ALLOWED_FONT_FAMILIES,
     LocalImageProviderBinding,
+    LocalImageProviderBindingV2,
     content_json_bytes,
     text_sha256,
 )
@@ -119,14 +120,17 @@ from eom_catalog_service.generated_stimulus import (
     PNG_MEMBER,
     PNG_WIDTH,
     RASTER_MEMBER,
+    RenderedLocalImageStimulus,
+    RenderedStyleReferenceStimulus,
     render_generated_local_vector_stimulus,
     render_generated_stimulus,
+    render_generated_style_reference_stimulus,
     render_generated_vector_stimulus,
 )
 from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
-    load_local_image_provider_binding,
+    load_local_image_provider_binding_any,
 )
 from eom_catalog_service.local_image_prompt_policy import LocalGpuPromptContract
 from eom_catalog_service.models import (
@@ -151,6 +155,9 @@ from eom_catalog_service.vector_stimulus import (
     SVG_MEDIA_TYPE,
     SVG_MEMBER,
     SVG_RENDERER_CONTRACT,
+)
+from eom_catalog_service.visual_reference_receipts import (
+    OrchestratorVisualReferenceReceiptResolver,
 )
 
 ROLE_PROFILE_KEYS = {
@@ -361,6 +368,10 @@ class WorkflowCatalogService:
         self.evidence_usage_receipts = (
             evidence_usage_receipts or OrchestratorEvidenceUsageReceiptResolver(self.sessions)
         )
+        self.visual_reference_receipts = OrchestratorVisualReferenceReceiptResolver(
+            self.sessions,
+            self.settings,
+        )
 
     def bind_request(
         self,
@@ -489,9 +500,14 @@ class WorkflowCatalogService:
                 "local_image_provider.reviewed_binding_json" in profile_snapshot["required_context"]
                 for profile_snapshot in profiles.values()
             ):
-                binding = load_local_image_provider_binding(
+                binding = load_local_image_provider_binding_any(
                     self.settings.local_image_provider_binding
                 )
+                if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
+                    raise ContentPackError(
+                        ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                        "reference-grounded image binding requires Content Pack 1.20.0",
+                    )
                 context["local_image_provider"] = binding.model_dump(mode="json")
             if request.request_name in {
                 "KNOWLEDGE_ITEM_REQUEST",
@@ -1236,11 +1252,13 @@ class WorkflowCatalogService:
             raise ValueError("content-team image output changed the ordered IMAGE slots")
 
         provider_value = workflow.runtime_context.get("local_image_provider")
-        provider = (
-            LocalImageProviderBinding.model_validate(provider_value)
-            if isinstance(provider_value, dict)
-            else None
-        )
+        provider: LocalImageProviderBinding | LocalImageProviderBindingV2 | None = None
+        if isinstance(provider_value, dict):
+            provider = (
+                LocalImageProviderBindingV2.model_validate(provider_value)
+                if provider_value.get("schema_version") == "local-image-provider-binding/2.0"
+                else LocalImageProviderBinding.model_validate(provider_value)
+            )
         prompt_contract = _local_image_prompt_contract(workflow)
         committed: list[ContentTeamStimulusPointer] = []
         for item in image_drawings:
@@ -1252,17 +1270,56 @@ class WorkflowCatalogService:
             ):
                 if provider is None:
                     raise ValueError("pinned local image provider binding is missing")
-                local_rendered = render_generated_local_vector_stimulus(
-                    self.settings,
-                    workflow_id=workflow.workflow_id,
-                    result_revision_id=image.revision_id,
-                    drawing_hash=drawing_hash,
-                    drawing=drawing,
-                    binding=provider,
-                    adapter=self.local_image,
-                    prompt_contract=prompt_contract,
-                    operation_suffix=suffix,
-                )
+                local_rendered: RenderedLocalImageStimulus | RenderedStyleReferenceStimulus
+                if isinstance(provider, LocalImageProviderBindingV2):
+                    if not isinstance(image_result, ContentTeamImageRoleResultV12):
+                        raise ValueError(
+                            "reference-grounded provider requires the latest image result"
+                        )
+                    reference = self.visual_reference_receipts.resolve(
+                        image_result=image,
+                        workflow_id=workflow.workflow_id,
+                        visual_ordinal=item.visual_ordinal,
+                        drawing_sha256=drawing_hash,
+                    )
+                    local_rendered = render_generated_style_reference_stimulus(
+                        self.settings,
+                        workflow_id=workflow.workflow_id,
+                        result_revision_id=image.revision_id,
+                        drawing_hash=drawing_hash,
+                        drawing=drawing,
+                        binding=provider,
+                        adapter=self.local_image,
+                        prompt_contract=prompt_contract,
+                        visual_reference=reference.pointer,
+                        reference_bytes=reference.payload,
+                        operation_suffix=suffix,
+                    )
+                    receipt_schema_ref = (
+                        "eom://schemas/image-provider/"
+                        "local-image-reference-conditioned-composite-receipt/2.0"
+                    )
+                    request_sha256 = local_rendered.request_sha256
+                    publication_receipt_sha256: str | None = reference.publication_receipt_sha256
+                    reference_bundle_revision_id: str | None = reference.pointer.bundle_revision_id
+                else:
+                    local_rendered = render_generated_local_vector_stimulus(
+                        self.settings,
+                        workflow_id=workflow.workflow_id,
+                        result_revision_id=image.revision_id,
+                        drawing_hash=drawing_hash,
+                        drawing=drawing,
+                        binding=provider,
+                        adapter=self.local_image,
+                        prompt_contract=prompt_contract,
+                        operation_suffix=suffix,
+                    )
+                    receipt_schema_ref = (
+                        "eom://schemas/image-provider/local-image-composite-receipt/1.0"
+                    )
+                    request_sha256 = local_rendered.request_sha256
+                    publication_receipt_sha256 = None
+                    reference_bundle_revision_id = None
                 files = {
                     PNG_MEMBER: local_rendered.png_path,
                     SVG_MEMBER: local_rendered.svg_path,
@@ -1277,9 +1334,20 @@ class WorkflowCatalogService:
                     "production_route": drawing.production_route,
                     "route_reason": drawing.route_reason,
                     "local_image_binding_sha256": provider.binding_sha256,
-                    "local_image_request_sha256": local_rendered.request_sha256,
+                    "local_image_request_sha256": request_sha256,
                     "local_image_receipt_sha256": local_rendered.receipt.receipt_sha256,
                     "local_image_policy_sha256": text_sha256(local_rendered.prompt_policy_revision),
+                    **(
+                        {
+                            "visual_reference_publication_receipt_sha256": (
+                                publication_receipt_sha256
+                            ),
+                            "visual_reference_bundle_revision_id": (reference_bundle_revision_id),
+                            "style_adapter_release_sha256": provider.style_adapter.release_sha256,
+                        }
+                        if isinstance(provider, LocalImageProviderBindingV2)
+                        else {}
+                    ),
                 }
                 file_metadata = {
                     PNG_MEMBER: {
@@ -1295,11 +1363,15 @@ class WorkflowCatalogService:
                         "media_type": "image/png",
                     },
                     LOCAL_IMAGE_RECEIPT_MEMBER: {
-                        "schema_ref": "eom://schemas/image-provider/local-image-composite-receipt/1.0",
+                        "schema_ref": receipt_schema_ref,
                         "media_type": "application/json",
                     },
                 }
-                manifest_version = "generated-item-stimulus-file-set/4.0"
+                manifest_version = (
+                    "generated-item-stimulus-file-set/5.0"
+                    if isinstance(provider, LocalImageProviderBindingV2)
+                    else "generated-item-stimulus-file-set/4.0"
+                )
             else:
                 vector_rendered = render_generated_vector_stimulus(
                     self.settings,
@@ -1336,6 +1408,13 @@ class WorkflowCatalogService:
                 idempotency_key=(
                     f"content-team-stimulus:{workflow.workflow_id}:{image.revision_id}:"
                     f"{item.visual_ordinal}:{drawing_hash}"
+                    + (
+                        f":{provider.binding_sha256}:{request_sha256}"
+                        if isinstance(provider, LocalImageProviderBindingV2)
+                        and isinstance(drawing, GeneratedVectorDrawingV6)
+                        and drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
+                        else ""
+                    )
                 ),
                 request={
                     "workflow_id": workflow.workflow_id,
@@ -1893,7 +1972,11 @@ class WorkflowCatalogService:
             context["generated_stimulus"] = generated
         provider = workflow.runtime_context.get("local_image_provider")
         if isinstance(provider, dict):
-            validated_provider = LocalImageProviderBinding.model_validate(provider)
+            validated_provider = (
+                LocalImageProviderBindingV2.model_validate(provider)
+                if provider.get("schema_version") == "local-image-provider-binding/2.0"
+                else LocalImageProviderBinding.model_validate(provider)
+            )
             provider_context = validated_provider.model_dump(mode="json")
             # The provider contract legitimately contains a floating-point sampler value. EOM
             # message hashing rejects floats, so expose only its already validated canonical JSON

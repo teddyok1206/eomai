@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import grp
+import hashlib
 import json
 import os
 import pwd
@@ -158,21 +159,12 @@ def load_local_image_provider_binding(
 ) -> LocalImageProviderBinding:
     """Load one root-controlled binding without following a symlink."""
 
-    _require_absolute_components(path)
-    try:
-        metadata = path.lstat()
-    except OSError as exc:
-        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
-    if (
-        path.is_symlink()
-        or not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_uid != trusted_owner_uid
-        or metadata.st_gid != trusted_group_gid
-        or stat.S_IMODE(metadata.st_mode) != 0o644
-        or not 0 < metadata.st_size <= 64 * 1024
-    ):
-        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
-    value = _load_json(path, maximum_bytes=64 * 1024)
+    value = _load_provider_binding_document(
+        path,
+        trusted_owner_uid=trusted_owner_uid,
+        trusted_group_gid=trusted_group_gid,
+        maximum_bytes=64 * 1024,
+    )
     try:
         validate_contract("provider-binding", value)
         return LocalImageProviderBinding.model_validate(value)
@@ -188,6 +180,53 @@ def load_local_image_provider_binding_v2(
 ) -> LocalImageProviderBindingV2:
     """Load one root-controlled style/reference binding without implicit V1 fallback."""
 
+    value = _load_provider_binding_document(
+        path,
+        trusted_owner_uid=trusted_owner_uid,
+        trusted_group_gid=trusted_group_gid,
+        maximum_bytes=512 * 1024,
+    )
+    try:
+        validate_contract("provider-binding-v2", value)
+        return LocalImageProviderBindingV2.model_validate(value)
+    except Exception as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+
+
+def load_local_image_provider_binding_any(
+    path: Path,
+    *,
+    trusted_owner_uid: int = 0,
+    trusted_group_gid: int = 0,
+) -> LocalImageProviderBinding | LocalImageProviderBindingV2:
+    """Load the exact immutable V1 or V2 binding selected by its schema discriminator."""
+
+    value = _load_provider_binding_document(
+        path,
+        trusted_owner_uid=trusted_owner_uid,
+        trusted_group_gid=trusted_group_gid,
+        maximum_bytes=512 * 1024,
+    )
+    schema_version = value.get("schema_version")
+    try:
+        if schema_version == "local-image-provider-binding/1.0":
+            validate_contract("provider-binding", value)
+            return LocalImageProviderBinding.model_validate(value)
+        if schema_version == "local-image-provider-binding/2.0":
+            validate_contract("provider-binding-v2", value)
+            return LocalImageProviderBindingV2.model_validate(value)
+    except Exception as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+    raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
+
+
+def _load_provider_binding_document(
+    path: Path,
+    *,
+    trusted_owner_uid: int,
+    trusted_group_gid: int,
+    maximum_bytes: int,
+) -> dict[str, object]:
     _require_absolute_components(path)
     try:
         metadata = path.lstat()
@@ -199,15 +238,10 @@ def load_local_image_provider_binding_v2(
         or metadata.st_uid != trusted_owner_uid
         or metadata.st_gid != trusted_group_gid
         or stat.S_IMODE(metadata.st_mode) != 0o644
-        or not 0 < metadata.st_size <= 512 * 1024
+        or not 0 < metadata.st_size <= maximum_bytes
     ):
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
-    value = _load_json(path, maximum_bytes=512 * 1024)
-    try:
-        validate_contract("provider-binding-v2", value)
-        return LocalImageProviderBindingV2.model_validate(value)
-    except Exception as exc:
-        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+    return _load_json(path, maximum_bytes=maximum_bytes)
 
 
 class FixedLocalImageProviderAdapter:
@@ -357,7 +391,7 @@ class FixedLocalImageProviderAdapter:
         output_directory: Path,
         prompt_contract: LocalGpuPromptContract,
         visual_reference: LocalImageVisualReferencePointer,
-        reference_path: Path,
+        reference_bytes: bytes,
     ) -> StyleReferenceConditionedLocalImageMaterialization:
         """Stage one exact reference and one pinned released style adapter identity."""
 
@@ -389,18 +423,14 @@ class FixedLocalImageProviderAdapter:
         )
         _stage_exact_source(workspace / OVERLAY_MEMBER, overlay_path, provider_gid)
         reference_target = workspace / visual_reference.reference_member.member_path
-        reference_metadata = _require_regular(
-            reference_path,
-            maximum_bytes=8 * 1024 * 1024,
-            mode=0o640,
-        )
         if (
-            reference_metadata.st_size != visual_reference.reference_member.size_bytes
-            or sha256_file(reference_path) != visual_reference.reference_member.sha256
+            len(reference_bytes) != visual_reference.reference_member.size_bytes
+            or "sha256:" + hashlib.sha256(reference_bytes).hexdigest()
+            != visual_reference.reference_member.sha256
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_source(reference_target, reference_path, provider_gid)
+        _stage_exact_file(reference_target, reference_bytes, provider_gid)
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
         unit_name = f"eom-image-reference-style-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():

@@ -17,6 +17,7 @@ from eom_catalog_service.local_image_adapter import (
     _build_reference_conditioned_request_v2,
     _build_request,
     load_local_image_provider_binding,
+    load_local_image_provider_binding_any,
     load_local_image_provider_binding_v2,
 )
 from eom_catalog_service.local_image_prompt_policy import (
@@ -288,6 +289,14 @@ def test_v2_binding_loader_and_request_pin_style_without_changing_prompt(tmp_pat
     )
     assert request.conditioning.strength == 0.35
     assert LocalImageProviderBindingV2.model_validate(value) == binding
+    assert isinstance(
+        load_local_image_provider_binding_any(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid(),
+        ),
+        LocalImageProviderBindingV2,
+    )
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))

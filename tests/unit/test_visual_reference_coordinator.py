@@ -89,6 +89,7 @@ class _Publisher:
     def publish(self, **kwargs: object) -> PublishedControlFileSet:
         members = kwargs["members"]
         assert isinstance(members, tuple)
+        assert str(kwargs["artifact_type"]).startswith("control_local_image_visual_reference_")
         for member in members:
             payload = member.source.read_bytes()
             assert len(payload) == member.bytes
