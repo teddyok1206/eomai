@@ -186,9 +186,16 @@ class _Response:
 
 
 class _Opener:
-    def __init__(self, *, original: bytes, license_code: str = "cc-zero") -> None:
+    def __init__(
+        self,
+        *,
+        original: bytes,
+        license_code: str = "cc-zero",
+        license_url: str = "https://creativecommons.org/publicdomain/zero/1.0/",
+    ) -> None:
         self.original = original
         self.license_code = license_code
+        self.license_url = license_url
         self.calls: list[str] = []
 
     def open(self, request: Any, *, timeout: int) -> _Response:
@@ -218,9 +225,7 @@ class _Opener:
                         "extmetadata": {
                             "License": {"value": self.license_code},
                             "LicenseShortName": {"value": "CC0 1.0"},
-                            "LicenseUrl": {
-                                "value": ("https://creativecommons.org/publicdomain/zero/1.0/")
-                            },
+                            "LicenseUrl": {"value": self.license_url},
                         },
                     }
                 ],
@@ -396,6 +401,18 @@ def test_upload_tracking_query_is_exactly_bounded_before_canonicalization() -> N
         )
         is None
     )
+
+
+def test_accepted_license_code_uses_fixed_canonical_url() -> None:
+    opener = _Opener(
+        original=b"original-jpeg",
+        license_url="http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+    )
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    acquired = client.acquire(_intent(), maximum_bytes=16_777_216, timeout_seconds=120)
+
+    assert acquired[0].source.license_url == ("https://creativecommons.org/publicdomain/zero/1.0/")
 
 
 def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None:

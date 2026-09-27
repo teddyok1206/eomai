@@ -801,14 +801,17 @@ def _canonical_original_file_url(value: object) -> str | None:
 def _license(metadata: dict[str, object]) -> tuple[str, str, str]:
     raw_code = _metadata_text(metadata, "License").casefold()
     _metadata_text(metadata, "LicenseShortName")
-    raw_url = _metadata_text(metadata, "LicenseUrl", required=False)
+    # Commons still emits legacy HTTP or localized deed URLs for some otherwise valid
+    # public-domain records.  Treat that field as untrusted descriptive metadata and bind
+    # accepted identifiers to our fixed canonical license URLs instead.
+    _metadata_text(metadata, "LicenseUrl", required=False)
     if raw_code in {"cc-zero", "cc0", "cc0-1.0"}:
         license_id = "CC0-1.0"
-        license_url = raw_url or "https://creativecommons.org/publicdomain/zero/1.0/"
+        license_url = "https://creativecommons.org/publicdomain/zero/1.0/"
         license_name = "CC0 1.0"
     elif raw_code in {"pd", "public-domain", "public domain"} or raw_code.startswith("pd-"):
         license_id = "PUBLIC-DOMAIN"
-        license_url = raw_url or "https://commons.wikimedia.org/wiki/Commons:Public_domain"
+        license_url = "https://commons.wikimedia.org/wiki/Commons:Public_domain"
         license_name = "Public domain"
     else:
         raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_LICENSE_REJECTED")
