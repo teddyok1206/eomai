@@ -149,6 +149,18 @@ SCHEMA_FILES = {
     "science-lora-micro-evaluation-result": (
         "local-image-science-lora-micro-evaluation-result-v1.schema.json"
     ),
+    "science-visual-subject-inventory": (
+        "local-image-science-visual-subject-inventory-v1.schema.json"
+    ),
+    "science-visual-subject-benchmark-plan": (
+        "local-image-science-visual-subject-benchmark-plan-v1.schema.json"
+    ),
+    "science-visual-subject-benchmark-command": (
+        "local-image-science-visual-subject-benchmark-command-v1.schema.json"
+    ),
+    "science-visual-subject-benchmark-result": (
+        "local-image-science-visual-subject-benchmark-result-v1.schema.json"
+    ),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -339,6 +351,18 @@ SCHEMA_SHA256 = {
     ),
     "science-lora-micro-evaluation-result": (
         "sha256:2477a3f12e6396b3224d1812ce84d513eec607a768cb69f3f66d78ceafe76399"
+    ),
+    "science-visual-subject-inventory": (
+        "sha256:5b5d5aed3224e601cfe7353f2eea693ef0eae79f6529db16409698a5a9028f6b"
+    ),
+    "science-visual-subject-benchmark-plan": (
+        "sha256:4e3eeea046c4bd583e3bb0010457fb449131fb7b182d3b7f8d936eecf2d048cc"
+    ),
+    "science-visual-subject-benchmark-command": (
+        "sha256:6af9fd7b70487bb343c9b04e77fe321c189550419f0b3868aff3d93296849322"
+    ),
+    "science-visual-subject-benchmark-result": (
+        "sha256:c62502a11e133329b72f4bb99aa331c1a535dffab63ab1eefd51dcee3d213525"
     ),
 }
 

@@ -42,6 +42,14 @@
     "omission": {
       "additionalProperties": false,
       "properties": {
+        "item_proposal_id": {
+          "pattern": "^itemproposal_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
         "reason": {
           "enum": [
             "NO_RENDERED_SUBJECT",
@@ -54,6 +62,8 @@
         }
       },
       "required": [
+        "item_revision_id",
+        "item_proposal_id",
         "visual_pattern_id",
         "reason"
       ],
@@ -66,6 +76,9 @@
     "sourceReference": {
       "additionalProperties": false,
       "properties": {
+        "accepted_analysis_result": {
+          "$ref": "#/$defs/artifactMember"
+        },
         "composition_summary_sha256": {
           "$ref": "#/$defs/sha256"
         },
@@ -112,7 +125,7 @@
         },
         "source_anchor_ids": {
           "items": {
-            "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+            "pattern": "^assessmentanchor_[0-9a-f]{32}$",
             "type": "string"
           },
           "maxItems": 32,
@@ -127,6 +140,7 @@
       },
       "required": [
         "item_revision_id",
+        "accepted_analysis_result",
         "extraction_result",
         "item_proposal_id",
         "visual_pattern_id",
@@ -235,12 +249,15 @@
                 "AXIS_PLOT",
                 "CELL_CROSS_SECTION",
                 "CIRCUIT",
+                "CONTENT_TABLE",
+                "FLOW_DIAGRAM",
                 "GENERIC_LABELLED_DIAGRAM",
                 "GEOLOGIC_SECTION",
                 "MAP_BOUNDARY",
                 "ORBITAL_SYSTEM",
                 "PARTICLE_SYSTEM",
                 "RAY_DIAGRAM",
+                "TIMELINE",
                 "VECTOR_FIELD"
               ]
             },

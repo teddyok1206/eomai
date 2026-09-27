@@ -40,6 +40,9 @@ if TYPE_CHECKING:
         LocalImageScienceCampaignLoraMicroProbePlanV2,
         LocalImageScienceVisualCampaignRasterRefinementPlan,
         LocalImageScienceVisualCampaignRasterSuitabilityReview,
+        LocalImageScienceVisualSubjectBenchmarkPlan,
+        LocalImageScienceVisualSubjectBenchmarkResult,
+        LocalImageScienceVisualSubjectInventory,
     )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
@@ -169,6 +172,31 @@ SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
 )
 SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE = (
     "control_local_image_science_campaign_raster_refinement_plan"
+)
+SCIENCE_VISUAL_SUBJECT_INVENTORY_MEMBER = "manifests/science-visual-subject-inventory.json"
+SCIENCE_VISUAL_SUBJECT_INVENTORY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-subject-inventory/1.0"
+)
+SCIENCE_VISUAL_SUBJECT_INVENTORY_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_subject_inventory"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_MEMBER = (
+    "manifests/science-visual-subject-benchmark-plan.json"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-plan/1.0"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_subject_benchmark_plan"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_MEMBER = (
+    "manifests/science-visual-subject-benchmark-result.json"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-visual-subject-benchmark-result/1.0"
+)
+SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_ARTIFACT_TYPE = (
+    "control_local_image_science_visual_subject_benchmark_result"
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -420,6 +448,51 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-visual-campaign-pattern-inventory",
             identity_sha256=inventory.inventory_sha256,
             created_at=inventory.created_at,
+        )
+
+    def commit_science_visual_subject_inventory(
+        self,
+        inventory: LocalImageScienceVisualSubjectInventory,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=inventory,
+            contract_name="science-visual-subject-inventory",
+            member=SCIENCE_VISUAL_SUBJECT_INVENTORY_MEMBER,
+            schema_ref=SCIENCE_VISUAL_SUBJECT_INVENTORY_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_SUBJECT_INVENTORY_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-subject-inventory",
+            identity_sha256=inventory.inventory_sha256,
+            created_at=inventory.created_at,
+        )
+
+    def commit_science_visual_subject_benchmark_plan(
+        self,
+        plan: LocalImageScienceVisualSubjectBenchmarkPlan,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-visual-subject-benchmark-plan",
+            member=SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_MEMBER,
+            schema_ref=SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-subject-benchmark-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_visual_subject_benchmark_result(
+        self,
+        result: LocalImageScienceVisualSubjectBenchmarkResult,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=result,
+            contract_name="science-visual-subject-benchmark-result",
+            member=SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_MEMBER,
+            schema_ref=SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_SCHEMA_REF,
+            artifact_type=SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-visual-subject-benchmark-result",
+            identity_sha256=result.result_sha256,
+            created_at=result.completed_at,
         )
 
     def commit_science_visual_campaign_review_batch_command(

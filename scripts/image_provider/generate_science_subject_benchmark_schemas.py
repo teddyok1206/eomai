@@ -29,12 +29,15 @@ PRIMITIVES = [
     "AXIS_PLOT",
     "CELL_CROSS_SECTION",
     "CIRCUIT",
+    "CONTENT_TABLE",
+    "FLOW_DIAGRAM",
     "GENERIC_LABELLED_DIAGRAM",
     "GEOLOGIC_SECTION",
     "MAP_BOUNDARY",
     "ORBITAL_SYSTEM",
     "PARTICLE_SYSTEM",
     "RAY_DIAGRAM",
+    "TIMELINE",
     "VECTOR_FIELD",
 ]
 
@@ -93,6 +96,7 @@ def _source_reference() -> dict[str, Any]:
         "additionalProperties": False,
         "required": [
             "item_revision_id",
+            "accepted_analysis_result",
             "extraction_result",
             "item_proposal_id",
             "visual_pattern_id",
@@ -107,6 +111,7 @@ def _source_reference() -> dict[str, Any]:
                 "type": "string",
                 "pattern": "^itemrev_[0-9a-f]{32}$",
             },
+            "accepted_analysis_result": {"$ref": "#/$defs/artifactMember"},
             "extraction_result": {"$ref": "#/$defs/artifactMember"},
             "item_proposal_id": {
                 "type": "string",
@@ -123,7 +128,7 @@ def _source_reference() -> dict[str, Any]:
                 "uniqueItems": True,
                 "items": {
                     "type": "string",
-                    "pattern": "^anchor_[a-z0-9][a-z0-9_-]{0,63}$",
+                    "pattern": "^assessmentanchor_[0-9a-f]{32}$",
                 },
             },
             "representation_kind": {
@@ -195,9 +200,7 @@ def _subject() -> dict[str, Any]:
             },
             "family": {"enum": FAMILIES},
             "render_route": {"enum": ROUTES},
-            "renderer_primitive": {
-                "anyOf": [{"enum": PRIMITIVES}, {"type": "null"}]
-            },
+            "renderer_primitive": {"anyOf": [{"enum": PRIMITIVES}, {"type": "null"}]},
             "raster_prompt_en": {
                 "anyOf": [
                     {
@@ -209,9 +212,7 @@ def _subject() -> dict[str, Any]:
                     {"type": "null"},
                 ]
             },
-            "raster_prompt_sha256": {
-                "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
-            },
+            "raster_prompt_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
             "blocked_reason": {
                 "anyOf": [
                     {
@@ -238,8 +239,16 @@ def _omission() -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["visual_pattern_id", "reason"],
+        "required": ["item_revision_id", "item_proposal_id", "visual_pattern_id", "reason"],
         "properties": {
+            "item_revision_id": {
+                "type": "string",
+                "pattern": "^itemrev_[0-9a-f]{32}$",
+            },
+            "item_proposal_id": {
+                "type": "string",
+                "pattern": "^itemproposal_[0-9a-f]{32}$",
+            },
             "visual_pattern_id": {
                 "type": "string",
                 "pattern": "^visualpattern_[0-9a-f]{32}$",
@@ -278,9 +287,7 @@ def _inventory() -> dict[str, Any]:
                 "inventory_sha256",
             ],
             "properties": {
-                "schema_version": {
-                    "const": "local-image-science-visual-subject-inventory/1.0"
-                },
+                "schema_version": {"const": "local-image-science-visual-subject-inventory/1.0"},
                 "inventory_id": {
                     "type": "string",
                     "pattern": "^imgscisubjectinventory_[0-9a-f]{32}$",
@@ -374,9 +381,7 @@ def _case() -> dict[str, Any]:
                     {"type": "null"},
                 ]
             },
-            "prompt_sha256": {
-                "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
-            },
+            "prompt_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
             "negative_prompt_en": {
                 "anyOf": [
                     {
@@ -388,18 +393,14 @@ def _case() -> dict[str, Any]:
                     {"type": "null"},
                 ]
             },
-            "negative_prompt_sha256": {
-                "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
-            },
+            "negative_prompt_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
             "seed": {
                 "anyOf": [
                     {"type": "integer", "minimum": 0, "maximum": 2147483647},
                     {"type": "null"},
                 ]
             },
-            "renderer_primitive": {
-                "anyOf": [{"enum": PRIMITIVES}, {"type": "null"}]
-            },
+            "renderer_primitive": {"anyOf": [{"enum": PRIMITIVES}, {"type": "null"}]},
             "expected_outcome": {
                 "enum": ["BASE_ADAPTER_PAIR", "DETERMINISTIC_RENDERED", "POLICY_REJECTED"]
             },
@@ -502,9 +503,7 @@ def _command() -> dict[str, Any]:
                 "plan_sha256": {"$ref": "#/$defs/sha256"},
                 "staged_plan_path": {"const": "inputs/subject-benchmark-plan.json"},
                 "staged_model_path": {"const": "inputs/model"},
-                "staged_adapter_model_path": {
-                    "const": "inputs/adapter/adapter_model.safetensors"
-                },
+                "staged_adapter_model_path": {"const": "inputs/adapter/adapter_model.safetensors"},
                 "staged_adapter_config_path": {"const": "inputs/adapter/adapter_config.json"},
                 "output_directory": {"const": "outputs"},
                 "command_sha256": {"$ref": "#/$defs/sha256"},
@@ -536,7 +535,9 @@ def _output() -> dict[str, Any]:
             "variant": {"enum": ["ADAPTER", "BASE", "DETERMINISTIC"]},
             "relative_path": {
                 "type": "string",
-                "pattern": "^outputs/imgscisubjectcase_[0-9a-f]{32}-(adapter|base|deterministic)\\.png$",
+                "pattern": (
+                    "^outputs/imgscisubjectcase_[0-9a-f]{32}-(adapter|base|deterministic)\\.png$"
+                ),
             },
             "media_type": {"const": "image/png"},
             "bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
@@ -557,9 +558,7 @@ def _outcome() -> dict[str, Any]:
                 "type": "string",
                 "pattern": "^imgscisubjectcase_[0-9a-f]{32}$",
             },
-            "outcome": {
-                "enum": ["BASE_ADAPTER_PAIR", "DETERMINISTIC_RENDERED", "POLICY_REJECTED"]
-            },
+            "outcome": {"enum": ["BASE_ADAPTER_PAIR", "DETERMINISTIC_RENDERED", "POLICY_REJECTED"]},
             "stable_code": {
                 "anyOf": [
                     {"const": "LOCAL_IMAGE_HUMAN_SUBJECT_FORBIDDEN"},

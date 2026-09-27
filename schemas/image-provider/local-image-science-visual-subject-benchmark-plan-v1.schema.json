@@ -122,12 +122,15 @@
                 "AXIS_PLOT",
                 "CELL_CROSS_SECTION",
                 "CIRCUIT",
+                "CONTENT_TABLE",
+                "FLOW_DIAGRAM",
                 "GENERIC_LABELLED_DIAGRAM",
                 "GEOLOGIC_SECTION",
                 "MAP_BOUNDARY",
                 "ORBITAL_SYSTEM",
                 "PARTICLE_SYSTEM",
                 "RAY_DIAGRAM",
+                "TIMELINE",
                 "VECTOR_FIELD"
               ]
             },
