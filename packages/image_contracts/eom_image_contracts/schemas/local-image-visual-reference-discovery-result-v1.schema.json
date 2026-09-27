@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-visual-reference-discovery-result/1.0",
+  "title": "EOM local image visual reference discovery result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rank",
+        "provider",
+        "page_id",
+        "file_title",
+        "canonical_page_url",
+        "selection_rationale",
+        "intended_use",
+        "license_expectation"
+      ],
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "provider": {
+          "const": "WIKIMEDIA_COMMONS"
+        },
+        "page_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "file_title": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 240,
+          "pattern": "^File:[^\\x00-\\x1f\\x7f]+$"
+        },
+        "canonical_page_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://commons\\.wikimedia\\.org/wiki/File:",
+          "maxLength": 1000
+        },
+        "selection_rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]+$"
+        },
+        "intended_use": {
+          "const": "SUBJECT_MORPHOLOGY_REFERENCE"
+        },
+        "license_expectation": {
+          "const": "PUBLIC_DOMAIN_OR_CC0"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "command_id",
+    "command_sha256",
+    "status",
+    "candidates",
+    "error_code",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-visual-reference-discovery-result/1.0"
+    },
+    "command_id": {
+      "type": "string",
+      "pattern": "^imgrefdiscover_[0-9a-f]{32}$"
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "error_code": {
+      "oneOf": [
+        {
+          "enum": [
+            "VISUAL_REFERENCE_INPUT_INVALID",
+            "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+            "VISUAL_REFERENCE_SOURCE_REJECTED",
+            "VISUAL_REFERENCE_LICENSE_REJECTED"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 180000
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidates": {
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "error_code": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "candidates": {
+            "maxItems": 0
+          },
+          "error_code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

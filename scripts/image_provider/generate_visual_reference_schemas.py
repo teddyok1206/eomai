@@ -313,6 +313,111 @@ def bundle_schema() -> dict[str, Any]:
     return value
 
 
+def discovery_command_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-visual-reference-discovery-command/1.0",
+        "EOM local image visual reference discovery command v1",
+    )
+    value["required"] = [
+        "schema_version",
+        "command_id",
+        "workflow_id",
+        "image_step_run_id",
+        "image_job_id",
+        "visual_ordinal",
+        "drawing_sha256",
+        "subject",
+        "query_terms",
+        "candidate_limit",
+        "observed_at",
+        "timeout_seconds",
+        "command_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-visual-reference-discovery-command/1.0"},
+        "command_id": {"type": "string", "pattern": "^imgrefdiscover_[0-9a-f]{32}$"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "image_step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+        "image_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "visual_ordinal": {"type": "integer", "minimum": 0, "maximum": 1},
+        "drawing_sha256": SHA256,
+        "subject": intent_schema()["properties"]["subject"],
+        "query_terms": intent_schema()["properties"]["query_terms"],
+        "candidate_limit": {"const": 5},
+        "observed_at": UTC,
+        "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 180},
+        "command_sha256": SHA256,
+    }
+    return value
+
+
+def discovery_result_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-visual-reference-discovery-result/1.0",
+        "EOM local image visual reference discovery result v1",
+    )
+    value["$defs"] = {"candidate": intent_schema()["$defs"]["candidate"]}
+    value["required"] = [
+        "schema_version",
+        "command_id",
+        "command_sha256",
+        "status",
+        "candidates",
+        "error_code",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "result_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-visual-reference-discovery-result/1.0"},
+        "command_id": {"type": "string", "pattern": "^imgrefdiscover_[0-9a-f]{32}$"},
+        "command_sha256": SHA256,
+        "status": {"enum": ["SUCCEEDED", "FAILED"]},
+        "candidates": {
+            "type": "array",
+            "maxItems": 5,
+            "uniqueItems": True,
+            "items": {"$ref": "#/$defs/candidate"},
+        },
+        "error_code": {
+            "oneOf": [
+                {
+                    "enum": [
+                        "VISUAL_REFERENCE_INPUT_INVALID",
+                        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+                        "VISUAL_REFERENCE_SOURCE_REJECTED",
+                        "VISUAL_REFERENCE_LICENSE_REJECTED",
+                    ]
+                },
+                {"type": "null"},
+            ]
+        },
+        "started_at": UTC,
+        "completed_at": UTC,
+        "duration_ms": {"type": "integer", "minimum": 1, "maximum": 180000},
+        "result_sha256": SHA256,
+    }
+    value["allOf"] = [
+        {
+            "if": {"properties": {"status": {"const": "SUCCEEDED"}}},
+            "then": {
+                "properties": {
+                    "candidates": {"minItems": 1, "maxItems": 5},
+                    "error_code": {"type": "null"},
+                }
+            },
+            "else": {
+                "properties": {
+                    "candidates": {"maxItems": 0},
+                    "error_code": {"type": "string"},
+                }
+            },
+        }
+    ]
+    return value
+
+
 def _conditioning_pointer() -> dict[str, Any]:
     return {
         "type": "object",
@@ -797,6 +902,8 @@ def conditioned_receipt_v2_schema() -> dict[str, Any]:
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
+    "local-image-visual-reference-discovery-command-v1.schema.json": (discovery_command_schema()),
+    "local-image-visual-reference-discovery-result-v1.schema.json": discovery_result_schema(),
     "local-image-reference-conditioned-composite-request-v1.schema.json": (
         conditioned_request_schema()
     ),
