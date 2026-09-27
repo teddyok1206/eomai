@@ -211,7 +211,8 @@ def test_acquisition_materializes_only_canonical_bundle_reference_and_result(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
-    workspace.mkdir(mode=0o700)
+    workspace.mkdir(mode=0o1730)
+    workspace.chmod(0o1730)
     intent = _intent()
     intent_bytes = content_json_bytes(intent.model_dump(mode="json"))
     command = _command(intent_bytes)
@@ -246,6 +247,9 @@ def test_acquisition_materializes_only_canonical_bundle_reference_and_result(
     assert output.result_path.read_bytes() == content_json_bytes(
         output.result.model_dump(mode="json")
     )
+    for path in output.output_directory.rglob("*"):
+        if path.is_file():
+            assert path.stat().st_mode & 0o777 == 0o640
     assert not any(
         path.read_bytes() == original
         for path in output.output_directory.rglob("*")
@@ -302,7 +306,8 @@ def test_failed_acquisition_publishes_only_stable_failure_result(tmp_path: Path)
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_UNAVAILABLE")
 
     workspace = tmp_path / "workspace"
-    workspace.mkdir(mode=0o700)
+    workspace.mkdir(mode=0o1730)
+    workspace.chmod(0o1730)
     intent = _intent()
     intent_bytes = content_json_bytes(intent.model_dump(mode="json"))
     now = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
@@ -322,14 +327,16 @@ def test_failed_acquisition_publishes_only_stable_failure_result(tmp_path: Path)
 
 def test_canonical_input_loader_rejects_hash_drift(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
-    (workspace / "input").mkdir(mode=0o700, parents=True)
-    workspace.chmod(0o700)
+    (workspace / "input").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
     intent = _intent()
     intended = content_json_bytes(intent.model_dump(mode="json"))
     command = _command(intended)
     command_path = workspace / "command.json"
     command_path.write_bytes(content_json_bytes(command.model_dump(mode="json")))
+    command_path.chmod(0o440)
     (workspace / "input/visual-reference-intent.json").write_bytes(intended + b" ")
+    (workspace / "input/visual-reference-intent.json").chmod(0o440)
 
     with pytest.raises(VisualReferenceAcquisitionError, match="VISUAL_REFERENCE_INPUT_INVALID"):
         load_acquisition_inputs(command_path=command_path, workspace=workspace)

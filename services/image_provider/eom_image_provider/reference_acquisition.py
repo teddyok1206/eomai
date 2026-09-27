@@ -667,11 +667,12 @@ def _build_result(
 
 def _publish_output(workspace: Path, members: dict[str, bytes]) -> None:
     staging = Path(tempfile.mkdtemp(prefix=".reference-output-", dir=workspace))
-    staging.chmod(0o700)
+    staging.chmod(0o750)
     try:
         for name, payload in members.items():
             target = staging / name
-            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            target.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+            target.parent.chmod(0o750)
             _write_exclusive(target, payload)
         os.rename(staging, workspace / "output")
     except Exception:
@@ -683,7 +684,7 @@ def _write_exclusive(path: Path, payload: bytes) -> None:
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
-        0o600,
+        0o640,
     )
     try:
         view = memoryview(payload)
@@ -693,6 +694,7 @@ def _write_exclusive(path: Path, payload: bytes) -> None:
                 raise OSError("short visual-reference write")
             view = view[written:]
         os.fsync(descriptor)
+        os.fchmod(descriptor, 0o640)
     finally:
         os.close(descriptor)
 
@@ -706,6 +708,8 @@ def _load_canonical_json(path: Path, *, maximum_bytes: int) -> tuple[dict[str, o
             or not stat.S_ISREG(metadata.st_mode)
             or metadata.st_nlink != 1
             or not 1 <= metadata.st_size <= maximum_bytes
+            or stat.S_IMODE(metadata.st_mode) != 0o440
+            or metadata.st_gid != os.getegid()
         ):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
         descriptor = os.open(
@@ -756,8 +760,9 @@ def _require_workspace(path: Path) -> None:
         not path.is_absolute()
         or path.is_symlink()
         or not stat.S_ISDIR(metadata.st_mode)
-        or stat.S_IMODE(metadata.st_mode) != 0o700
-        or metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o1730
+        or metadata.st_gid != os.getegid()
+        or metadata.st_gid not in os.getgroups()
     ):
         raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
 

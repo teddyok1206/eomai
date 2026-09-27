@@ -67,6 +67,8 @@ class Settings:
     workspace_root: Path = Path("/srv/eom/workspaces")
     worker_home_root: Path = Path("/srv/eom/worker-homes")
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
+    image_reference_workspace_root: Path = Path("/srv/eom/image-reference-workspaces")
+    image_reference_provider_group: str = "eom-image-reference"
     codex_binary: Path = Path("/usr/local/bin/codex")
     codex_capability_policy: Path = DEFAULT_CODEX_CAPABILITY_POLICY
     worker_timeout_seconds: int = 1800
@@ -92,6 +94,15 @@ class Settings:
             worker_home_root=Path(os.environ.get("EOM_WORKER_HOME_ROOT", "/srv/eom/worker-homes")),
             nas_artifact_root=Path(
                 os.environ.get("EOM_NAS_ARTIFACT_ROOT", "/mnt/nas/eom/artifacts")
+            ),
+            image_reference_workspace_root=Path(
+                os.environ.get(
+                    "EOM_IMAGE_REFERENCE_WORKSPACE_ROOT",
+                    "/srv/eom/image-reference-workspaces",
+                )
+            ),
+            image_reference_provider_group=os.environ.get(
+                "EOM_IMAGE_REFERENCE_PROVIDER_GROUP", "eom-image-reference"
             ),
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),
             codex_capability_policy=capability_policy,
