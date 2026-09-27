@@ -47,6 +47,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-crop-locator-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-crop-locator-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-provider-binding-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-provider-binding-v2.schema.json",
         "eom_image_contracts/schemas/local-image-composite-request-v1.schema.json",
         "eom_image_contracts/schemas/local-image-composite-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-quality-evaluation-plan-v1.schema.json",
@@ -65,10 +66,15 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-lora-training-worker-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-visual-reference-intent-v1.schema.json",
         "eom_image_contracts/schemas/local-image-visual-reference-bundle-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-discovery-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-visual-reference-discovery-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-visual-reference-acquisition-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-visual-reference-acquisition-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v1.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-style-adapter-release-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v2.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_CONTRACT_WHEEL_INVALID")

@@ -31,14 +31,18 @@ from eom_image_contracts import (
     LocalImageVisualReferenceAcquisitionCommand,
     LocalImageVisualReferenceAcquisitionResult,
     LocalImageVisualReferenceBundle,
+    LocalImageVisualReferenceDiscoveryCommand,
+    LocalImageVisualReferenceDiscoveryResult,
     LocalImageVisualReferenceIntent,
     NormalizedVisualReferenceMember,
     VisualReferenceAcquisitionOutputFile,
+    VisualReferenceIntentCandidate,
     VisualReferenceSource,
     content_json_bytes,
     content_sha256,
     validate_contract,
     validate_visual_reference_acquisition,
+    validate_visual_reference_discovery,
 )
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
@@ -87,6 +91,13 @@ class VisualReferenceAcquisitionOutput:
     output_directory: Path
     bundle_path: Path | None
     reference_path: Path | None
+    result_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class VisualReferenceDiscoveryOutput:
+    result: LocalImageVisualReferenceDiscoveryResult
+    output_directory: Path
     result_path: Path
 
 
@@ -200,6 +211,105 @@ class WikimediaCommonsClient:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         return tuple(acquired)
 
+    def discover_candidates(
+        self,
+        *,
+        subject: str,
+        candidate_limit: int,
+        timeout_seconds: int,
+    ) -> tuple[VisualReferenceIntentCandidate, ...]:
+        """Return a stable ordered subset of official, license-compatible Commons files."""
+
+        if not 3 <= len(subject) <= 180 or not 1 <= candidate_limit <= 5:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
+        parameters = urlencode(
+            {
+                "action": "query",
+                "format": "json",
+                "formatversion": "2",
+                "generator": "search",
+                "gsrsearch": subject,
+                "gsrnamespace": "6",
+                "gsrlimit": "20",
+                "gsrwhat": "text",
+                "prop": "info|revisions|imageinfo",
+                "inprop": "url",
+                "rvprop": "ids",
+                "iiprop": "url|size|mime|extmetadata",
+                "maxlag": "5",
+            }
+        )
+        request_url = f"{COMMONS_API}?{parameters}"
+        response = self._open(request_url, timeout_seconds=timeout_seconds)
+        try:
+            if response.geturl() != request_url:
+                raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+            media_type = response.headers.get_content_type()
+            raw = response.read(MAX_API_BYTES + 1)
+        except OSError as exc:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_UNAVAILABLE") from exc
+
+        finally:
+            response.close()
+        if media_type not in {"application/json", "text/json"} or len(raw) > MAX_API_BYTES:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+        try:
+            value = json.loads(raw, object_pairs_hook=_unique_object)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED") from exc
+        raw_pages = _mapping(value, "query").get("pages")
+        if not isinstance(raw_pages, list):
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+        ordered_pages = sorted(raw_pages, key=_discovery_page_order)
+        discovered: list[VisualReferenceIntentCandidate] = []
+        seen_page_ids: set[int] = set()
+        seen_titles: set[str] = set()
+        for raw_page in ordered_pages:
+            if not isinstance(raw_page, dict):
+                raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+            page_id = raw_page.get("pageid")
+            title = raw_page.get("title")
+            canonical_url = raw_page.get("canonicalurl")
+            if (
+                not isinstance(page_id, int)
+                or page_id in seen_page_ids
+                or not isinstance(title, str)
+                or title in seen_titles
+                or not isinstance(canonical_url, str)
+            ):
+                raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+            seen_page_ids.add(page_id)
+            seen_titles.add(title)
+            candidate = VisualReferenceIntentCandidate.model_validate(
+                {
+                    "rank": len(discovered) + 1,
+                    "provider": "WIKIMEDIA_COMMONS",
+                    "page_id": page_id,
+                    "file_title": title,
+                    "canonical_page_url": canonical_url,
+                    "selection_rationale": (
+                        "Official Commons result selected for the exact morphology subject."
+                    ),
+                    "intended_use": "SUBJECT_MORPHOLOGY_REFERENCE",
+                    "license_expectation": "PUBLIC_DOMAIN_OR_CC0",
+                }
+            )
+            try:
+                _verified_page(candidate, raw_page)
+            except VisualReferenceAcquisitionError as exc:
+                if exc.code not in {
+                    "VISUAL_REFERENCE_SOURCE_REJECTED",
+                    "VISUAL_REFERENCE_LICENSE_REJECTED",
+                }:
+                    raise
+                continue
+            discovered.append(candidate)
+            if len(discovered) == candidate_limit:
+                break
+        if not discovered:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+        return tuple(discovered)
+
     def _load_pages(
         self,
         intent: LocalImageVisualReferenceIntent,
@@ -303,6 +413,67 @@ class WikimediaCommonsClient:
             return cast(HttpResponse, self.opener.open(request, timeout=timeout_seconds))
         except OSError as exc:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_UNAVAILABLE") from exc
+
+
+def run_visual_reference_discovery(
+    *,
+    command: LocalImageVisualReferenceDiscoveryCommand,
+    workspace: Path,
+    client: WikimediaCommonsClient | None = None,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
+) -> VisualReferenceDiscoveryOutput:
+    """Resolve a subject-only command into bounded, metadata-verified candidate identities."""
+
+    _require_workspace(workspace)
+    output = workspace / "output"
+    if output.exists() or output.is_symlink():
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_OUTPUT_INVALID")
+    started_at = now()
+    started_clock = monotonic_ns()
+    resolved_client = client or WikimediaCommonsClient()
+    try:
+        candidates = resolved_client.discover_candidates(
+            subject=command.subject,
+            candidate_limit=command.candidate_limit,
+            timeout_seconds=command.timeout_seconds,
+        )
+        status = "SUCCEEDED"
+        error_code = None
+    except VisualReferenceAcquisitionError as exc:
+        candidates = ()
+        status = "FAILED"
+        error_code = exc.code
+    completed_at = now()
+    duration_ms = min(max(1, (monotonic_ns() - started_clock) // 1_000_000), 180_000)
+    body = {
+        "schema_version": "local-image-visual-reference-discovery-result/1.0",
+        "command_id": command.command_id,
+        "command_sha256": command.command_sha256,
+        "status": status,
+        "candidates": [value.model_dump(mode="json") for value in candidates],
+        "error_code": error_code,
+        "started_at": started_at.isoformat().replace("+00:00", "Z"),
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+        "duration_ms": duration_ms,
+    }
+    try:
+        result = LocalImageVisualReferenceDiscoveryResult.model_validate(
+            {**body, "result_sha256": content_sha256(body)}
+        )
+        validate_contract("visual-reference-discovery-result", result.model_dump(mode="json"))
+        validate_visual_reference_discovery(command, result)
+    except Exception as exc:
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_OUTPUT_INVALID") from exc
+    _publish_output(
+        workspace,
+        {RESULT_MEMBER: content_json_bytes(result.model_dump(mode="json"))},
+    )
+    return VisualReferenceDiscoveryOutput(
+        result=result,
+        output_directory=output,
+        result_path=output / RESULT_MEMBER,
+    )
 
 
 def run_visual_reference_acquisition(
@@ -528,6 +699,22 @@ def load_acquisition_inputs(
     except Exception as exc:
         raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID") from exc
     return command, intent
+
+
+def load_discovery_command(
+    *,
+    command_path: Path,
+    workspace: Path,
+) -> LocalImageVisualReferenceDiscoveryCommand:
+    """Load one canonical discovery command without following mutable links."""
+
+    _require_workspace(workspace)
+    command_value, _ = _load_canonical_json(command_path, maximum_bytes=256 * 1024)
+    try:
+        validate_contract("visual-reference-discovery-command", command_value)
+        return LocalImageVisualReferenceDiscoveryCommand.model_validate(command_value)
+    except Exception as exc:
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID") from exc
 
 
 def _verified_page(
@@ -811,6 +998,16 @@ def _unique_object(pairs: Iterable[tuple[str, object]]) -> dict[str, object]:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         value[key] = item
     return value
+
+
+def _discovery_page_order(value: object) -> tuple[int, int]:
+    if not isinstance(value, dict):
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+    index = value.get("index")
+    page_id = value.get("pageid")
+    if not isinstance(index, int) or not isinstance(page_id, int):
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+    return index, page_id
 
 
 def _mapping(value: object, key: str) -> dict[str, object]:

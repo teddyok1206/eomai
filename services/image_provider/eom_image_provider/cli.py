@@ -29,7 +29,9 @@ from eom_image_provider.provider import (
 from eom_image_provider.reference_acquisition import (
     VisualReferenceAcquisitionError,
     load_acquisition_inputs,
+    load_discovery_command,
     run_visual_reference_acquisition,
+    run_visual_reference_discovery,
 )
 
 
@@ -53,6 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     reference = subparsers.add_parser("acquire-reference")
     reference.add_argument("--command", type=Path, required=True)
     reference.add_argument("--workspace", type=Path, required=True)
+    discovery = subparsers.add_parser("discover-reference")
+    discovery.add_argument("--command", type=Path, required=True)
+    discovery.add_argument("--workspace", type=Path, required=True)
     manifest = subparsers.add_parser("create-manifest")
     manifest.add_argument("--revision-directory", type=Path, required=True)
     manifest.add_argument("--model-id", required=True)
@@ -119,7 +124,7 @@ def main() -> None:
                         backend=Ssd1bDiffusersBackend(),
                     )
             result = conditioned_receipt.model_dump(mode="json")
-        else:
+        elif args.operation == "acquire-reference":
             command, intent = load_acquisition_inputs(
                 command_path=args.command,
                 workspace=args.workspace,
@@ -130,6 +135,16 @@ def main() -> None:
                 workspace=args.workspace,
             )
             result = acquisition.result.model_dump(mode="json")
+        else:
+            discovery_command = load_discovery_command(
+                command_path=args.command,
+                workspace=args.workspace,
+            )
+            discovery = run_visual_reference_discovery(
+                command=discovery_command,
+                workspace=args.workspace,
+            )
+            result = discovery.result.model_dump(mode="json")
     except Exception as exc:
         code = (
             exc.code

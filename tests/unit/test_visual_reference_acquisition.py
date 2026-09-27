@@ -9,10 +9,12 @@ from typing import Any
 import pytest
 from eom_image_contracts import (
     LocalImageVisualReferenceAcquisitionCommand,
+    LocalImageVisualReferenceDiscoveryCommand,
     LocalImageVisualReferenceIntent,
     VisualReferenceSource,
     content_json_bytes,
     content_sha256,
+    validate_contract,
 )
 from eom_image_provider.reference_acquisition import (
     AcquiredReference,
@@ -20,6 +22,7 @@ from eom_image_provider.reference_acquisition import (
     WikimediaCommonsClient,
     load_acquisition_inputs,
     run_visual_reference_acquisition,
+    run_visual_reference_discovery,
 )
 from pydantic import ValidationError as PydanticValidationError
 
@@ -84,6 +87,27 @@ def _command(intent_bytes: bytes) -> LocalImageVisualReferenceAcquisitionCommand
         "timeout_seconds": 120,
     }
     return LocalImageVisualReferenceAcquisitionCommand.model_validate(
+        {**body, "command_sha256": content_sha256(body)}
+    )
+
+
+def _discovery_command() -> LocalImageVisualReferenceDiscoveryCommand:
+    identity_body = {
+        "schema_version": "local-image-visual-reference-discovery-command/1.0",
+        "workflow_id": "workflow_" + "2" * 32,
+        "image_step_run_id": "steprun_" + "3" * 32,
+        "image_job_id": "job_" + "4" * 32,
+        "visual_ordinal": 0,
+        "drawing_sha256": "sha256:" + "5" * 64,
+        "subject": "one compact car in side view isolated on white",
+        "query_terms": ["compact car", "side view"],
+        "candidate_limit": 5,
+        "observed_at": "2026-09-27T12:00:00Z",
+        "timeout_seconds": 120,
+    }
+    command_id = "imgrefdiscover_" + content_sha256(identity_body).removeprefix("sha256:")[:32]
+    body = {**identity_body, "command_id": command_id}
+    return LocalImageVisualReferenceDiscoveryCommand.model_validate(
         {**body, "command_sha256": content_sha256(body)}
     )
 
@@ -203,6 +227,74 @@ class _Opener:
         return _Response(url, "image/jpeg", self.original)
 
 
+class _DiscoveryOpener:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def open(self, request: Any, *, timeout: int) -> _Response:
+        url = request.full_url
+        self.calls.append(url)
+        assert timeout == 120
+
+        def page(*, index: int, page_id: int, title: str, license_code: str) -> dict[str, object]:
+            canonical_title = title.replace(" ", "_")
+            return {
+                "pageid": page_id,
+                "ns": 6,
+                "title": title,
+                "index": index,
+                "canonicalurl": f"https://commons.wikimedia.org/wiki/{canonical_title}",
+                "revisions": [{"revid": 1000 + page_id}],
+                "imageinfo": [
+                    {
+                        "url": (
+                            "https://upload.wikimedia.org/wikipedia/commons/"
+                            f"a/ab/reference-{page_id}.jpg"
+                        ),
+                        "size": 100_000,
+                        "width": 1200,
+                        "height": 800,
+                        "mime": "image/jpeg",
+                        "extmetadata": {
+                            "License": {"value": license_code},
+                            "LicenseShortName": {"value": license_code},
+                            "LicenseUrl": {
+                                "value": ("https://creativecommons.org/publicdomain/zero/1.0/")
+                            },
+                        },
+                    }
+                ],
+            }
+
+        payload = json.dumps(
+            {
+                "query": {
+                    "pages": [
+                        page(
+                            index=3,
+                            page_id=103,
+                            title="File:Licensed compact car.jpg",
+                            license_code="cc-by-sa-4.0",
+                        ),
+                        page(
+                            index=2,
+                            page_id=102,
+                            title="File:Public compact car rear.jpg",
+                            license_code="pd",
+                        ),
+                        page(
+                            index=1,
+                            page_id=101,
+                            title="File:CC0 compact car side.jpg",
+                            license_code="cc-zero",
+                        ),
+                    ]
+                }
+            }
+        ).encode()
+        return _Response(url, "application/json", payload)
+
+
 def _public_resolver(*_args: object, **_kwargs: object) -> list[tuple[object, ...]]:
     return [(2, 1, 6, "", ("208.80.154.224", 443))]
 
@@ -278,6 +370,57 @@ def test_official_metadata_is_independently_verified() -> None:
     assert acquired[0].source.page_revision_id == 1001
     assert acquired[0].source.license_id == "CC0-1.0"
     assert len(opener.calls) == 2
+
+
+def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None:
+    opener = _DiscoveryOpener()
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    candidates = client.discover_candidates(
+        subject="one compact car in side view isolated on white",
+        candidate_limit=5,
+        timeout_seconds=120,
+    )
+
+    assert tuple(value.page_id for value in candidates) == (101, 102)
+    assert tuple(value.rank for value in candidates) == (1, 2)
+    assert all(value.license_expectation == "PUBLIC_DOMAIN_OR_CC0" for value in candidates)
+    assert len(opener.calls) == 1
+
+
+def test_discovery_materializes_one_canonical_result_without_source_bytes(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(mode=0o1730)
+    workspace.chmod(0o1730)
+    clock = iter(
+        (
+            datetime(2026, 9, 27, 12, 0, tzinfo=UTC),
+            datetime(2026, 9, 27, 12, 0, 1, tzinfo=UTC),
+        )
+    )
+    ticks = iter((1_000_000_000, 2_000_000_000))
+    client = WikimediaCommonsClient(
+        opener=_DiscoveryOpener(),  # type: ignore[arg-type]
+        address_resolver=_public_resolver,
+    )
+
+    command = _discovery_command()
+    validate_contract("visual-reference-discovery-command", command.model_dump(mode="json"))
+    output = run_visual_reference_discovery(
+        command=command,
+        workspace=workspace,
+        client=client,
+        now=lambda: next(clock),
+        monotonic_ns=lambda: next(ticks),
+    )
+
+    assert output.result.status == "SUCCEEDED"
+    validate_contract("visual-reference-discovery-result", output.result.model_dump(mode="json"))
+    assert tuple(value.page_id for value in output.result.candidates) == (101, 102)
+    assert output.result_path.read_bytes() == content_json_bytes(
+        output.result.model_dump(mode="json")
+    )
+    assert tuple(path.name for path in output.output_directory.iterdir()) == ("result.json",)
 
 
 def test_non_public_domain_metadata_is_rejected() -> None:

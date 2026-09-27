@@ -242,6 +242,8 @@ from eom_image_contracts.visual_reference import (
     LocalImageVisualReferenceAcquisitionCommand,
     LocalImageVisualReferenceAcquisitionResult,
     LocalImageVisualReferenceBundle,
+    LocalImageVisualReferenceDiscoveryCommand,
+    LocalImageVisualReferenceDiscoveryResult,
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     LocalImageVisualReferencePolicy,
@@ -259,6 +261,7 @@ from eom_image_contracts.visual_reference import (
     validate_reference_conditioned_receipt,
     validate_reference_conditioned_receipt_v2,
     validate_visual_reference_acquisition,
+    validate_visual_reference_discovery,
 )
 
 __all__ = [
@@ -396,6 +399,8 @@ __all__ = [
     "LocalImageVisualReferenceAcquisitionCommand",
     "LocalImageVisualReferenceAcquisitionResult",
     "LocalImageVisualReferenceBundle",
+    "LocalImageVisualReferenceDiscoveryCommand",
+    "LocalImageVisualReferenceDiscoveryResult",
     "LocalImageVisualReferenceIntent",
     "LocalImageVisualReferencePointer",
     "LocalImageVisualReferencePolicy",
@@ -505,4 +510,5 @@ __all__ = [
     "validate_training_dataset_inventory",
     "validate_training_inventory_review",
     "validate_visual_reference_acquisition",
+    "validate_visual_reference_discovery",
 ]

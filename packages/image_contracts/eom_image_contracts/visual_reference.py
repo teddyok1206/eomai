@@ -92,6 +92,131 @@ class VisualReferenceIntentCandidate(FrozenModel):
         )
 
 
+class LocalImageVisualReferenceDiscoveryCommand(FrozenModel):
+    schema_version: Literal["local-image-visual-reference-discovery-command/1.0"] = (
+        "local-image-visual-reference-discovery-command/1.0"
+    )
+    command_id: str = Field(pattern=r"^imgrefdiscover_[0-9a-f]{32}$")
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    image_step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
+    image_job_id: str = Field(pattern=r"^job_[0-9a-f]{32}$")
+    visual_ordinal: int = Field(ge=0, le=1)
+    drawing_sha256: Sha256
+    subject: EnglishSubject
+    query_terms: tuple[
+        Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=80,
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9 .()/_-]{0,79}$",
+            ),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=8)
+    candidate_limit: Literal[5] = 5
+    observed_at: datetime
+    timeout_seconds: int = Field(ge=30, le=180)
+    command_sha256: Sha256
+
+    @field_validator("subject")
+    @classmethod
+    def safe_subject(cls, value: str) -> str:
+        return _require_safe_text(value)
+
+    @field_validator("query_terms")
+    @classmethod
+    def safe_query_terms(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(_require_safe_text(value) for value in values)
+
+    @field_validator("observed_at")
+    @classmethod
+    def utc_observation(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("visual-reference discovery observation must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_identity_and_hash(self) -> LocalImageVisualReferenceDiscoveryCommand:
+        if self.query_terms != tuple(sorted(set(self.query_terms))):
+            raise ValueError("visual-reference discovery query terms must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"command_id", "command_sha256"})
+        identity = content_sha256(body).removeprefix("sha256:")
+        if self.command_id != "imgrefdiscover_" + identity[:32]:
+            raise ValueError("visual-reference discovery command ID mismatch")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
+        if self.command_sha256 != expected:
+            raise ValueError("visual-reference discovery command hash mismatch")
+        return self
+
+
+class LocalImageVisualReferenceDiscoveryResult(FrozenModel):
+    schema_version: Literal["local-image-visual-reference-discovery-result/1.0"] = (
+        "local-image-visual-reference-discovery-result/1.0"
+    )
+    command_id: str = Field(pattern=r"^imgrefdiscover_[0-9a-f]{32}$")
+    command_sha256: Sha256
+    status: Literal["SUCCEEDED", "FAILED"]
+    candidates: tuple[VisualReferenceIntentCandidate, ...] = Field(max_length=5)
+    error_code: (
+        Literal[
+            "VISUAL_REFERENCE_INPUT_INVALID",
+            "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+            "VISUAL_REFERENCE_SOURCE_REJECTED",
+            "VISUAL_REFERENCE_LICENSE_REJECTED",
+        ]
+        | None
+    )
+    started_at: datetime
+    completed_at: datetime
+    duration_ms: int = Field(ge=1, le=180_000)
+    result_sha256: Sha256
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("visual-reference discovery timestamps must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def coherent_result(self) -> LocalImageVisualReferenceDiscoveryResult:
+        if self.completed_at < self.started_at:
+            raise ValueError("visual-reference discovery completion precedes start")
+        if self.status == "SUCCEEDED":
+            if not self.candidates or self.error_code is not None:
+                raise ValueError("successful visual-reference discovery is incomplete")
+            ranks = tuple(value.rank for value in self.candidates)
+            if ranks != tuple(range(1, len(self.candidates) + 1)):
+                raise ValueError("visual-reference discovery ranks must be contiguous")
+            for values, label in (
+                (tuple(value.page_id for value in self.candidates), "page IDs"),
+                (tuple(value.file_title for value in self.candidates), "file titles"),
+                (
+                    tuple(value.canonical_page_url for value in self.candidates),
+                    "page URLs",
+                ),
+            ):
+                if len(values) != len(set(values)):
+                    raise ValueError(f"visual-reference discovery {label} must be unique")
+        elif self.candidates or self.error_code is None:
+            raise ValueError("failed visual-reference discovery has invalid outputs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("visual-reference discovery result hash mismatch")
+        return self
+
+
+def validate_visual_reference_discovery(
+    command: LocalImageVisualReferenceDiscoveryCommand,
+    result: LocalImageVisualReferenceDiscoveryResult,
+) -> None:
+    if result.command_id != command.command_id or result.command_sha256 != command.command_sha256:
+        raise ValueError("visual-reference discovery result differs from its command")
+    if result.status == "SUCCEEDED" and len(result.candidates) > command.candidate_limit:
+        raise ValueError("visual-reference discovery exceeds its candidate limit")
+
+
 class LocalImageVisualReferenceIntent(FrozenModel):
     schema_version: Literal["local-image-visual-reference-intent/1.0"] = (
         "local-image-visual-reference-intent/1.0"

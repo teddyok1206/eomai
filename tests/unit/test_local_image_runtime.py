@@ -48,6 +48,23 @@ def test_visual_reference_acquirer_has_network_but_no_gpu_model_nas_or_repo_acce
     assert "Restart=no" in source
 
 
+def test_visual_reference_discoverer_has_the_same_bounded_network_boundary() -> None:
+    source = (ROOT / "infra/systemd/eom-image-reference-discoverer@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image-reference" in source
+    assert "eom-local-image discover-reference" in source
+    assert "PrivateNetwork=false" in source
+    assert "PrivateDevices=true" in source
+    assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6" in source
+    assert "--gpu-lock" not in source
+    assert "ReadWritePaths=/srv/eom/image-reference-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/srv/eom/models" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+
+
 def test_reference_conditioned_provider_has_gpu_but_no_network_nas_or_acquirer_access() -> None:
     source = (ROOT / "infra/systemd/eom-image-reference-provider@.service").read_text(
         encoding="utf-8"
@@ -266,6 +283,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
 
     assert "eom-image-provider@imgreq_" in source
     assert "eom-image-reference-acquirer@imgrefcmd_" in source
+    assert "eom-image-reference-discoverer@imgrefdiscover_" in source
     assert "eom-image-reference-provider@imgreq_" in source
     assert "eom-image-trainer@imgtrainrun_" in source
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
@@ -310,6 +328,7 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert "curl" not in build and "wget" not in build
     assert "--no-deps --force-reinstall" in deploy
     assert "eom-image-reference-acquirer@.service" in deploy
+    assert "eom-image-reference-discoverer@.service" in deploy
     assert "eom-image-reference" in deploy
     assert "RUNNER_RESTART_REQUIRED=YES" in deploy
     assert "systemctl restart" not in deploy
@@ -418,6 +437,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
     for unit in (
         ROOT / "infra/systemd/eom-image-provider@.service",
         ROOT / "infra/systemd/eom-image-reference-acquirer@.service",
+        ROOT / "infra/systemd/eom-image-reference-discoverer@.service",
         ROOT / "infra/systemd/eom-image-reference-provider@.service",
         ROOT / "infra/systemd/eom-image-trainer@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
