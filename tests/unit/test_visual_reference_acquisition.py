@@ -20,6 +20,7 @@ from eom_image_provider.reference_acquisition import (
     AcquiredReference,
     VisualReferenceAcquisitionError,
     WikimediaCommonsClient,
+    _canonical_original_file_url,
     load_acquisition_inputs,
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
@@ -207,6 +208,8 @@ class _Opener:
                     {
                         "url": (
                             "https://upload.wikimedia.org/wikipedia/commons/a/ab/Compact_car.jpg"
+                            "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo"
+                            "&utm_content=original"
                         ),
                         "size": len(self.original),
                         "width": 1200,
@@ -249,7 +252,8 @@ class _DiscoveryOpener:
                     {
                         "url": (
                             "https://upload.wikimedia.org/wikipedia/commons/"
-                            f"a/ab/reference-{page_id}.jpg"
+                            f"a/ab/reference-{page_id}.jpg?utm_source=commons.wikimedia.org"
+                            "&utm_campaign=imageinfo&utm_content=original"
                         ),
                         "size": 100_000,
                         "width": 1200,
@@ -369,7 +373,29 @@ def test_official_metadata_is_independently_verified() -> None:
     assert acquired[0].original_bytes == original
     assert acquired[0].source.page_revision_id == 1001
     assert acquired[0].source.license_id == "CC0-1.0"
+    assert acquired[0].source.original_file_url == (
+        "https://upload.wikimedia.org/wikipedia/commons/a/ab/Compact_car.jpg"
+    )
+    assert opener.calls[-1] == acquired[0].source.original_file_url
     assert len(opener.calls) == 2
+
+
+def test_upload_tracking_query_is_exactly_bounded_before_canonicalization() -> None:
+    base = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Compact_car.jpg"
+
+    assert (
+        _canonical_original_file_url(
+            base + "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
+        )
+        == base
+    )
+    assert _canonical_original_file_url(base + "?token=secret") is None
+    assert (
+        _canonical_original_file_url(
+            base + "?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+        )
+        is None
+    )
 
 
 def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None:

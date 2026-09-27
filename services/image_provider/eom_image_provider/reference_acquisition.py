@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import (
     HTTPRedirectHandler,
     OpenerDirector,
@@ -744,15 +744,14 @@ def _verified_page(
     ):
         raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
     info = image_info[0]
-    original_url = info.get("url")
+    original_url = _canonical_original_file_url(info.get("url"))
     media_type = info.get("mime")
     size = info.get("size")
     width = info.get("width")
     height = info.get("height")
     metadata = info.get("extmetadata")
     if (
-        not isinstance(original_url, str)
-        or _require_https_url(original_url, hosts=frozenset({UPLOAD_HOST})) != original_url
+        original_url is None
         or media_type not in {"image/jpeg", "image/png", "image/webp"}
         or not isinstance(size, int)
         or not 1 <= size <= 16 * 1024 * 1024
@@ -776,6 +775,27 @@ def _verified_page(
         "license_url": license_url,
         "license_short_name": license_name,
     }
+
+
+def _canonical_original_file_url(value: object) -> str | None:
+    """Strip only Wikimedia's fixed imageinfo tracking tuple from an upload URL."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = urlsplit(value)
+        _require_https_url(value, hosts=frozenset({UPLOAD_HOST}), allow_query=True)
+    except VisualReferenceAcquisitionError:
+        return None
+    if parsed.query:
+        pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+        if pairs != [
+            ("utm_source", "commons.wikimedia.org"),
+            ("utm_campaign", "imageinfo"),
+            ("utm_content", "original"),
+        ]:
+            return None
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def _license(metadata: dict[str, object]) -> tuple[str, str, str]:
