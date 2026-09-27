@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "evaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgscisubject(seed)?case_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "ADAPTER",
+            "BASE",
+            "NEITHER"
+          ]
+        },
+        "seed": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "ADDITIONAL",
+            "INITIAL"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "case_id",
+        "seed",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "reviewEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "evaluations": {
+          "items": {
+            "$ref": "#/$defs/evaluation"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "next_actions": {
+          "items": {
+            "enum": [
+              "ADAPTER_PRODUCTION_CANARY",
+              "DATASET_AUGMENTATION",
+              "KEEP_BASE_ONLY",
+              "PROMPT_REFINEMENT",
+              "ROUTE_RECLASSIFICATION"
+            ]
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "render_route": {
+          "enum": [
+            "HYBRID",
+            "LORA_RASTER"
+          ]
+        },
+        "stability_status": {
+          "enum": [
+            "MIXED",
+            "NEITHER_ACCEPTABLE",
+            "STABLE_ADAPTER_PREFERRED",
+            "STABLE_BASE_PREFERRED"
+          ]
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "subject_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "subject_key",
+        "render_route",
+        "evaluations",
+        "stability_status",
+        "next_actions"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-review/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_activation_recommendation": {
+      "const": "FORBIDDEN"
+    },
+    "initial_quality_review": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "mixed_count": {
+      "maximum": 64,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "multiseed_plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "multiseed_result": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "neither_acceptable_count": {
+      "maximum": 64,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "review_id": {
+      "pattern": "^imgscisubjectmultiseedreview_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "review_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "reviewed_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "reviews": {
+      "items": {
+        "$ref": "#/$defs/reviewEntry"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-multiseed-review/1.0"
+    },
+    "stable_adapter_preferred_count": {
+      "maximum": 64,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "stable_base_preferred_count": {
+      "maximum": 64,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "review_id",
+    "multiseed_plan",
+    "multiseed_result",
+    "initial_quality_review",
+    "reviews",
+    "stable_adapter_preferred_count",
+    "stable_base_preferred_count",
+    "mixed_count",
+    "neither_acceptable_count",
+    "adapter_activation_recommendation",
+    "reviewed_at",
+    "reviewed_by",
+    "review_sha256"
+  ],
+  "title": "EOM Science Visual Subject Multi-seed Review V1",
+  "type": "object"
+}

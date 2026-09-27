@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgscisubjectseedcase_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "negative_prompt_en": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        "negative_prompt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "prompt_en": {
+          "maxLength": 2000,
+          "minLength": 20,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "render_route": {
+          "enum": [
+            "HYBRID",
+            "LORA_RASTER"
+          ]
+        },
+        "seed": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seed_ordinal": {
+          "maximum": 2,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "subject_id": {
+          "pattern": "^imgscisubject_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "subject_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "subject_id",
+        "subject_key",
+        "render_route",
+        "seed_ordinal",
+        "seed",
+        "prompt_en",
+        "prompt_sha256",
+        "negative_prompt_en",
+        "negative_prompt_sha256"
+      ],
+      "type": "object"
+    },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-plan/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "adapter_manifest": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "base_model": {
+      "$ref": "#/$defs/modelPointer"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/case"
+      },
+      "maxItems": 128,
+      "minItems": 2,
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "delivery_height_px": {
+      "const": 500
+    },
+    "delivery_width_px": {
+      "const": 800
+    },
+    "generation_height_px": {
+      "const": 504
+    },
+    "generation_width_px": {
+      "const": 800
+    },
+    "guidance_scale_milli": {
+      "const": 7500
+    },
+    "inference_steps": {
+      "const": 20
+    },
+    "initial_quality_review": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "plan_id": {
+      "pattern": "^imgscisubjectmultiseed_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-multiseed-plan/1.0"
+    },
+    "seeds_per_subject": {
+      "const": 2
+    },
+    "subject_inventory": {
+      "$ref": "#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "subject_inventory",
+    "initial_quality_review",
+    "base_model",
+    "adapter_manifest",
+    "generation_width_px",
+    "generation_height_px",
+    "delivery_width_px",
+    "delivery_height_px",
+    "inference_steps",
+    "guidance_scale_milli",
+    "seeds_per_subject",
+    "cases",
+    "activation_policy",
+    "created_at",
+    "created_by",
+    "plan_sha256"
+  ],
+  "title": "EOM Science Visual Subject Multi-seed Plan V1",
+  "type": "object"
+}

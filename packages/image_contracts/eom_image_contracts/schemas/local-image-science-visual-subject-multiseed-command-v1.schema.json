@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-command/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "output_directory": {
+      "const": "outputs"
+    },
+    "plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "run_id": {
+      "pattern": "^imgscisubjectmultiseedrun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-science-visual-subject-multiseed-command/1.0"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "staged_adapter_config_path": {
+      "const": "inputs/adapter/adapter_config.json"
+    },
+    "staged_adapter_manifest_path": {
+      "const": "inputs/adapter/adapter-manifest.json"
+    },
+    "staged_adapter_model_path": {
+      "const": "inputs/adapter/adapter_model.safetensors"
+    },
+    "staged_initial_quality_review_path": {
+      "const": "inputs/science-visual-subject-benchmark-review.json"
+    },
+    "staged_plan_path": {
+      "const": "inputs/subject-multiseed-plan.json"
+    },
+    "staged_subject_inventory_path": {
+      "const": "inputs/science-visual-subject-inventory.json"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "plan",
+    "plan_sha256",
+    "staged_plan_path",
+    "staged_subject_inventory_path",
+    "staged_initial_quality_review_path",
+    "staged_adapter_manifest_path",
+    "staged_adapter_model_path",
+    "staged_adapter_config_path",
+    "output_directory",
+    "source_commit",
+    "command_sha256"
+  ],
+  "title": "EOM Science Visual Subject Multi-seed Command V1",
+  "type": "object"
+}
