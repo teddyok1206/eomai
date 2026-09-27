@@ -16,6 +16,7 @@ SCHEMA_FILES = {
     "composite-request": "local-image-composite-request-v1.schema.json",
     "model-manifest": "local-image-model-manifest-v1.schema.json",
     "provider-binding": "local-image-provider-binding-v1.schema.json",
+    "provider-binding-v2": "local-image-provider-binding-v2.schema.json",
     "generation-request": "local-image-generation-request-v1.schema.json",
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
     "visual-reference-intent": "local-image-visual-reference-intent-v1.schema.json",
@@ -31,6 +32,13 @@ SCHEMA_FILES = {
     ),
     "reference-conditioned-composite-receipt": (
         "local-image-reference-conditioned-composite-receipt-v1.schema.json"
+    ),
+    "style-adapter-release": "local-image-style-adapter-release-v1.schema.json",
+    "reference-conditioned-composite-request-v2": (
+        "local-image-reference-conditioned-composite-request-v2.schema.json"
+    ),
+    "reference-conditioned-composite-receipt-v2": (
+        "local-image-reference-conditioned-composite-receipt-v2.schema.json"
     ),
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
@@ -199,6 +207,9 @@ SCHEMA_SHA256 = {
     "composite-request": "sha256:a238142416462d0dd597d06973ebc180e57c57acf61dc089c79209f6f1a8f4d9",
     "model-manifest": "sha256:f3c0d55b27e16785c14f04a52be0c84cfc23cb7fe10f9e40654891f907804fd3",
     "provider-binding": "sha256:5669a9e9d47b0e681b165dd7a8d71500d7f0552c968759273d4107eb488f00be",
+    "provider-binding-v2": (
+        "sha256:c9a7c6a2ba772f44108193be85d8b354ec89e26e1003affbe634f8327399ad78"
+    ),
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
     "visual-reference-intent": (
@@ -218,6 +229,15 @@ SCHEMA_SHA256 = {
     ),
     "reference-conditioned-composite-receipt": (
         "sha256:50863b0953358d7b71f3aa909748bf4ac9306418894c34b58c34f1800573568e"
+    ),
+    "style-adapter-release": (
+        "sha256:22f632254b0b72236d4d8a1e80597dfdca7982fe028259b0bcb1ee630d251018"
+    ),
+    "reference-conditioned-composite-request-v2": (
+        "sha256:6b538a3b968b728c6f2c51e882e3e3626220a0778bf43dabae9c38ff1dc24c96"
+    ),
+    "reference-conditioned-composite-receipt-v2": (
+        "sha256:ce8986fd687998cfef67ff3df72fa98dd45cc5def52e056ab8e2e4ec7dc59961"
     ),
     "quality-evaluation-plan": (
         "sha256:d0968b5e3237cef4edd5581f8e72e768c0e9c4c64efd4008d1bdeaed2c1497ca"

@@ -13,8 +13,12 @@ from eom_image_contracts import (
     LocalImageModelPointer,
     LocalImageOutput,
     LocalImageOverlayInput,
+    LocalImageProductionStyleAdapterRelease,
+    LocalImageProviderBindingV2,
     LocalImageReferenceConditionedCompositeReceipt,
+    LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeRequest,
+    LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferenceAcquisitionCommand,
@@ -22,6 +26,10 @@ from eom_image_contracts import (
     LocalImageVisualReferenceBundle,
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
+    LocalImageVisualReferencePolicy,
+    ProductionStyleAdapterEvaluationPointer,
+    ProductionStyleAdapterFile,
+    ProductionStyleAdapterSourceManifestPointer,
     SamplerContract,
     VisualReferenceAcquisitionOutputFile,
     VisualReferenceBundleManifestPointer,
@@ -30,6 +38,7 @@ from eom_image_contracts import (
     text_sha256,
     validate_contract,
     validate_reference_conditioned_receipt,
+    validate_reference_conditioned_receipt_v2,
     validate_visual_reference_acquisition,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -250,6 +259,63 @@ def _conditioned_request() -> LocalImageReferenceConditionedCompositeRequest:
     )
 
 
+def _style_adapter_release() -> LocalImageProductionStyleAdapterRelease:
+    model = _composite_request().generation.model
+    body = {
+        "schema_version": "local-image-style-adapter-release/1.0",
+        "release_id": "imgstylerelease_" + "1" * 32,
+        "release_revision_id": "imgstylereleaserev_" + "2" * 32,
+        "state": "RELEASED",
+        "adapter_contract": "eom-assessment-style-lora/1.0",
+        "adapter_id": "imgadapter_" + "3" * 32,
+        "adapter_revision_id": "imgadapterrev_" + "4" * 32,
+        "base_model": model.model_dump(mode="json"),
+        "source_adapter_manifest": ProductionStyleAdapterSourceManifestPointer(
+            artifact_id="artifact_" + "5" * 32,
+            artifact_revision_id="rev_" + "6" * 32,
+            sha256=_sha(30),
+            size_bytes=5000,
+        ).model_dump(mode="json"),
+        "evaluation_result": ProductionStyleAdapterEvaluationPointer(
+            artifact_id="artifact_" + "7" * 32,
+            artifact_revision_id="rev_" + "8" * 32,
+            sha256=_sha(31),
+            size_bytes=6000,
+        ).model_dump(mode="json"),
+        "files": [
+            ProductionStyleAdapterFile(
+                relative_path="adapter_config.json",
+                size_bytes=1000,
+                sha256=_sha(32),
+            ).model_dump(mode="json"),
+            ProductionStyleAdapterFile(
+                relative_path="adapter_model.safetensors",
+                size_bytes=200_000,
+                sha256=_sha(33),
+            ).model_dump(mode="json"),
+        ],
+        "lora_scale": 0.8,
+        "approved_at": "2026-09-27T13:00:00Z",
+        "approved_by": "operator_test",
+    }
+    return LocalImageProductionStyleAdapterRelease.model_validate(
+        {**body, "release_sha256": content_sha256(body)}
+    )
+
+
+def _conditioned_request_v2() -> LocalImageReferenceConditionedCompositeRequestV2:
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/2.0",
+        "composite_request": _composite_request().model_dump(mode="json"),
+        "visual_reference": _reference_pointer().model_dump(mode="json"),
+        "conditioning": LocalImageReferenceConditioning().model_dump(mode="json"),
+        "style_adapter": _style_adapter_release().model_dump(mode="json"),
+    }
+    return LocalImageReferenceConditionedCompositeRequestV2.model_validate(
+        {**body, "request_sha256": content_sha256(body)}
+    )
+
+
 def _acquisition_command() -> LocalImageVisualReferenceAcquisitionCommand:
     body = {
         "schema_version": "local-image-visual-reference-acquisition-command/1.0",
@@ -420,6 +486,76 @@ def test_conditioned_request_and_receipt_pass_both_contract_layers() -> None:
         receipt.model_dump(mode="json"),
     )
     validate_reference_conditioned_receipt(request, receipt)
+
+
+def test_style_reference_v2_contracts_pin_adapter_reference_and_unchanged_prompt() -> None:
+    request = _conditioned_request_v2()
+    v1_request = LocalImageReferenceConditionedCompositeRequest.model_validate(
+        {
+            "schema_version": "local-image-reference-conditioned-composite-request/1.0",
+            "composite_request": request.composite_request.model_dump(mode="json"),
+            "visual_reference": request.visual_reference.model_dump(mode="json"),
+            "conditioning": request.conditioning.model_dump(mode="json"),
+            "request_sha256": content_sha256(
+                {
+                    "schema_version": ("local-image-reference-conditioned-composite-request/1.0"),
+                    "composite_request": request.composite_request.model_dump(mode="json"),
+                    "visual_reference": request.visual_reference.model_dump(mode="json"),
+                    "conditioning": request.conditioning.model_dump(mode="json"),
+                }
+            ),
+        }
+    )
+    composite_receipt = _conditioned_receipt(v1_request).composite_receipt
+    receipt_body = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/2.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "completed_at": "2026-09-27T13:01:00Z",
+    }
+    receipt = LocalImageReferenceConditionedCompositeReceiptV2.model_validate(
+        {**receipt_body, "receipt_sha256": content_sha256(receipt_body)}
+    )
+    binding_body = {
+        "schema_version": "local-image-provider-binding/2.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-reference-conditioned-background/2.0",
+        "model": request.composite_request.generation.model.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "reference_policy": LocalImageVisualReferencePolicy().model_dump(mode="json"),
+        "sampler": request.composite_request.generation.sampler.model_dump(mode="json"),
+        "timeout_seconds": 300,
+    }
+    binding = LocalImageProviderBindingV2.model_validate(
+        {**binding_body, "binding_sha256": content_sha256(binding_body)}
+    )
+
+    for name, value in (
+        ("style-adapter-release", request.style_adapter.model_dump(mode="json")),
+        ("provider-binding-v2", binding.model_dump(mode="json")),
+        ("reference-conditioned-composite-request-v2", request.model_dump(mode="json")),
+        ("reference-conditioned-composite-receipt-v2", receipt.model_dump(mode="json")),
+    ):
+        validate_contract(name, value)
+    validate_reference_conditioned_receipt_v2(request, receipt)
+    assert request.composite_request.generation.prompt == _composite_request().generation.prompt
+
+
+def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:
+    payload = _style_adapter_release().model_dump(mode="json")
+    payload["base_model"]["model_revision_id"] = "imgmodelrev_" + "f" * 32
+    body = {key: value for key, value in payload.items() if key != "release_sha256"}
+    payload["release_sha256"] = content_sha256(body)
+    adapter = LocalImageProductionStyleAdapterRelease.model_validate(payload)
+    request_payload = _conditioned_request_v2().model_dump(mode="json")
+    request_payload["style_adapter"] = adapter.model_dump(mode="json")
+    body = {key: value for key, value in request_payload.items() if key != "request_sha256"}
+    request_payload["request_sha256"] = content_sha256(body)
+    with pytest.raises(PydanticValidationError, match="base model differs"):
+        LocalImageReferenceConditionedCompositeRequestV2.model_validate(request_payload)
 
 
 def test_conditioned_pointer_rejects_cross_revision_members() -> None:

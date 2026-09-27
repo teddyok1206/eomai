@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from eom_image_contracts.models import (
     LocalImageCompositeReceipt,
     LocalImageCompositeRequest,
+    LocalImageModelPointer,
+    SamplerContract,
     content_sha256,
 )
 
@@ -520,6 +522,116 @@ class LocalImageReferenceConditioning(FrozenModel):
     fit_policy: Literal["CONTAIN_WHITE_NO_UPSCALE"] = "CONTAIN_WHITE_NO_UPSCALE"
 
 
+class ProductionStyleAdapterSourceManifestPointer(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: Literal["manifests/adapter-manifest.json"] = "manifests/adapter-manifest.json"
+    schema_ref: Literal[
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+    ] = "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+    media_type: Literal["application/json"] = "application/json"
+    sha256: Sha256
+    size_bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+
+
+class ProductionStyleAdapterEvaluationPointer(FrozenModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: Literal["result.json"] = "result.json"
+    schema_ref: Literal[
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-result/1.1"
+    ] = "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-result/1.1"
+    media_type: Literal["application/json"] = "application/json"
+    sha256: Sha256
+    size_bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+
+
+class ProductionStyleAdapterFile(FrozenModel):
+    relative_path: Literal["adapter_config.json", "adapter_model.safetensors"]
+    size_bytes: int = Field(ge=1, le=1024 * 1024 * 1024)
+    sha256: Sha256
+
+
+class LocalImageProductionStyleAdapterRelease(FrozenModel):
+    """Human-approved immutable promotion of one evaluated style-only adapter."""
+
+    schema_version: Literal["local-image-style-adapter-release/1.0"] = (
+        "local-image-style-adapter-release/1.0"
+    )
+    release_id: str = Field(pattern=r"^imgstylerelease_[0-9a-f]{32}$")
+    release_revision_id: str = Field(pattern=r"^imgstylereleaserev_[0-9a-f]{32}$")
+    state: Literal["RELEASED"] = "RELEASED"
+    adapter_contract: Literal["eom-assessment-style-lora/1.0"] = "eom-assessment-style-lora/1.0"
+    adapter_id: str = Field(pattern=r"^imgadapter_[0-9a-f]{32}$")
+    adapter_revision_id: str = Field(pattern=r"^imgadapterrev_[0-9a-f]{32}$")
+    base_model: LocalImageModelPointer
+    source_adapter_manifest: ProductionStyleAdapterSourceManifestPointer
+    evaluation_result: ProductionStyleAdapterEvaluationPointer
+    files: tuple[ProductionStyleAdapterFile, ...] = Field(min_length=2, max_length=2)
+    lora_scale: float = Field(default=0.8, ge=0.8, le=0.8)
+    approved_at: datetime
+    approved_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    release_sha256: Sha256
+
+    @field_validator("approved_at")
+    @classmethod
+    def utc_approval(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("style-adapter approval must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_files_and_hash(self) -> LocalImageProductionStyleAdapterRelease:
+        if tuple(value.relative_path for value in self.files) != (
+            "adapter_config.json",
+            "adapter_model.safetensors",
+        ):
+            raise ValueError("style-adapter files must be exact and ordered")
+        if len({value.sha256 for value in self.files}) != 2:
+            raise ValueError("style-adapter file hashes must be unique")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"release_sha256"}))
+        if self.release_sha256 != expected:
+            raise ValueError("style-adapter release hash mismatch")
+        return self
+
+
+class LocalImageVisualReferencePolicy(FrozenModel):
+    intent_source: Literal["DRAWING_ALT_TEXT"] = "DRAWING_ALT_TEXT"
+    provider: Literal["WIKIMEDIA_COMMONS"] = "WIKIMEDIA_COMMONS"
+    license_policy: Literal["PUBLIC_DOMAIN_OR_CC0"] = "PUBLIC_DOMAIN_OR_CC0"
+    candidate_limit: Literal[5] = 5
+    conditioning_contract: Literal["sdxl-img2img/1.0"] = "sdxl-img2img/1.0"
+    conditioning_strength: float = Field(default=0.35, ge=0.35, le=0.35)
+    failure_policy: Literal["FAIL_CLOSED"] = "FAIL_CLOSED"
+
+
+class LocalImageProviderBindingV2(FrozenModel):
+    schema_version: Literal["local-image-provider-binding/2.0"] = "local-image-provider-binding/2.0"
+    state: Literal["ENABLED"] = "ENABLED"
+    route_contract: Literal["eom-local-reference-conditioned-background/2.0"] = (
+        "eom-local-reference-conditioned-background/2.0"
+    )
+    model: LocalImageModelPointer
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    reference_policy: LocalImageVisualReferencePolicy
+    sampler: SamplerContract
+    timeout_seconds: int = Field(ge=30, le=900)
+    binding_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_model_and_hash(self) -> LocalImageProviderBindingV2:
+        if self.style_adapter.base_model != self.model:
+            raise ValueError("style-adapter base model differs from provider model")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
+        if self.binding_sha256 != expected:
+            raise ValueError("local image provider V2 binding hash mismatch")
+        return self
+
+
 class LocalImageReferenceConditionedCompositeRequest(FrozenModel):
     schema_version: Literal["local-image-reference-conditioned-composite-request/1.0"] = (
         "local-image-reference-conditioned-composite-request/1.0"
@@ -565,6 +677,55 @@ class LocalImageReferenceConditionedCompositeReceipt(FrozenModel):
         return self
 
 
+class LocalImageReferenceConditionedCompositeRequestV2(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-request/2.0"] = (
+        "local-image-reference-conditioned-composite-request/2.0"
+    )
+    composite_request: LocalImageCompositeRequest
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageReferenceConditioning
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_model_and_hash(self) -> LocalImageReferenceConditionedCompositeRequestV2:
+        if self.style_adapter.base_model != self.composite_request.generation.model:
+            raise ValueError("conditioned request style-adapter base model differs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
+        if self.request_sha256 != expected:
+            raise ValueError("reference-conditioned V2 request hash mismatch")
+        return self
+
+
+class LocalImageReferenceConditionedCompositeReceiptV2(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-receipt/2.0"] = (
+        "local-image-reference-conditioned-composite-receipt/2.0"
+    )
+    request_sha256: Sha256
+    composite_receipt: LocalImageCompositeReceipt
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageReferenceConditioning
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    completed_at: datetime
+    receipt_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("reference-conditioned V2 completion must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_hash_and_order(self) -> LocalImageReferenceConditionedCompositeReceiptV2:
+        if self.completed_at < self.composite_receipt.completed_at:
+            raise ValueError("reference-conditioned V2 completion precedes image composition")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("reference-conditioned V2 receipt hash mismatch")
+        return self
+
+
 def validate_reference_conditioned_receipt(
     request: LocalImageReferenceConditionedCompositeRequest,
     receipt: LocalImageReferenceConditionedCompositeReceipt,
@@ -579,6 +740,23 @@ def validate_reference_conditioned_receipt(
         or receipt.conditioning != request.conditioning
     ):
         raise ValueError("reference-conditioned receipt differs from its request")
+
+
+def validate_reference_conditioned_receipt_v2(
+    request: LocalImageReferenceConditionedCompositeRequestV2,
+    receipt: LocalImageReferenceConditionedCompositeReceiptV2,
+) -> None:
+    """Bind a LoRA-style provider receipt to its exact reference and immutable release."""
+
+    if (
+        receipt.request_sha256 != request.request_sha256
+        or receipt.composite_receipt.composite_request_sha256
+        != request.composite_request.composite_request_sha256
+        or receipt.visual_reference != request.visual_reference
+        or receipt.conditioning != request.conditioning
+        or receipt.style_adapter != request.style_adapter
+    ):
+        raise ValueError("reference-conditioned V2 receipt differs from its request")
 
 
 def safe_visual_reference_member_path(value: str) -> str:
