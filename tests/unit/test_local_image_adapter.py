@@ -14,8 +14,10 @@ import pytest
 from eom_catalog_service.local_image_adapter import (
     LocalImageAdapterError,
     _build_reference_conditioned_request,
+    _build_reference_conditioned_request_v2,
     _build_request,
     load_local_image_provider_binding,
+    load_local_image_provider_binding_v2,
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
@@ -31,6 +33,7 @@ from eom_catalog_service.local_image_prompt_policy import (
 )
 from eom_image_contracts import (
     LocalImageProviderBinding,
+    LocalImageProviderBindingV2,
     LocalImageVisualReferencePointer,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
@@ -78,6 +81,79 @@ def _binding_value() -> dict[str, object]:
             "guidance_scale": 7.5,
             "dtype": "float16",
         },
+        "timeout_seconds": 900,
+    }
+    return {**body, "binding_sha256": content_sha256(body)}
+
+
+def _binding_v2_value() -> dict[str, object]:
+    model = _binding_value()["model"]
+    style_body = {
+        "schema_version": "local-image-style-adapter-release/1.0",
+        "release_id": "imgstylerelease_" + "4" * 32,
+        "release_revision_id": "imgstylereleaserev_" + "5" * 32,
+        "state": "RELEASED",
+        "adapter_contract": "eom-assessment-style-lora/1.0",
+        "adapter_id": "imgadapter_" + "6" * 32,
+        "adapter_revision_id": "imgadapterrev_" + "7" * 32,
+        "base_model": model,
+        "source_adapter_manifest": {
+            "artifact_id": "artifact_" + "8" * 32,
+            "artifact_revision_id": "rev_" + "9" * 32,
+            "member_path": "manifests/adapter-manifest.json",
+            "schema_ref": (
+                "eom://schemas/image-provider/"
+                "local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+            ),
+            "media_type": "application/json",
+            "sha256": "sha256:" + "a" * 64,
+            "size_bytes": 1000,
+        },
+        "evaluation_result": {
+            "artifact_id": "artifact_" + "b" * 32,
+            "artifact_revision_id": "rev_" + "c" * 32,
+            "member_path": "result.json",
+            "schema_ref": (
+                "eom://schemas/image-provider/"
+                "local-image-science-campaign-lora-micro-evaluation-result/1.1"
+            ),
+            "media_type": "application/json",
+            "sha256": "sha256:" + "d" * 64,
+            "size_bytes": 2000,
+        },
+        "files": [
+            {
+                "relative_path": "adapter_config.json",
+                "size_bytes": 100,
+                "sha256": "sha256:" + "e" * 64,
+            },
+            {
+                "relative_path": "adapter_model.safetensors",
+                "size_bytes": 200,
+                "sha256": "sha256:" + "f" * 64,
+            },
+        ],
+        "lora_scale": 0.8,
+        "approved_at": "2026-09-27T15:00:00Z",
+        "approved_by": "operator_test",
+    }
+    style = {**style_body, "release_sha256": content_sha256(style_body)}
+    body = {
+        "schema_version": "local-image-provider-binding/2.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-reference-conditioned-background/2.0",
+        "model": model,
+        "style_adapter": style,
+        "reference_policy": {
+            "intent_source": "DRAWING_ALT_TEXT",
+            "provider": "WIKIMEDIA_COMMONS",
+            "license_policy": "PUBLIC_DOMAIN_OR_CC0",
+            "candidate_limit": 5,
+            "conditioning_contract": "sdxl-img2img/1.0",
+            "conditioning_strength": 0.35,
+            "failure_policy": "FAIL_CLOSED",
+        },
+        "sampler": _binding_value()["sampler"],
         "timeout_seconds": 900,
     }
     return {**body, "binding_sha256": content_sha256(body)}
@@ -170,6 +246,48 @@ def test_binding_loader_pins_root_controlled_bytes(tmp_path: Path) -> None:
             trusted_owner_uid=os.geteuid(),
             trusted_group_gid=os.getegid(),
         )
+
+
+def test_v2_binding_loader_and_request_pin_style_without_changing_prompt(tmp_path: Path) -> None:
+    path = tmp_path / "binding-v2.json"
+    value = _binding_v2_value()
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    path.chmod(0o644)
+    binding = load_local_image_provider_binding_v2(
+        path,
+        trusted_owner_uid=os.geteuid(),
+        trusted_group_gid=os.getegid(),
+    )
+    assert binding.binding_sha256 == value["binding_sha256"]
+
+    overlay_path = tmp_path / "generated-overlay.png"
+    overlay_path.write_bytes(_overlay_png())
+    overlay_path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(
+        update={"alt_text": "one fox standing beside sparse grass"}
+    )
+    composite = _build_request(
+        workflow_id="workflow_" + "4" * 32,
+        result_revision_id="rev_" + "5" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=binding,
+        overlay_path=overlay_path,
+        prompt_contract="ASSESSMENT_LINE_ART_V1",
+    )
+    request = _build_reference_conditioned_request_v2(
+        composite,
+        _reference_pointer(),
+        binding,
+    )
+
+    assert request.style_adapter == binding.style_adapter
+    assert request.composite_request.generation.prompt == composite.generation.prompt
+    assert request.composite_request.generation.negative_prompt == (
+        composite.generation.negative_prompt
+    )
+    assert request.conditioning.strength == 0.35
+    assert LocalImageProviderBindingV2.model_validate(value) == binding
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))
