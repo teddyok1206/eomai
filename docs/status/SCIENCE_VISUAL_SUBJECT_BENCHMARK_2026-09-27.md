@@ -106,6 +106,26 @@ activation gate.
 - review file-set manifest SHA-256:
   `sha256:1ffa65502ec8852f7a974f349125f9c29173d1de439b39ae907cb09d8f74e72e`.
 
+## Per-subject refinement plan
+
+The stability result is now captured as a separate immutable, content-bound refinement plan rather
+than by editing the V1 inventory or changing the production provider binding. Sixteen subjects
+remain `BASE_ONLY`. Consumer science product and safety equipment are
+`BLOCK_UNTIL_REFINED`. Plant organism and volcano carry an
+`ADAPTER_PRODUCTION_CANARY` research action, but their production disposition is still
+`BASE_ONLY`. Fourteen mixed or unacceptable subjects carry exact successor prompt candidates;
+route reclassification is only a future `PYTHON_SVG` evaluation candidate.
+
+- refinement plan: `imgscisubjectrefinement_9e03f2148d7a6729a7e78be9cc3b4215`;
+- plan semantic SHA-256:
+  `sha256:f6b4751f8fe2f386227cade193307405872eff0985e7542c77b2d3496d097b6d`;
+- plan Artifact / Revision: `artifact_56e8ce15f923479a938fb47f8b1b20c8` /
+  `rev_29abde51113548aabcdf5459e1a73b9f`;
+- plan member SHA-256:
+  `sha256:f6dc986e23d3316cf1c5f385f19a3fe3fb4d9d4cfdab65ba46e95bfbad10b83a`;
+- publication source: `de9201db990ef103e1f6d431fd5b079415e9ce74`;
+- global adapter activation: `FORBIDDEN`.
+
 ## Production SVG and HWPX boundary
 
 The deterministic benchmark PNGs remain diagnostics. A separate focused regression now exercises
@@ -124,8 +144,8 @@ diagnostic subjects have individually passed a human quality review.
 
 1. Keep global production on the base-only binding. The three-seed review forbids global adapter
    activation.
-2. Keep stable-base subjects base-only. Refine prompts, dataset coverage, or route selection for the
-   12 mixed and two neither-acceptable subjects, then re-evaluate through an additive successor.
+2. Keep stable-base subjects base-only. Use the pinned refinement plan to evaluate prompt, dataset,
+   or route successors for the 12 mixed and two neither-acceptable subjects; do not mutate V1.
 3. If plant and volcano are promoted, use a subject-gated successor binding and bounded Item,
    Preview, and package-internal HWPX canary. Do not reinterpret the current global binding.
 4. Rollback must select the existing base-only immutable provider binding.

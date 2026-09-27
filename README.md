@@ -66,7 +66,10 @@ readiness가 정본입니다.
 adapter 활성화는 계속 금지합니다. 73개 고정 `PYTHON_SVG`/`HYBRID` 정의와 fallback이 쓰는 14개
 primitive는 실제 safe-SVG sanitizer, 고정 font, librsvg 경로에서 유효하고 서로 다른 PNG를 만들었으며,
 HWPX 회귀는 1장/2장 PNG가 외부 경로가 아닌 package 내부 member로 정확히 삽입됨을 다시 확인했습니다.
-이는 실행·출판 경계의 PASS이며 모든 그림의 사람 품질 승인을 뜻하지 않습니다. 정확한 Artifact와 판정은
+이 판정은 subject별 불변 refinement plan으로 고정되어 16개는 base-only, 생활제품·안전장비 2개는
+refinement 전 차단으로 유지됩니다. 식물·화산의 adapter canary 표시는 연구 action일 뿐 production
+활성화가 아닙니다. 이는 실행·출판 경계의 PASS이며 모든 그림의 사람 품질 승인을 뜻하지 않습니다.
+정확한 Artifact와 판정은
 [과학 시각 요소 벤치마크 상태](docs/status/SCIENCE_VISUAL_SUBJECT_BENCHMARK_2026-09-27.md)에
 기록합니다.
 
