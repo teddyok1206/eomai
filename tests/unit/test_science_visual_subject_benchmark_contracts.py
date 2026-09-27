@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from eom_catalog_service.science_visual_subject_benchmark import (
@@ -22,6 +23,7 @@ from eom_image_contracts import (
     LocalImageScienceVisualSubjectMultiseedPlan,
     LocalImageScienceVisualSubjectMultiseedResult,
     LocalImageScienceVisualSubjectMultiseedReview,
+    LocalImageScienceVisualSubjectRefinementPlan,
     ScienceVisualSubject,
     ScienceVisualSubjectBenchmarkCase,
     ScienceVisualSubjectBenchmarkOutcome,
@@ -31,8 +33,10 @@ from eom_image_contracts import (
     ScienceVisualSubjectMultiseedReviewEntry,
     ScienceVisualSubjectOmission,
     ScienceVisualSubjectQualityReviewEntry,
+    ScienceVisualSubjectRefinementStrategy,
     ScienceVisualSubjectSeedEvaluation,
     ScienceVisualSubjectSourceReference,
+    build_science_visual_subject_refinement_plan,
     content_json_bytes,
     content_sha256,
     science_subject_multiseed_value,
@@ -44,10 +48,12 @@ from eom_image_contracts import (
     validate_science_visual_subject_multiseed_plan,
     validate_science_visual_subject_multiseed_result,
     validate_science_visual_subject_multiseed_review,
+    validate_science_visual_subject_refinement_plan,
 )
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 27, 1, 2, 3, tzinfo=UTC)
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _pointer(
@@ -934,6 +940,172 @@ def test_subject_multiseed_review_binds_exact_predecessors_and_seed_population()
         initial_review_pointer=review.initial_quality_review,
     )
     assert review.adapter_activation_recommendation == "FORBIDDEN"
+
+
+def test_subject_refinement_plan_closes_review_population_without_activation() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    multiseed_plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    multiseed_result = _multiseed_result(multiseed_plan, _multiseed_command(multiseed_plan))
+    review = _multiseed_review(initial_plan, initial_review, multiseed_plan, multiseed_result)
+    inventory_pointer = multiseed_plan.subject_inventory
+    review_pointer = _pointer(
+        "e",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-review/1.0"
+        ),
+        member_path="manifests/science-visual-subject-multiseed-review.json",
+        sha256=content_sha256(review.model_dump(mode="json")),
+    )
+
+    plan = build_science_visual_subject_refinement_plan(
+        inventory=inventory,
+        inventory_pointer=inventory_pointer,
+        review=review,
+        review_pointer=review_pointer,
+        candidate_prompts={},
+        created_at=NOW,
+        created_by="contract_test",
+    )
+
+    validate_contract("science-visual-subject-refinement-plan", plan.model_dump(mode="json"))
+    validate_science_visual_subject_refinement_plan(
+        inventory,
+        review,
+        plan,
+        inventory_pointer=inventory_pointer,
+        review_pointer=review_pointer,
+    )
+    assert plan.global_adapter_activation == "FORBIDDEN"
+    assert {strategy.production_disposition for strategy in plan.strategies} == {"BASE_ONLY"}
+
+
+def test_subject_refinement_schema_mirror_is_byte_identical() -> None:
+    filename = "local-image-science-visual-subject-refinement-plan-v1.schema.json"
+    assert (ROOT / "schemas/image-provider" / filename).read_bytes() == (
+        ROOT / "packages/image_contracts/eom_image_contracts/schemas" / filename
+    ).read_bytes()
+
+
+def test_subject_refinement_strategy_requires_content_bound_prompt_and_route() -> None:
+    prompt = (
+        "monochrome Korean science assessment line art of one safety helmet, "
+        "plain white background, no text or labels"
+    )
+    strategy = ScienceVisualSubjectRefinementStrategy(
+        subject_id=f"imgscisubject_{'a' * 32}",
+        subject_key="SAFETY_EQUIPMENT",
+        source_render_route="HYBRID",
+        source_stability="NEITHER_ACCEPTABLE",
+        evidence_case_ids=(
+            f"imgscisubjectcase_{'1' * 32}",
+            f"imgscisubjectseedcase_{'2' * 32}",
+            f"imgscisubjectseedcase_{'3' * 32}",
+        ),
+        production_disposition="BLOCK_UNTIL_REFINED",
+        research_actions=(
+            "DATASET_AUGMENTATION",
+            "PROMPT_REFINEMENT",
+            "ROUTE_RECLASSIFICATION",
+        ),
+        candidate_route="PYTHON_SVG",
+        candidate_prompt_en=prompt,
+        candidate_prompt_sha256=text_sha256(prompt),
+    )
+    assert strategy.candidate_route == "PYTHON_SVG"
+
+    with pytest.raises(ValidationError, match="candidate prompt hash mismatch"):
+        ScienceVisualSubjectRefinementStrategy.model_validate(
+            {**strategy.model_dump(mode="json"), "candidate_prompt_sha256": f"sha256:{'f' * 64}"}
+        )
+    with pytest.raises(ValidationError, match="must target PYTHON_SVG"):
+        ScienceVisualSubjectRefinementStrategy.model_validate(
+            {**strategy.model_dump(mode="json"), "candidate_route": "HYBRID"}
+        )
+
+
+def test_subject_refinement_plan_rejects_missing_prompt_population() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    multiseed_plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    multiseed_result = _multiseed_result(multiseed_plan, _multiseed_command(multiseed_plan))
+    review = _multiseed_review(initial_plan, initial_review, multiseed_plan, multiseed_result)
+    entry = review.reviews[0]
+    evaluations = [value.model_dump(mode="json") for value in entry.evaluations]
+    evaluations[-1]["decision"] = "ADAPTER"
+    revised_entry = ScienceVisualSubjectMultiseedReviewEntry.model_validate(
+        {
+            **entry.model_dump(mode="json"),
+            "evaluations": evaluations,
+            "stability_status": "MIXED",
+            "next_actions": ["DATASET_AUGMENTATION", "KEEP_BASE_ONLY", "PROMPT_REFINEMENT"],
+        }
+    )
+    review_body = review.model_dump(mode="json", exclude={"review_id", "review_sha256"})
+    review_body["reviews"] = [revised_entry.model_dump(mode="json")]
+    review_body["stable_base_preferred_count"] = 0
+    review_body["mixed_count"] = 1
+    identity = content_sha256(
+        {
+            key: value
+            for key, value in review_body.items()
+            if key not in {"reviewed_at", "reviewed_by"}
+        }
+    ).removeprefix("sha256:")[:32]
+    revised_review_body = {
+        **review_body,
+        "review_id": f"imgscisubjectmultiseedreview_{identity}",
+    }
+    revised_review = LocalImageScienceVisualSubjectMultiseedReview.model_validate(
+        {
+            **revised_review_body,
+            "review_sha256": content_sha256(revised_review_body),
+        }
+    )
+    review_pointer = _pointer(
+        "f",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-review/1.0"
+        ),
+        member_path="manifests/science-visual-subject-multiseed-review.json",
+    )
+
+    with pytest.raises(ValueError, match="candidate prompt population"):
+        build_science_visual_subject_refinement_plan(
+            inventory=inventory,
+            inventory_pointer=multiseed_plan.subject_inventory,
+            review=revised_review,
+            review_pointer=review_pointer,
+            candidate_prompts={},
+            created_at=NOW,
+            created_by="contract_test",
+        )
+
+
+def test_subject_refinement_plan_hash_tamper_fails_closed() -> None:
+    inventory, initial_plan, initial_review = _multiseed_initials()
+    multiseed_plan = _multiseed_plan(inventory, initial_plan, initial_review)
+    multiseed_result = _multiseed_result(multiseed_plan, _multiseed_command(multiseed_plan))
+    review = _multiseed_review(initial_plan, initial_review, multiseed_plan, multiseed_result)
+    review_pointer = _pointer(
+        "e",
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-science-visual-subject-multiseed-review/1.0"
+        ),
+        member_path="manifests/science-visual-subject-multiseed-review.json",
+    )
+    plan = build_science_visual_subject_refinement_plan(
+        inventory=inventory,
+        inventory_pointer=multiseed_plan.subject_inventory,
+        review=review,
+        review_pointer=review_pointer,
+        candidate_prompts={},
+        created_at=NOW,
+        created_by="contract_test",
+    )
+
+    with pytest.raises(ValidationError, match="plan hash mismatch"):
+        LocalImageScienceVisualSubjectRefinementPlan.model_validate(
+            {**plan.model_dump(mode="json"), "plan_sha256": f"sha256:{'0' * 64}"}
+        )
 
 
 def test_subject_benchmark_failed_result_is_typed_and_empty() -> None:

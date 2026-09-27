@@ -181,6 +181,12 @@ from eom_image_contracts.science_subject_multiseed import (
     validate_science_visual_subject_multiseed_result,
     validate_science_visual_subject_multiseed_review,
 )
+from eom_image_contracts.science_subject_refinement import (
+    LocalImageScienceVisualSubjectRefinementPlan,
+    ScienceVisualSubjectRefinementStrategy,
+    build_science_visual_subject_refinement_plan,
+    validate_science_visual_subject_refinement_plan,
+)
 from eom_image_contracts.training import (
     ImageTrainingRightsPolicy,
     LocalImageCropLocatorCommand,
@@ -335,6 +341,7 @@ __all__ = [
     "LocalImageScienceVisualSubjectMultiseedPlan",
     "LocalImageScienceVisualSubjectMultiseedResult",
     "LocalImageScienceVisualSubjectMultiseedReview",
+    "LocalImageScienceVisualSubjectRefinementPlan",
     "LocalImageTrainerDependencies",
     "LocalImageTrainingAuthorization",
     "LocalImageTrainingCandidate",
@@ -377,12 +384,14 @@ __all__ = [
     "ScienceVisualSubjectMultiseedReviewEntry",
     "ScienceVisualSubjectOmission",
     "ScienceVisualSubjectQualityReviewEntry",
+    "ScienceVisualSubjectRefinementStrategy",
     "ScienceVisualSubjectSeedEvaluation",
     "ScienceVisualSubjectSourceReference",
     "ScienceVisualToolIdentity",
     "ScienceVisualToolSet",
     "UpstreamModel",
     "assemble_science_visual_campaign_pattern_inventory",
+    "build_science_visual_subject_refinement_plan",
     "build_training_crop_review_draft",
     "content_json_bytes",
     "content_sha256",
@@ -435,6 +444,7 @@ __all__ = [
     "validate_science_visual_subject_multiseed_plan",
     "validate_science_visual_subject_multiseed_result",
     "validate_science_visual_subject_multiseed_review",
+    "validate_science_visual_subject_refinement_plan",
     "validate_training_crop_review",
     "validate_training_dataset_authorization",
     "validate_training_dataset_inventory",

@@ -176,6 +176,9 @@ SCHEMA_FILES = {
     "science-visual-subject-multiseed-review": (
         "local-image-science-visual-subject-multiseed-review-v1.schema.json"
     ),
+    "science-visual-subject-refinement-plan": (
+        "local-image-science-visual-subject-refinement-plan-v1.schema.json"
+    ),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -393,6 +396,9 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-subject-multiseed-review": (
         "sha256:a84ac26745df3e56c22cc288ba8c555fda8411868aaf0f49f2e790227e92a882"
+    ),
+    "science-visual-subject-refinement-plan": (
+        "sha256:85f158a9fd84919e6eb3cee09dbb5a2e142f456044792dd11bb6218607ab701d"
     ),
 }
 
