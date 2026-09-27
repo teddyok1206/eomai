@@ -49,6 +49,14 @@ manifest has the worker's historical single trailing-newline framing; resolution
 canonical JSON bytes or canonical JSON plus that one newline while still pinning the exact member
 SHA-256.
 
+The isolated runner receives the plan, inventory, adapter manifest, adapter config, and adapter
+weights as staged workspace members. The large immutable base model is not copied for every run;
+the runner resolves the exact plan-pinned `LocalImageModelPointer` from the existing read-only local
+model store, using the same verifier as the established micro-evaluation boundary.
+The plan records the established 800x504 SSD-1B generation canvas and deterministic 800x500
+delivery crop separately; output contracts always describe the 800x500 delivered PNG.
+The worker command also pins the exact committed source revision that owns the runner behavior.
+
 ## Subject routes
 
 - `LORA_RASTER`: non-authoritative natural texture or realistic non-human subject for which the

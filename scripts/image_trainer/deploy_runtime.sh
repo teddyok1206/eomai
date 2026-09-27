@@ -30,6 +30,8 @@ SCIENCE_MICRO_EVALUATION_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-scien
 SCIENCE_MICRO_EVALUATION_UNIT_TARGET=/etc/systemd/system/eom-image-science-lora-micro-evaluation@.service
 SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-science-campaign-lora-micro-evaluation@.service
 SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_TARGET=/etc/systemd/system/eom-image-science-campaign-lora-micro-evaluation@.service
+SCIENCE_SUBJECT_BENCHMARK_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-science-subject-benchmark@.service
+SCIENCE_SUBJECT_BENCHMARK_UNIT_TARGET=/etc/systemd/system/eom-image-science-subject-benchmark@.service
 CROP_LOCATOR_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-crop-locator@.service
 CROP_LOCATOR_UNIT_TARGET=/etc/systemd/system/eom-image-crop-locator@.service
 SCIENCE_VISUAL_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-science-visual-pilot@.service
@@ -86,6 +88,7 @@ if systemctl list-units --type=service --state=activating,active --no-legend \
   'eom-image-lora-micro-evaluation@*.service' \
   'eom-image-science-lora-micro-evaluation@*.service' \
   'eom-image-science-campaign-lora-micro-evaluation@*.service' \
+  'eom-image-science-subject-benchmark@*.service' \
   'eom-image-crop-locator@*.service' \
   'eom-image-science-visual-pilot@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_GPU_UNIT_ACTIVE"
@@ -115,6 +118,7 @@ install -o root -g root -m 0644 "${SCIENCE_CAMPAIGN_MICRO_PROBE_UNIT_SOURCE}" "$
 install -o root -g root -m 0644 "${MICRO_EVALUATION_UNIT_SOURCE}" "${MICRO_EVALUATION_UNIT_TARGET}"
 install -o root -g root -m 0644 "${SCIENCE_MICRO_EVALUATION_UNIT_SOURCE}" "${SCIENCE_MICRO_EVALUATION_UNIT_TARGET}"
 install -o root -g root -m 0644 "${SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_SOURCE}" "${SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_TARGET}"
+install -o root -g root -m 0644 "${SCIENCE_SUBJECT_BENCHMARK_UNIT_SOURCE}" "${SCIENCE_SUBJECT_BENCHMARK_UNIT_TARGET}"
 install -o root -g root -m 0644 "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}"
 install -o root -g root -m 0644 "${SCIENCE_VISUAL_UNIT_SOURCE}" "${SCIENCE_VISUAL_UNIT_TARGET}"
 install -o root -g root -m 0644 "${PROVIDER_UNIT_SOURCE}" "${PROVIDER_UNIT_TARGET}"
@@ -126,6 +130,7 @@ systemd-analyze verify "${TRAINER_UNIT_TARGET}" "${MICRO_PROBE_UNIT_TARGET}" \
   "${MICRO_EVALUATION_UNIT_TARGET}" \
   "${SCIENCE_MICRO_EVALUATION_UNIT_TARGET}" \
   "${SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_TARGET}" \
+  "${SCIENCE_SUBJECT_BENCHMARK_UNIT_TARGET}" \
   "${CROP_LOCATOR_UNIT_TARGET}" \
   "${SCIENCE_VISUAL_UNIT_TARGET}" \
   "${PROVIDER_UNIT_TARGET}"
@@ -145,6 +150,9 @@ cmp -s "${SCIENCE_MICRO_EVALUATION_UNIT_SOURCE}" "${SCIENCE_MICRO_EVALUATION_UNI
 cmp -s "${SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_SOURCE}" \
   "${SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_SCIENCE_CAMPAIGN_MICRO_EVALUATION_UNIT_DRIFT"
+cmp -s "${SCIENCE_SUBJECT_BENCHMARK_UNIT_SOURCE}" \
+  "${SCIENCE_SUBJECT_BENCHMARK_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_SCIENCE_SUBJECT_BENCHMARK_UNIT_DRIFT"
 cmp -s "${CROP_LOCATOR_UNIT_SOURCE}" "${CROP_LOCATOR_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_CROP_LOCATOR_UNIT_DRIFT"
 cmp -s "${SCIENCE_VISUAL_UNIT_SOURCE}" "${SCIENCE_VISUAL_UNIT_TARGET}" || \

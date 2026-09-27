@@ -374,8 +374,10 @@ class LocalImageScienceVisualSubjectBenchmarkPlan(FrozenModel):
     subject_inventory_sha256: Sha256
     base_model: LocalImageModelPointer
     adapter_manifest: ImageEvaluationArtifactMember
-    width_px: Literal[800]
-    height_px: Literal[500]
+    generation_width_px: Literal[800]
+    generation_height_px: Literal[504]
+    delivery_width_px: Literal[800]
+    delivery_height_px: Literal[500]
     inference_steps: int = Field(ge=1, le=100)
     guidance_scale_milli: int = Field(ge=1000, le=20_000)
     cases: tuple[ScienceVisualSubjectBenchmarkCase, ...] = Field(min_length=1, max_length=256)
@@ -417,10 +419,11 @@ class LocalImageScienceVisualSubjectBenchmarkCommand(FrozenModel):
     plan_sha256: Sha256
     staged_plan_path: Literal["inputs/subject-benchmark-plan.json"]
     staged_subject_inventory_path: Literal["inputs/science-visual-subject-inventory.json"]
-    staged_model_path: Literal["inputs/model"]
+    staged_adapter_manifest_path: Literal["inputs/adapter/adapter-manifest.json"]
     staged_adapter_model_path: Literal["inputs/adapter/adapter_model.safetensors"]
     staged_adapter_config_path: Literal["inputs/adapter/adapter_config.json"]
     output_directory: Literal["outputs"]
+    source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     command_sha256: Sha256
 
     @model_validator(mode="after")
@@ -478,8 +481,21 @@ class LocalImageScienceVisualSubjectBenchmarkResult(FrozenModel):
     plan_id: str = Field(pattern=r"^imgscisubjectbenchmark_[0-9a-f]{32}$")
     plan_sha256: Sha256
     command_sha256: Sha256
-    status: Literal["SUCCEEDED"]
-    outcomes: tuple[ScienceVisualSubjectBenchmarkOutcome, ...] = Field(min_length=1, max_length=256)
+    status: Literal["FAILED", "SUCCEEDED"]
+    error_code: (
+        Literal[
+            "SCIENCE_SUBJECT_BENCHMARK_ADAPTER_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_EXEC_FAILED",
+            "SCIENCE_SUBJECT_BENCHMARK_GPU_RUNTIME_DRIFT",
+            "SCIENCE_SUBJECT_BENCHMARK_INPUT_HASH_MISMATCH",
+            "SCIENCE_SUBJECT_BENCHMARK_INPUT_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_MODEL_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_OOM",
+            "SCIENCE_SUBJECT_BENCHMARK_OUTPUT_INVALID",
+        ]
+        | None
+    )
+    outcomes: tuple[ScienceVisualSubjectBenchmarkOutcome, ...] = Field(max_length=256)
     outputs: tuple[ScienceVisualSubjectBenchmarkOutput, ...] = Field(max_length=768)
     started_at: datetime
     completed_at: datetime
@@ -494,6 +510,11 @@ class LocalImageScienceVisualSubjectBenchmarkResult(FrozenModel):
     def result_is_canonical(self) -> Self:
         if self.completed_at < self.started_at:
             raise ValueError("subject benchmark completion precedes start")
+        if self.status == "SUCCEEDED":
+            if self.error_code is not None or not self.outcomes:
+                raise ValueError("successful subject benchmark result is incomplete")
+        elif self.error_code is None or self.outcomes or self.outputs:
+            raise ValueError("failed subject benchmark result must be empty and coded")
         outcome_ids = tuple(outcome.case_id for outcome in self.outcomes)
         if outcome_ids != tuple(sorted(set(outcome_ids))):
             raise ValueError("benchmark outcomes must be uniquely sorted")
@@ -565,6 +586,8 @@ def validate_science_visual_subject_benchmark_result(
         or result.command_sha256 != command.command_sha256
     ):
         raise ValueError("subject benchmark command/result pointer mismatch")
+    if result.status == "FAILED":
+        return
     outcomes = {outcome.case_id: outcome for outcome in result.outcomes}
     if set(outcomes) != {case.case_id for case in plan.cases}:
         raise ValueError("subject benchmark outcome set mismatch")

@@ -447,8 +447,10 @@ def _plan() -> dict[str, Any]:
                 "subject_inventory_sha256",
                 "base_model",
                 "adapter_manifest",
-                "width_px",
-                "height_px",
+                "generation_width_px",
+                "generation_height_px",
+                "delivery_width_px",
+                "delivery_height_px",
                 "inference_steps",
                 "guidance_scale_milli",
                 "cases",
@@ -468,8 +470,10 @@ def _plan() -> dict[str, Any]:
                 "subject_inventory_sha256": {"$ref": "#/$defs/sha256"},
                 "base_model": {"$ref": "#/$defs/modelPointer"},
                 "adapter_manifest": {"$ref": "#/$defs/artifactMember"},
-                "width_px": {"const": 800},
-                "height_px": {"const": 500},
+                "generation_width_px": {"const": 800},
+                "generation_height_px": {"const": 504},
+                "delivery_width_px": {"const": 800},
+                "delivery_height_px": {"const": 500},
                 "inference_steps": {"type": "integer", "minimum": 1, "maximum": 100},
                 "guidance_scale_milli": {
                     "type": "integer",
@@ -510,10 +514,11 @@ def _command() -> dict[str, Any]:
                 "plan_sha256",
                 "staged_plan_path",
                 "staged_subject_inventory_path",
-                "staged_model_path",
+                "staged_adapter_manifest_path",
                 "staged_adapter_model_path",
                 "staged_adapter_config_path",
                 "output_directory",
+                "source_commit",
                 "command_sha256",
             ],
             "properties": {
@@ -530,10 +535,11 @@ def _command() -> dict[str, Any]:
                 "staged_subject_inventory_path": {
                     "const": "inputs/science-visual-subject-inventory.json"
                 },
-                "staged_model_path": {"const": "inputs/model"},
+                "staged_adapter_manifest_path": {"const": "inputs/adapter/adapter-manifest.json"},
                 "staged_adapter_model_path": {"const": "inputs/adapter/adapter_model.safetensors"},
                 "staged_adapter_config_path": {"const": "inputs/adapter/adapter_config.json"},
                 "output_directory": {"const": "outputs"},
+                "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
                 "command_sha256": {"$ref": "#/$defs/sha256"},
             },
         }
@@ -612,6 +618,7 @@ def _result() -> dict[str, Any]:
                 "plan_sha256",
                 "command_sha256",
                 "status",
+                "error_code",
                 "outcomes",
                 "outputs",
                 "started_at",
@@ -632,10 +639,26 @@ def _result() -> dict[str, Any]:
                 },
                 "plan_sha256": {"$ref": "#/$defs/sha256"},
                 "command_sha256": {"$ref": "#/$defs/sha256"},
-                "status": {"const": "SUCCEEDED"},
+                "status": {"enum": ["FAILED", "SUCCEEDED"]},
+                "error_code": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "SCIENCE_SUBJECT_BENCHMARK_ADAPTER_INVALID",
+                                "SCIENCE_SUBJECT_BENCHMARK_EXEC_FAILED",
+                                "SCIENCE_SUBJECT_BENCHMARK_GPU_RUNTIME_DRIFT",
+                                "SCIENCE_SUBJECT_BENCHMARK_INPUT_HASH_MISMATCH",
+                                "SCIENCE_SUBJECT_BENCHMARK_INPUT_INVALID",
+                                "SCIENCE_SUBJECT_BENCHMARK_MODEL_INVALID",
+                                "SCIENCE_SUBJECT_BENCHMARK_OOM",
+                                "SCIENCE_SUBJECT_BENCHMARK_OUTPUT_INVALID",
+                            ]
+                        },
+                        {"type": "null"},
+                    ]
+                },
                 "outcomes": {
                     "type": "array",
-                    "minItems": 1,
                     "maxItems": 256,
                     "items": {"$ref": "#/$defs/outcome"},
                 },

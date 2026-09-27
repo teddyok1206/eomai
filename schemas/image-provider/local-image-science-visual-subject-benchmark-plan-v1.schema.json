@@ -234,13 +234,22 @@
       "pattern": "^[A-Za-z0-9._:@-]+$",
       "type": "string"
     },
+    "delivery_height_px": {
+      "const": 500
+    },
+    "delivery_width_px": {
+      "const": 800
+    },
+    "generation_height_px": {
+      "const": 504
+    },
+    "generation_width_px": {
+      "const": 800
+    },
     "guidance_scale_milli": {
       "maximum": 20000,
       "minimum": 1000,
       "type": "integer"
-    },
-    "height_px": {
-      "const": 500
     },
     "inference_steps": {
       "maximum": 100,
@@ -262,9 +271,6 @@
     },
     "subject_inventory_sha256": {
       "$ref": "#/$defs/sha256"
-    },
-    "width_px": {
-      "const": 800
     }
   },
   "required": [
@@ -274,8 +280,10 @@
     "subject_inventory_sha256",
     "base_model",
     "adapter_manifest",
-    "width_px",
-    "height_px",
+    "generation_width_px",
+    "generation_height_px",
+    "delivery_width_px",
+    "delivery_height_px",
     "inference_steps",
     "guidance_scale_milli",
     "cases",

@@ -251,8 +251,10 @@ def _plan(
             ),
             member_path="manifests/adapter-manifest.json",
         ).model_dump(mode="json"),
-        "width_px": 800,
-        "height_px": 500,
+        "generation_width_px": 800,
+        "generation_height_px": 504,
+        "delivery_width_px": 800,
+        "delivery_height_px": 500,
         "inference_steps": 25,
         "guidance_scale_milli": 7500,
         "cases": tuple(
@@ -328,10 +330,11 @@ def _command(
         "plan_sha256": plan.plan_sha256,
         "staged_plan_path": "inputs/subject-benchmark-plan.json",
         "staged_subject_inventory_path": "inputs/science-visual-subject-inventory.json",
-        "staged_model_path": "inputs/model",
+        "staged_adapter_manifest_path": "inputs/adapter/adapter-manifest.json",
         "staged_adapter_model_path": "inputs/adapter/adapter_model.safetensors",
         "staged_adapter_config_path": "inputs/adapter/adapter_config.json",
         "output_directory": "outputs",
+        "source_commit": "f" * 40,
     }
     identity = content_sha256(base).removeprefix("sha256:")[:32]
     with_id = {**base, "run_id": f"imgscisubjectbenchmarkrun_{identity}"}
@@ -385,6 +388,7 @@ def _result(
         "plan_sha256": plan.plan_sha256,
         "command_sha256": command.command_sha256,
         "status": "SUCCEEDED",
+        "error_code": None,
         "outcomes": tuple(
             value.model_dump(mode="json")
             for value in sorted(outcomes, key=lambda item: item.case_id)
@@ -413,6 +417,45 @@ def test_subject_inventory_and_benchmark_round_trip_through_both_contract_layers
     validate_contract("science-visual-subject-benchmark-result", result.model_dump(mode="json"))
     validate_science_visual_subject_benchmark_plan(inventory, plan)
     validate_science_visual_subject_benchmark_result(plan, command, result)
+
+
+def test_subject_benchmark_failed_result_is_typed_and_empty() -> None:
+    inventory = _inventory()
+    plan = _plan(inventory)
+    command = _command(plan)
+    body = {
+        "schema_version": "local-image-science-visual-subject-benchmark-result/1.0",
+        "run_id": command.run_id,
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "command_sha256": command.command_sha256,
+        "status": "FAILED",
+        "error_code": "SCIENCE_SUBJECT_BENCHMARK_INPUT_HASH_MISMATCH",
+        "outcomes": (),
+        "outputs": (),
+        "started_at": NOW.isoformat().replace("+00:00", "Z"),
+        "completed_at": NOW.isoformat().replace("+00:00", "Z"),
+    }
+    result = LocalImageScienceVisualSubjectBenchmarkResult.model_validate(
+        {**body, "result_sha256": content_sha256(body)}
+    )
+
+    validate_contract("science-visual-subject-benchmark-result", result.model_dump(mode="json"))
+    validate_science_visual_subject_benchmark_result(plan, command, result)
+
+
+def test_subject_benchmark_failed_result_rejects_partial_outputs() -> None:
+    inventory = _inventory()
+    plan = _plan(inventory)
+    command = _command(plan)
+    succeeded = _result(plan, command)
+    body = succeeded.model_dump(mode="json", exclude={"result_sha256"})
+    body["status"] = "FAILED"
+    body["error_code"] = "SCIENCE_SUBJECT_BENCHMARK_EXEC_FAILED"
+    with pytest.raises(ValidationError, match="must be empty"):
+        LocalImageScienceVisualSubjectBenchmarkResult.model_validate(
+            {**body, "result_sha256": content_sha256(body)}
+        )
 
 
 def test_plan_builder_covers_every_subject_and_adds_human_gpu_negative() -> None:

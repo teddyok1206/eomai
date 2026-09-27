@@ -67,14 +67,18 @@
     "schema_version": {
       "const": "local-image-science-visual-subject-benchmark-command/1.0"
     },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
     "staged_adapter_config_path": {
       "const": "inputs/adapter/adapter_config.json"
     },
+    "staged_adapter_manifest_path": {
+      "const": "inputs/adapter/adapter-manifest.json"
+    },
     "staged_adapter_model_path": {
       "const": "inputs/adapter/adapter_model.safetensors"
-    },
-    "staged_model_path": {
-      "const": "inputs/model"
     },
     "staged_plan_path": {
       "const": "inputs/subject-benchmark-plan.json"
@@ -90,10 +94,11 @@
     "plan_sha256",
     "staged_plan_path",
     "staged_subject_inventory_path",
-    "staged_model_path",
+    "staged_adapter_manifest_path",
     "staged_adapter_model_path",
     "staged_adapter_config_path",
     "output_directory",
+    "source_commit",
     "command_sha256"
   ],
   "title": "EOM Science Visual Subject Benchmark Command V1",

@@ -263,6 +263,42 @@ class Ssd1bMicroEvaluationBackend:
             identity=lambda case: cast(str, case.sample_id),
         )
 
+    def generate_subject_benchmark_pairs(
+        self,
+        *,
+        model_directory: Path,
+        adapter_root: Path,
+        command: Any,
+        plan: Any,
+    ) -> tuple[GeneratedEvaluationImage, ...]:
+        """Generate only QUALITY cases from a pinned subject benchmark plan."""
+
+        cases = tuple(
+            _SubjectBenchmarkCaseView(
+                sample_id=case.case_id,
+                positive_prompt=cast(str, case.prompt_en),
+                negative_prompt=cast(str, case.negative_prompt_en),
+                seed=cast(int, case.seed),
+            )
+            for case in plan.cases
+            if case.case_kind == "QUALITY"
+        )
+        view = _SubjectBenchmarkCommandView(
+            cases=cases,
+            generation_width=plan.generation_width_px,
+            generation_height=plan.generation_height_px,
+            delivery_width=plan.delivery_width_px,
+            delivery_height=plan.delivery_height_px,
+            inference_steps=plan.inference_steps,
+            guidance_scale=plan.guidance_scale_milli / 1000,
+        )
+        return self._generate_with_identity(
+            model_directory=model_directory,
+            adapter_root=adapter_root,
+            command=view,
+            identity=lambda case: cast(str, case.sample_id),
+        )
+
     def _generate_with_identity(
         self,
         *,
@@ -387,6 +423,25 @@ def _generate_variant(
             )
         )
     return tuple(values)
+
+
+@dataclass(frozen=True, slots=True)
+class _SubjectBenchmarkCaseView:
+    sample_id: str
+    positive_prompt: str
+    negative_prompt: str
+    seed: int
+
+
+@dataclass(frozen=True, slots=True)
+class _SubjectBenchmarkCommandView:
+    cases: tuple[_SubjectBenchmarkCaseView, ...]
+    generation_width: int
+    generation_height: int
+    delivery_width: int
+    delivery_height: int
+    inference_steps: int
+    guidance_scale: float
 
 
 def _require_untruncated_prompts(

@@ -135,12 +135,30 @@
       "format": "date-time",
       "type": "string"
     },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "SCIENCE_SUBJECT_BENCHMARK_ADAPTER_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_EXEC_FAILED",
+            "SCIENCE_SUBJECT_BENCHMARK_GPU_RUNTIME_DRIFT",
+            "SCIENCE_SUBJECT_BENCHMARK_INPUT_HASH_MISMATCH",
+            "SCIENCE_SUBJECT_BENCHMARK_INPUT_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_MODEL_INVALID",
+            "SCIENCE_SUBJECT_BENCHMARK_OOM",
+            "SCIENCE_SUBJECT_BENCHMARK_OUTPUT_INVALID"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "outcomes": {
       "items": {
         "$ref": "#/$defs/outcome"
       },
       "maxItems": 256,
-      "minItems": 1,
       "type": "array"
     },
     "outputs": {
@@ -172,7 +190,10 @@
       "type": "string"
     },
     "status": {
-      "const": "SUCCEEDED"
+      "enum": [
+        "FAILED",
+        "SUCCEEDED"
+      ]
     }
   },
   "required": [
@@ -182,6 +203,7 @@
     "plan_sha256",
     "command_sha256",
     "status",
+    "error_code",
     "outcomes",
     "outputs",
     "started_at",

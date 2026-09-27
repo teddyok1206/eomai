@@ -60,6 +60,11 @@ from eom_image_trainer.science_micro_probe_runner import (
     load_science_micro_probe_command,
     run_science_micro_probe_command,
 )
+from eom_image_trainer.science_subject_benchmark_runner import (
+    ScienceSubjectBenchmarkRunnerError,
+    load_science_subject_benchmark_command,
+    run_science_subject_benchmark_command,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -106,6 +111,11 @@ def _parser() -> argparse.ArgumentParser:
     science_visual = subcommands.add_parser("science-corpus-visual-pilot")
     science_visual.add_argument("--command", required=True, type=Path)
     science_visual.add_argument("--workspace", required=True, type=Path)
+    subject_benchmark = subcommands.add_parser("science-subject-benchmark")
+    subject_benchmark.add_argument("--command", required=True, type=Path)
+    subject_benchmark.add_argument("--model-store-root", required=True, type=Path)
+    subject_benchmark.add_argument("--workspace", required=True, type=Path)
+    subject_benchmark.add_argument("--gpu-lock", required=True, type=Path)
     return parser
 
 
@@ -157,6 +167,29 @@ def _lock_gpu(path: Path) -> int:
 
 def main() -> None:
     args = _parser().parse_args()
+    if args.operation == "science-subject-benchmark":
+        try:
+            subject_command = load_science_subject_benchmark_command(args.command)
+            if args.workspace.name != subject_command.run_id:
+                raise ScienceSubjectBenchmarkRunnerError(
+                    "SCIENCE_SUBJECT_BENCHMARK_WORKSPACE_ID_MISMATCH"
+                )
+            lock_descriptor = _lock_gpu(args.gpu_lock)
+            try:
+                subject_result = run_science_subject_benchmark_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=subject_command,
+                    backend=Ssd1bMicroEvaluationBackend(),
+                    model_resolver=verify_model_revision,
+                )
+            finally:
+                os.close(lock_descriptor)
+        except (TrainingRunnerError, ScienceSubjectBenchmarkRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        if subject_result.status != "SUCCEEDED":
+            raise SystemExit(subject_result.error_code or "SCIENCE_SUBJECT_BENCHMARK_EXEC_FAILED")
+        return
     if args.operation == "science-corpus-visual-pilot":
         try:
             command = load_science_visual_command(args.command)

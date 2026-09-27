@@ -44,8 +44,6 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     SCIENCE_VISUAL_PILOT_RESULT_MEMBER,
     SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_ARTIFACT_TYPE,
     SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_MEMBER,
-    SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_ARTIFACT_TYPE,
-    SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_MEMBER,
     SCIENCE_VISUAL_SUBJECT_INVENTORY_ARTIFACT_TYPE,
     SCIENCE_VISUAL_SUBJECT_INVENTORY_MEMBER,
     LocalImageTrainingControlArtifactPublisher,
@@ -282,16 +280,6 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     )
     assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_SUBJECT_BENCHMARK_PLAN_MEMBER
     assert subject_benchmark_plan_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
-
-    subject_benchmark_result_pointer = adapter.commit_science_visual_subject_benchmark_result(
-        result  # type: ignore[arg-type]
-    )
-    assert (
-        publisher.arguments["artifact_type"]
-        == SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_ARTIFACT_TYPE
-    )
-    assert publisher.arguments["logical_name"] == SCIENCE_VISUAL_SUBJECT_BENCHMARK_RESULT_MEMBER
-    assert subject_benchmark_result_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     campaign_batch_command = _ScienceCampaignBatchCommand(
         command_sha256="sha256:" + "d" * 64,
