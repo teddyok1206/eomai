@@ -100,6 +100,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-visual-subject-multiseed-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-subject-multiseed-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-subject-multiseed-review-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-visual-subject-refinement-plan-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
