@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from eom_image_contracts import LocalImageGenerationRequest, content_sha256, text_sha256
-from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
+from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend, _load_peft_unet_adapter
 from eom_image_provider.provider import ProviderError
 from eom_image_trainer.diffusers_backend import (
     DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG,
@@ -33,15 +33,24 @@ class EulerDiscreteScheduler:
     pass
 
 
+class _Unet:
+    def __init__(self, *, dtype: object) -> None:
+        self.dtype = dtype
+        self.added_adapter: tuple[object, str] | None = None
+        self.loaded_state: tuple[dict[str, object], str] | None = None
+
+    def add_adapter(self, configuration: object, *, adapter_name: str) -> None:
+        self.added_adapter = (configuration, adapter_name)
+
+
 class _Pipeline:
     def __init__(self, *, token_count: int, dtype: object) -> None:
         self.scheduler = EulerDiscreteScheduler()
         self.tokenizer = _Tokenizer(token_count=token_count)
         self.tokenizer_2 = _Tokenizer(token_count=token_count)
-        self.unet = SimpleNamespace(dtype=dtype)
+        self.unet = _Unet(dtype=dtype)
         self.transferred_to: str | None = None
         self.last_kwargs: dict[str, object] | None = None
-        self.lora_load: tuple[str, str, str] | None = None
         self.adapters: tuple[list[str], list[float]] | None = None
 
     def set_progress_bar_config(self, *, disable: bool) -> None:
@@ -49,15 +58,6 @@ class _Pipeline:
 
     def to(self, device: str) -> None:
         self.transferred_to = device
-
-    def load_lora_weights(
-        self,
-        path: str,
-        *,
-        weight_name: str,
-        adapter_name: str,
-    ) -> None:
-        self.lora_load = (path, weight_name, adapter_name)
 
     def set_adapters(self, names: list[str], *, adapter_weights: list[float]) -> None:
         self.adapters = (names, adapter_weights)
@@ -190,6 +190,33 @@ def _runtime_modules(
             StableDiffusionXLImg2ImgPipeline=DiffusionPipeline,
         ),
     )
+
+    class LoraConfig:
+        @classmethod
+        def from_pretrained(cls, path: str, **kwargs: object) -> tuple[str, dict[str, object]]:
+            return (path, kwargs)
+
+    def set_peft_model_state_dict(
+        unet: _Unet,
+        state: dict[str, object],
+        *,
+        adapter_name: str,
+    ) -> SimpleNamespace:
+        unet.loaded_state = (state, adapter_name)
+        return SimpleNamespace(unexpected_keys=[])
+
+    monkeypatch.setitem(sys.modules, "peft", SimpleNamespace(LoraConfig=LoraConfig))
+    monkeypatch.setitem(
+        sys.modules,
+        "peft.utils",
+        SimpleNamespace(set_peft_model_state_dict=set_peft_model_state_dict),
+    )
+    monkeypatch.setitem(sys.modules, "safetensors", SimpleNamespace())
+    monkeypatch.setitem(
+        sys.modules,
+        "safetensors.torch",
+        SimpleNamespace(load_file=lambda *_args, **_kwargs: {"lora.weight": object()}),
+    )
     monkeypatch.setattr(
         "eom_image_provider.diffusers_backend.metadata.version",
         lambda name: {"diffusers": "0.35.2", "transformers": "4.56.2"}[name],
@@ -307,16 +334,37 @@ def test_ssd1b_style_reference_conditioning_loads_exact_lora_and_keeps_prompt(
 
     assert generated.png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
     loaded = pipeline_class.from_pretrained(str(tmp_path))
-    assert loaded.lora_load == (
-        str(adapter_directory),
-        "adapter_model.safetensors",
+    assert loaded.unet.added_adapter == (
+        (str(adapter_directory), {"local_files_only": True}),
         "eom_assessment_style",
     )
+    assert loaded.unet.loaded_state is not None
+    assert loaded.unet.loaded_state[1] == "eom_assessment_style"
     assert loaded.adapters == (["eom_assessment_style"], [0.8])
     assert loaded.last_kwargs is not None
     assert loaded.last_kwargs["prompt"] == _request().prompt
     assert loaded.last_kwargs["negative_prompt"] == _request().negative_prompt
     assert loaded.last_kwargs["strength"] == 0.35
+
+
+def test_style_reference_conditioning_rejects_empty_peft_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _torch, pipeline_class = _runtime_modules(monkeypatch, token_count=20)
+    monkeypatch.setitem(
+        sys.modules,
+        "safetensors.torch",
+        SimpleNamespace(load_file=lambda *_args, **_kwargs: {}),
+    )
+    pipeline = pipeline_class.from_pretrained(str(tmp_path))
+
+    with pytest.raises(ProviderError, match="LOCAL_IMAGE_STYLE_ADAPTER_INVALID"):
+        _load_peft_unet_adapter(
+            pipeline=pipeline,
+            style_adapter_directory=tmp_path / "adapter",
+            adapter_name="eom_assessment_style",
+        )
 
 
 def test_lora_trainer_requires_exact_deterministic_cublas_workspace(

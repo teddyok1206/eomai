@@ -7,7 +7,9 @@ CONTRACT_WHEEL=${1:-}
 CONTRACT_SHA256=${2:-}
 PROVIDER_WHEEL=${3:-}
 PROVIDER_SHA256=${4:-}
-SOURCE_COMMIT=${5:-}
+PEFT_WHEEL=${5:-}
+PEFT_SHA256=${6:-}
+SOURCE_COMMIT=${7:-}
 UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-provider@.service
 UNIT_TARGET=/etc/systemd/system/eom-image-provider@.service
 REFERENCE_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-acquirer@.service
@@ -34,6 +36,7 @@ fail() {
 [[ "${SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]] || fail "LOCAL_IMAGE_SOURCE_COMMIT_INVALID"
 [[ "${CONTRACT_SHA256}" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_IMAGE_WHEEL_HASH_INVALID"
 [[ "${PROVIDER_SHA256}" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_IMAGE_WHEEL_HASH_INVALID"
+[[ "${PEFT_SHA256}" =~ ^[0-9a-f]{64}$ ]] || fail "LOCAL_IMAGE_WHEEL_HASH_INVALID"
 [[ "$(git -C "${REPOSITORY}" rev-parse HEAD)" == "${SOURCE_COMMIT}" ]] || \
   fail "LOCAL_IMAGE_SOURCE_COMMIT_MISMATCH"
 [[ -z "$(git -C "${REPOSITORY}" status --porcelain)" ]] || \
@@ -43,9 +46,15 @@ for wheel in "${CONTRACT_WHEEL}" "${PROVIDER_WHEEL}"; do
     fail "LOCAL_IMAGE_WHEEL_PATH_INVALID"
   [[ -f "${wheel}" && ! -L "${wheel}" ]] || fail "LOCAL_IMAGE_WHEEL_INVALID"
 done
+[[ "${PEFT_WHEEL}" == /tmp/eom-image-trainer-build/*/dist/peft-0.17.1-*.whl ]] || \
+  fail "LOCAL_IMAGE_DEPENDENCY_WHEEL_INVALID"
+[[ -f "${PEFT_WHEEL}" && ! -L "${PEFT_WHEEL}" ]] || \
+  fail "LOCAL_IMAGE_DEPENDENCY_WHEEL_INVALID"
 [[ "$(sha256sum "${CONTRACT_WHEEL}" | cut -d' ' -f1)" == "${CONTRACT_SHA256}" ]] || \
   fail "LOCAL_IMAGE_WHEEL_HASH_MISMATCH"
 [[ "$(sha256sum "${PROVIDER_WHEEL}" | cut -d' ' -f1)" == "${PROVIDER_SHA256}" ]] || \
+  fail "LOCAL_IMAGE_WHEEL_HASH_MISMATCH"
+[[ "$(sha256sum "${PEFT_WHEEL}" | cut -d' ' -f1)" == "${PEFT_SHA256}" ]] || \
   fail "LOCAL_IMAGE_WHEEL_HASH_MISMATCH"
 [[ -f "${BINDING_SOURCE}" && ! -L "${BINDING_SOURCE}" ]] || \
   fail "LOCAL_IMAGE_BINDING_SOURCE_INVALID"
@@ -96,6 +105,7 @@ install -d -o root -g eom-image-reference -m 03770 /srv/eom/image-reference-work
 
 "${IMAGE_ENV}/bin/python" -m pip install --no-deps --force-reinstall "${CONTRACT_WHEEL}"
 "${IMAGE_ENV}/bin/python" -m pip install --no-deps --force-reinstall "${PROVIDER_WHEEL}"
+"${IMAGE_ENV}/bin/python" -m pip install --no-deps --force-reinstall "${PEFT_WHEEL}"
 "${IMAGE_ENV}/bin/python" "${REPOSITORY}/scripts/image_provider/normalize_runtime_permissions.py" \
   --binding "${BINDING_TARGET}" --model-store-root /srv/eom/models/image
 
@@ -131,12 +141,13 @@ cmp -s "${BINDING_SOURCE}" "${BINDING_TARGET}" || fail "LOCAL_IMAGE_BINDING_DRIF
 runuser -u eom-image -g eom-image -- env -i \
   HOME=/var/lib/eom-image PATH=${IMAGE_ENV}/bin:/usr/bin:/bin PYTHONNOUSERSITE=1 \
   "${IMAGE_ENV}/bin/python" -I -c \
-  'import eom_image_contracts, eom_image_provider; print("LOCAL_IMAGE_IMPORT=PASS")'
+  'import importlib.metadata; import eom_image_contracts, eom_image_provider; assert importlib.metadata.version("peft") == "0.17.1"; print("LOCAL_IMAGE_IMPORT=PASS")'
 
 printf 'LOCAL_IMAGE_RUNTIME_PREPARED=YES\n'
 printf 'SOURCE_COMMIT=%s\n' "${SOURCE_COMMIT}"
 printf 'CONTRACT_WHEEL_SHA256=%s\n' "${CONTRACT_SHA256}"
 printf 'PROVIDER_WHEEL_SHA256=%s\n' "${PROVIDER_SHA256}"
+printf 'PEFT_WHEEL_SHA256=%s\n' "${PEFT_SHA256}"
 printf 'WORKSPACE_ROOT=root:eom-image:3770\n'
 printf 'REFERENCE_WORKSPACE_ROOT=root:eom-image-reference:3770\n'
 printf 'MODEL_STORE=root:eom-image:0750_0640\n'

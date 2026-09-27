@@ -9,9 +9,9 @@ from typing import Final, Literal
 LocalGpuPromptContract = Literal["LEGACY_COMPAT", "ASSESSMENT_LINE_ART_V1"]
 
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
-LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.6"
+LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.7"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
-LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 180
+LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 96
 
 # These are provenance pins for the three reviewed inputs. They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
@@ -43,10 +43,12 @@ LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = ("monochrome:",)
 # benchmark, while the same subjects in Korean repeatedly collapsed into unrelated portraits.
 # Scientific labels and exact geometry still belong to the deterministic SVG overlay.
 LOCAL_GPU_ASSESSMENT_STYLE_PREFIX: Final = (
-    "black-and-white Korean science exam figure, flat 2D technical line drawing, centered isolated "
-    "subject, clean white background, uniform black outlines, sparse light-gray hatching, no text:"
+    "black-and-white science exam figure, flat technical line art, isolated object, white "
+    "background, black outlines, light gray hatching, no text:"
 )
-_LOCAL_GPU_ENGLISH_SUBJECT: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$")
+_LOCAL_GPU_ENGLISH_SUBJECT: Final = re.compile(
+    rf"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{{2,{LOCAL_GPU_MAX_SUBJECT_CHARS - 1}}}$"
+)
 
 # Ordered terms combine the two sources' always-on prohibitions.  Authoritative labels, graphs,
 # equations, arrows, scales, and exact geometry remain in the deterministic SVG overlay.
@@ -84,37 +86,24 @@ LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS: Final = (
     "photorealistic",
     "anime",
     "manga",
-    "comic",
     "cartoon",
     "3d",
-    "render",
     "perspective",
-    "cinematic lighting",
-    "dramatic composition",
+    "scenery",
     "decoration",
     "extra objects",
     "duplicates",
     "collage",
     "crop",
     "text",
-    "letters",
     "labels",
     "numbers",
-    "symbols",
-    "equations",
     "watermark",
     "logo",
     "person",
-    "human",
-    "man",
-    "woman",
-    "child",
     "face",
     "portrait",
-    "fashion",
     "clothing",
-    "stage",
-    "room",
 )
 
 

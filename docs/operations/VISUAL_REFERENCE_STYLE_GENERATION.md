@@ -8,6 +8,9 @@ This runbook operates the ADR 0135 path. It keeps the two image responsibilities
 The content-team prompt remains authoritative and unchanged. Reference titles, captions, EXIF, and
 web content are untrusted data and never enter the prompt. Scientific labels, values, arrows, axes,
 answer-bearing geometry, and `(가)/(나)` remain deterministic SVG or editable HWPX content.
+The provider-facing positive and negative prompts use the bounded
+`local-gpu-image-prompt-policy/1.7`; the complete team-lead instructions remain pinned as
+provenance outside the two 77-token CLIP inputs and are never silently truncated.
 
 ## Implemented boundary
 

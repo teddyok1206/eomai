@@ -31,6 +31,7 @@ from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_PROMPT_SOURCE_PINS,
     LOCAL_GPU_RASTER_REQUIREMENTS,
     LocalGpuPromptPlan,
+    compose_local_gpu_prompt_plan,
 )
 from eom_image_contracts import (
     LocalImageProviderBinding,
@@ -523,9 +524,30 @@ def test_v6_hybrid_english_subject_uses_benchmarked_assessment_style(tmp_path: P
     assert "anime" in request.generation.negative_prompt
     assert "manga" in request.generation.negative_prompt
     assert "portrait" in request.generation.negative_prompt
-    assert "flat 2D technical line drawing" in request.generation.prompt
-    assert "uniform black outlines" in request.generation.prompt
-    assert "sparse light-gray hatching" in request.generation.prompt
+    assert "flat technical line art" in request.generation.prompt
+    assert "black outlines" in request.generation.prompt
+    assert "light gray hatching" in request.generation.prompt
+
+
+def test_assessment_style_prompt_policy_is_bounded_for_fixed_clip_runtime() -> None:
+    plan = compose_local_gpu_prompt_plan(
+        subject="one compact automobile shown in three-quarter front view",
+        production_route="HYBRID_LOCAL_GENERATIVE",
+        prompt_contract="ASSESSMENT_LINE_ART_V1",
+    )
+
+    assert plan.policy_revision == "local-gpu-image-prompt-policy/1.7"
+    assert len(plan.positive_prompt) <= 220
+    assert len(plan.negative_prompt) <= 280
+
+
+def test_assessment_style_prompt_policy_rejects_oversized_subject() -> None:
+    with pytest.raises(ValueError, match="bounded English"):
+        compose_local_gpu_prompt_plan(
+            subject="one " + "a" * LOCAL_GPU_MAX_SUBJECT_CHARS,
+            production_route="HYBRID_LOCAL_GENERATIVE",
+            prompt_contract="ASSESSMENT_LINE_ART_V1",
+        )
 
 
 def test_assessment_style_contract_fails_closed_on_legacy_korean_subject(tmp_path: Path) -> None:
@@ -575,7 +597,7 @@ def test_local_gpu_prompt_policy_pins_both_team_lead_sources_and_kice_guide() ->
     root = Path(__file__).resolve().parents[2]
 
     assert LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.4"
-    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.6"
+    assert LOCAL_GPU_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.7"
     assert len(LOCAL_GPU_PROMPT_SOURCE_PINS) == 3
     for relative_path, expected_sha256 in LOCAL_GPU_PROMPT_SOURCE_PINS:
         source = root / relative_path

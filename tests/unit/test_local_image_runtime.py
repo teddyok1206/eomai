@@ -345,6 +345,8 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert 'git -C "${REPOSITORY}" archive' in build
     assert "curl" not in build and "wget" not in build
     assert "--no-deps --force-reinstall" in deploy
+    assert "peft-0.17.1-*.whl" in deploy
+    assert 'metadata.version("peft") == "0.17.1"' in deploy
     assert "eom-image-reference-acquirer@.service" in deploy
     assert "eom-image-reference-discoverer@.service" in deploy
     assert "eom-image-reference" in deploy

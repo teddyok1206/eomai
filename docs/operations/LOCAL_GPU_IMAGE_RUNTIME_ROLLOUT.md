@@ -47,17 +47,19 @@ Run the source-isolated offline wheel build as `eom`:
 scripts/image_provider/build_release.sh
 ```
 
-Record the two wheel paths and hashes. Run the reviewed runtime preparer as root with those exact
-values and the exact source commit:
+Record the two EOM wheel paths and hashes. Reuse the exact reviewed `peft==0.17.1` wheel from the
+image-trainer release state; PEFT is required because Diffusers delegates LoRA adapter loading to
+it. Run the runtime preparer as root with those exact values and the exact source commit:
 
 ```bash
 sudo -n scripts/image_provider/deploy_runtime.sh \
   <CONTRACT_WHEEL> <CONTRACT_SHA256> \
   <PROVIDER_WHEEL> <PROVIDER_SHA256> \
+  <PEFT_WHEEL> <PEFT_SHA256> \
   <SOURCE_COMMIT>
 ```
 
-The preparer creates only the `eom-image` no-login identity, installs the two local wheels with
+The preparer creates only the `eom-image` no-login identity, installs the three pinned wheels with
 `--no-deps`, normalizes only the manifest-listed model files, installs the fixed unit/polkit/binding,
 and prepares `/srv/eom/image-workspaces`. It does not restart any service and does not activate a
 Content Pack.

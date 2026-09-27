@@ -221,9 +221,9 @@ class Ssd1bDiffusersBackend:
                 raise ProviderError("LOCAL_IMAGE_MODEL_UNAVAILABLE")
             _require_untruncated_prompts(pipeline, request)
             adapter_name = "eom_assessment_style"
-            pipeline.load_lora_weights(
-                str(style_adapter_directory),
-                weight_name="adapter_model.safetensors",
+            _load_peft_unet_adapter(
+                pipeline=pipeline,
+                style_adapter_directory=style_adapter_directory,
                 adapter_name=adapter_name,
             )
             pipeline.set_adapters([adapter_name], adapter_weights=[lora_scale])
@@ -270,6 +270,47 @@ class Ssd1bDiffusersBackend:
             if pipeline is not None:
                 del pipeline
             torch.cuda.empty_cache()
+
+
+def _load_peft_unet_adapter(
+    *,
+    pipeline: Any,
+    style_adapter_directory: Path,
+    adapter_name: str,
+) -> None:
+    """Load the exact PEFT UNet format emitted by the EOM trainer.
+
+    Diffusers' pipeline LoRA loader expects converted component-prefixed keys.  EOM deliberately
+    preserves the trainer's native PEFT UNet state, so it must be restored through the same PEFT
+    adapter boundary instead of being guessed or silently converted.
+    """
+
+    try:
+        from peft import LoraConfig  # type: ignore[import-not-found]
+        from peft.utils import set_peft_model_state_dict  # type: ignore[import-not-found]
+        from safetensors.torch import load_file  # type: ignore[import-not-found]
+
+        configuration = LoraConfig.from_pretrained(
+            str(style_adapter_directory),
+            local_files_only=True,
+        )
+        pipeline.unet.add_adapter(configuration, adapter_name=adapter_name)
+        state = load_file(
+            str(style_adapter_directory / "adapter_model.safetensors"),
+            device="cpu",
+        )
+        if not isinstance(state, dict) or not state:
+            raise ValueError("empty adapter state")
+        loaded = set_peft_model_state_dict(
+            pipeline.unet,
+            state,
+            adapter_name=adapter_name,
+        )
+        unexpected = getattr(loaded, "unexpected_keys", ())
+        if unexpected:
+            raise ValueError("unexpected adapter keys")
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_STYLE_ADAPTER_INVALID") from exc
 
 
 def _require_untruncated_prompts(

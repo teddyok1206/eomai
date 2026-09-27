@@ -13,6 +13,8 @@ dependencies = [
   "diffusers==0.35.2",
   "eom-image-contracts==0.1.0",
   "huggingface-hub==0.35.3",
+  # Diffusers delegates immutable LoRA adapter loading to PEFT on the reference-style route.
+  "peft==0.17.1",
   "Pillow==11.3.0",
   "safetensors==0.6.2",
   "torch==2.7.1",
