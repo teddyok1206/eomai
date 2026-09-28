@@ -48,7 +48,13 @@ def test_reference_simplification_is_deterministic_bounded_and_self_describing()
         assert image.format == "PNG"
         assert image.mode == "RGB"
         assert image.size == (800, 504)
-        assert sum(1 for count in image.convert("L").histogram() if count) <= 4
+        grayscale = image.convert("L")
+        values = {value for value, count in enumerate(grayscale.histogram()) if count}
+        assert values <= {48, 160, 224, 236, 248, 255}
+        assert grayscale.getextrema() == (48, 255)
+        histogram = grayscale.histogram()
+        mean_luma = sum(value * count for value, count in enumerate(histogram)) / (800 * 504)
+        assert mean_luma > 220
 
 
 def test_reference_simplification_rejects_cluttered_border_without_segmentation() -> None:

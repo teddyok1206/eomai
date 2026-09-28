@@ -23,6 +23,7 @@ from eom_image_contracts import (
     LocalImageModelManifest,
     LocalImageMorphologyConditioning,
     LocalImageProductionStyleAdapterRelease,
+    LocalImageProductionStyleAdapterReleaseV2,
     LocalImageProviderBinding,
     LocalImageQualityEvaluationPlan,
     LocalImageQualityEvaluationResult,
@@ -397,7 +398,7 @@ def _conditioned_request_v3(
     manifest: LocalImageModelManifest,
     overlay: bytes,
     reference: bytes,
-    release: LocalImageProductionStyleAdapterRelease,
+    release: LocalImageProductionStyleAdapterReleaseV2,
 ) -> LocalImageReferenceConditionedCompositeRequestV3:
     v1 = _conditioned_request(manifest, overlay, reference)
     body = {
@@ -410,6 +411,20 @@ def _conditioned_request_v3(
     value = {**body, "request_sha256": content_sha256(body)}
     validate_contract("reference-conditioned-composite-request-v3", value)
     return LocalImageReferenceConditionedCompositeRequestV3.model_validate(value)
+
+
+def _reduced_scale_release(
+    release: LocalImageProductionStyleAdapterRelease,
+) -> LocalImageProductionStyleAdapterReleaseV2:
+    predecessor = release.model_dump(mode="json", exclude={"release_sha256"})
+    body = {
+        **predecessor,
+        "schema_version": "local-image-style-adapter-release/2.0",
+        "lora_scale": 0.45,
+    }
+    return LocalImageProductionStyleAdapterReleaseV2.model_validate(
+        {**body, "release_sha256": content_sha256(body)}
+    )
 
 
 def test_contract_resources_are_canonical_mirrors() -> None:
@@ -965,7 +980,8 @@ def test_simplified_reference_handoff_uses_conditioning_bytes_and_is_idempotent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, manifest = _store(tmp_path)
-    style_root, release = _style_store(tmp_path, manifest)
+    style_root, predecessor_release = _style_store(tmp_path, manifest)
+    release = _reduced_scale_release(predecessor_release)
     workspace = tmp_path / "simplified-reference-handoff"
     (workspace / "references").mkdir(mode=0o750, parents=True)
     workspace.chmod(0o1730)
@@ -995,9 +1011,15 @@ def test_simplified_reference_handoff_uses_conditioning_bytes_and_is_idempotent(
             with Image.open(io.BytesIO(reference_png)) as conditioned:
                 conditioned.load()
                 assert conditioned.size == (800, 504)
-                assert sum(1 for count in conditioned.convert("L").histogram() if count) <= 4
+                values = {
+                    value
+                    for value, count in enumerate(conditioned.convert("L").histogram())
+                    if count
+                }
+                assert values <= {48, 160, 224, 236, 248, 255}
+                assert conditioned.convert("L").getextrema() == (48, 255)
             assert strength == 0.35
-            assert lora_scale == 0.8
+            assert lora_scale == 0.45
             return FakeBackend().generate(model_directory=model_directory, request=request)
 
     monkeypatch.setattr(

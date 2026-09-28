@@ -72,12 +72,22 @@ def _edge_density(image: Image.Image) -> float:
     return _ratio(count, total)
 
 
-def _posterize_four_levels(value: int) -> int:
+def _light_fill_tone(value: int) -> int:
     if value >= 240:
         return 255
     if value >= 176:
-        return 224
+        return 248
     if value >= 96:
+        return 236
+    return 224
+
+
+def _contour_tone(value: int) -> int:
+    if value < 30:
+        return 255
+    if value < 80:
+        return 224
+    if value < 150:
         return 160
     return 48
 
@@ -105,11 +115,31 @@ def simplify_visual_reference(
         policy.foreground_luma_threshold,
     )
     source_edge_density = _edge_density(grayscale)
-    denoised = grayscale.filter(ImageFilter.MedianFilter(size=5)).filter(
+    fill_source = grayscale.filter(ImageFilter.MedianFilter(size=5)).filter(
         ImageFilter.GaussianBlur(radius=1.2)
     )
-    contrasted = ImageOps.autocontrast(denoised, cutoff=1)
-    simplified = contrasted.point(tuple(_posterize_four_levels(value) for value in range(256)))
+    fill = ImageOps.autocontrast(fill_source, cutoff=1).point(
+        tuple(_light_fill_tone(value) for value in range(256))
+    )
+    contour_source = (
+        grayscale.filter(ImageFilter.MaxFilter(size=5))
+        .filter(ImageFilter.MedianFilter(size=7))
+        .filter(ImageFilter.GaussianBlur(radius=2.0))
+    )
+    contours = ImageOps.autocontrast(
+        contour_source.filter(ImageFilter.FIND_EDGES),
+        cutoff=1,
+    ).point(tuple(_contour_tone(value) for value in range(256)))
+    fill_pixels = fill.load()
+    contour_pixels = contours.load()
+    for y in range(fill.height):
+        for x in range(fill.width):
+            fill_pixels[x, y] = (
+                255
+                if x < 5 or x >= fill.width - 5 or y < 5 or y >= fill.height - 5
+                else min(fill_pixels[x, y], contour_pixels[x, y])
+            )
+    simplified = fill
     conditioning_foreground_ratio = _foreground_ratio(
         simplified,
         policy.foreground_luma_threshold,
