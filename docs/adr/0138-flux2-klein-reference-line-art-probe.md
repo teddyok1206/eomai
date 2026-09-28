@@ -140,3 +140,27 @@ black-and-white illustrations, but it must not replace the deterministic Python/
 current provider for reference-faithful rendering. Any successor experiment must use a distinct
 plan/revision and demonstrate composition fidelity explicitly; it must not reinterpret this result
 or silently tune the prompt/seed under the same run identity.
+
+The user subsequently accepted the visual style, especially the automobile result. That product
+assessment refines the interpretation above: FLUX.2 is not rejected as a renderer; its line-art
+style is a viable candidate, while reference composition remains the blocking invariant.
+
+A second immutable run removed contradictory subject wording and explicitly prohibited completing
+cropped objects. It was published as Artifact `artifact_3a7be3bbc7434ebaaac1023636de8e9a`,
+revision `rev_01792d3dd923457399378e710f31d5ed`, with result hash
+`sha256:c1465a1f34fd2f0742378266987d32bfd471e1c596bec6a3ce850da2d747a960` and
+file-set manifest hash
+`sha256:a63de61f0812b778644db339d19ac7afa6c875716c6484938dfff45c0ece884a`.
+Against a foreground-threshold bounding box, candidate-to-conditioning area ratios improved from
+8.09 to 2.29 for the automobile and from 10.12 to 0.78 for the fossil; normalized center drift fell
+to 0.031 and 0.009 respectively. The plant retained the correct no-flower semantics but still
+extended its stem, with area ratio 2.55 and center drift 0.114. Prompt correction therefore helps
+but does not provide a structural guarantee.
+
+The next successor must keep the accepted style prompt while moving placement and scale out of the
+generative model. A deterministic layout adapter should compute the reference foreground bounding
+box, stage the bounded subject crop, and composite the validated generated subject back into that
+exact rectangle on the target canvas. Its typed result must report source/output normalized bounds,
+area ratio and center drift. A structural-control model may be evaluated separately if internal
+edge topology must also be preserved. Prompt wording alone is no longer considered sufficient for
+the composition gate.
