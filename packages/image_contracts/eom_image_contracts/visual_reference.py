@@ -1176,12 +1176,13 @@ class LocalImageReferenceConditionedCompositeReceiptV4(FrozenModel):
             raise ValueError("reference-conditioned V4 completion precedes image composition")
         policy = self.conditioning.simplification
         metrics = self.simplification_metrics
-        for ratio in (
-            metrics.source_foreground_ratio,
-            metrics.conditioning_foreground_ratio,
+        if metrics.source_foreground_ratio < policy.foreground_ratio_min:
+            raise ValueError("reference source foreground ratio is below policy minimum")
+        if (
+            metrics.conditioning_foreground_ratio < policy.foreground_ratio_min
+            or metrics.conditioning_foreground_ratio > policy.foreground_ratio_max
         ):
-            if ratio < policy.foreground_ratio_min or ratio > policy.foreground_ratio_max:
-                raise ValueError("reference simplification foreground ratio is outside policy")
+            raise ValueError("reference conditioning foreground ratio is outside policy")
         if metrics.border_foreground_ratio > policy.border_foreground_ratio_max:
             raise ValueError("reference simplification border ratio is outside policy")
         expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))

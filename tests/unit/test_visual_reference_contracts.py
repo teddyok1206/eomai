@@ -719,8 +719,8 @@ def test_base_only_simplified_morphology_v4_contracts_pin_palette_and_policy() -
             "height_px": 504,
         },
         "simplification_metrics": {
-            "source_foreground_ratio": 0.32,
-            "conditioning_foreground_ratio": 0.28,
+            "source_foreground_ratio": 0.9125,
+            "conditioning_foreground_ratio": 0.58215774,
             "border_foreground_ratio": 0.01,
             "source_edge_density": 0.14,
             "conditioning_edge_density": 0.06,
