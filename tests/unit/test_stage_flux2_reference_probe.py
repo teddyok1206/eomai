@@ -109,3 +109,12 @@ def test_stage_png_probe_parses_canvas_and_rejects_invalid_header() -> None:
     assert stage_reference_probe._png_dimensions(payload) == (801, 504)
     with pytest.raises(stage_reference_probe.Flux2ProbeStageError):
         stage_reference_probe._png_dimensions(b"not-a-png")
+
+
+def test_flux2_probe_prompts_keep_reference_crop_as_layout_constraint() -> None:
+    assert "strict layout constraint" in stage_reference_probe.STYLE_PREFIX
+    assert "keep it cropped" in stage_reference_probe.STYLE_PREFIX
+    assert "never complete hidden portions" in stage_reference_probe.STYLE_PREFIX
+    assert "do not complete the vehicle" in stage_reference_probe.CASES["car"][1]
+    assert "no flowers" in stage_reference_probe.CASES["plant"][1]
+    assert "without inventing anatomy" in stage_reference_probe.CASES["fossil"][1]

@@ -64,16 +64,34 @@ SOURCE_PATTERN = re.compile(
     r"(?P<member>crops/imgsciviscandidate_[0-9a-f]{32}\.png)$"
 )
 CASES = {
-    "car": ("AUTOMOBILE", "one compact automobile shown in side view", 2026092801),
-    "plant": ("PLANT", "one simple flowering plant specimen", 2026092802),
-    "fossil": ("FOSSIL", "one fossil specimen shown from above", 2026092803),
+    "car": (
+        "AUTOMOBILE",
+        "only the visible cropped front portion of the automobile; keep the missing remainder "
+        "outside the image and do not complete the vehicle",
+        2026092801,
+    ),
+    "plant": (
+        "PLANT",
+        "only the exact leafy stem segment visible in the reference, with no flowers and no "
+        "additional leaves",
+        2026092802,
+    ),
+    "fossil": (
+        "FOSSIL",
+        "only the exact shield-shaped specimen visible in the reference; preserve its outline "
+        "and internal marks without inventing anatomy",
+        2026092803,
+    ),
 }
 STYLE_PREFIX = (
     "Minimal black-and-white Korean science assessment line art. Preserve the exact reference "
-    "composition, silhouette, part count, and viewpoint. Use a white background, uniform thin "
-    "black contours, essential large internal lines only, sparse flat light gray, and generous "
-    "blank space. Do not add text, labels, frames, scenery, shadows, color, people, or extra "
-    "objects."
+    "composition, silhouette, part count, viewpoint, canvas position, and scale. Treat the "
+    "supplied reference as a strict layout constraint rather than inspiration. If the reference "
+    "crops an object, keep it cropped and never complete hidden portions. Use a white background, "
+    "uniform "
+    "thin black contours, essential large internal lines only, sparse flat light gray, and "
+    "generous blank space. Do not add text, labels, frames, scenery, shadows, color, people, or "
+    "extra objects."
 )
 
 
