@@ -11,14 +11,18 @@ from eom_image_contracts import (
     LocalImageGenerationReceipt,
     LocalImageGenerationRequest,
     LocalImageModelPointer,
+    LocalImageMorphologyConditioning,
     LocalImageOutput,
     LocalImageOverlayInput,
     LocalImageProductionStyleAdapterRelease,
     LocalImageProviderBindingV2,
+    LocalImageProviderBindingV3,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
+    LocalImageReferenceConditionedCompositeReceiptV3,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
+    LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferenceAcquisitionCommand,
@@ -27,6 +31,7 @@ from eom_image_contracts import (
     LocalImageVisualReferenceIntent,
     LocalImageVisualReferencePointer,
     LocalImageVisualReferencePolicy,
+    LocalImageVisualReferencePolicyV2,
     LocalImageVisualReferencePublicationReceipt,
     ProductionStyleAdapterEvaluationPointer,
     ProductionStyleAdapterFile,
@@ -42,6 +47,7 @@ from eom_image_contracts import (
     validate_contract,
     validate_reference_conditioned_receipt,
     validate_reference_conditioned_receipt_v2,
+    validate_reference_conditioned_receipt_v3,
     validate_visual_reference_acquisition,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -319,6 +325,19 @@ def _conditioned_request_v2() -> LocalImageReferenceConditionedCompositeRequestV
     )
 
 
+def _conditioned_request_v3() -> LocalImageReferenceConditionedCompositeRequestV3:
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/3.0",
+        "composite_request": _composite_request().model_dump(mode="json"),
+        "visual_reference": _reference_pointer().model_dump(mode="json"),
+        "conditioning": LocalImageMorphologyConditioning().model_dump(mode="json"),
+        "style_adapter": _style_adapter_release().model_dump(mode="json"),
+    }
+    return LocalImageReferenceConditionedCompositeRequestV3.model_validate(
+        {**body, "request_sha256": content_sha256(body)}
+    )
+
+
 def _acquisition_command() -> LocalImageVisualReferenceAcquisitionCommand:
     body = {
         "schema_version": "local-image-visual-reference-acquisition-command/1.0",
@@ -545,6 +564,104 @@ def test_style_reference_v2_contracts_pin_adapter_reference_and_unchanged_prompt
         validate_contract(name, value)
     validate_reference_conditioned_receipt_v2(request, receipt)
     assert request.composite_request.generation.prompt == _composite_request().generation.prompt
+
+
+def test_simplified_morphology_v3_contracts_pin_conditioning_bytes_and_metrics() -> None:
+    request = _conditioned_request_v3()
+    v1_body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/1.0",
+        "composite_request": request.composite_request.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": LocalImageReferenceConditioning().model_dump(mode="json"),
+    }
+    v1_request = LocalImageReferenceConditionedCompositeRequest.model_validate(
+        {**v1_body, "request_sha256": content_sha256(v1_body)}
+    )
+    composite_receipt = _conditioned_receipt(v1_request).composite_receipt
+    receipt_body = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/3.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "conditioning_output": {
+            "member_path": "reference-conditioning.png",
+            "media_type": "image/png",
+            "sha256": _sha(31),
+            "size_bytes": 12_000,
+            "width_px": 800,
+            "height_px": 504,
+        },
+        "simplification_metrics": {
+            "source_foreground_ratio": 0.32,
+            "conditioning_foreground_ratio": 0.28,
+            "border_foreground_ratio": 0.01,
+            "source_edge_density": 0.14,
+            "conditioning_edge_density": 0.06,
+            "edge_density_ratio": 0.42857143,
+        },
+        "simplifier_runtime": {
+            "contract": "local-image-reference-simplifier/1.0",
+            "pillow_version": "11.3.0",
+        },
+        "completed_at": "2026-09-27T13:01:00Z",
+    }
+    receipt = LocalImageReferenceConditionedCompositeReceiptV3.model_validate(
+        {**receipt_body, "receipt_sha256": content_sha256(receipt_body)}
+    )
+    binding_body = {
+        "schema_version": "local-image-provider-binding/3.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-morphology-conditioned-line-art/3.0",
+        "model": request.composite_request.generation.model.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "reference_policy": LocalImageVisualReferencePolicyV2().model_dump(mode="json"),
+        "sampler": request.composite_request.generation.sampler.model_dump(mode="json"),
+        "timeout_seconds": 300,
+    }
+    binding = LocalImageProviderBindingV3.model_validate(
+        {**binding_body, "binding_sha256": content_sha256(binding_body)}
+    )
+
+    for name, value in (
+        ("provider-binding-v3", binding.model_dump(mode="json")),
+        ("reference-conditioned-composite-request-v3", request.model_dump(mode="json")),
+        ("reference-conditioned-composite-receipt-v3", receipt.model_dump(mode="json")),
+    ):
+        validate_contract(name, value)
+    validate_reference_conditioned_receipt_v3(request, receipt)
+
+
+def test_simplified_morphology_v3_rejects_metrics_outside_pinned_policy() -> None:
+    request = _conditioned_request_v3()
+    payload = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/3.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": _conditioned_receipt(
+            _conditioned_request()
+        ).composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "style_adapter": request.style_adapter.model_dump(mode="json"),
+        "conditioning_output": {
+            "sha256": _sha(31),
+            "size_bytes": 12_000,
+        },
+        "simplification_metrics": {
+            "source_foreground_ratio": 0.32,
+            "conditioning_foreground_ratio": 0.28,
+            "border_foreground_ratio": 0.13,
+            "source_edge_density": 0.14,
+            "conditioning_edge_density": 0.06,
+            "edge_density_ratio": 0.42857143,
+        },
+        "simplifier_runtime": {"pillow_version": "11.3.0"},
+        "completed_at": "2026-09-27T13:01:00Z",
+    }
+    payload["receipt_sha256"] = content_sha256(payload)
+    with pytest.raises(PydanticValidationError, match="border ratio"):
+        LocalImageReferenceConditionedCompositeReceiptV3.model_validate(payload)
 
 
 def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:

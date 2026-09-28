@@ -6,10 +6,15 @@ import re
 from dataclasses import dataclass
 from typing import Final, Literal
 
-LocalGpuPromptContract = Literal["LEGACY_COMPAT", "ASSESSMENT_LINE_ART_V1"]
+LocalGpuPromptContract = Literal[
+    "LEGACY_COMPAT",
+    "ASSESSMENT_LINE_ART_V1",
+    "ASSESSMENT_MINIMAL_LINE_ART_V2",
+]
 
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
 LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.7"
+LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.8"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 96
 
@@ -45,6 +50,11 @@ LOCAL_GPU_BACKGROUND_REQUIREMENTS: Final = ("monochrome:",)
 LOCAL_GPU_ASSESSMENT_STYLE_PREFIX: Final = (
     "black-and-white science exam figure, flat technical line art, isolated object, white "
     "background, black outlines, light gray hatching, no text:"
+)
+LOCAL_GPU_MINIMAL_STYLE_PREFIX: Final = (
+    "minimal black-and-white science exam line art, exact reference composition, isolated subject, "
+    "white background, uniform thin black contour, essential large internal lines only, sparse "
+    "flat light gray, generous blank space, no text:"
 )
 _LOCAL_GPU_ENGLISH_SUBJECT: Final = re.compile(
     rf"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{{2,{LOCAL_GPU_MAX_SUBJECT_CHARS - 1}}}$"
@@ -106,6 +116,27 @@ LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS: Final = (
     "clothing",
 )
 
+LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS: Final = (
+    *LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
+    "hatching",
+    "cross-hatching",
+    "stippling",
+    "microtexture",
+    "fine texture",
+    "material texture",
+    "fur texture",
+    "skin texture",
+    "metal texture",
+    "fabric texture",
+    "fine scratches",
+    "dense shading",
+    "dramatic lighting",
+    "detailed background",
+    "added parts",
+    "removed parts",
+    "changed viewpoint",
+)
+
 
 @dataclass(frozen=True)
 class LocalGpuPromptPlan:
@@ -119,6 +150,8 @@ class LocalGpuPromptPlan:
 def local_gpu_prompt_policy_revision(prompt_contract: LocalGpuPromptContract) -> str:
     """Return the immutable policy revision selected by a pinned Pack contract."""
 
+    if prompt_contract == "ASSESSMENT_MINIMAL_LINE_ART_V2":
+        return LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION
     if prompt_contract == "ASSESSMENT_LINE_ART_V1":
         return LOCAL_GPU_PROMPT_POLICY_REVISION
     return LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION
@@ -132,12 +165,18 @@ def compose_local_gpu_prompt_plan(
 ) -> LocalGpuPromptPlan:
     """Select a backward-compatible prompt policy without truncating worker content."""
 
-    if prompt_contract == "ASSESSMENT_LINE_ART_V1":
+    if prompt_contract in {"ASSESSMENT_LINE_ART_V1", "ASSESSMENT_MINIMAL_LINE_ART_V2"}:
         if (
             production_route != "HYBRID_LOCAL_GENERATIVE"
             or _LOCAL_GPU_ENGLISH_SUBJECT.fullmatch(subject) is None
         ):
             raise ValueError("assessment local GPU subject is not bounded English")
+        if prompt_contract == "ASSESSMENT_MINIMAL_LINE_ART_V2":
+            return LocalGpuPromptPlan(
+                policy_revision=LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION,
+                positive_prompt=f"{LOCAL_GPU_MINIMAL_STYLE_PREFIX} {subject}",
+                negative_prompt=", ".join(LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS),
+            )
         return LocalGpuPromptPlan(
             policy_revision=LOCAL_GPU_PROMPT_POLICY_REVISION,
             positive_prompt=f"{LOCAL_GPU_ASSESSMENT_STYLE_PREFIX} {subject}",

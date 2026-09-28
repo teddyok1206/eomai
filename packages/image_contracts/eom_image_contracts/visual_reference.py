@@ -793,6 +793,44 @@ class LocalImageVisualReferencePolicy(FrozenModel):
     failure_policy: Literal["FAIL_CLOSED"] = "FAIL_CLOSED"
 
 
+class LocalImageReferenceSimplification(FrozenModel):
+    contract: Literal["local-image-reference-simplification/1.0"] = (
+        "local-image-reference-simplification/1.0"
+    )
+    output_member: Literal["reference-conditioning.png"] = "reference-conditioning.png"
+    color_policy: Literal["GRAYSCALE_WHITE_BACKGROUND"] = "GRAYSCALE_WHITE_BACKGROUND"
+    denoise_policy: Literal["MEDIAN_5_GAUSSIAN_1_2"] = "MEDIAN_5_GAUSSIAN_1_2"
+    tone_policy: Literal["FOUR_LEVEL_POSTERIZE"] = "FOUR_LEVEL_POSTERIZE"
+    foreground_luma_threshold: Literal[245] = 245
+    border_width_px: Literal[24] = 24
+    foreground_ratio_min: float = Field(default=0.005, ge=0.005, le=0.005)
+    foreground_ratio_max: float = Field(default=0.8, ge=0.8, le=0.8)
+    border_foreground_ratio_max: float = Field(default=0.12, ge=0.12, le=0.12)
+
+
+class LocalImageMorphologyConditioning(FrozenModel):
+    contract: Literal["sdxl-morphology-img2img/2.0"] = "sdxl-morphology-img2img/2.0"
+    strength: float = Field(default=0.35, ge=0.35, le=0.35)
+    fit_policy: Literal["EXACT_NORMALIZED_CANVAS"] = "EXACT_NORMALIZED_CANVAS"
+    simplification: LocalImageReferenceSimplification = Field(
+        default_factory=LocalImageReferenceSimplification
+    )
+
+
+class LocalImageVisualReferencePolicyV2(FrozenModel):
+    intent_source: Literal["DRAWING_ALT_TEXT"] = "DRAWING_ALT_TEXT"
+    provider: Literal["WIKIMEDIA_COMMONS"] = "WIKIMEDIA_COMMONS"
+    license_policy: Literal["PUBLIC_DOMAIN_OR_CC0"] = "PUBLIC_DOMAIN_OR_CC0"
+    candidate_limit: Literal[5] = 5
+    conditioning: LocalImageMorphologyConditioning = Field(
+        default_factory=LocalImageMorphologyConditioning
+    )
+    authority_boundary: Literal["MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY"] = (
+        "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY"
+    )
+    failure_policy: Literal["FAIL_CLOSED"] = "FAIL_CLOSED"
+
+
 class LocalImageProviderBindingV2(FrozenModel):
     schema_version: Literal["local-image-provider-binding/2.0"] = "local-image-provider-binding/2.0"
     state: Literal["ENABLED"] = "ENABLED"
@@ -813,6 +851,29 @@ class LocalImageProviderBindingV2(FrozenModel):
         expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
         if self.binding_sha256 != expected:
             raise ValueError("local image provider V2 binding hash mismatch")
+        return self
+
+
+class LocalImageProviderBindingV3(FrozenModel):
+    schema_version: Literal["local-image-provider-binding/3.0"] = "local-image-provider-binding/3.0"
+    state: Literal["ENABLED"] = "ENABLED"
+    route_contract: Literal["eom-local-morphology-conditioned-line-art/3.0"] = (
+        "eom-local-morphology-conditioned-line-art/3.0"
+    )
+    model: LocalImageModelPointer
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    reference_policy: LocalImageVisualReferencePolicyV2
+    sampler: SamplerContract
+    timeout_seconds: int = Field(ge=30, le=900)
+    binding_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_model_and_hash(self) -> LocalImageProviderBindingV3:
+        if self.style_adapter.base_model != self.model:
+            raise ValueError("style-adapter base model differs from provider model")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
+        if self.binding_sha256 != expected:
+            raise ValueError("local image provider V3 binding hash mismatch")
         return self
 
 
@@ -910,6 +971,93 @@ class LocalImageReferenceConditionedCompositeReceiptV2(FrozenModel):
         return self
 
 
+class LocalImageReferenceConditioningOutput(FrozenModel):
+    member_path: Literal["reference-conditioning.png"] = "reference-conditioning.png"
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    size_bytes: int = Field(ge=64, le=8 * 1024 * 1024)
+    width_px: Literal[800] = 800
+    height_px: Literal[504] = 504
+
+
+class LocalImageReferenceSimplificationMetrics(FrozenModel):
+    source_foreground_ratio: float = Field(ge=0, le=1)
+    conditioning_foreground_ratio: float = Field(ge=0, le=1)
+    border_foreground_ratio: float = Field(ge=0, le=1)
+    source_edge_density: float = Field(ge=0, le=1)
+    conditioning_edge_density: float = Field(ge=0, le=1)
+    edge_density_ratio: float = Field(ge=0, le=16)
+
+
+class LocalImageReferenceSimplifierRuntime(FrozenModel):
+    contract: Literal["local-image-reference-simplifier/1.0"] = (
+        "local-image-reference-simplifier/1.0"
+    )
+    pillow_version: str = Field(min_length=1, max_length=64)
+
+
+class LocalImageReferenceConditionedCompositeRequestV3(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-request/3.0"] = (
+        "local-image-reference-conditioned-composite-request/3.0"
+    )
+    composite_request: LocalImageCompositeRequest
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioning
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_model_and_hash(self) -> LocalImageReferenceConditionedCompositeRequestV3:
+        if self.style_adapter.base_model != self.composite_request.generation.model:
+            raise ValueError("conditioned request style-adapter base model differs")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
+        if self.request_sha256 != expected:
+            raise ValueError("reference-conditioned V3 request hash mismatch")
+        return self
+
+
+class LocalImageReferenceConditionedCompositeReceiptV3(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-receipt/3.0"] = (
+        "local-image-reference-conditioned-composite-receipt/3.0"
+    )
+    request_sha256: Sha256
+    composite_receipt: LocalImageCompositeReceipt
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioning
+    style_adapter: LocalImageProductionStyleAdapterRelease
+    conditioning_output: LocalImageReferenceConditioningOutput
+    simplification_metrics: LocalImageReferenceSimplificationMetrics
+    simplifier_runtime: LocalImageReferenceSimplifierRuntime
+    completed_at: datetime
+    receipt_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("reference-conditioned V3 completion must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_metrics_hash_and_order(self) -> LocalImageReferenceConditionedCompositeReceiptV3:
+        if self.completed_at < self.composite_receipt.completed_at:
+            raise ValueError("reference-conditioned V3 completion precedes image composition")
+        policy = self.conditioning.simplification
+        metrics = self.simplification_metrics
+        for ratio in (
+            metrics.source_foreground_ratio,
+            metrics.conditioning_foreground_ratio,
+        ):
+            if ratio < policy.foreground_ratio_min or ratio > policy.foreground_ratio_max:
+                raise ValueError("reference simplification foreground ratio is outside policy")
+        if metrics.border_foreground_ratio > policy.border_foreground_ratio_max:
+            raise ValueError("reference simplification border ratio is outside policy")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("reference-conditioned V3 receipt hash mismatch")
+        return self
+
+
 def validate_reference_conditioned_receipt(
     request: LocalImageReferenceConditionedCompositeRequest,
     receipt: LocalImageReferenceConditionedCompositeReceipt,
@@ -941,6 +1089,25 @@ def validate_reference_conditioned_receipt_v2(
         or receipt.style_adapter != request.style_adapter
     ):
         raise ValueError("reference-conditioned V2 receipt differs from its request")
+
+
+def validate_reference_conditioned_receipt_v3(
+    request: LocalImageReferenceConditionedCompositeRequestV3,
+    receipt: LocalImageReferenceConditionedCompositeReceiptV3,
+) -> None:
+    """Bind a simplified-morphology receipt to its exact source, policy, and release."""
+
+    if (
+        receipt.request_sha256 != request.request_sha256
+        or receipt.composite_receipt.composite_request_sha256
+        != request.composite_request.composite_request_sha256
+        or receipt.visual_reference != request.visual_reference
+        or receipt.conditioning != request.conditioning
+        or receipt.style_adapter != request.style_adapter
+        or receipt.conditioning_output.member_path
+        != request.conditioning.simplification.output_member
+    ):
+        raise ValueError("reference-conditioned V3 receipt differs from its request")
 
 
 def safe_visual_reference_member_path(value: str) -> str:

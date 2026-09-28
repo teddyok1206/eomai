@@ -113,3 +113,18 @@ microtexture. Passing an aggressively thresholded edge map loses broad morpholog
 model invent volume. General background segmentation adds an unreviewed model and another failure
 boundary. Mutating binding V2 would break replay. The additive V3 receipt plus a small deterministic
 simplifier is the smallest auditable successor.
+
+## Bounded preprocessing evidence
+
+On 2026-09-28 UTC, the installed image-provider environment (Pillow 11.3.0) processed three
+previously reviewed 800x504 reference candidates without GPU inference. The isolated beetle on a
+white background passed in 157.824 ms: foreground ratio 0.24031994, border foreground ratio
+0.00295249, and edge-density ratio 0.33698351. Its conditioning member was 9,908 bytes with SHA-256
+`04136e62f75978231b680cfa047829388989c86dd2df764f4bb75676a95d107b`.
+
+The automobile photograph was rejected as `REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID`; the rock
+photograph containing an answer-bearing scale and dark border was rejected as
+`REFERENCE_SIMPLIFICATION_BACKGROUND_COMPLEX`. Median runtime across the three fixed-size inputs was
+157.824 ms. This is the intended boundary: an isolated morphology reference may proceed, while a
+busy photographic scene or a source that mixes the object with authoritative measurement marks is
+not silently simplified into a generative input.

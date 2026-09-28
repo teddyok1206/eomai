@@ -12,6 +12,7 @@ from eom_image_contracts import (
     LocalImageGenerationRequest,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
+    LocalImageReferenceConditionedCompositeRequestV3,
     validate_contract,
 )
 
@@ -24,10 +25,12 @@ from eom_image_provider.provider import (
     generate_composite_handoff,
     generate_reference_conditioned_composite_handoff,
     generate_reference_conditioned_composite_handoff_v2,
+    generate_reference_conditioned_composite_handoff_v3,
     load_json_object,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
     reuse_reference_conditioned_composite_handoff_v2,
+    reuse_reference_conditioned_composite_handoff_v3,
 )
 from eom_image_provider.reference_acquisition import (
     VisualReferenceAcquisitionError,
@@ -135,20 +138,54 @@ def main() -> None:
             result = conditioned_receipt.model_dump(mode="json")
         elif args.operation == "generate-reference-style-composite":
             value = load_json_object(args.request, maximum_bytes=512 * 1024)
-            validate_contract("reference-conditioned-composite-request-v2", value)
-            styled_request = LocalImageReferenceConditionedCompositeRequestV2.model_validate(value)
-            styled_receipt = reuse_reference_conditioned_composite_handoff_v2(
-                workspace=args.workspace,
-                request=styled_request,
+            is_v3 = value.get("schema_version") == (
+                "local-image-reference-conditioned-composite-request/3.0"
+            )
+            validate_contract(
+                (
+                    "reference-conditioned-composite-request-v3"
+                    if is_v3
+                    else "reference-conditioned-composite-request-v2"
+                ),
+                value,
+            )
+            styled_request = (
+                LocalImageReferenceConditionedCompositeRequestV3.model_validate(value)
+                if is_v3
+                else LocalImageReferenceConditionedCompositeRequestV2.model_validate(value)
+            )
+            styled_receipt = (
+                reuse_reference_conditioned_composite_handoff_v3(
+                    workspace=args.workspace,
+                    request=styled_request,
+                )
+                if isinstance(styled_request, LocalImageReferenceConditionedCompositeRequestV3)
+                else reuse_reference_conditioned_composite_handoff_v2(
+                    workspace=args.workspace,
+                    request=styled_request,
+                )
             )
             if styled_receipt is None:
                 with acquire_gpu_lease(args.gpu_lock):
-                    styled_receipt = generate_reference_conditioned_composite_handoff_v2(
-                        model_store_root=args.model_store_root,
-                        style_adapter_store_root=args.style_adapter_store_root,
-                        workspace=args.workspace,
-                        request=styled_request,
-                        backend=Ssd1bDiffusersBackend(),
+                    styled_receipt = (
+                        generate_reference_conditioned_composite_handoff_v3(
+                            model_store_root=args.model_store_root,
+                            style_adapter_store_root=args.style_adapter_store_root,
+                            workspace=args.workspace,
+                            request=styled_request,
+                            backend=Ssd1bDiffusersBackend(),
+                        )
+                        if isinstance(
+                            styled_request,
+                            LocalImageReferenceConditionedCompositeRequestV3,
+                        )
+                        else generate_reference_conditioned_composite_handoff_v2(
+                            model_store_root=args.model_store_root,
+                            style_adapter_store_root=args.style_adapter_store_root,
+                            workspace=args.workspace,
+                            request=styled_request,
+                            backend=Ssd1bDiffusersBackend(),
+                        )
                     )
             result = styled_receipt.model_dump(mode="json")
         elif args.operation == "acquire-reference":

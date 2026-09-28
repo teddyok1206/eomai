@@ -15,10 +15,12 @@ from eom_catalog_service.local_image_adapter import (
     LocalImageAdapterError,
     _build_reference_conditioned_request,
     _build_reference_conditioned_request_v2,
+    _build_reference_conditioned_request_v3,
     _build_request,
     load_local_image_provider_binding,
     load_local_image_provider_binding_any,
     load_local_image_provider_binding_v2,
+    load_local_image_provider_binding_v3,
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
@@ -26,6 +28,9 @@ from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_BACKGROUND_REQUIREMENTS,
     LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION,
     LOCAL_GPU_MAX_SUBJECT_CHARS,
+    LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS,
+    LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION,
+    LOCAL_GPU_MINIMAL_STYLE_PREFIX,
     LOCAL_GPU_NEGATIVE_REQUIREMENTS,
     LOCAL_GPU_PROMPT_POLICY_REVISION,
     LOCAL_GPU_PROMPT_SOURCE_PINS,
@@ -36,6 +41,7 @@ from eom_catalog_service.local_image_prompt_policy import (
 from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
+    LocalImageProviderBindingV3,
     LocalImageVisualReferencePointer,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
@@ -156,6 +162,45 @@ def _binding_v2_value() -> dict[str, object]:
             "failure_policy": "FAIL_CLOSED",
         },
         "sampler": _binding_value()["sampler"],
+        "timeout_seconds": 900,
+    }
+    return {**body, "binding_sha256": content_sha256(body)}
+
+
+def _binding_v3_value() -> dict[str, object]:
+    predecessor = _binding_v2_value()
+    body = {
+        "schema_version": "local-image-provider-binding/3.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-morphology-conditioned-line-art/3.0",
+        "model": predecessor["model"],
+        "style_adapter": predecessor["style_adapter"],
+        "reference_policy": {
+            "intent_source": "DRAWING_ALT_TEXT",
+            "provider": "WIKIMEDIA_COMMONS",
+            "license_policy": "PUBLIC_DOMAIN_OR_CC0",
+            "candidate_limit": 5,
+            "conditioning": {
+                "contract": "sdxl-morphology-img2img/2.0",
+                "strength": 0.35,
+                "fit_policy": "EXACT_NORMALIZED_CANVAS",
+                "simplification": {
+                    "contract": "local-image-reference-simplification/1.0",
+                    "output_member": "reference-conditioning.png",
+                    "color_policy": "GRAYSCALE_WHITE_BACKGROUND",
+                    "denoise_policy": "MEDIAN_5_GAUSSIAN_1_2",
+                    "tone_policy": "FOUR_LEVEL_POSTERIZE",
+                    "foreground_luma_threshold": 245,
+                    "border_width_px": 24,
+                    "foreground_ratio_min": 0.005,
+                    "foreground_ratio_max": 0.8,
+                    "border_foreground_ratio_max": 0.12,
+                },
+            },
+            "authority_boundary": "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY",
+            "failure_policy": "FAIL_CLOSED",
+        },
+        "sampler": predecessor["sampler"],
         "timeout_seconds": 900,
     }
     return {**body, "binding_sha256": content_sha256(body)}
@@ -298,6 +343,57 @@ def test_v2_binding_loader_and_request_pin_style_without_changing_prompt(tmp_pat
         ),
         LocalImageProviderBindingV2,
     )
+
+
+def test_v3_binding_loader_pins_simplification_and_minimal_prompt(tmp_path: Path) -> None:
+    path = tmp_path / "binding-v3.json"
+    value = _binding_v3_value()
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    path.chmod(0o644)
+    binding = load_local_image_provider_binding_v3(
+        path,
+        trusted_owner_uid=os.geteuid(),
+        trusted_group_gid=os.getegid(),
+    )
+    overlay_path = tmp_path / "generated-overlay.png"
+    overlay_path.write_bytes(_overlay_png())
+    overlay_path.chmod(0o640)
+    subject = "one compact automobile in side view isolated on white"
+    drawing = _hybrid_drawing().model_copy(update={"alt_text": subject})
+    composite = _build_request(
+        workflow_id="workflow_" + "4" * 32,
+        result_revision_id="rev_" + "5" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=binding,
+        overlay_path=overlay_path,
+        prompt_contract="ASSESSMENT_MINIMAL_LINE_ART_V2",
+    )
+    request = _build_reference_conditioned_request_v3(
+        composite,
+        _reference_pointer(),
+        binding,
+    )
+
+    assert request.conditioning == binding.reference_policy.conditioning
+    assert request.conditioning.simplification.output_member == "reference-conditioning.png"
+    assert request.composite_request.generation.prompt == (
+        f"{LOCAL_GPU_MINIMAL_STYLE_PREFIX} {subject}"
+    )
+    assert request.composite_request.generation.negative_prompt == ", ".join(
+        LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS
+    )
+    assert request.composite_request.generation.request_sha256
+    assert LocalImageProviderBindingV3.model_validate(value) == binding
+    assert isinstance(
+        load_local_image_provider_binding_any(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid(),
+        ),
+        LocalImageProviderBindingV3,
+    )
+    assert LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.8"
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))
