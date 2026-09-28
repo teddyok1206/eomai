@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal, cast
 
-from eom_identifiers import sha256_file
+from eom_identifiers import sha256_bytes, sha256_file
 from eom_image_contracts import (
     LocalImageCompositeReceipt,
     LocalImageCompositeRequest,
@@ -356,7 +356,7 @@ class FixedLocalImageProviderAdapter:
         output_directory: Path,
         prompt_contract: LocalGpuPromptContract,
         visual_reference: LocalImageVisualReferencePointer,
-        reference_path: Path,
+        reference_bytes: bytes,
     ) -> ReferenceConditionedLocalImageMaterialization:
         """Stage one exact reference without changing the reviewed generation prompt."""
 
@@ -384,18 +384,14 @@ class FixedLocalImageProviderAdapter:
         )
         _stage_exact_source(workspace / OVERLAY_MEMBER, overlay_path, provider_gid)
         reference_target = workspace / visual_reference.reference_member.member_path
-        reference_metadata = _require_regular(
-            reference_path,
-            maximum_bytes=8 * 1024 * 1024,
-            mode=0o640,
-        )
         if (
-            reference_metadata.st_size != visual_reference.reference_member.size_bytes
-            or sha256_file(reference_path) != visual_reference.reference_member.sha256
+            not 0 < len(reference_bytes) <= 8 * 1024 * 1024
+            or len(reference_bytes) != visual_reference.reference_member.size_bytes
+            or sha256_bytes(reference_bytes) != visual_reference.reference_member.sha256
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_source(reference_target, reference_path, provider_gid)
+        _stage_exact_file(reference_target, reference_bytes, provider_gid)
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
         unit_name = f"eom-image-reference-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():

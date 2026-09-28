@@ -10,11 +10,13 @@ LocalGpuPromptContract = Literal[
     "LEGACY_COMPAT",
     "ASSESSMENT_LINE_ART_V1",
     "ASSESSMENT_MINIMAL_LINE_ART_V2",
+    "ASSESSMENT_REFERENCE_COMPOSITION_V3",
 ]
 
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
 LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.7"
 LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.8.1"
+LOCAL_GPU_REFERENCE_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.9"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 96
 
@@ -137,6 +139,17 @@ LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS: Final = (
     "changed viewpoint",
 )
 
+_ORIENTATION_LOCKS: Final = {
+    "facing right": (
+        "front of subject on right side, rear on left side, orientation locked",
+        "mirrored orientation, facing left",
+    ),
+    "facing left": (
+        "front of subject on left side, rear on right side, orientation locked",
+        "mirrored orientation, facing right",
+    ),
+}
+
 
 @dataclass(frozen=True)
 class LocalGpuPromptPlan:
@@ -150,6 +163,8 @@ class LocalGpuPromptPlan:
 def local_gpu_prompt_policy_revision(prompt_contract: LocalGpuPromptContract) -> str:
     """Return the immutable policy revision selected by a pinned Pack contract."""
 
+    if prompt_contract == "ASSESSMENT_REFERENCE_COMPOSITION_V3":
+        return LOCAL_GPU_REFERENCE_PROMPT_POLICY_REVISION
     if prompt_contract == "ASSESSMENT_MINIMAL_LINE_ART_V2":
         return LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION
     if prompt_contract == "ASSESSMENT_LINE_ART_V1":
@@ -165,17 +180,36 @@ def compose_local_gpu_prompt_plan(
 ) -> LocalGpuPromptPlan:
     """Select a backward-compatible prompt policy without truncating worker content."""
 
-    if prompt_contract in {"ASSESSMENT_LINE_ART_V1", "ASSESSMENT_MINIMAL_LINE_ART_V2"}:
+    if prompt_contract in {
+        "ASSESSMENT_LINE_ART_V1",
+        "ASSESSMENT_MINIMAL_LINE_ART_V2",
+        "ASSESSMENT_REFERENCE_COMPOSITION_V3",
+    }:
         if (
             production_route != "HYBRID_LOCAL_GENERATIVE"
             or _LOCAL_GPU_ENGLISH_SUBJECT.fullmatch(subject) is None
         ):
             raise ValueError("assessment local GPU subject is not bounded English")
-        if prompt_contract == "ASSESSMENT_MINIMAL_LINE_ART_V2":
+        if prompt_contract in {
+            "ASSESSMENT_MINIMAL_LINE_ART_V2",
+            "ASSESSMENT_REFERENCE_COMPOSITION_V3",
+        }:
+            orientation = next(
+                (lock for phrase, lock in _ORIENTATION_LOCKS.items() if phrase in subject.lower()),
+                None,
+            )
+            positive_suffix = f", {orientation[0]}" if orientation is not None else ""
+            negative_suffix = (orientation[1],) if orientation is not None else ()
             return LocalGpuPromptPlan(
-                policy_revision=LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION,
-                positive_prompt=f"{LOCAL_GPU_MINIMAL_STYLE_PREFIX} {subject}",
-                negative_prompt=", ".join(LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS),
+                policy_revision=(
+                    LOCAL_GPU_REFERENCE_PROMPT_POLICY_REVISION
+                    if prompt_contract == "ASSESSMENT_REFERENCE_COMPOSITION_V3"
+                    else LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION
+                ),
+                positive_prompt=f"{LOCAL_GPU_MINIMAL_STYLE_PREFIX} {subject}{positive_suffix}",
+                negative_prompt=", ".join(
+                    (*LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS, *negative_suffix)
+                ),
             )
         return LocalGpuPromptPlan(
             policy_revision=LOCAL_GPU_PROMPT_POLICY_REVISION,

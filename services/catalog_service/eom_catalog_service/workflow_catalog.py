@@ -123,9 +123,11 @@ from eom_catalog_service.generated_stimulus import (
     RASTER_MEMBER,
     REFERENCE_CONDITIONING_MEMBER,
     RenderedLocalImageStimulus,
+    RenderedReferenceStimulus,
     RenderedSimplifiedStyleReferenceStimulus,
     RenderedStyleReferenceStimulus,
     render_generated_local_vector_stimulus,
+    render_generated_reference_stimulus,
     render_generated_simplified_style_reference_stimulus,
     render_generated_stimulus,
     render_generated_style_reference_stimulus,
@@ -187,11 +189,27 @@ def _local_image_prompt_contract(
     """Select only from the immutable Content Pack version pinned at workflow start."""
 
     content_pack = workflow.runtime_context.get("content_pack")
+    if isinstance(content_pack, dict) and content_pack.get("version") == "1.20.3":
+        return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
         return "ASSESSMENT_MINIMAL_LINE_ART_V2"
     if isinstance(content_pack, dict) and content_pack.get("version") == "1.20.0":
         return "ASSESSMENT_LINE_ART_V1"
     return "LEGACY_COMPAT"
+
+
+def _uses_v1_reference_conditioning(
+    workflow: WorkflowInstanceRecord,
+    provider: LocalImageProviderBinding | LocalImageProviderBindingV2 | LocalImageProviderBindingV3,
+) -> bool:
+    """Enable the existing V1 reference protocol only for its immutable successor Pack."""
+
+    content_pack = workflow.runtime_context.get("content_pack")
+    return (
+        isinstance(provider, LocalImageProviderBinding)
+        and isinstance(content_pack, dict)
+        and content_pack.get("version") == "1.20.3"
+    )
 
 
 ROLE_BY_RESULT_SCHEMA = {
@@ -512,10 +530,11 @@ class WorkflowCatalogService:
                 if isinstance(binding, LocalImageProviderBindingV3) and release.version not in {
                     "1.20.1",
                     "1.20.2",
+                    "1.20.3",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "simplified-reference image binding requires Content Pack 1.20.1 or 1.20.2",
+                        "simplified-reference image binding requires Content Pack 1.20.1-1.20.3",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1286,6 +1305,7 @@ class WorkflowCatalogService:
             drawing = item.drawing
             drawing_hash = content_sha256(drawing.model_dump(mode="json"))
             suffix = f"visual-{item.visual_ordinal}"
+            provider_request_identity: tuple[str, str] | None = None
             if isinstance(drawing, GeneratedVectorDrawingV6) and drawing.production_route == (
                 "HYBRID_LOCAL_GENERATIVE"
             ):
@@ -1293,10 +1313,15 @@ class WorkflowCatalogService:
                     raise ValueError("pinned local image provider binding is missing")
                 local_rendered: (
                     RenderedLocalImageStimulus
+                    | RenderedReferenceStimulus
                     | RenderedStyleReferenceStimulus
                     | RenderedSimplifiedStyleReferenceStimulus
                 )
-                if isinstance(provider, (LocalImageProviderBindingV2, LocalImageProviderBindingV3)):
+                uses_v1_reference = _uses_v1_reference_conditioning(workflow, provider)
+                if (
+                    isinstance(provider, (LocalImageProviderBindingV2, LocalImageProviderBindingV3))
+                    or uses_v1_reference
+                ):
                     if not isinstance(image_result, ContentTeamImageRoleResultV12):
                         raise ValueError(
                             "reference-grounded provider requires the latest image result"
@@ -1307,8 +1332,8 @@ class WorkflowCatalogService:
                         visual_ordinal=item.visual_ordinal,
                         drawing_sha256=drawing_hash,
                     )
-                    local_rendered = (
-                        render_generated_simplified_style_reference_stimulus(
+                    if isinstance(provider, LocalImageProviderBindingV3):
+                        local_rendered = render_generated_simplified_style_reference_stimulus(
                             self.settings,
                             workflow_id=workflow.workflow_id,
                             result_revision_id=image.revision_id,
@@ -1321,8 +1346,8 @@ class WorkflowCatalogService:
                             reference_bytes=reference.payload,
                             operation_suffix=suffix,
                         )
-                        if isinstance(provider, LocalImageProviderBindingV3)
-                        else render_generated_style_reference_stimulus(
+                    elif isinstance(provider, LocalImageProviderBindingV2):
+                        local_rendered = render_generated_style_reference_stimulus(
                             self.settings,
                             workflow_id=workflow.workflow_id,
                             result_revision_id=image.revision_id,
@@ -1335,13 +1360,33 @@ class WorkflowCatalogService:
                             reference_bytes=reference.payload,
                             operation_suffix=suffix,
                         )
-                    )
+                    else:
+                        local_rendered = render_generated_reference_stimulus(
+                            self.settings,
+                            workflow_id=workflow.workflow_id,
+                            result_revision_id=image.revision_id,
+                            drawing_hash=drawing_hash,
+                            drawing=drawing,
+                            binding=provider,
+                            adapter=self.local_image,
+                            prompt_contract=prompt_contract,
+                            visual_reference=reference.pointer,
+                            reference_bytes=reference.payload,
+                            operation_suffix=suffix,
+                        )
                     receipt_schema_ref = (
                         "eom://schemas/image-provider/"
                         "local-image-reference-conditioned-composite-receipt/"
-                        + ("3.0" if isinstance(provider, LocalImageProviderBindingV3) else "2.0")
+                        + (
+                            "3.0"
+                            if isinstance(provider, LocalImageProviderBindingV3)
+                            else "2.0"
+                            if isinstance(provider, LocalImageProviderBindingV2)
+                            else "1.0"
+                        )
                     )
                     request_sha256 = local_rendered.request_sha256
+                    provider_request_identity = (provider.binding_sha256, request_sha256)
                     publication_receipt_sha256: str | None = reference.publication_receipt_sha256
                     reference_bundle_revision_id: str | None = reference.pointer.bundle_revision_id
                 else:
@@ -1387,8 +1432,12 @@ class WorkflowCatalogService:
                                 publication_receipt_sha256
                             ),
                             "visual_reference_bundle_revision_id": (reference_bundle_revision_id),
-                            "style_adapter_release_sha256": provider.style_adapter.release_sha256,
                         }
+                        if publication_receipt_sha256 is not None
+                        else {}
+                    ),
+                    **(
+                        {"style_adapter_release_sha256": provider.style_adapter.release_sha256}
                         if isinstance(
                             provider, (LocalImageProviderBindingV2, LocalImageProviderBindingV3)
                         )
@@ -1426,7 +1475,11 @@ class WorkflowCatalogService:
                     else (
                         "generated-item-stimulus-file-set/5.0"
                         if isinstance(provider, LocalImageProviderBindingV2)
-                        else "generated-item-stimulus-file-set/4.0"
+                        else (
+                            "generated-item-stimulus-file-set/4.1"
+                            if uses_v1_reference
+                            else "generated-item-stimulus-file-set/4.0"
+                        )
                     )
                 )
             else:
@@ -1466,12 +1519,8 @@ class WorkflowCatalogService:
                     f"content-team-stimulus:{workflow.workflow_id}:{image.revision_id}:"
                     f"{item.visual_ordinal}:{drawing_hash}"
                     + (
-                        f":{provider.binding_sha256}:{request_sha256}"
-                        if isinstance(
-                            provider, (LocalImageProviderBindingV2, LocalImageProviderBindingV3)
-                        )
-                        and isinstance(drawing, GeneratedVectorDrawingV6)
-                        and drawing.production_route == "HYBRID_LOCAL_GENERATIVE"
+                        f":{provider_request_identity[0]}:{provider_request_identity[1]}"
+                        if provider_request_identity is not None
                         else ""
                     )
                 ),
@@ -1793,6 +1842,7 @@ class WorkflowCatalogService:
             "1.20.0",
             "1.20.1",
             "1.20.2",
+            "1.20.3",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1811,6 +1861,7 @@ class WorkflowCatalogService:
                     "1.20.0",
                     "1.20.1",
                     "1.20.2",
+                    "1.20.3",
                 }
             ) != is_material_v4:
                 raise ContentPackError(
@@ -1826,6 +1877,7 @@ class WorkflowCatalogService:
                 "1.20.0",
                 "1.20.1",
                 "1.20.2",
+                "1.20.3",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
