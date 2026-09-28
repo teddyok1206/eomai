@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1",
+  "title": "EOM FLUX.2 reference line-art layout-locked probe plan v1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+        "schema_ref": {"type": "string", "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"},
+        "media_type": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"]
+    },
+    "sourceCrop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "pattern": "^crops/imgsciviscandidate_[0-9a-f]{32}\\.png$"},
+        "schema_ref": {"const": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-candidate-image/1.0"},
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"]
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "references/primary.png"},
+        "schema_ref": {"const": "eom://schemas/image-provider/normalized-visual-reference/1.0"},
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      },
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256", "size_bytes"]
+    },
+    "simplification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {"const": "local-image-reference-simplification/1.1"},
+        "output_member": {"const": "reference-conditioning.png"},
+        "color_policy": {"const": "GRAYSCALE_WHITE_BACKGROUND"},
+        "denoise_policy": {"const": "MAX_5_MEDIAN_7_GAUSSIAN_2_0"},
+        "tone_policy": {"const": "SIX_LEVEL_LIGHT_TONE_CONTOUR"},
+        "foreground_luma_threshold": {"const": 245},
+        "border_width_px": {"const": 24},
+        "foreground_ratio_min": {"const": 0.005},
+        "foreground_ratio_max": {"const": 0.8},
+        "border_foreground_ratio_max": {"const": 0.12}
+      },
+      "required": ["contract", "output_member", "color_policy", "denoise_policy", "tone_policy", "foreground_luma_threshold", "border_width_px", "foreground_ratio_min", "foreground_ratio_max", "border_foreground_ratio_max"]
+    },
+    "conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {"const": "reference-conditioning.png"},
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 64, "maximum": 8388608},
+        "width_px": {"const": 800},
+        "height_px": {"const": 504}
+      },
+      "required": ["member_path", "media_type", "sha256", "size_bytes", "width_px", "height_px"]
+    },
+    "simplificationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "conditioning_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "border_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "source_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+        "conditioning_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+        "edge_density_ratio": {"type": "number", "minimum": 0, "maximum": 16}
+      },
+      "required": ["source_foreground_ratio", "conditioning_foreground_ratio", "border_foreground_ratio", "source_edge_density", "conditioning_edge_density", "edge_density_ratio"]
+    },
+    "simplifierRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {"const": "local-image-reference-simplifier/1.0"},
+        "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      },
+      "required": ["contract", "pillow_version"]
+    },
+    "layoutLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {"const": "local-image-reference-layout-lock/1.0"},
+        "foreground_luma_threshold": {"const": 245},
+        "source_canvas_width_px": {"const": 800},
+        "source_canvas_height_px": {"const": 504},
+        "delivery_canvas_width_px": {"const": 800},
+        "delivery_canvas_height_px": {"const": 500},
+        "source_to_delivery_y_policy": {"const": "SCALE_HALF_OPEN_OUTWARD"},
+        "candidate_crop_policy": {"const": "TIGHT_FOREGROUND_BBOX"},
+        "placement_policy": {"const": "EXACT_REFERENCE_BBOX"},
+        "resize_filter": {"const": "LANCZOS"},
+        "background_policy": {"const": "WHITE"},
+        "empty_foreground_policy": {"const": "FAIL_CLOSED"}
+      },
+      "required": ["contract", "foreground_luma_threshold", "source_canvas_width_px", "source_canvas_height_px", "delivery_canvas_width_px", "delivery_canvas_height_px", "source_to_delivery_y_policy", "candidate_crop_policy", "placement_policy", "resize_filter", "background_policy", "empty_foreground_policy"]
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
+        "subject_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
+        "source_crop": {"$ref": "#/$defs/sourceCrop"},
+        "visual_reference": {"$ref": "#/$defs/reference"},
+        "conditioning": {"$ref": "#/$defs/conditioning"},
+        "simplification_metrics": {"$ref": "#/$defs/simplificationMetrics"},
+        "simplifier_runtime": {"$ref": "#/$defs/simplifierRuntime"},
+        "prompt_en": {"type": "string", "minLength": 20, "maxLength": 1200, "pattern": "^[ -~]+$"},
+        "prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647}
+      },
+      "required": ["case_id", "subject_key", "source_crop", "visual_reference", "conditioning", "simplification_metrics", "simplifier_runtime", "prompt_en", "prompt_sha256", "seed"]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "local-image-flux2-reference-probe-plan/1.1"},
+    "plan_id": {"type": "string", "pattern": "^imgflux2probe_[0-9a-f]{32}$"},
+    "candidate_model_manifest": {"$ref": "#/$defs/artifactMember"},
+    "candidate_model_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "generation_width_px": {"const": 800},
+    "generation_height_px": {"const": 512},
+    "delivery_width_px": {"const": 800},
+    "delivery_height_px": {"const": 500},
+    "inference_steps": {"const": 50},
+    "guidance_scale_milli": {"const": 4000},
+    "dtype": {"const": "bfloat16"},
+    "cpu_offload": {"const": true},
+    "simplification": {"$ref": "#/$defs/simplification"},
+    "layout_lock": {"$ref": "#/$defs/layoutLock"},
+    "cases": {"type": "array", "minItems": 3, "maxItems": 12, "items": {"$ref": "#/$defs/case"}},
+    "created_at": {"type": "string", "format": "date-time"},
+    "created_by": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._:@-]+$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "required": ["schema_version", "plan_id", "candidate_model_manifest", "candidate_model_manifest_sha256", "activation_policy", "generation_width_px", "generation_height_px", "delivery_width_px", "delivery_height_px", "inference_steps", "guidance_scale_milli", "dtype", "cpu_offload", "simplification", "layout_lock", "cases", "created_at", "created_by", "plan_sha256"]
+}
