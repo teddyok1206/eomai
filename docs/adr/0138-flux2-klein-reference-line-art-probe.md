@@ -113,3 +113,30 @@ Technical success proves only that the exact model ran within bounds and emitted
 review must separately score subject identity, landmark preservation, framing, exam-line economy,
 pseudotext, invented anatomy and excessive detail. Activation and LoRA training remain forbidden
 until that review prefers the candidate on representative organisms, fossils and natural objects.
+
+## 2026-09-28 probe outcome
+
+The exact three-case probe completed and was published as Artifact
+`artifact_a57beb9984694f739b4b9d8d7590e080`, revision
+`rev_bb5e28f15ee74ed3bf730c9367cb0d3d`. The canonical result hash is
+`sha256:d57e0512436c5206e430ebe02e998b5ba498266a3029a3c192b0704405271366`; the
+file-set manifest hash is
+`sha256:bb65257afb6c53470dd8bc263234af583c5034f53499d3bfa94c6f87d425acd1`.
+The three 50-step cases took 55.391, 40.429 and 39.917 seconds. Peak allocated GPU memory was
+8,913,644,032 bytes on the RTX 5080; the isolated systemd unit completed in 2 minutes 50 seconds
+with a 24.5 GiB system-memory peak.
+
+The technical execution boundary passed, but the current reference-conditioning strategy did not
+pass the activation boundary. All outputs were clean PNGs without pseudotext, yet the model
+reconstructed the named subject rather than preserving the exact crop composition. In particular,
+the partial automobile crop became a complete detailed automobile with a shadow, and the plant
+reference changed from a leafy specimen to a flowering specimen. The fossil retained a broadly
+similar centered specimen layout but invented internal morphology. This also shows that prompt
+prohibitions alone do not enforce sparse detail or composition preservation.
+
+Consequently FLUX.2 remains `EVALUATION_ONLY` with `activation_policy=FORBIDDEN`. These outputs are
+useful negative evidence: the model is technically feasible on the local GPU and can make clean
+black-and-white illustrations, but it must not replace the deterministic Python/SVG path or the
+current provider for reference-faithful rendering. Any successor experiment must use a distinct
+plan/revision and demonstrate composition fidelity explicitly; it must not reinterpret this result
+or silently tune the prompt/seed under the same run identity.
