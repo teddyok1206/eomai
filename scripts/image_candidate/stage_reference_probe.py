@@ -45,6 +45,7 @@ MODEL_MANIFEST = Path("/opt/eom-evaluation-models/flux2-klein-base-4b.manifest.j
 FIXTURE_ROOT = Path("/tmp/eom-actual-science-crop-simplification-49e0e5f")
 WORKSPACE_PARENT = Path("/tmp/eom-flux2-reference-probe")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+INPUT_PUBLICATION_SOURCE_COMMIT = "54408b28cf5c587a95efeb4b78a62cb11d8548ef"
 FIXTURE_RESULT_FILE_SHA256 = (
     "sha256:0ae5c6b653e4dce9543fe2500196147e2f785881fbcc19ee4f24008016599d75"
 )
@@ -347,7 +348,7 @@ def main() -> int:
             artifact_type="control_local_image_model_candidate",
             manifest_version="local-image-model-candidate-files/1.0",
             idempotency_key=f"image-model-candidate:{manifest.model_revision_id}",
-            source_commit=args.source_commit,
+            source_commit=INPUT_PUBLICATION_SOURCE_COMMIT,
             created_at=manifest.created_at,
         )
         cases: list[Flux2ReferenceProbeCase] = []
@@ -384,7 +385,7 @@ def main() -> int:
                 artifact_type="control_local_image_flux2_probe_reference",
                 manifest_version="local-image-flux2-probe-reference-files/1.0",
                 idempotency_key=f"flux2-probe-reference:{normalized_sha}",
-                source_commit=args.source_commit,
+                source_commit=INPUT_PUBLICATION_SOURCE_COMMIT,
                 created_at=manifest.created_at,
             )
             metrics = raw.get("metrics")

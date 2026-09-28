@@ -112,6 +112,9 @@ def test_stage_png_probe_parses_canvas_and_rejects_invalid_header() -> None:
 
 
 def test_flux2_probe_prompts_keep_reference_crop_as_layout_constraint() -> None:
+    assert stage_reference_probe.INPUT_PUBLICATION_SOURCE_COMMIT == (
+        "54408b28cf5c587a95efeb4b78a62cb11d8548ef"
+    )
     assert "strict layout constraint" in stage_reference_probe.STYLE_PREFIX
     assert "keep it cropped" in stage_reference_probe.STYLE_PREFIX
     assert "never complete hidden portions" in stage_reference_probe.STYLE_PREFIX
