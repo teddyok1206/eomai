@@ -84,6 +84,19 @@ _MULTI_SUBJECT_TITLE_MARKERS = (
     " cast",
     " with cast",
 )
+_SINGLE_SUBJECT_EXCLUSION_MARKERS = (
+    " collage",
+    " collection",
+    " comparison",
+    " display",
+    " exhibit",
+    " group",
+    " montage",
+    " multiple",
+    " pavement",
+    " plate",
+    " specimens",
+)
 _VIEWPOINT_TITLE_MARKERS = ("dorsal", "front", "rear", "side", "top")
 _REFERENCE_QUERY_MODIFIERS = re.compile(
     r"\b(?:seen from above|viewed from above|from above|top view|dorsal view|side view|"
@@ -271,11 +284,20 @@ class WikimediaCommonsClient:
         if not discovered:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         ranked = sorted(
-            discovered,
+            tuple(
+                value
+                for value in discovered
+                if not (
+                    _subject_requests_one(subject)
+                    and _title_has_marker(value[1].file_title, _SINGLE_SUBJECT_EXCLUSION_MARKERS)
+                )
+            ),
             key=lambda value: _reference_candidate_order(
                 value[1], query=query, official_rank=value[0]
             ),
         )[:candidate_limit]
+        if not ranked:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         used_fallback = selected_query != query
         return tuple(
             VisualReferenceIntentCandidate.model_validate(
@@ -284,7 +306,8 @@ class WikimediaCommonsClient:
                     "rank": rank,
                     "selection_rationale": (
                         "Official Commons result selected by stable morphology suitability "
-                        "ranking; montage-like file titles are deprioritized"
+                        "ranking; explicit aggregate titles are excluded for one-subject "
+                        "requests and other montage-like file titles are deprioritized"
                         + (
                             " after one bounded subject-only query fallback."
                             if used_fallback
@@ -756,12 +779,16 @@ def normalize_reference_image(
             with Image.open(io.BytesIO(raw)) as source:
                 if (
                     source.format != expected_format
-                    or source.size != (expected_width, expected_height)
                     or getattr(source, "is_animated", False)
                     or source.width * source.height > MAX_IMAGE_PIXELS
                 ):
                     raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_IMAGE_INVALID")
                 oriented = ImageOps.exif_transpose(source)
+                if (
+                    oriented.size != (expected_width, expected_height)
+                    or oriented.width * oriented.height > MAX_IMAGE_PIXELS
+                ):
+                    raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_IMAGE_INVALID")
                 converted = oriented.convert("RGB")
                 converted.thumbnail(
                     (NORMALIZED_WIDTH, NORMALIZED_HEIGHT),
@@ -1158,6 +1185,16 @@ def _reference_candidate_order(
     requested_viewpoints = {marker for marker in _VIEWPOINT_TITLE_MARKERS if marker in query_value}
     viewpoint_matches = sum(marker in title for marker in requested_viewpoints)
     return montage_penalty, -viewpoint_matches, official_rank, candidate.page_id
+
+
+def _subject_requests_one(subject: str) -> bool:
+    normalized = " ".join(subject.casefold().split())
+    return normalized.startswith(("one ", "a ", "an ", "1 "))
+
+
+def _title_has_marker(title: str, markers: tuple[str, ...]) -> bool:
+    normalized = " " + re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip() + " "
+    return any(f" {marker.strip()} " in normalized for marker in markers)
 
 
 def _reference_discovery_queries(query: str) -> tuple[str, ...]:

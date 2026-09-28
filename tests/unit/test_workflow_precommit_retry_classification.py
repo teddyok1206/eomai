@@ -12,6 +12,7 @@ def test_deterministic_visual_reference_failure_is_terminal() -> None:
     for detail in (
         "VISUAL_REFERENCE_DISCOVERY_INVALID",
         "VISUAL_REFERENCE_HANDOFF_INVALID",
+        "VISUAL_REFERENCE_IMAGE_INVALID",
         "VISUAL_REFERENCE_INPUT_INVALID",
         "VISUAL_REFERENCE_LICENSE_REJECTED",
         "VISUAL_REFERENCE_OUTPUT_INVALID",

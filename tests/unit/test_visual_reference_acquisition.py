@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 from datetime import UTC, datetime, timedelta
 from email.message import Message
@@ -24,6 +25,7 @@ from eom_image_provider.reference_acquisition import (
     WikimediaCommonsClient,
     _canonical_original_file_url,
     load_acquisition_inputs,
+    normalize_reference_image,
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
 )
@@ -238,9 +240,10 @@ class _Opener:
 
 
 class _DiscoveryOpener:
-    def __init__(self, *, include_collage: bool = False) -> None:
+    def __init__(self, *, include_collage: bool = False, include_pavement: bool = False) -> None:
         self.calls: list[str] = []
         self.include_collage = include_collage
+        self.include_pavement = include_pavement
 
     def open(self, request: Any, *, timeout: int) -> _Response:
         url = request.full_url
@@ -279,6 +282,18 @@ class _DiscoveryOpener:
             }
 
         pages = [
+            *(
+                [
+                    page(
+                        index=-1,
+                        page_id=105,
+                        title="File:Ammonite Pavement.jpg",
+                        license_code="cc-zero",
+                    )
+                ]
+                if self.include_pavement
+                else []
+            ),
             *(
                 [
                     page(
@@ -550,7 +565,7 @@ def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None
     assert len(opener.calls) == 1
 
 
-def test_discovery_deprioritizes_montage_like_titles_within_bounded_candidates() -> None:
+def test_discovery_excludes_explicit_aggregate_titles_for_one_subject() -> None:
     opener = _DiscoveryOpener(include_collage=True)
     client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
 
@@ -561,9 +576,46 @@ def test_discovery_deprioritizes_montage_like_titles_within_bounded_candidates()
         timeout_seconds=120,
     )
 
-    assert tuple(value.page_id for value in candidates) == (101, 102, 104)
-    assert tuple(value.rank for value in candidates) == (1, 2, 3)
+    assert tuple(value.page_id for value in candidates) == (101, 102)
+    assert tuple(value.rank for value in candidates) == (1, 2)
     assert "montage-like" in candidates[0].selection_rationale
+
+
+def test_discovery_excludes_pavement_before_single_specimen_candidates() -> None:
+    opener = _DiscoveryOpener(include_pavement=True)
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    candidates = client.discover_candidates(
+        subject="one ammonite fossil in frontal view with a spiral shell",
+        query_terms=("ammonite fossil front view",),
+        candidate_limit=5,
+        timeout_seconds=120,
+    )
+
+    assert 105 not in {value.page_id for value in candidates}
+    assert tuple(value.rank for value in candidates) == tuple(range(1, len(candidates) + 1))
+
+
+def test_normalizer_compares_official_dimensions_after_exif_orientation() -> None:
+    from PIL import Image
+
+    source = Image.new("RGB", (120, 80), "white")
+    exif = source.getexif()
+    exif[274] = 6
+    encoded = io.BytesIO()
+    source.save(encoded, format="JPEG", exif=exif)
+
+    normalized = normalize_reference_image(
+        encoded.getvalue(),
+        "image/jpeg",
+        expected_width=80,
+        expected_height=120,
+    )
+
+    with Image.open(io.BytesIO(normalized)) as result:
+        assert result.format == "PNG"
+        assert result.mode == "RGB"
+        assert result.size == (800, 504)
 
 
 def test_discovery_uses_one_bounded_subject_fallback_when_exact_view_has_no_eligible_license() -> (
