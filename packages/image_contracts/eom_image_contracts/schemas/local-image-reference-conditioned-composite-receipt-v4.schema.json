@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/4.0",
+  "title": "EOM base-only simplified-morphology reference receipt v4",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "reference_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_manifest",
+        "primary_reference_id",
+        "reference_member"
+      ],
+      "properties": {
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^imgrefbundle_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^imgrefbundlerev_[0-9a-f]{32}$"
+        },
+        "bundle_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^manifests/visual-reference-bundle\\.json$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        },
+        "primary_reference_id": {
+          "type": "string",
+          "pattern": "^imgref_[0-9a-f]{32}$"
+        },
+        "reference_member": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^references/primary\\.png$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/normalized-visual-reference/1.0"
+            },
+            "media_type": {
+              "const": "image/png"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        }
+      }
+    },
+    "conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "strength",
+        "fit_policy",
+        "simplification"
+      ],
+      "properties": {
+        "contract": {
+          "const": "sdxl-morphology-img2img/2.1"
+        },
+        "strength": {
+          "const": 0.35
+        },
+        "fit_policy": {
+          "const": "EXACT_NORMALIZED_CANVAS"
+        },
+        "simplification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "output_member",
+            "color_policy",
+            "denoise_policy",
+            "tone_policy",
+            "foreground_luma_threshold",
+            "border_width_px",
+            "foreground_ratio_min",
+            "foreground_ratio_max",
+            "border_foreground_ratio_max"
+          ],
+          "properties": {
+            "contract": {
+              "const": "local-image-reference-simplification/1.1"
+            },
+            "output_member": {
+              "const": "reference-conditioning.png"
+            },
+            "color_policy": {
+              "const": "GRAYSCALE_WHITE_BACKGROUND"
+            },
+            "denoise_policy": {
+              "const": "MAX_5_MEDIAN_7_GAUSSIAN_2_0"
+            },
+            "tone_policy": {
+              "const": "SIX_LEVEL_LIGHT_TONE_CONTOUR"
+            },
+            "foreground_luma_threshold": {
+              "const": 245
+            },
+            "border_width_px": {
+              "const": 24
+            },
+            "foreground_ratio_min": {
+              "const": 0.005
+            },
+            "foreground_ratio_max": {
+              "const": 0.8
+            },
+            "border_foreground_ratio_max": {
+              "const": 0.12
+            }
+          }
+        }
+      }
+    },
+    "conditioning_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_path",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "member_path": {
+          "const": "reference-conditioning.png"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 8388608
+        },
+        "width_px": {
+          "const": 800
+        },
+        "height_px": {
+          "const": 504
+        }
+      }
+    },
+    "simplification_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_foreground_ratio",
+        "conditioning_foreground_ratio",
+        "border_foreground_ratio",
+        "source_edge_density",
+        "conditioning_edge_density",
+        "edge_density_ratio"
+      ],
+      "properties": {
+        "source_foreground_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "conditioning_foreground_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "border_foreground_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_edge_density": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "conditioning_edge_density": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "edge_density_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16
+        }
+      }
+    },
+    "simplifier_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "pillow_version"
+      ],
+      "properties": {
+        "contract": {
+          "const": "local-image-reference-simplifier/1.0"
+        },
+        "pillow_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_sha256",
+    "composite_receipt",
+    "visual_reference",
+    "conditioning",
+    "conditioning_output",
+    "simplification_metrics",
+    "simplifier_runtime",
+    "output_palette",
+    "completed_at",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-reference-conditioned-composite-receipt/4.0"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "composite_receipt": {
+      "$ref": "eom://schemas/image-provider/local-image-composite-receipt/1.0"
+    },
+    "visual_reference": {
+      "$ref": "#/$defs/reference_pointer"
+    },
+    "conditioning": {
+      "$ref": "#/$defs/conditioning"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "conditioning_output": {
+      "$ref": "#/$defs/conditioning_output"
+    },
+    "simplification_metrics": {
+      "$ref": "#/$defs/simplification_metrics"
+    },
+    "simplifier_runtime": {
+      "$ref": "#/$defs/simplifier_runtime"
+    },
+    "output_palette": {
+      "const": "ASSESSMENT_GRAYSCALE"
+    }
+  }
+}

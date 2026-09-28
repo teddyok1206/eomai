@@ -16,9 +16,11 @@ from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
+    LocalImageProviderBindingV4,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
+    LocalImageReferenceConditionedCompositeReceiptV4,
     LocalImageVisualReferencePointer,
 )
 from eom_workflow.models import (
@@ -33,6 +35,7 @@ from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
     LocalImageMaterialization,
     ReferenceConditionedLocalImageMaterialization,
+    SimplifiedBaseReferenceLocalImageMaterialization,
     SimplifiedStyleReferenceLocalImageMaterialization,
     StyleReferenceConditionedLocalImageMaterialization,
 )
@@ -132,6 +135,24 @@ class RenderedSimplifiedStyleReferenceStimulus:
     conditioning_path: Path
     receipt_path: Path
     receipt: LocalImageReferenceConditionedCompositeReceiptV3
+    request_sha256: str
+    unit_name: str
+    renderer_contract: str
+    renderer_version: str
+    renderer_sha256: str
+    font_sha256: str
+    font_manifest_sha256: str
+    prompt_policy_revision: str
+
+
+@dataclass(frozen=True)
+class RenderedSimplifiedBaseReferenceStimulus:
+    svg_path: Path
+    background_path: Path
+    png_path: Path
+    conditioning_path: Path
+    receipt_path: Path
+    receipt: LocalImageReferenceConditionedCompositeReceiptV4
     request_sha256: str
     unit_name: str
     renderer_contract: str
@@ -483,6 +504,74 @@ def render_generated_simplified_style_reference_stimulus(
     validate_generated_png(materialized.background_path)
     validate_generated_png(materialized.final_path)
     return RenderedSimplifiedStyleReferenceStimulus(
+        svg_path=svg_path,
+        background_path=materialized.background_path,
+        png_path=materialized.final_path,
+        conditioning_path=materialized.conditioning_path,
+        receipt_path=materialized.receipt_path,
+        receipt=materialized.receipt,
+        request_sha256=materialized.request.request_sha256,
+        unit_name=materialized.unit_name,
+        renderer_contract=SVG_RENDERER_CONTRACT,
+        renderer_version=provenance.renderer_version,
+        renderer_sha256=provenance.renderer_sha256,
+        font_sha256=provenance.font_sha256,
+        font_manifest_sha256=provenance.font_manifest_sha256,
+        prompt_policy_revision=materialized.prompt_policy_revision,
+    )
+
+
+def render_generated_simplified_base_reference_stimulus(
+    settings: CatalogSettings,
+    *,
+    workflow_id: str,
+    result_revision_id: str,
+    drawing_hash: str,
+    drawing: GeneratedVectorDrawingV6,
+    binding: LocalImageProviderBindingV4,
+    adapter: FixedLocalImageProviderAdapter,
+    prompt_contract: LocalGpuPromptContract,
+    visual_reference: LocalImageVisualReferencePointer,
+    reference_bytes: bytes,
+    operation_suffix: str,
+) -> RenderedSimplifiedBaseReferenceStimulus:
+    """Render one exact source through base-only deterministic simplification."""
+
+    if not workflow_id.startswith("workflow_") or not result_revision_id.startswith("rev_"):
+        raise ValueError("generated vector stimulus identity is invalid")
+    root = require_fixed_catalog_staging_root(settings, CatalogStagingArea.REGISTRY)
+    operation = create_catalog_operation_directory(
+        root,
+        f"generated-vector-reference-{workflow_id}-{result_revision_id}-{operation_suffix}",
+        message="reference-grounded stimulus staging directory is unsafe",
+    )
+    svg_path = operation / SVG_MEMBER
+    overlay_path = operation / OVERLAY_MEMBER
+    payload = compose_vector_overlay_svg(drawing)
+    write_vector_svg(svg_path, payload)
+    if overlay_path.exists() or overlay_path.is_symlink():
+        validate_generated_overlay_png(overlay_path)
+        provenance = svg_renderer_provenance()
+    else:
+        provenance = rasterize_vector_svg(svg_path, overlay_path)
+        validate_generated_overlay_png(overlay_path)
+    materialized: SimplifiedBaseReferenceLocalImageMaterialization = (
+        adapter.generate_with_simplified_base_reference(
+            workflow_id=workflow_id,
+            result_revision_id=result_revision_id,
+            drawing_hash=drawing_hash,
+            drawing=drawing,
+            overlay_path=overlay_path,
+            binding=binding,
+            output_directory=operation,
+            prompt_contract=prompt_contract,
+            visual_reference=visual_reference,
+            reference_bytes=reference_bytes,
+        )
+    )
+    validate_generated_png(materialized.background_path)
+    validate_generated_png(materialized.final_path)
+    return RenderedSimplifiedBaseReferenceStimulus(
         svg_path=svg_path,
         background_path=materialized.background_path,
         png_path=materialized.final_path,

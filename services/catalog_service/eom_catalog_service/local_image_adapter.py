@@ -25,12 +25,15 @@ from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
+    LocalImageProviderBindingV4,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
+    LocalImageReferenceConditionedCompositeReceiptV4,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
+    LocalImageReferenceConditionedCompositeRequestV4,
     LocalImageReferenceConditioning,
     LocalImageVisualReferencePointer,
     content_sha256,
@@ -39,6 +42,7 @@ from eom_image_contracts import (
     validate_reference_conditioned_receipt,
     validate_reference_conditioned_receipt_v2,
     validate_reference_conditioned_receipt_v3,
+    validate_reference_conditioned_receipt_v4,
 )
 from eom_workflow.models import (
     GeneratedVectorDrawingV5,
@@ -167,6 +171,18 @@ class SimplifiedStyleReferenceLocalImageMaterialization:
     prompt_policy_revision: str
 
 
+@dataclass(frozen=True)
+class SimplifiedBaseReferenceLocalImageMaterialization:
+    request: LocalImageReferenceConditionedCompositeRequestV4
+    receipt: LocalImageReferenceConditionedCompositeReceiptV4
+    background_path: Path
+    final_path: Path
+    conditioning_path: Path
+    receipt_path: Path
+    unit_name: str
+    prompt_policy_revision: str
+
+
 def load_local_image_provider_binding(
     path: Path,
     *,
@@ -230,12 +246,38 @@ def load_local_image_provider_binding_v3(
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
 
 
+def load_local_image_provider_binding_v4(
+    path: Path,
+    *,
+    trusted_owner_uid: int = 0,
+    trusted_group_gid: int = 0,
+) -> LocalImageProviderBindingV4:
+    """Load one root-controlled base-only simplified-reference binding."""
+
+    value = _load_provider_binding_document(
+        path,
+        trusted_owner_uid=trusted_owner_uid,
+        trusted_group_gid=trusted_group_gid,
+        maximum_bytes=512 * 1024,
+    )
+    try:
+        validate_contract("provider-binding-v4", value)
+        return LocalImageProviderBindingV4.model_validate(value)
+    except Exception as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+
+
 def load_local_image_provider_binding_any(
     path: Path,
     *,
     trusted_owner_uid: int = 0,
     trusted_group_gid: int = 0,
-) -> LocalImageProviderBinding | LocalImageProviderBindingV2 | LocalImageProviderBindingV3:
+) -> (
+    LocalImageProviderBinding
+    | LocalImageProviderBindingV2
+    | LocalImageProviderBindingV3
+    | LocalImageProviderBindingV4
+):
     """Load the exact immutable V1 or V2 binding selected by its schema discriminator."""
 
     value = _load_provider_binding_document(
@@ -255,6 +297,9 @@ def load_local_image_provider_binding_any(
         if schema_version == "local-image-provider-binding/3.0":
             validate_contract("provider-binding-v3", value)
             return LocalImageProviderBindingV3.model_validate(value)
+        if schema_version == "local-image-provider-binding/4.0":
+            validate_contract("provider-binding-v4", value)
+            return LocalImageProviderBindingV4.model_validate(value)
     except Exception as exc:
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
     raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
@@ -568,6 +613,83 @@ class FixedLocalImageProviderAdapter:
             prompt_policy_revision=local_gpu_prompt_policy_revision(prompt_contract),
         )
 
+    def generate_with_simplified_base_reference(
+        self,
+        *,
+        workflow_id: str,
+        result_revision_id: str,
+        drawing_hash: str,
+        drawing: GeneratedVectorDrawingV6,
+        overlay_path: Path,
+        binding: LocalImageProviderBindingV4,
+        output_directory: Path,
+        prompt_contract: LocalGpuPromptContract,
+        visual_reference: LocalImageVisualReferencePointer,
+        reference_bytes: bytes,
+    ) -> SimplifiedBaseReferenceLocalImageMaterialization:
+        """Stage one source reference for base-only simplified monochrome generation."""
+
+        composite = _build_request(
+            workflow_id=workflow_id,
+            result_revision_id=result_revision_id,
+            drawing_hash=drawing_hash,
+            drawing=drawing,
+            binding=binding,
+            overlay_path=overlay_path,
+            prompt_contract=prompt_contract,
+        )
+        request = _build_reference_conditioned_request_v4(
+            composite,
+            visual_reference,
+            binding,
+        )
+        provider_gid = _provider_group_id(self.settings.local_image_provider_group)
+        instance_id = "imgreq_" + request.request_sha256.removeprefix("sha256:")[:32]
+        workspace = _prepare_workspace(
+            self.settings.local_image_workspace_root,
+            instance_id,
+            provider_gid,
+        )
+        _stage_exact_file(
+            workspace / "request.json",
+            _canonical_json(request.model_dump(mode="json")),
+            provider_gid,
+        )
+        _stage_exact_source(workspace / OVERLAY_MEMBER, overlay_path, provider_gid)
+        reference_target = workspace / visual_reference.reference_member.member_path
+        if (
+            len(reference_bytes) != visual_reference.reference_member.size_bytes
+            or "sha256:" + hashlib.sha256(reference_bytes).hexdigest()
+            != visual_reference.reference_member.sha256
+        ):
+            raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
+        _prepare_input_directory(reference_target.parent, workspace, provider_gid)
+        _stage_exact_file(reference_target, reference_bytes, provider_gid)
+        conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
+        unit_name = f"eom-image-reference-style-provider@{instance_id}.service"
+        if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
+            _run_fixed_unit(unit_name, binding.timeout_seconds)
+        receipt = _validate_reference_handoff_v4(workspace, request, provider_gid)
+        _copy_result(workspace / BACKGROUND_MEMBER, output_directory / BACKGROUND_MEMBER)
+        _copy_result(workspace / FINAL_MEMBER, output_directory / FINAL_MEMBER)
+        conditioning_path = output_directory / receipt.conditioning_output.member_path
+        _copy_result(
+            workspace / receipt.conditioning_output.member_path,
+            conditioning_path,
+        )
+        receipt_path = output_directory / RECEIPT_MEMBER
+        _copy_result(conditioned_receipt_path, receipt_path)
+        return SimplifiedBaseReferenceLocalImageMaterialization(
+            request=request,
+            receipt=receipt,
+            background_path=output_directory / BACKGROUND_MEMBER,
+            final_path=output_directory / FINAL_MEMBER,
+            conditioning_path=conditioning_path,
+            receipt_path=receipt_path,
+            unit_name=unit_name,
+            prompt_policy_revision=local_gpu_prompt_policy_revision(prompt_contract),
+        )
+
 
 def _build_reference_conditioned_request(
     composite: LocalImageCompositeRequest,
@@ -626,13 +748,36 @@ def _build_reference_conditioned_request_v3(
     return request
 
 
+def _build_reference_conditioned_request_v4(
+    composite: LocalImageCompositeRequest,
+    visual_reference: LocalImageVisualReferencePointer,
+    binding: LocalImageProviderBindingV4,
+) -> LocalImageReferenceConditionedCompositeRequestV4:
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/4.0",
+        "composite_request": composite.model_dump(mode="json"),
+        "visual_reference": visual_reference.model_dump(mode="json"),
+        "conditioning": binding.reference_policy.conditioning.model_dump(mode="json"),
+    }
+    request = LocalImageReferenceConditionedCompositeRequestV4.model_validate(
+        {**body, "request_sha256": content_sha256(body)}
+    )
+    validate_contract("reference-conditioned-composite-request-v4", request.model_dump(mode="json"))
+    return request
+
+
 def _build_request(
     *,
     workflow_id: str,
     result_revision_id: str,
     drawing_hash: str,
     drawing: GeneratedVectorDrawingV5 | GeneratedVectorDrawingV6,
-    binding: LocalImageProviderBinding | LocalImageProviderBindingV2 | LocalImageProviderBindingV3,
+    binding: (
+        LocalImageProviderBinding
+        | LocalImageProviderBindingV2
+        | LocalImageProviderBindingV3
+        | LocalImageProviderBindingV4
+    ),
     overlay_path: Path,
     prompt_contract: LocalGpuPromptContract = "LEGACY_COMPAT",
 ) -> LocalImageCompositeRequest:
@@ -917,6 +1062,70 @@ def _validate_reference_handoff_v3(
         validate_contract("reference-conditioned-composite-receipt-v3", value)
         receipt = LocalImageReferenceConditionedCompositeReceiptV3.model_validate(value)
         validate_reference_conditioned_receipt_v3(request, receipt)
+    except Exception as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    composite = _validate_handoff(workspace, request.composite_request, provider_gid)
+    if receipt.composite_receipt != composite:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    reference = request.visual_reference.reference_member
+    reference_path = workspace / reference.member_path
+    metadata = _require_regular(
+        reference_path,
+        maximum_bytes=8 * 1024 * 1024,
+        mode=INPUT_MODE,
+        uid=os.geteuid(),
+        gid=provider_gid,
+    )
+    if metadata.st_size != reference.size_bytes or sha256_file(reference_path) != reference.sha256:
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    conditioning_path = workspace / receipt.conditioning_output.member_path
+    conditioning_metadata = _require_regular(
+        conditioning_path,
+        maximum_bytes=8 * 1024 * 1024,
+        mode=OUTPUT_MODE,
+        uid=provider_uid,
+        gid=provider_gid,
+    )
+    if (
+        conditioning_metadata.st_size != receipt.conditioning_output.size_bytes
+        or sha256_file(conditioning_path) != receipt.conditioning_output.sha256
+    ):
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    with conditioning_path.open("rb") as source:
+        conditioning_header = source.read(26)
+    if (
+        len(conditioning_header) != 26
+        or conditioning_header[:8] != b"\x89PNG\r\n\x1a\n"
+        or conditioning_header[12:16] != b"IHDR"
+        or struct.unpack(">II", conditioning_header[16:24]) != (800, 504)
+        or conditioning_header[24:26] != b"\x08\x02"
+    ):
+        raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID")
+    _require_regular(
+        receipt_path,
+        maximum_bytes=512 * 1024,
+        mode=OUTPUT_MODE,
+        uid=provider_uid,
+        gid=provider_gid,
+    )
+    return receipt
+
+
+def _validate_reference_handoff_v4(
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV4,
+    provider_gid: int,
+) -> LocalImageReferenceConditionedCompositeReceiptV4:
+    try:
+        provider_uid = pwd.getpwnam("eom-image").pw_uid
+    except KeyError as exc:
+        raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
+    receipt_path = workspace / "reference-conditioned-receipt.json"
+    value = _load_json(receipt_path, maximum_bytes=512 * 1024)
+    try:
+        validate_contract("reference-conditioned-composite-receipt-v4", value)
+        receipt = LocalImageReferenceConditionedCompositeReceiptV4.model_validate(value)
+        validate_reference_conditioned_receipt_v4(request, receipt)
     except Exception as exc:
         raise LocalImageAdapterError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
     composite = _validate_handoff(workspace, request.composite_request, provider_gid)

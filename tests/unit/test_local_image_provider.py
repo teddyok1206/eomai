@@ -30,6 +30,7 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
+    LocalImageReferenceConditionedCompositeRequestV4,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferencePointer,
@@ -54,14 +55,16 @@ from eom_image_provider.provider import (
     generate_reference_conditioned_composite_handoff,
     generate_reference_conditioned_composite_handoff_v2,
     generate_reference_conditioned_composite_handoff_v3,
+    generate_reference_conditioned_composite_handoff_v4,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
     reuse_reference_conditioned_composite_handoff_v2,
     reuse_reference_conditioned_composite_handoff_v3,
+    reuse_reference_conditioned_composite_handoff_v4,
     verify_model_revision,
     verify_style_adapter_release,
 )
-from PIL import Image  # type: ignore[import-not-found]
+from PIL import Image, ImageChops  # type: ignore[import-not-found]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MODEL_ID = "imgmodel_" + "1" * 32
@@ -420,6 +423,23 @@ def _conditioned_request_v3(
     return LocalImageReferenceConditionedCompositeRequestV3.model_validate(value)
 
 
+def _conditioned_request_v4(
+    manifest: LocalImageModelManifest,
+    overlay: bytes,
+    reference: bytes,
+) -> LocalImageReferenceConditionedCompositeRequestV4:
+    v1 = _conditioned_request(manifest, overlay, reference)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/4.0",
+        "composite_request": v1.composite_request.model_dump(mode="json"),
+        "visual_reference": v1.visual_reference.model_dump(mode="json"),
+        "conditioning": LocalImageMorphologyConditioning().model_dump(mode="json"),
+    }
+    value = {**body, "request_sha256": content_sha256(body)}
+    validate_contract("reference-conditioned-composite-request-v4", value)
+    return LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
+
+
 def _reduced_scale_release(
     release: LocalImageProductionStyleAdapterRelease,
 ) -> LocalImageProductionStyleAdapterReleaseV2:
@@ -441,10 +461,13 @@ def test_contract_resources_are_canonical_mirrors() -> None:
         "local-image-generation-receipt-v1.schema.json",
         "local-image-provider-binding-v1.schema.json",
         "local-image-provider-binding-v3.schema.json",
+        "local-image-provider-binding-v4.schema.json",
         "local-image-composite-request-v1.schema.json",
         "local-image-composite-receipt-v1.schema.json",
         "local-image-reference-conditioned-composite-request-v3.schema.json",
         "local-image-reference-conditioned-composite-receipt-v3.schema.json",
+        "local-image-reference-conditioned-composite-request-v4.schema.json",
+        "local-image-reference-conditioned-composite-receipt-v4.schema.json",
         "local-image-quality-evaluation-plan-v1.schema.json",
         "local-image-quality-evaluation-result-v1.schema.json",
     ):
@@ -1070,6 +1093,83 @@ def test_simplified_reference_handoff_uses_conditioning_bytes_and_is_idempotent(
     validate_contract("reference-conditioned-composite-receipt-v3", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v3(
+            workspace=workspace,
+            request=request,
+        )
+        == first
+    )
+
+
+def test_base_only_simplified_reference_handoff_is_grayscale_and_idempotent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "base-only-simplified-reference-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _isolated_reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference)
+    (workspace / "references/primary.png").chmod(0o440)
+    request = _conditioned_request_v4(manifest, overlay, reference)
+    calls = 0
+
+    class BaseReferenceBackend:
+        def generate_from_reference(
+            self,
+            *,
+            model_directory: Path,
+            request: LocalImageGenerationRequest,
+            reference_png: bytes,
+            strength: float,
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            assert model_directory.name == "files"
+            assert reference_png != reference
+            assert strength == 0.35
+            generated = FakeBackend().generate(model_directory=model_directory, request=request)
+            return GeneratedBackground(png_bytes=_colored_png(), runtime=generated.runtime)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda background, _overlay: background.read_bytes(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    monkeypatch.setattr(
+        "eom_image_provider.reference_simplification.metadata.version",
+        lambda _name: "11.3.0",
+    )
+    first = generate_reference_conditioned_composite_handoff_v4(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+    second = generate_reference_conditioned_composite_handoff_v4(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.output_palette == "ASSESSMENT_GRAYSCALE"
+    assert first.conditioning_output.member_path == "reference-conditioning.png"
+    with Image.open(workspace / "generated-background.png") as generated_background:
+        generated_background.load()
+        assert generated_background.mode == "RGB"
+        assert generated_background.getpixel((400, 250)) == (145, 145, 145)
+        red, green, blue = generated_background.split()
+        assert ImageChops.difference(red, green).getbbox() is None
+        assert ImageChops.difference(green, blue).getbbox() is None
+    validate_contract("reference-conditioned-composite-receipt-v4", first.model_dump(mode="json"))
+    assert (
+        reuse_reference_conditioned_composite_handoff_v4(
             workspace=workspace,
             request=request,
         )

@@ -42,6 +42,7 @@ from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
+    LocalImageProviderBindingV4,
     content_json_bytes,
     text_sha256,
 )
@@ -124,10 +125,12 @@ from eom_catalog_service.generated_stimulus import (
     REFERENCE_CONDITIONING_MEMBER,
     RenderedLocalImageStimulus,
     RenderedReferenceStimulus,
+    RenderedSimplifiedBaseReferenceStimulus,
     RenderedSimplifiedStyleReferenceStimulus,
     RenderedStyleReferenceStimulus,
     render_generated_local_vector_stimulus,
     render_generated_reference_stimulus,
+    render_generated_simplified_base_reference_stimulus,
     render_generated_simplified_style_reference_stimulus,
     render_generated_stimulus,
     render_generated_style_reference_stimulus,
@@ -200,7 +203,12 @@ def _local_image_prompt_contract(
 
 def _uses_v1_reference_conditioning(
     workflow: WorkflowInstanceRecord,
-    provider: LocalImageProviderBinding | LocalImageProviderBindingV2 | LocalImageProviderBindingV3,
+    provider: (
+        LocalImageProviderBinding
+        | LocalImageProviderBindingV2
+        | LocalImageProviderBindingV3
+        | LocalImageProviderBindingV4
+    ),
 ) -> bool:
     """Enable the existing V1 reference protocol only for its immutable successor Pack."""
 
@@ -536,6 +544,11 @@ class WorkflowCatalogService:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                         "simplified-reference image binding requires Content Pack 1.20.1-1.20.4",
+                    )
+                if isinstance(binding, LocalImageProviderBindingV4) and release.version != "1.20.4":
+                    raise ContentPackError(
+                        ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                        "base-only simplified-reference binding requires Content Pack 1.20.4",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1290,11 +1303,14 @@ class WorkflowCatalogService:
             LocalImageProviderBinding
             | LocalImageProviderBindingV2
             | LocalImageProviderBindingV3
+            | LocalImageProviderBindingV4
             | None
         ) = None
         if isinstance(provider_value, dict):
             provider_schema = provider_value.get("schema_version")
-            if provider_schema == "local-image-provider-binding/3.0":
+            if provider_schema == "local-image-provider-binding/4.0":
+                provider = LocalImageProviderBindingV4.model_validate(provider_value)
+            elif provider_schema == "local-image-provider-binding/3.0":
                 provider = LocalImageProviderBindingV3.model_validate(provider_value)
             elif provider_schema == "local-image-provider-binding/2.0":
                 provider = LocalImageProviderBindingV2.model_validate(provider_value)
@@ -1317,10 +1333,18 @@ class WorkflowCatalogService:
                     | RenderedReferenceStimulus
                     | RenderedStyleReferenceStimulus
                     | RenderedSimplifiedStyleReferenceStimulus
+                    | RenderedSimplifiedBaseReferenceStimulus
                 )
                 uses_v1_reference = _uses_v1_reference_conditioning(workflow, provider)
                 if (
-                    isinstance(provider, (LocalImageProviderBindingV2, LocalImageProviderBindingV3))
+                    isinstance(
+                        provider,
+                        (
+                            LocalImageProviderBindingV2,
+                            LocalImageProviderBindingV3,
+                            LocalImageProviderBindingV4,
+                        ),
+                    )
                     or uses_v1_reference
                 ):
                     if not isinstance(image_result, ContentTeamImageRoleResultV12):
@@ -1333,7 +1357,21 @@ class WorkflowCatalogService:
                         visual_ordinal=item.visual_ordinal,
                         drawing_sha256=drawing_hash,
                     )
-                    if isinstance(provider, LocalImageProviderBindingV3):
+                    if isinstance(provider, LocalImageProviderBindingV4):
+                        local_rendered = render_generated_simplified_base_reference_stimulus(
+                            self.settings,
+                            workflow_id=workflow.workflow_id,
+                            result_revision_id=image.revision_id,
+                            drawing_hash=drawing_hash,
+                            drawing=drawing,
+                            binding=provider,
+                            adapter=self.local_image,
+                            prompt_contract=prompt_contract,
+                            visual_reference=reference.pointer,
+                            reference_bytes=reference.payload,
+                            operation_suffix=suffix,
+                        )
+                    elif isinstance(provider, LocalImageProviderBindingV3):
                         local_rendered = render_generated_simplified_style_reference_stimulus(
                             self.settings,
                             workflow_id=workflow.workflow_id,
@@ -1379,7 +1417,9 @@ class WorkflowCatalogService:
                         "eom://schemas/image-provider/"
                         "local-image-reference-conditioned-composite-receipt/"
                         + (
-                            "3.0"
+                            "4.0"
+                            if isinstance(provider, LocalImageProviderBindingV4)
+                            else "3.0"
                             if isinstance(provider, LocalImageProviderBindingV3)
                             else "2.0"
                             if isinstance(provider, LocalImageProviderBindingV2)
@@ -1414,7 +1454,13 @@ class WorkflowCatalogService:
                     RASTER_MEMBER: local_rendered.background_path,
                     LOCAL_IMAGE_RECEIPT_MEMBER: local_rendered.receipt_path,
                 }
-                if isinstance(local_rendered, RenderedSimplifiedStyleReferenceStimulus):
+                if isinstance(
+                    local_rendered,
+                    (
+                        RenderedSimplifiedStyleReferenceStimulus,
+                        RenderedSimplifiedBaseReferenceStimulus,
+                    ),
+                ):
                     files[REFERENCE_CONDITIONING_MEMBER] = local_rendered.conditioning_path
                 result = {
                     "drawing_sha256": drawing_hash,
@@ -1463,7 +1509,13 @@ class WorkflowCatalogService:
                         "media_type": "application/json",
                     },
                 }
-                if isinstance(local_rendered, RenderedSimplifiedStyleReferenceStimulus):
+                if isinstance(
+                    local_rendered,
+                    (
+                        RenderedSimplifiedStyleReferenceStimulus,
+                        RenderedSimplifiedBaseReferenceStimulus,
+                    ),
+                ):
                     file_metadata[REFERENCE_CONDITIONING_MEMBER] = {
                         "schema_ref": (
                             "eom://schemas/image-provider/simplified-reference-conditioning/1.0"
@@ -1471,7 +1523,9 @@ class WorkflowCatalogService:
                         "media_type": "image/png",
                     }
                 manifest_version = (
-                    "generated-item-stimulus-file-set/6.0"
+                    "generated-item-stimulus-file-set/7.0"
+                    if isinstance(provider, LocalImageProviderBindingV4)
+                    else "generated-item-stimulus-file-set/6.0"
                     if isinstance(provider, LocalImageProviderBindingV3)
                     else (
                         "generated-item-stimulus-file-set/5.0"
@@ -2106,8 +2160,11 @@ class WorkflowCatalogService:
                 LocalImageProviderBinding
                 | LocalImageProviderBindingV2
                 | LocalImageProviderBindingV3
+                | LocalImageProviderBindingV4
             )
-            if provider_schema == "local-image-provider-binding/3.0":
+            if provider_schema == "local-image-provider-binding/4.0":
+                validated_provider = LocalImageProviderBindingV4.model_validate(provider)
+            elif provider_schema == "local-image-provider-binding/3.0":
                 validated_provider = LocalImageProviderBindingV3.model_validate(provider)
             elif provider_schema == "local-image-provider-binding/2.0":
                 validated_provider = LocalImageProviderBindingV2.model_validate(provider)

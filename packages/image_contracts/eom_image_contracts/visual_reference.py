@@ -924,6 +924,28 @@ class LocalImageProviderBindingV3(FrozenModel):
         return self
 
 
+class LocalImageProviderBindingV4(FrozenModel):
+    """Base-only production binding with pinned reference simplification and monochrome output."""
+
+    schema_version: Literal["local-image-provider-binding/4.0"] = "local-image-provider-binding/4.0"
+    state: Literal["ENABLED"] = "ENABLED"
+    route_contract: Literal["eom-local-morphology-conditioned-base-line-art/4.0"] = (
+        "eom-local-morphology-conditioned-base-line-art/4.0"
+    )
+    model: LocalImageModelPointer
+    reference_policy: LocalImageVisualReferencePolicyV2
+    sampler: SamplerContract
+    timeout_seconds: int = Field(ge=30, le=900)
+    binding_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> LocalImageProviderBindingV4:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
+        if self.binding_sha256 != expected:
+            raise ValueError("local image provider V4 binding hash mismatch")
+        return self
+
+
 class LocalImageReferenceConditionedCompositeRequest(FrozenModel):
     schema_version: Literal["local-image-reference-conditioned-composite-request/1.0"] = (
         "local-image-reference-conditioned-composite-request/1.0"
@@ -1105,6 +1127,69 @@ class LocalImageReferenceConditionedCompositeReceiptV3(FrozenModel):
         return self
 
 
+class LocalImageReferenceConditionedCompositeRequestV4(FrozenModel):
+    """Base-only request that pins the exact morphology simplification policy."""
+
+    schema_version: Literal["local-image-reference-conditioned-composite-request/4.0"] = (
+        "local-image-reference-conditioned-composite-request/4.0"
+    )
+    composite_request: LocalImageCompositeRequest
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioning
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> LocalImageReferenceConditionedCompositeRequestV4:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
+        if self.request_sha256 != expected:
+            raise ValueError("reference-conditioned V4 request hash mismatch")
+        return self
+
+
+class LocalImageReferenceConditionedCompositeReceiptV4(FrozenModel):
+    """Receipt for one simplified base-model generation and deterministic monochrome output."""
+
+    schema_version: Literal["local-image-reference-conditioned-composite-receipt/4.0"] = (
+        "local-image-reference-conditioned-composite-receipt/4.0"
+    )
+    request_sha256: Sha256
+    composite_receipt: LocalImageCompositeReceipt
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioning
+    conditioning_output: LocalImageReferenceConditioningOutput
+    simplification_metrics: LocalImageReferenceSimplificationMetrics
+    simplifier_runtime: LocalImageReferenceSimplifierRuntime
+    output_palette: Literal["ASSESSMENT_GRAYSCALE"] = "ASSESSMENT_GRAYSCALE"
+    completed_at: datetime
+    receipt_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("reference-conditioned completion must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_metrics_hash_and_order(self) -> LocalImageReferenceConditionedCompositeReceiptV4:
+        if self.completed_at < self.composite_receipt.completed_at:
+            raise ValueError("reference-conditioned V4 completion precedes image composition")
+        policy = self.conditioning.simplification
+        metrics = self.simplification_metrics
+        for ratio in (
+            metrics.source_foreground_ratio,
+            metrics.conditioning_foreground_ratio,
+        ):
+            if ratio < policy.foreground_ratio_min or ratio > policy.foreground_ratio_max:
+                raise ValueError("reference simplification foreground ratio is outside policy")
+        if metrics.border_foreground_ratio > policy.border_foreground_ratio_max:
+            raise ValueError("reference simplification border ratio is outside policy")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("reference-conditioned V4 receipt hash mismatch")
+        return self
+
+
 def validate_reference_conditioned_receipt(
     request: LocalImageReferenceConditionedCompositeRequest,
     receipt: LocalImageReferenceConditionedCompositeReceipt,
@@ -1155,6 +1240,24 @@ def validate_reference_conditioned_receipt_v3(
         != request.conditioning.simplification.output_member
     ):
         raise ValueError("reference-conditioned V3 receipt differs from its request")
+
+
+def validate_reference_conditioned_receipt_v4(
+    request: LocalImageReferenceConditionedCompositeRequestV4,
+    receipt: LocalImageReferenceConditionedCompositeReceiptV4,
+) -> None:
+    """Bind a base-only simplified receipt to its exact source and policy."""
+
+    if (
+        receipt.request_sha256 != request.request_sha256
+        or receipt.composite_receipt.composite_request_sha256
+        != request.composite_request.composite_request_sha256
+        or receipt.visual_reference != request.visual_reference
+        or receipt.conditioning != request.conditioning
+        or receipt.conditioning_output.member_path
+        != request.conditioning.simplification.output_member
+    ):
+        raise ValueError("reference-conditioned V4 receipt differs from its request")
 
 
 def safe_visual_reference_member_path(value: str) -> str:

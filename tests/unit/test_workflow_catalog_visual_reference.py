@@ -8,7 +8,11 @@ from typing import Any, cast
 import pytest
 from eom_identifiers import sha256_file
 
-from tests.unit.test_local_image_adapter import _binding_v2_value, _binding_v3_value
+from tests.unit.test_local_image_adapter import (
+    _binding_v2_value,
+    _binding_v3_value,
+    _binding_v4_value,
+)
 from tests.unit.test_visual_reference_receipts import _receipt
 from tests.unit.test_workflow_catalog_generated import (
     AUTHORING_V12,
@@ -210,4 +214,90 @@ def test_simplified_reference_binding_commits_exact_conditioning_member(
         files["conditioning_path"]
     )
     assert committed["file_metadata"]["local-image-receipt.json"]["schema_ref"].endswith("/3.0")
+    assert binding["binding_sha256"] in committed["idempotency_key"]
+
+
+def test_base_only_reference_binding_commits_v4_without_style_adapter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, artifacts = _service(tmp_path)
+    authoring = _content_team_authoring_result_v12()
+    image = _content_team_image_result_v12()
+    authoring_draft = cast(dict[str, Any], cast(dict[str, Any], authoring["output"])["draft"])
+    authoring_draft["visuals"] = [{"kind": "IMAGE", "label": ""}]
+    authoring_draft["visual_layout"] = "IMAGE_ONLY"
+    image_output = cast(dict[str, Any], image["output"])
+    image_output["drawings"] = image_output["drawings"][:1]
+    drawing_entry = cast(dict[str, Any], image_output["drawings"][0])
+    drawing_entry["label"] = ""
+    drawing = cast(dict[str, Any], drawing_entry["drawing"])
+    drawing.update(
+        {
+            "kind": "natural_scene",
+            "production_route": "HYBRID_LOCAL_GENERATIVE",
+            "route_reason": "ORGANIC_OBJECT_REQUIRED",
+            "alt_text": "one trilobite fossil isolated on white",
+            "scene_description": "삼엽충 화석 한 개의 윗면",
+            "scientific_constraints": ["삼엽충 화석은 한 개이다."],
+            "required_labels": [],
+            "generation_prompt": drawing_entry["illustration_prompt"],
+            "negative_prompt": None,
+        }
+    )
+    artifacts.values[AUTHORING_V12.revision_id] = authoring
+    artifacts.values[IMAGE_V12.revision_id] = image
+    service.local_image = cast(Any, object())
+    reference_receipt = _receipt(IMAGE_V12)
+    reference = reference_receipt.entries[0].visual_reference
+
+    class _References:
+        def resolve(self, **_kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(
+                pointer=reference,
+                payload=b"bounded-normalized-reference-png",
+                publication_receipt_sha256=reference_receipt.receipt_sha256,
+            )
+
+    service.visual_reference_receipts = _References()
+    files = {
+        "svg_path": tmp_path / "reference-v4.svg",
+        "background_path": tmp_path / "reference-v4-raster.png",
+        "png_path": tmp_path / "reference-v4-final.png",
+        "conditioning_path": tmp_path / "reference-v4-conditioning.png",
+        "receipt_path": tmp_path / "reference-v4-receipt.json",
+    }
+    for key, path in files.items():
+        path.write_bytes(("bounded-" + key).encode())
+
+    class _RenderedV4:
+        def __init__(self) -> None:
+            for key, path in files.items():
+                setattr(self, key, path)
+            self.receipt = SimpleNamespace(receipt_sha256="sha256:" + "1" * 64)
+            self.request_sha256 = "sha256:" + "2" * 64
+            self.prompt_policy_revision = "local-gpu-image-prompt-policy/1.8.1"
+
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.RenderedSimplifiedBaseReferenceStimulus",
+        _RenderedV4,
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.workflow_catalog.render_generated_simplified_base_reference_stimulus",
+        lambda *_args, **_kwargs: _RenderedV4(),
+    )
+    binding = _binding_v4_value()
+    pointers = service.materialize_content_team_stimuli(
+        workflow=_workflow({"local_image_provider": binding}),
+        artifacts=(AUTHORING_V12, IMAGE_V12),
+    )
+
+    assert len(pointers) == 1
+    committed = artifacts.commits[0]
+    assert committed["manifest_version"] == "generated-item-stimulus-file-set/7.0"
+    assert committed["file_metadata"]["local-image-receipt.json"]["schema_ref"].endswith("/4.0")
+    assert committed["expected_file_sha256"]["reference-conditioning.png"] == sha256_file(
+        files["conditioning_path"]
+    )
+    assert "style_adapter_release_sha256" not in committed["result"]
     assert binding["binding_sha256"] in committed["idempotency_key"]

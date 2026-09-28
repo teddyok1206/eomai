@@ -1081,6 +1081,49 @@ def conditioned_receipt_v3_schema() -> dict[str, Any]:
     return value
 
 
+def provider_binding_v4_schema() -> dict[str, Any]:
+    value = copy.deepcopy(provider_binding_v3_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/4.0"
+    value["title"] = "EOM base-only simplified-morphology provider binding v4"
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/4.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-morphology-conditioned-base-line-art/4.0"
+    }
+    value["required"].remove("style_adapter")
+    del value["properties"]["style_adapter"]
+    return value
+
+
+def conditioned_request_v4_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_v3_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/4.0"
+    )
+    value["title"] = "EOM base-only simplified-morphology reference request v4"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/4.0"
+    }
+    value["required"].remove("style_adapter")
+    del value["properties"]["style_adapter"]
+    return value
+
+
+def conditioned_receipt_v4_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_v3_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/4.0"
+    )
+    value["title"] = "EOM base-only simplified-morphology reference receipt v4"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/4.0"
+    }
+    value["required"].remove("style_adapter")
+    del value["properties"]["style_adapter"]
+    value["required"].insert(-2, "output_palette")
+    value["properties"]["output_palette"] = {"const": "ASSESSMENT_GRAYSCALE"}
+    return value
+
+
 def reference_composition_evaluation_schema() -> dict[str, Any]:
     value = _header(
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
@@ -1278,6 +1321,13 @@ SCHEMAS = {
     ),
     "local-image-reference-conditioned-composite-receipt-v3.schema.json": (
         conditioned_receipt_v3_schema()
+    ),
+    "local-image-provider-binding-v4.schema.json": provider_binding_v4_schema(),
+    "local-image-reference-conditioned-composite-request-v4.schema.json": (
+        conditioned_request_v4_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v4.schema.json": (
+        conditioned_receipt_v4_schema()
     ),
 }
 

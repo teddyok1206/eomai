@@ -18,6 +18,7 @@ SCHEMA_FILES = {
     "provider-binding": "local-image-provider-binding-v1.schema.json",
     "provider-binding-v2": "local-image-provider-binding-v2.schema.json",
     "provider-binding-v3": "local-image-provider-binding-v3.schema.json",
+    "provider-binding-v4": "local-image-provider-binding-v4.schema.json",
     "generation-request": "local-image-generation-request-v1.schema.json",
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
     "visual-reference-intent": "local-image-visual-reference-intent-v1.schema.json",
@@ -53,6 +54,12 @@ SCHEMA_FILES = {
     ),
     "reference-conditioned-composite-receipt-v3": (
         "local-image-reference-conditioned-composite-receipt-v3.schema.json"
+    ),
+    "reference-conditioned-composite-request-v4": (
+        "local-image-reference-conditioned-composite-request-v4.schema.json"
+    ),
+    "reference-conditioned-composite-receipt-v4": (
+        "local-image-reference-conditioned-composite-receipt-v4.schema.json"
     ),
     "reference-composition-evaluation": (
         "local-image-reference-composition-evaluation-v1.schema.json"
@@ -266,6 +273,9 @@ SCHEMA_SHA256 = {
     "provider-binding-v3": (
         "sha256:51f22a71964507fbeeb1f800fcdd61551dc4f382e3cc28ec76c1f687ee620020"
     ),
+    "provider-binding-v4": (
+        "sha256:9e1c367abeee7276d3f4e390cdc61a117f9f49dd6b4341d0904542657a2fabdc"
+    ),
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
     "visual-reference-intent": (
@@ -309,6 +319,12 @@ SCHEMA_SHA256 = {
     ),
     "reference-conditioned-composite-receipt-v3": (
         "sha256:30d516b0c5b36ce9cfd9a4d3c2f0c59217cdc201aaa36d89972ac08c8f9404a4"
+    ),
+    "reference-conditioned-composite-request-v4": (
+        "sha256:8a201067f093c76f7923b6920e064c885565480ba960e371b711a693e3448dc3"
+    ),
+    "reference-conditioned-composite-receipt-v4": (
+        "sha256:88d1c70fd2a7b599c93162388fb54885055337e7b1f777c14f8ed3877b44335a"
     ),
     "reference-composition-evaluation": (
         "sha256:2bf2747b6d2458880c7fa26409b96377756a022bc13f4a75ee1de19340ef1120"

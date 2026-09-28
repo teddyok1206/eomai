@@ -16,12 +16,14 @@ from eom_catalog_service.local_image_adapter import (
     _build_reference_conditioned_request,
     _build_reference_conditioned_request_v2,
     _build_reference_conditioned_request_v3,
+    _build_reference_conditioned_request_v4,
     _build_request,
     _stage_exact_file,
     load_local_image_provider_binding,
     load_local_image_provider_binding_any,
     load_local_image_provider_binding_v2,
     load_local_image_provider_binding_v3,
+    load_local_image_provider_binding_v4,
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
@@ -43,6 +45,7 @@ from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
+    LocalImageProviderBindingV4,
     LocalImageVisualReferencePointer,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
@@ -225,6 +228,20 @@ def _binding_v3_value() -> dict[str, object]:
             "authority_boundary": "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY",
             "failure_policy": "FAIL_CLOSED",
         },
+        "sampler": predecessor["sampler"],
+        "timeout_seconds": 900,
+    }
+    return {**body, "binding_sha256": content_sha256(body)}
+
+
+def _binding_v4_value() -> dict[str, object]:
+    predecessor = _binding_v3_value()
+    body = {
+        "schema_version": "local-image-provider-binding/4.0",
+        "state": "ENABLED",
+        "route_contract": "eom-local-morphology-conditioned-base-line-art/4.0",
+        "model": predecessor["model"],
+        "reference_policy": predecessor["reference_policy"],
         "sampler": predecessor["sampler"],
         "timeout_seconds": 900,
     }
@@ -419,6 +436,53 @@ def test_v3_binding_loader_pins_simplification_and_minimal_prompt(tmp_path: Path
         LocalImageProviderBindingV3,
     )
     assert LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.8.1"
+
+
+def test_v4_binding_loader_uses_base_model_without_style_adapter(tmp_path: Path) -> None:
+    path = tmp_path / "binding-v4.json"
+    value = _binding_v4_value()
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    path.chmod(0o644)
+    binding = load_local_image_provider_binding_v4(
+        path,
+        trusted_owner_uid=os.geteuid(),
+        trusted_group_gid=os.getegid(),
+    )
+    overlay_path = tmp_path / "generated-overlay.png"
+    overlay_path.write_bytes(_overlay_png())
+    overlay_path.chmod(0o640)
+    subject = "one trilobite fossil isolated on white"
+    drawing = _hybrid_drawing().model_copy(update={"alt_text": subject})
+    composite = _build_request(
+        workflow_id="workflow_" + "4" * 32,
+        result_revision_id="rev_" + "5" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=binding,
+        overlay_path=overlay_path,
+        prompt_contract="ASSESSMENT_MINIMAL_LINE_ART_V2",
+    )
+    request = _build_reference_conditioned_request_v4(
+        composite,
+        _reference_pointer(),
+        binding,
+    )
+
+    assert request.conditioning == binding.reference_policy.conditioning
+    assert request.composite_request.generation.prompt == (
+        f"{LOCAL_GPU_MINIMAL_STYLE_PREFIX} {subject}"
+    )
+    assert request.schema_version.endswith("/4.0")
+    assert not hasattr(binding, "style_adapter")
+    assert LocalImageProviderBindingV4.model_validate(value) == binding
+    assert isinstance(
+        load_local_image_provider_binding_any(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid(),
+        ),
+        LocalImageProviderBindingV4,
+    )
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))
