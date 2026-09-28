@@ -110,3 +110,26 @@ invent or simplify structure. Training photographs and line drawings in one adap
 with page style. A general semantic-vision service or new database would be disproportionate for one
 fixed-size structural comparison. The additive result contract plus deterministic evaluator is the
 smallest implementation that makes the user's composition-preservation rule testable.
+
+## 2026-09-28 micro-probe decision
+
+The 14-anchor, 200-step micro-probe produced adapter revision
+`imgadapterrev_2a6a18afca40230d82aa6cd479125d11`. Its manifest remains
+`EVALUATION_ONLY` with activation policy `FORBIDDEN`.
+
+The exact three-case BASE/ADAPTER text holdout completed successfully at the runtime boundary, but
+human inspection found semantic failures that a style metric cannot excuse: duplicate isolated
+specimens, a non-white astronomy background, and an automobile that did not reliably express the
+requested collision state. The adapter is therefore not eligible for text-only production.
+
+Reference-conditioned evaluation kept conditioning strength at `0.35` and tested LoRA scales `0.8`
+and `1.0`. All three bounded morphology cases passed the deterministic composition thresholds at both
+scales. At scale `1.0`, edge recall ranged from `0.854391` to `0.978040`, foreground bounding-box IoU
+from `0.988207` to `1.0`, and mean chroma ratio from `0.003018` to `0.003594`.
+
+Those structural passes do not constitute a release decision. A clean isolated organism reference
+produced a useful exam-style line drawing, while automobile and rock references retained background
+objects, numbers, and source markings. The new low-strength outputs were also visually close to the
+predecessor adapter outputs, so superiority has not been demonstrated. Before another activation
+candidate is considered, the evaluation population must include more diverse approved exam line-art
+anchors and the reference-selection boundary must reject or replace non-isolated source images.
