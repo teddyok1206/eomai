@@ -15,6 +15,7 @@ StateDirectoryMode=0700
 WorkingDirectory=/var/lib/eom-workflow-runner
 Environment=HOME=/var/lib/eom-workflow-runner
 Environment=TZ=UTC
+EnvironmentFile=/etc/eom/workflow-runtime.env
 Environment=EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env
 Environment=EOM_WORKER_CONFIG=/etc/eom/worker-slots.yaml
 Environment=EOM_WORKFLOW_DEFINITION=/etc/eom/workflows/generic-item-development.yaml
@@ -59,6 +60,7 @@ AmbientCapabilities=
 SystemCallArchitectures=native
 
 ReadOnlyPaths=/etc/eom/secrets/postgres.env
+ReadOnlyPaths=/etc/eom/workflow-runtime.env
 ReadOnlyPaths=/etc/eom/worker-slots.yaml
 ReadOnlyPaths=/etc/eom/human-actors.yaml
 ReadOnlyPaths=/etc/eom/workflow-runner.yaml

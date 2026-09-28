@@ -5,6 +5,7 @@ REPOSITORY_ROOT="/home/eom/EOM"
 SERVICE="eom-workflow-runner.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${SERVICE}"
 UNIT_TARGET="/etc/systemd/system/${SERVICE}"
+RUNTIME_ENV_TARGET="/etc/eom/workflow-runtime.env"
 RUNNER="/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner"
 RELEASE_ROOT="/var/lib/eom-workflow-runner-deployments"
 SERVICE_USER="eom-workflow-runner"
@@ -76,17 +77,39 @@ preflight() {
   getent passwd "${SERVICE_USER}" >/dev/null || fail "workflow runner identity is unavailable"
   require_group_membership "${SERVICE_USER}" eom
   reject_group_membership "${SERVICE_USER}" eom-artifact-committers
-  for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06; do
+  for group in eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 \
+    eom-image eom-image-reference; do
     require_group_membership "${SERVICE_USER}" "${group}"
   done
   require_group_membership "${SERVICE_USER}" eom-codex-auth
   systemd-analyze verify "${UNIT_SOURCE}"
 }
 
+install_runtime_identity() {
+  local expected_commit="$1"
+  local temporary staged
+  temporary="$(mktemp)"
+  staged="${RUNTIME_ENV_TARGET}.staged.${expected_commit}"
+  printf 'EOM_RUNTIME_SOURCE_COMMIT=%s\n' "${expected_commit}" >"${temporary}"
+  [[ ! -L "${staged}" ]] || fail "staged runtime identity is unsafe"
+  install -o root -g root -m 0644 "${temporary}" "${staged}"
+  rm -f "${temporary}"
+  mv -T "${staged}" "${RUNTIME_ENV_TARGET}"
+  require_file_metadata "${RUNTIME_ENV_TARGET}" root:root:644
+  [[ "$(wc -l <"${RUNTIME_ENV_TARGET}")" == "1" ]] || \
+    fail "runtime identity must contain exactly one line"
+  grep -Fxq "EOM_RUNTIME_SOURCE_COMMIT=${expected_commit}" "${RUNTIME_ENV_TARGET}" || \
+    fail "runtime identity content mismatch"
+}
+
 verify_unit() {
+  local expected_commit="$1"
   [[ -f "${UNIT_TARGET}" && ! -L "${UNIT_TARGET}" ]] || fail "installed unit is unsafe"
   require_file_metadata "${UNIT_TARGET}" root:root:644
   cmp --silent "${UNIT_SOURCE}" "${UNIT_TARGET}" || fail "installed unit content drift"
+  require_file_metadata "${RUNTIME_ENV_TARGET}" root:root:644
+  grep -Fxq "EOM_RUNTIME_SOURCE_COMMIT=${expected_commit}" "${RUNTIME_ENV_TARGET}" || \
+    fail "installed runtime identity mismatch"
   require_property User "${SERVICE_USER}"
   require_property Group eom
   require_property UMask 0007
@@ -96,7 +119,7 @@ verify_unit() {
   require_property ProtectHome yes
   require_property IPAddressDeny "0.0.0.0/0 ::/0"
   [[ "$(systemctl show --property=SupplementaryGroups --value "${SERVICE}")" == \
-      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth" ]] || \
+      "eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 eom-codex-auth eom-image eom-image-reference" ]] || \
     fail "installed supplementary group contract mismatch"
   local runtime_environment
   runtime_environment="$(systemctl show --property=Environment --value "${SERVICE}")"
@@ -114,7 +137,7 @@ verify_unit() {
     fail "workflow runner process is unavailable"
   local group group_id
   for group in eom eom-cdx-01 eom-cdx-02 eom-cdx-03 eom-cdx-04 eom-cdx-05 eom-cdx-06 \
-    eom-codex-auth; do
+    eom-codex-auth eom-image eom-image-reference; do
     group_id="$(getent group "${group}" | cut -d: -f3)"
     [[ "${group_id}" =~ ^[1-9][0-9]*$ ]] || fail "worker group identity is unavailable"
     grep -E "^Groups:.*[[:space:]]${group_id}([[:space:]]|$)" "/proc/${main_pid}/status" \
@@ -153,12 +176,13 @@ main() {
        { [[ ! -f "${UNIT_TARGET}" ]] || ! cmp --silent "${UNIT_SOURCE}" "${UNIT_TARGET}"; }; then
       fail "active workflow runner unit differs; refuse an implicit execution interruption"
     fi
+    install_runtime_identity "${expected_commit}"
     install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
     systemctl daemon-reload
     systemctl enable "${SERVICE}" >/dev/null
     systemctl start "${SERVICE}"
   fi
-  verify_unit
+  verify_unit "${expected_commit}"
   if [[ "${action}" == "install" ]]; then
     record_release "${expected_commit}"
   fi

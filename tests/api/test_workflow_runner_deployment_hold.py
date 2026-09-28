@@ -17,7 +17,7 @@ HOLD_SOURCE = ROOT / "infra/systemd/zzzz-eom-workflow-runner-deployment-hold.con
 BASE_UNIT_SOURCE = ROOT / "infra/systemd/eom-workflow-runner.service"
 HOLD_BYTES = b"[Unit]\nRefuseManualStart=yes\nConditionPathExists=!/\n"
 HOLD_SHA256 = "d63c1155611f0305d4bcc99da04be6ab89811b7ec1b0abff93e1af118df056e0"
-BASE_UNIT_SHA256 = "1688c77a606ea647d498aacbb3f8f75265f459cf888e1495ae82a8d2887b2878"
+BASE_UNIT_SHA256 = "ac81b5650aa3bf0a1560df3e6f61f3c7b7dc246c35e278fc4cabedfabf3d6fe4"
 JOURNAL_CURSOR = (
     "s=0123456789abcdef0123456789abcdef;i=42;b=fedcba9876543210fedcba9876543210;m=123;t=456;x=789"
 )

@@ -388,6 +388,9 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert "eom-image-reference-discoverer@.service" in deploy
     assert "eom-image-reference" in deploy
     assert "RUNNER_RESTART_REQUIRED=YES" in deploy
+    assert "RUNNER_SOURCE=" not in deploy
+    assert "RUNNER_TARGET=" not in deploy
+    assert "LOCAL_IMAGE_RUNNER_UNIT_DRIFT" not in deploy
     assert "systemctl restart" not in deploy
     assert "chmod -R" not in deploy and "chown -R" not in deploy
     assert "stat -c '%U:%G:%a' /etc/eom" in deploy

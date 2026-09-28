@@ -20,8 +20,6 @@ REFERENCE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-p
 REFERENCE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-provider@.service
 REFERENCE_STYLE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-style-provider@.service
 REFERENCE_STYLE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-style-provider@.service
-RUNNER_SOURCE=${REPOSITORY}/infra/systemd/eom-workflow-runner.service
-RUNNER_TARGET=/etc/systemd/system/eom-workflow-runner.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
 BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.json
@@ -117,7 +115,6 @@ install -o root -g root -m 0644 \
   "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 \
   "${REFERENCE_STYLE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_STYLE_PROVIDER_UNIT_TARGET}"
-install -o root -g root -m 0644 "${RUNNER_SOURCE}" "${RUNNER_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${UNIT_TARGET}"
@@ -134,7 +131,6 @@ cmp -s "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}" |
   fail "LOCAL_IMAGE_REFERENCE_PROVIDER_UNIT_DRIFT"
 cmp -s "${REFERENCE_STYLE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_STYLE_PROVIDER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_REFERENCE_STYLE_PROVIDER_UNIT_DRIFT"
-cmp -s "${RUNNER_SOURCE}" "${RUNNER_TARGET}" || fail "LOCAL_IMAGE_RUNNER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || fail "LOCAL_IMAGE_POLKIT_DRIFT"
 cmp -s "${BINDING_SOURCE}" "${BINDING_TARGET}" || fail "LOCAL_IMAGE_BINDING_DRIFT"
 

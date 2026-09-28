@@ -7,7 +7,7 @@ readonly WORKFLOW_RUNNER_HOLD_TARGET="/etc/systemd/system/eom-workflow-runner.se
 readonly WORKFLOW_RUNNER_HOLD_DIRECTORY="/etc/systemd/system/eom-workflow-runner.service.d"
 readonly WORKFLOW_RUNNER_HOLD_SHA256="sha256:d63c1155611f0305d4bcc99da04be6ab89811b7ec1b0abff93e1af118df056e0"
 readonly WORKFLOW_RUNNER_FRAGMENT="/etc/systemd/system/eom-workflow-runner.service"
-readonly WORKFLOW_RUNNER_FRAGMENT_SHA256="sha256:1688c77a606ea647d498aacbb3f8f75265f459cf888e1495ae82a8d2887b2878"
+readonly WORKFLOW_RUNNER_FRAGMENT_SHA256="sha256:ac81b5650aa3bf0a1560df3e6f61f3c7b7dc246c35e278fc4cabedfabf3d6fe4"
 readonly WORKFLOW_RUNNER_INEFFECTIVE_RUNTIME_MASK="/run/systemd/system/eom-workflow-runner.service"
 readonly WORKFLOW_RUNNER_HOLD_RELEASED_BACKUP="/etc/systemd/system/eom-workflow-runner.service.d/.zzzz-eom-deployment-hold.released"
 

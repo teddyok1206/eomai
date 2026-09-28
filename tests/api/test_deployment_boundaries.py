@@ -1028,6 +1028,24 @@ def test_shared_platform_release_restarts_every_long_lived_consumer() -> None:
     assert '"eom-workflow-runner",' in deployment
 
 
+def test_shared_platform_release_installs_pinned_workflow_runner_runtime_identity() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    unit = _source("infra/systemd/eom-workflow-runner.service")
+
+    assert (
+        'WORKFLOW_RUNNER_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_RUNNER_SERVICE}"'
+        in deployment
+    )
+    assert 'WORKFLOW_RUNNER_RUNTIME_ENV_TARGET="/etc/eom/workflow-runtime.env"' in deployment
+    assert "install_workflow_runner_runtime_identity" in deployment
+    assert "EOM_RUNTIME_SOURCE_COMMIT=%s" in deployment
+    assert '"root:root:644"' in deployment
+    assert '"${WORKFLOW_RUNNER_UNIT_SOURCE}" "${WORKFLOW_RUNNER_UNIT_TARGET}"' in deployment
+    assert "require_workflow_runner_runtime_identity" in deployment
+    assert "EnvironmentFile=/etc/eom/workflow-runtime.env" in unit
+    assert "ReadOnlyPaths=/etc/eom/workflow-runtime.env" in unit
+
+
 def test_shared_platform_release_fences_transient_consumers_before_install() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
     install_branch = deployment.partition('case "${ACTION}" in')[2]

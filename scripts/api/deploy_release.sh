@@ -24,6 +24,9 @@ SHARED_RUNTIME_TRANSIENT_PATTERNS=(
 WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT="/run/systemd/system/eom-workflow-runner-accelerator.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
+WORKFLOW_RUNNER_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_RUNNER_SERVICE}"
+WORKFLOW_RUNNER_UNIT_TARGET="/etc/systemd/system/${WORKFLOW_RUNNER_SERVICE}"
+WORKFLOW_RUNNER_RUNTIME_ENV_TARGET="/etc/eom/workflow-runtime.env"
 WORKFLOW_MAINTENANCE_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_MAINTENANCE_SERVICE}"
 WORKFLOW_MAINTENANCE_UNIT_TARGET="/etc/systemd/system/${WORKFLOW_MAINTENANCE_SERVICE}"
 METADATA_VERIFIER_SOURCE="${REPOSITORY_ROOT}/scripts/api/verify_deployment_metadata.sh"
@@ -2848,18 +2851,50 @@ require_no_staged_workflow_runner_accelerator() {
     fail "staged Workflow runner accelerator must be removed before release"
 }
 
+require_workflow_runner_runtime_identity() {
+  [[ -f "${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}" && \
+    ! -L "${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}" ]] || \
+    fail "workflow runner runtime identity is missing or unsafe"
+  [[ "$(stat -c '%U:%G:%a' "${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}")" == \
+    "root:root:644" ]] || fail "workflow runner runtime identity metadata mismatch"
+  [[ "$(wc -l <"${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}")" == "1" ]] || \
+    fail "workflow runner runtime identity must contain exactly one line"
+  grep -Fxq "EOM_RUNTIME_SOURCE_COMMIT=${COMMIT}" \
+    "${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}" || \
+    fail "workflow runner runtime identity does not match the installed release"
+}
+
+install_workflow_runner_runtime_identity() {
+  local expected staged
+  expected="${BUILD_ROOT}/workflow-runtime.env"
+  staged="${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}.staged.${COMMIT}"
+  printf 'EOM_RUNTIME_SOURCE_COMMIT=%s\n' "${COMMIT}" >"${expected}"
+  [[ ! -L "${staged}" ]] || fail "workflow runner staged runtime identity is unsafe"
+  sudo -n install -o root -g root -m 0644 "${expected}" "${staged}"
+  cmp --silent "${expected}" "${staged}" || \
+    fail "workflow runner staged runtime identity content mismatch"
+  sudo -n mv -T "${staged}" "${WORKFLOW_RUNNER_RUNTIME_ENV_TARGET}"
+  require_workflow_runner_runtime_identity
+}
+
 install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   sudo -n "${OFFICE_CONVERTER_INSTALLER}"
   sudo -n install -d -o eom-api -g eom-api -m 0700 \
     /var/lib/eom-api/pdf-review-uploads
-  systemd-analyze verify "${UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}"
+  systemd-analyze verify \
+    "${UNIT_SOURCE}" \
+    "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}" \
+    "${WORKFLOW_RUNNER_UNIT_SOURCE}"
   install_workflow_runner_hold_release_boundary
+  install_workflow_runner_runtime_identity
   sudo -n install -o root -g root -m 0755 \
     "${METADATA_VERIFIER_SOURCE}" "${METADATA_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0755 \
     "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}"
   sudo -n install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"
+  sudo -n install -o root -g root -m 0644 \
+    "${WORKFLOW_RUNNER_UNIT_SOURCE}" "${WORKFLOW_RUNNER_UNIT_TARGET}"
   sudo -n install -o root -g root -m 0644 \
     "${WORKFLOW_MAINTENANCE_UNIT_SOURCE}" "${WORKFLOW_MAINTENANCE_UNIT_TARGET}"
   sudo -n "${METADATA_VERIFIER_TARGET}"
@@ -2892,6 +2927,9 @@ verify_service() {
     fail "installed metadata verifier source drift"
   cmp --silent "${RUNTIME_VERIFIER_SOURCE}" "${RUNTIME_VERIFIER_TARGET}" || \
     fail "installed runtime verifier source drift"
+  cmp --silent "${WORKFLOW_RUNNER_UNIT_SOURCE}" "${WORKFLOW_RUNNER_UNIT_TARGET}" || \
+    fail "installed workflow runner unit source drift"
+  require_workflow_runner_runtime_identity
   require_installed_workflow_runner_hold_release_verifier
   cmp --silent \
     "${MOCK_EXAM_DEPLOYMENT_ADMISSION_SOURCE}" \

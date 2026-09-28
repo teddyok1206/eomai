@@ -59,18 +59,22 @@ sudo -n scripts/image_provider/deploy_runtime.sh \
   <SOURCE_COMMIT>
 ```
 
-The preparer creates only the `eom-image` no-login identity, installs the three pinned wheels with
-`--no-deps`, normalizes only the manifest-listed model files, installs the fixed unit/polkit/binding,
-and prepares `/srv/eom/image-workspaces`. It does not restart any service and does not activate a
-Content Pack.
+The preparer creates the image-provider no-login identities, installs the three pinned wheels with
+`--no-deps`, normalizes only the manifest-listed model files, installs the provider/reference
+units, polkit rule, and binding, and prepares the bounded image workspaces. The shared
+`eom-workflow-runner.service` unit is owned by the API/platform release; this preparer only updates
+its required supplementary group membership and reports that the runner must be restarted by the
+subsequent platform deployment. It does not restart any service and does not activate a Content
+Pack.
 
 ## Application deployment and activation gate
 
 After the active-lease guard passes:
 
 1. deploy the reviewed API/platform release through `scripts/api/deploy_release.sh`;
-2. restart `eom-workflow-runner.service` once so it receives the `eom-image` supplementary group and
-   new Catalog adapter;
+2. let the platform deployment install the canonical `eom-workflow-runner.service`, materialize its
+   exact `EOM_RUNTIME_SOURCE_COMMIT`, and restart it once so it receives the image/reference groups
+   and new Catalog adapter;
 3. verify the runner remains enabled/active and cannot read `/srv/eom/models/image`;
 4. execute one disposable fixed-unit identity/composition smoke using a protected synthetic SVG
    overlay, never an Item workflow:

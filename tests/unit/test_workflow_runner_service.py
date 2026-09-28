@@ -28,6 +28,7 @@ def test_workflow_runner_service_fixes_identity_command_and_group_contract() -> 
     )
     assert "ExecStart=/srv/eom/conda/envs/eom-api/bin/eom-workflow-runner serve" in source
     assert "EOM_POSTGRES_ENV=/etc/eom/secrets/postgres.env" in source
+    assert "EnvironmentFile=/etc/eom/workflow-runtime.env" in source
     assert "EOM_CODEX_CAPABILITY_POLICY=/etc/eom/codex-capabilities.yaml" in source
     assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
     assert (
@@ -64,6 +65,7 @@ def test_workflow_runner_service_is_narrow_but_can_materialize_worker_handoffs()
     assert _directives(source, "ReadWritePaths") == {
         "/srv/eom/workspaces",
         "/srv/eom/image-workspaces",
+        "/srv/eom/image-reference-workspaces",
         "/mnt/nas/eom/artifacts",
         "/var/lib/eom-workflow-runner",
     }
@@ -86,6 +88,7 @@ def test_workflow_runner_service_reads_only_its_required_operator_contracts() ->
     read_only = _directives(source, "ReadOnlyPaths")
 
     assert "/etc/eom/secrets/postgres.env" in read_only
+    assert "/etc/eom/workflow-runtime.env" in read_only
     assert "/etc/eom/worker-slots.yaml" in read_only
     assert "/etc/eom/human-actors.yaml" in read_only
     assert "/etc/eom/workflow-runner.yaml" in read_only
@@ -103,6 +106,9 @@ def test_workflow_runner_deployer_is_commit_pinned_and_noninteractive() -> None:
     assert 'git -C "${REPOSITORY_ROOT}" rev-parse HEAD' in source
     assert 'git -C "${REPOSITORY_ROOT}" status --porcelain' in source
     assert 'systemd-analyze verify "${UNIT_SOURCE}"' in source
+    assert "install_runtime_identity" in source
+    assert "EOM_RUNTIME_SOURCE_COMMIT=%s" in source
+    assert "root:root:644" in source
     assert 'install -o root -g root -m 0644 "${UNIT_SOURCE}" "${UNIT_TARGET}"' in source
     assert 'systemctl enable "${SERVICE}"' in source
     assert 'systemctl start "${SERVICE}"' in source
