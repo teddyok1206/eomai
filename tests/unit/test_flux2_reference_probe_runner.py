@@ -18,6 +18,7 @@ from eom_image_candidate_runner.runner import (
 from eom_image_contracts import (
     Flux2ReferenceProbeRuntime,
     LocalImageFlux2ReferenceProbeCommand,
+    LocalImageFlux2ReferenceProbeCommandV2,
     LocalImageModelCandidateManifest,
     content_json_bytes,
     content_sha256,
@@ -102,6 +103,67 @@ def _workspace(tmp_path: Path) -> tuple[Path, LocalImageFlux2ReferenceProbeComma
     return workspace, load_probe_command(command_path)
 
 
+def _workspace_v2(tmp_path: Path) -> tuple[Path, LocalImageFlux2ReferenceProbeCommandV2]:
+    manifest = _manifest_value()
+    plan = _plan_value(manifest)
+    plan["schema_version"] = "local-image-flux2-reference-probe-plan/1.1"
+    plan["layout_lock"] = {
+        "contract": "local-image-reference-layout-lock/1.0",
+        "foreground_luma_threshold": 245,
+        "source_canvas_width_px": 800,
+        "source_canvas_height_px": 504,
+        "delivery_canvas_width_px": 800,
+        "delivery_canvas_height_px": 500,
+        "source_to_delivery_y_policy": "SCALE_HALF_OPEN_OUTWARD",
+        "candidate_crop_policy": "TIGHT_FOREGROUND_BBOX",
+        "placement_policy": "EXACT_REFERENCE_BBOX",
+        "resize_filter": "LANCZOS",
+        "background_policy": "WHITE",
+        "empty_foreground_policy": "FAIL_CLOSED",
+    }
+    payloads: dict[str, tuple[bytes, bytes]] = {}
+    for ordinal, case in enumerate(plan["cases"], start=1):
+        reference = _png(dark=ordinal * 10)
+        conditioning = _png(dark=ordinal * 10 + 2)
+        _rebuild_case(case, reference, conditioning)
+        payloads[case["subject_key"]] = (reference, conditioning)
+    _rebuild_plan(plan)
+    command_value = _command_value(plan)
+    command_value["schema_version"] = "local-image-flux2-reference-probe-command/1.1"
+    command_value["plan"]["schema_ref"] = (
+        "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1"
+    )
+    command_value["plan"]["sha256"] = content_sha256(plan)
+    command_value["plan_sha256"] = content_sha256(plan)
+    identity = {
+        key: value
+        for key, value in command_value.items()
+        if key not in {"run_id", "command_sha256"}
+    }
+    command_value["run_id"] = "imgflux2proberun_" + content_sha256(identity)[7:39]
+    command_value["command_sha256"] = content_sha256(
+        {key: value for key, value in command_value.items() if key != "command_sha256"}
+    )
+    command = LocalImageFlux2ReferenceProbeCommandV2.model_validate(command_value)
+    workspace = tmp_path / command.run_id
+    references = workspace / "inputs" / "references"
+    references.mkdir(parents=True, mode=0o700)
+    workspace.chmod(0o700)
+    (workspace / "inputs").chmod(0o700)
+    references.chmod(0o700)
+    for case in plan["cases"]:
+        reference, conditioning = payloads[case["subject_key"]]
+        (references / f"{case['case_id']}.png").write_bytes(reference)
+        (references / f"{case['case_id']}-conditioning.png").write_bytes(conditioning)
+    (workspace / command.staged_plan_path).write_bytes(content_json_bytes(plan))
+    (workspace / command.staged_model_manifest_path).write_bytes(content_json_bytes(manifest))
+    command_path = workspace / "command.json"
+    command_path.write_bytes(content_json_bytes(command_value))
+    loaded = load_probe_command(command_path)
+    assert isinstance(loaded, LocalImageFlux2ReferenceProbeCommandV2)
+    return workspace, loaded
+
+
 class _Backend:
     def prepare(self, _model_root: Path) -> Flux2ReferenceProbeRuntime:
         return Flux2ReferenceProbeRuntime(
@@ -116,6 +178,14 @@ class _Backend:
 
     def generate(self, **_kwargs: object) -> tuple[Image.Image, int]:
         return Image.new("RGB", (800, 512), "white"), 12_000_000_000
+
+
+class _LayoutBackend(_Backend):
+    def generate(self, **_kwargs: object) -> tuple[Image.Image, int]:
+        image = Image.new("RGB", (800, 512), "white")
+        drawing = ImageDraw.Draw(image)
+        drawing.rectangle((20, 36, 719, 435), fill="black")
+        return image, 12_000_000_000
 
 
 def test_flux2_runner_writes_exact_atomic_result(
@@ -140,6 +210,32 @@ def test_flux2_runner_writes_exact_atomic_result(
         payload = (workspace / output.relative_path).read_bytes()
         assert len(payload) == output.size_bytes
         assert _sha256(payload) == output.sha256
+
+
+def test_flux2_layout_locked_runner_keeps_raw_and_locks_delivery_bounds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace, command = _workspace_v2(tmp_path)
+    monkeypatch.setattr(
+        "eom_image_candidate_runner.runner._verify_model",
+        lambda _root, _manifest: None,
+    )
+
+    result = run_probe(workspace=workspace, command=command, backend=_LayoutBackend())
+
+    assert result.status == "SUCCEEDED"
+    assert len(result.outputs) == 9
+    assert len(result.measurements) == 3
+    assert {output.kind for output in result.outputs} == {
+        "RAW_CANDIDATE",
+        "LOCKED_CANDIDATE",
+        "CONDITIONING",
+    }
+    for measurement in result.measurements:
+        assert measurement.layout_status == "PASS"
+        assert measurement.locked_candidate_bbox == measurement.reference_bbox
+        assert measurement.locked_area_ratio_milli == 1000
+        assert measurement.locked_center_distance_milli == 0
 
 
 def test_flux2_runner_rejects_staged_hash_drift_before_inference(

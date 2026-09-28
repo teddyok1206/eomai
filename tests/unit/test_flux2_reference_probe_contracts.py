@@ -8,8 +8,11 @@ import pytest
 from eom_image_contracts import (
     Flux2ReferenceProbeCase,
     LocalImageFlux2ReferenceProbeCommand,
+    LocalImageFlux2ReferenceProbeCommandV2,
     LocalImageFlux2ReferenceProbePlan,
+    LocalImageFlux2ReferenceProbePlanV2,
     LocalImageFlux2ReferenceProbeResult,
+    LocalImageFlux2ReferenceProbeResultV2,
     LocalImageModelCandidateManifest,
     content_sha256,
     load_schema,
@@ -297,6 +300,150 @@ def test_flux2_probe_contract_family_round_trips_schema_and_pydantic() -> None:
     result = LocalImageFlux2ReferenceProbeResult.model_validate(result_value)
     validate_flux2_probe_command(manifest, plan, command)
     validate_flux2_probe_result(plan, command, manifest, result)
+
+
+def _layout_locked_values() -> tuple[
+    dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]
+]:
+    manifest = _manifest_value()
+    plan = _plan_value(manifest)
+    plan["schema_version"] = "local-image-flux2-reference-probe-plan/1.1"
+    plan["layout_lock"] = {
+        "contract": "local-image-reference-layout-lock/1.0",
+        "foreground_luma_threshold": 245,
+        "source_canvas_width_px": 800,
+        "source_canvas_height_px": 504,
+        "delivery_canvas_width_px": 800,
+        "delivery_canvas_height_px": 500,
+        "source_to_delivery_y_policy": "SCALE_HALF_OPEN_OUTWARD",
+        "candidate_crop_policy": "TIGHT_FOREGROUND_BBOX",
+        "placement_policy": "EXACT_REFERENCE_BBOX",
+        "resize_filter": "LANCZOS",
+        "background_policy": "WHITE",
+        "empty_foreground_policy": "FAIL_CLOSED",
+    }
+    plan_identity = {
+        key: field
+        for key, field in plan.items()
+        if key not in {"plan_id", "created_at", "created_by", "plan_sha256"}
+    }
+    plan["plan_id"] = "imgflux2probe_" + content_sha256(plan_identity)[7:39]
+    plan["plan_sha256"] = content_sha256(
+        {key: field for key, field in plan.items() if key != "plan_sha256"}
+    )
+
+    command = _command_value(plan)
+    command["schema_version"] = "local-image-flux2-reference-probe-command/1.1"
+    command["plan"]["schema_ref"] = (
+        "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1"
+    )
+    command["plan"]["sha256"] = content_sha256(plan)
+    command["plan_sha256"] = content_sha256(plan)
+    command_identity = {
+        key: field for key, field in command.items() if key not in {"run_id", "command_sha256"}
+    }
+    command["run_id"] = "imgflux2proberun_" + content_sha256(command_identity)[7:39]
+    command["command_sha256"] = content_sha256(
+        {key: field for key, field in command.items() if key != "command_sha256"}
+    )
+
+    outputs: list[dict[str, Any]] = []
+    measurements: list[dict[str, Any]] = []
+    for case in plan["cases"]:
+        case_id = case["case_id"]
+        for kind, suffix, height in (
+            ("RAW_CANDIDATE", "raw-candidate", 500),
+            ("LOCKED_CANDIDATE", "locked-candidate", 500),
+            ("CONDITIONING", "conditioning", 504),
+        ):
+            outputs.append(
+                {
+                    "case_id": case_id,
+                    "kind": kind,
+                    "relative_path": f"outputs/{case_id}-{suffix}.png",
+                    "media_type": "image/png",
+                    "size_bytes": (
+                        case["conditioning"]["size_bytes"] if kind == "CONDITIONING" else 12345
+                    ),
+                    "sha256": (
+                        case["conditioning"]["sha256"]
+                        if kind == "CONDITIONING"
+                        else "sha256:" + ("55" if kind == "RAW_CANDIDATE" else "66") * 32
+                    ),
+                    "width_px": 800,
+                    "height_px": height,
+                }
+            )
+        bbox = {"x_min": 120, "y_min": 100, "x_max": 420, "y_max": 300}
+        measurements.append(
+            {
+                "case_id": case_id,
+                "elapsed_milliseconds": 1000,
+                "peak_gpu_memory_bytes": 13_000_000_000,
+                "reference_bbox": dict(bbox),
+                "raw_candidate_bbox": {"x_min": 20, "y_min": 10, "x_max": 700, "y_max": 480},
+                "locked_candidate_bbox": dict(bbox),
+                "raw_area_ratio_milli": 5440,
+                "locked_area_ratio_milli": 1000,
+                "raw_center_distance_milli": 180,
+                "locked_center_distance_milli": 0,
+                "layout_status": "PASS",
+            }
+        )
+    outputs.sort(key=lambda value: (value["case_id"], value["kind"]))
+    measurements.sort(key=lambda value: value["case_id"])
+    result: dict[str, Any] = {
+        "schema_version": "local-image-flux2-reference-probe-result/1.1",
+        "run_id": command["run_id"],
+        "plan_id": plan["plan_id"],
+        "plan_sha256": plan["plan_sha256"],
+        "command_sha256": command["command_sha256"],
+        "model_revision_id": manifest["model_revision_id"],
+        "activation_policy": "FORBIDDEN",
+        "status": "SUCCEEDED",
+        "error_code": None,
+        "outputs": outputs,
+        "measurements": measurements,
+        "runtime": {
+            "python_version": "3.12.11",
+            "torch_version": "2.7.1",
+            "diffusers_version": "0.40.0",
+            "transformers_version": "4.57.0",
+            "cuda_version": "12.8",
+            "gpu_name": "NVIDIA GeForce RTX 5080",
+            "compute_capability": "12.0",
+        },
+        "started_at": NOW.isoformat().replace("+00:00", "Z"),
+        "completed_at": NOW.replace(minute=1).isoformat().replace("+00:00", "Z"),
+    }
+    result["result_sha256"] = content_sha256(result)
+    return manifest, plan, command, result
+
+
+def test_flux2_layout_lock_contract_family_round_trips_schema_and_pydantic() -> None:
+    _, plan, command, result = _layout_locked_values()
+    for name, value, model in (
+        ("flux2-reference-probe-plan-v2", plan, LocalImageFlux2ReferenceProbePlanV2),
+        ("flux2-reference-probe-command-v2", command, LocalImageFlux2ReferenceProbeCommandV2),
+        ("flux2-reference-probe-result-v2", result, LocalImageFlux2ReferenceProbeResultV2),
+    ):
+        validate_contract(name, value)
+        parsed = model.model_validate(value)
+        assert parsed.model_dump(mode="json") == value
+        assert set(load_schema(name)["required"]) == set(
+            model.model_json_schema(mode="validation")["required"]
+        )
+
+
+def test_flux2_layout_lock_result_rejects_nonmatching_locked_bounds() -> None:
+    _, _, _, result = _layout_locked_values()
+    broken = deepcopy(result)
+    broken["measurements"][0]["locked_candidate_bbox"]["x_max"] -= 1
+    broken["result_sha256"] = content_sha256(
+        {key: value for key, value in broken.items() if key != "result_sha256"}
+    )
+    with pytest.raises(ValidationError, match="does not match reference bounds"):
+        LocalImageFlux2ReferenceProbeResultV2.model_validate(broken)
 
 
 def test_flux2_probe_rejects_path_escape_manifest_drift_and_partial_success() -> None:

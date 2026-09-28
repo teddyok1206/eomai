@@ -26,6 +26,9 @@ MODEL_CANDIDATE_SCHEMA_REF = "eom://schemas/image-provider/local-image-model-can
 FLUX2_PROBE_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.0"
 )
+FLUX2_PROBE_PLAN_V2_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1"
+)
 
 
 def _require_utc(value: datetime) -> datetime:
@@ -185,6 +188,28 @@ class LocalImageFlux2ReferenceProbePlan(FrozenModel):
         return self
 
 
+class LocalImageReferenceLayoutLock(FrozenModel):
+    contract: Literal["local-image-reference-layout-lock/1.0"]
+    foreground_luma_threshold: Literal[245]
+    source_canvas_width_px: Literal[800]
+    source_canvas_height_px: Literal[504]
+    delivery_canvas_width_px: Literal[800]
+    delivery_canvas_height_px: Literal[500]
+    source_to_delivery_y_policy: Literal["SCALE_HALF_OPEN_OUTWARD"]
+    candidate_crop_policy: Literal["TIGHT_FOREGROUND_BBOX"]
+    placement_policy: Literal["EXACT_REFERENCE_BBOX"]
+    resize_filter: Literal["LANCZOS"]
+    background_policy: Literal["WHITE"]
+    empty_foreground_policy: Literal["FAIL_CLOSED"]
+
+
+class LocalImageFlux2ReferenceProbePlanV2(LocalImageFlux2ReferenceProbePlan):
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-flux2-reference-probe-plan/1.1"
+    ]
+    layout_lock: LocalImageReferenceLayoutLock
+
+
 class Flux2ReferenceProbeInput(FrozenModel):
     case_id: str = Field(pattern=r"^imgflux2case_[0-9a-f]{32}$")
     relative_path: str = Field(pattern=r"^inputs/references/imgflux2case_[0-9a-f]{32}\.png$")
@@ -221,8 +246,12 @@ class LocalImageFlux2ReferenceProbeCommand(FrozenModel):
 
     @model_validator(mode="after")
     def exact_command(self) -> Self:
+        expected_plan_schema = {
+            "local-image-flux2-reference-probe-command/1.0": FLUX2_PROBE_PLAN_SCHEMA_REF,
+            "local-image-flux2-reference-probe-command/1.1": FLUX2_PROBE_PLAN_V2_SCHEMA_REF,
+        }[self.schema_version]
         if (
-            self.plan.schema_ref != FLUX2_PROBE_PLAN_SCHEMA_REF
+            self.plan.schema_ref != expected_plan_schema
             or self.plan.media_type != "application/json"
             or self.plan_sha256 != self.plan.sha256
         ):
@@ -239,6 +268,12 @@ class LocalImageFlux2ReferenceProbeCommand(FrozenModel):
         if self.command_sha256 != expected:
             raise ValueError("FLUX.2 probe command hash mismatch")
         return self
+
+
+class LocalImageFlux2ReferenceProbeCommandV2(LocalImageFlux2ReferenceProbeCommand):
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-flux2-reference-probe-command/1.1"
+    ]
 
 
 class Flux2ReferenceProbeOutput(FrozenModel):
@@ -278,6 +313,67 @@ class Flux2ReferenceProbeRuntime(FrozenModel):
     cuda_version: str = Field(min_length=1, max_length=32)
     gpu_name: Literal["NVIDIA GeForce RTX 5080"]
     compute_capability: Literal["12.0"]
+
+
+class Flux2ReferenceProbeBoundingBox(FrozenModel):
+    """Half-open foreground bounds on the 800 x 500 delivery canvas."""
+
+    x_min: int = Field(ge=0, le=799)
+    y_min: int = Field(ge=0, le=499)
+    x_max: int = Field(ge=1, le=800)
+    y_max: int = Field(ge=1, le=500)
+
+    @model_validator(mode="after")
+    def non_empty(self) -> Self:
+        if self.x_min >= self.x_max or self.y_min >= self.y_max:
+            raise ValueError("FLUX.2 foreground bounding box must be non-empty")
+        return self
+
+
+class Flux2ReferenceProbeOutputV2(FrozenModel):
+    case_id: str = Field(pattern=r"^imgflux2case_[0-9a-f]{32}$")
+    kind: Literal["RAW_CANDIDATE", "LOCKED_CANDIDATE", "CONDITIONING"]
+    relative_path: str = Field(
+        pattern=(
+            r"^outputs/imgflux2case_[0-9a-f]{32}-"
+            r"(raw-candidate|locked-candidate|conditioning)\.png$"
+        )
+    )
+    media_type: Literal["image/png"]
+    size_bytes: int = Field(ge=1, le=64 * 1024 * 1024)
+    sha256: Sha256
+    width_px: Literal[800]
+    height_px: Literal[500, 504]
+
+    @model_validator(mode="after")
+    def dimensions_and_path_match_kind(self) -> Self:
+        suffix = self.kind.lower().replace("_", "-")
+        if self.relative_path != f"outputs/{self.case_id}-{suffix}.png":
+            raise ValueError("FLUX.2 layout-locked output path mismatch")
+        expected_height = 504 if self.kind == "CONDITIONING" else 500
+        if self.height_px != expected_height:
+            raise ValueError("FLUX.2 layout-locked output dimensions mismatch")
+        return self
+
+
+class Flux2ReferenceProbeMeasurementV2(FrozenModel):
+    case_id: str = Field(pattern=r"^imgflux2case_[0-9a-f]{32}$")
+    elapsed_milliseconds: int = Field(ge=1, le=7_200_000)
+    peak_gpu_memory_bytes: int = Field(ge=1, le=32 * 1024 * 1024 * 1024)
+    reference_bbox: Flux2ReferenceProbeBoundingBox
+    raw_candidate_bbox: Flux2ReferenceProbeBoundingBox
+    locked_candidate_bbox: Flux2ReferenceProbeBoundingBox
+    raw_area_ratio_milli: int = Field(ge=1, le=100_000)
+    locked_area_ratio_milli: Literal[1000]
+    raw_center_distance_milli: int = Field(ge=0, le=100_000)
+    locked_center_distance_milli: Literal[0]
+    layout_status: Literal["PASS"]
+
+    @model_validator(mode="after")
+    def exact_locked_geometry(self) -> Self:
+        if self.locked_candidate_bbox != self.reference_bbox:
+            raise ValueError("FLUX.2 locked candidate does not match reference bounds")
+        return self
 
 
 Flux2ProbeErrorCode = Literal[
@@ -349,6 +445,65 @@ class LocalImageFlux2ReferenceProbeResult(FrozenModel):
         return self
 
 
+class LocalImageFlux2ReferenceProbeResultV2(FrozenModel):
+    schema_version: Literal["local-image-flux2-reference-probe-result/1.1"]
+    run_id: str = Field(pattern=r"^imgflux2proberun_[0-9a-f]{32}$")
+    plan_id: str = Field(pattern=r"^imgflux2probe_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    command_sha256: Sha256
+    model_revision_id: str = Field(pattern=r"^imgmodelrev_[0-9a-f]{32}$")
+    activation_policy: Literal["FORBIDDEN"]
+    status: Literal["FAILED", "SUCCEEDED"]
+    error_code: Flux2ProbeErrorCode | None
+    outputs: tuple[Flux2ReferenceProbeOutputV2, ...] = Field(max_length=36)
+    measurements: tuple[Flux2ReferenceProbeMeasurementV2, ...] = Field(max_length=12)
+    runtime: Flux2ReferenceProbeRuntime | None
+    started_at: datetime
+    completed_at: datetime
+    result_sha256: Sha256
+
+    @field_validator("started_at", "completed_at")
+    @classmethod
+    def utc_timestamps(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def exact_result(self) -> Self:
+        if self.completed_at < self.started_at:
+            raise ValueError("FLUX.2 probe completion precedes start")
+        if self.status == "FAILED":
+            if (
+                self.error_code is None
+                or self.outputs
+                or self.measurements
+                or self.runtime is not None
+            ):
+                raise ValueError("failed FLUX.2 probe result must be empty and coded")
+        else:
+            if self.error_code is not None or self.runtime is None:
+                raise ValueError("successful FLUX.2 probe result is incomplete")
+            output_keys = tuple((value.case_id, value.kind) for value in self.outputs)
+            if output_keys != tuple(sorted(set(output_keys))):
+                raise ValueError("FLUX.2 probe outputs must be uniquely sorted")
+            output_cases: dict[str, set[str]] = {}
+            for value in self.outputs:
+                output_cases.setdefault(value.case_id, set()).add(value.kind)
+            measurement_ids = tuple(value.case_id for value in self.measurements)
+            if measurement_ids != tuple(sorted(set(measurement_ids))):
+                raise ValueError("FLUX.2 probe measurements must be uniquely sorted")
+            expected_kinds = {"RAW_CANDIDATE", "LOCKED_CANDIDATE", "CONDITIONING"}
+            if set(measurement_ids) != set(output_cases) or any(
+                kinds != expected_kinds for kinds in output_cases.values()
+            ):
+                raise ValueError("FLUX.2 successful result lacks exact layout-lock outputs")
+            if not 3 <= len(measurement_ids) <= 12:
+                raise ValueError("FLUX.2 successful result case count is invalid")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
+        if self.result_sha256 != expected:
+            raise ValueError("FLUX.2 probe result hash mismatch")
+        return self
+
+
 def validate_flux2_probe_command(
     manifest: LocalImageModelCandidateManifest,
     plan: LocalImageFlux2ReferenceProbePlan,
@@ -406,3 +561,45 @@ def validate_flux2_probe_result(
                 or output.size_bytes != case.conditioning.size_bytes
             ):
                 raise ValueError("FLUX.2 result conditioning binding mismatch")
+
+
+def validate_flux2_probe_command_v2(
+    manifest: LocalImageModelCandidateManifest,
+    plan: LocalImageFlux2ReferenceProbePlanV2,
+    command: LocalImageFlux2ReferenceProbeCommandV2,
+) -> None:
+    """Bind the staged successor manifest, plan, and command in O(C)."""
+
+    validate_flux2_probe_command(manifest, plan, command)
+
+
+def validate_flux2_probe_result_v2(
+    plan: LocalImageFlux2ReferenceProbePlanV2,
+    command: LocalImageFlux2ReferenceProbeCommandV2,
+    manifest: LocalImageModelCandidateManifest,
+    result: LocalImageFlux2ReferenceProbeResultV2,
+) -> None:
+    """Bind layout-locked outputs and exact conditioning bytes in O(C)."""
+
+    if (
+        result.run_id != command.run_id
+        or result.plan_id != plan.plan_id
+        or result.plan_sha256 != plan.plan_sha256
+        or result.command_sha256 != command.command_sha256
+        or result.model_revision_id != manifest.model_revision_id
+    ):
+        raise ValueError("FLUX.2 result execution binding mismatch")
+    if result.status != "SUCCEEDED":
+        return
+    if {value.case_id for value in result.measurements} != {value.case_id for value in plan.cases}:
+        raise ValueError("FLUX.2 result plan coverage mismatch")
+    conditioning_by_case = {
+        value.case_id: value for value in result.outputs if value.kind == "CONDITIONING"
+    }
+    for case in plan.cases:
+        output = conditioning_by_case[case.case_id]
+        if (
+            output.sha256 != case.conditioning.sha256
+            or output.size_bytes != case.conditioning.size_bytes
+        ):
+            raise ValueError("FLUX.2 result conditioning binding mismatch")

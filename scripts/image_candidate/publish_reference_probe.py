@@ -14,13 +14,18 @@ from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageFlux2ReferenceProbeCommand,
+    LocalImageFlux2ReferenceProbeCommandV2,
     LocalImageFlux2ReferenceProbePlan,
+    LocalImageFlux2ReferenceProbePlanV2,
     LocalImageFlux2ReferenceProbeResult,
+    LocalImageFlux2ReferenceProbeResultV2,
     LocalImageModelCandidateManifest,
     content_json_bytes,
     validate_contract,
     validate_flux2_probe_command,
+    validate_flux2_probe_command_v2,
     validate_flux2_probe_result,
+    validate_flux2_probe_result_v2,
 )
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.file_set_control_artifacts import (
@@ -40,6 +45,7 @@ MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_PNG_BYTES = 16 * 1024 * 1024
 RUN_ID = re.compile(r"^imgflux2proberun_[0-9a-f]{32}$")
 RESULT_SCHEMA_REF = "eom://schemas/image-provider/local-image-flux2-reference-probe-result/1.0"
+RESULT_V2_SCHEMA_REF = "eom://schemas/image-provider/local-image-flux2-reference-probe-result/1.1"
 SOURCE_CROP_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-candidate-image/1.0"
 )
@@ -80,10 +86,10 @@ def _read_json(path: Path) -> tuple[bytes, dict[str, object]]:
 def _load(
     workspace: Path,
 ) -> tuple[
-    LocalImageFlux2ReferenceProbeCommand,
-    LocalImageFlux2ReferenceProbePlan,
+    LocalImageFlux2ReferenceProbeCommand | LocalImageFlux2ReferenceProbeCommandV2,
+    LocalImageFlux2ReferenceProbePlan | LocalImageFlux2ReferenceProbePlanV2,
     LocalImageModelCandidateManifest,
-    LocalImageFlux2ReferenceProbeResult,
+    LocalImageFlux2ReferenceProbeResult | LocalImageFlux2ReferenceProbeResultV2,
     bytes,
 ]:
     try:
@@ -91,16 +97,36 @@ def _load(
         plan_payload, plan_value = _read_json(workspace / "inputs" / "probe-plan.json")
         manifest_payload, manifest_value = _read_json(workspace / "inputs" / "model-manifest.json")
         result_payload, result_value = _read_json(workspace / "outputs" / "result.json")
-        validate_contract("flux2-reference-probe-command", command_value)
-        validate_contract("flux2-reference-probe-plan", plan_value)
         validate_contract("model-candidate-manifest", manifest_value)
-        validate_contract("flux2-reference-probe-result", result_value)
-        command = LocalImageFlux2ReferenceProbeCommand.model_validate(command_value)
-        plan = LocalImageFlux2ReferenceProbePlan.model_validate(plan_value)
         manifest = LocalImageModelCandidateManifest.model_validate(manifest_value)
-        result = LocalImageFlux2ReferenceProbeResult.model_validate(result_value)
-        validate_flux2_probe_command(manifest, plan, command)
-        validate_flux2_probe_result(plan, command, manifest, result)
+        if command_value.get("schema_version") == "local-image-flux2-reference-probe-command/1.1":
+            validate_contract("flux2-reference-probe-command-v2", command_value)
+            validate_contract("flux2-reference-probe-plan-v2", plan_value)
+            validate_contract("flux2-reference-probe-result-v2", result_value)
+            command_v2 = LocalImageFlux2ReferenceProbeCommandV2.model_validate(command_value)
+            plan_v2 = LocalImageFlux2ReferenceProbePlanV2.model_validate(plan_value)
+            result_v2 = LocalImageFlux2ReferenceProbeResultV2.model_validate(result_value)
+            validate_flux2_probe_command_v2(manifest, plan_v2, command_v2)
+            validate_flux2_probe_result_v2(plan_v2, command_v2, manifest, result_v2)
+            command: (
+                LocalImageFlux2ReferenceProbeCommand | LocalImageFlux2ReferenceProbeCommandV2
+            ) = command_v2
+            plan: LocalImageFlux2ReferenceProbePlan | LocalImageFlux2ReferenceProbePlanV2 = plan_v2
+            result: LocalImageFlux2ReferenceProbeResult | LocalImageFlux2ReferenceProbeResultV2 = (
+                result_v2
+            )
+        else:
+            validate_contract("flux2-reference-probe-command", command_value)
+            validate_contract("flux2-reference-probe-plan", plan_value)
+            validate_contract("flux2-reference-probe-result", result_value)
+            command_v1 = LocalImageFlux2ReferenceProbeCommand.model_validate(command_value)
+            plan_v1 = LocalImageFlux2ReferenceProbePlan.model_validate(plan_value)
+            result_v1 = LocalImageFlux2ReferenceProbeResult.model_validate(result_value)
+            validate_flux2_probe_command(manifest, plan_v1, command_v1)
+            validate_flux2_probe_result(plan_v1, command_v1, manifest, result_v1)
+            command = command_v1
+            plan = plan_v1
+            result = result_v1
     except (
         Flux2ProbePublicationError,
         PublicationFileReadError,
@@ -207,9 +233,9 @@ def _read_png(
 
 def _members(
     workspace: Path,
-    command: LocalImageFlux2ReferenceProbeCommand,
-    plan: LocalImageFlux2ReferenceProbePlan,
-    result: LocalImageFlux2ReferenceProbeResult,
+    command: LocalImageFlux2ReferenceProbeCommand | LocalImageFlux2ReferenceProbeCommandV2,
+    plan: LocalImageFlux2ReferenceProbePlan | LocalImageFlux2ReferenceProbePlanV2,
+    result: LocalImageFlux2ReferenceProbeResult | LocalImageFlux2ReferenceProbeResultV2,
     result_payload: bytes,
 ) -> tuple[ControlFileSetMember, ...]:
     cases = {case.case_id: case for case in plan.cases}
@@ -247,13 +273,18 @@ def _members(
     }
     if actual_paths != declared_paths | {"outputs/result.json"}:
         raise Flux2ProbePublicationError("FLUX2_PROBE_OUTPUT_INVALID")
+    result_schema_ref = (
+        RESULT_V2_SCHEMA_REF
+        if isinstance(result, LocalImageFlux2ReferenceProbeResultV2)
+        else RESULT_SCHEMA_REF
+    )
     members = [
         ControlFileSetMember(
             file_name="result.json",
             source=output_root / "result.json",
             sha256=sha256_bytes(result_payload),
             bytes=len(result_payload),
-            schema_ref=RESULT_SCHEMA_REF,
+            schema_ref=result_schema_ref,
             media_type="application/json",
         )
     ]
@@ -276,7 +307,8 @@ def _members(
                 bytes=output.size_bytes,
                 schema_ref=(
                     "eom://schemas/image-provider/"
-                    f"local-image-flux2-reference-probe-{output.kind.lower()}-image/1.0"
+                    "local-image-flux2-reference-probe-"
+                    f"{output.kind.lower().replace('_', '-')}-image/1.0"
                 ),
                 media_type="image/png",
             )
@@ -311,7 +343,11 @@ def main() -> int:
             members=members,
             primary_file="result.json",
             artifact_type="control_local_image_flux2_reference_probe_result",
-            manifest_version="local-image-flux2-reference-probe-result-files/1.0",
+            manifest_version=(
+                "local-image-flux2-reference-probe-result-files/1.1"
+                if isinstance(result, LocalImageFlux2ReferenceProbeResultV2)
+                else "local-image-flux2-reference-probe-result-files/1.0"
+            ),
             idempotency_key=f"flux2-reference-probe-result:{result.run_id}",
             source_commit=args.source_commit,
             created_at=result.completed_at,
@@ -322,7 +358,11 @@ def main() -> int:
         artifact_id=published.artifact_id,
         artifact_revision_id=published.artifact_revision_id,
         member_path="result.json",
-        schema_ref=RESULT_SCHEMA_REF,
+        schema_ref=(
+            RESULT_V2_SCHEMA_REF
+            if isinstance(result, LocalImageFlux2ReferenceProbeResultV2)
+            else RESULT_SCHEMA_REF
+        ),
         media_type="application/json",
         sha256=published.primary_sha256,
     )

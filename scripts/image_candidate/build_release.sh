@@ -47,6 +47,9 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-flux2-reference-probe-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-flux2-reference-probe-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-flux2-reference-probe-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-flux2-reference-probe-plan-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-flux2-reference-probe-command-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-flux2-reference-probe-result-v2.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("IMAGE_CANDIDATE_CONTRACT_WHEEL_INVALID")
@@ -56,6 +59,7 @@ with zipfile.ZipFile(runner) as archive:
         "eom_image_candidate_runner/backend.py",
         "eom_image_candidate_runner/cli.py",
         "eom_image_candidate_runner/runner.py",
+        "eom_image_candidate_runner/layout_lock.py",
     }
     if not required.issubset(names):
         raise SystemExit("IMAGE_CANDIDATE_RUNNER_WHEEL_INVALID")

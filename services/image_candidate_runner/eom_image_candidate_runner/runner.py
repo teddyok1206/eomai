@@ -15,21 +15,29 @@ from typing import Protocol
 
 from eom_image_contracts import (
     Flux2ReferenceProbeMeasurement,
+    Flux2ReferenceProbeMeasurementV2,
     Flux2ReferenceProbeOutput,
+    Flux2ReferenceProbeOutputV2,
     Flux2ReferenceProbeRuntime,
     LocalImageFlux2ReferenceProbeCommand,
+    LocalImageFlux2ReferenceProbeCommandV2,
     LocalImageFlux2ReferenceProbePlan,
+    LocalImageFlux2ReferenceProbePlanV2,
     LocalImageFlux2ReferenceProbeResult,
+    LocalImageFlux2ReferenceProbeResultV2,
     LocalImageModelCandidateManifest,
     content_json_bytes,
     content_sha256,
     validate_contract,
     validate_flux2_probe_command,
+    validate_flux2_probe_command_v2,
     validate_flux2_probe_result,
+    validate_flux2_probe_result_v2,
 )
 from PIL import Image, UnidentifiedImageError  # type: ignore[import-not-found]
 
 from eom_image_candidate_runner.backend import Flux2BackendError
+from eom_image_candidate_runner.layout_lock import LayoutLockError, lock_reference_layout
 
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_PNG_BYTES = 16 * 1024 * 1024
@@ -170,9 +178,16 @@ def _require_workspace(workspace: Path) -> None:
         raise CandidateRunnerError("FLUX2_PROBE_INPUT_INVALID")
 
 
-def load_probe_command(path: Path) -> LocalImageFlux2ReferenceProbeCommand:
+ProbeCommand = LocalImageFlux2ReferenceProbeCommand | LocalImageFlux2ReferenceProbeCommandV2
+ProbeResult = LocalImageFlux2ReferenceProbeResult | LocalImageFlux2ReferenceProbeResultV2
+
+
+def load_probe_command(path: Path) -> ProbeCommand:
     value = _parse_canonical_json(_read_regular(path, maximum_bytes=MAX_JSON_BYTES))
     try:
+        if value.get("schema_version") == "local-image-flux2-reference-probe-command/1.1":
+            validate_contract("flux2-reference-probe-command-v2", value)
+            return LocalImageFlux2ReferenceProbeCommandV2.model_validate(value)
         validate_contract("flux2-reference-probe-command", value)
         return LocalImageFlux2ReferenceProbeCommand.model_validate(value)
     except Exception as exc:
@@ -199,6 +214,35 @@ def _load_plan_and_manifest(
         plan = LocalImageFlux2ReferenceProbePlan.model_validate(plan_value)
         manifest = LocalImageModelCandidateManifest.model_validate(manifest_value)
         validate_flux2_probe_command(manifest, plan, command)
+    except CandidateRunnerError:
+        raise
+    except Exception as exc:
+        raise CandidateRunnerError("FLUX2_PROBE_INPUT_INVALID") from exc
+    if _sha256(manifest_payload) != plan.candidate_model_manifest.sha256:
+        raise CandidateRunnerError("FLUX2_PROBE_INPUT_HASH_MISMATCH")
+    return plan, manifest
+
+
+def _load_plan_and_manifest_v2(
+    workspace: Path,
+    command: LocalImageFlux2ReferenceProbeCommandV2,
+) -> tuple[LocalImageFlux2ReferenceProbePlanV2, LocalImageModelCandidateManifest]:
+    plan_payload = _read_regular(
+        _safe_member(workspace, command.staged_plan_path), maximum_bytes=MAX_JSON_BYTES
+    )
+    manifest_payload = _read_regular(
+        _safe_member(workspace, command.staged_model_manifest_path), maximum_bytes=MAX_JSON_BYTES
+    )
+    if _sha256(plan_payload) != command.plan.sha256:
+        raise CandidateRunnerError("FLUX2_PROBE_INPUT_HASH_MISMATCH")
+    try:
+        plan_value = _parse_canonical_json(plan_payload)
+        manifest_value = _parse_canonical_json(manifest_payload)
+        validate_contract("flux2-reference-probe-plan-v2", plan_value)
+        validate_contract("model-candidate-manifest", manifest_value)
+        plan = LocalImageFlux2ReferenceProbePlanV2.model_validate(plan_value)
+        manifest = LocalImageModelCandidateManifest.model_validate(manifest_value)
+        validate_flux2_probe_command_v2(manifest, plan, command)
     except CandidateRunnerError:
         raise
     except Exception as exc:
@@ -324,10 +368,13 @@ def _failed_result(
 def run_probe(
     *,
     workspace: Path,
-    command: LocalImageFlux2ReferenceProbeCommand,
+    command: ProbeCommand,
     backend: CandidateBackend,
-) -> LocalImageFlux2ReferenceProbeResult:
+) -> ProbeResult:
     """Run one exact command; output publication remains an Orchestrator responsibility."""
+
+    if isinstance(command, LocalImageFlux2ReferenceProbeCommandV2):
+        return _run_probe_v2(workspace=workspace, command=command, backend=backend)
 
     _require_workspace(workspace)
     if workspace.name != command.run_id:
@@ -448,6 +495,178 @@ def run_probe(
             plan=plan,
             manifest=manifest,
             error_code=error_code,
+            started_at=started_at,
+        )
+        _write_exclusive(final / "result.json", content_json_bytes(failed.model_dump(mode="json")))
+        return failed
+
+
+def _failed_result_v2(
+    *,
+    command: LocalImageFlux2ReferenceProbeCommandV2,
+    plan: LocalImageFlux2ReferenceProbePlanV2,
+    manifest: LocalImageModelCandidateManifest,
+    error_code: str,
+    started_at: datetime,
+) -> LocalImageFlux2ReferenceProbeResultV2:
+    value: dict[str, object] = {
+        "schema_version": "local-image-flux2-reference-probe-result/1.1",
+        "run_id": command.run_id,
+        "plan_id": plan.plan_id,
+        "plan_sha256": plan.plan_sha256,
+        "command_sha256": command.command_sha256,
+        "model_revision_id": manifest.model_revision_id,
+        "activation_policy": "FORBIDDEN",
+        "status": "FAILED",
+        "error_code": error_code,
+        "outputs": [],
+        "measurements": [],
+        "runtime": None,
+        "started_at": _utc_text(started_at),
+        "completed_at": _utc_text(datetime.now(UTC)),
+    }
+    value["result_sha256"] = content_sha256(value)
+    return LocalImageFlux2ReferenceProbeResultV2.model_validate(value)
+
+
+def _run_probe_v2(
+    *,
+    workspace: Path,
+    command: LocalImageFlux2ReferenceProbeCommandV2,
+    backend: CandidateBackend,
+) -> LocalImageFlux2ReferenceProbeResultV2:
+    _require_workspace(workspace)
+    if workspace.name != command.run_id:
+        raise CandidateRunnerError("FLUX2_PROBE_INPUT_INVALID")
+    plan, manifest = _load_plan_and_manifest_v2(workspace, command)
+    _verify_model(Path(command.model_root), manifest)
+    staged_inputs = {value.case_id: value for value in command.inputs}
+    pending = workspace / "outputs.pending"
+    final = workspace / command.output_directory
+    if pending.exists() or pending.is_symlink() or final.exists() or final.is_symlink():
+        raise CandidateRunnerError("FLUX2_PROBE_OUTPUT_INVALID")
+    pending.mkdir(mode=0o700)
+    started_at = datetime.now(UTC)
+    try:
+        runtime = backend.prepare(Path(command.model_root))
+        outputs: list[Flux2ReferenceProbeOutputV2] = []
+        measurements: list[Flux2ReferenceProbeMeasurementV2] = []
+        for case in plan.cases:
+            staged = staged_inputs[case.case_id]
+            reference_payload = _read_regular(
+                _safe_member(workspace, staged.relative_path), maximum_bytes=MAX_PNG_BYTES
+            )
+            conditioning_payload = _read_regular(
+                _safe_member(workspace, staged.conditioning_relative_path),
+                maximum_bytes=MAX_PNG_BYTES,
+            )
+            if (
+                len(reference_payload) != staged.size_bytes
+                or _sha256(reference_payload) != staged.sha256
+                or len(conditioning_payload) != staged.conditioning_size_bytes
+                or _sha256(conditioning_payload) != staged.conditioning_sha256
+            ):
+                raise CandidateRunnerError("FLUX2_PROBE_INPUT_HASH_MISMATCH")
+            _decode_png(reference_payload, expected_size=(800, 504))
+            conditioning = _decode_png(conditioning_payload, expected_size=(800, 504))
+            started = time.monotonic_ns()
+            generated, peak = backend.generate(
+                conditioning=conditioning,
+                prompt=case.prompt_en,
+                seed=case.seed,
+                width=plan.generation_width_px,
+                height=plan.generation_height_px,
+                inference_steps=plan.inference_steps,
+                guidance_scale=plan.guidance_scale_milli / 1000,
+            )
+            if generated.size != (800, 512):
+                raise CandidateRunnerError("FLUX2_PROBE_OUTPUT_INVALID")
+            raw = generated.convert("RGB").crop((0, 6, 800, 506))
+            try:
+                layout = lock_reference_layout(
+                    conditioning=conditioning,
+                    raw_candidate=raw,
+                    threshold=plan.layout_lock.foreground_luma_threshold,
+                )
+            except LayoutLockError as exc:
+                raise CandidateRunnerError("FLUX2_PROBE_OUTPUT_INVALID") from exc
+            payloads = {
+                "RAW_CANDIDATE": _png_bytes(raw),
+                "LOCKED_CANDIDATE": _png_bytes(layout.image),
+                "CONDITIONING": conditioning_payload,
+            }
+            suffixes = {
+                "RAW_CANDIDATE": "raw-candidate",
+                "LOCKED_CANDIDATE": "locked-candidate",
+                "CONDITIONING": "conditioning",
+            }
+            for kind in ("RAW_CANDIDATE", "LOCKED_CANDIDATE", "CONDITIONING"):
+                payload = payloads[kind]
+                file_name = f"{case.case_id}-{suffixes[kind]}.png"
+                _write_exclusive(pending / file_name, payload)
+                outputs.append(
+                    Flux2ReferenceProbeOutputV2(
+                        case_id=case.case_id,
+                        kind=kind,
+                        relative_path=f"outputs/{file_name}",
+                        media_type="image/png",
+                        size_bytes=len(payload),
+                        sha256=_sha256(payload),
+                        width_px=800,
+                        height_px=504 if kind == "CONDITIONING" else 500,
+                    )
+                )
+            measurements.append(
+                Flux2ReferenceProbeMeasurementV2(
+                    case_id=case.case_id,
+                    elapsed_milliseconds=max(1, (time.monotonic_ns() - started) // 1_000_000),
+                    peak_gpu_memory_bytes=peak,
+                    reference_bbox=layout.reference_bbox,
+                    raw_candidate_bbox=layout.raw_candidate_bbox,
+                    locked_candidate_bbox=layout.locked_candidate_bbox,
+                    raw_area_ratio_milli=layout.raw_area_ratio_milli,
+                    locked_area_ratio_milli=1000,
+                    raw_center_distance_milli=layout.raw_center_distance_milli,
+                    locked_center_distance_milli=0,
+                    layout_status="PASS",
+                )
+            )
+        outputs.sort(key=lambda value: (value.case_id, value.kind))
+        measurements.sort(key=lambda value: value.case_id)
+        result_value: dict[str, object] = {
+            "schema_version": "local-image-flux2-reference-probe-result/1.1",
+            "run_id": command.run_id,
+            "plan_id": plan.plan_id,
+            "plan_sha256": plan.plan_sha256,
+            "command_sha256": command.command_sha256,
+            "model_revision_id": manifest.model_revision_id,
+            "activation_policy": "FORBIDDEN",
+            "status": "SUCCEEDED",
+            "error_code": None,
+            "outputs": [value.model_dump(mode="json") for value in outputs],
+            "measurements": [value.model_dump(mode="json") for value in measurements],
+            "runtime": runtime.model_dump(mode="json"),
+            "started_at": _utc_text(started_at),
+            "completed_at": _utc_text(datetime.now(UTC)),
+        }
+        result_value["result_sha256"] = content_sha256(result_value)
+        result = LocalImageFlux2ReferenceProbeResultV2.model_validate(result_value)
+        validate_flux2_probe_result_v2(plan, command, manifest, result)
+        validate_contract("flux2-reference-probe-result-v2", result.model_dump(mode="json"))
+        _write_exclusive(
+            pending / "result.json", content_json_bytes(result.model_dump(mode="json"))
+        )
+        pending.rename(final)
+        return result
+    except (CandidateRunnerError, Flux2BackendError) as exc:
+        if pending.exists() and not pending.is_symlink():
+            shutil.rmtree(pending)
+        final.mkdir(mode=0o700)
+        failed = _failed_result_v2(
+            command=command,
+            plan=plan,
+            manifest=manifest,
+            error_code=exc.code,
             started_at=started_at,
         )
         _write_exclusive(final / "result.json", content_json_bytes(failed.model_dump(mode="json")))

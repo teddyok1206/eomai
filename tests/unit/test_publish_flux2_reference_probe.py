@@ -104,6 +104,114 @@ def _completed_workspace(tmp_path: Path) -> Path:
     return workspace
 
 
+def _completed_workspace_v2(tmp_path: Path) -> Path:
+    manifest = _manifest_value()
+    plan = _plan_value(manifest)
+    plan["schema_version"] = "local-image-flux2-reference-probe-plan/1.1"
+    plan["layout_lock"] = {
+        "contract": "local-image-reference-layout-lock/1.0",
+        "foreground_luma_threshold": 245,
+        "source_canvas_width_px": 800,
+        "source_canvas_height_px": 504,
+        "delivery_canvas_width_px": 800,
+        "delivery_canvas_height_px": 500,
+        "source_to_delivery_y_policy": "SCALE_HALF_OPEN_OUTWARD",
+        "candidate_crop_policy": "TIGHT_FOREGROUND_BBOX",
+        "placement_policy": "EXACT_REFERENCE_BBOX",
+        "resize_filter": "LANCZOS",
+        "background_policy": "WHITE",
+        "empty_foreground_policy": "FAIL_CLOSED",
+    }
+    staged: dict[str, tuple[bytes, bytes]] = {}
+    for ordinal, case in enumerate(plan["cases"], start=1):
+        reference = _png(800, 504, 245 - ordinal)
+        conditioning = _png(800, 504, 235 - ordinal)
+        _rebuild_case(case, reference, conditioning)
+        staged[case["subject_key"]] = (reference, conditioning)
+    _rebuild_plan(plan)
+    command = _command_value(plan)
+    command["schema_version"] = "local-image-flux2-reference-probe-command/1.1"
+    command["plan"]["schema_ref"] = (
+        "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1"
+    )
+    command["plan"]["sha256"] = content_sha256(plan)
+    command["plan_sha256"] = content_sha256(plan)
+    command_identity = {
+        key: value for key, value in command.items() if key not in {"run_id", "command_sha256"}
+    }
+    command["run_id"] = "imgflux2proberun_" + content_sha256(command_identity)[7:39]
+    command["command_sha256"] = content_sha256(
+        {key: value for key, value in command.items() if key != "command_sha256"}
+    )
+
+    outputs: list[dict[str, Any]] = []
+    measurements: list[dict[str, Any]] = []
+    workspace = tmp_path / command["run_id"]
+    references = workspace / "inputs" / "references"
+    output_root = workspace / "outputs"
+    references.mkdir(parents=True)
+    output_root.mkdir()
+    for case in plan["cases"]:
+        reference, conditioning = staged[case["subject_key"]]
+        case_id = case["case_id"]
+        raw = _png(800, 500, 210)
+        locked = _png(800, 500, 200)
+        (references / f"{case_id}.png").write_bytes(reference)
+        (references / f"{case_id}-conditioning.png").write_bytes(conditioning)
+        for kind, suffix, payload, height in (
+            ("RAW_CANDIDATE", "raw-candidate", raw, 500),
+            ("LOCKED_CANDIDATE", "locked-candidate", locked, 500),
+            ("CONDITIONING", "conditioning", conditioning, 504),
+        ):
+            (output_root / f"{case_id}-{suffix}.png").write_bytes(payload)
+            outputs.append(
+                {
+                    "case_id": case_id,
+                    "kind": kind,
+                    "relative_path": f"outputs/{case_id}-{suffix}.png",
+                    "media_type": "image/png",
+                    "size_bytes": len(payload),
+                    "sha256": _sha256(payload),
+                    "width_px": 800,
+                    "height_px": height,
+                }
+            )
+        bbox = {"x_min": 100, "y_min": 100, "x_max": 300, "y_max": 300}
+        measurements.append(
+            {
+                "case_id": case_id,
+                "elapsed_milliseconds": 1000,
+                "peak_gpu_memory_bytes": 13_000_000_000,
+                "reference_bbox": dict(bbox),
+                "raw_candidate_bbox": {"x_min": 0, "y_min": 0, "x_max": 800, "y_max": 500},
+                "locked_candidate_bbox": dict(bbox),
+                "raw_area_ratio_milli": 10000,
+                "locked_area_ratio_milli": 1000,
+                "raw_center_distance_milli": 100,
+                "locked_center_distance_milli": 0,
+                "layout_status": "PASS",
+            }
+        )
+    outputs.sort(key=lambda value: (value["case_id"], value["kind"]))
+    measurements.sort(key=lambda value: value["case_id"])
+    result = _result_value(manifest, plan, command)
+    result.update(
+        schema_version="local-image-flux2-reference-probe-result/1.1",
+        outputs=outputs,
+        measurements=measurements,
+    )
+    result.pop("result_sha256")
+    result["result_sha256"] = content_sha256(result)
+    (workspace / "command.json").write_bytes(content_json_bytes(command))
+    (workspace / "inputs" / "probe-plan.json").write_bytes(content_json_bytes(plan))
+    (workspace / "inputs" / "model-manifest.json").write_bytes(content_json_bytes(manifest))
+    (output_root / "result.json").write_bytes(content_json_bytes(result))
+    for path in workspace.rglob("*"):
+        path.chmod(0o700 if path.is_dir() else 0o600)
+    workspace.chmod(0o700)
+    return workspace
+
+
 def test_flux2_publication_revalidates_exact_completed_file_set(tmp_path: Path) -> None:
     workspace = _completed_workspace(tmp_path)
 
@@ -143,3 +251,25 @@ def test_flux2_publication_rejects_output_drift_and_unexpected_member(tmp_path: 
         match="FLUX2_PROBE_OUTPUT_INVALID",
     ):
         publish_reference_probe._members(workspace, command, plan, loaded, result_payload)
+
+
+def test_flux2_layout_lock_publication_revalidates_all_three_outputs(
+    tmp_path: Path,
+) -> None:
+    workspace = _completed_workspace_v2(tmp_path)
+
+    loaded_command, plan, manifest, loaded, result_payload = publish_reference_probe._load(
+        workspace
+    )
+    members = publish_reference_probe._members(
+        workspace,
+        loaded_command,
+        plan,
+        loaded,
+        result_payload,
+    )
+
+    assert manifest.activation_policy == "FORBIDDEN"
+    assert len(members) == 10
+    result_member = next(member for member in members if member.file_name == "result.json")
+    assert result_member.schema_ref.endswith("local-image-flux2-reference-probe-result/1.1")

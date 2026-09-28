@@ -18,9 +18,12 @@ from eom_image_contracts import (
     Flux2ReferenceProbeInput,
     ImageEvaluationArtifactMember,
     LocalImageFlux2ReferenceProbeCommand,
+    LocalImageFlux2ReferenceProbeCommandV2,
     LocalImageFlux2ReferenceProbePlan,
+    LocalImageFlux2ReferenceProbePlanV2,
     LocalImageModelCandidateManifest,
     LocalImageReferenceConditioningOutput,
+    LocalImageReferenceLayoutLock,
     LocalImageReferenceSimplification,
     LocalImageReferenceSimplificationMetrics,
     LocalImageReferenceSimplifierRuntime,
@@ -29,6 +32,7 @@ from eom_image_contracts import (
     text_sha256,
     validate_contract,
     validate_flux2_probe_command,
+    validate_flux2_probe_command_v2,
 )
 from eom_orchestrator.database import build_engine, build_session_factory
 from eom_orchestrator.file_set_control_artifacts import (
@@ -51,6 +55,7 @@ FIXTURE_RESULT_FILE_SHA256 = (
 )
 MODEL_SCHEMA_REF = "eom://schemas/image-provider/local-image-model-candidate-manifest/1.0"
 PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.0"
+PLAN_V2_SCHEMA_REF = "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.1"
 REFERENCE_SCHEMA_REF = "eom://schemas/image-provider/normalized-visual-reference/1.0"
 SOURCE_CROP_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-candidate-image/1.0"
@@ -128,6 +133,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--layout-lock", action="store_true")
     return parser
 
 
@@ -423,7 +429,11 @@ def main() -> int:
             staged[case.case_id] = (reference, conditioning)
         ordered_cases = tuple(sorted(cases, key=lambda value: value.case_id))
         plan_body = {
-            "schema_version": "local-image-flux2-reference-probe-plan/1.0",
+            "schema_version": (
+                "local-image-flux2-reference-probe-plan/1.1"
+                if args.layout_lock
+                else "local-image-flux2-reference-probe-plan/1.0"
+            ),
             "candidate_model_manifest": model_pointer.model_dump(mode="json"),
             "candidate_model_manifest_sha256": model_pointer.sha256,
             "activation_policy": "FORBIDDEN",
@@ -440,6 +450,21 @@ def main() -> int:
             "created_at": manifest.created_at.isoformat().replace("+00:00", "Z"),
             "created_by": "codex.flux2-probe",
         }
+        if args.layout_lock:
+            plan_body["layout_lock"] = LocalImageReferenceLayoutLock(
+                contract="local-image-reference-layout-lock/1.0",
+                foreground_luma_threshold=245,
+                source_canvas_width_px=800,
+                source_canvas_height_px=504,
+                delivery_canvas_width_px=800,
+                delivery_canvas_height_px=500,
+                source_to_delivery_y_policy="SCALE_HALF_OPEN_OUTWARD",
+                candidate_crop_policy="TIGHT_FOREGROUND_BBOX",
+                placement_policy="EXACT_REFERENCE_BBOX",
+                resize_filter="LANCZOS",
+                background_policy="WHITE",
+                empty_foreground_policy="FAIL_CLOSED",
+            ).model_dump(mode="json")
         identity_body = {
             key: field
             for key, field in plan_body.items()
@@ -449,8 +474,11 @@ def main() -> int:
             **plan_body,
             "plan_id": "imgflux2probe_" + content_sha256(identity_body)[7:39],
         }
-        plan = LocalImageFlux2ReferenceProbePlan.model_validate(
-            {**plan_with_id, "plan_sha256": content_sha256(plan_with_id)}
+        plan_value = {**plan_with_id, "plan_sha256": content_sha256(plan_with_id)}
+        plan = (
+            LocalImageFlux2ReferenceProbePlanV2.model_validate(plan_value)
+            if args.layout_lock
+            else LocalImageFlux2ReferenceProbePlan.model_validate(plan_value)
         )
         plan_bytes = content_json_bytes(plan.model_dump(mode="json"))
         plan_temp = WORKSPACE_PARENT / f".{plan.plan_id}.json"
@@ -464,10 +492,18 @@ def main() -> int:
             publisher,
             source=plan_temp,
             file_name="manifests/flux2-reference-probe-plan.json",
-            schema_ref=PLAN_SCHEMA_REF,
+            schema_ref=PLAN_V2_SCHEMA_REF if args.layout_lock else PLAN_SCHEMA_REF,
             artifact_type="control_local_image_flux2_reference_probe_plan",
-            manifest_version="local-image-flux2-reference-probe-plan-files/1.0",
-            idempotency_key=f"flux2-reference-probe-plan:{plan.plan_id}",
+            manifest_version=(
+                "local-image-flux2-reference-probe-plan-files/1.1"
+                if args.layout_lock
+                else "local-image-flux2-reference-probe-plan-files/1.0"
+            ),
+            idempotency_key=(
+                f"flux2-reference-layout-lock-probe-plan:{plan.plan_id}"
+                if args.layout_lock
+                else f"flux2-reference-probe-plan:{plan.plan_id}"
+            ),
             source_commit=args.source_commit,
             created_at=manifest.created_at,
         )
@@ -487,7 +523,11 @@ def main() -> int:
         for case in ordered_cases
     )
     command_body = {
-        "schema_version": "local-image-flux2-reference-probe-command/1.0",
+        "schema_version": (
+            "local-image-flux2-reference-probe-command/1.1"
+            if args.layout_lock
+            else "local-image-flux2-reference-probe-command/1.0"
+        ),
         "plan": plan_pointer.model_dump(mode="json"),
         "plan_sha256": plan_pointer.sha256,
         "staged_plan_path": "inputs/probe-plan.json",
@@ -502,10 +542,21 @@ def main() -> int:
         **command_body,
         "run_id": "imgflux2proberun_" + content_sha256(command_body)[7:39],
     }
-    command = LocalImageFlux2ReferenceProbeCommand.model_validate(
-        {**command_with_id, "command_sha256": content_sha256(command_with_id)}
-    )
-    validate_flux2_probe_command(manifest, plan, command)
+    command_value = {**command_with_id, "command_sha256": content_sha256(command_with_id)}
+    if args.layout_lock:
+        if not isinstance(plan, LocalImageFlux2ReferenceProbePlanV2):
+            raise Flux2ProbeStageError("FLUX2_PROBE_PLAN_CONFLICT")
+        command_v2 = LocalImageFlux2ReferenceProbeCommandV2.model_validate(command_value)
+        validate_flux2_probe_command_v2(manifest, plan, command_v2)
+        command: LocalImageFlux2ReferenceProbeCommand | LocalImageFlux2ReferenceProbeCommandV2 = (
+            command_v2
+        )
+    else:
+        if not isinstance(plan, LocalImageFlux2ReferenceProbePlan):
+            raise Flux2ProbeStageError("FLUX2_PROBE_PLAN_CONFLICT")
+        command_v1 = LocalImageFlux2ReferenceProbeCommand.model_validate(command_value)
+        validate_flux2_probe_command(manifest, plan, command_v1)
+        command = command_v1
     summary = {
         "status": "STAGED",
         "run_id": command.run_id,
