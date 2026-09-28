@@ -391,7 +391,12 @@ class FixedLocalImageProviderAdapter:
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_file(reference_target, reference_bytes, provider_gid)
+        _stage_exact_file(
+            reference_target,
+            reference_bytes,
+            provider_gid,
+            maximum_bytes=8 * 1024 * 1024,
+        )
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
         unit_name = f"eom-image-reference-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
@@ -1018,11 +1023,19 @@ def _prepare_input_directory(path: Path, workspace: Path, provider_gid: int) -> 
         raise LocalImageAdapterError("LOCAL_IMAGE_HANDOFF_INVALID") from exc
 
 
-def _stage_exact_file(path: Path, payload: bytes, provider_gid: int) -> None:
+def _stage_exact_file(
+    path: Path,
+    payload: bytes,
+    provider_gid: int,
+    *,
+    maximum_bytes: int = 128 * 1024,
+) -> None:
+    if not 0 < len(payload) <= maximum_bytes:
+        raise LocalImageAdapterError("LOCAL_IMAGE_HANDOFF_INVALID")
     if path.exists() or path.is_symlink():
         metadata = _require_regular(
             path,
-            maximum_bytes=128 * 1024,
+            maximum_bytes=maximum_bytes,
             mode=INPUT_MODE,
             uid=os.geteuid(),
             gid=provider_gid,

@@ -17,6 +17,7 @@ from eom_catalog_service.local_image_adapter import (
     _build_reference_conditioned_request_v2,
     _build_reference_conditioned_request_v3,
     _build_request,
+    _stage_exact_file,
     load_local_image_provider_binding,
     load_local_image_provider_binding_any,
     load_local_image_provider_binding_v2,
@@ -92,6 +93,22 @@ def _binding_value() -> dict[str, object]:
         "timeout_seconds": 900,
     }
     return {**body, "binding_sha256": content_sha256(body)}
+
+
+def test_exact_reference_bytes_are_idempotent_at_the_bounded_reference_size(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "references" / "primary.png"
+    target.parent.mkdir(mode=0o750)
+    payload = b"r" * (256 * 1024)
+
+    _stage_exact_file(target, payload, os.getegid(), maximum_bytes=8 * 1024 * 1024)
+    _stage_exact_file(target, payload, os.getegid(), maximum_bytes=8 * 1024 * 1024)
+
+    assert target.read_bytes() == payload
+    assert target.stat().st_mode & 0o777 == 0o440
+    with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_HANDOFF_INVALID"):
+        _stage_exact_file(target, payload + b"drift", os.getegid(), maximum_bytes=8 * 1024 * 1024)
 
 
 def _binding_v2_value() -> dict[str, object]:
