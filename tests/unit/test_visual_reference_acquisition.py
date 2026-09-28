@@ -284,7 +284,7 @@ class _DiscoveryOpener:
                     page(
                         index=0,
                         page_id=104,
-                        title="File:Compact car collection collage.jpg",
+                        title="File:Compact car collection collage (with cast).jpg",
                         license_code="cc-zero",
                     )
                 ]
@@ -311,6 +311,41 @@ class _DiscoveryOpener:
             ),
         ]
         payload = json.dumps({"query": {"pages": pages}}).encode()
+        return _Response(url, "application/json", payload)
+
+
+class _FallbackDiscoveryOpener(_DiscoveryOpener):
+    def open(self, request: Any, *, timeout: int) -> _Response:
+        url = request.full_url
+        if "gsrsearch=trilobite+fossil+seen+from+above" not in url:
+            return super().open(request, timeout=timeout)
+        self.calls.append(url)
+        assert timeout == 120
+        page = {
+            "pageid": 201,
+            "ns": 6,
+            "title": "File:Attribution-only trilobite.jpg",
+            "index": 1,
+            "canonicalurl": (
+                "https://commons.wikimedia.org/wiki/File:Attribution-only_trilobite.jpg"
+            ),
+            "revisions": [{"revid": 1201}],
+            "imageinfo": [
+                {
+                    "url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/reference-201.jpg",
+                    "size": 100_000,
+                    "width": 1200,
+                    "height": 800,
+                    "mime": "image/jpeg",
+                    "extmetadata": {
+                        "License": {"value": "cc-by-2.0"},
+                        "LicenseShortName": {"value": "CC BY 2.0"},
+                        "LicenseUrl": {"value": "https://creativecommons.org/licenses/by/2.0/"},
+                    },
+                }
+            ],
+        }
+        payload = json.dumps({"query": {"pages": [page]}}).encode()
         return _Response(url, "application/json", payload)
 
 
@@ -529,6 +564,26 @@ def test_discovery_deprioritizes_montage_like_titles_within_bounded_candidates()
     assert tuple(value.page_id for value in candidates) == (101, 102, 104)
     assert tuple(value.rank for value in candidates) == (1, 2, 3)
     assert "montage-like" in candidates[0].selection_rationale
+
+
+def test_discovery_uses_one_bounded_subject_fallback_when_exact_view_has_no_eligible_license() -> (
+    None
+):
+    opener = _FallbackDiscoveryOpener()
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    candidates = client.discover_candidates(
+        subject="one trilobite fossil seen from above isolated on white",
+        query_terms=("trilobite fossil seen from above",),
+        candidate_limit=5,
+        timeout_seconds=120,
+    )
+
+    assert tuple(value.page_id for value in candidates) == (101, 102)
+    assert len(opener.calls) == 2
+    assert "gsrsearch=trilobite+fossil+seen+from+above" in opener.calls[0]
+    assert "gsrsearch=trilobite+fossil" in opener.calls[1]
+    assert "bounded subject-only query fallback" in candidates[0].selection_rationale
 
 
 def test_discovery_materializes_one_canonical_result_without_source_bytes(tmp_path: Path) -> None:

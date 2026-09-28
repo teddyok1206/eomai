@@ -31,6 +31,13 @@ official relevance order and page ID remain deterministic tie-breakers. This is 
 semantic guarantee, so all candidates remain pinned in the intent and the selected source remains
 auditable.
 
+If the exact viewpoint query yields no image under the existing public-domain/CC0 policy, discovery
+performs at most one deterministic subject-only fallback by removing a closed set of viewpoint and
+white-background modifiers. It does not relax licensing, media, host, byte, dimension, or metadata
+validation. This keeps the common one-request path unchanged and bounds the fallback path to two
+official API requests; an unbounded synonym search or attribution-policy expansion would add
+non-reproducible selection and licensing obligations.
+
 Only the current simplified-reference V3 generation path canonicalizes the generated background to
 8-bit grayscale RGB before computing the generation receipt and before deterministic SVG overlay.
 The operation cannot add, remove, or move morphology. Predecessor V1/V2 provider paths remain byte

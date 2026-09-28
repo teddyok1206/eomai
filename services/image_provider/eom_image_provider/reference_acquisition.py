@@ -81,9 +81,15 @@ _MULTI_SUBJECT_TITLE_MARKERS = (
     " multiple",
     " plate",
     " specimens",
+    " cast",
     " with cast",
 )
 _VIEWPOINT_TITLE_MARKERS = ("dorsal", "front", "rear", "side", "top")
+_REFERENCE_QUERY_MODIFIERS = re.compile(
+    r"\b(?:seen from above|viewed from above|from above|top view|dorsal view|side view|"
+    r"front view|rear view|isolated on (?:a )?white(?: background)?)\b",
+    re.IGNORECASE,
+)
 
 
 class VisualReferenceAcquisitionError(RuntimeError):
@@ -249,6 +255,53 @@ class WikimediaCommonsClient:
         ):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
         query = query_terms[0]
+        selected_query = query
+        discovered: list[tuple[int, VisualReferenceIntentCandidate]] = []
+        for selected_query in _reference_discovery_queries(query):
+            raw_pages = self._load_discovery_pages(
+                selected_query,
+                timeout_seconds=timeout_seconds,
+            )
+            discovered = self._verified_discovery_candidates(
+                raw_pages,
+                candidate_limit=candidate_limit,
+            )
+            if discovered:
+                break
+        if not discovered:
+            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+        ranked = sorted(
+            discovered,
+            key=lambda value: _reference_candidate_order(
+                value[1], query=query, official_rank=value[0]
+            ),
+        )[:candidate_limit]
+        used_fallback = selected_query != query
+        return tuple(
+            VisualReferenceIntentCandidate.model_validate(
+                {
+                    **candidate.model_dump(mode="json"),
+                    "rank": rank,
+                    "selection_rationale": (
+                        "Official Commons result selected by stable morphology suitability "
+                        "ranking; montage-like file titles are deprioritized"
+                        + (
+                            " after one bounded subject-only query fallback."
+                            if used_fallback
+                            else "."
+                        )
+                    ),
+                }
+            )
+            for rank, (_official_rank, candidate) in enumerate(ranked, start=1)
+        )
+
+    def _load_discovery_pages(
+        self,
+        query: str,
+        *,
+        timeout_seconds: int,
+    ) -> list[object]:
         parameters = urlencode(
             {
                 "action": "query",
@@ -287,6 +340,14 @@ class WikimediaCommonsClient:
         raw_pages = _mapping(value, "query").get("pages")
         if not isinstance(raw_pages, list):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
+        return raw_pages
+
+    @staticmethod
+    def _verified_discovery_candidates(
+        raw_pages: list[object],
+        *,
+        candidate_limit: int,
+    ) -> list[tuple[int, VisualReferenceIntentCandidate]]:
         ordered_pages = sorted(raw_pages, key=_discovery_page_order)
         discovered: list[tuple[int, VisualReferenceIntentCandidate]] = []
         seen_page_ids: set[int] = set()
@@ -333,27 +394,7 @@ class WikimediaCommonsClient:
             discovered.append((len(discovered), candidate))
             if len(discovered) == candidate_limit:
                 break
-        if not discovered:
-            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
-        ranked = sorted(
-            discovered,
-            key=lambda value: _reference_candidate_order(
-                value[1], query=query, official_rank=value[0]
-            ),
-        )[:candidate_limit]
-        return tuple(
-            VisualReferenceIntentCandidate.model_validate(
-                {
-                    **candidate.model_dump(mode="json"),
-                    "rank": rank,
-                    "selection_rationale": (
-                        "Official Commons result selected by stable morphology suitability "
-                        "ranking; montage-like file titles are deprioritized."
-                    ),
-                }
-            )
-            for rank, (_official_rank, candidate) in enumerate(ranked, start=1)
-        )
+        return discovered
 
     def _load_pages(
         self,
@@ -1109,12 +1150,23 @@ def _reference_candidate_order(
 ) -> tuple[int, int, int, int]:
     """Prefer one clean morphology subject while preserving stable official relevance order."""
 
-    title = " " + candidate.file_title.casefold().replace("_", " ")
-    montage_penalty = int(any(marker in title for marker in _MULTI_SUBJECT_TITLE_MARKERS))
+    title = " " + re.sub(r"[^a-z0-9]+", " ", candidate.file_title.casefold()).strip() + " "
+    montage_penalty = int(
+        any(f" {marker.strip()} " in title for marker in _MULTI_SUBJECT_TITLE_MARKERS)
+    )
     query_value = query.casefold()
     requested_viewpoints = {marker for marker in _VIEWPOINT_TITLE_MARKERS if marker in query_value}
     viewpoint_matches = sum(marker in title for marker in requested_viewpoints)
     return montage_penalty, -viewpoint_matches, official_rank, candidate.page_id
+
+
+def _reference_discovery_queries(query: str) -> tuple[str, ...]:
+    """Use one exact query and at most one deterministic subject-only fallback."""
+
+    simplified = " ".join(_REFERENCE_QUERY_MODIFIERS.sub(" ", query).split())
+    if simplified == query or len(simplified) < 3:
+        return (query,)
+    return query, simplified
 
 
 def _mapping(value: object, key: str) -> dict[str, object]:
