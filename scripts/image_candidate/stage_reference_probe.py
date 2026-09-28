@@ -123,7 +123,7 @@ def _png_dimensions(payload: bytes) -> tuple[int, int]:
 def _load_manifest() -> tuple[LocalImageModelCandidateManifest, bytes]:
     payload = _read(
         MODEL_MANIFEST,
-        expected_sha256="sha256:605e85dedafb1e80551e759988ebce369e92aa5ad8fa45e7f42f245f19e3a689",
+        expected_sha256="sha256:ac80e54f565cb6d55cf5d1b77f2c21df28f22c34a6ba94b5f0af9371c818a089",
         maximum_bytes=MAX_JSON_BYTES,
     )
     try:
