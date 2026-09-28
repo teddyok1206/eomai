@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-flux2-reference-probe-command/1.0",
+  "title": "EOM FLUX.2 reference line-art probe command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"},
+        "schema_ref": {"type": "string", "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"},
+        "media_type": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
+        "relative_path": {"type": "string", "pattern": "^inputs/references/imgflux2case_[0-9a-f]{32}\\.png$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      },
+      "required": ["case_id", "relative_path", "sha256", "size_bytes"]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "local-image-flux2-reference-probe-command/1.0"},
+    "run_id": {"type": "string", "pattern": "^imgflux2proberun_[0-9a-f]{32}$"},
+    "plan": {"$ref": "#/$defs/artifactMember"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "staged_plan_path": {"const": "inputs/probe-plan.json"},
+    "staged_model_manifest_path": {"const": "inputs/model-manifest.json"},
+    "model_root": {"const": "/opt/eom-evaluation-models/flux2-klein-base-4b"},
+    "inputs": {"type": "array", "minItems": 3, "maxItems": 12, "items": {"$ref": "#/$defs/input"}},
+    "output_directory": {"const": "outputs"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "timeout_seconds": {"type": "integer", "minimum": 600, "maximum": 7200},
+    "command_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "required": ["schema_version", "run_id", "plan", "plan_sha256", "staged_plan_path", "staged_model_manifest_path", "model_root", "inputs", "output_directory", "source_commit", "timeout_seconds", "command_sha256"]
+}

@@ -245,6 +245,10 @@ SCHEMA_FILES = {
     "science-visual-subject-refinement-plan": (
         "local-image-science-visual-subject-refinement-plan-v1.schema.json"
     ),
+    "model-candidate-manifest": "local-image-model-candidate-manifest-v1.schema.json",
+    "flux2-reference-probe-plan": "local-image-flux2-reference-probe-plan-v1.schema.json",
+    "flux2-reference-probe-command": ("local-image-flux2-reference-probe-command-v1.schema.json"),
+    "flux2-reference-probe-result": "local-image-flux2-reference-probe-result-v1.schema.json",
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -543,6 +547,18 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-subject-refinement-plan": (
         "sha256:85f158a9fd84919e6eb3cee09dbb5a2e142f456044792dd11bb6218607ab701d"
+    ),
+    "model-candidate-manifest": (
+        "sha256:cb13c20fc5f88b025c14e15990582c0762df85a9576de41fa2db2bd7958c7658"
+    ),
+    "flux2-reference-probe-plan": (
+        "sha256:7b86f70f6acced4809e2984b32120144f6b7fd1bfff9b63b21942962dac9f54f"
+    ),
+    "flux2-reference-probe-command": (
+        "sha256:1f635fadefa77dd504defffce35c345cf2f0559a0061206b6855c3a6b0fed630"
+    ),
+    "flux2-reference-probe-result": (
+        "sha256:179051d6e4f685b199aa0cc95a74e8e815ba5b2e0a941aa163f3735a97356181"
     ),
 }
 
