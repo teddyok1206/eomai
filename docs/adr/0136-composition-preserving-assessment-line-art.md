@@ -133,3 +133,32 @@ objects, numbers, and source markings. The new low-strength outputs were also vi
 predecessor adapter outputs, so superiority has not been demonstrated. Before another activation
 candidate is considered, the evaluation population must include more diverse approved exam line-art
 anchors and the reference-selection boundary must reject or replace non-isolated source images.
+
+## 2026-09-28 object-line-art successor probe
+
+The additive object-line-art workflow reviewed all 768 campaign candidates independently, selected
+24 exact literal crops, and preserved source-group partitions as 16 training, 4 validation, and 4
+holdout members. The resulting 200-step run
+`imgscicampaignmicrotrainrun_e10cb0aadfbcc6cdd0617632d7aa5c5e` produced adapter revision
+`imgadapterrev_9a2817825a8fc67e9811fafb542de34f`, with manifest SHA-256
+`sha256:2051f43272fac4ed9c984cad3e312cc27fe758a8c02feeca5190384e7380e594`. Its activation
+policy remains `FORBIDDEN`.
+
+The exact BASE/ADAPTER evaluation
+`imgscicampaignmicroevalrun_57710f49f4214129af1dd55dbe9d3666` covered four unseen source groups:
+three seated students, a fossil shell, two laboratory heating assemblies, and a car body/front
+wheel. Its immutable result SHA-256 is
+`sha256:b4acf6fd6575e686c79dfc6f775d5b6a112f65cd7d6beb076f8373858fccc4fe`.
+
+Human comparison found a clear style effect: adapter outputs used sparser gray backgrounds,
+stronger isolation, simpler composition, and smaller PNG encodings. The fossil became a useful
+isolated specimen and the automobile became closer to a compact exam-page silhouette. Those gains
+did not establish semantic fidelity. The three-student prompt produced four people, and the two
+laboratory assemblies contained synthesized non-authoritative structure. Laboratory-equipment
+morphology was included in this bounded probe to test the routing boundary; the result reinforces
+that exact apparatus remains a deterministic Python/SVG/HWPX responsibility.
+
+This successor is therefore useful evidence that the selected examples teach assessment line-art
+presentation, but it is not an activation candidate. The next experiment must keep object-family
+coverage balanced, test count and silhouette preservation against exact references, and keep
+answer-bearing or mechanically exact structure outside the generative raster path.
