@@ -557,7 +557,7 @@ class CommandAdapter:
                     idempotency_key=f"start:{workflow.workflow_id}",
                 )
             else:
-                existing_command = session.scalar(
+                command = session.scalar(
                     select(WorkflowCommandRecord)
                     .where(
                         WorkflowCommandRecord.workflow_id == workflow.workflow_id,
@@ -569,7 +569,7 @@ class CommandAdapter:
                     )
                     .limit(1)
                 )
-                if existing_command is None:
+                if command is None:
                     raise WorkflowError(
                         WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                         "existing workflow occurrence has no start command",
