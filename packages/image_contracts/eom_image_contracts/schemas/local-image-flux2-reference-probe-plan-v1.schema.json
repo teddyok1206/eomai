@@ -50,6 +50,41 @@
       },
       "required": ["contract", "output_member", "color_policy", "denoise_policy", "tone_policy", "foreground_luma_threshold", "border_width_px", "foreground_ratio_min", "foreground_ratio_max", "border_foreground_ratio_max"]
     },
+    "conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {"const": "reference-conditioning.png"},
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 64, "maximum": 8388608},
+        "width_px": {"const": 800},
+        "height_px": {"const": 504}
+      },
+      "required": ["member_path", "media_type", "sha256", "size_bytes", "width_px", "height_px"]
+    },
+    "simplificationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "conditioning_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "border_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "source_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+        "conditioning_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+        "edge_density_ratio": {"type": "number", "minimum": 0, "maximum": 16}
+      },
+      "required": ["source_foreground_ratio", "conditioning_foreground_ratio", "border_foreground_ratio", "source_edge_density", "conditioning_edge_density", "edge_density_ratio"]
+    },
+    "simplifierRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract": {"const": "local-image-reference-simplifier/1.0"},
+        "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64}
+      },
+      "required": ["contract", "pillow_version"]
+    },
     "case": {
       "type": "object",
       "additionalProperties": false,
@@ -57,11 +92,14 @@
         "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
         "subject_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
         "visual_reference": {"$ref": "#/$defs/reference"},
+        "conditioning": {"$ref": "#/$defs/conditioning"},
+        "simplification_metrics": {"$ref": "#/$defs/simplificationMetrics"},
+        "simplifier_runtime": {"$ref": "#/$defs/simplifierRuntime"},
         "prompt_en": {"type": "string", "minLength": 20, "maxLength": 1200, "pattern": "^[ -~]+$"},
         "prompt_sha256": {"$ref": "#/$defs/sha256"},
         "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647}
       },
-      "required": ["case_id", "subject_key", "visual_reference", "prompt_en", "prompt_sha256", "seed"]
+      "required": ["case_id", "subject_key", "visual_reference", "conditioning", "simplification_metrics", "simplifier_runtime", "prompt_en", "prompt_sha256", "seed"]
     }
   },
   "properties": {
@@ -71,7 +109,7 @@
     "candidate_model_manifest_sha256": {"$ref": "#/$defs/sha256"},
     "activation_policy": {"const": "FORBIDDEN"},
     "generation_width_px": {"const": 800},
-    "generation_height_px": {"const": 504},
+    "generation_height_px": {"const": 512},
     "delivery_width_px": {"const": 800},
     "delivery_height_px": {"const": 500},
     "inference_steps": {"const": 50},

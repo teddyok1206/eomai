@@ -71,6 +71,26 @@ def _case_value(ordinal: int) -> dict[str, Any]:
             "sha256": "sha256:" + f"{ordinal:02x}" * 32,
             "size_bytes": 1000 + ordinal,
         },
+        "conditioning": {
+            "member_path": "reference-conditioning.png",
+            "media_type": "image/png",
+            "sha256": "sha256:" + f"{ordinal + 16:02x}" * 32,
+            "size_bytes": 2000 + ordinal,
+            "width_px": 800,
+            "height_px": 504,
+        },
+        "simplification_metrics": {
+            "source_foreground_ratio": 0.25,
+            "conditioning_foreground_ratio": 0.2,
+            "border_foreground_ratio": 0.0,
+            "source_edge_density": 0.1,
+            "conditioning_edge_density": 0.05,
+            "edge_density_ratio": 0.5,
+        },
+        "simplifier_runtime": {
+            "contract": "local-image-reference-simplifier/1.0",
+            "pillow_version": "11.3.0",
+        },
         "prompt_en": prompt,
         "prompt_sha256": text_sha256(prompt),
         "seed": ordinal,
@@ -97,7 +117,7 @@ def _plan_value(manifest: dict[str, Any]) -> dict[str, Any]:
         "candidate_model_manifest_sha256": content_sha256(manifest),
         "activation_policy": "FORBIDDEN",
         "generation_width_px": 800,
-        "generation_height_px": 504,
+        "generation_height_px": 512,
         "delivery_width_px": 800,
         "delivery_height_px": 500,
         "inference_steps": 50,
@@ -137,6 +157,11 @@ def _command_value(plan: dict[str, Any]) -> dict[str, Any]:
                 "relative_path": f"inputs/references/{case['case_id']}.png",
                 "sha256": case["visual_reference"]["sha256"],
                 "size_bytes": case["visual_reference"]["size_bytes"],
+                "conditioning_relative_path": (
+                    f"inputs/references/{case['case_id']}-conditioning.png"
+                ),
+                "conditioning_sha256": case["conditioning"]["sha256"],
+                "conditioning_size_bytes": case["conditioning"]["size_bytes"],
             }
             for case in plan["cases"]
         ),
@@ -191,8 +216,8 @@ def _result_value(
                     "kind": "CONDITIONING",
                     "relative_path": f"outputs/{case_id}-conditioning.png",
                     "media_type": "image/png",
-                    "size_bytes": 2345,
-                    "sha256": "sha256:" + "55" * 32,
+                    "size_bytes": case["conditioning"]["size_bytes"],
+                    "sha256": case["conditioning"]["sha256"],
                     "width_px": 800,
                     "height_px": 504,
                 },

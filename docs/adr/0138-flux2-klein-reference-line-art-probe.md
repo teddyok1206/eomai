@@ -11,8 +11,9 @@ answer-bearing labels, axes, arrows, tables, plots, measured geometry, or exact 
 The probe answers one question: does the Apache-2.0 FLUX.2 klein Base 4B checkpoint preserve a
 reviewed subject's morphology while rendering it as sparse monochrome assessment line art better
 than the current SSD-1B path? The image provider remains an infrastructure adapter. The
-Orchestrator resolves and stages immutable inputs, the isolated runner reads only those inputs and a
-read-only installed model, and only the Orchestrator may publish validated outputs to NAS.
+Orchestrator resolves immutable inputs and uses the existing reference-simplification adapter before
+staging both the source and its exact conditioning PNG. The isolated runner reads only those inputs
+and a read-only installed model, and only the Orchestrator may publish validated outputs to NAS.
 
 Python/SVG/HWPX continues to own every authoritative mark and editable label. The candidate model
 may supply only non-authoritative organism, fossil, landscape, astronomical, or natural-object
@@ -25,7 +26,8 @@ upstream FLUX.2 repository + immutable commit
   -> installed evaluation model revision + file manifest
 reviewed visual-reference bundle revision
   -> normalized PNG Artifact member
-  -> deterministic morphology-conditioning PNG
+  -> existing deterministic morphology-simplification adapter
+  -> hash-pinned morphology-conditioning PNG
   -> candidate raster output
   -> immutable technical probe result
   -> separate human morphology/style review
@@ -53,15 +55,19 @@ and V1-V3 reference-conditioned schema bytes remain unchanged.
 
 Before dereference, the Orchestrator validates Artifact/Revision existence, exact member path,
 schema, media type, lifecycle, size and SHA-256. The runner validates every staged regular file,
-rejects symlinks, checks canonical JSON, verifies the installed model file set against its manifest,
-and does not access PostgreSQL or NAS.
+rejects symlinks, checks canonical JSON, binds the conditioning PNG to the plan, verifies the
+installed model file set against its manifest, and does not access PostgreSQL or NAS. Keeping
+simplification outside the candidate runtime avoids duplicating the existing authoritative
+algorithm merely because FLUX.2 requires newer Diffusers dependencies.
 
 ## Access patterns and data structures
 
 The probe performs exact-key lookup of at most twelve cases, then stable ordered iteration. A dict
 or set validates case/member uniqueness in `O(C)` time and space. Each image preprocessing and
-validation pass is `O(W*H)` over fixed 800x504 or 800x500 rasters. Model files are an ordered frozen
-tuple and are verified once per run; there is no database, queue, cache, or new index.
+validation pass is `O(W*H)` over fixed 800x504 reference, 800x512 generation, or 800x500 delivery
+rasters. The generation canvas is divisible by the FLUX.2 VAE/packing multiple; its central delivery
+crop is deterministic. Model files are an ordered frozen tuple and are verified once per run; there
+is no database, queue, cache, or new index.
 
 ## Runtime and dependency ownership
 

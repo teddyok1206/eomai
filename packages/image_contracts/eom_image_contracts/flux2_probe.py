@@ -15,7 +15,10 @@ from eom_image_contracts.models import (
     text_sha256,
 )
 from eom_image_contracts.visual_reference import (
+    LocalImageReferenceConditioningOutput,
     LocalImageReferenceSimplification,
+    LocalImageReferenceSimplificationMetrics,
+    LocalImageReferenceSimplifierRuntime,
     VisualReferencePngArtifactPointer,
 )
 
@@ -100,6 +103,9 @@ class Flux2ReferenceProbeCase(FrozenModel):
     case_id: str = Field(pattern=r"^imgflux2case_[0-9a-f]{32}$")
     subject_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")
     visual_reference: VisualReferencePngArtifactPointer
+    conditioning: LocalImageReferenceConditioningOutput
+    simplification_metrics: LocalImageReferenceSimplificationMetrics
+    simplifier_runtime: LocalImageReferenceSimplifierRuntime
     prompt_en: str = Field(min_length=20, max_length=1200, pattern=r"^[ -~]+$")
     prompt_sha256: Sha256
     seed: int = Field(ge=0, le=2_147_483_647)
@@ -123,7 +129,7 @@ class LocalImageFlux2ReferenceProbePlan(FrozenModel):
     candidate_model_manifest_sha256: Sha256
     activation_policy: Literal["FORBIDDEN"]
     generation_width_px: Literal[800]
-    generation_height_px: Literal[504]
+    generation_height_px: Literal[512]
     delivery_width_px: Literal[800]
     delivery_height_px: Literal[500]
     inference_steps: Literal[50]
@@ -174,11 +180,18 @@ class Flux2ReferenceProbeInput(FrozenModel):
     relative_path: str = Field(pattern=r"^inputs/references/imgflux2case_[0-9a-f]{32}\.png$")
     sha256: Sha256
     size_bytes: int = Field(ge=1, le=16 * 1024 * 1024)
+    conditioning_relative_path: str = Field(
+        pattern=r"^inputs/references/imgflux2case_[0-9a-f]{32}-conditioning\.png$"
+    )
+    conditioning_sha256: Sha256
+    conditioning_size_bytes: int = Field(ge=64, le=8 * 1024 * 1024)
 
     @model_validator(mode="after")
     def path_matches_case(self) -> Self:
         if self.relative_path != f"inputs/references/{self.case_id}.png":
             raise ValueError("FLUX.2 staged input path mismatch")
+        if self.conditioning_relative_path != f"inputs/references/{self.case_id}-conditioning.png":
+            raise ValueError("FLUX.2 staged conditioning path mismatch")
         return self
 
 
@@ -346,6 +359,8 @@ def validate_flux2_probe_command(
         if (
             staged.sha256 != case.visual_reference.sha256
             or staged.size_bytes != case.visual_reference.size_bytes
+            or staged.conditioning_sha256 != case.conditioning.sha256
+            or staged.conditioning_size_bytes != case.conditioning.size_bytes
         ):
             raise ValueError("FLUX.2 command input pointer mismatch")
 
@@ -370,3 +385,14 @@ def validate_flux2_probe_result(
         value.case_id for value in plan.cases
     }:
         raise ValueError("FLUX.2 result plan coverage mismatch")
+    if result.status == "SUCCEEDED":
+        conditioning_by_case = {
+            value.case_id: value for value in result.outputs if value.kind == "CONDITIONING"
+        }
+        for case in plan.cases:
+            output = conditioning_by_case[case.case_id]
+            if (
+                output.sha256 != case.conditioning.sha256
+                or output.size_bytes != case.conditioning.size_bytes
+            ):
+                raise ValueError("FLUX.2 result conditioning binding mismatch")
