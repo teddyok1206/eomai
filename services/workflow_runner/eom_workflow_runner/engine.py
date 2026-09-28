@@ -161,6 +161,30 @@ _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES = frozenset(
         ErrorCode.WORKER_RESULT_INVALID.value,
     }
 )
+_NON_RETRYABLE_PRECOMMIT_DETAIL_CODES = frozenset(
+    {
+        "VISUAL_REFERENCE_DISCOVERY_INVALID",
+        "VISUAL_REFERENCE_HANDOFF_INVALID",
+        "VISUAL_REFERENCE_INPUT_INVALID",
+        "VISUAL_REFERENCE_LICENSE_REJECTED",
+        "VISUAL_REFERENCE_OUTPUT_INVALID",
+        "VISUAL_REFERENCE_ROUTE_UNDEPLOYED",
+        "VISUAL_REFERENCE_SOURCE_REJECTED",
+    }
+)
+
+
+def _is_retryable_precommit_agent_failure(
+    *,
+    error_code: str | None,
+    error_detail: str | None,
+) -> bool:
+    """Keep infrastructure retries while terminating deterministic contract failures."""
+
+    return (
+        error_code in _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES
+        and error_detail not in _NON_RETRYABLE_PRECOMMIT_DETAIL_CODES
+    )
 
 
 def _is_content_team_image_result_schema(result_schema: str) -> bool:
@@ -1454,8 +1478,7 @@ class WorkflowRunner:
 
         error_code = execution.error_code
         if (
-            error_code not in _RETRYABLE_PRECOMMIT_AGENT_ERROR_CODES
-            or step.attempt >= compiled.definition.limits.max_step_attempts
+            step.attempt >= compiled.definition.limits.max_step_attempts
             or step.state != StepState.RUNNING.value
             or step.platform_job_id != execution.job_id
         ):
@@ -1467,6 +1490,10 @@ class WorkflowRunner:
             job is None
             or job.status != "FAILED"
             or job.error_code != error_code
+            or not _is_retryable_precommit_agent_failure(
+                error_code=error_code,
+                error_detail=job.error_message,
+            )
             or job.logical_artifact_id != execution.logical_artifact_id
             or job.revision_id != execution.revision_id
             or session.scalar(

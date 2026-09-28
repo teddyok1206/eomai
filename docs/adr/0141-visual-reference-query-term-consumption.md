@@ -38,6 +38,11 @@ downloaded bytes, normalization, schema, pointers, and hashes all validate. Byte
 uses the same command and publication identities. Missing or rejected candidates fail closed; there
 is no fallback to arbitrary web search, another license class, or unpinned bytes.
 
+The runner retries transient source and route unavailability. Deterministic input, discovery,
+handoff, license, output, undeployed-route, and source-rejection detail codes terminate the current
+step rather than consume the remaining attempts with an identical immutable request. Failed jobs
+and workflow history remain append-only evidence; no row is reinterpreted as successful.
+
 ## Simpler alternative rejected
 
 Searching the full descriptive subject was simpler but included direction, background, and isolation

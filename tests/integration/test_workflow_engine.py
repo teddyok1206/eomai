@@ -584,11 +584,13 @@ class FailedRoleExecutor:
         sessions: sessionmaker[Session],
         *,
         error_code: str = "WORKER_EXEC_FAILED",
+        error_detail: str | None = None,
         commit_artifact_evidence: bool = False,
         cross_commit_boundary: bool = False,
     ) -> None:
         self.sessions = sessions
         self.error_code = error_code
+        self.error_detail = error_detail
         self.commit_artifact_evidence = commit_artifact_evidence
         self.cross_commit_boundary = cross_commit_boundary
 
@@ -641,6 +643,7 @@ class FailedRoleExecutor:
                 ):
                     transition_job(session, job.job_id, target, event)
             job.error_code = self.error_code
+            job.error_message = self.error_detail
             transition_job(session, job.job_id, JobState.FAILED, "JOB_FAILED")
             if self.commit_artifact_evidence:
                 content_hash = content_sha256({"job_id": job.job_id, "status": "ambiguous"})
@@ -1961,6 +1964,45 @@ def test_retryable_precommit_failure_preserves_history_then_succeeds(
             ]
             assert len(retry_events) == 1
             assert retry_events[0].payload["error_code"] == "WORKER_RESULT_INVALID"
+    finally:
+        _close(resources)
+
+
+def test_deterministic_visual_reference_failure_is_terminal_on_first_attempt(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-integration-visual-reference-terminal",
+    )
+    runner.executor = FailedRoleExecutor(
+        sessions,
+        error_code="WORKER_UNAVAILABLE",
+        error_detail="VISUAL_REFERENCE_SOURCE_REJECTED",
+    )
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            authoring = list(
+                session.scalars(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == "authoring",
+                    )
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            assert workflow.failure_code == "WORKER_UNAVAILABLE"
+            assert len(authoring) == 1
+            assert authoring[0].state == StepState.FAILED.value
+            assert authoring[0].superseded_by_step_run_id is None
+            assert not any(
+                event.event_type == "STEP_RETRY_SCHEDULED"
+                for event in list_workflow_events(session, workflow_id)
+            )
     finally:
         _close(resources)
 
