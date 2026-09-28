@@ -131,6 +131,12 @@ SCHEMA_FILES = {
     "science-visual-campaign-crop-set-v2": (
         "local-image-science-visual-campaign-crop-set-v2.schema.json"
     ),
+    "science-object-line-art-suitability-review": (
+        "local-image-science-object-line-art-suitability-review-v1.schema.json"
+    ),
+    "science-object-line-art-crop-set": (
+        "local-image-science-object-line-art-crop-set-v1.schema.json"
+    ),
     "science-lora-micro-probe-plan": ("local-image-science-lora-micro-probe-plan-v1.schema.json"),
     "science-lora-micro-probe-command": (
         "local-image-science-lora-micro-probe-command-v1.schema.json"
@@ -373,6 +379,12 @@ SCHEMA_SHA256 = {
     ),
     "science-visual-crop-set-v2": (
         "sha256:2b4f1865270c1c50c33ed6aedb56f239679accccf15ce49b9575418715bc12b7"
+    ),
+    "science-object-line-art-suitability-review": (
+        "sha256:0f92daa6ab3441e8e8af765e0422491a4bbd1a3377967feea8edb86911313f0d"
+    ),
+    "science-object-line-art-crop-set": (
+        "sha256:5982a6486aa98fae1dd3a56fd2e116f1a025ee20fb8d3fbd4280dcea407c8013"
     ),
     "science-raster-suitability-review": (
         "sha256:b386137ac8f1188aa01b12a075f8e1ba3696621d299cbf599bce8760f92b3713"

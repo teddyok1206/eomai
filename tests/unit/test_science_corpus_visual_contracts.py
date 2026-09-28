@@ -26,6 +26,8 @@ from eom_image_contracts import (
     LocalImageScienceLoraMicroProbeCommand,
     LocalImageScienceLoraMicroProbePlan,
     LocalImageScienceLoraMicroProbeWorkerResult,
+    LocalImageScienceObjectLineArtCropSet,
+    LocalImageScienceObjectLineArtSuitabilityReview,
     LocalImageScienceVisualCampaignCropSet,
     LocalImageScienceVisualCampaignPatternInventory,
     LocalImageScienceVisualCampaignRasterRefinementPlan,
@@ -48,6 +50,8 @@ from eom_image_contracts import (
     validate_science_micro_evaluation_result,
     validate_science_micro_probe_plan_sources,
     validate_science_micro_probe_worker_result,
+    validate_science_object_line_art_crop_set,
+    validate_science_object_line_art_suitability_review,
     validate_science_visual_authorization_plan,
     validate_science_visual_campaign_crop_set,
     validate_science_visual_campaign_pattern_inventory,
@@ -1229,6 +1233,298 @@ def _campaign_raster_review_value() -> tuple[dict[str, object], dict[str, object
         "imgsciviscampaignrasterreview_" + content_sha256(body).removeprefix("sha256:")[:32]
     )
     return inventory, {**body, "review_sha256": content_sha256(body)}
+
+
+def _object_line_art_values() -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    inventory, plans, results, plan_pointers, result_pointers = _campaign_inventory_value()
+    sources = {
+        str(source["document_id"]): source for plan in plans for source in plan["selected_sources"]
+    }
+    candidates = {
+        str(candidate["candidate_id"]): candidate
+        for result in results
+        for candidate in result["visual_candidates"]
+    }
+    selectable: dict[str, list[str]] = {"TRAIN": [], "VALIDATION": [], "HOLDOUT": []}
+    for candidate_id, candidate in sorted(candidates.items()):
+        if candidate["authority_class"] != "AUTHORITATIVE_DETERMINISTIC_GEOMETRY":
+            source = sources[str(candidate["document_id"])]
+            selectable[str(source["partition"])].append(candidate_id)
+    eligible_ids = set(
+        selectable["TRAIN"][:16] + selectable["VALIDATION"][:4] + selectable["HOLDOUT"][:4]
+    )
+    assert len(eligible_ids) == 24
+
+    entries: list[dict[str, object]] = []
+    for candidate_id, candidate in sorted(candidates.items()):
+        if candidate_id in eligible_ids:
+            caption = f"clean black and white science exam object {len(entries) + 1}"
+            entries.append(
+                {
+                    "candidate_id": candidate_id,
+                    "decision": "OBJECT_LINE_ART_ELIGIBLE",
+                    "reasons": [],
+                    "object_family": "LAB_EQUIPMENT",
+                    "crop_bounding_box": {
+                        "left": 0,
+                        "top": 0,
+                        "right": 96,
+                        "bottom": 96,
+                    },
+                    "caption_en": caption,
+                    "caption_sha256": text_sha256(caption),
+                }
+            )
+        elif candidate["authority_class"] == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY":
+            entries.append(
+                {
+                    "candidate_id": candidate_id,
+                    "decision": "DETERMINISTIC_RENDERER_ONLY",
+                    "reasons": ["AUTHORITATIVE_GEOMETRY"],
+                    "object_family": None,
+                    "crop_bounding_box": None,
+                    "caption_en": None,
+                    "caption_sha256": None,
+                }
+            )
+        else:
+            entries.append(
+                {
+                    "candidate_id": candidate_id,
+                    "decision": "EXCLUDED",
+                    "reasons": ["DUPLICATE_CONTENT"],
+                    "object_family": None,
+                    "crop_bounding_box": None,
+                    "caption_en": None,
+                    "caption_sha256": None,
+                }
+            )
+    counts = Counter(str(value["decision"]) for value in entries)
+    inventory_sha256 = content_sha256(inventory)
+    review_body: dict[str, object] = {
+        "schema_version": "local-image-science-object-line-art-suitability-review/1.0",
+        "campaign_id": inventory["campaign_id"],
+        "pattern_inventory": _pointer(
+            "e",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+            schema_ref=(
+                "eom://schemas/image-provider/"
+                "local-image-science-visual-campaign-pattern-inventory/1.0"
+            ),
+            sha256=inventory_sha256,
+        ),
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "entries": entries,
+        "decision_counts": {
+            "DETERMINISTIC_RENDERER_ONLY": counts["DETERMINISTIC_RENDERER_ONLY"],
+            "EXCLUDED": counts["EXCLUDED"],
+            "OBJECT_LINE_ART_ELIGIBLE": counts["OBJECT_LINE_ART_ELIGIBLE"],
+            "RASTER_STYLE_ONLY": counts["RASTER_STYLE_ONLY"],
+        },
+        "created_at": "2026-09-28T12:00:00Z",
+        "created_by": "reviewer_user",
+    }
+    review_body["review_id"] = (
+        "imgscivislineartreview_" + content_sha256(review_body).removeprefix("sha256:")[:32]
+    )
+    review = {**review_body, "review_sha256": content_sha256(review_body)}
+
+    review_pointer = _pointer(
+        "f",
+        member_path="manifests/science-object-line-art-suitability-review.json",
+        schema_ref=(
+            "eom://schemas/image-provider/"
+            "local-image-science-object-line-art-suitability-review/1.0"
+        ),
+        sha256=content_sha256(review),
+    )
+    entries_by_id = {str(value["candidate_id"]): value for value in entries}
+    members: list[dict[str, object]] = []
+    for index, candidate_id in enumerate(sorted(eligible_ids)):
+        candidate = candidates[candidate_id]
+        source = sources[str(candidate["document_id"])]
+        entry = entries_by_id[candidate_id]
+        member: dict[str, object] = {
+            "parent_candidate_id": candidate_id,
+            "parent_candidate_sha256": candidate["sha256"],
+            "crop_bounding_box": entry["crop_bounding_box"],
+            "document_id": candidate["document_id"],
+            "physical_page": candidate["physical_page"],
+            "exam_group_sha256": source["exam_group_sha256"],
+            "partition": source["partition"],
+            "object_family": entry["object_family"],
+            "media_type": "image/png",
+            "width_px": 96,
+            "height_px": 96,
+            "size_bytes": 1024 + index,
+            "sha256": content_sha256({"line_art_fixture": candidate_id}),
+            "caption_en": entry["caption_en"],
+            "caption_sha256": entry["caption_sha256"],
+            "perceptual_hash": f"{index + 1:016x}",
+        }
+        member["sample_id"] = (
+            "imgscivislineartcrop_" + content_sha256(member).removeprefix("sha256:")[:32]
+        )
+        member["member_path"] = f"crops/{member['sample_id']}.png"
+        members.append(member)
+    members.sort(key=lambda value: str(value["sample_id"]))
+    crop_body: dict[str, object] = {
+        "schema_version": "local-image-science-object-line-art-crop-set/1.0",
+        "campaign_id": inventory["campaign_id"],
+        "pattern_inventory": review["pattern_inventory"],
+        "pattern_inventory_semantic_sha256": inventory["inventory_sha256"],
+        "line_art_suitability_review": review_pointer,
+        "line_art_suitability_review_sha256": review["review_sha256"],
+        "training_authorization": plans[0]["training_authorization"],
+        "member_policy": {
+            "partition_policy": "PINNED_SOURCE_GROUP_V1",
+            "max_members_per_document": 3,
+            "max_members_per_exam_group": 4,
+        },
+        "members": members,
+        "created_at": "2026-09-28T12:01:00Z",
+        "created_by": "orchestrator_line_art_crop_set",
+    }
+    crop_body["crop_set_id"] = (
+        "imgscivislineartcropset_" + content_sha256(crop_body).removeprefix("sha256:")[:32]
+    )
+    crop_set = {**crop_body, "crop_set_sha256": content_sha256(crop_body)}
+    return plans, results, plan_pointers, result_pointers, inventory, review, crop_set
+
+
+def test_object_line_art_review_and_crop_set_bind_exact_campaign_sources() -> None:
+    (
+        plan_values,
+        result_values,
+        plan_pointer_values,
+        result_pointer_values,
+        inventory_value,
+        review_value,
+        crop_set_value,
+    ) = _object_line_art_values()
+    validate_contract("science-object-line-art-suitability-review", review_value)
+    validate_contract("science-object-line-art-crop-set", crop_set_value)
+    plans = tuple(LocalImageScienceCorpusVisualPilotPlanV3.model_validate(v) for v in plan_values)
+    results = tuple(
+        LocalImageScienceCorpusVisualPilotResult.model_validate(v) for v in result_values
+    )
+    plan_pointers = tuple(
+        ImageEvaluationArtifactMember.model_validate(v) for v in plan_pointer_values
+    )
+    result_pointers = tuple(
+        ImageEvaluationArtifactMember.model_validate(v) for v in result_pointer_values
+    )
+    inventory = LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value)
+    review = LocalImageScienceObjectLineArtSuitabilityReview.model_validate(review_value)
+    crop_set = LocalImageScienceObjectLineArtCropSet.model_validate(crop_set_value)
+
+    validate_science_object_line_art_suitability_review(inventory, review)
+    validate_science_object_line_art_crop_set(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+        review=review,
+        crop_set=crop_set,
+    )
+
+
+def test_object_line_art_review_rejects_incomplete_campaign_coverage() -> None:
+    *_, inventory_value, review_value, _ = _object_line_art_values()
+    entries = review_value["entries"]
+    assert isinstance(entries, list)
+    removed = entries.pop()
+    counts = review_value["decision_counts"]
+    assert isinstance(counts, dict)
+    counts[str(removed["decision"])] = int(counts[str(removed["decision"])]) - 1
+    review_body = {
+        key: value
+        for key, value in review_value.items()
+        if key not in {"review_id", "review_sha256"}
+    }
+    review_value["review_id"] = (
+        "imgscivislineartreview_" + content_sha256(review_body).removeprefix("sha256:")[:32]
+    )
+    review_value["review_sha256"] = content_sha256(
+        {key: value for key, value in review_value.items() if key != "review_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="does not cover every campaign candidate"):
+        validate_science_object_line_art_suitability_review(
+            LocalImageScienceVisualCampaignPatternInventory.model_validate(inventory_value),
+            LocalImageScienceObjectLineArtSuitabilityReview.model_validate(review_value),
+        )
+
+
+def test_object_line_art_crop_set_rejects_partition_drift() -> None:
+    values = _object_line_art_values()
+    plan_values, result_values, plan_pointer_values, result_pointer_values = values[:4]
+    inventory_value, review_value, crop_set_value = values[4:]
+    drifted = copy.deepcopy(crop_set_value)
+    members = drifted["members"]
+    assert isinstance(members, list)
+    first_index = next(
+        index for index, value in enumerate(members) if value["partition"] == "TRAIN"
+    )
+    second_index = next(
+        index for index, value in enumerate(members) if value["partition"] == "VALIDATION"
+    )
+    members[first_index]["partition"], members[second_index]["partition"] = (
+        members[second_index]["partition"],
+        members[first_index]["partition"],
+    )
+    for index in (first_index, second_index):
+        member_body = {
+            key: value
+            for key, value in members[index].items()
+            if key not in {"sample_id", "member_path"}
+        }
+        members[index]["sample_id"] = (
+            "imgscivislineartcrop_" + content_sha256(member_body).removeprefix("sha256:")[:32]
+        )
+        members[index]["member_path"] = f"crops/{members[index]['sample_id']}.png"
+    members.sort(key=lambda value: str(value["sample_id"]))
+    crop_body = {
+        key: value
+        for key, value in drifted.items()
+        if key not in {"crop_set_id", "crop_set_sha256"}
+    }
+    drifted["crop_set_id"] = (
+        "imgscivislineartcropset_" + content_sha256(crop_body).removeprefix("sha256:")[:32]
+    )
+    drifted["crop_set_sha256"] = content_sha256(
+        {key: value for key, value in drifted.items() if key != "crop_set_sha256"}
+    )
+
+    with pytest.raises(ValueError, match="differs from its reviewed source"):
+        validate_science_object_line_art_crop_set(
+            plans=tuple(
+                LocalImageScienceCorpusVisualPilotPlanV3.model_validate(v) for v in plan_values
+            ),
+            plan_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(v) for v in plan_pointer_values
+            ),
+            results=tuple(
+                LocalImageScienceCorpusVisualPilotResult.model_validate(v) for v in result_values
+            ),
+            result_pointers=tuple(
+                ImageEvaluationArtifactMember.model_validate(v) for v in result_pointer_values
+            ),
+            inventory=LocalImageScienceVisualCampaignPatternInventory.model_validate(
+                inventory_value
+            ),
+            review=LocalImageScienceObjectLineArtSuitabilityReview.model_validate(review_value),
+            crop_set=LocalImageScienceObjectLineArtCropSet.model_validate(drifted),
+        )
 
 
 def test_campaign_raster_review_covers_broad_population() -> None:

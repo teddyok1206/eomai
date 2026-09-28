@@ -80,6 +80,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-raster-refinement-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-campaign-raster-refinement-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-campaign-crop-set-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-object-line-art-suitability-review-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-object-line-art-crop-set-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-probe-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-lora-micro-adapter-manifest-v1.schema.json",

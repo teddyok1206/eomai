@@ -1,0 +1,267 @@
+{
+  "$defs": {
+    "artifact_member": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 512,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "media_type",
+        "schema_ref",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "bounding_box": {
+      "additionalProperties": false,
+      "properties": {
+        "bottom": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "left": {
+          "maximum": 9999,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "right": {
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "top": {
+          "maximum": 9999,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bottom",
+        "left",
+        "right",
+        "top"
+      ],
+      "type": "object"
+    },
+    "entry": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "caption_en": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 3,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "caption_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "crop_bounding_box": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/bounding_box"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision": {
+          "enum": [
+            "DETERMINISTIC_RENDERER_ONLY",
+            "EXCLUDED",
+            "OBJECT_LINE_ART_ELIGIBLE",
+            "RASTER_STYLE_ONLY"
+          ]
+        },
+        "object_family": {
+          "anyOf": [
+            {
+              "enum": [
+                "ANIMAL",
+                "HUMAN",
+                "LAB_EQUIPMENT",
+                "NATURAL_SPECIMEN",
+                "PLANT",
+                "SAFETY_EQUIPMENT",
+                "VEHICLE",
+                "OTHER_OBJECT"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasons": {
+          "items": {
+            "enum": [
+              "ANSWER_BEARING_CONTENT",
+              "AUTHORITATIVE_GEOMETRY",
+              "BACKGROUND_CLUTTER",
+              "DUPLICATE_CONTENT",
+              "INSUFFICIENT_IMAGE_CONTENT",
+              "NON_OBJECT_CONTENT",
+              "RASTER_TEXTURE_TARGET",
+              "REDACTION_OR_MASK",
+              "TEXT_OR_LABEL"
+            ]
+          },
+          "maxItems": 9,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "candidate_id",
+        "caption_en",
+        "caption_sha256",
+        "crop_bounding_box",
+        "decision",
+        "object_family",
+        "reasons"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-object-line-art-suitability-review/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "campaign_id": {
+      "pattern": "^imgsciviscampaign_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*Z$",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "decision_counts": {
+      "additionalProperties": false,
+      "properties": {
+        "DETERMINISTIC_RENDERER_ONLY": {
+          "maximum": 2048,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "EXCLUDED": {
+          "maximum": 2048,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "OBJECT_LINE_ART_ELIGIBLE": {
+          "maximum": 2048,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "RASTER_STYLE_ONLY": {
+          "maximum": 2048,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "DETERMINISTIC_RENDERER_ONLY",
+        "EXCLUDED",
+        "OBJECT_LINE_ART_ELIGIBLE",
+        "RASTER_STYLE_ONLY"
+      ],
+      "type": "object"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "maxItems": 2048,
+      "minItems": 1,
+      "type": "array"
+    },
+    "pattern_inventory": {
+      "$ref": "#/$defs/artifact_member"
+    },
+    "pattern_inventory_semantic_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "review_id": {
+      "pattern": "^imgscivislineartreview_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "review_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-science-object-line-art-suitability-review/1.0"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "created_at",
+    "created_by",
+    "decision_counts",
+    "entries",
+    "pattern_inventory",
+    "pattern_inventory_semantic_sha256",
+    "review_id",
+    "review_sha256",
+    "schema_version"
+  ],
+  "title": "LocalImageScienceObjectLineArtSuitabilityReview",
+  "type": "object"
+}

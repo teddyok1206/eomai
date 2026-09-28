@@ -83,6 +83,12 @@ CORPUS_CAMPAIGN_CROP_SET_SCHEMA_REF = (
 CORPUS_CAMPAIGN_CROP_SET_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/1.1"
 )
+CORPUS_OBJECT_LINE_ART_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-object-line-art-suitability-review/1.0"
+)
+CORPUS_OBJECT_LINE_ART_CROP_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-object-line-art-crop-set/1.0"
+)
 
 ScienceSubjectFamily = Literal[
     "CHEMISTRY",
@@ -1376,6 +1382,275 @@ ScienceVisualRasterSuitabilityReason = Literal[
     "REDACTION_OR_MASK",
     "TEXT_OR_LABEL",
 ]
+
+ScienceObjectLineArtDecision = Literal[
+    "DETERMINISTIC_RENDERER_ONLY",
+    "EXCLUDED",
+    "OBJECT_LINE_ART_ELIGIBLE",
+    "RASTER_STYLE_ONLY",
+]
+ScienceObjectLineArtReason = Literal[
+    "ANSWER_BEARING_CONTENT",
+    "AUTHORITATIVE_GEOMETRY",
+    "BACKGROUND_CLUTTER",
+    "DUPLICATE_CONTENT",
+    "INSUFFICIENT_IMAGE_CONTENT",
+    "NON_OBJECT_CONTENT",
+    "RASTER_TEXTURE_TARGET",
+    "REDACTION_OR_MASK",
+    "TEXT_OR_LABEL",
+]
+ScienceObjectLineArtFamily = Literal[
+    "ANIMAL",
+    "HUMAN",
+    "LAB_EQUIPMENT",
+    "NATURAL_SPECIMEN",
+    "OTHER_OBJECT",
+    "PLANT",
+    "SAFETY_EQUIPMENT",
+    "VEHICLE",
+]
+
+
+class ScienceObjectLineArtSuitabilityEntry(FrozenModel):
+    """One independent object-line-art decision over a campaign candidate."""
+
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    decision: ScienceObjectLineArtDecision
+    reasons: tuple[ScienceObjectLineArtReason, ...] = Field(max_length=9)
+    object_family: ScienceObjectLineArtFamily | None
+    crop_bounding_box: ImageEvaluationBoundingBox | None
+    caption_en: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256 | None
+
+    @model_validator(mode="after")
+    def decision_is_coherent(self) -> ScienceObjectLineArtSuitabilityEntry:
+        if self.reasons != tuple(sorted(set(self.reasons))):
+            raise ValueError("object-line-art reasons must be sorted and unique")
+        eligible = self.decision == "OBJECT_LINE_ART_ELIGIBLE"
+        if eligible:
+            if (
+                self.reasons
+                or self.object_family is None
+                or self.crop_bounding_box is None
+                or self.caption_en is None
+                or self.caption_sha256 != text_sha256(self.caption_en)
+                or self.crop_bounding_box.right - self.crop_bounding_box.left < 32
+                or self.crop_bounding_box.bottom - self.crop_bounding_box.top < 32
+            ):
+                raise ValueError("eligible object-line-art entry lacks an exact crop or caption")
+        elif (
+            not self.reasons
+            or self.object_family is not None
+            or self.crop_bounding_box is not None
+            or self.caption_en is not None
+            or self.caption_sha256 is not None
+        ):
+            raise ValueError("ineligible object-line-art entry carries training material")
+        if self.decision == "RASTER_STYLE_ONLY" and "RASTER_TEXTURE_TARGET" not in self.reasons:
+            raise ValueError("raster-only decision requires its explicit reason")
+        if (
+            self.decision == "DETERMINISTIC_RENDERER_ONLY"
+            and "AUTHORITATIVE_GEOMETRY" not in self.reasons
+        ):
+            raise ValueError("deterministic decision requires authoritative geometry")
+        return self
+
+
+class ScienceObjectLineArtDecisionCounts(FrozenModel):
+    DETERMINISTIC_RENDERER_ONLY: int = Field(ge=0, le=2048)
+    EXCLUDED: int = Field(ge=0, le=2048)
+    OBJECT_LINE_ART_ELIGIBLE: int = Field(ge=0, le=2048)
+    RASTER_STYLE_ONLY: int = Field(ge=0, le=2048)
+
+
+class LocalImageScienceObjectLineArtSuitabilityReview(FrozenModel):
+    """Complete immutable second-axis review of one campaign inventory."""
+
+    schema_version: Literal["local-image-science-object-line-art-suitability-review/1.0"]
+    review_id: str = Field(pattern=r"^imgscivislineartreview_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    entries: tuple[ScienceObjectLineArtSuitabilityEntry, ...] = Field(
+        min_length=1,
+        max_length=2048,
+    )
+    decision_counts: ScienceObjectLineArtDecisionCounts
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    review_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_review_is_coherent(self) -> LocalImageScienceObjectLineArtSuitabilityReview:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+        )
+        candidate_ids = tuple(value.candidate_id for value in self.entries)
+        if candidate_ids != tuple(sorted(set(candidate_ids))):
+            raise ValueError("object-line-art review entries must be uniquely sorted")
+        actual = Counter(value.decision for value in self.entries)
+        if self.decision_counts.model_dump() != {
+            "DETERMINISTIC_RENDERER_ONLY": actual["DETERMINISTIC_RENDERER_ONLY"],
+            "EXCLUDED": actual["EXCLUDED"],
+            "OBJECT_LINE_ART_ELIGIBLE": actual["OBJECT_LINE_ART_ELIGIBLE"],
+            "RASTER_STYLE_ONLY": actual["RASTER_STYLE_ONLY"],
+        }:
+            raise ValueError("object-line-art review counts differ from entries")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"review_id", "review_sha256"})
+        ).removeprefix("sha256:")
+        if self.review_id != "imgscivislineartreview_" + identity[:32]:
+            raise ValueError("object-line-art review ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        if self.review_sha256 != expected:
+            raise ValueError("object-line-art review hash mismatch")
+        return self
+
+
+class ScienceObjectLineArtCropMember(FrozenModel):
+    """One exact literal crop selected by the object-line-art review."""
+
+    sample_id: str = Field(pattern=r"^imgscivislineartcrop_[0-9a-f]{32}$")
+    parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    parent_candidate_sha256: Sha256
+    crop_bounding_box: ImageEvaluationBoundingBox
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    physical_page: int = Field(ge=1, le=512)
+    exam_group_sha256: Sha256
+    partition: ScienceVisualPartition
+    object_family: ScienceObjectLineArtFamily
+    member_path: str = Field(pattern=r"^crops/imgscivislineartcrop_[0-9a-f]{32}\.png$")
+    media_type: Literal["image/png"]
+    width_px: int = Field(ge=32, le=10_000)
+    height_px: int = Field(ge=32, le=10_000)
+    size_bytes: int = Field(ge=64, le=64 * 1024 * 1024)
+    sha256: Sha256
+    caption_en: str = Field(
+        min_length=3,
+        max_length=240,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_:-]{2,239}$",
+    )
+    caption_sha256: Sha256
+    perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+    @model_validator(mode="after")
+    def immutable_member_is_coherent(self) -> ScienceObjectLineArtCropMember:
+        if self.member_path != f"crops/{self.sample_id}.png":
+            raise ValueError("object-line-art crop path differs from sample identity")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("object-line-art crop caption hash mismatch")
+        if (
+            self.crop_bounding_box.right - self.crop_bounding_box.left != self.width_px
+            or self.crop_bounding_box.bottom - self.crop_bounding_box.top != self.height_px
+        ):
+            raise ValueError("object-line-art crop dimensions differ from its source box")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"sample_id", "member_path"})
+        ).removeprefix("sha256:")
+        if self.sample_id != "imgscivislineartcrop_" + identity[:32]:
+            raise ValueError("object-line-art crop ID does not bind its content")
+        return self
+
+
+class LocalImageScienceObjectLineArtMemberPolicy(FrozenModel):
+    partition_policy: Literal["PINNED_SOURCE_GROUP_V1"]
+    max_members_per_document: Literal[3]
+    max_members_per_exam_group: Literal[4]
+
+
+class LocalImageScienceObjectLineArtCropSet(FrozenModel):
+    """A 24--96 member object-line-art dataset with pinned source partitions."""
+
+    schema_version: Literal["local-image-science-object-line-art-crop-set/1.0"]
+    crop_set_id: str = Field(pattern=r"^imgscivislineartcropset_[0-9a-f]{32}$")
+    campaign_id: str = Field(pattern=r"^imgsciviscampaign_[0-9a-f]{32}$")
+    pattern_inventory: ImageEvaluationArtifactMember
+    pattern_inventory_semantic_sha256: Sha256
+    line_art_suitability_review: ImageEvaluationArtifactMember
+    line_art_suitability_review_sha256: Sha256
+    training_authorization: ImageEvaluationArtifactMember
+    member_policy: LocalImageScienceObjectLineArtMemberPolicy
+    members: tuple[ScienceObjectLineArtCropMember, ...] = Field(min_length=24, max_length=96)
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    crop_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_creation(cls, value: datetime) -> datetime:
+        return _require_utc(value)
+
+    @model_validator(mode="after")
+    def immutable_crop_set_is_coherent(self) -> LocalImageScienceObjectLineArtCropSet:
+        _require_pointer(
+            self.pattern_inventory,
+            schema_ref=CORPUS_CAMPAIGN_PATTERN_INVENTORY_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-visual-campaign-pattern-inventory.json",
+        )
+        _require_pointer(
+            self.line_art_suitability_review,
+            schema_ref=CORPUS_OBJECT_LINE_ART_REVIEW_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-object-line-art-suitability-review.json",
+        )
+        _require_pointer(
+            self.training_authorization,
+            schema_ref=CORPUS_AUTHORIZATION_SCHEMA_REF,
+            media_type="application/json",
+            member_path="manifests/science-corpus-training-authorization.json",
+        )
+        sample_ids = tuple(value.sample_id for value in self.members)
+        if sample_ids != tuple(sorted(set(sample_ids))):
+            raise ValueError("object-line-art crop members must be uniquely sorted")
+        for label, values in (
+            ("parent candidates", (value.parent_candidate_id for value in self.members)),
+            ("crop hashes", (value.sha256 for value in self.members)),
+            ("perceptual hashes", (value.perceptual_hash for value in self.members)),
+        ):
+            sequence = tuple(values)
+            if len(sequence) != len(set(sequence)):
+                raise ValueError(f"object-line-art crop set repeats {label}")
+        if max(Counter(value.document_id for value in self.members).values(), default=0) > 3:
+            raise ValueError("object-line-art crop set exceeds its document member bound")
+        group_counts = Counter(value.exam_group_sha256 for value in self.members)
+        if max(group_counts.values(), default=0) > 4:
+            raise ValueError("object-line-art crop set exceeds its exam-group member bound")
+        group_partitions: dict[Sha256, set[ScienceVisualPartition]] = {}
+        for member in self.members:
+            group_partitions.setdefault(member.exam_group_sha256, set()).add(member.partition)
+        if any(len(partitions) != 1 for partitions in group_partitions.values()):
+            raise ValueError("object-line-art crop set crosses an exam-group partition")
+        partition_counts = Counter(value.partition for value in self.members)
+        if (
+            partition_counts["TRAIN"] < 16
+            or partition_counts["VALIDATION"] < 4
+            or partition_counts["HOLDOUT"] < 4
+        ):
+            raise ValueError("object-line-art crop partitions are too small")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_set_id", "crop_set_sha256"})
+        ).removeprefix("sha256:")
+        if self.crop_set_id != "imgscivislineartcropset_" + identity[:32]:
+            raise ValueError("object-line-art crop-set ID does not bind its content")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
+        if self.crop_set_sha256 != expected:
+            raise ValueError("object-line-art crop-set hash mismatch")
+        return self
 
 
 class ScienceVisualRasterSuitabilityEntry(FrozenModel):
@@ -2770,6 +3045,98 @@ def validate_science_visual_campaign_raster_suitability_review(
         raise ValueError(
             "science campaign raster-suitability review does not cover every broad candidate"
         )
+
+
+def validate_science_object_line_art_suitability_review(
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    review: LocalImageScienceObjectLineArtSuitabilityReview,
+) -> None:
+    """Bind the independent line-art axis to every exact campaign candidate."""
+
+    if (
+        review.campaign_id != inventory.campaign_id
+        or review.pattern_inventory.sha256 != content_sha256(inventory.model_dump(mode="json"))
+        or review.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+    ):
+        raise ValueError("object-line-art review source binding differs")
+    inventory_ids = {value.candidate_id for value in inventory.reviews}
+    review_ids = {value.candidate_id for value in review.entries}
+    if review_ids != inventory_ids:
+        raise ValueError("object-line-art review does not cover every campaign candidate")
+
+
+def validate_science_object_line_art_crop_set(
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    review: LocalImageScienceObjectLineArtSuitabilityReview,
+    crop_set: LocalImageScienceObjectLineArtCropSet,
+) -> None:
+    """Resolve each literal line-art crop to its candidate and pinned partition.
+
+    Dictionaries keep candidate, source, and review lookup O(C + M), where C is
+    the campaign candidate count and M is the selected member count.
+    """
+
+    validate_science_object_line_art_suitability_review(inventory, review)
+    candidates = _resolved_campaign_candidates(
+        plans=plans,
+        plan_pointers=plan_pointers,
+        results=results,
+        result_pointers=result_pointers,
+        inventory=inventory,
+    )
+    authorizations = {value.training_authorization for value in plans}
+    if (
+        crop_set.campaign_id != inventory.campaign_id
+        or crop_set.pattern_inventory != review.pattern_inventory
+        or crop_set.pattern_inventory_semantic_sha256 != inventory.inventory_sha256
+        or crop_set.line_art_suitability_review.sha256
+        != content_sha256(review.model_dump(mode="json"))
+        or crop_set.line_art_suitability_review_sha256 != review.review_sha256
+        or len(authorizations) != 1
+        or crop_set.training_authorization not in authorizations
+    ):
+        raise ValueError("object-line-art crop-set source binding differs")
+
+    entries = {value.candidate_id: value for value in review.entries}
+    eligible_ids = {
+        value.candidate_id
+        for value in review.entries
+        if value.decision == "OBJECT_LINE_ART_ELIGIBLE"
+    }
+    member_ids = {value.parent_candidate_id for value in crop_set.members}
+    if member_ids != eligible_ids:
+        raise ValueError("object-line-art crop set does not materialize every eligible candidate")
+
+    for member in crop_set.members:
+        resolved = candidates.get(member.parent_candidate_id)
+        entry = entries.get(member.parent_candidate_id)
+        if resolved is None or entry is None:
+            raise ValueError("object-line-art crop member parent is unresolved")
+        candidate, source = resolved
+        candidate_width = candidate.bounding_box.right - candidate.bounding_box.left
+        candidate_height = candidate.bounding_box.bottom - candidate.bounding_box.top
+        if (
+            entry.decision != "OBJECT_LINE_ART_ELIGIBLE"
+            or candidate.authority_class == "AUTHORITATIVE_DETERMINISTIC_GEOMETRY"
+            or candidate.representation_kind in {"PLOT", "TABLE"}
+            or member.parent_candidate_sha256 != candidate.sha256
+            or member.crop_bounding_box != entry.crop_bounding_box
+            or member.crop_bounding_box.right > candidate_width
+            or member.crop_bounding_box.bottom > candidate_height
+            or member.document_id != candidate.document_id
+            or member.physical_page != candidate.physical_page
+            or member.exam_group_sha256 != source.exam_group_sha256
+            or member.partition != source.partition
+            or member.object_family != entry.object_family
+            or member.caption_en != entry.caption_en
+            or member.caption_sha256 != entry.caption_sha256
+        ):
+            raise ValueError("object-line-art crop member differs from its reviewed source")
 
 
 def validate_science_visual_authorization_plan(
