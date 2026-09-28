@@ -18,6 +18,7 @@ from eom_image_contracts import (
 )
 from eom_image_provider.reference_acquisition import (
     AcquiredReference,
+    VisualReferenceAcquisitionError,
     load_acquisition_inputs,
     load_discovery_command,
     run_visual_reference_acquisition,
@@ -167,6 +168,8 @@ class _Client:
 
 def _coordinator(
     tmp_path: Path,
+    *,
+    client: object | None = None,
 ) -> tuple[VisualReferenceAcquisitionCoordinator, _Publisher, list[str]]:
     staging = tmp_path / "staging"
     staging.mkdir(mode=0o700)
@@ -175,6 +178,7 @@ def _coordinator(
     root.chmod(0o3770)
     publisher = _Publisher()
     starts: list[str] = []
+    resolved_client = client or _Client()
 
     def run(unit_name: str, timeout: int) -> None:
         starts.append(unit_name)
@@ -182,26 +186,26 @@ def _coordinator(
         command_id = unit_name.split("@", maxsplit=1)[1].removesuffix(".service")
         workspace = root / command_id
         if unit_name.startswith("eom-image-reference-discoverer@"):
-            command = load_discovery_command(
+            discovery_command = load_discovery_command(
                 command_path=workspace / "command.json",
                 workspace=workspace,
             )
             run_visual_reference_discovery(
-                command=command,
+                command=discovery_command,
                 workspace=workspace,
-                client=_Client(),  # type: ignore[arg-type]
+                client=resolved_client,  # type: ignore[arg-type]
             )
             return
         assert unit_name.startswith("eom-image-reference-acquirer@")
-        command, intent = load_acquisition_inputs(
+        acquisition_command, intent = load_acquisition_inputs(
             command_path=workspace / "command.json",
             workspace=workspace,
         )
         run_visual_reference_acquisition(
-            command=command,
+            command=acquisition_command,
             intent=intent,
             workspace=workspace,
-            client=_Client(),  # type: ignore[arg-type]
+            client=resolved_client,  # type: ignore[arg-type]
             normalizer=lambda *_args: _reference_png(),
         )
 
@@ -219,6 +223,11 @@ def _coordinator(
         workspace_root_uid=os.geteuid(),
     )
     return coordinator, publisher, starts
+
+
+class _UnavailableClient(_Client):
+    def acquire(self, *_args: object, **_kwargs: object) -> tuple[AcquiredReference, ...]:
+        raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_UNAVAILABLE")
 
 
 def test_coordinator_publishes_intent_and_bundle_once_and_returns_exact_pointer(
@@ -248,6 +257,25 @@ def test_coordinator_publishes_intent_and_bundle_once_and_returns_exact_pointer(
     assert first.acquisition_result.bundle is not None
     assert first.pointer.bundle_id == first.acquisition_result.bundle.bundle_id
     assert first.command.intent.artifact_id == first.intent_artifact.artifact_id
+
+
+def test_coordinator_preserves_failed_acquisition_error_without_success_directories(
+    tmp_path: Path,
+) -> None:
+    coordinator, publisher, starts = _coordinator(tmp_path, client=_UnavailableClient())
+
+    with pytest.raises(
+        VisualReferenceCoordinatorError,
+        match="VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
+    ):
+        coordinator.acquire(
+            intent=_intent(),
+            source_commit="1" * 40,
+            observed_at=datetime(2026, 9, 27, 14, 0, tzinfo=UTC),
+        )
+
+    assert publisher.calls == 1
+    assert len(starts) == 1
 
 
 def test_coordinator_rejects_output_hash_drift_without_publishing_bundle(tmp_path: Path) -> None:

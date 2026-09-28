@@ -392,12 +392,6 @@ class VisualReferenceAcquisitionCoordinator:
             expected_uid=self.provider_uid,
             expected_gid=self.provider_gid,
         )
-        for child in (output / "manifests", output / "references"):
-            _require_output_directory(
-                child,
-                expected_uid=self.provider_uid,
-                expected_gid=self.provider_gid,
-            )
         result_path = output / _RESULT_MEMBER
         result_bytes = _read_exact_output(
             result_path,
@@ -417,6 +411,12 @@ class VisualReferenceAcquisitionCoordinator:
         if result.status != "SUCCEEDED" or result.bundle is None:
             raise VisualReferenceCoordinatorError(
                 result.error_code or "VISUAL_REFERENCE_OUTPUT_INVALID"
+            )
+        for child in (output / "manifests", output / "references"):
+            _require_output_directory(
+                child,
+                expected_uid=self.provider_uid,
+                expected_gid=self.provider_gid,
             )
         bundle_path = output / _BUNDLE_MEMBER
         reference_path = output / _REFERENCE_MEMBER
