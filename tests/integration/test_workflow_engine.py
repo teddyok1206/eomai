@@ -2007,6 +2007,45 @@ def test_deterministic_visual_reference_failure_is_terminal_on_first_attempt(
         _close(resources)
 
 
+def test_deterministic_evidence_pointer_failure_is_terminal_on_first_attempt(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-integration-evidence-pointer-terminal",
+    )
+    runner.executor = FailedRoleExecutor(
+        sessions,
+        error_code="WORKER_RESULT_INVALID",
+        error_detail="EVIDENCE_DRAFT_POINTER_INVALID",
+    )
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            authoring = list(
+                session.scalars(
+                    select(WorkflowStepRunRecord).where(
+                        WorkflowStepRunRecord.workflow_id == workflow_id,
+                        WorkflowStepRunRecord.step_key == "authoring",
+                    )
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            assert workflow.failure_code == "WORKER_RESULT_INVALID"
+            assert len(authoring) == 1
+            assert authoring[0].state == StepState.FAILED.value
+            assert authoring[0].superseded_by_step_run_id is None
+            assert not any(
+                event.event_type == "STEP_RETRY_SCHEDULED"
+                for event in list_workflow_events(session, workflow_id)
+            )
+    finally:
+        _close(resources)
+
+
 @pytest.mark.parametrize(
     ("error_code", "commit_artifact_evidence", "cross_commit_boundary"),
     [

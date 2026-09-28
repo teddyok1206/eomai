@@ -28,6 +28,20 @@ def test_deterministic_visual_reference_failure_is_terminal() -> None:
         )
 
 
+def test_deterministic_evidence_pointer_failure_is_terminal() -> None:
+    for detail in (
+        "EVIDENCE_DRAFT_POINTER_INVALID",
+        "EVIDENCE_DRAFT_POINTER_MISSING",
+        "EVIDENCE_DRAFT_POINTER_NOT_LEAF",
+        "EVIDENCE_REVIEW_TARGET_SOURCE_INVALID",
+        "EVIDENCE_REVIEW_TARGET_SOURCE_MISSING",
+    ):
+        assert not _is_retryable_precommit_agent_failure(
+            error_code="WORKER_RESULT_INVALID",
+            error_detail=detail,
+        )
+
+
 def test_non_retryable_worker_code_stays_terminal() -> None:
     assert not _is_retryable_precommit_agent_failure(
         error_code="WORKFLOW_INPUT_INVALID",

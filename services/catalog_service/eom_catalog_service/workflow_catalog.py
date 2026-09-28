@@ -187,7 +187,7 @@ def _local_image_prompt_contract(
     """Select only from the immutable Content Pack version pinned at workflow start."""
 
     content_pack = workflow.runtime_context.get("content_pack")
-    if isinstance(content_pack, dict) and content_pack.get("version") == "1.20.1":
+    if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
         return "ASSESSMENT_MINIMAL_LINE_ART_V2"
     if isinstance(content_pack, dict) and content_pack.get("version") == "1.20.0":
         return "ASSESSMENT_LINE_ART_V1"
@@ -509,10 +509,13 @@ class WorkflowCatalogService:
                 binding = load_local_image_provider_binding_any(
                     self.settings.local_image_provider_binding
                 )
-                if isinstance(binding, LocalImageProviderBindingV3) and release.version != "1.20.1":
+                if isinstance(binding, LocalImageProviderBindingV3) and release.version not in {
+                    "1.20.1",
+                    "1.20.2",
+                }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "simplified-reference image binding requires Content Pack 1.20.1",
+                        "simplified-reference image binding requires Content Pack 1.20.1 or 1.20.2",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1789,6 +1792,7 @@ class WorkflowCatalogService:
             "1.19.0",
             "1.20.0",
             "1.20.1",
+            "1.20.2",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1798,7 +1802,16 @@ class WorkflowCatalogService:
                 )
             if (
                 release_version
-                in {"1.16.0", "1.16.1", "1.17.0", "1.18.0", "1.19.0", "1.20.0", "1.20.1"}
+                in {
+                    "1.16.0",
+                    "1.16.1",
+                    "1.17.0",
+                    "1.18.0",
+                    "1.19.0",
+                    "1.20.0",
+                    "1.20.1",
+                    "1.20.2",
+                }
             ) != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
@@ -1812,6 +1825,7 @@ class WorkflowCatalogService:
                 "1.19.0",
                 "1.20.0",
                 "1.20.1",
+                "1.20.2",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
