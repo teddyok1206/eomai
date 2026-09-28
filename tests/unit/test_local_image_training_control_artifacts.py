@@ -15,6 +15,7 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     AUTHORIZATION_ARTIFACT_TYPE,
     SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
     SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_MEMBER,
+    SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_ARTIFACT_TYPE,
     SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
     SCIENCE_CAMPAIGN_RASTER_REFINEMENT_PLAN_MEMBER,
     SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
@@ -23,6 +24,8 @@ from eom_orchestrator.local_image_training_control_artifacts import (
     SCIENCE_CORPUS_AUTHORIZATION_MEMBER,
     SCIENCE_MICRO_PROBE_PLAN_ARTIFACT_TYPE,
     SCIENCE_MICRO_PROBE_PLAN_MEMBER,
+    SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_ARTIFACT_TYPE,
+    SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_MEMBER,
     SCIENCE_RASTER_REFINEMENT_PLAN_ARTIFACT_TYPE,
     SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER,
     SCIENCE_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE,
@@ -170,6 +173,10 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
         review_sha256: str
         reviewed_at: datetime
 
+    class _ScienceObjectLineArtSuitabilityReview(BaseModel):
+        review_sha256: str
+        created_at: datetime
+
     class _ScienceRasterRefinementPlan(BaseModel):
         plan_sha256: str
         created_at: datetime
@@ -227,6 +234,15 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     assert publisher.arguments["artifact_type"] == SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_ARTIFACT_TYPE
     assert publisher.arguments["logical_name"] == SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_MEMBER
     assert campaign_micro_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    campaign_micro_v3_pointer = adapter.commit_science_campaign_micro_probe_plan_v3(
+        plan  # type: ignore[arg-type]
+    )
+    assert (
+        publisher.arguments["artifact_type"] == SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_ARTIFACT_TYPE
+    )
+    assert publisher.arguments["logical_name"] == SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_MEMBER
+    assert campaign_micro_v3_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     result = _ScienceResult(
         result_sha256="sha256:" + "d" * 64,
@@ -338,6 +354,20 @@ def test_science_visual_controls_use_orchestrator_publication_boundary(monkeypat
     )
     assert publisher.arguments["logical_name"] == SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_MEMBER
     assert campaign_raster_review_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
+
+    line_art_review = _ScienceObjectLineArtSuitabilityReview(
+        review_sha256="sha256:" + "1" * 64,
+        created_at=datetime(2026, 9, 28, 12, 0, tzinfo=UTC),
+    )
+    line_art_review_pointer = adapter.commit_science_object_line_art_suitability_review(
+        line_art_review  # type: ignore[arg-type]
+    )
+    assert (
+        publisher.arguments["artifact_type"]
+        == SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_ARTIFACT_TYPE
+    )
+    assert publisher.arguments["logical_name"] == SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_MEMBER
+    assert line_art_review_pointer.sha256 == sha256_bytes(publisher.arguments["payload"])
 
     refinement_plan = _ScienceRasterRefinementPlan(
         plan_sha256="sha256:" + "0" * 64,

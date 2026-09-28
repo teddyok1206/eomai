@@ -18,6 +18,7 @@ from eom_image_contracts.models import (
     text_sha256,
 )
 from eom_image_contracts.science_corpus_visual import (
+    LocalImageScienceObjectLineArtCropSet,
     LocalImageScienceVisualCampaignCropSet,
     LocalImageScienceVisualCampaignCropSetV2,
 )
@@ -38,6 +39,12 @@ CAMPAIGN_CROP_SET_V2_SCHEMA_REF = (
 )
 CAMPAIGN_MICRO_PLAN_V2_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.1"
+)
+OBJECT_LINE_ART_CROP_SET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-object-line-art-crop-set/1.0"
+)
+CAMPAIGN_MICRO_PLAN_V3_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.2"
 )
 
 
@@ -63,6 +70,8 @@ def _require_pointer(
 
 class LocalImageScienceCampaignLoraMicroProbePlan(FrozenModel):
     crop_set_schema_ref: ClassVar[str] = CAMPAIGN_CROP_SET_SCHEMA_REF
+    crop_set_member_path: ClassVar[str] = "manifests/science-visual-campaign-crop-set.json"
+    member_id_prefix: ClassVar[str] = "imgsciviscampaigncrop_"
 
     schema_version: Literal["local-image-science-campaign-lora-micro-probe-plan/1.0"]
     probe_id: str = Field(pattern=r"^imgscicampaignmicroprobe_[0-9a-f]{32}$")
@@ -97,7 +106,7 @@ class LocalImageScienceCampaignLoraMicroProbePlan(FrozenModel):
         _require_pointer(
             self.crop_set,
             schema_ref=self.crop_set_schema_ref,
-            member_path="manifests/science-visual-campaign-crop-set.json",
+            member_path=self.crop_set_member_path,
         )
         if self.authorized_at > self.created_at:
             raise ValueError(
@@ -110,7 +119,8 @@ class LocalImageScienceCampaignLoraMicroProbePlan(FrozenModel):
             (self.holdout_member_ids, "holdout members"),
         ):
             if values != tuple(sorted(set(values))) or any(
-                not value.startswith("imgsciviscampaigncrop_") or len(value) != 54
+                not value.startswith(self.member_id_prefix)
+                or len(value) != len(self.member_id_prefix) + 32
                 for value in values
             ):
                 raise ValueError(f"science campaign micro-probe {label} must be sorted and unique")
@@ -145,6 +155,24 @@ class LocalImageScienceCampaignLoraMicroProbePlanV2(LocalImageScienceCampaignLor
     ]
     purpose: Literal[  # type: ignore[assignment]
         "EVALUATION_ONLY_SCIENCE_CAMPAIGN_EXPANDED_PROBE"
+    ]
+
+
+class LocalImageScienceCampaignLoraMicroProbePlanV3(LocalImageScienceCampaignLoraMicroProbePlanV2):
+    """Object-line-art 16/4/4 evaluation-only successor."""
+
+    crop_set_schema_ref: ClassVar[str] = OBJECT_LINE_ART_CROP_SET_SCHEMA_REF
+    crop_set_member_path: ClassVar[str] = "manifests/science-object-line-art-crop-set.json"
+    member_id_prefix: ClassVar[str] = "imgscivislineartcrop_"
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-probe-plan/1.2"
+    ]
+    trainer_contract: Literal[  # type: ignore[assignment]
+        "eom-local-image-science-campaign-lora-micro-trainer/1.2"
+    ]
+    purpose: Literal[  # type: ignore[assignment]
+        "EVALUATION_ONLY_SCIENCE_OBJECT_LINE_ART_PROBE"
     ]
 
 
@@ -209,6 +237,20 @@ class LocalImageScienceCampaignLoraMicroProbeCommandV2(
     probe_plan: LocalImageScienceCampaignLoraMicroProbePlanV2
 
 
+class LocalImageScienceCampaignLoraMicroProbeCommandV3(
+    LocalImageScienceCampaignLoraMicroProbeCommand
+):
+    plan_schema_ref: ClassVar[str] = CAMPAIGN_MICRO_PLAN_V3_SCHEMA_REF
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-probe-command/1.2"
+    ]
+    probe_plan: LocalImageScienceCampaignLoraMicroProbePlanV3
+    staged_crop_set_member: Literal[  # type: ignore[assignment]
+        "inputs/science-object-line-art-crop-set.json"
+    ]
+
+
 class LocalImageScienceCampaignLoraMicroRealizedSample(FrozenModel):
     sample_id: str = Field(pattern=r"^imgsciviscampaigncrop_[0-9a-f]{32}$")
     parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
@@ -219,6 +261,12 @@ class LocalImageScienceCampaignLoraMicroRealizedSample(FrozenModel):
     realized_crop_sha256: Sha256
     caption_sha256: Sha256
     perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+
+class LocalImageScienceCampaignLoraMicroRealizedSampleV3(
+    LocalImageScienceCampaignLoraMicroRealizedSample
+):
+    sample_id: str = Field(pattern=r"^imgscivislineartcrop_[0-9a-f]{32}$")
 
 
 class LocalImageScienceCampaignLoraMicroAdapterManifest(FrozenModel):
@@ -268,6 +316,16 @@ class LocalImageScienceCampaignLoraMicroAdapterManifestV2(
 
     schema_version: Literal[  # type: ignore[assignment]
         "local-image-science-campaign-lora-micro-adapter-manifest/1.1"
+    ]
+
+
+class LocalImageScienceCampaignLoraMicroAdapterManifestV3(
+    LocalImageScienceCampaignLoraMicroAdapterManifest
+):
+    plan_schema_ref: ClassVar[str] = CAMPAIGN_MICRO_PLAN_V3_SCHEMA_REF
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-adapter-manifest/1.2"
     ]
 
 
@@ -370,6 +428,22 @@ class LocalImageScienceCampaignLoraMicroProbeWorkerResultV2(
     )
 
 
+class LocalImageScienceCampaignLoraMicroProbeWorkerResultV3(
+    LocalImageScienceCampaignLoraMicroProbeWorkerResult
+):
+    plan_schema_ref: ClassVar[str] = CAMPAIGN_MICRO_PLAN_V3_SCHEMA_REF
+    expected_realized_sample_count: ClassVar[int] = 16
+    require_unique_exam_groups: ClassVar[bool] = False
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-probe-worker-result/1.2"
+    ]
+    adapter_manifest: LocalImageScienceCampaignLoraMicroAdapterManifestV3 | None
+    realized_samples: tuple[LocalImageScienceCampaignLoraMicroRealizedSampleV3, ...] = Field(
+        max_length=16
+    )
+
+
 class LocalImageScienceCampaignLoraMicroEvaluationCase(FrozenModel):
     sample_id: str = Field(pattern=r"^imgsciviscampaigncrop_[0-9a-f]{32}$")
     parent_candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
@@ -402,9 +476,16 @@ class LocalImageScienceCampaignLoraMicroEvaluationCase(FrozenModel):
         return self
 
 
+class LocalImageScienceCampaignLoraMicroEvaluationCaseV3(
+    LocalImageScienceCampaignLoraMicroEvaluationCase
+):
+    sample_id: str = Field(pattern=r"^imgscivislineartcrop_[0-9a-f]{32}$")
+
+
 class LocalImageScienceCampaignLoraMicroEvaluationCommand(FrozenModel):
     plan_schema_ref: ClassVar[str] = CAMPAIGN_MICRO_PLAN_SCHEMA_REF
     crop_set_schema_ref: ClassVar[str] = CAMPAIGN_CROP_SET_SCHEMA_REF
+    crop_set_member_path: ClassVar[str] = "manifests/science-visual-campaign-crop-set.json"
     require_unique_source_groups: ClassVar[bool] = True
 
     schema_version: Literal["local-image-science-campaign-lora-micro-evaluation-command/1.0"]
@@ -443,7 +524,7 @@ class LocalImageScienceCampaignLoraMicroEvaluationCommand(FrozenModel):
         _require_pointer(
             self.crop_set,
             schema_ref=self.crop_set_schema_ref,
-            member_path="manifests/science-visual-campaign-crop-set.json",
+            member_path=self.crop_set_member_path,
         )
         if (
             self.adapter_manifest.probe_plan != self.probe_plan_pointer
@@ -492,6 +573,24 @@ class LocalImageScienceCampaignLoraMicroEvaluationCommandV2(
     )
 
 
+class LocalImageScienceCampaignLoraMicroEvaluationCommandV3(
+    LocalImageScienceCampaignLoraMicroEvaluationCommand
+):
+    plan_schema_ref: ClassVar[str] = CAMPAIGN_MICRO_PLAN_V3_SCHEMA_REF
+    crop_set_schema_ref: ClassVar[str] = OBJECT_LINE_ART_CROP_SET_SCHEMA_REF
+    crop_set_member_path: ClassVar[str] = "manifests/science-object-line-art-crop-set.json"
+    require_unique_source_groups: ClassVar[bool] = False
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-evaluation-command/1.2"
+    ]
+    adapter_manifest: LocalImageScienceCampaignLoraMicroAdapterManifestV3
+    cases: tuple[LocalImageScienceCampaignLoraMicroEvaluationCaseV3, ...] = Field(
+        min_length=4,
+        max_length=4,
+    )
+
+
 class LocalImageScienceCampaignLoraMicroEvaluationOutput(FrozenModel):
     sample_id: str = Field(pattern=r"^imgsciviscampaigncrop_[0-9a-f]{32}$")
     variant: Literal["ADAPTER", "BASE"]
@@ -510,6 +609,15 @@ class LocalImageScienceCampaignLoraMicroEvaluationOutput(FrozenModel):
         if self.member_path != f"outputs/{self.sample_id}-{self.variant.lower()}.png":
             raise ValueError("science campaign evaluation output path mismatch")
         return self
+
+
+class LocalImageScienceCampaignLoraMicroEvaluationOutputV3(
+    LocalImageScienceCampaignLoraMicroEvaluationOutput
+):
+    sample_id: str = Field(pattern=r"^imgscivislineartcrop_[0-9a-f]{32}$")
+    member_path: str = Field(
+        pattern=r"^outputs/imgscivislineartcrop_[0-9a-f]{32}-(adapter|base)\.png$"
+    )
 
 
 class LocalImageScienceCampaignLoraMicroEvaluationResult(FrozenModel):
@@ -561,6 +669,17 @@ class LocalImageScienceCampaignLoraMicroEvaluationResultV2(
         "local-image-science-campaign-lora-micro-evaluation-result/1.1"
     ]
     outputs: tuple[LocalImageScienceCampaignLoraMicroEvaluationOutput, ...] = Field(max_length=8)
+
+
+class LocalImageScienceCampaignLoraMicroEvaluationResultV3(
+    LocalImageScienceCampaignLoraMicroEvaluationResult
+):
+    expected_output_count: ClassVar[int] = 8
+
+    schema_version: Literal[  # type: ignore[assignment]
+        "local-image-science-campaign-lora-micro-evaluation-result/1.2"
+    ]
+    outputs: tuple[LocalImageScienceCampaignLoraMicroEvaluationOutputV3, ...] = Field(max_length=8)
 
 
 def validate_science_campaign_micro_probe_plan_sources(
@@ -771,3 +890,108 @@ def validate_science_campaign_micro_evaluation_result_v2(
     actual = {(value.sample_id, value.variant) for value in result.outputs}
     if actual != planned:
         raise ValueError("expanded science campaign evaluation lacks exact paired coverage")
+
+
+def validate_science_campaign_micro_probe_plan_sources_v3(
+    plan: LocalImageScienceCampaignLoraMicroProbePlanV3,
+    crop_set: LocalImageScienceObjectLineArtCropSet,
+) -> None:
+    """Bind the object-line-art plan to all 24 exact crop-set members in O(n)."""
+
+    if (
+        plan.crop_set_sha256 != crop_set.crop_set_sha256
+        or plan.crop_set.sha256 == plan.crop_set_sha256
+    ):
+        raise ValueError("object-line-art probe crop-set hash binding mismatch")
+    members = {value.sample_id: value for value in crop_set.members}
+    expected = {
+        "TRAIN": plan.training_member_ids,
+        "VALIDATION": plan.validation_member_ids,
+        "HOLDOUT": plan.holdout_member_ids,
+    }
+    for partition, identities in expected.items():
+        if any(
+            (member := members.get(identity)) is None or member.partition != partition
+            for identity in identities
+        ):
+            raise ValueError("object-line-art probe member partition binding mismatch")
+    if set().union(*map(set, expected.values())) != set(members):
+        raise ValueError("object-line-art probe omits a crop-set member")
+
+
+def validate_science_campaign_micro_probe_worker_result_v3(
+    command: LocalImageScienceCampaignLoraMicroProbeCommandV3,
+    result: LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
+) -> None:
+    if (
+        result.training_run_id != command.training_run_id
+        or result.probe_plan_pointer != command.probe_plan_pointer
+        or result.probe_plan_sha256 != command.probe_plan_sha256
+        or result.command_sha256 != command.command_sha256
+        or result.attempt != command.attempt
+    ):
+        raise ValueError("object-line-art result does not bind the exact command")
+    if result.status == "SUCCEEDED" and {
+        value.sample_id for value in result.realized_samples
+    } != set(command.probe_plan.training_member_ids):
+        raise ValueError("object-line-art realized samples differ from training members")
+    if result.adapter_manifest is not None and (
+        result.adapter_manifest.base_model != command.probe_plan.base_model
+        or result.adapter_manifest.probe_plan != command.probe_plan_pointer
+    ):
+        raise ValueError("object-line-art adapter does not bind the exact plan")
+
+
+def validate_science_campaign_micro_evaluation_command_v3(
+    plan: LocalImageScienceCampaignLoraMicroProbePlanV3,
+    crop_set: LocalImageScienceObjectLineArtCropSet,
+    training_result: LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommandV3,
+) -> None:
+    if (
+        command.training_run_id != training_result.training_run_id
+        or command.probe_plan_pointer != training_result.probe_plan_pointer
+        or command.probe_plan_sha256 != training_result.probe_plan_sha256
+        or command.crop_set != plan.crop_set
+        or command.crop_set_sha256 != plan.crop_set_sha256
+        or command.training_result_sha256 != training_result.result_sha256
+        or training_result.adapter_manifest is None
+        or command.adapter_manifest != training_result.adapter_manifest
+    ):
+        raise ValueError("object-line-art evaluation inputs differ")
+    members = {value.sample_id: value for value in crop_set.members}
+    if {value.sample_id for value in command.cases} != set(plan.holdout_member_ids):
+        raise ValueError("object-line-art evaluation lacks exact holdout coverage")
+    for case in command.cases:
+        member = members.get(case.sample_id)
+        if member is None or member.partition != "HOLDOUT":
+            raise ValueError("object-line-art evaluation case is not a holdout member")
+        if (
+            case.parent_candidate_id != member.parent_candidate_id
+            or case.document_id != member.document_id
+            or case.exam_group_sha256 != member.exam_group_sha256
+            or case.positive_prompt != member.caption_en
+            or case.positive_prompt_sha256 != member.caption_sha256
+        ):
+            raise ValueError("object-line-art evaluation case binding mismatch")
+
+
+def validate_science_campaign_micro_evaluation_result_v3(
+    command: LocalImageScienceCampaignLoraMicroEvaluationCommandV3,
+    result: LocalImageScienceCampaignLoraMicroEvaluationResultV3,
+) -> None:
+    if (
+        result.evaluation_run_id != command.evaluation_run_id
+        or result.command_sha256 != command.command_sha256
+        or result.training_result_sha256 != command.training_result_sha256
+        or result.adapter_manifest_sha256 != command.adapter_manifest.manifest_sha256
+    ):
+        raise ValueError("object-line-art evaluation result binding mismatch")
+    if result.status != "SUCCEEDED":
+        return
+    planned = {
+        (case.sample_id, variant) for case in command.cases for variant in ("ADAPTER", "BASE")
+    }
+    actual = {(value.sample_id, value.variant) for value in result.outputs}
+    if actual != planned:
+        raise ValueError("object-line-art evaluation lacks exact paired coverage")

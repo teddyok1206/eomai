@@ -1,0 +1,318 @@
+{
+  "$defs": {
+    "adapter": {
+      "additionalProperties": false,
+      "properties": {
+        "activation_policy": {
+          "const": "FORBIDDEN"
+        },
+        "adapter_id": {
+          "pattern": "^imgadapter_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "adapter_revision_id": {
+          "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "base_model": {
+          "$ref": "#/$defs/modelPointer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/adapterFile"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "probe_plan": {
+          "$ref": "#/$defs/artifactMember"
+        },
+        "sample_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_version": {
+          "const": "local-image-science-campaign-lora-micro-adapter-manifest/1.2"
+        },
+        "state": {
+          "const": "EVALUATION_ONLY"
+        }
+      },
+      "required": [
+        "schema_version",
+        "adapter_id",
+        "adapter_revision_id",
+        "state",
+        "activation_policy",
+        "base_model",
+        "probe_plan",
+        "sample_set_sha256",
+        "files",
+        "created_at",
+        "manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "adapterFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "maximum": 1073741824,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "case": {
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {
+          "pattern": "^sciencedoc_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "exam_group_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "negative_prompt": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "negative_prompt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "parent_candidate_id": {
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "positive_prompt": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "positive_prompt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sample_id": {
+          "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_id",
+        "parent_candidate_id",
+        "document_id",
+        "exam_group_sha256",
+        "positive_prompt",
+        "positive_prompt_sha256",
+        "negative_prompt",
+        "negative_prompt_sha256",
+        "seed"
+      ],
+      "type": "object"
+    },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-command/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "adapter_manifest": {
+      "$ref": "#/$defs/adapter"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/case"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "crop_set": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "crop_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "delivery_height": {
+      "const": 500
+    },
+    "delivery_width": {
+      "const": 800
+    },
+    "evaluation_run_id": {
+      "pattern": "^imgscicampaignmicroevalrun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "generation_height": {
+      "const": 504
+    },
+    "generation_width": {
+      "const": 800
+    },
+    "guidance_scale": {
+      "const": 7.5
+    },
+    "inference_steps": {
+      "const": 20
+    },
+    "output_root_member": {
+      "const": "outputs"
+    },
+    "probe_plan_pointer": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "probe_plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-evaluation-command/1.2"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "staged_adapter_root": {
+      "const": "inputs/adapter"
+    },
+    "timeout_seconds": {
+      "maximum": 3600,
+      "minimum": 600,
+      "type": "integer"
+    },
+    "training_result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "training_run_id": {
+      "pattern": "^imgscicampaignmicrotrainrun_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_run_id",
+    "training_run_id",
+    "probe_plan_pointer",
+    "probe_plan_sha256",
+    "crop_set",
+    "crop_set_sha256",
+    "training_result_sha256",
+    "adapter_manifest",
+    "cases",
+    "inference_steps",
+    "guidance_scale",
+    "generation_width",
+    "generation_height",
+    "delivery_width",
+    "delivery_height",
+    "staged_adapter_root",
+    "output_root_member",
+    "source_commit",
+    "timeout_seconds",
+    "command_sha256"
+  ],
+  "title": "EOM Science Campaign LoRA Expanded Evaluation Command V2",
+  "type": "object"
+}

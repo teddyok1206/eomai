@@ -16,14 +16,20 @@ from pathlib import Path
 
 from eom_image_contracts import (
     LocalImageScienceCampaignLoraMicroEvaluationCase,
+    LocalImageScienceCampaignLoraMicroEvaluationCaseV3,
     LocalImageScienceCampaignLoraMicroEvaluationCommand,
     LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
+    LocalImageScienceCampaignLoraMicroEvaluationCommandV3,
     LocalImageScienceCampaignLoraMicroProbeCommand,
     LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    LocalImageScienceCampaignLoraMicroProbeCommandV3,
     LocalImageScienceCampaignLoraMicroProbePlan,
     LocalImageScienceCampaignLoraMicroProbePlanV2,
+    LocalImageScienceCampaignLoraMicroProbePlanV3,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult,
     LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
+    LocalImageScienceObjectLineArtCropSet,
     LocalImageScienceVisualCampaignCropSet,
     LocalImageScienceVisualCampaignCropSetV2,
     content_json_bytes,
@@ -32,10 +38,13 @@ from eom_image_contracts import (
     validate_contract,
     validate_science_campaign_micro_evaluation_command,
     validate_science_campaign_micro_evaluation_command_v2,
+    validate_science_campaign_micro_evaluation_command_v3,
     validate_science_campaign_micro_probe_plan_sources,
     validate_science_campaign_micro_probe_plan_sources_v2,
+    validate_science_campaign_micro_probe_plan_sources_v3,
     validate_science_campaign_micro_probe_worker_result,
     validate_science_campaign_micro_probe_worker_result_v2,
+    validate_science_campaign_micro_probe_worker_result_v3,
 )
 from eom_orchestrator.database import build_engine
 from pydantic import ValidationError as PydanticValidationError
@@ -57,6 +66,10 @@ MAX_ADAPTER_BYTES = 1024 * 1024 * 1024
 NEGATIVE_PROMPT = (
     "people, portrait, photorealistic scene, decorative text, watermark, color, "
     "answer markings, cropped subject, clutter"
+)
+OBJECT_LINE_ART_NEGATIVE_PROMPT = (
+    "color, photorealistic background, decorative text, watermark, answer markings, "
+    "cropped subject, clutter, duplicated object"
 )
 
 
@@ -98,9 +111,11 @@ def _load_training(
     expected_result_sha256: str,
 ) -> tuple[
     LocalImageScienceCampaignLoraMicroProbeCommand
-    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+    | LocalImageScienceCampaignLoraMicroProbeCommandV3,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult
-    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
 ]:
     command_payload = _safe_read(
         workspace / "command.json",
@@ -115,20 +130,39 @@ def _load_training(
     try:
         command_value = _parse_json(command_payload)
         result_value = _parse_json(result_payload)
+        object_line_art = command_value.get("schema_version") == (
+            "local-image-science-campaign-lora-micro-probe-command/1.2"
+        )
         expanded = command_value.get("schema_version") == (
             "local-image-science-campaign-lora-micro-probe-command/1.1"
         )
-        if expanded:
+        command: (
+            LocalImageScienceCampaignLoraMicroProbeCommand
+            | LocalImageScienceCampaignLoraMicroProbeCommandV2
+            | LocalImageScienceCampaignLoraMicroProbeCommandV3
+        )
+        result: (
+            LocalImageScienceCampaignLoraMicroProbeWorkerResult
+            | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+            | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3
+        )
+        if object_line_art:
+            validate_contract("science-campaign-lora-micro-probe-command-v3", command_value)
+            validate_contract("science-campaign-lora-micro-probe-worker-result-v3", result_value)
+            command = LocalImageScienceCampaignLoraMicroProbeCommandV3.model_validate(command_value)
+            result = LocalImageScienceCampaignLoraMicroProbeWorkerResultV3.model_validate(
+                result_value
+            )
+            assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV3)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV3)
+            validate_science_campaign_micro_probe_worker_result_v3(command, result)
+        elif expanded:
             validate_contract("science-campaign-lora-micro-probe-command-v2", command_value)
             validate_contract("science-campaign-lora-micro-probe-worker-result-v2", result_value)
-            command: (
-                LocalImageScienceCampaignLoraMicroProbeCommand
-                | LocalImageScienceCampaignLoraMicroProbeCommandV2
-            ) = LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(command_value)
-            result: (
-                LocalImageScienceCampaignLoraMicroProbeWorkerResult
-                | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
-            ) = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(result_value)
+            command = LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(command_value)
+            result = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(
+                result_value
+            )
             assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
             assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV2)
             validate_science_campaign_micro_probe_worker_result_v2(command, result)
@@ -156,10 +190,15 @@ def _load_training(
 def _load_sources(
     engine: Engine,
     training: LocalImageScienceCampaignLoraMicroProbeCommand
-    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+    | LocalImageScienceCampaignLoraMicroProbeCommandV3,
 ) -> tuple[
-    LocalImageScienceCampaignLoraMicroProbePlan | LocalImageScienceCampaignLoraMicroProbePlanV2,
-    LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
+    LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2
+    | LocalImageScienceCampaignLoraMicroProbePlanV3,
+    LocalImageScienceVisualCampaignCropSet
+    | LocalImageScienceVisualCampaignCropSetV2
+    | LocalImageScienceObjectLineArtCropSet,
 ]:
     plan_payload = _load_artifact_member(
         engine,
@@ -174,16 +213,29 @@ def _load_sources(
     try:
         plan_value = _parse_json(plan_payload)
         crop_value = _parse_json(crop_payload)
-        if isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV2):
+        plan: (
+            LocalImageScienceCampaignLoraMicroProbePlan
+            | LocalImageScienceCampaignLoraMicroProbePlanV2
+            | LocalImageScienceCampaignLoraMicroProbePlanV3
+        )
+        crop_set: (
+            LocalImageScienceVisualCampaignCropSet
+            | LocalImageScienceVisualCampaignCropSetV2
+            | LocalImageScienceObjectLineArtCropSet
+        )
+        if isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV3):
+            validate_contract("science-campaign-lora-micro-probe-plan-v3", plan_value)
+            validate_contract("science-object-line-art-crop-set", crop_value)
+            plan = LocalImageScienceCampaignLoraMicroProbePlanV3.model_validate(plan_value)
+            crop_set = LocalImageScienceObjectLineArtCropSet.model_validate(crop_value)
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3)
+            assert isinstance(crop_set, LocalImageScienceObjectLineArtCropSet)
+            validate_science_campaign_micro_probe_plan_sources_v3(plan, crop_set)
+        elif isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV2):
             validate_contract("science-campaign-lora-micro-probe-plan-v2", plan_value)
             validate_contract("science-visual-campaign-crop-set-v2", crop_value)
-            plan: (
-                LocalImageScienceCampaignLoraMicroProbePlan
-                | LocalImageScienceCampaignLoraMicroProbePlanV2
-            ) = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(plan_value)
-            crop_set: (
-                LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2
-            ) = LocalImageScienceVisualCampaignCropSetV2.model_validate(crop_value)
+            plan = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(plan_value)
+            crop_set = LocalImageScienceVisualCampaignCropSetV2.model_validate(crop_value)
             assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
             assert isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
             validate_science_campaign_micro_probe_plan_sources_v2(plan, crop_set)
@@ -202,25 +254,42 @@ def _load_sources(
 
 def _cases(
     plan: LocalImageScienceCampaignLoraMicroProbePlan
-    | LocalImageScienceCampaignLoraMicroProbePlanV2,
-    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
-) -> tuple[LocalImageScienceCampaignLoraMicroEvaluationCase, ...]:
+    | LocalImageScienceCampaignLoraMicroProbePlanV2
+    | LocalImageScienceCampaignLoraMicroProbePlanV3,
+    crop_set: LocalImageScienceVisualCampaignCropSet
+    | LocalImageScienceVisualCampaignCropSetV2
+    | LocalImageScienceObjectLineArtCropSet,
+) -> tuple[
+    LocalImageScienceCampaignLoraMicroEvaluationCase
+    | LocalImageScienceCampaignLoraMicroEvaluationCaseV3,
+    ...,
+]:
     members = {value.sample_id: value for value in crop_set.members}
     values = []
     for index, sample_id in enumerate(plan.holdout_member_ids):
         member = members.get(sample_id)
         if member is None or member.partition != "HOLDOUT":
             raise ScienceCampaignMicroEvaluationStageError("IMAGE_EVALUATION_HOLDOUT_INVALID")
+        case_model = (
+            LocalImageScienceCampaignLoraMicroEvaluationCaseV3
+            if isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3)
+            else LocalImageScienceCampaignLoraMicroEvaluationCase
+        )
+        negative_prompt = (
+            OBJECT_LINE_ART_NEGATIVE_PROMPT
+            if isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3)
+            else NEGATIVE_PROMPT
+        )
         values.append(
-            LocalImageScienceCampaignLoraMicroEvaluationCase(
+            case_model(
                 sample_id=member.sample_id,
                 parent_candidate_id=member.parent_candidate_id,
                 document_id=member.document_id,
                 exam_group_sha256=member.exam_group_sha256,
                 positive_prompt=member.caption_en,
                 positive_prompt_sha256=member.caption_sha256,
-                negative_prompt=NEGATIVE_PROMPT,
-                negative_prompt_sha256=text_sha256(NEGATIVE_PROMPT),
+                negative_prompt=negative_prompt,
+                negative_prompt_sha256=text_sha256(negative_prompt),
                 seed=plan.seed + 1000 + index,
             )
         )
@@ -230,21 +299,32 @@ def _cases(
 def _build_command(
     *,
     training: LocalImageScienceCampaignLoraMicroProbeCommand
-    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+    | LocalImageScienceCampaignLoraMicroProbeCommandV3,
     result: LocalImageScienceCampaignLoraMicroProbeWorkerResult
-    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
     plan: LocalImageScienceCampaignLoraMicroProbePlan
-    | LocalImageScienceCampaignLoraMicroProbePlanV2,
-    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
-    cases: tuple[LocalImageScienceCampaignLoraMicroEvaluationCase, ...],
+    | LocalImageScienceCampaignLoraMicroProbePlanV2
+    | LocalImageScienceCampaignLoraMicroProbePlanV3,
+    crop_set: LocalImageScienceVisualCampaignCropSet
+    | LocalImageScienceVisualCampaignCropSetV2
+    | LocalImageScienceObjectLineArtCropSet,
+    cases: tuple[
+        LocalImageScienceCampaignLoraMicroEvaluationCase
+        | LocalImageScienceCampaignLoraMicroEvaluationCaseV3,
+        ...,
+    ],
     source_commit: str,
 ) -> (
     LocalImageScienceCampaignLoraMicroEvaluationCommand
     | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV3
 ):
     assert result.adapter_manifest is not None
+    object_line_art = isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV3)
     expanded = isinstance(training, LocalImageScienceCampaignLoraMicroProbeCommandV2)
-    version = "1.1" if expanded else "1.0"
+    version = "1.2" if object_line_art else "1.1" if expanded else "1.0"
     body = {
         "schema_version": (f"local-image-science-campaign-lora-micro-evaluation-command/{version}"),
         "training_run_id": training.training_run_id,
@@ -270,6 +350,16 @@ def _build_command(
     with_id = {**body, "evaluation_run_id": "imgscicampaignmicroevalrun_" + identity[:32]}
     value = {**with_id, "command_sha256": content_sha256(with_id)}
     try:
+        if object_line_art:
+            validate_contract("science-campaign-lora-micro-evaluation-command-v3", value)
+            command_v3 = LocalImageScienceCampaignLoraMicroEvaluationCommandV3.model_validate(value)
+            assert isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3)
+            assert isinstance(crop_set, LocalImageScienceObjectLineArtCropSet)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV3)
+            validate_science_campaign_micro_evaluation_command_v3(
+                plan, crop_set, result, command_v3
+            )
+            return command_v3
         if expanded:
             validate_contract("science-campaign-lora-micro-evaluation-command-v2", value)
             command_v2 = LocalImageScienceCampaignLoraMicroEvaluationCommandV2.model_validate(value)

@@ -13,12 +13,15 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCampaignLoraMicroProbeCommand,
     LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    LocalImageScienceCampaignLoraMicroProbeCommandV3,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult,
     LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
     content_json_bytes,
     validate_contract,
     validate_science_campaign_micro_probe_worker_result,
     validate_science_campaign_micro_probe_worker_result_v2,
+    validate_science_campaign_micro_probe_worker_result_v3,
 )
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.file_set_control_artifacts import (
@@ -55,6 +58,11 @@ _RESULT_SCHEMA = {
         "eom://schemas/image-provider/"
         "local-image-science-campaign-lora-micro-probe-worker-result/1.1",
     ),
+    "1.2": (
+        "science-campaign-lora-micro-probe-worker-result-v3",
+        "eom://schemas/image-provider/"
+        "local-image-science-campaign-lora-micro-probe-worker-result/1.2",
+    ),
 }
 _MANIFEST_SCHEMA = {
     "1.0": (
@@ -64,6 +72,10 @@ _MANIFEST_SCHEMA = {
     "1.1": (
         "science-campaign-lora-micro-adapter-manifest-v2",
         "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.1",
+    ),
+    "1.2": (
+        "science-campaign-lora-micro-adapter-manifest-v3",
+        "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.2",
     ),
 }
 
@@ -98,9 +110,11 @@ def _load_result(
     workspace: Path,
 ) -> tuple[
     LocalImageScienceCampaignLoraMicroProbeCommand
-    | LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    | LocalImageScienceCampaignLoraMicroProbeCommandV2
+    | LocalImageScienceCampaignLoraMicroProbeCommandV3,
     LocalImageScienceCampaignLoraMicroProbeWorkerResult
-    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
     bytes,
     str,
 ]:
@@ -114,16 +128,31 @@ def _load_result(
         version = str(result_value.get("schema_version", "")).rsplit("/", 1)[-1]
         result_contract, result_schema_ref = _RESULT_SCHEMA[version]
         validate_contract(result_contract, result_value)
-        if version == "1.1":
+        command: (
+            LocalImageScienceCampaignLoraMicroProbeCommand
+            | LocalImageScienceCampaignLoraMicroProbeCommandV2
+            | LocalImageScienceCampaignLoraMicroProbeCommandV3
+        )
+        result: (
+            LocalImageScienceCampaignLoraMicroProbeWorkerResult
+            | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+            | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3
+        )
+        if version == "1.2":
+            validate_contract("science-campaign-lora-micro-probe-command-v3", command_value)
+            command = LocalImageScienceCampaignLoraMicroProbeCommandV3.model_validate(command_value)
+            result = LocalImageScienceCampaignLoraMicroProbeWorkerResultV3.model_validate(
+                result_value
+            )
+            assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV3)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV3)
+            validate_science_campaign_micro_probe_worker_result_v3(command, result)
+        elif version == "1.1":
             validate_contract("science-campaign-lora-micro-probe-command-v2", command_value)
-            command: (
-                LocalImageScienceCampaignLoraMicroProbeCommand
-                | LocalImageScienceCampaignLoraMicroProbeCommandV2
-            ) = LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(command_value)
-            result: (
-                LocalImageScienceCampaignLoraMicroProbeWorkerResult
-                | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
-            ) = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(result_value)
+            command = LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(command_value)
+            result = LocalImageScienceCampaignLoraMicroProbeWorkerResultV2.model_validate(
+                result_value
+            )
             assert isinstance(command, LocalImageScienceCampaignLoraMicroProbeCommandV2)
             assert isinstance(result, LocalImageScienceCampaignLoraMicroProbeWorkerResultV2)
             validate_science_campaign_micro_probe_worker_result_v2(command, result)
@@ -185,7 +214,8 @@ def _member(
 def _members(
     workspace: Path,
     result: LocalImageScienceCampaignLoraMicroProbeWorkerResult
-    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2,
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV2
+    | LocalImageScienceCampaignLoraMicroProbeWorkerResultV3,
     result_payload: bytes,
     result_schema_ref: str,
 ) -> tuple[ControlFileSetMember, ...]:

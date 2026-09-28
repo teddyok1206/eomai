@@ -15,12 +15,15 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCampaignLoraMicroEvaluationCommand,
     LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
+    LocalImageScienceCampaignLoraMicroEvaluationCommandV3,
     LocalImageScienceCampaignLoraMicroEvaluationResult,
     LocalImageScienceCampaignLoraMicroEvaluationResultV2,
+    LocalImageScienceCampaignLoraMicroEvaluationResultV3,
     content_json_bytes,
     validate_contract,
     validate_science_campaign_micro_evaluation_result,
     validate_science_campaign_micro_evaluation_result_v2,
+    validate_science_campaign_micro_evaluation_result_v3,
 )
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.file_set_control_artifacts import (
@@ -56,6 +59,11 @@ _RESULT_SCHEMA = {
         "science-campaign-lora-micro-evaluation-result-v2",
         "eom://schemas/image-provider/"
         "local-image-science-campaign-lora-micro-evaluation-result/1.1",
+    ),
+    "1.2": (
+        "science-campaign-lora-micro-evaluation-result-v3",
+        "eom://schemas/image-provider/"
+        "local-image-science-campaign-lora-micro-evaluation-result/1.2",
     ),
 }
 
@@ -126,9 +134,11 @@ def _load_result(
     workspace: Path,
 ) -> tuple[
     LocalImageScienceCampaignLoraMicroEvaluationCommand
-    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2,
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
+    | LocalImageScienceCampaignLoraMicroEvaluationCommandV3,
     LocalImageScienceCampaignLoraMicroEvaluationResult
-    | LocalImageScienceCampaignLoraMicroEvaluationResultV2,
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV2
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV3,
     bytes,
     str,
 ]:
@@ -138,16 +148,35 @@ def _load_result(
         version = str(result_value.get("schema_version", "")).rsplit("/", 1)[-1]
         result_contract, result_schema_ref = _RESULT_SCHEMA[version]
         validate_contract(result_contract, result_value)
-        if version == "1.1":
+        command: (
+            LocalImageScienceCampaignLoraMicroEvaluationCommand
+            | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
+            | LocalImageScienceCampaignLoraMicroEvaluationCommandV3
+        )
+        result: (
+            LocalImageScienceCampaignLoraMicroEvaluationResult
+            | LocalImageScienceCampaignLoraMicroEvaluationResultV2
+            | LocalImageScienceCampaignLoraMicroEvaluationResultV3
+        )
+        if version == "1.2":
+            validate_contract("science-campaign-lora-micro-evaluation-command-v3", command_value)
+            command = LocalImageScienceCampaignLoraMicroEvaluationCommandV3.model_validate(
+                command_value
+            )
+            result = LocalImageScienceCampaignLoraMicroEvaluationResultV3.model_validate(
+                result_value
+            )
+            assert isinstance(command, LocalImageScienceCampaignLoraMicroEvaluationCommandV3)
+            assert isinstance(result, LocalImageScienceCampaignLoraMicroEvaluationResultV3)
+            validate_science_campaign_micro_evaluation_result_v3(command, result)
+        elif version == "1.1":
             validate_contract("science-campaign-lora-micro-evaluation-command-v2", command_value)
-            command: (
-                LocalImageScienceCampaignLoraMicroEvaluationCommand
-                | LocalImageScienceCampaignLoraMicroEvaluationCommandV2
-            ) = LocalImageScienceCampaignLoraMicroEvaluationCommandV2.model_validate(command_value)
-            result: (
-                LocalImageScienceCampaignLoraMicroEvaluationResult
-                | LocalImageScienceCampaignLoraMicroEvaluationResultV2
-            ) = LocalImageScienceCampaignLoraMicroEvaluationResultV2.model_validate(result_value)
+            command = LocalImageScienceCampaignLoraMicroEvaluationCommandV2.model_validate(
+                command_value
+            )
+            result = LocalImageScienceCampaignLoraMicroEvaluationResultV2.model_validate(
+                result_value
+            )
             assert isinstance(command, LocalImageScienceCampaignLoraMicroEvaluationCommandV2)
             assert isinstance(result, LocalImageScienceCampaignLoraMicroEvaluationResultV2)
             validate_science_campaign_micro_evaluation_result_v2(command, result)
@@ -180,7 +209,8 @@ def _load_result(
 def _members(
     workspace: Path,
     result: LocalImageScienceCampaignLoraMicroEvaluationResult
-    | LocalImageScienceCampaignLoraMicroEvaluationResultV2,
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV2
+    | LocalImageScienceCampaignLoraMicroEvaluationResultV3,
     result_payload: bytes,
     result_schema_ref: str,
 ) -> tuple[ControlFileSetMember, ...]:

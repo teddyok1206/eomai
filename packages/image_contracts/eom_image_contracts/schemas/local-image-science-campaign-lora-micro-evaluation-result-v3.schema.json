@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-evaluation-result/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "error_code": {
+            "pattern": "^IMAGE_EVALUATION_[A-Z0-9_]{3,96}$",
+            "type": "string"
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error_code": {
+            "type": "null"
+          },
+          "outputs": {
+            "maxItems": 8,
+            "minItems": 8
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "adapter_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "pattern": "^IMAGE_EVALUATION_[A-Z0-9_]{3,96}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evaluation_run_id": {
+      "pattern": "^imgscicampaignmicroevalrun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "outputs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "height_px": {
+            "const": 500
+          },
+          "member_path": {
+            "pattern": "^outputs/imgscivislineartcrop_[0-9a-f]{32}-(adapter|base)\\.png$",
+            "type": "string"
+          },
+          "sample_id": {
+            "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "size_bytes": {
+            "maximum": 67108864,
+            "minimum": 64,
+            "type": "integer"
+          },
+          "variant": {
+            "enum": [
+              "ADAPTER",
+              "BASE"
+            ]
+          },
+          "width_px": {
+            "const": 800
+          }
+        },
+        "required": [
+          "sample_id",
+          "variant",
+          "member_path",
+          "sha256",
+          "size_bytes",
+          "width_px",
+          "height_px"
+        ],
+        "type": "object"
+      },
+      "maxItems": 8,
+      "type": "array"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-evaluation-result/1.2"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "training_result_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_run_id",
+    "command_sha256",
+    "training_result_sha256",
+    "adapter_manifest_sha256",
+    "status",
+    "outputs",
+    "error_code",
+    "started_at",
+    "completed_at",
+    "result_sha256"
+  ],
+  "title": "EOM Science Campaign LoRA Expanded Evaluation Result V2",
+  "type": "object"
+}

@@ -183,6 +183,24 @@ SCHEMA_FILES = {
     "science-campaign-lora-micro-evaluation-result-v2": (
         "local-image-science-campaign-lora-micro-evaluation-result-v2.schema.json"
     ),
+    "science-campaign-lora-micro-probe-plan-v3": (
+        "local-image-science-campaign-lora-micro-probe-plan-v3.schema.json"
+    ),
+    "science-campaign-lora-micro-probe-command-v3": (
+        "local-image-science-campaign-lora-micro-probe-command-v3.schema.json"
+    ),
+    "science-campaign-lora-micro-adapter-manifest-v3": (
+        "local-image-science-campaign-lora-micro-adapter-manifest-v3.schema.json"
+    ),
+    "science-campaign-lora-micro-probe-worker-result-v3": (
+        "local-image-science-campaign-lora-micro-probe-worker-result-v3.schema.json"
+    ),
+    "science-campaign-lora-micro-evaluation-command-v3": (
+        "local-image-science-campaign-lora-micro-evaluation-command-v3.schema.json"
+    ),
+    "science-campaign-lora-micro-evaluation-result-v3": (
+        "local-image-science-campaign-lora-micro-evaluation-result-v3.schema.json"
+    ),
     "science-lora-micro-evaluation-command": (
         "local-image-science-lora-micro-evaluation-command-v1.schema.json"
     ),
@@ -451,6 +469,24 @@ SCHEMA_SHA256 = {
     ),
     "science-campaign-lora-micro-evaluation-result-v2": (
         "sha256:b7db6670fa4b41d81d83a3100d364032f9f32b1855f92cbcdeda01fccd018f4d"
+    ),
+    "science-campaign-lora-micro-probe-plan-v3": (
+        "sha256:06e7e9f091c92c8c3355a6832364b36325ff0ba473cb0c5976eb99f7baac6849"
+    ),
+    "science-campaign-lora-micro-probe-command-v3": (
+        "sha256:fbacfa10fe6063311b65fb555e89e20af3a7c793614b5f95e7bbc2af4def898f"
+    ),
+    "science-campaign-lora-micro-adapter-manifest-v3": (
+        "sha256:91e88a5b8fce6b74dffbf2c2adb7dd4eda7cbbc83d45d34075adfa8ca5f7d31d"
+    ),
+    "science-campaign-lora-micro-probe-worker-result-v3": (
+        "sha256:5c563dab6452285735b6e7cc96720d2025083fd3b11bcc4ff7e9a05f47ad35a6"
+    ),
+    "science-campaign-lora-micro-evaluation-command-v3": (
+        "sha256:a72636bb5a6db707de4860b6aef60cc63e8864d9e2026c0801fad9e69f6bf85d"
+    ),
+    "science-campaign-lora-micro-evaluation-result-v3": (
+        "sha256:4dae3349885dd47488eeb45f3196ad1b7f4bc21c950aa8936120677efc987f1f"
     ),
     "science-lora-micro-evaluation-command": (
         "sha256:715e3f8495698b9e3db7601ec954a38774011ab67a649c19190e9bfe6774b019"

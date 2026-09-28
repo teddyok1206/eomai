@@ -1,0 +1,461 @@
+{
+  "$defs": {
+    "adapter": {
+      "additionalProperties": false,
+      "properties": {
+        "activation_policy": {
+          "const": "FORBIDDEN"
+        },
+        "adapter_id": {
+          "pattern": "^imgadapter_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "adapter_revision_id": {
+          "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "base_model": {
+          "$ref": "#/$defs/modelPointer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/adapterFile"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "probe_plan": {
+          "$ref": "#/$defs/artifactMember"
+        },
+        "sample_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema_version": {
+          "const": "local-image-science-campaign-lora-micro-adapter-manifest/1.2"
+        },
+        "state": {
+          "const": "EVALUATION_ONLY"
+        }
+      },
+      "required": [
+        "schema_version",
+        "adapter_id",
+        "adapter_revision_id",
+        "state",
+        "activation_policy",
+        "base_model",
+        "probe_plan",
+        "sample_set_sha256",
+        "files",
+        "created_at",
+        "manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "adapterFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "maximum": 1073741824,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
+    "realizedSample": {
+      "additionalProperties": false,
+      "properties": {
+        "caption_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "document_id": {
+          "pattern": "^sciencedoc_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "exam_group_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "parent_candidate_id": {
+          "pattern": "^imgsciviscandidate_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "perceptual_hash": {
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
+        },
+        "realized_crop_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sample_id": {
+          "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "source_crop_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "training_sample_id": {
+          "pattern": "^imgtrainsample_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample_id",
+        "parent_candidate_id",
+        "document_id",
+        "exam_group_sha256",
+        "training_sample_id",
+        "source_crop_sha256",
+        "realized_crop_sha256",
+        "caption_sha256",
+        "perceptual_hash"
+      ],
+      "type": "object"
+    },
+    "runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "accelerate_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "bitsandbytes_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "compute_capability": {
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "type": "string"
+        },
+        "cuda_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "diffusers_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "gpu_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "peak_gpu_memory_bytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "peft_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "python_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "torch_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "transformers_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version",
+        "cuda_version",
+        "gpu_name",
+        "compute_capability",
+        "peak_gpu_memory_bytes"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-worker-result/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "adapter_manifest": {
+            "type": "null"
+          },
+          "error_code": {
+            "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+            "type": "string"
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "adapter_manifest": {
+            "$ref": "#/$defs/adapter"
+          },
+          "completed_steps": {
+            "const": 200
+          },
+          "error_code": {
+            "type": "null"
+          },
+          "final_loss": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "realized_samples": {
+            "maxItems": 16,
+            "minItems": 16
+          },
+          "runtime": {
+            "$ref": "#/$defs/runtime"
+          },
+          "sample_set_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "adapter_manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/adapter"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "attempt": {
+      "const": 1
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "completed_steps": {
+      "maximum": 200,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "final_loss": {
+      "anyOf": [
+        {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "probe_plan_pointer": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "probe_plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "realized_samples": {
+      "items": {
+        "$ref": "#/$defs/realizedSample"
+      },
+      "maxItems": 16,
+      "minItems": 0,
+      "type": "array"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/runtime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sample_set_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-probe-worker-result/1.2"
+    },
+    "started_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "training_run_id": {
+      "pattern": "^imgscicampaignmicrotrainrun_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "probe_plan_pointer",
+    "probe_plan_sha256",
+    "command_sha256",
+    "attempt",
+    "status",
+    "adapter_manifest",
+    "realized_samples",
+    "sample_set_sha256",
+    "error_code",
+    "runtime",
+    "completed_steps",
+    "final_loss",
+    "started_at",
+    "completed_at",
+    "result_sha256"
+  ],
+  "title": "EOM Science Campaign LoRA Expanded Probe Worker Result V2",
+  "type": "object"
+}

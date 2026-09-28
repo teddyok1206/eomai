@@ -21,14 +21,18 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCampaignLoraMicroProbeCommand,
     LocalImageScienceCampaignLoraMicroProbeCommandV2,
+    LocalImageScienceCampaignLoraMicroProbeCommandV3,
     LocalImageScienceCampaignLoraMicroProbePlan,
     LocalImageScienceCampaignLoraMicroProbePlanV2,
+    LocalImageScienceCampaignLoraMicroProbePlanV3,
+    LocalImageScienceObjectLineArtCropSet,
     LocalImageScienceVisualCampaignCropSet,
     LocalImageScienceVisualCampaignCropSetV2,
     content_sha256,
     validate_contract,
     validate_science_campaign_micro_probe_plan_sources,
     validate_science_campaign_micro_probe_plan_sources_v2,
+    validate_science_campaign_micro_probe_plan_sources_v3,
 )
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
@@ -70,7 +74,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--created-by", required=True)
     parser.add_argument("--seed", type=int, default=20260926)
     parser.add_argument("--source-commit", required=True)
-    parser.add_argument("--contract-version", choices=("1.0", "1.1"), default="1.0")
+    parser.add_argument("--contract-version", choices=("1.0", "1.1", "1.2"), default="1.0")
     parser.add_argument("--preflight-only", action="store_true")
     return parser
 
@@ -83,13 +87,19 @@ def _utc(value: datetime) -> datetime:
 
 def _crop_set_pointer(args: argparse.Namespace) -> ImageEvaluationArtifactMember:
     version = args.contract_version
+    if version == "1.2":
+        member_path = "manifests/science-object-line-art-crop-set.json"
+        schema_ref = "eom://schemas/image-provider/local-image-science-object-line-art-crop-set/1.0"
+    else:
+        member_path = "manifests/science-visual-campaign-crop-set.json"
+        schema_ref = (
+            f"eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/{version}"
+        )
     return ImageEvaluationArtifactMember(
         artifact_id=args.crop_set_artifact_id,
         artifact_revision_id=args.crop_set_artifact_revision_id,
-        member_path="manifests/science-visual-campaign-crop-set.json",
-        schema_ref=(
-            f"eom://schemas/image-provider/local-image-science-visual-campaign-crop-set/{version}"
-        ),
+        member_path=member_path,
+        schema_ref=schema_ref,
         media_type="application/json",
         sha256=args.crop_set_artifact_sha256,
     )
@@ -98,10 +108,17 @@ def _crop_set_pointer(args: argparse.Namespace) -> ImageEvaluationArtifactMember
 def _load_crop_set(
     engine: Engine,
     pointer: ImageEvaluationArtifactMember,
-) -> LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2:
+) -> (
+    LocalImageScienceVisualCampaignCropSet
+    | LocalImageScienceVisualCampaignCropSetV2
+    | LocalImageScienceObjectLineArtCropSet
+):
     payload = _load_artifact_member(engine, pointer, maximum_bytes=MAX_JSON_BYTES)
     try:
         value = _parse_json(payload)
+        if pointer.schema_ref.endswith("object-line-art-crop-set/1.0"):
+            validate_contract("science-object-line-art-crop-set", value)
+            return LocalImageScienceObjectLineArtCropSet.model_validate(value)
         if pointer.schema_ref.endswith("/1.1"):
             validate_contract("science-visual-campaign-crop-set-v2", value)
             return LocalImageScienceVisualCampaignCropSetV2.model_validate(value)
@@ -153,8 +170,14 @@ def _build_plan(
     *,
     args: argparse.Namespace,
     crop_set_pointer: ImageEvaluationArtifactMember,
-    crop_set: LocalImageScienceVisualCampaignCropSet | LocalImageScienceVisualCampaignCropSetV2,
-) -> LocalImageScienceCampaignLoraMicroProbePlan | LocalImageScienceCampaignLoraMicroProbePlanV2:
+    crop_set: LocalImageScienceVisualCampaignCropSet
+    | LocalImageScienceVisualCampaignCropSetV2
+    | LocalImageScienceObjectLineArtCropSet,
+) -> (
+    LocalImageScienceCampaignLoraMicroProbePlan
+    | LocalImageScienceCampaignLoraMicroProbePlanV2
+    | LocalImageScienceCampaignLoraMicroProbePlanV3
+):
     if args.authorization_reference_sha256 != crop_set.training_authorization.sha256:
         raise ScienceCampaignMicroProbeStageError("IMAGE_TRAINING_AUTHORIZATION_MISMATCH")
     binding = load_local_image_provider_binding(
@@ -166,8 +189,9 @@ def _build_plan(
         )
         for partition in ("TRAIN", "VALIDATION", "HOLDOUT")
     }
+    object_line_art = isinstance(crop_set, LocalImageScienceObjectLineArtCropSet)
     expanded = isinstance(crop_set, LocalImageScienceVisualCampaignCropSetV2)
-    version = "1.1" if expanded else "1.0"
+    version = "1.2" if object_line_art else "1.1" if expanded else "1.0"
     body = {
         "schema_version": f"local-image-science-campaign-lora-micro-probe-plan/{version}",
         "crop_set": crop_set_pointer.model_dump(mode="json"),
@@ -199,9 +223,13 @@ def _build_plan(
         },
         "seed": args.seed,
         "purpose": (
-            "EVALUATION_ONLY_SCIENCE_CAMPAIGN_EXPANDED_PROBE"
-            if expanded
-            else "EVALUATION_ONLY_SCIENCE_CAMPAIGN_MICRO_PROBE"
+            "EVALUATION_ONLY_SCIENCE_OBJECT_LINE_ART_PROBE"
+            if object_line_art
+            else (
+                "EVALUATION_ONLY_SCIENCE_CAMPAIGN_EXPANDED_PROBE"
+                if expanded
+                else "EVALUATION_ONLY_SCIENCE_CAMPAIGN_MICRO_PROBE"
+            )
         ),
         "activation_policy": "FORBIDDEN",
         "authorized_at": _utc(args.authorized_at).isoformat().replace("+00:00", "Z"),
@@ -215,6 +243,12 @@ def _build_plan(
     with_id = {**body, "probe_id": "imgscicampaignmicroprobe_" + identity[:32]}
     value = {**with_id, "plan_sha256": content_sha256(with_id)}
     try:
+        if object_line_art:
+            validate_contract("science-campaign-lora-micro-probe-plan-v3", value)
+            plan_v3 = LocalImageScienceCampaignLoraMicroProbePlanV3.model_validate(value)
+            assert isinstance(crop_set, LocalImageScienceObjectLineArtCropSet)
+            validate_science_campaign_micro_probe_plan_sources_v3(plan_v3, crop_set)
+            return plan_v3
         if expanded:
             validate_contract("science-campaign-lora-micro-probe-plan-v2", value)
             plan_v2 = LocalImageScienceCampaignLoraMicroProbePlanV2.model_validate(value)
@@ -233,14 +267,19 @@ def _build_plan(
 def _build_command(
     *,
     plan: LocalImageScienceCampaignLoraMicroProbePlan
-    | LocalImageScienceCampaignLoraMicroProbePlanV2,
+    | LocalImageScienceCampaignLoraMicroProbePlanV2
+    | LocalImageScienceCampaignLoraMicroProbePlanV3,
     plan_pointer: ImageEvaluationArtifactMember,
 ) -> (
     LocalImageScienceCampaignLoraMicroProbeCommand
     | LocalImageScienceCampaignLoraMicroProbeCommandV2
+    | LocalImageScienceCampaignLoraMicroProbeCommandV3
 ):
-    expanded = isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2)
-    version = "1.1" if expanded else "1.0"
+    object_line_art = isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3)
+    expanded = (
+        isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2) and not object_line_art
+    )
+    version = "1.2" if object_line_art else "1.1" if expanded else "1.0"
     identity = content_sha256(
         {
             "probe_plan_pointer": plan_pointer.model_dump(mode="json"),
@@ -256,7 +295,11 @@ def _build_command(
         "probe_plan": plan.model_dump(mode="json"),
         "attempt": 1,
         "staged_plan_member": "inputs/science-campaign-micro-probe-plan.json",
-        "staged_crop_set_member": "inputs/science-visual-campaign-crop-set.json",
+        "staged_crop_set_member": (
+            "inputs/science-object-line-art-crop-set.json"
+            if object_line_art
+            else "inputs/science-visual-campaign-crop-set.json"
+        ),
         "staged_crops_root": "inputs/crops",
         "runtime_dataset_root": "runtime-dataset",
         "output_root_member": "outputs",
@@ -265,6 +308,9 @@ def _build_command(
     }
     value = {**body, "command_sha256": content_sha256(body)}
     try:
+        if object_line_art:
+            validate_contract("science-campaign-lora-micro-probe-command-v3", value)
+            return LocalImageScienceCampaignLoraMicroProbeCommandV3.model_validate(value)
         if expanded:
             validate_contract("science-campaign-lora-micro-probe-command-v2", value)
             return LocalImageScienceCampaignLoraMicroProbeCommandV2.model_validate(value)
@@ -328,7 +374,9 @@ def main() -> None:
             ControlArtifactPublisher(engine, Settings.from_environment()),
             source_commit=args.source_commit,
         )
-        if isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2):
+        if isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV3):
+            plan_pointer = publisher.commit_science_campaign_micro_probe_plan_v3(plan)
+        elif isinstance(plan, LocalImageScienceCampaignLoraMicroProbePlanV2):
             plan_pointer = publisher.commit_science_campaign_micro_probe_plan_v2(plan)
         else:
             plan_pointer = publisher.commit_science_campaign_micro_probe_plan(plan)
@@ -345,7 +393,12 @@ def main() -> None:
             trainer_gid=trainer_gid,
         )
         _stage_file(
-            inputs / "science-visual-campaign-crop-set.json",
+            inputs
+            / (
+                "science-object-line-art-crop-set.json"
+                if isinstance(crop_set, LocalImageScienceObjectLineArtCropSet)
+                else "science-visual-campaign-crop-set.json"
+            ),
             canonical_json_bytes(crop_set.model_dump(mode="json")),
             trainer_gid=trainer_gid,
         )

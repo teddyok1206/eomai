@@ -1,0 +1,326 @@
+{
+  "$defs": {
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "dependencies": {
+      "additionalProperties": false,
+      "properties": {
+        "accelerate_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "bitsandbytes_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "diffusers_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "peft_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "python_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "torch_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "transformers_version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version"
+      ],
+      "type": "object"
+    },
+    "hyperparameters": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_type": {
+          "const": "UNET_LORA"
+        },
+        "alpha": {
+          "const": 8
+        },
+        "checkpointing_steps": {
+          "const": 200
+        },
+        "gradient_accumulation_steps": {
+          "const": 4
+        },
+        "gradient_checkpointing": {
+          "const": true
+        },
+        "learning_rate": {
+          "const": "1e-4"
+        },
+        "max_train_steps": {
+          "const": 200
+        },
+        "mixed_precision": {
+          "const": "fp16"
+        },
+        "optimizer": {
+          "const": "adamw_8bit"
+        },
+        "random_flip": {
+          "const": false
+        },
+        "rank": {
+          "const": 8
+        },
+        "resolution_height": {
+          "const": 512
+        },
+        "resolution_width": {
+          "const": 768
+        },
+        "train_batch_size": {
+          "const": 1
+        },
+        "train_text_encoders": {
+          "const": false
+        },
+        "train_vae": {
+          "const": false
+        }
+      },
+      "required": [
+        "adapter_type",
+        "rank",
+        "alpha",
+        "resolution_width",
+        "resolution_height",
+        "train_batch_size",
+        "gradient_accumulation_steps",
+        "gradient_checkpointing",
+        "mixed_precision",
+        "optimizer",
+        "learning_rate",
+        "max_train_steps",
+        "checkpointing_steps",
+        "random_flip",
+        "train_text_encoders",
+        "train_vae"
+      ],
+      "type": "object"
+    },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "authorization_reference_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "authorized_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "authorized_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "base_model": {
+      "$ref": "#/$defs/modelPointer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "type": "string"
+    },
+    "crop_set": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "crop_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "dependencies": {
+      "$ref": "#/$defs/dependencies"
+    },
+    "holdout_member_ids": {
+      "items": {
+        "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "hyperparameters": {
+      "$ref": "#/$defs/hyperparameters"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "preprocessing_revision": {
+      "const": "local-image-science-crop-preprocess/1.0"
+    },
+    "probe_id": {
+      "pattern": "^imgscicampaignmicroprobe_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_SCIENCE_OBJECT_LINE_ART_PROBE"
+    },
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-probe-plan/1.2"
+    },
+    "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "trainer_contract": {
+      "const": "eom-local-image-science-campaign-lora-micro-trainer/1.2"
+    },
+    "training_member_ids": {
+      "items": {
+        "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 16,
+      "type": "array"
+    },
+    "validation_member_ids": {
+      "items": {
+        "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "probe_id",
+    "crop_set",
+    "crop_set_sha256",
+    "base_model",
+    "training_member_ids",
+    "validation_member_ids",
+    "holdout_member_ids",
+    "preprocessing_revision",
+    "trainer_contract",
+    "dependencies",
+    "hyperparameters",
+    "seed",
+    "purpose",
+    "activation_policy",
+    "authorized_at",
+    "authorized_by",
+    "authorization_reference_sha256",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "plan_sha256"
+  ],
+  "title": "EOM Science Campaign LoRA Expanded Probe Plan V2",
+  "type": "object"
+}

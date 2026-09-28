@@ -1,0 +1,163 @@
+{
+  "$defs": {
+    "adapterFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "maximum": 1073741824,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "artifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "modelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-science-campaign-lora-micro-adapter-manifest/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "adapter_id": {
+      "pattern": "^imgadapter_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "adapter_revision_id": {
+      "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "base_model": {
+      "$ref": "#/$defs/modelPointer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/adapterFile"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "probe_plan": {
+      "$ref": "#/$defs/artifactMember"
+    },
+    "sample_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "local-image-science-campaign-lora-micro-adapter-manifest/1.2"
+    },
+    "state": {
+      "const": "EVALUATION_ONLY"
+    }
+  },
+  "required": [
+    "schema_version",
+    "adapter_id",
+    "adapter_revision_id",
+    "state",
+    "activation_policy",
+    "base_model",
+    "probe_plan",
+    "sample_set_sha256",
+    "files",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "title": "EOM Science Campaign LoRA Expanded Adapter Manifest V2",
+  "type": "object"
+}

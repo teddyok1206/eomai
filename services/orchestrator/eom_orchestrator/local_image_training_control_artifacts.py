@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from eom_image_contracts import (
         LocalImageScienceCampaignLoraMicroProbePlan,
         LocalImageScienceCampaignLoraMicroProbePlanV2,
+        LocalImageScienceCampaignLoraMicroProbePlanV3,
+        LocalImageScienceObjectLineArtSuitabilityReview,
         LocalImageScienceVisualCampaignRasterRefinementPlan,
         LocalImageScienceVisualCampaignRasterSuitabilityReview,
         LocalImageScienceVisualSubjectBenchmarkPlan,
@@ -78,6 +80,12 @@ SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_SCHEMA_REF = (
 )
 SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_ARTIFACT_TYPE = (
     "control_local_image_science_campaign_lora_micro_probe_plan_v2"
+)
+SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-campaign-lora-micro-probe-plan/1.2"
+)
+SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_ARTIFACT_TYPE = (
+    "control_local_image_science_campaign_lora_micro_probe_plan_v3"
 )
 SCIENCE_CORPUS_AUTHORIZATION_MEMBER = "manifests/science-corpus-training-authorization.json"
 SCIENCE_CORPUS_AUTHORIZATION_SCHEMA_REF = (
@@ -159,6 +167,15 @@ SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_SCHEMA_REF = (
 )
 SCIENCE_CAMPAIGN_RASTER_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
     "control_local_image_science_campaign_raster_suitability_review"
+)
+SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_MEMBER = (
+    "manifests/science-object-line-art-suitability-review.json"
+)
+SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-science-object-line-art-suitability-review/1.0"
+)
+SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_ARTIFACT_TYPE = (
+    "control_local_image_science_object_line_art_suitability_review"
 )
 SCIENCE_RASTER_REFINEMENT_PLAN_MEMBER = "manifests/science-raster-refinement-plan.json"
 SCIENCE_RASTER_REFINEMENT_PLAN_SCHEMA_REF = (
@@ -336,6 +353,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_SCHEMA_REF,
             artifact_type=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V2_ARTIFACT_TYPE,
             idempotency_prefix="local-image-science-campaign-lora-micro-probe-plan-v2",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
+        )
+
+    def commit_science_campaign_micro_probe_plan_v3(
+        self,
+        plan: LocalImageScienceCampaignLoraMicroProbePlanV3,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-campaign-lora-micro-probe-plan-v3",
+            member=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_MEMBER,
+            schema_ref=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_SCHEMA_REF,
+            artifact_type=SCIENCE_CAMPAIGN_MICRO_PROBE_PLAN_V3_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-campaign-lora-micro-probe-plan-v3",
             identity_sha256=plan.plan_sha256,
             created_at=plan.created_at,
         )
@@ -578,6 +610,21 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-campaign-raster-suitability-review",
             identity_sha256=review.review_sha256,
             created_at=review.reviewed_at,
+        )
+
+    def commit_science_object_line_art_suitability_review(
+        self,
+        review: LocalImageScienceObjectLineArtSuitabilityReview,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=review,
+            contract_name="science-object-line-art-suitability-review",
+            member=SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_MEMBER,
+            schema_ref=SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_SCHEMA_REF,
+            artifact_type=SCIENCE_OBJECT_LINE_ART_SUITABILITY_REVIEW_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-science-object-line-art-suitability-review",
+            identity_sha256=review.review_sha256,
+            created_at=review.created_at,
         )
 
     def commit_science_raster_refinement_plan(
