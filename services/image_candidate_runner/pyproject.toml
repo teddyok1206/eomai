@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eom-local-image-candidate-runner"
+version = "0.1.0"
+description = "Isolated evaluation-only runner for EOM local image model candidates"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  # Required for model CPU offload without changing the production SSD-1B runtime.
+  "accelerate==1.10.1",
+  # First stable release containing the FLUX.2 Klein reference-conditioned pipeline.
+  "diffusers==0.40.0",
+  "eom-image-contracts==0.1.0",
+  # Diffusers 0.40 requires the immutable model-cache APIs from the 1.x line.
+  "huggingface-hub==1.23.0",
+  # Required for bounded PNG validation and deterministic delivery crops.
+  "Pillow==11.3.0",
+  # Safetensors 0.8 is the minimum accepted by Diffusers 0.40.
+  "safetensors==0.8.0",
+  # Existing CUDA 12.8 / RTX 5080 runtime validated by the current image service.
+  "torch==2.7.1",
+  # Provides the Qwen3 text encoder used by FLUX.2 Klein.
+  "transformers==5.17.0",
+]
+
+[project.scripts]
+eom-local-image-candidate = "eom_image_candidate_runner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eom_image_candidate_runner*"]
