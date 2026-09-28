@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from eom_image_contracts import (
@@ -56,6 +58,8 @@ from eom_image_contracts import (
     validate_visual_reference_acquisition,
 )
 from pydantic import ValidationError as PydanticValidationError
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _sha(value: int) -> str:
@@ -752,6 +756,21 @@ def test_base_only_simplified_morphology_v4_contracts_pin_palette_and_policy() -
         validate_contract(name, value)
     validate_reference_conditioned_receipt_v4(request, receipt)
     assert "style_adapter" not in binding.model_fields_set
+
+
+def test_deployable_v4_binding_is_canonical_and_schema_valid() -> None:
+    path = REPOSITORY_ROOT / "config/local-image-provider.ssd1b.v4.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    validate_contract("provider-binding-v4", value)
+    binding = LocalImageProviderBindingV4.model_validate(value)
+
+    assert binding.binding_sha256 == (
+        "sha256:56b5442180fe01347f8135865e719e6be76e89b86caa2d156d6992689740d96d"
+    )
+    assert binding.reference_policy.conditioning.simplification.output_member == (
+        "reference-conditioning.png"
+    )
+    assert not hasattr(binding, "style_adapter")
 
 
 def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:

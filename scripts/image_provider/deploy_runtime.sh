@@ -22,7 +22,7 @@ REFERENCE_STYLE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-refer
 REFERENCE_STYLE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-style-provider@.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
-BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.json
+BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.v4.json
 BINDING_TARGET=/etc/eom/local-image-provider.json
 
 fail() {

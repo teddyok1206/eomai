@@ -398,6 +398,7 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert "LOCAL_IMAGE_SHARED_CONFIG_ROOT_DRIFT" in deploy
     assert "install -d -o root -g eom -m 0750 /etc/eom" not in deploy
     assert 'install -o root -g root -m 0644 "${BINDING_SOURCE}"' in deploy
+    assert "config/local-image-provider.ssd1b.v4.json" in deploy
     assert "os.walk(files_root, followlinks=False)" in normalize
     assert "manifest.files" in normalize
 
