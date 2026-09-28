@@ -74,6 +74,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v1.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-style-adapter-release-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-style-adapter-release-v2.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v2.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v2.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v3.schema.json",

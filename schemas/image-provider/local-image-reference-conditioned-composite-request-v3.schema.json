@@ -125,7 +125,7 @@
       ],
       "properties": {
         "contract": {
-          "const": "sdxl-morphology-img2img/2.0"
+          "const": "sdxl-morphology-img2img/2.1"
         },
         "strength": {
           "const": 0.35
@@ -150,7 +150,7 @@
           ],
           "properties": {
             "contract": {
-              "const": "local-image-reference-simplification/1.0"
+              "const": "local-image-reference-simplification/1.1"
             },
             "output_member": {
               "const": "reference-conditioning.png"
@@ -159,10 +159,10 @@
               "const": "GRAYSCALE_WHITE_BACKGROUND"
             },
             "denoise_policy": {
-              "const": "MEDIAN_5_GAUSSIAN_1_2"
+              "const": "MAX_5_MEDIAN_7_GAUSSIAN_2_0"
             },
             "tone_policy": {
-              "const": "FOUR_LEVEL_POSTERIZE"
+              "const": "SIX_LEVEL_LIGHT_TONE_CONTOUR"
             },
             "foreground_luma_threshold": {
               "const": 245
@@ -210,7 +210,7 @@
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "style_adapter": {
-      "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+      "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/2.0"
     }
   }
 }

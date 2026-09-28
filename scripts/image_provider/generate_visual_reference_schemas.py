@@ -818,10 +818,10 @@ def style_adapter_release_schema() -> dict[str, Any]:
 
 
 def provider_binding_v2_schema() -> dict[str, Any]:
-    predecessor = json.loads(
+    predecessor: dict[str, Any] = json.loads(
         (CANONICAL / "local-image-provider-binding-v1.schema.json").read_text()
     )
-    value = copy.deepcopy(predecessor)
+    value: dict[str, Any] = copy.deepcopy(predecessor)
     value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/2.0"
     value["title"] = "EOM reference-conditioned local image provider binding v2"
     value["required"] = [
@@ -864,6 +864,15 @@ def provider_binding_v2_schema() -> dict[str, Any]:
             "failure_policy": {"const": "FAIL_CLOSED"},
         },
     }
+    return value
+
+
+def style_adapter_release_v2_schema() -> dict[str, Any]:
+    value: dict[str, Any] = copy.deepcopy(style_adapter_release_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-style-adapter-release/2.0"
+    value["title"] = "EOM reduced-scale assessment style adapter release v2"
+    value["properties"]["schema_version"] = {"const": "local-image-style-adapter-release/2.0"}
+    value["properties"]["lora_scale"] = {"const": 0.45}
     return value
 
 
@@ -910,7 +919,7 @@ def _morphology_conditioning_schema() -> dict[str, Any]:
             "simplification",
         ],
         "properties": {
-            "contract": {"const": "sdxl-morphology-img2img/2.0"},
+            "contract": {"const": "sdxl-morphology-img2img/2.1"},
             "strength": {"const": 0.35},
             "fit_policy": {"const": "EXACT_NORMALIZED_CANVAS"},
             "simplification": {
@@ -929,11 +938,11 @@ def _morphology_conditioning_schema() -> dict[str, Any]:
                     "border_foreground_ratio_max",
                 ],
                 "properties": {
-                    "contract": {"const": "local-image-reference-simplification/1.0"},
+                    "contract": {"const": "local-image-reference-simplification/1.1"},
                     "output_member": {"const": "reference-conditioning.png"},
                     "color_policy": {"const": "GRAYSCALE_WHITE_BACKGROUND"},
-                    "denoise_policy": {"const": "MEDIAN_5_GAUSSIAN_1_2"},
-                    "tone_policy": {"const": "FOUR_LEVEL_POSTERIZE"},
+                    "denoise_policy": {"const": "MAX_5_MEDIAN_7_GAUSSIAN_2_0"},
+                    "tone_policy": {"const": "SIX_LEVEL_LIGHT_TONE_CONTOUR"},
                     "foreground_luma_threshold": {"const": 245},
                     "border_width_px": {"const": 24},
                     "foreground_ratio_min": {"const": 0.005},
@@ -952,6 +961,9 @@ def provider_binding_v3_schema() -> dict[str, Any]:
     value["properties"]["schema_version"] = {"const": "local-image-provider-binding/3.0"}
     value["properties"]["route_contract"] = {
         "const": "eom-local-morphology-conditioned-line-art/3.0"
+    }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/2.0"
     }
     value["properties"]["reference_policy"] = {
         "type": "object",
@@ -987,6 +999,9 @@ def conditioned_request_v3_schema() -> dict[str, Any]:
     value["properties"]["schema_version"] = {
         "const": "local-image-reference-conditioned-composite-request/3.0"
     }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/2.0"
+    }
     value["$defs"]["conditioning"] = _morphology_conditioning_schema()
     return value
 
@@ -999,6 +1014,9 @@ def conditioned_receipt_v3_schema() -> dict[str, Any]:
     value["title"] = "EOM simplified-morphology reference composite receipt v3"
     value["properties"]["schema_version"] = {
         "const": "local-image-reference-conditioned-composite-receipt/3.0"
+    }
+    value["properties"]["style_adapter"] = {
+        "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/2.0"
     }
     value["$defs"]["conditioning"] = _morphology_conditioning_schema()
     value["$defs"]["conditioning_output"] = {
@@ -1243,6 +1261,7 @@ SCHEMAS = {
     ),
     "local-image-visual-reference-acquisition-result-v1.schema.json": (acquisition_result_schema()),
     "local-image-style-adapter-release-v1.schema.json": style_adapter_release_schema(),
+    "local-image-style-adapter-release-v2.schema.json": style_adapter_release_v2_schema(),
     "local-image-provider-binding-v2.schema.json": provider_binding_v2_schema(),
     "local-image-reference-conditioned-composite-request-v2.schema.json": (
         conditioned_request_v2_schema()

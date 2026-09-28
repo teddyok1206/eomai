@@ -7,7 +7,7 @@ import os
 import struct
 import zlib
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import eom_catalog_service.local_image_adapter as local_image_adapter
 import pytest
@@ -169,27 +169,35 @@ def _binding_v2_value() -> dict[str, object]:
 
 def _binding_v3_value() -> dict[str, object]:
     predecessor = _binding_v2_value()
+    style_adapter = dict(cast(dict[str, object], predecessor["style_adapter"]))
+    style_body = {
+        **style_adapter,
+        "schema_version": "local-image-style-adapter-release/2.0",
+        "lora_scale": 0.45,
+    }
+    style_body.pop("release_sha256")
+    style = {**style_body, "release_sha256": content_sha256(style_body)}
     body = {
         "schema_version": "local-image-provider-binding/3.0",
         "state": "ENABLED",
         "route_contract": "eom-local-morphology-conditioned-line-art/3.0",
         "model": predecessor["model"],
-        "style_adapter": predecessor["style_adapter"],
+        "style_adapter": style,
         "reference_policy": {
             "intent_source": "DRAWING_ALT_TEXT",
             "provider": "WIKIMEDIA_COMMONS",
             "license_policy": "PUBLIC_DOMAIN_OR_CC0",
             "candidate_limit": 5,
             "conditioning": {
-                "contract": "sdxl-morphology-img2img/2.0",
+                "contract": "sdxl-morphology-img2img/2.1",
                 "strength": 0.35,
                 "fit_policy": "EXACT_NORMALIZED_CANVAS",
                 "simplification": {
-                    "contract": "local-image-reference-simplification/1.0",
+                    "contract": "local-image-reference-simplification/1.1",
                     "output_member": "reference-conditioning.png",
                     "color_policy": "GRAYSCALE_WHITE_BACKGROUND",
-                    "denoise_policy": "MEDIAN_5_GAUSSIAN_1_2",
-                    "tone_policy": "FOUR_LEVEL_POSTERIZE",
+                    "denoise_policy": "MAX_5_MEDIAN_7_GAUSSIAN_2_0",
+                    "tone_policy": "SIX_LEVEL_LIGHT_TONE_CONTOUR",
                     "foreground_luma_threshold": 245,
                     "border_width_px": 24,
                     "foreground_ratio_min": 0.005,

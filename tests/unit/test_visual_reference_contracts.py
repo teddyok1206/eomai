@@ -15,6 +15,7 @@ from eom_image_contracts import (
     LocalImageOutput,
     LocalImageOverlayInput,
     LocalImageProductionStyleAdapterRelease,
+    LocalImageProductionStyleAdapterReleaseV2,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageReferenceConditionedCompositeReceipt,
@@ -312,6 +313,21 @@ def _style_adapter_release() -> LocalImageProductionStyleAdapterRelease:
     )
 
 
+def _style_adapter_release_v2() -> LocalImageProductionStyleAdapterReleaseV2:
+    predecessor = _style_adapter_release().model_dump(
+        mode="json",
+        exclude={"release_sha256"},
+    )
+    body = {
+        **predecessor,
+        "schema_version": "local-image-style-adapter-release/2.0",
+        "lora_scale": 0.45,
+    }
+    return LocalImageProductionStyleAdapterReleaseV2.model_validate(
+        {**body, "release_sha256": content_sha256(body)}
+    )
+
+
 def _conditioned_request_v2() -> LocalImageReferenceConditionedCompositeRequestV2:
     body = {
         "schema_version": "local-image-reference-conditioned-composite-request/2.0",
@@ -331,7 +347,7 @@ def _conditioned_request_v3() -> LocalImageReferenceConditionedCompositeRequestV
         "composite_request": _composite_request().model_dump(mode="json"),
         "visual_reference": _reference_pointer().model_dump(mode="json"),
         "conditioning": LocalImageMorphologyConditioning().model_dump(mode="json"),
-        "style_adapter": _style_adapter_release().model_dump(mode="json"),
+        "style_adapter": _style_adapter_release_v2().model_dump(mode="json"),
     }
     return LocalImageReferenceConditionedCompositeRequestV3.model_validate(
         {**body, "request_sha256": content_sha256(body)}
@@ -625,6 +641,7 @@ def test_simplified_morphology_v3_contracts_pin_conditioning_bytes_and_metrics()
     )
 
     for name, value in (
+        ("style-adapter-release-v2", request.style_adapter.model_dump(mode="json")),
         ("provider-binding-v3", binding.model_dump(mode="json")),
         ("reference-conditioned-composite-request-v3", request.model_dump(mode="json")),
         ("reference-conditioned-composite-receipt-v3", receipt.model_dump(mode="json")),

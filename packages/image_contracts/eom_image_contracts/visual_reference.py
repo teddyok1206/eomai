@@ -783,6 +783,53 @@ class LocalImageProductionStyleAdapterRelease(FrozenModel):
         return self
 
 
+class LocalImageProductionStyleAdapterReleaseV2(FrozenModel):
+    """Same immutable adapter bytes with the reviewed reduced inference scale."""
+
+    schema_version: Literal["local-image-style-adapter-release/2.0"] = (
+        "local-image-style-adapter-release/2.0"
+    )
+    release_id: str = Field(pattern=r"^imgstylerelease_[0-9a-f]{32}$")
+    release_revision_id: str = Field(pattern=r"^imgstylereleaserev_[0-9a-f]{32}$")
+    state: Literal["RELEASED"] = "RELEASED"
+    adapter_contract: Literal["eom-assessment-style-lora/1.0"] = "eom-assessment-style-lora/1.0"
+    adapter_id: str = Field(pattern=r"^imgadapter_[0-9a-f]{32}$")
+    adapter_revision_id: str = Field(pattern=r"^imgadapterrev_[0-9a-f]{32}$")
+    base_model: LocalImageModelPointer
+    source_adapter_manifest: ProductionStyleAdapterSourceManifestPointer
+    evaluation_result: ProductionStyleAdapterEvaluationPointer
+    files: tuple[ProductionStyleAdapterFile, ...] = Field(min_length=2, max_length=2)
+    lora_scale: float = Field(default=0.45, ge=0.45, le=0.45)
+    approved_at: datetime
+    approved_by: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:@-]+$",
+    )
+    release_sha256: Sha256
+
+    @field_validator("approved_at")
+    @classmethod
+    def utc_approval(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("style-adapter approval must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_files_and_hash(self) -> LocalImageProductionStyleAdapterReleaseV2:
+        if tuple(value.relative_path for value in self.files) != (
+            "adapter_config.json",
+            "adapter_model.safetensors",
+        ):
+            raise ValueError("style-adapter files must be exact and ordered")
+        if len({value.sha256 for value in self.files}) != 2:
+            raise ValueError("style-adapter file hashes must be unique")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"release_sha256"}))
+        if self.release_sha256 != expected:
+            raise ValueError("style-adapter release hash mismatch")
+        return self
+
+
 class LocalImageVisualReferencePolicy(FrozenModel):
     intent_source: Literal["DRAWING_ALT_TEXT"] = "DRAWING_ALT_TEXT"
     provider: Literal["WIKIMEDIA_COMMONS"] = "WIKIMEDIA_COMMONS"
@@ -794,13 +841,13 @@ class LocalImageVisualReferencePolicy(FrozenModel):
 
 
 class LocalImageReferenceSimplification(FrozenModel):
-    contract: Literal["local-image-reference-simplification/1.0"] = (
-        "local-image-reference-simplification/1.0"
+    contract: Literal["local-image-reference-simplification/1.1"] = (
+        "local-image-reference-simplification/1.1"
     )
     output_member: Literal["reference-conditioning.png"] = "reference-conditioning.png"
     color_policy: Literal["GRAYSCALE_WHITE_BACKGROUND"] = "GRAYSCALE_WHITE_BACKGROUND"
-    denoise_policy: Literal["MEDIAN_5_GAUSSIAN_1_2"] = "MEDIAN_5_GAUSSIAN_1_2"
-    tone_policy: Literal["FOUR_LEVEL_POSTERIZE"] = "FOUR_LEVEL_POSTERIZE"
+    denoise_policy: Literal["MAX_5_MEDIAN_7_GAUSSIAN_2_0"] = "MAX_5_MEDIAN_7_GAUSSIAN_2_0"
+    tone_policy: Literal["SIX_LEVEL_LIGHT_TONE_CONTOUR"] = "SIX_LEVEL_LIGHT_TONE_CONTOUR"
     foreground_luma_threshold: Literal[245] = 245
     border_width_px: Literal[24] = 24
     foreground_ratio_min: float = Field(default=0.005, ge=0.005, le=0.005)
@@ -809,7 +856,7 @@ class LocalImageReferenceSimplification(FrozenModel):
 
 
 class LocalImageMorphologyConditioning(FrozenModel):
-    contract: Literal["sdxl-morphology-img2img/2.0"] = "sdxl-morphology-img2img/2.0"
+    contract: Literal["sdxl-morphology-img2img/2.1"] = "sdxl-morphology-img2img/2.1"
     strength: float = Field(default=0.35, ge=0.35, le=0.35)
     fit_policy: Literal["EXACT_NORMALIZED_CANVAS"] = "EXACT_NORMALIZED_CANVAS"
     simplification: LocalImageReferenceSimplification = Field(
@@ -861,7 +908,7 @@ class LocalImageProviderBindingV3(FrozenModel):
         "eom-local-morphology-conditioned-line-art/3.0"
     )
     model: LocalImageModelPointer
-    style_adapter: LocalImageProductionStyleAdapterRelease
+    style_adapter: LocalImageProductionStyleAdapterReleaseV2
     reference_policy: LocalImageVisualReferencePolicyV2
     sampler: SamplerContract
     timeout_seconds: int = Field(ge=30, le=900)
@@ -1003,7 +1050,7 @@ class LocalImageReferenceConditionedCompositeRequestV3(FrozenModel):
     composite_request: LocalImageCompositeRequest
     visual_reference: LocalImageVisualReferencePointer
     conditioning: LocalImageMorphologyConditioning
-    style_adapter: LocalImageProductionStyleAdapterRelease
+    style_adapter: LocalImageProductionStyleAdapterReleaseV2
     request_sha256: Sha256
 
     @model_validator(mode="after")
@@ -1024,7 +1071,7 @@ class LocalImageReferenceConditionedCompositeReceiptV3(FrozenModel):
     composite_receipt: LocalImageCompositeReceipt
     visual_reference: LocalImageVisualReferencePointer
     conditioning: LocalImageMorphologyConditioning
-    style_adapter: LocalImageProductionStyleAdapterRelease
+    style_adapter: LocalImageProductionStyleAdapterReleaseV2
     conditioning_output: LocalImageReferenceConditioningOutput
     simplification_metrics: LocalImageReferenceSimplificationMetrics
     simplifier_runtime: LocalImageReferenceSimplifierRuntime

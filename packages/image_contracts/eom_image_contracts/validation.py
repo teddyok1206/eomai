@@ -41,6 +41,7 @@ SCHEMA_FILES = {
         "local-image-reference-conditioned-composite-receipt-v1.schema.json"
     ),
     "style-adapter-release": "local-image-style-adapter-release-v1.schema.json",
+    "style-adapter-release-v2": "local-image-style-adapter-release-v2.schema.json",
     "reference-conditioned-composite-request-v2": (
         "local-image-reference-conditioned-composite-request-v2.schema.json"
     ),
@@ -254,7 +255,7 @@ SCHEMA_SHA256 = {
         "sha256:c9a7c6a2ba772f44108193be85d8b354ec89e26e1003affbe634f8327399ad78"
     ),
     "provider-binding-v3": (
-        "sha256:837b32d9693ba12f33a6f6c0ff4c252e40096dad1d0de2f3ab67fca4c953f01d"
+        "sha256:51f22a71964507fbeeb1f800fcdd61551dc4f382e3cc28ec76c1f687ee620020"
     ),
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
@@ -285,6 +286,9 @@ SCHEMA_SHA256 = {
     "style-adapter-release": (
         "sha256:22f632254b0b72236d4d8a1e80597dfdca7982fe028259b0bcb1ee630d251018"
     ),
+    "style-adapter-release-v2": (
+        "sha256:e009d0496edb573840cebfef8f6112244fda9aeaaf67ca100546d87bec6e067f"
+    ),
     "reference-conditioned-composite-request-v2": (
         "sha256:6b538a3b968b728c6f2c51e882e3e3626220a0778bf43dabae9c38ff1dc24c96"
     ),
@@ -292,10 +296,10 @@ SCHEMA_SHA256 = {
         "sha256:ce8986fd687998cfef67ff3df72fa98dd45cc5def52e056ab8e2e4ec7dc59961"
     ),
     "reference-conditioned-composite-request-v3": (
-        "sha256:e48a576b20c139a0573b2bd4b556afda9d800aadd0deb7c6a4a84f1752fba057"
+        "sha256:02ed5dfe0b946ae068dec703605c618d8d038acba5d2f871695b1b7f56f5d05b"
     ),
     "reference-conditioned-composite-receipt-v3": (
-        "sha256:52f61a351cb40e46ec1a91c247a484da081b5d2a8384bf25315f1ad0bb179b0b"
+        "sha256:30d516b0c5b36ce9cfd9a4d3c2f0c59217cdc201aaa36d89972ac08c8f9404a4"
     ),
     "reference-composition-evaluation": (
         "sha256:2bf2747b6d2458880c7fa26409b96377756a022bc13f4a75ee1de19340ef1120"

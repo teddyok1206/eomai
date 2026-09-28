@@ -264,6 +264,7 @@ from eom_image_contracts.validation import SCHEMA_SHA256, load_schema, validate_
 from eom_image_contracts.visual_reference import (
     LocalImageMorphologyConditioning,
     LocalImageProductionStyleAdapterRelease,
+    LocalImageProductionStyleAdapterReleaseV2,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageReferenceConditionedCompositeReceipt,
@@ -359,6 +360,7 @@ __all__ = [
     "LocalImageOutput",
     "LocalImageOverlayInput",
     "LocalImageProductionStyleAdapterRelease",
+    "LocalImageProductionStyleAdapterReleaseV2",
     "LocalImageProviderBinding",
     "LocalImageProviderBindingV2",
     "LocalImageProviderBindingV3",

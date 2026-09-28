@@ -28,6 +28,7 @@ from eom_image_contracts import (
     LocalImageModelManifest,
     LocalImageOutput,
     LocalImageProductionStyleAdapterRelease,
+    LocalImageProductionStyleAdapterReleaseV2,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
@@ -233,7 +234,7 @@ def verify_model_revision(
 
 def verify_style_adapter_release(
     style_adapter_store_root: Path,
-    release: LocalImageProductionStyleAdapterRelease,
+    release: LocalImageProductionStyleAdapterRelease | LocalImageProductionStyleAdapterReleaseV2,
 ) -> Path:
     """Resolve one installed style release without trusting a path from worker output."""
 

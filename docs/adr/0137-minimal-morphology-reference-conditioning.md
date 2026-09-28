@@ -15,9 +15,10 @@ framing. The model may change only the assessment-page rendering style.
 
 The predecessor passed the normalized reference PNG directly to SDXL img2img and always requested
 light-gray hatching. Human review showed that this preserves or invents too much texture. The
-successor therefore creates one deterministic, low-detail morphology-conditioning PNG before model
-inference and uses a derived prompt policy that requests only essential large contours and sparse
-flat tone. The two team-lead source documents and the KICE illustration guide remain byte-stable.
+successor therefore creates one deterministic, light-tone morphology-conditioning PNG before model
+inference, reduces the same reviewed style adapter's inference scale, and uses a derived prompt
+policy that requests only essential large contours and sparse flat tone. The two team-lead source
+documents and the KICE illustration guide remain byte-stable.
 
 ## Canonical source and revision model
 
@@ -48,11 +49,13 @@ infer that meaning from free text or silently reinterpret an older route.
 
 ## Contract and pointer design
 
-The additive provider-binding/request/receipt V3 family pins:
+The additive provider-binding/request/receipt V3 family was not activated before bounded
+evaluation. Its final pre-activation contract pins:
 
-- the exact V2 style-adapter release and base model;
+- an additive style-adapter release V2 that references the same immutable adapter files and base
+  model while fixing inference scale to `0.45`;
 - the exact approved visual-reference pointer;
-- `local-image-reference-simplification/1.0` parameters;
+- `local-image-reference-simplification/1.1` parameters;
 - the exact conditioning member path, media type, dimensions, size, and SHA-256;
 - bounded foreground, border, and edge-density metrics;
 - the exact composite request and receipt; and
@@ -71,10 +74,14 @@ uses the existing keyed typed manifest; duplicate paths remain rejected by that 
 
 ## Deterministic preprocessing
 
-The v1 simplifier performs only reviewed local operations: grayscale conversion, 5x5 median noise
-suppression, a 1.2 pixel Gaussian smoothing pass, bounded autocontrast, and four-level tone
-quantization. It does not segment a foreground, synthesize missing pixels, crop, rotate, mirror,
-rescale, or call a model. It therefore reduces small texture without changing canvas geometry.
+The v1.1 simplifier performs only reviewed local operations. A light fill branch uses grayscale,
+5x5 median noise suppression, 1.2-pixel Gaussian smoothing, bounded autocontrast, and four light
+tones. A contour branch uses a 5x5 maximum filter, 7x7 median filter, 2.0-pixel Gaussian smoothing,
+edge detection, bounded autocontrast, and four contour tones. Their pixel-wise minimum preserves
+large boundaries while keeping broad interiors light; a fixed five-pixel outer margin is forced to
+white. Across the combined output there are at most six grayscale values. It does not segment a
+foreground, synthesize missing pixels, crop, rotate, mirror, rescale, or call a model. It therefore
+reduces texture without changing canvas dimensions or delegating answer-bearing structure.
 
 The simplifier measures source/conditioning foreground ratios, dark border ratio, source/output edge
 density, and their ratio. A nearly empty image, a nearly full image, or a dark/cluttered border fails
@@ -116,18 +123,28 @@ simplifier is the smallest auditable successor.
 
 ## Bounded preprocessing evidence
 
-On 2026-09-28 UTC, the installed image-provider environment (Pillow 11.3.0) processed three
-previously reviewed 800x504 reference candidates without GPU inference. The isolated beetle on a
-white background passed in 157.824 ms: foreground ratio 0.24031994, border foreground ratio
-0.00295249, and edge-density ratio 0.33698351. Its conditioning member was 9,908 bytes with SHA-256
-`04136e62f75978231b680cfa047829388989c86dd2df764f4bb75676a95d107b`.
+On 2026-09-28 UTC, the first draft simplifier processed three previously reviewed 800x504 reference
+candidates without GPU inference. The isolated beetle passed, while the automobile photograph was
+rejected as `REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID` and the rock photograph containing an
+answer-bearing scale and dark border was rejected as
+`REFERENCE_SIMPLIFICATION_BACKGROUND_COMPLEX`. This confirmed the fail-closed source boundary, but
+the first GPU output was too dark and flat. An edge-only conditioning probe at style scale `0.8`
+also remained too detailed and hatched, showing that prompt wording alone could not correct the
+conditioning and adapter strength.
 
-The automobile photograph was rejected as `REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID`; the rock
-photograph containing an answer-bearing scale and dark border was rejected as
-`REFERENCE_SIMPLIFICATION_BACKGROUND_COMPLEX`. Median runtime across the three fixed-size inputs was
-157.824 ms. This is the intended boundary: an isolated morphology reference may proceed, while a
-busy photographic scene or a source that mixes the object with authoritative measurement marks is
-not silently simplified into a generative input.
+The reviewed light-tone contour probe used the exact v1.1 algorithm and style scale `0.45`. For the
+same beetle input, it produced a 34,273-byte conditioning PNG with SHA-256
+`7174f62b148471fea7e2303879b032f04445e4512a2e1e97ee2b914cfda1a530`, foreground ratio
+`0.24122768`, border foreground ratio `0.00180799`, and edge-density ratio `0.91233403`. The GPU
+candidate preserved the accepted bounding geometry (IoU `0.8188`, center shift `0.0129`, width
+ratio `0.8425`, height ratio `0.9719`) while materially reducing dark fill and hatching. The legacy
+composition evaluator rejected only edge recall, which is texture-sensitive and conflicts with the
+explicit goal of deleting reference microtexture; its geometry thresholds passed. The legacy
+threshold is not weakened or reinterpreted by this decision.
+
+The final V3 family remains evaluation-only. Activation requires a morphology-aware evaluation
+contract and representative subject review; this bounded canary is evidence for the contract
+choice, not production approval.
 
 The first bounded GPU canary stopped before CUDA transfer because the draft V2 negative prompt used
 116 CLIP tokens and exceeded the pinned SSD-1B encoders' 77-token limit. No image was produced. The

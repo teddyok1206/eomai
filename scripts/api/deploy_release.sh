@@ -1867,6 +1867,7 @@ image_resources = {
     "local-image-reference-conditioned-composite-request-v2.schema.json": "schemas/image-provider/local-image-reference-conditioned-composite-request-v2.schema.json",
     "local-image-reference-conditioned-composite-request-v3.schema.json": "schemas/image-provider/local-image-reference-conditioned-composite-request-v3.schema.json",
     "local-image-style-adapter-release-v1.schema.json": "schemas/image-provider/local-image-style-adapter-release-v1.schema.json",
+    "local-image-style-adapter-release-v2.schema.json": "schemas/image-provider/local-image-style-adapter-release-v2.schema.json",
     "local-image-visual-reference-acquisition-command-v1.schema.json": "schemas/image-provider/local-image-visual-reference-acquisition-command-v1.schema.json",
     "local-image-visual-reference-acquisition-result-v1.schema.json": "schemas/image-provider/local-image-visual-reference-acquisition-result-v1.schema.json",
     "local-image-visual-reference-bundle-v1.schema.json": "schemas/image-provider/local-image-visual-reference-bundle-v1.schema.json",
