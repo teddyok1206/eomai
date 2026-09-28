@@ -516,7 +516,12 @@ class FixedLocalImageProviderAdapter:
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_file(reference_target, reference_bytes, provider_gid)
+        _stage_exact_file(
+            reference_target,
+            reference_bytes,
+            provider_gid,
+            maximum_bytes=8 * 1024 * 1024,
+        )
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
         unit_name = f"eom-image-reference-style-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
@@ -587,7 +592,12 @@ class FixedLocalImageProviderAdapter:
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_file(reference_target, reference_bytes, provider_gid)
+        _stage_exact_file(
+            reference_target,
+            reference_bytes,
+            provider_gid,
+            maximum_bytes=8 * 1024 * 1024,
+        )
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
         unit_name = f"eom-image-reference-style-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
@@ -664,9 +674,14 @@ class FixedLocalImageProviderAdapter:
         ):
             raise LocalImageAdapterError("LOCAL_IMAGE_INPUT_INVALID")
         _prepare_input_directory(reference_target.parent, workspace, provider_gid)
-        _stage_exact_file(reference_target, reference_bytes, provider_gid)
+        _stage_exact_file(
+            reference_target,
+            reference_bytes,
+            provider_gid,
+            maximum_bytes=8 * 1024 * 1024,
+        )
         conditioned_receipt_path = workspace / "reference-conditioned-receipt.json"
-        unit_name = f"eom-image-reference-style-provider@{instance_id}.service"
+        unit_name = f"eom-image-reference-base-provider@{instance_id}.service"
         if not conditioned_receipt_path.exists() and not conditioned_receipt_path.is_symlink():
             _run_fixed_unit(unit_name, binding.timeout_seconds)
         receipt = _validate_reference_handoff_v4(workspace, request, provider_gid)

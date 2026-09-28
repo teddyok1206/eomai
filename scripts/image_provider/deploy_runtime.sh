@@ -20,6 +20,8 @@ REFERENCE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-p
 REFERENCE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-provider@.service
 REFERENCE_STYLE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-style-provider@.service
 REFERENCE_STYLE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-style-provider@.service
+REFERENCE_BASE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-reference-base-provider@.service
+REFERENCE_BASE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-base-provider@.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
 BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.v4.json
@@ -59,6 +61,7 @@ done
 if systemctl list-units --type=service --state=activating,active --no-legend \
   'eom-image-provider@*.service' 'eom-image-reference-provider@*.service' \
   'eom-image-reference-style-provider@*.service' \
+  'eom-image-reference-base-provider@*.service' \
   'eom-image-reference-acquirer@*.service' \
   'eom-image-reference-discoverer@*.service' | grep -q .; then
   fail "LOCAL_IMAGE_PROVIDER_ACTIVE"
@@ -115,6 +118,8 @@ install -o root -g root -m 0644 \
   "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 \
   "${REFERENCE_STYLE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_STYLE_PROVIDER_UNIT_TARGET}"
+install -o root -g root -m 0644 \
+  "${REFERENCE_BASE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_BASE_PROVIDER_UNIT_TARGET}"
 install -o root -g root -m 0644 "${POLKIT_SOURCE}" "${POLKIT_TARGET}"
 systemctl daemon-reload
 systemd-analyze verify "${UNIT_TARGET}"
@@ -122,6 +127,7 @@ systemd-analyze verify "${REFERENCE_UNIT_TARGET}"
 systemd-analyze verify "${REFERENCE_DISCOVERY_UNIT_TARGET}"
 systemd-analyze verify "${REFERENCE_PROVIDER_UNIT_TARGET}"
 systemd-analyze verify "${REFERENCE_STYLE_PROVIDER_UNIT_TARGET}"
+systemd-analyze verify "${REFERENCE_BASE_PROVIDER_UNIT_TARGET}"
 cmp -s "${UNIT_SOURCE}" "${UNIT_TARGET}" || fail "LOCAL_IMAGE_UNIT_DRIFT"
 cmp -s "${REFERENCE_UNIT_SOURCE}" "${REFERENCE_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_REFERENCE_UNIT_DRIFT"
@@ -131,6 +137,8 @@ cmp -s "${REFERENCE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_PROVIDER_UNIT_TARGET}" |
   fail "LOCAL_IMAGE_REFERENCE_PROVIDER_UNIT_DRIFT"
 cmp -s "${REFERENCE_STYLE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_STYLE_PROVIDER_UNIT_TARGET}" || \
   fail "LOCAL_IMAGE_REFERENCE_STYLE_PROVIDER_UNIT_DRIFT"
+cmp -s "${REFERENCE_BASE_PROVIDER_UNIT_SOURCE}" "${REFERENCE_BASE_PROVIDER_UNIT_TARGET}" || \
+  fail "LOCAL_IMAGE_REFERENCE_BASE_PROVIDER_UNIT_DRIFT"
 cmp -s "${POLKIT_SOURCE}" "${POLKIT_TARGET}" || fail "LOCAL_IMAGE_POLKIT_DRIFT"
 cmp -s "${BINDING_SOURCE}" "${BINDING_TARGET}" || fail "LOCAL_IMAGE_BINDING_DRIFT"
 

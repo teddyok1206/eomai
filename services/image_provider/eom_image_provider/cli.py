@@ -67,6 +67,11 @@ def _parser() -> argparse.ArgumentParser:
     styled.add_argument("--style-adapter-store-root", type=Path, required=True)
     styled.add_argument("--workspace", type=Path, required=True)
     styled.add_argument("--gpu-lock", type=Path, required=True)
+    base = subparsers.add_parser("generate-reference-base-composite")
+    base.add_argument("--request", type=Path, required=True)
+    base.add_argument("--model-store-root", type=Path, required=True)
+    base.add_argument("--workspace", type=Path, required=True)
+    base.add_argument("--gpu-lock", type=Path, required=True)
     reference = subparsers.add_parser("acquire-reference")
     reference.add_argument("--command", type=Path, required=True)
     reference.add_argument("--workspace", type=Path, required=True)
@@ -221,6 +226,23 @@ def main() -> None:
                         )
                     )
             result = styled_receipt.model_dump(mode="json")
+        elif args.operation == "generate-reference-base-composite":
+            value = load_json_object(args.request, maximum_bytes=512 * 1024)
+            validate_contract("reference-conditioned-composite-request-v4", value)
+            base_request = LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
+            base_receipt = reuse_reference_conditioned_composite_handoff_v4(
+                workspace=args.workspace,
+                request=base_request,
+            )
+            if base_receipt is None:
+                with acquire_gpu_lease(args.gpu_lock):
+                    base_receipt = generate_reference_conditioned_composite_handoff_v4(
+                        model_store_root=args.model_store_root,
+                        workspace=args.workspace,
+                        request=base_request,
+                        backend=Ssd1bDiffusersBackend(),
+                    )
+            result = base_receipt.model_dump(mode="json")
         elif args.operation == "acquire-reference":
             command, intent = load_acquisition_inputs(
                 command_path=args.command,

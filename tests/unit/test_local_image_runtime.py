@@ -151,6 +151,24 @@ def test_style_reference_provider_reads_only_exact_model_and_adapter_stores() ->
     assert "Restart=no" in source
 
 
+def test_base_reference_provider_has_no_style_store_or_network_access() -> None:
+    source = (ROOT / "infra/systemd/eom-image-reference-base-provider@.service").read_text(
+        encoding="utf-8"
+    )
+
+    assert "User=eom-image" in source
+    assert "eom-local-image generate-reference-base-composite" in source
+    assert "--style-adapter-store-root" not in source
+    assert "/srv/eom/models/image-style" not in source
+    assert "--gpu-lock /var/lib/eom-image/gpu0.lock" in source
+    assert "PrivateNetwork=true" in source
+    assert "ReadOnlyPaths=/srv/eom/models/image" in source
+    assert "ReadWritePaths=/srv/eom/image-workspaces/%i" in source
+    assert "InaccessiblePaths=/mnt/nas" in source
+    assert "InaccessiblePaths=/home/eom/EOM" in source
+    assert "Restart=no" in source
+
+
 def test_local_image_trainer_unit_is_isolated_and_shares_only_gpu_capacity_lock() -> None:
     source = (ROOT / "infra/systemd/eom-image-trainer@.service").read_text(encoding="utf-8")
 
@@ -353,6 +371,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     assert "eom-image-reference-acquirer@imgrefcmd_" in source
     assert "eom-image-reference-discoverer@imgrefdiscover_" in source
     assert "eom-image-reference-provider@imgreq_" in source
+    assert "eom-image-reference-base-provider@imgreq_" in source
     assert "eom-image-trainer@imgtrainrun_" in source
     assert "eom-image-lora-micro-probe@imgmicrotrainrun_" in source
     assert "eom-image-science-lora-micro-probe@imgscimicrotrainrun_" in source
@@ -364,6 +383,7 @@ def test_polkit_grants_only_exact_local_image_instances_to_runner() -> None:
     assert "eom-image-crop-locator@imgcroplocator_" in source
     assert "eom-image-science-visual-pilot@imgscivisattempt_" in source
     assert "localImageUnit.test(unit)" in source
+    assert "localImageReferenceBaseProviderUnit.test(unit)" in source
     assert "localImageScienceMicroProbeUnit.test(unit)" in source
     assert re.search(
         r"subject\.user === \"eom-workflow-runner\"[\s\S]+localImageUnit\.test\(unit\)",
@@ -399,6 +419,7 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert 'metadata.version("peft") == "0.17.1"' in deploy
     assert "eom-image-reference-acquirer@.service" in deploy
     assert "eom-image-reference-discoverer@.service" in deploy
+    assert "eom-image-reference-base-provider@.service" in deploy
     assert "eom-image-reference" in deploy
     assert "RUNNER_RESTART_REQUIRED=YES" in deploy
     assert "RUNNER_SOURCE=" not in deploy
@@ -514,6 +535,7 @@ def test_local_image_unit_has_valid_systemd_syntax_when_analyzer_is_available(
         ROOT / "infra/systemd/eom-image-reference-discoverer@.service",
         ROOT / "infra/systemd/eom-image-reference-provider@.service",
         ROOT / "infra/systemd/eom-image-reference-style-provider@.service",
+        ROOT / "infra/systemd/eom-image-reference-base-provider@.service",
         ROOT / "infra/systemd/eom-image-trainer@.service",
         ROOT / "infra/systemd/eom-image-lora-micro-probe@.service",
         ROOT / "infra/systemd/eom-image-science-lora-micro-probe@.service",

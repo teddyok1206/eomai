@@ -12,6 +12,7 @@ from typing import Literal, cast
 import eom_catalog_service.local_image_adapter as local_image_adapter
 import pytest
 from eom_catalog_service.local_image_adapter import (
+    FixedLocalImageProviderAdapter,
     LocalImageAdapterError,
     _build_reference_conditioned_request,
     _build_reference_conditioned_request_v2,
@@ -41,6 +42,7 @@ from eom_catalog_service.local_image_prompt_policy import (
     LocalGpuPromptPlan,
     compose_local_gpu_prompt_plan,
 )
+from eom_catalog_service.settings import CatalogSettings
 from eom_image_contracts import (
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
@@ -112,6 +114,80 @@ def test_exact_reference_bytes_are_idempotent_at_the_bounded_reference_size(
     assert target.stat().st_mode & 0o777 == 0o440
     with pytest.raises(LocalImageAdapterError, match="LOCAL_IMAGE_HANDOFF_INVALID"):
         _stage_exact_file(target, payload + b"drift", os.getegid(), maximum_bytes=8 * 1024 * 1024)
+
+
+def test_v4_adapter_stages_large_reference_and_selects_base_only_unit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    output = tmp_path / "output"
+    output.mkdir()
+    overlay = tmp_path / "generated-overlay.png"
+    overlay.write_bytes(_overlay_png())
+    overlay.chmod(0o640)
+    reference_bytes = b"reference" * (60 * 1024)
+    reference_sha256 = "sha256:" + hashlib.sha256(reference_bytes).hexdigest()
+    pointer = _reference_pointer(reference_hash=reference_sha256)
+    pointer = pointer.model_copy(
+        update={
+            "reference_member": pointer.reference_member.model_copy(
+                update={"size_bytes": len(reference_bytes)}
+            )
+        }
+    )
+    drawing = _hybrid_drawing().model_copy(
+        update={"alt_text": "one trilobite fossil isolated on white"}
+    )
+    binding = LocalImageProviderBindingV4.model_validate(_binding_v4_value())
+    started: list[str] = []
+
+    def prepare_workspace(_root: Path, _request_id: str, _gid: int) -> Path:
+        workspace.mkdir()
+        return workspace
+
+    class _StopAfterStaging(RuntimeError):
+        pass
+
+    def validate_staged(
+        staged_workspace: Path,
+        _request: object,
+        _gid: int,
+    ) -> None:
+        assert (staged_workspace / "references/primary.png").read_bytes() == reference_bytes
+        raise _StopAfterStaging
+
+    monkeypatch.setattr(local_image_adapter, "_provider_group_id", lambda _name: os.getegid())
+    monkeypatch.setattr(local_image_adapter, "_prepare_workspace", prepare_workspace)
+    monkeypatch.setattr(
+        local_image_adapter,
+        "_run_fixed_unit",
+        lambda unit, _timeout: started.append(unit),
+    )
+    monkeypatch.setattr(local_image_adapter, "_validate_reference_handoff_v4", validate_staged)
+
+    adapter = FixedLocalImageProviderAdapter(
+        CatalogSettings(local_image_workspace_root=tmp_path, local_image_provider_group="test")
+    )
+    with pytest.raises(_StopAfterStaging):
+        adapter.generate_with_simplified_base_reference(
+            workflow_id="workflow_" + "1" * 32,
+            result_revision_id="rev_" + "2" * 32,
+            drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+            drawing=drawing,
+            overlay_path=overlay,
+            binding=binding,
+            output_directory=output,
+            prompt_contract="ASSESSMENT_MINIMAL_LINE_ART_V2",
+            visual_reference=pointer,
+            reference_bytes=reference_bytes,
+        )
+
+    assert started == [
+        "eom-image-reference-base-provider@imgreq_"
+        + json.loads((workspace / "request.json").read_text())["request_sha256"][7:39]
+        + ".service"
+    ]
 
 
 def _binding_v2_value() -> dict[str, object]:
