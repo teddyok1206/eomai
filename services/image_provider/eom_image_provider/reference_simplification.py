@@ -162,9 +162,13 @@ def simplify_visual_reference(
         conditioning_edge_density=conditioning_edge_density,
         edge_density_ratio=edge_density_ratio,
     )
-    for ratio in (source_foreground_ratio, conditioning_foreground_ratio):
-        if ratio < policy.foreground_ratio_min or ratio > policy.foreground_ratio_max:
-            raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID")
+    if source_foreground_ratio < policy.foreground_ratio_min:
+        raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID")
+    if (
+        conditioning_foreground_ratio < policy.foreground_ratio_min
+        or conditioning_foreground_ratio > policy.foreground_ratio_max
+    ):
+        raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID")
     if border_foreground_ratio > policy.border_foreground_ratio_max:
         raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_BACKGROUND_COMPLEX")
 

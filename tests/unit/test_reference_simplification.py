@@ -30,6 +30,19 @@ def _reference_png(*, cluttered_border: bool = False, texture: bool = False) -> 
     return target.getvalue()
 
 
+def _dark_source_with_clean_border_png() -> bytes:
+    image = Image.new("RGB", (800, 504), "white")
+    pixels = image.load()
+    for y in range(30, 474):
+        for x in range(30, 770):
+            base = 80 + ((x - 30) * 150 // 739)
+            value = base + (15 if ((x // 8 + y // 8) % 2) else -15)
+            pixels[x, y] = (value, value, value)
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
 def test_reference_simplification_is_deterministic_bounded_and_self_describing() -> None:
     source = _reference_png(texture=True)
     policy = LocalImageReferenceSimplification()
@@ -66,6 +79,17 @@ def test_reference_simplification_rejects_cluttered_border_without_segmentation(
             _reference_png(cluttered_border=True),
             policy=LocalImageReferenceSimplification(),
         )
+
+
+def test_reference_simplification_accepts_dark_source_when_conditioning_is_bounded() -> None:
+    simplified = simplify_visual_reference(
+        _dark_source_with_clean_border_png(),
+        policy=LocalImageReferenceSimplification(),
+    )
+
+    assert simplified.metrics.source_foreground_ratio > 0.8
+    assert simplified.metrics.conditioning_foreground_ratio <= 0.8
+    assert simplified.metrics.border_foreground_ratio <= 0.12
 
 
 def test_reference_simplification_rejects_wrong_canvas_and_nearly_empty_input() -> None:

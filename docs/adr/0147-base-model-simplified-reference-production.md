@@ -36,6 +36,13 @@ Logical IDs, revisions, member paths, media types, schemas, and hashes remain di
 files are temporary materializations. Existing V1–V3 requests, receipts, workspaces, Items, and
 Artifacts are never rewritten.
 
+The source foreground ratio is retained as audit evidence and must exceed the non-empty minimum,
+but its upper bound does not reject a dark photographed background. The configured foreground
+maximum applies to the deterministic conditioning output that is actually passed to the model.
+The conditioning foreground and border ratios must both remain within their pinned limits. This
+keeps empty or still-cluttered conditioning fail-closed while allowing simplification to perform
+its intended conversion of a valid dark source into a bounded light line-art reference.
+
 ## Access patterns and data structures
 
 The route performs keyed immutable pointer lookup, one bounded 800×504 pixel simplification, one
@@ -43,6 +50,10 @@ GPU inference, and one bounded 800×500 grayscale pass. It is `O(W*H)` time and 
 fixed canvases, with `O(1)` database pointer lookups through existing indexes. Typed frozen models
 and manifests remain the authoritative structures; no table, index, queue, cache, or binary DB
 column is added.
+
+V4 runs through its own fixed `eom-image-reference-base-provider@` unit. Unlike the V2/V3 style
+unit it has no style-adapter store argument or mount, while preserving the same private-network,
+GPU-device, workspace, repository, NAS, and secret isolation boundaries.
 
 ## Transaction, concurrency, retry, and idempotency
 
