@@ -45,7 +45,9 @@ MODEL_MANIFEST = Path("/opt/eom-evaluation-models/flux2-klein-base-4b.manifest.j
 FIXTURE_ROOT = Path("/tmp/eom-actual-science-crop-simplification-49e0e5f")
 WORKSPACE_PARENT = Path("/tmp/eom-flux2-reference-probe")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-FIXTURE_RESULT_SHA256 = "sha256:41a6b7f15cc1a5540a23e1408c983df0ddfafe558494e8a0415f86fb89f3bbcf"
+FIXTURE_RESULT_FILE_SHA256 = (
+    "sha256:0ae5c6b653e4dce9543fe2500196147e2f785881fbcc19ee4f24008016599d75"
+)
 MODEL_SCHEMA_REF = "eom://schemas/image-provider/local-image-model-candidate-manifest/1.0"
 PLAN_SCHEMA_REF = "eom://schemas/image-provider/local-image-flux2-reference-probe-plan/1.0"
 REFERENCE_SCHEMA_REF = "eom://schemas/image-provider/normalized-visual-reference/1.0"
@@ -139,7 +141,11 @@ def _load_manifest() -> tuple[LocalImageModelCandidateManifest, bytes]:
 
 def _load_fixture() -> tuple[dict[str, object], bytes]:
     path = FIXTURE_ROOT / "evaluation-result.json"
-    payload = _read(path, expected_sha256=FIXTURE_RESULT_SHA256, maximum_bytes=MAX_JSON_BYTES)
+    payload = _read(
+        path,
+        expected_sha256=FIXTURE_RESULT_FILE_SHA256,
+        maximum_bytes=MAX_JSON_BYTES,
+    )
     try:
         value = json.loads(payload)
     except json.JSONDecodeError as exc:
