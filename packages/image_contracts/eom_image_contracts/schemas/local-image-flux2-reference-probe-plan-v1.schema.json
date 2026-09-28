@@ -19,6 +19,19 @@
       },
       "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"]
     },
+    "sourceCrop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "pattern": "^crops/imgsciviscandidate_[0-9a-f]{32}\\.png$"},
+        "schema_ref": {"const": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-candidate-image/1.0"},
+        "media_type": {"const": "image/png"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"]
+    },
     "reference": {
       "type": "object",
       "additionalProperties": false,
@@ -91,6 +104,7 @@
       "properties": {
         "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
         "subject_key": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
+        "source_crop": {"$ref": "#/$defs/sourceCrop"},
         "visual_reference": {"$ref": "#/$defs/reference"},
         "conditioning": {"$ref": "#/$defs/conditioning"},
         "simplification_metrics": {"$ref": "#/$defs/simplificationMetrics"},
@@ -99,7 +113,7 @@
         "prompt_sha256": {"$ref": "#/$defs/sha256"},
         "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647}
       },
-      "required": ["case_id", "subject_key", "visual_reference", "conditioning", "simplification_metrics", "simplifier_runtime", "prompt_en", "prompt_sha256", "seed"]
+      "required": ["case_id", "subject_key", "source_crop", "visual_reference", "conditioning", "simplification_metrics", "simplifier_runtime", "prompt_en", "prompt_sha256", "seed"]
     }
   },
   "properties": {

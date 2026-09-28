@@ -552,7 +552,7 @@ SCHEMA_SHA256 = {
         "sha256:cb13c20fc5f88b025c14e15990582c0762df85a9576de41fa2db2bd7958c7658"
     ),
     "flux2-reference-probe-plan": (
-        "sha256:66f59928eae0fa02c583329a587fa66f69683584354e953aa0530b1a0a742390"
+        "sha256:80ffbe051f3d4db74d475c9463f650de7cc70efd3ae2a15412ac1f2ab85542cf"
     ),
     "flux2-reference-probe-command": (
         "sha256:beb6cb5e88ab230458bdd3e868f06e17d0805a00a4ab3c6e542dfeb857f56a91"

@@ -18,6 +18,7 @@ from eom_image_contracts import (
     validate_flux2_probe_command,
     validate_flux2_probe_result,
 )
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
@@ -62,6 +63,17 @@ def _case_value(ordinal: int) -> dict[str, Any]:
     )
     value: dict[str, Any] = {
         "subject_key": f"NATURAL_SPECIMEN_{ordinal}",
+        "source_crop": {
+            "artifact_id": f"artifact_{ordinal + 32:032x}",
+            "artifact_revision_id": f"rev_{ordinal + 32:032x}",
+            "member_path": f"crops/imgsciviscandidate_{ordinal:032x}.png",
+            "schema_ref": (
+                "eom://schemas/image-provider/"
+                "local-image-science-corpus-visual-pilot-candidate-image/1.0"
+            ),
+            "media_type": "image/png",
+            "sha256": "sha256:" + f"{ordinal + 32:02x}" * 32,
+        },
         "visual_reference": {
             "artifact_id": f"artifact_{ordinal:032x}",
             "artifact_revision_id": f"rev_{ordinal:032x}",
@@ -312,4 +324,17 @@ def test_flux2_case_identity_and_prompt_hash_are_fail_closed() -> None:
     value = _case_value(1)
     value["prompt_en"] += " changed"
     with pytest.raises(ValidationError, match="prompt hash"):
+        Flux2ReferenceProbeCase.model_validate(value)
+
+
+def test_flux2_case_requires_exact_source_crop_pointer() -> None:
+    value = _case_value(1)
+    value["source_crop"]["schema_ref"] = "eom://schemas/image-provider/wrong/1.0"
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract(
+            "flux2-reference-probe-plan",
+            _plan_value(_manifest_value()) | {"cases": [value, _case_value(2), _case_value(3)]},
+        )
+    with pytest.raises(ValidationError, match="source crop pointer"):
         Flux2ReferenceProbeCase.model_validate(value)

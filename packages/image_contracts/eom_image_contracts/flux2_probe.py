@@ -102,6 +102,7 @@ class LocalImageModelCandidateManifest(FrozenModel):
 class Flux2ReferenceProbeCase(FrozenModel):
     case_id: str = Field(pattern=r"^imgflux2case_[0-9a-f]{32}$")
     subject_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")
+    source_crop: ImageEvaluationArtifactMember
     visual_reference: VisualReferencePngArtifactPointer
     conditioning: LocalImageReferenceConditioningOutput
     simplification_metrics: LocalImageReferenceSimplificationMetrics
@@ -112,6 +113,15 @@ class Flux2ReferenceProbeCase(FrozenModel):
 
     @model_validator(mode="after")
     def exact_case_identity(self) -> Self:
+        if (
+            self.source_crop.schema_ref
+            != "eom://schemas/image-provider/"
+            "local-image-science-corpus-visual-pilot-candidate-image/1.0"
+            or self.source_crop.media_type != "image/png"
+            or not self.source_crop.member_path.startswith("crops/imgsciviscandidate_")
+            or not self.source_crop.member_path.endswith(".png")
+        ):
+            raise ValueError("FLUX.2 source crop pointer is incompatible")
         if self.prompt_sha256 != text_sha256(self.prompt_en):
             raise ValueError("FLUX.2 probe prompt hash mismatch")
         identity = content_sha256(self.model_dump(mode="json", exclude={"case_id"})).removeprefix(
