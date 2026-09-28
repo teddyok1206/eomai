@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from email.message import Message
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 
 import pytest
 from eom_image_contracts import (
@@ -304,6 +306,22 @@ class _DiscoveryOpener:
         return _Response(url, "application/json", payload)
 
 
+class _RateLimitedOpener(_Opener):
+    def __init__(self, *, original: bytes, rate_limit_count: int) -> None:
+        super().__init__(original=original)
+        self.rate_limit_count = rate_limit_count
+        self.user_agents: list[str | None] = []
+
+    def open(self, request: Any, *, timeout: int) -> _Response:
+        self.user_agents.append(request.get_header("User-agent"))
+        if self.rate_limit_count:
+            self.rate_limit_count -= 1
+            headers = Message()
+            headers["Retry-After"] = "10"
+            raise HTTPError(request.full_url, 429, "Too Many Requests", headers, None)
+        return super().open(request, timeout=timeout)
+
+
 def _public_resolver(*_args: object, **_kwargs: object) -> list[tuple[object, ...]]:
     return [(2, 1, 6, "", ("208.80.154.224", 443))]
 
@@ -383,6 +401,62 @@ def test_official_metadata_is_independently_verified() -> None:
     )
     assert opener.calls[-1] == acquired[0].source.original_file_url
     assert len(opener.calls) == 2
+
+
+def test_rate_limit_respects_retry_after_with_compliant_identity() -> None:
+    opener = _RateLimitedOpener(original=b"original-jpeg", rate_limit_count=1)
+    delays: list[float] = []
+    client = WikimediaCommonsClient(
+        opener=opener,  # type: ignore[arg-type]
+        address_resolver=_public_resolver,
+        sleeper=delays.append,
+    )
+
+    acquired = client.acquire(_intent(), maximum_bytes=16_777_216, timeout_seconds=120)
+
+    assert len(acquired) == 1
+    assert delays == [10.0]
+    assert opener.user_agents == [
+        "EOMVisualReferenceBot/1.1 (https://eomai.duckdns.org/)",
+        "EOMVisualReferenceBot/1.1 (https://eomai.duckdns.org/)",
+        "EOMVisualReferenceBot/1.1 (https://eomai.duckdns.org/)",
+    ]
+
+
+def test_rate_limit_without_bounded_retry_after_fails_without_sleep() -> None:
+    class _MalformedRateLimitOpener(_Opener):
+        def open(self, request: Any, *, timeout: int) -> _Response:
+            raise HTTPError(request.full_url, 429, "Too Many Requests", Message(), None)
+
+    delays: list[float] = []
+    client = WikimediaCommonsClient(
+        opener=_MalformedRateLimitOpener(original=b"original-jpeg"),  # type: ignore[arg-type]
+        address_resolver=_public_resolver,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(
+        VisualReferenceAcquisitionError, match="VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+    ):
+        client.acquire(_intent(), maximum_bytes=16_777_216, timeout_seconds=120)
+    assert delays == []
+
+
+def test_rate_limit_retry_budget_is_bounded() -> None:
+    opener = _RateLimitedOpener(original=b"original-jpeg", rate_limit_count=3)
+    delays: list[float] = []
+    client = WikimediaCommonsClient(
+        opener=opener,  # type: ignore[arg-type]
+        address_resolver=_public_resolver,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(
+        VisualReferenceAcquisitionError, match="VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+    ):
+        client.acquire(_intent(), maximum_bytes=16_777_216, timeout_seconds=120)
+    assert delays == [10.0, 10.0]
+    assert len(opener.user_agents) == 3
 
 
 def test_upload_tracking_query_is_exactly_bounded_before_canonicalization() -> None:

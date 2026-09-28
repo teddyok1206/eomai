@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import (
     HTTPRedirectHandler,
@@ -48,7 +49,9 @@ from eom_image_contracts import (
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 COMMONS_HOST = "commons.wikimedia.org"
 UPLOAD_HOST = "upload.wikimedia.org"
-USER_AGENT = "EOMVisualReferenceBot/1.0 (+internal-assessment-authoring; bounded)"
+USER_AGENT = "EOMVisualReferenceBot/1.1 (https://eomai.duckdns.org/)"
+MAX_RATE_LIMIT_RETRIES = 2
+MAX_RETRY_AFTER_SECONDS = 30
 MAX_API_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_PIXELS = 40_000_000
 NORMALIZED_WIDTH = 800
@@ -136,6 +139,7 @@ class WikimediaCommonsClient:
         *,
         opener: OpenerDirector | None = None,
         address_resolver: Callable[..., list[tuple[Any, ...]]] = socket.getaddrinfo,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.allowed_hosts = frozenset({COMMONS_HOST, UPLOAD_HOST})
         # Do not inherit ambient proxy variables.  The acquisition unit is allowed to
@@ -144,6 +148,7 @@ class WikimediaCommonsClient:
             ProxyHandler({}), _RestrictedRedirectHandler(self.allowed_hosts)
         )
         self.address_resolver = address_resolver
+        self.sleeper = sleeper
 
     def acquire(
         self,
@@ -417,10 +422,32 @@ class WikimediaCommonsClient:
                 "Accept": "application/json,image/jpeg,image/png,image/webp;q=0.9,*/*;q=0.1",
             },
         )
-        try:
-            return cast(HttpResponse, self.opener.open(request, timeout=timeout_seconds))
-        except OSError as exc:
-            raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_UNAVAILABLE") from exc
+        for retry in range(MAX_RATE_LIMIT_RETRIES + 1):
+            try:
+                return cast(HttpResponse, self.opener.open(request, timeout=timeout_seconds))
+            except HTTPError as exc:
+                if exc.code != 429 or retry == MAX_RATE_LIMIT_RETRIES:
+                    exc.close()
+                    raise VisualReferenceAcquisitionError(
+                        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+                    ) from exc
+                retry_after = exc.headers.get("Retry-After")
+                exc.close()
+                if retry_after is None or not retry_after.isdigit():
+                    raise VisualReferenceAcquisitionError(
+                        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+                    ) from exc
+                delay = int(retry_after)
+                if not 1 <= delay <= MAX_RETRY_AFTER_SECONDS:
+                    raise VisualReferenceAcquisitionError(
+                        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+                    ) from exc
+                self.sleeper(float(delay))
+            except OSError as exc:
+                raise VisualReferenceAcquisitionError(
+                    "VISUAL_REFERENCE_SOURCE_UNAVAILABLE"
+                ) from exc
+        raise AssertionError("unreachable rate-limit retry state")
 
 
 def run_visual_reference_discovery(

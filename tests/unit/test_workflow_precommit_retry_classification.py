@@ -1,11 +1,7 @@
 from eom_workflow_runner.engine import _is_retryable_precommit_agent_failure
 
 
-def test_transient_visual_reference_failure_remains_retryable() -> None:
-    assert _is_retryable_precommit_agent_failure(
-        error_code="WORKER_UNAVAILABLE",
-        error_detail="VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
-    )
+def test_route_unavailable_visual_reference_failure_remains_retryable() -> None:
     assert _is_retryable_precommit_agent_failure(
         error_code="WORKER_UNAVAILABLE",
         error_detail="VISUAL_REFERENCE_ROUTE_UNAVAILABLE",
@@ -20,6 +16,7 @@ def test_deterministic_visual_reference_failure_is_terminal() -> None:
         "VISUAL_REFERENCE_LICENSE_REJECTED",
         "VISUAL_REFERENCE_OUTPUT_INVALID",
         "VISUAL_REFERENCE_ROUTE_UNDEPLOYED",
+        "VISUAL_REFERENCE_SOURCE_UNAVAILABLE",
         "VISUAL_REFERENCE_SOURCE_REJECTED",
     ):
         assert not _is_retryable_precommit_agent_failure(
