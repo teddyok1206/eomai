@@ -71,3 +71,31 @@ silhouette would over-constrain legitimate detail and hide topology errors.  Exa
 placement is therefore the smallest auditable successor; subject topology remains a
 separate human/model-quality gate.
 
+## Bounded acceptance result
+
+The exact three-case successor probe completed on 2026-09-28 UTC and was published without
+activating the provider:
+
+- source commit: `82ecfd935ecbcb4a0c901a52bdc0ee90374c0c5b`
+- run: `imgflux2proberun_67aca05fd7874a1d1e660c91ad94c571`
+- result Artifact: `artifact_d6a6937f7ad3457a9758305278dbfae2`
+- result revision: `rev_590bc29c4693475a9dc020d9dfcad04b`
+- semantic result hash:
+  `sha256:0d8c4fc6da271e0d95a0650576a6ab00d0a12c0b8619fe3206885bfcc8573b61`
+- result member hash:
+  `sha256:e047e172a4340a88a549f0547d784c37bf5911115e9879c996e5cbd1e37d9479`
+- file-set manifest hash:
+  `sha256:f47d0fcfd511d759732af9389cb18d63168e4ea38f01ade7bc23948dbd6c71c0`
+
+All three locked outputs matched the mapped reference bounds exactly: locked area ratio
+1000/1000 and normalized center displacement zero.  Raw area ratios were 0.778 (fossil),
+2.272 (automobile), and 2.532 (plant), demonstrating that the adapter corrected real model
+placement drift rather than merely recording already-conforming outputs.
+
+Human inspection preserved the previously accepted monochrome line-art style.  The
+automobile still completed a whole vehicle where its reference showed a cropped portion.
+The layout-lock acceptance therefore closes deterministic scale and placement only.  It
+does not close partial-object topology preservation and does not authorize production
+activation.  The next bounded control experiment should compare an explicit spatial
+control input or crop-topology constraint while retaining the same prompt and style
+model; it must not hide the raw candidate.
