@@ -1857,6 +1857,13 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {
+    "local-image-flux2-reference-probe-command-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-command-v1.schema.json",
+    "local-image-flux2-reference-probe-command-v2.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-command-v2.schema.json",
+    "local-image-flux2-reference-probe-plan-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-plan-v1.schema.json",
+    "local-image-flux2-reference-probe-plan-v2.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-plan-v2.schema.json",
+    "local-image-flux2-reference-probe-result-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-result-v1.schema.json",
+    "local-image-flux2-reference-probe-result-v2.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-result-v2.schema.json",
+    "local-image-model-candidate-manifest-v1.schema.json": "schemas/image-provider/local-image-model-candidate-manifest-v1.schema.json",
     "local-image-model-manifest-v1.schema.json": "schemas/image-provider/local-image-model-manifest-v1.schema.json",
     "local-image-generation-request-v1.schema.json": "schemas/image-provider/local-image-generation-request-v1.schema.json",
     "local-image-generation-receipt-v1.schema.json": "schemas/image-provider/local-image-generation-receipt-v1.schema.json",
