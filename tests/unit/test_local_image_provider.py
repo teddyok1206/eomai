@@ -87,6 +87,13 @@ def _png() -> bytes:
     )
 
 
+def _colored_png() -> bytes:
+    image = Image.new("RGB", (800, 500), (196, 132, 74))
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
 def _rgba_png() -> bytes:
     width, height = 800, 500
     transparent = b"\x00\x00\x00\x00"
@@ -939,7 +946,8 @@ def test_style_reference_handoff_pins_release_files_and_is_idempotent(
             assert reference_png == reference
             assert strength == 0.35
             assert lora_scale == 0.8
-            return FakeBackend().generate(model_directory=model_directory, request=request)
+            generated = FakeBackend().generate(model_directory=model_directory, request=request)
+            return GeneratedBackground(png_bytes=_colored_png(), runtime=generated.runtime)
 
     monkeypatch.setattr(
         "eom_image_provider.provider._compose_png",
@@ -965,6 +973,9 @@ def test_style_reference_handoff_pins_release_files_and_is_idempotent(
     assert calls == 1
     assert first.style_adapter == release
     assert first.visual_reference == request.visual_reference
+    with Image.open(workspace / "generated-background.png") as generated_background:
+        generated_background.load()
+        assert generated_background.getpixel((400, 250)) == (196, 132, 74)
     validate_contract("reference-conditioned-composite-receipt-v2", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v2(
@@ -1020,7 +1031,8 @@ def test_simplified_reference_handoff_uses_conditioning_bytes_and_is_idempotent(
                 assert conditioned.convert("L").getextrema() == (48, 255)
             assert strength == 0.35
             assert lora_scale == 0.45
-            return FakeBackend().generate(model_directory=model_directory, request=request)
+            generated = FakeBackend().generate(model_directory=model_directory, request=request)
+            return GeneratedBackground(png_bytes=_colored_png(), runtime=generated.runtime)
 
     monkeypatch.setattr(
         "eom_image_provider.provider._compose_png",
@@ -1051,6 +1063,10 @@ def test_simplified_reference_handoff_uses_conditioning_bytes_and_is_idempotent(
     assert first.style_adapter == release
     assert first.conditioning_output.member_path == "reference-conditioning.png"
     assert first.simplification_metrics.border_foreground_ratio == 0
+    with Image.open(workspace / "generated-background.png") as generated_background:
+        generated_background.load()
+        assert generated_background.mode == "RGB"
+        assert generated_background.getpixel((400, 250)) == (145, 145, 145)
     validate_contract("reference-conditioned-composite-receipt-v3", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v3(

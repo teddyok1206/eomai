@@ -238,8 +238,9 @@ class _Opener:
 
 
 class _DiscoveryOpener:
-    def __init__(self) -> None:
+    def __init__(self, *, include_collage: bool = False) -> None:
         self.calls: list[str] = []
+        self.include_collage = include_collage
 
     def open(self, request: Any, *, timeout: int) -> _Response:
         url = request.full_url
@@ -277,32 +278,39 @@ class _DiscoveryOpener:
                 ],
             }
 
-        payload = json.dumps(
-            {
-                "query": {
-                    "pages": [
-                        page(
-                            index=3,
-                            page_id=103,
-                            title="File:Licensed compact car.jpg",
-                            license_code="cc-by-sa-4.0",
-                        ),
-                        page(
-                            index=2,
-                            page_id=102,
-                            title="File:Public compact car rear.jpg",
-                            license_code="pd",
-                        ),
-                        page(
-                            index=1,
-                            page_id=101,
-                            title="File:CC0 compact car side.jpg",
-                            license_code="cc-zero",
-                        ),
-                    ]
-                }
-            }
-        ).encode()
+        pages = [
+            *(
+                [
+                    page(
+                        index=0,
+                        page_id=104,
+                        title="File:Compact car collection collage.jpg",
+                        license_code="cc-zero",
+                    )
+                ]
+                if self.include_collage
+                else []
+            ),
+            page(
+                index=3,
+                page_id=103,
+                title="File:Licensed compact car.jpg",
+                license_code="cc-by-sa-4.0",
+            ),
+            page(
+                index=2,
+                page_id=102,
+                title="File:Public compact car rear.jpg",
+                license_code="pd",
+            ),
+            page(
+                index=1,
+                page_id=101,
+                title="File:CC0 compact car side.jpg",
+                license_code="cc-zero",
+            ),
+        ]
+        payload = json.dumps({"query": {"pages": pages}}).encode()
         return _Response(url, "application/json", payload)
 
 
@@ -505,6 +513,22 @@ def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None
     assert all(value.license_expectation == "PUBLIC_DOMAIN_OR_CC0" for value in candidates)
     assert "gsrsearch=compact+car+side+view" in opener.calls[0]
     assert len(opener.calls) == 1
+
+
+def test_discovery_deprioritizes_montage_like_titles_within_bounded_candidates() -> None:
+    opener = _DiscoveryOpener(include_collage=True)
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    candidates = client.discover_candidates(
+        subject="one compact car in side view isolated on white",
+        query_terms=("compact car side view",),
+        candidate_limit=3,
+        timeout_seconds=120,
+    )
+
+    assert tuple(value.page_id for value in candidates) == (101, 102, 104)
+    assert tuple(value.rank for value in candidates) == (1, 2, 3)
+    assert "montage-like" in candidates[0].selection_rationale
 
 
 def test_discovery_materializes_one_canonical_result_without_source_bytes(tmp_path: Path) -> None:

@@ -1814,6 +1814,20 @@ def test_image_required_rework_preserves_attempt_history(integration_engine: Eng
     )
     try:
         runner.run_until_idle(workflow_id)
+        with sessions.begin() as session:
+            failed_image = create_step_run(
+                session,
+                workflow_id=workflow_id,
+                step_key="image",
+                step_type="agent",
+                worker_role="image",
+                result_schema="image-result@1.0",
+                input_pointer_manifest={"historical_failure": True},
+                max_attempts=10,
+            )
+            transition_step(failed_image, StepState.RUNNING)
+            failed_image.error_code = "WORKER_UNAVAILABLE"
+            transition_step(failed_image, StepState.FAILED)
         _enqueue_approval(
             sessions,
             workflow_id,
@@ -1838,6 +1852,16 @@ def test_image_required_rework_preserves_attempt_history(integration_engine: Eng
             assert authoring[0].output_pointer_manifest is not None
             assert authoring[0].superseded_by_step_run_id == authoring[1].step_run_id
             assert authoring[1].state == StepState.SUCCEEDED.value
+            images = [
+                step for step in list_step_runs(session, workflow_id) if step.step_key == "image"
+            ]
+            assert [step.attempt for step in images] == [1, 2, 3]
+            assert [step.state for step in images] == [
+                StepState.SUPERSEDED.value,
+                StepState.FAILED.value,
+                StepState.SUCCEEDED.value,
+            ]
+            assert images[1].error_code == "WORKER_UNAVAILABLE"
         _enqueue_approval(
             sessions,
             workflow_id,
@@ -1855,11 +1879,12 @@ def test_image_required_rework_preserves_attempt_history(integration_engine: Eng
                 runs = [
                     step for step in list_step_runs(session, workflow_id) if step.step_key == key
                 ]
-                assert runs[0].superseded_by_step_run_id == runs[1].step_run_id
+                successor = next(step for step in runs if step.state == StepState.SUCCEEDED.value)
+                assert runs[0].superseded_by_step_run_id == successor.step_run_id
             final = workflow.runtime_context["final_pointer_manifest"]
             assert [pointer["attempt"] for pointer in final["artifact_pointers"]] == [
                 2,
-                2,
+                3,
                 2,
                 1,
             ]

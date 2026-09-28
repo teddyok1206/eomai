@@ -85,6 +85,13 @@ keys, runtime histories, and job idempotency keys. Multiple Runners may advance 
 parallel through the shared indexed queue. They do not share a process-global feedback collection;
 each exact directive and Artifact pointer pair remains scoped to the claimed Workflow transaction.
 
+An active-step lookup considers only executable, successful, skipped, or human-waiting states.
+Historical `FAILED` and `CANCELLED` attempts remain immutable audit records but cannot shadow a
+new attempt after a predecessor is superseded by rework. The capacity-recovery boundary uses a
+separate latest-unsuperseded lookup because that use case must inspect an exact failed queued job.
+Both lookups use the existing indexed `(workflow_id, step_key, attempt)` access path and are
+O(log A) with a bounded attempt count `A <= 10`; no derived current-attempt cache is persisted.
+
 ## Dependency direction and adapters
 
 The Workflow Runner depends on a narrow Catalog application port returning the typed directive.

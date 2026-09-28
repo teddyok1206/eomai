@@ -70,6 +70,20 @@ _SAFE_ERROR_CODES = frozenset(
     }
 )
 _HTML_TAG = re.compile(r"<[^>]+>")
+_MULTI_SUBJECT_TITLE_MARKERS = (
+    " collage",
+    " collection",
+    " comparison",
+    " display",
+    " exhibit",
+    " group",
+    " montage",
+    " multiple",
+    " plate",
+    " specimens",
+    " with cast",
+)
+_VIEWPOINT_TITLE_MARKERS = ("dorsal", "front", "rear", "side", "top")
 
 
 class VisualReferenceAcquisitionError(RuntimeError):
@@ -274,7 +288,7 @@ class WikimediaCommonsClient:
         if not isinstance(raw_pages, list):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         ordered_pages = sorted(raw_pages, key=_discovery_page_order)
-        discovered: list[VisualReferenceIntentCandidate] = []
+        discovered: list[tuple[int, VisualReferenceIntentCandidate]] = []
         seen_page_ids: set[int] = set()
         seen_titles: set[str] = set()
         for raw_page in ordered_pages:
@@ -316,12 +330,30 @@ class WikimediaCommonsClient:
                 }:
                     raise
                 continue
-            discovered.append(candidate)
+            discovered.append((len(discovered), candidate))
             if len(discovered) == candidate_limit:
                 break
         if not discovered:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
-        return tuple(discovered)
+        ranked = sorted(
+            discovered,
+            key=lambda value: _reference_candidate_order(
+                value[1], query=query, official_rank=value[0]
+            ),
+        )[:candidate_limit]
+        return tuple(
+            VisualReferenceIntentCandidate.model_validate(
+                {
+                    **candidate.model_dump(mode="json"),
+                    "rank": rank,
+                    "selection_rationale": (
+                        "Official Commons result selected by stable morphology suitability "
+                        "ranking; montage-like file titles are deprioritized."
+                    ),
+                }
+            )
+            for rank, (_official_rank, candidate) in enumerate(ranked, start=1)
+        )
 
     def _load_pages(
         self,
@@ -1067,6 +1099,22 @@ def _discovery_page_order(value: object) -> tuple[int, int]:
     if not isinstance(index, int) or not isinstance(page_id, int):
         raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
     return index, page_id
+
+
+def _reference_candidate_order(
+    candidate: VisualReferenceIntentCandidate,
+    *,
+    query: str,
+    official_rank: int,
+) -> tuple[int, int, int, int]:
+    """Prefer one clean morphology subject while preserving stable official relevance order."""
+
+    title = " " + candidate.file_title.casefold().replace("_", " ")
+    montage_penalty = int(any(marker in title for marker in _MULTI_SUBJECT_TITLE_MARKERS))
+    query_value = query.casefold()
+    requested_viewpoints = {marker for marker in _VIEWPOINT_TITLE_MARKERS if marker in query_value}
+    viewpoint_matches = sum(marker in title for marker in requested_viewpoints)
+    return montage_penalty, -viewpoint_matches, official_rank, candidate.page_id
 
 
 def _mapping(value: object, key: str) -> dict[str, object]:

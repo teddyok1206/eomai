@@ -1886,7 +1886,7 @@ class WorkflowRunner:
                     WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
                     "failed workflow is not positioned on an agent step",
                 )
-            step = self._latest_active_step(
+            step = self._latest_unsuperseded_step(
                 session,
                 workflow.workflow_id,
                 definition.key,
@@ -2529,6 +2529,32 @@ class WorkflowRunner:
     def _latest_active_step(
         session: Session, workflow_id: str, step_key: str
     ) -> WorkflowStepRunRecord | None:
+        return session.scalar(
+            select(WorkflowStepRunRecord)
+            .where(
+                WorkflowStepRunRecord.workflow_id == workflow_id,
+                WorkflowStepRunRecord.step_key == step_key,
+                WorkflowStepRunRecord.state.in_(
+                    (
+                        StepState.PENDING.value,
+                        StepState.READY.value,
+                        StepState.RUNNING.value,
+                        StepState.SUCCEEDED.value,
+                        StepState.SKIPPED.value,
+                        StepState.WAITING_FOR_HUMAN.value,
+                    )
+                ),
+            )
+            .order_by(WorkflowStepRunRecord.attempt.desc())
+            .limit(1)
+        )
+
+    @staticmethod
+    def _latest_unsuperseded_step(
+        session: Session, workflow_id: str, step_key: str
+    ) -> WorkflowStepRunRecord | None:
+        """Return terminal failures only at an explicit recovery boundary."""
+
         return session.scalar(
             select(WorkflowStepRunRecord)
             .where(

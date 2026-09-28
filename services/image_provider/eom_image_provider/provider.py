@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from eom_image_contracts import (
     LocalImageCompositeReceipt,
@@ -554,6 +554,7 @@ def generate_reference_conditioned_composite_handoff_v3(
         lora_scale=request.style_adapter.lora_scale,
         backend=backend,
         output_mode=0o640,
+        output_palette="ASSESSMENT_GRAYSCALE",
     )
     composite_receipt = _complete_composite_handoff(
         workspace=workspace,
@@ -910,6 +911,7 @@ def _generate_background_from_reference_with_style(
     lora_scale: float,
     backend: StyleReferenceImageBackend,
     output_mode: int,
+    output_palette: Literal["SOURCE_RGB", "ASSESSMENT_GRAYSCALE"] = "SOURCE_RGB",
 ) -> LocalImageGenerationReceipt:
     manifest, model_directory = verify_model_revision(model_store_root, request.model)
     if manifest.state != "APPROVED":
@@ -937,11 +939,16 @@ def _generate_background_from_reference_with_style(
     duration_ms = max(1, (time.monotonic_ns() - started_clock) // 1_000_000)
     if duration_ms > request.timeout_seconds * 1000:
         raise ProviderError("LOCAL_IMAGE_PROVIDER_TIMEOUT")
-    _validate_png(generated.png_bytes)
-    _write_exclusive(output_path, generated.png_bytes, mode=output_mode)
+    generated_png = (
+        _assessment_grayscale_png(generated.png_bytes)
+        if output_palette == "ASSESSMENT_GRAYSCALE"
+        else generated.png_bytes
+    )
+    _validate_png(generated_png)
+    _write_exclusive(output_path, generated_png, mode=output_mode)
     output = LocalImageOutput(
-        size_bytes=len(generated.png_bytes),
-        sha256="sha256:" + hashlib.sha256(generated.png_bytes).hexdigest(),
+        size_bytes=len(generated_png),
+        sha256="sha256:" + hashlib.sha256(generated_png).hexdigest(),
     )
     body = {
         "schema_version": "local-image-generation-receipt/1.0",
@@ -1333,6 +1340,29 @@ def _validate_png(payload: bytes) -> None:
         or payload[-8:-4] != b"IEND"
     ):
         raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+
+
+def _assessment_grayscale_png(payload: bytes) -> bytes:
+    """Canonicalize a morphology raster to the required monochrome print palette."""
+
+    _validate_png(payload)
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(io.BytesIO(payload)) as source:
+            source.load()
+            if source.format != "PNG" or source.size != (800, 500):
+                raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+            grayscale = ImageOps.grayscale(source).convert("RGB")
+            target = io.BytesIO()
+            grayscale.save(target, format="PNG", optimize=False, compress_level=9)
+    except ProviderError:
+        raise
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    normalized = target.getvalue()
+    _validate_png(normalized)
+    return normalized
 
 
 def _write_exclusive(path: Path, payload: bytes, *, mode: int) -> None:
