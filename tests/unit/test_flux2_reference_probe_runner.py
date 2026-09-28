@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,15 @@ from tests.unit.test_flux2_reference_probe_contracts import (
     _manifest_value,
     _plan_value,
 )
+
+
+def test_candidate_runtime_pins_transformers_compatible_peft() -> None:
+    project = tomllib.loads(
+        Path("services/image_candidate_runner/pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert "transformers==5.17.0" in project["project"]["dependencies"]
+    assert "peft==0.21.0" in project["project"]["dependencies"]
 
 
 def _png(*, dark: int) -> bytes:
