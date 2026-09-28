@@ -9,10 +9,23 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from eom_image_contracts import LocalImageProviderBinding, LocalImageProviderBindingV4
 
+from scripts.image_provider.normalize_runtime_permissions import _load_provider_binding
 from scripts.image_trainer.stage_crop_locator import _make_trainer_readonly_directory
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_runtime_permission_normalizer_accepts_pinned_v1_and_v4_bindings() -> None:
+    assert isinstance(
+        _load_provider_binding(ROOT / "config/local-image-provider.ssd1b.json"),
+        LocalImageProviderBinding,
+    )
+    assert isinstance(
+        _load_provider_binding(ROOT / "config/local-image-provider.ssd1b.v4.json"),
+        LocalImageProviderBindingV4,
+    )
 
 
 def test_training_staging_directory_mode_is_not_filtered_by_operator_umask(

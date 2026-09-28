@@ -14,11 +14,21 @@ from pathlib import Path
 from eom_image_contracts import (
     LocalImageModelManifest,
     LocalImageProviderBinding,
+    LocalImageProviderBindingV2,
+    LocalImageProviderBindingV3,
+    LocalImageProviderBindingV4,
     validate_contract,
 )
 
+ProviderBinding = (
+    LocalImageProviderBinding
+    | LocalImageProviderBindingV2
+    | LocalImageProviderBindingV3
+    | LocalImageProviderBindingV4
+)
 
-def _json(path: Path, contract: str) -> dict[str, object]:
+
+def _json(path: Path, contract: str | None) -> dict[str, object]:
     metadata = path.lstat()
     if path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or not 0 < metadata.st_size < 262144:
         raise SystemExit("LOCAL_IMAGE_RUNTIME_POINTER_INVALID")
@@ -34,8 +44,35 @@ def _json(path: Path, contract: str) -> dict[str, object]:
     value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
     if not isinstance(value, dict):
         raise SystemExit("LOCAL_IMAGE_RUNTIME_POINTER_INVALID")
-    validate_contract(contract, value)
+    if contract is not None:
+        validate_contract(contract, value)
     return value
+
+
+def _load_provider_binding(path: Path) -> ProviderBinding:
+    value = _json(path, None)
+    schema_version = value.get("schema_version")
+    contracts: dict[str, tuple[str, type[ProviderBinding]]] = {
+        "local-image-provider-binding/1.0": ("provider-binding", LocalImageProviderBinding),
+        "local-image-provider-binding/2.0": (
+            "provider-binding-v2",
+            LocalImageProviderBindingV2,
+        ),
+        "local-image-provider-binding/3.0": (
+            "provider-binding-v3",
+            LocalImageProviderBindingV3,
+        ),
+        "local-image-provider-binding/4.0": (
+            "provider-binding-v4",
+            LocalImageProviderBindingV4,
+        ),
+    }
+    selected = contracts.get(schema_version) if isinstance(schema_version, str) else None
+    if selected is None:
+        raise SystemExit("LOCAL_IMAGE_RUNTIME_POINTER_INVALID")
+    contract, model = selected
+    validate_contract(contract, value)
+    return model.model_validate(value)
 
 
 def _require_directory(path: Path) -> None:
@@ -61,7 +98,7 @@ def main() -> None:
     root: Path = args.model_store_root
     if root != Path("/srv/eom/models/image") or not root.is_absolute():
         raise SystemExit("LOCAL_IMAGE_RUNTIME_MODEL_ROOT_INVALID")
-    binding = LocalImageProviderBinding.model_validate(_json(args.binding, "provider-binding"))
+    binding = _load_provider_binding(args.binding)
     revision = root / binding.model.model_id / binding.model.model_revision_id
     manifest_path = revision / "manifest.json"
     manifest = LocalImageModelManifest.model_validate(_json(manifest_path, "model-manifest"))
