@@ -899,6 +899,170 @@ def conditioned_receipt_v2_schema() -> dict[str, Any]:
     return value
 
 
+def _morphology_conditioning_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "contract",
+            "strength",
+            "fit_policy",
+            "simplification",
+        ],
+        "properties": {
+            "contract": {"const": "sdxl-morphology-img2img/2.0"},
+            "strength": {"const": 0.35},
+            "fit_policy": {"const": "EXACT_NORMALIZED_CANVAS"},
+            "simplification": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "contract",
+                    "output_member",
+                    "color_policy",
+                    "denoise_policy",
+                    "tone_policy",
+                    "foreground_luma_threshold",
+                    "border_width_px",
+                    "foreground_ratio_min",
+                    "foreground_ratio_max",
+                    "border_foreground_ratio_max",
+                ],
+                "properties": {
+                    "contract": {"const": "local-image-reference-simplification/1.0"},
+                    "output_member": {"const": "reference-conditioning.png"},
+                    "color_policy": {"const": "GRAYSCALE_WHITE_BACKGROUND"},
+                    "denoise_policy": {"const": "MEDIAN_5_GAUSSIAN_1_2"},
+                    "tone_policy": {"const": "FOUR_LEVEL_POSTERIZE"},
+                    "foreground_luma_threshold": {"const": 245},
+                    "border_width_px": {"const": 24},
+                    "foreground_ratio_min": {"const": 0.005},
+                    "foreground_ratio_max": {"const": 0.8},
+                    "border_foreground_ratio_max": {"const": 0.12},
+                },
+            },
+        },
+    }
+
+
+def provider_binding_v3_schema() -> dict[str, Any]:
+    value = copy.deepcopy(provider_binding_v2_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/3.0"
+    value["title"] = "EOM simplified-morphology local image provider binding v3"
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/3.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-morphology-conditioned-line-art/3.0"
+    }
+    value["properties"]["reference_policy"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "intent_source",
+            "provider",
+            "license_policy",
+            "candidate_limit",
+            "conditioning",
+            "authority_boundary",
+            "failure_policy",
+        ],
+        "properties": {
+            "intent_source": {"const": "DRAWING_ALT_TEXT"},
+            "provider": {"const": "WIKIMEDIA_COMMONS"},
+            "license_policy": {"const": "PUBLIC_DOMAIN_OR_CC0"},
+            "candidate_limit": {"const": 5},
+            "conditioning": _morphology_conditioning_schema(),
+            "authority_boundary": {"const": "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY"},
+            "failure_policy": {"const": "FAIL_CLOSED"},
+        },
+    }
+    return value
+
+
+def conditioned_request_v3_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_v2_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/3.0"
+    )
+    value["title"] = "EOM simplified-morphology reference composite request v3"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/3.0"
+    }
+    value["$defs"]["conditioning"] = _morphology_conditioning_schema()
+    return value
+
+
+def conditioned_receipt_v3_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_v2_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/3.0"
+    )
+    value["title"] = "EOM simplified-morphology reference composite receipt v3"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/3.0"
+    }
+    value["$defs"]["conditioning"] = _morphology_conditioning_schema()
+    value["$defs"]["conditioning_output"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "member_path",
+            "media_type",
+            "sha256",
+            "size_bytes",
+            "width_px",
+            "height_px",
+        ],
+        "properties": {
+            "member_path": {"const": "reference-conditioning.png"},
+            "media_type": {"const": "image/png"},
+            "sha256": SHA256,
+            "size_bytes": {"type": "integer", "minimum": 64, "maximum": 8388608},
+            "width_px": {"const": 800},
+            "height_px": {"const": 504},
+        },
+    }
+    value["$defs"]["simplification_metrics"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "source_foreground_ratio",
+            "conditioning_foreground_ratio",
+            "border_foreground_ratio",
+            "source_edge_density",
+            "conditioning_edge_density",
+            "edge_density_ratio",
+        ],
+        "properties": {
+            "source_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+            "conditioning_foreground_ratio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+            },
+            "border_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+            "source_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+            "conditioning_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+            "edge_density_ratio": {"type": "number", "minimum": 0, "maximum": 16},
+        },
+    }
+    value["$defs"]["simplifier_runtime"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["contract", "pillow_version"],
+        "properties": {
+            "contract": {"const": "local-image-reference-simplifier/1.0"},
+            "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        },
+    }
+    value["required"].insert(-2, "conditioning_output")
+    value["required"].insert(-2, "simplification_metrics")
+    value["required"].insert(-2, "simplifier_runtime")
+    value["properties"]["conditioning_output"] = {"$ref": "#/$defs/conditioning_output"}
+    value["properties"]["simplification_metrics"] = {"$ref": "#/$defs/simplification_metrics"}
+    value["properties"]["simplifier_runtime"] = {"$ref": "#/$defs/simplifier_runtime"}
+    return value
+
+
 def reference_composition_evaluation_schema() -> dict[str, Any]:
     value = _header(
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
@@ -1088,6 +1252,13 @@ SCHEMAS = {
     ),
     "local-image-reference-composition-evaluation-v1.schema.json": (
         reference_composition_evaluation_schema()
+    ),
+    "local-image-provider-binding-v3.schema.json": provider_binding_v3_schema(),
+    "local-image-reference-conditioned-composite-request-v3.schema.json": (
+        conditioned_request_v3_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v3.schema.json": (
+        conditioned_receipt_v3_schema()
     ),
 }
 

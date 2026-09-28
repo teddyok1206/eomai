@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/3.0",
+  "title": "EOM simplified-morphology reference composite request v3",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "reference_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_manifest",
+        "primary_reference_id",
+        "reference_member"
+      ],
+      "properties": {
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^imgrefbundle_[0-9a-f]{32}$"
+        },
+        "bundle_revision_id": {
+          "type": "string",
+          "pattern": "^imgrefbundlerev_[0-9a-f]{32}$"
+        },
+        "bundle_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^manifests/visual-reference-bundle\\.json$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        },
+        "primary_reference_id": {
+          "type": "string",
+          "pattern": "^imgref_[0-9a-f]{32}$"
+        },
+        "reference_member": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^references/primary\\.png$"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/normalized-visual-reference/1.0"
+            },
+            "media_type": {
+              "const": "image/png"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            }
+          }
+        }
+      }
+    },
+    "conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "strength",
+        "fit_policy",
+        "simplification"
+      ],
+      "properties": {
+        "contract": {
+          "const": "sdxl-morphology-img2img/2.0"
+        },
+        "strength": {
+          "const": 0.35
+        },
+        "fit_policy": {
+          "const": "EXACT_NORMALIZED_CANVAS"
+        },
+        "simplification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "output_member",
+            "color_policy",
+            "denoise_policy",
+            "tone_policy",
+            "foreground_luma_threshold",
+            "border_width_px",
+            "foreground_ratio_min",
+            "foreground_ratio_max",
+            "border_foreground_ratio_max"
+          ],
+          "properties": {
+            "contract": {
+              "const": "local-image-reference-simplification/1.0"
+            },
+            "output_member": {
+              "const": "reference-conditioning.png"
+            },
+            "color_policy": {
+              "const": "GRAYSCALE_WHITE_BACKGROUND"
+            },
+            "denoise_policy": {
+              "const": "MEDIAN_5_GAUSSIAN_1_2"
+            },
+            "tone_policy": {
+              "const": "FOUR_LEVEL_POSTERIZE"
+            },
+            "foreground_luma_threshold": {
+              "const": 245
+            },
+            "border_width_px": {
+              "const": 24
+            },
+            "foreground_ratio_min": {
+              "const": 0.005
+            },
+            "foreground_ratio_max": {
+              "const": 0.8
+            },
+            "border_foreground_ratio_max": {
+              "const": 0.12
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "composite_request",
+    "visual_reference",
+    "conditioning",
+    "style_adapter",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-reference-conditioned-composite-request/3.0"
+    },
+    "composite_request": {
+      "$ref": "eom://schemas/image-provider/local-image-composite-request/1.0"
+    },
+    "visual_reference": {
+      "$ref": "#/$defs/reference_pointer"
+    },
+    "conditioning": {
+      "$ref": "#/$defs/conditioning"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "style_adapter": {
+      "$ref": "eom://schemas/image-provider/local-image-style-adapter-release/1.0"
+    }
+  }
+}
