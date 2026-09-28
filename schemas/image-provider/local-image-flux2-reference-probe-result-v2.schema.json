@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-flux2-reference-probe-result/1.1",
+  "title": "EOM FLUX.2 reference line-art layout-locked probe result v1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
+        "kind": {"enum": ["RAW_CANDIDATE", "LOCKED_CANDIDATE", "CONDITIONING"]},
+        "relative_path": {"type": "string", "pattern": "^outputs/imgflux2case_[0-9a-f]{32}-(raw-candidate|locked-candidate|conditioning)\\.png$"},
+        "media_type": {"const": "image/png"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width_px": {"const": 800},
+        "height_px": {"enum": [500, 504]}
+      },
+      "required": ["case_id", "kind", "relative_path", "media_type", "size_bytes", "sha256", "width_px", "height_px"]
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^imgflux2case_[0-9a-f]{32}$"},
+        "elapsed_milliseconds": {"type": "integer", "minimum": 1, "maximum": 7200000},
+        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1, "maximum": 34359738368},
+        "reference_bbox": {"$ref": "#/$defs/bbox"},
+        "raw_candidate_bbox": {"$ref": "#/$defs/bbox"},
+        "locked_candidate_bbox": {"$ref": "#/$defs/bbox"},
+        "raw_area_ratio_milli": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "locked_area_ratio_milli": {"const": 1000},
+        "raw_center_distance_milli": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "locked_center_distance_milli": {"const": 0},
+        "layout_status": {"const": "PASS"}
+      },
+      "required": ["case_id", "elapsed_milliseconds", "peak_gpu_memory_bytes", "reference_bbox", "raw_candidate_bbox", "locked_candidate_bbox", "raw_area_ratio_milli", "locked_area_ratio_milli", "raw_center_distance_milli", "locked_center_distance_milli", "layout_status"]
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x_min": {"type": "integer", "minimum": 0, "maximum": 799},
+        "y_min": {"type": "integer", "minimum": 0, "maximum": 499},
+        "x_max": {"type": "integer", "minimum": 1, "maximum": 800},
+        "y_max": {"type": "integer", "minimum": 1, "maximum": 500}
+      },
+      "required": ["x_min", "y_min", "x_max", "y_max"]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "torch_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "diffusers_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "transformers_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "cuda_version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "gpu_name": {"const": "NVIDIA GeForce RTX 5080"},
+        "compute_capability": {"const": "12.0"}
+      },
+      "required": ["python_version", "torch_version", "diffusers_version", "transformers_version", "cuda_version", "gpu_name", "compute_capability"]
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "local-image-flux2-reference-probe-result/1.1"},
+    "run_id": {"type": "string", "pattern": "^imgflux2proberun_[0-9a-f]{32}$"},
+    "plan_id": {"type": "string", "pattern": "^imgflux2probe_[0-9a-f]{32}$"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "command_sha256": {"$ref": "#/$defs/sha256"},
+    "model_revision_id": {"type": "string", "pattern": "^imgmodelrev_[0-9a-f]{32}$"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "status": {"enum": ["FAILED", "SUCCEEDED"]},
+    "error_code": {"anyOf": [{"enum": ["FLUX2_PROBE_EXEC_FAILED", "FLUX2_PROBE_GPU_UNAVAILABLE", "FLUX2_PROBE_INPUT_HASH_MISMATCH", "FLUX2_PROBE_INPUT_INVALID", "FLUX2_PROBE_MODEL_INVALID", "FLUX2_PROBE_OOM", "FLUX2_PROBE_OUTPUT_INVALID"]}, {"type": "null"}]},
+    "outputs": {"type": "array", "maxItems": 36, "items": {"$ref": "#/$defs/output"}},
+    "measurements": {"type": "array", "maxItems": 12, "items": {"$ref": "#/$defs/measurement"}},
+    "runtime": {"anyOf": [{"$ref": "#/$defs/runtime"}, {"type": "null"}]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "result_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "required": ["schema_version", "run_id", "plan_id", "plan_sha256", "command_sha256", "model_revision_id", "activation_policy", "status", "error_code", "outputs", "measurements", "runtime", "started_at", "completed_at", "result_sha256"]
+}

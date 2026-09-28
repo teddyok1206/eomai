@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -25,6 +26,26 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "local-image-flux2-reference-probe-command-v1.schema.json",
+        "local-image-flux2-reference-probe-command-v2.schema.json",
+        "local-image-flux2-reference-probe-plan-v1.schema.json",
+        "local-image-flux2-reference-probe-plan-v2.schema.json",
+        "local-image-flux2-reference-probe-result-v1.schema.json",
+        "local-image-flux2-reference-probe-result-v2.schema.json",
+        "local-image-model-candidate-manifest-v1.schema.json",
+    ),
+)
+def test_flux2_contract_canonical_and_package_schema_bytes_match(name: str) -> None:
+    canonical = REPOSITORY_ROOT / "schemas/image-provider" / name
+    packaged = REPOSITORY_ROOT / "packages/image_contracts/eom_image_contracts/schemas" / name
+
+    assert canonical.read_bytes() == packaged.read_bytes()
 
 
 def _manifest_value() -> dict[str, Any]:
