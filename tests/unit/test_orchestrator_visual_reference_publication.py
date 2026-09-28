@@ -14,7 +14,10 @@ from eom_image_contracts import (
 )
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.settings import Settings
-from eom_orchestrator.visual_reference_acquisition import VisualReferenceCoordinatorError
+from eom_orchestrator.visual_reference_acquisition import (
+    VisualReferenceCoordinatorError,
+    _discovery_query_terms,
+)
 from eom_workflow.models import ContentTeamImageRoleResultV12, GeneratedVectorDrawingV6
 
 
@@ -181,3 +184,22 @@ def test_hybrid_image_fails_closed_without_publication_route() -> None:
             revision_id="rev_" + "5" * 32,
             content_hash=_sha("6"),
         )
+
+
+@pytest.mark.parametrize(
+    ("subject", "expected"),
+    (
+        (
+            "one compact passenger car in full side view with its front facing right, "
+            "isolated on white",
+            ("compact passenger car side view",),
+        ),
+        ("one trilobite fossil isolated on white", ("trilobite fossil",)),
+        ("a flower in cross-section on white", ("flower cross-section",)),
+    ),
+)
+def test_discovery_query_preserves_morphology_and_removes_presentation_clauses(
+    subject: str,
+    expected: tuple[str, ...],
+) -> None:
+    assert _discovery_query_terms(subject) == expected

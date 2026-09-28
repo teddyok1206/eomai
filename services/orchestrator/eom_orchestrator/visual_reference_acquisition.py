@@ -517,10 +517,7 @@ def _build_discovery_command(
     observed_at: datetime,
     timeout_seconds: int,
 ) -> LocalImageVisualReferenceDiscoveryCommand:
-    query_term = re.sub(r"[^A-Za-z0-9 .()/_-]+", " ", subject)
-    query_term = re.sub(r"\s+", " ", query_term).strip()
-    if len(query_term) > 80:
-        query_term = query_term[:80].rstrip()
+    query_terms = _discovery_query_terms(subject)
     identity_body = {
         "schema_version": "local-image-visual-reference-discovery-command/1.0",
         "workflow_id": workflow_id,
@@ -529,7 +526,7 @@ def _build_discovery_command(
         "visual_ordinal": visual_ordinal,
         "drawing_sha256": drawing_sha256,
         "subject": subject,
-        "query_terms": [query_term],
+        "query_terms": list(query_terms),
         "candidate_limit": 5,
         "observed_at": observed_at.isoformat().replace("+00:00", "Z"),
         "timeout_seconds": timeout_seconds,
@@ -541,6 +538,62 @@ def _build_discovery_command(
     )
     validate_contract("visual-reference-discovery-command", command.model_dump(mode="json"))
     return command
+
+
+def _discovery_query_terms(subject: str) -> tuple[str, ...]:
+    """Derive one bounded morphology query from the validated English subject.
+
+    The subject remains the immutable semantic identity. Commons search performs better when
+    presentation-only clauses such as isolation, direction, and background are removed, while an
+    explicit viewpoint remains part of the morphology query.
+    """
+
+    normalized = re.sub(r"[^A-Za-z0-9 .()/_-]+", " ", subject)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    lowered = normalized.casefold()
+    cut_positions = [
+        index
+        for marker in (
+            " in ",
+            " with ",
+            " isolated ",
+            " on white",
+            " facing ",
+            " viewed ",
+            " showing ",
+            " after ",
+            " before ",
+        )
+        if (index := lowered.find(marker)) > 0
+    ]
+    core = normalized[: min(cut_positions)] if cut_positions else normalized
+    core = re.sub(
+        r"^(?:a|an|the|one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+)\s+",
+        "",
+        core,
+        flags=re.IGNORECASE,
+    ).strip()
+    viewpoint = next(
+        (
+            value
+            for value in (
+                "side view",
+                "front view",
+                "rear view",
+                "top view",
+                "cross-section",
+                "cross section",
+            )
+            if value in lowered
+        ),
+        None,
+    )
+    if viewpoint is not None and viewpoint not in core.casefold():
+        core = f"{core} {viewpoint}"
+    query = core[:80].rstrip(" ._-/")
+    if not query:
+        query = normalized[:80].rstrip(" ._-/")
+    return (query,)
 
 
 def _build_intent(

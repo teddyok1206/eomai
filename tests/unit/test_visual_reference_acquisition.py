@@ -421,6 +421,7 @@ def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None
 
     candidates = client.discover_candidates(
         subject="one compact car in side view isolated on white",
+        query_terms=("compact car side view",),
         candidate_limit=5,
         timeout_seconds=120,
     )
@@ -428,6 +429,7 @@ def test_discovery_uses_official_order_and_skips_incompatible_licenses() -> None
     assert tuple(value.page_id for value in candidates) == (101, 102)
     assert tuple(value.rank for value in candidates) == (1, 2)
     assert all(value.license_expectation == "PUBLIC_DOMAIN_OR_CC0" for value in candidates)
+    assert "gsrsearch=compact+car+side+view" in opener.calls[0]
     assert len(opener.calls) == 1
 
 

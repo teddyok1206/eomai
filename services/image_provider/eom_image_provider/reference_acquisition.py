@@ -215,20 +215,28 @@ class WikimediaCommonsClient:
         self,
         *,
         subject: str,
+        query_terms: tuple[str, ...],
         candidate_limit: int,
         timeout_seconds: int,
     ) -> tuple[VisualReferenceIntentCandidate, ...]:
         """Return a stable ordered subset of official, license-compatible Commons files."""
 
-        if not 3 <= len(subject) <= 180 or not 1 <= candidate_limit <= 5:
+        if (
+            not 3 <= len(subject) <= 180
+            or not 1 <= len(query_terms) <= 8
+            or query_terms != tuple(sorted(set(query_terms)))
+            or any(not 1 <= len(value) <= 80 for value in query_terms)
+            or not 1 <= candidate_limit <= 5
+        ):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
+        query = query_terms[0]
         parameters = urlencode(
             {
                 "action": "query",
                 "format": "json",
                 "formatversion": "2",
                 "generator": "search",
-                "gsrsearch": subject,
+                "gsrsearch": query,
                 "gsrnamespace": "6",
                 "gsrlimit": "20",
                 "gsrwhat": "text",
@@ -435,6 +443,7 @@ def run_visual_reference_discovery(
     try:
         candidates = resolved_client.discover_candidates(
             subject=command.subject,
+            query_terms=command.query_terms,
             candidate_limit=command.candidate_limit,
             timeout_seconds=command.timeout_seconds,
         )
