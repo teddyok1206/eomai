@@ -14,7 +14,7 @@ LocalGpuPromptContract = Literal[
 
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
 LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.7"
-LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.8"
+LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.8.1"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
 LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 96
 
@@ -117,23 +117,23 @@ LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS: Final = (
 )
 
 LOCAL_GPU_MINIMAL_NEGATIVE_REQUIREMENTS: Final = (
-    *LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
-    "hatching",
-    "cross-hatching",
-    "stippling",
-    "microtexture",
-    "fine texture",
-    "material texture",
-    "fur texture",
-    "skin texture",
-    "metal texture",
-    "fabric texture",
-    "fine scratches",
-    "dense shading",
-    "dramatic lighting",
+    "color",
+    "nonwhite background",
+    "frame",
+    "gradient shadow",
+    "photo 3d",
+    "anime cartoon",
+    "scenery decoration",
+    "extra duplicate objects",
+    "crop",
+    "text labels numbers",
+    "watermark logo",
+    "person face clothing",
+    "hatching stippling",
+    "microtexture material texture scratches",
+    "dense dramatic shading",
     "detailed background",
-    "added parts",
-    "removed parts",
+    "added removed parts",
     "changed viewpoint",
 )
 

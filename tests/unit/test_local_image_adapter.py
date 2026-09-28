@@ -393,7 +393,7 @@ def test_v3_binding_loader_pins_simplification_and_minimal_prompt(tmp_path: Path
         ),
         LocalImageProviderBindingV3,
     )
-    assert LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.8"
+    assert LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION == "local-gpu-image-prompt-policy/1.8.1"
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))

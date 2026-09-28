@@ -128,3 +128,10 @@ photograph containing an answer-bearing scale and dark border was rejected as
 157.824 ms. This is the intended boundary: an isolated morphology reference may proceed, while a
 busy photographic scene or a source that mixes the object with authoritative measurement marks is
 not silently simplified into a generative input.
+
+The first bounded GPU canary stopped before CUDA transfer because the draft V2 negative prompt used
+116 CLIP tokens and exceeded the pinned SSD-1B encoders' 77-token limit. No image was produced. The
+successor prompt policy `local-gpu-image-prompt-policy/1.8.1` compresses equivalent prohibitions into
+18 phrases and keeps the assembled negative prompt at no more than 340 characters. The provider's
+existing exact-tokenizer guard remains authoritative and fail-closed; the character bound is only a
+source-level regression guard, not a replacement tokenizer.

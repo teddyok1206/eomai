@@ -98,3 +98,4 @@ def test_pack_selects_minimal_prompt_policy_without_changing_worker_subject() ->
     assert "hatching" not in plan.positive_prompt
     assert "microtexture" in plan.negative_prompt
     assert "changed viewpoint" in plan.negative_prompt
+    assert len(plan.negative_prompt) <= 340
