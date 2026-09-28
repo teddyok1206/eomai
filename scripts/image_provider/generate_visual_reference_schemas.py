@@ -1124,6 +1124,133 @@ def conditioned_receipt_v4_schema() -> dict[str, Any]:
     return value
 
 
+def _assessment_line_art_postprocess_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "contract",
+            "raw_member",
+            "median_filter_size",
+            "mask_blur_radius",
+            "mask_luma_threshold",
+            "mask_expand_size",
+            "mask_contract_size",
+            "edge_mid_threshold",
+            "edge_dark_threshold",
+            "output_tones",
+            "horizontal_border_px",
+            "vertical_border_px",
+            "foreground_luma_threshold",
+            "foreground_ratio_min",
+            "foreground_ratio_max",
+            "border_foreground_ratio_max",
+            "edge_density_min",
+            "edge_density_max",
+        ],
+        "properties": {
+            "contract": {"const": "local-image-assessment-line-art-postprocess/1.0"},
+            "raw_member": {"const": "generated-background-raw.png"},
+            "median_filter_size": {"const": 3},
+            "mask_blur_radius": {"const": 12},
+            "mask_luma_threshold": {"const": 224},
+            "mask_expand_size": {"const": 25},
+            "mask_contract_size": {"const": 17},
+            "edge_mid_threshold": {"const": 48},
+            "edge_dark_threshold": {"const": 92},
+            "output_tones": {
+                "type": "array",
+                "prefixItems": [{"const": 48}, {"const": 160}, {"const": 255}],
+                "minItems": 3,
+                "maxItems": 3,
+            },
+            "horizontal_border_px": {"const": 40},
+            "vertical_border_px": {"const": 8},
+            "foreground_luma_threshold": {"const": 245},
+            "foreground_ratio_min": {"const": 0.01},
+            "foreground_ratio_max": {"const": 0.25},
+            "border_foreground_ratio_max": {"const": 0.01},
+            "edge_density_min": {"const": 0.01},
+            "edge_density_max": {"const": 0.3},
+        },
+    }
+
+
+def provider_binding_v5_schema() -> dict[str, Any]:
+    value = copy.deepcopy(provider_binding_v4_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/5.0"
+    value["title"] = "EOM assessment-line-art base provider binding v5"
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/5.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-morphology-conditioned-base-line-art/5.0"
+    }
+    value["required"].insert(-3, "postprocess")
+    value["properties"]["postprocess"] = _assessment_line_art_postprocess_schema()
+    return value
+
+
+def conditioned_request_v5_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_v4_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/5.0"
+    )
+    value["title"] = "EOM assessment-line-art base reference request v5"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/5.0"
+    }
+    value["required"].insert(-1, "postprocess")
+    value["properties"]["postprocess"] = _assessment_line_art_postprocess_schema()
+    return value
+
+
+def conditioned_receipt_v5_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_v4_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/5.0"
+    )
+    value["title"] = "EOM assessment-line-art base reference receipt v5"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/5.0"
+    }
+    value["properties"]["output_palette"] = {"const": "ASSESSMENT_LINE_ART"}
+    value["$defs"]["postprocess"] = _assessment_line_art_postprocess_schema()
+    value["$defs"]["postprocess_metrics"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "input_foreground_ratio",
+            "output_foreground_ratio",
+            "output_border_foreground_ratio",
+            "input_edge_density",
+            "output_edge_density",
+        ],
+        "properties": {
+            "input_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+            "output_foreground_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+            "output_border_foreground_ratio": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+            },
+            "input_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+            "output_edge_density": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+    }
+    value["$defs"]["postprocessor_runtime"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["contract", "pillow_version"],
+        "properties": {
+            "contract": {"const": "local-image-assessment-line-art-postprocessor/1.0"},
+            "pillow_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        },
+    }
+    for field in ("postprocess", "postprocess_metrics", "postprocessor_runtime"):
+        value["required"].insert(-2, field)
+        value["properties"][field] = {"$ref": f"#/$defs/{field}"}
+    return value
+
+
 def reference_composition_evaluation_schema() -> dict[str, Any]:
     value = _header(
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
@@ -1328,6 +1455,13 @@ SCHEMAS = {
     ),
     "local-image-reference-conditioned-composite-receipt-v4.schema.json": (
         conditioned_receipt_v4_schema()
+    ),
+    "local-image-provider-binding-v5.schema.json": provider_binding_v5_schema(),
+    "local-image-reference-conditioned-composite-request-v5.schema.json": (
+        conditioned_request_v5_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v5.schema.json": (
+        conditioned_receipt_v5_schema()
     ),
 }
 

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from eom_image_contracts import (
+    LocalImageAssessmentLineArtPostprocess,
     LocalImageCompositeReceipt,
     LocalImageCompositeRequest,
     LocalImageCompositorRuntime,
@@ -33,10 +34,12 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
     LocalImageReferenceConditionedCompositeReceiptV4,
+    LocalImageReferenceConditionedCompositeReceiptV5,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
+    LocalImageReferenceConditionedCompositeRequestV5,
     LocalImageRuntime,
     ProductionStyleAdapterFile,
     content_sha256,
@@ -45,8 +48,14 @@ from eom_image_contracts import (
     validate_reference_conditioned_receipt_v2,
     validate_reference_conditioned_receipt_v3,
     validate_reference_conditioned_receipt_v4,
+    validate_reference_conditioned_receipt_v5,
 )
 
+from eom_image_provider.assessment_line_art import (
+    AssessmentLineArtError,
+    AssessmentLineArtResult,
+    assessment_line_art,
+)
 from eom_image_provider.reference_simplification import (
     ReferenceSimplificationError,
     SimplifiedVisualReference,
@@ -645,12 +654,90 @@ def generate_reference_conditioned_composite_handoff_v4(
     )
 
 
+def generate_reference_conditioned_composite_handoff_v5(
+    *,
+    model_store_root: Path,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV5,
+    backend: ReferenceImageBackend,
+) -> LocalImageReferenceConditionedCompositeReceiptV5:
+    """Generate one base-model raster and deterministically reduce it to assessment line art."""
+
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    completed = _completed_reference_composite_v5(workspace, request)
+    if completed is not None:
+        return completed
+    composite = request.composite_request
+    wrapper_receipt_path = workspace / "reference-conditioned-receipt.json"
+    reference_pointer = request.visual_reference.reference_member
+    reference_png = _load_exact_handoff_input(
+        workspace / reference_pointer.member_path,
+        size_bytes=reference_pointer.size_bytes,
+        sha256=reference_pointer.sha256,
+    )
+    _validate_reference_png(reference_png)
+    simplified = _materialize_simplified_reference(
+        workspace=workspace,
+        request=request,
+        reference_png=reference_png,
+    )
+    recovered_composite = _completed_composite(workspace, composite)
+    if recovered_composite is not None:
+        raw_png = _load_line_art_raw(workspace, request)
+        line_art = _postprocess_line_art(raw_png, request=request)
+        return _write_reference_conditioned_receipt_v5(
+            workspace=workspace,
+            request=request,
+            composite_receipt=recovered_composite,
+            simplified=simplified,
+            line_art=line_art,
+        )
+    output_paths = (
+        workspace / composite.generation.output_member,
+        workspace / request.postprocess.raw_member,
+        workspace / "generation-receipt.json",
+        workspace / composite.final_output_member,
+        workspace / "composite-receipt.json",
+        wrapper_receipt_path,
+    )
+    if any(path.exists() or path.is_symlink() for path in output_paths):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    overlay_path = workspace / composite.overlay.member_path
+    _require_handoff_input(overlay_path, composite.overlay.size_bytes, composite.overlay.sha256)
+    started_clock = time.monotonic_ns()
+    generation, line_art = _generate_line_art_background_from_reference(
+        model_store_root=model_store_root,
+        workspace=workspace,
+        request=composite.generation,
+        reference_png=simplified.png_bytes,
+        strength=request.conditioning.strength,
+        postprocess=request.postprocess,
+        backend=backend,
+        output_mode=0o640,
+    )
+    composite_receipt = _complete_composite_handoff(
+        workspace=workspace,
+        request=composite,
+        generation=generation,
+        started_clock=started_clock,
+    )
+    return _write_reference_conditioned_receipt_v5(
+        workspace=workspace,
+        request=request,
+        composite_receipt=composite_receipt,
+        simplified=simplified,
+        line_art=line_art,
+    )
+
+
 def _materialize_simplified_reference(
     *,
     workspace: Path,
     request: (
         LocalImageReferenceConditionedCompositeRequestV3
         | LocalImageReferenceConditionedCompositeRequestV4
+        | LocalImageReferenceConditionedCompositeRequestV5
     ),
     reference_png: bytes,
 ) -> SimplifiedVisualReference:
@@ -802,6 +889,45 @@ def _write_reference_conditioned_receipt_v4(
     return receipt
 
 
+def _write_reference_conditioned_receipt_v5(
+    *,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV5,
+    composite_receipt: LocalImageCompositeReceipt,
+    simplified: SimplifiedVisualReference,
+    line_art: AssessmentLineArtResult,
+) -> LocalImageReferenceConditionedCompositeReceiptV5:
+    wrapper_receipt_path = workspace / "reference-conditioned-receipt.json"
+    completed_at = datetime.now(UTC)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/5.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "conditioning_output": simplified.output.model_dump(mode="json"),
+        "simplification_metrics": simplified.metrics.model_dump(mode="json"),
+        "simplifier_runtime": simplified.runtime.model_dump(mode="json"),
+        "postprocess": request.postprocess.model_dump(mode="json"),
+        "postprocess_metrics": line_art.metrics.model_dump(mode="json"),
+        "postprocessor_runtime": line_art.runtime.model_dump(mode="json"),
+        "output_palette": "ASSESSMENT_LINE_ART",
+        "completed_at": completed_at.isoformat().replace("+00:00", "Z"),
+    }
+    receipt = LocalImageReferenceConditionedCompositeReceiptV5.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+    validate_reference_conditioned_receipt_v5(request, receipt)
+    value = receipt.model_dump(mode="json")
+    validate_contract("reference-conditioned-composite-receipt-v5", value)
+    _write_exclusive(
+        wrapper_receipt_path,
+        (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+        mode=0o640,
+    )
+    return receipt
+
+
 def reuse_reference_conditioned_composite_handoff(
     *,
     workspace: Path,
@@ -840,6 +966,16 @@ def reuse_reference_conditioned_composite_handoff_v4(
     _require_absolute_no_symlink_components(workspace)
     _require_handoff_directory(workspace)
     return _completed_reference_composite_v4(workspace, request)
+
+
+def reuse_reference_conditioned_composite_handoff_v5(
+    *,
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV5,
+) -> LocalImageReferenceConditionedCompositeReceiptV5 | None:
+    _require_absolute_no_symlink_components(workspace)
+    _require_handoff_directory(workspace)
+    return _completed_reference_composite_v5(workspace, request)
 
 
 def _complete_composite_handoff(
@@ -1027,6 +1163,139 @@ def _generate_background_from_reference(
     ).encode("utf-8")
     _write_exclusive(receipt_path, receipt_bytes, mode=output_mode)
     return receipt
+
+
+def _generate_line_art_background_from_reference(
+    *,
+    model_store_root: Path,
+    workspace: Path,
+    request: LocalImageGenerationRequest,
+    reference_png: bytes,
+    strength: float,
+    postprocess: LocalImageAssessmentLineArtPostprocess,
+    backend: ReferenceImageBackend,
+    output_mode: int,
+) -> tuple[LocalImageGenerationReceipt, AssessmentLineArtResult]:
+    manifest, model_directory = verify_model_revision(model_store_root, request.model)
+    if manifest.state != "APPROVED":
+        raise ProviderError("LOCAL_IMAGE_MODEL_UNAVAILABLE")
+    output_path = workspace / request.output_member
+    raw_path = workspace / postprocess.raw_member
+    receipt_path = workspace / "generation-receipt.json"
+    if any(path.exists() or path.is_symlink() for path in (output_path, raw_path, receipt_path)):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    started = datetime.now(UTC)
+    started_clock = time.monotonic_ns()
+    generated = backend.generate_from_reference(
+        model_directory=model_directory,
+        request=request,
+        reference_png=reference_png,
+        strength=strength,
+    )
+    completed = datetime.now(UTC)
+    duration_ms = max(1, (time.monotonic_ns() - started_clock) // 1_000_000)
+    if duration_ms > request.timeout_seconds * 1000:
+        raise ProviderError("LOCAL_IMAGE_PROVIDER_TIMEOUT")
+    _validate_png(generated.png_bytes)
+    line_art = _postprocess_line_art(generated.png_bytes, postprocess=postprocess)
+    _validate_png(line_art.png_bytes)
+    _write_exclusive(raw_path, generated.png_bytes, mode=output_mode)
+    _write_exclusive(output_path, line_art.png_bytes, mode=output_mode)
+    output = LocalImageOutput(
+        size_bytes=len(line_art.png_bytes),
+        sha256="sha256:" + hashlib.sha256(line_art.png_bytes).hexdigest(),
+    )
+    body = {
+        "schema_version": "local-image-generation-receipt/1.0",
+        "request_id": request.request_id,
+        "request_sha256": request.request_sha256,
+        "model": request.model.model_dump(mode="json"),
+        "prompt_sha256": request.prompt_sha256,
+        "negative_prompt_sha256": request.negative_prompt_sha256,
+        "seed": request.seed,
+        "sampler": request.sampler.model_dump(mode="json"),
+        "output": output.model_dump(mode="json"),
+        "runtime": generated.runtime.model_dump(mode="json"),
+        "started_at": started.isoformat().replace("+00:00", "Z"),
+        "completed_at": completed.isoformat().replace("+00:00", "Z"),
+        "duration_ms": duration_ms,
+    }
+    receipt = LocalImageGenerationReceipt.model_validate(
+        {**body, "receipt_sha256": content_sha256(body)}
+    )
+    value = receipt.model_dump(mode="json")
+    validate_contract("generation-receipt", value)
+    _write_exclusive(
+        receipt_path,
+        (
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8"),
+        mode=output_mode,
+    )
+    return receipt, line_art
+
+
+def _postprocess_line_art(
+    payload: bytes,
+    *,
+    request: LocalImageReferenceConditionedCompositeRequestV5 | None = None,
+    postprocess: LocalImageAssessmentLineArtPostprocess | None = None,
+) -> AssessmentLineArtResult:
+    policy = request.postprocess if request is not None else postprocess
+    if policy is None:
+        raise ProviderError("LOCAL_IMAGE_LINE_ART_POLICY_INVALID")
+    try:
+        return assessment_line_art(payload, policy=policy)
+    except AssessmentLineArtError as exc:
+        raise ProviderError(str(exc)) from exc
+
+
+def _load_line_art_raw(
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV5,
+) -> bytes:
+    path = workspace / request.postprocess.raw_member
+    return _load_handoff_output_bytes(path)
+
+
+def _load_handoff_output_bytes(path: Path) -> bytes:
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+        )
+    except OSError as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_IMODE(before.st_mode) != 0o640
+            or before.st_uid != os.geteuid()
+            or before.st_gid != os.getegid()
+            or before.st_nlink != 1
+            or not 32 <= before.st_size <= PNG_MAX_BYTES
+        ):
+            raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+        payload = bytearray()
+        while len(payload) < before.st_size:
+            chunk = os.read(descriptor, before.st_size - len(payload))
+            if not chunk:
+                break
+            payload.extend(chunk)
+        if len(payload) != before.st_size or os.read(descriptor, 1):
+            raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+        return bytes(payload)
+    finally:
+        os.close(descriptor)
 
 
 def _generate_background_from_reference_with_style(
@@ -1339,6 +1608,58 @@ def _completed_reference_composite_v4(
         expected.output != receipt.conditioning_output
         or expected.metrics != receipt.simplification_metrics
         or expected.runtime != receipt.simplifier_runtime
+    ):
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    return receipt
+
+
+def _completed_reference_composite_v5(
+    workspace: Path,
+    request: LocalImageReferenceConditionedCompositeRequestV5,
+) -> LocalImageReferenceConditionedCompositeReceiptV5 | None:
+    receipt_path = workspace / "reference-conditioned-receipt.json"
+    if not receipt_path.exists() and not receipt_path.is_symlink():
+        return None
+    _require_handoff_output(receipt_path)
+    value = load_json_object(receipt_path, maximum_bytes=512 * 1024)
+    try:
+        validate_contract("reference-conditioned-composite-receipt-v5", value)
+        receipt = LocalImageReferenceConditionedCompositeReceiptV5.model_validate(value)
+        validate_reference_conditioned_receipt_v5(request, receipt)
+    except Exception as exc:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID") from exc
+    composite = _completed_composite(workspace, request.composite_request)
+    if composite is None or composite != receipt.composite_receipt:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    pointer = request.visual_reference.reference_member
+    reference_png = _load_exact_handoff_input(
+        workspace / pointer.member_path,
+        size_bytes=pointer.size_bytes,
+        sha256=pointer.sha256,
+    )
+    _validate_reference_png(reference_png)
+    conditioning = workspace / receipt.conditioning_output.member_path
+    _require_handoff_output(conditioning, sha256=receipt.conditioning_output.sha256)
+    if conditioning.stat().st_size != receipt.conditioning_output.size_bytes:
+        raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
+    try:
+        expected_simplified = simplify_visual_reference(
+            reference_png,
+            policy=request.conditioning.simplification,
+        )
+    except ReferenceSimplificationError as exc:
+        raise ProviderError(str(exc)) from exc
+    raw_png = _load_line_art_raw(workspace, request)
+    expected_line_art = _postprocess_line_art(raw_png, request=request)
+    output = receipt.composite_receipt.generation.output
+    if (
+        expected_simplified.output != receipt.conditioning_output
+        or expected_simplified.metrics != receipt.simplification_metrics
+        or expected_simplified.runtime != receipt.simplifier_runtime
+        or expected_line_art.metrics != receipt.postprocess_metrics
+        or expected_line_art.runtime != receipt.postprocessor_runtime
+        or len(expected_line_art.png_bytes) != output.size_bytes
+        or "sha256:" + hashlib.sha256(expected_line_art.png_bytes).hexdigest() != output.sha256
     ):
         raise ProviderError("LOCAL_IMAGE_OUTPUT_INVALID")
     return receipt

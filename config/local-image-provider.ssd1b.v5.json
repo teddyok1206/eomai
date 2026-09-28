@@ -1,0 +1,65 @@
+{
+  "binding_sha256": "sha256:f88ea4cad71eba730007530abdb01566b9ba0678487a5d9cf5970bf9c0d41029",
+  "model": {
+    "manifest_sha256": "sha256:20dbed28f34c9275538198110ac4962fcf7a312c0846e6819f284ead791fe70c",
+    "model_id": "imgmodel_7f1d9f4f4f041adde5dda11dba9491ff",
+    "model_revision_id": "imgmodelrev_17b6fb3832ac469316e3a447be8e7e1d",
+    "provider_family": "diffusers-ssd-1b",
+    "runtime_contract_version": "eom-local-image-provider/1.0"
+  },
+  "reference_policy": {
+    "authority_boundary": "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY",
+    "candidate_limit": 5,
+    "conditioning": {
+      "contract": "sdxl-morphology-img2img/2.1",
+      "fit_policy": "EXACT_NORMALIZED_CANVAS",
+      "simplification": {
+        "border_foreground_ratio_max": 0.12,
+        "border_width_px": 24,
+        "color_policy": "GRAYSCALE_WHITE_BACKGROUND",
+        "contract": "local-image-reference-simplification/1.1",
+        "denoise_policy": "MAX_5_MEDIAN_7_GAUSSIAN_2_0",
+        "foreground_luma_threshold": 245,
+        "foreground_ratio_max": 0.8,
+        "foreground_ratio_min": 0.005,
+        "output_member": "reference-conditioning.png",
+        "tone_policy": "SIX_LEVEL_LIGHT_TONE_CONTOUR"
+      },
+      "strength": 0.35
+    },
+    "failure_policy": "FAIL_CLOSED",
+    "intent_source": "DRAWING_ALT_TEXT",
+    "license_policy": "PUBLIC_DOMAIN_OR_CC0",
+    "provider": "WIKIMEDIA_COMMONS"
+  },
+  "postprocess": {
+    "border_foreground_ratio_max": 0.01,
+    "contract": "local-image-assessment-line-art-postprocess/1.0",
+    "edge_dark_threshold": 92,
+    "edge_density_max": 0.3,
+    "edge_density_min": 0.01,
+    "edge_mid_threshold": 48,
+    "foreground_luma_threshold": 245,
+    "foreground_ratio_max": 0.25,
+    "foreground_ratio_min": 0.01,
+    "horizontal_border_px": 40,
+    "mask_blur_radius": 12,
+    "mask_contract_size": 17,
+    "mask_expand_size": 25,
+    "mask_luma_threshold": 224,
+    "median_filter_size": 3,
+    "output_tones": [48, 160, 255],
+    "raw_member": "generated-background-raw.png",
+    "vertical_border_px": 8
+  },
+  "route_contract": "eom-local-morphology-conditioned-base-line-art/5.0",
+  "sampler": {
+    "contract": "euler-discrete/ssd-1b-v1",
+    "dtype": "float16",
+    "guidance_scale": 7.5,
+    "inference_steps": 20
+  },
+  "schema_version": "local-image-provider-binding/5.0",
+  "state": "ENABLED",
+  "timeout_seconds": 900
+}

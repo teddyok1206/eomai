@@ -17,10 +17,12 @@ from eom_image_contracts import (
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageProviderBindingV4,
+    LocalImageProviderBindingV5,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
     LocalImageReferenceConditionedCompositeReceiptV4,
+    LocalImageReferenceConditionedCompositeReceiptV5,
     LocalImageVisualReferencePointer,
 )
 from eom_workflow.models import (
@@ -152,7 +154,10 @@ class RenderedSimplifiedBaseReferenceStimulus:
     png_path: Path
     conditioning_path: Path
     receipt_path: Path
-    receipt: LocalImageReferenceConditionedCompositeReceiptV4
+    receipt: (
+        LocalImageReferenceConditionedCompositeReceiptV4
+        | LocalImageReferenceConditionedCompositeReceiptV5
+    )
     request_sha256: str
     unit_name: str
     renderer_contract: str
@@ -528,7 +533,7 @@ def render_generated_simplified_base_reference_stimulus(
     result_revision_id: str,
     drawing_hash: str,
     drawing: GeneratedVectorDrawingV6,
-    binding: LocalImageProviderBindingV4,
+    binding: LocalImageProviderBindingV4 | LocalImageProviderBindingV5,
     adapter: FixedLocalImageProviderAdapter,
     prompt_contract: LocalGpuPromptContract,
     visual_reference: LocalImageVisualReferencePointer,

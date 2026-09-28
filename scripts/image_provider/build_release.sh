@@ -50,6 +50,7 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-provider-binding-v2.schema.json",
         "eom_image_contracts/schemas/local-image-provider-binding-v3.schema.json",
         "eom_image_contracts/schemas/local-image-provider-binding-v4.schema.json",
+        "eom_image_contracts/schemas/local-image-provider-binding-v5.schema.json",
         "eom_image_contracts/schemas/local-image-composite-request-v1.schema.json",
         "eom_image_contracts/schemas/local-image-composite-receipt-v1.schema.json",
         "eom_image_contracts/schemas/local-image-quality-evaluation-plan-v1.schema.json",
@@ -82,6 +83,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v3.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v4.schema.json",
         "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v4.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-request-v5.schema.json",
+        "eom_image_contracts/schemas/local-image-reference-conditioned-composite-receipt-v5.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_CONTRACT_WHEEL_INVALID")

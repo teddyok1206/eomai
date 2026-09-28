@@ -17,6 +17,7 @@ from eom_image_contracts import (
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageProviderBindingV4,
+    LocalImageProviderBindingV5,
     validate_contract,
 )
 
@@ -25,6 +26,7 @@ ProviderBinding = (
     | LocalImageProviderBindingV2
     | LocalImageProviderBindingV3
     | LocalImageProviderBindingV4
+    | LocalImageProviderBindingV5
 )
 
 
@@ -65,6 +67,10 @@ def _load_provider_binding(path: Path) -> ProviderBinding:
         "local-image-provider-binding/4.0": (
             "provider-binding-v4",
             LocalImageProviderBindingV4,
+        ),
+        "local-image-provider-binding/5.0": (
+            "provider-binding-v5",
+            LocalImageProviderBindingV5,
         ),
     }
     selected = contracts.get(schema_version) if isinstance(schema_version, str) else None

@@ -43,6 +43,7 @@ from eom_image_contracts import (
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageProviderBindingV4,
+    LocalImageProviderBindingV5,
     content_json_bytes,
     text_sha256,
 )
@@ -192,7 +193,11 @@ def _local_image_prompt_contract(
     """Select only from the immutable Content Pack version pinned at workflow start."""
 
     content_pack = workflow.runtime_context.get("content_pack")
-    if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.3", "1.20.4"}:
+    if isinstance(content_pack, dict) and content_pack.get("version") in {
+        "1.20.3",
+        "1.20.4",
+        "1.20.5",
+    }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
         return "ASSESSMENT_MINIMAL_LINE_ART_V2"
@@ -208,6 +213,7 @@ def _uses_v1_reference_conditioning(
         | LocalImageProviderBindingV2
         | LocalImageProviderBindingV3
         | LocalImageProviderBindingV4
+        | LocalImageProviderBindingV5
     ),
 ) -> bool:
     """Enable the existing V1 reference protocol only for its immutable successor Pack."""
@@ -216,7 +222,7 @@ def _uses_v1_reference_conditioning(
     return (
         isinstance(provider, LocalImageProviderBinding)
         and isinstance(content_pack, dict)
-        and content_pack.get("version") in {"1.20.3", "1.20.4"}
+        and content_pack.get("version") in {"1.20.3", "1.20.4", "1.20.5"}
     )
 
 
@@ -549,6 +555,11 @@ class WorkflowCatalogService:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                         "base-only simplified-reference binding requires Content Pack 1.20.4",
+                    )
+                if isinstance(binding, LocalImageProviderBindingV5) and release.version != "1.20.5":
+                    raise ContentPackError(
+                        ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                        "assessment-line-art binding requires Content Pack 1.20.5",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1304,11 +1315,14 @@ class WorkflowCatalogService:
             | LocalImageProviderBindingV2
             | LocalImageProviderBindingV3
             | LocalImageProviderBindingV4
+            | LocalImageProviderBindingV5
             | None
         ) = None
         if isinstance(provider_value, dict):
             provider_schema = provider_value.get("schema_version")
-            if provider_schema == "local-image-provider-binding/4.0":
+            if provider_schema == "local-image-provider-binding/5.0":
+                provider = LocalImageProviderBindingV5.model_validate(provider_value)
+            elif provider_schema == "local-image-provider-binding/4.0":
                 provider = LocalImageProviderBindingV4.model_validate(provider_value)
             elif provider_schema == "local-image-provider-binding/3.0":
                 provider = LocalImageProviderBindingV3.model_validate(provider_value)
@@ -1343,6 +1357,7 @@ class WorkflowCatalogService:
                             LocalImageProviderBindingV2,
                             LocalImageProviderBindingV3,
                             LocalImageProviderBindingV4,
+                            LocalImageProviderBindingV5,
                         ),
                     )
                     or uses_v1_reference
@@ -1357,7 +1372,9 @@ class WorkflowCatalogService:
                         visual_ordinal=item.visual_ordinal,
                         drawing_sha256=drawing_hash,
                     )
-                    if isinstance(provider, LocalImageProviderBindingV4):
+                    if isinstance(
+                        provider, (LocalImageProviderBindingV4, LocalImageProviderBindingV5)
+                    ):
                         local_rendered = render_generated_simplified_base_reference_stimulus(
                             self.settings,
                             workflow_id=workflow.workflow_id,
@@ -1417,7 +1434,9 @@ class WorkflowCatalogService:
                         "eom://schemas/image-provider/"
                         "local-image-reference-conditioned-composite-receipt/"
                         + (
-                            "4.0"
+                            "5.0"
+                            if isinstance(provider, LocalImageProviderBindingV5)
+                            else "4.0"
                             if isinstance(provider, LocalImageProviderBindingV4)
                             else "3.0"
                             if isinstance(provider, LocalImageProviderBindingV3)
@@ -1523,7 +1542,9 @@ class WorkflowCatalogService:
                         "media_type": "image/png",
                     }
                 manifest_version = (
-                    "generated-item-stimulus-file-set/7.0"
+                    "generated-item-stimulus-file-set/8.0"
+                    if isinstance(provider, LocalImageProviderBindingV5)
+                    else "generated-item-stimulus-file-set/7.0"
                     if isinstance(provider, LocalImageProviderBindingV4)
                     else "generated-item-stimulus-file-set/6.0"
                     if isinstance(provider, LocalImageProviderBindingV3)
@@ -1899,6 +1920,7 @@ class WorkflowCatalogService:
             "1.20.2",
             "1.20.3",
             "1.20.4",
+            "1.20.5",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1919,6 +1941,7 @@ class WorkflowCatalogService:
                     "1.20.2",
                     "1.20.3",
                     "1.20.4",
+                    "1.20.5",
                 }
             ) != is_material_v4:
                 raise ContentPackError(
@@ -1936,6 +1959,7 @@ class WorkflowCatalogService:
                 "1.20.2",
                 "1.20.3",
                 "1.20.4",
+                "1.20.5",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
@@ -2161,8 +2185,11 @@ class WorkflowCatalogService:
                 | LocalImageProviderBindingV2
                 | LocalImageProviderBindingV3
                 | LocalImageProviderBindingV4
+                | LocalImageProviderBindingV5
             )
-            if provider_schema == "local-image-provider-binding/4.0":
+            if provider_schema == "local-image-provider-binding/5.0":
+                validated_provider = LocalImageProviderBindingV5.model_validate(provider)
+            elif provider_schema == "local-image-provider-binding/4.0":
                 validated_provider = LocalImageProviderBindingV4.model_validate(provider)
             elif provider_schema == "local-image-provider-binding/3.0":
                 validated_provider = LocalImageProviderBindingV3.model_validate(provider)

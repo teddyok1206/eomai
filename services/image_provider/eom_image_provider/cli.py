@@ -14,6 +14,7 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
+    LocalImageReferenceConditionedCompositeRequestV5,
     validate_contract,
 )
 
@@ -28,12 +29,14 @@ from eom_image_provider.provider import (
     generate_reference_conditioned_composite_handoff_v2,
     generate_reference_conditioned_composite_handoff_v3,
     generate_reference_conditioned_composite_handoff_v4,
+    generate_reference_conditioned_composite_handoff_v5,
     load_json_object,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
     reuse_reference_conditioned_composite_handoff_v2,
     reuse_reference_conditioned_composite_handoff_v3,
     reuse_reference_conditioned_composite_handoff_v4,
+    reuse_reference_conditioned_composite_handoff_v5,
 )
 from eom_image_provider.reference_acquisition import (
     VisualReferenceAcquisitionError,
@@ -228,19 +231,52 @@ def main() -> None:
             result = styled_receipt.model_dump(mode="json")
         elif args.operation == "generate-reference-base-composite":
             value = load_json_object(args.request, maximum_bytes=512 * 1024)
-            validate_contract("reference-conditioned-composite-request-v4", value)
-            base_request = LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
-            base_receipt = reuse_reference_conditioned_composite_handoff_v4(
-                workspace=args.workspace,
-                request=base_request,
+            is_v5 = value.get("schema_version") == (
+                "local-image-reference-conditioned-composite-request/5.0"
+            )
+            validate_contract(
+                (
+                    "reference-conditioned-composite-request-v5"
+                    if is_v5
+                    else "reference-conditioned-composite-request-v4"
+                ),
+                value,
+            )
+            base_request = (
+                LocalImageReferenceConditionedCompositeRequestV5.model_validate(value)
+                if is_v5
+                else LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
+            )
+            base_receipt = (
+                reuse_reference_conditioned_composite_handoff_v5(
+                    workspace=args.workspace,
+                    request=base_request,
+                )
+                if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV5)
+                else reuse_reference_conditioned_composite_handoff_v4(
+                    workspace=args.workspace,
+                    request=base_request,
+                )
             )
             if base_receipt is None:
                 with acquire_gpu_lease(args.gpu_lock):
-                    base_receipt = generate_reference_conditioned_composite_handoff_v4(
-                        model_store_root=args.model_store_root,
-                        workspace=args.workspace,
-                        request=base_request,
-                        backend=Ssd1bDiffusersBackend(),
+                    base_receipt = (
+                        generate_reference_conditioned_composite_handoff_v5(
+                            model_store_root=args.model_store_root,
+                            workspace=args.workspace,
+                            request=base_request,
+                            backend=Ssd1bDiffusersBackend(),
+                        )
+                        if isinstance(
+                            base_request,
+                            LocalImageReferenceConditionedCompositeRequestV5,
+                        )
+                        else generate_reference_conditioned_composite_handoff_v4(
+                            model_store_root=args.model_store_root,
+                            workspace=args.workspace,
+                            request=base_request,
+                            backend=Ssd1bDiffusersBackend(),
+                        )
                     )
             result = base_receipt.model_dump(mode="json")
         elif args.operation == "acquire-reference":

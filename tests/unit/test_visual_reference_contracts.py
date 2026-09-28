@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from eom_image_contracts import (
+    LocalImageAssessmentLineArtPostprocess,
     LocalImageCompositeReceipt,
     LocalImageCompositeRequest,
     LocalImageCompositorRuntime,
@@ -21,14 +22,17 @@ from eom_image_contracts import (
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
     LocalImageProviderBindingV4,
+    LocalImageProviderBindingV5,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
     LocalImageReferenceConditionedCompositeReceiptV4,
+    LocalImageReferenceConditionedCompositeReceiptV5,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
+    LocalImageReferenceConditionedCompositeRequestV5,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferenceAcquisitionCommand,
@@ -55,6 +59,7 @@ from eom_image_contracts import (
     validate_reference_conditioned_receipt_v2,
     validate_reference_conditioned_receipt_v3,
     validate_reference_conditioned_receipt_v4,
+    validate_reference_conditioned_receipt_v5,
     validate_visual_reference_acquisition,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -370,6 +375,20 @@ def _conditioned_request_v4() -> LocalImageReferenceConditionedCompositeRequestV
         "conditioning": LocalImageMorphologyConditioning().model_dump(mode="json"),
     }
     return LocalImageReferenceConditionedCompositeRequestV4.model_validate(
+        {**body, "request_sha256": content_sha256(body)}
+    )
+
+
+def _conditioned_request_v5() -> LocalImageReferenceConditionedCompositeRequestV5:
+    predecessor = _conditioned_request_v4()
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/5.0",
+        "composite_request": predecessor.composite_request.model_dump(mode="json"),
+        "visual_reference": predecessor.visual_reference.model_dump(mode="json"),
+        "conditioning": predecessor.conditioning.model_dump(mode="json"),
+        "postprocess": LocalImageAssessmentLineArtPostprocess().model_dump(mode="json"),
+    }
+    return LocalImageReferenceConditionedCompositeRequestV5.model_validate(
         {**body, "request_sha256": content_sha256(body)}
     )
 
@@ -771,6 +790,80 @@ def test_deployable_v4_binding_is_canonical_and_schema_valid() -> None:
         "reference-conditioning.png"
     )
     assert not hasattr(binding, "style_adapter")
+
+
+def test_assessment_line_art_v5_contracts_pin_cleanup_and_metrics() -> None:
+    request = _conditioned_request_v5()
+    composite_receipt = _conditioned_receipt(_conditioned_request()).composite_receipt
+    receipt_body = {
+        "schema_version": "local-image-reference-conditioned-composite-receipt/5.0",
+        "request_sha256": request.request_sha256,
+        "composite_receipt": composite_receipt.model_dump(mode="json"),
+        "visual_reference": request.visual_reference.model_dump(mode="json"),
+        "conditioning": request.conditioning.model_dump(mode="json"),
+        "conditioning_output": {
+            "member_path": "reference-conditioning.png",
+            "media_type": "image/png",
+            "sha256": _sha(31),
+            "size_bytes": 12_000,
+            "width_px": 800,
+            "height_px": 504,
+        },
+        "simplification_metrics": {
+            "source_foreground_ratio": 0.9125,
+            "conditioning_foreground_ratio": 0.58215774,
+            "border_foreground_ratio": 0.01,
+            "source_edge_density": 0.14,
+            "conditioning_edge_density": 0.06,
+            "edge_density_ratio": 0.42857143,
+        },
+        "simplifier_runtime": {
+            "contract": "local-image-reference-simplifier/1.0",
+            "pillow_version": "11.3.0",
+        },
+        "output_palette": "ASSESSMENT_LINE_ART",
+        "postprocess": request.postprocess.model_dump(mode="json"),
+        "postprocess_metrics": {
+            "input_foreground_ratio": 0.65,
+            "output_foreground_ratio": 0.08,
+            "output_border_foreground_ratio": 0.0,
+            "input_edge_density": 0.3,
+            "output_edge_density": 0.16,
+        },
+        "postprocessor_runtime": {
+            "contract": "local-image-assessment-line-art-postprocessor/1.0",
+            "pillow_version": "11.3.0",
+        },
+        "completed_at": "2026-09-28T13:01:00Z",
+    }
+    receipt = LocalImageReferenceConditionedCompositeReceiptV5.model_validate(
+        {**receipt_body, "receipt_sha256": content_sha256(receipt_body)}
+    )
+    binding_value = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.v5.json").read_text(encoding="utf-8")
+    )
+    binding = LocalImageProviderBindingV5.model_validate(binding_value)
+
+    for name, value in (
+        ("provider-binding-v5", binding.model_dump(mode="json")),
+        ("reference-conditioned-composite-request-v5", request.model_dump(mode="json")),
+        ("reference-conditioned-composite-receipt-v5", receipt.model_dump(mode="json")),
+    ):
+        validate_contract(name, value)
+    validate_reference_conditioned_receipt_v5(request, receipt)
+    assert binding.postprocess == request.postprocess
+    assert binding.postprocess.raw_member == "generated-background-raw.png"
+
+
+def test_assessment_line_art_v5_rejects_unbound_cleanup_policy() -> None:
+    request = _conditioned_request_v5()
+    payload = request.model_dump(mode="json")
+    payload["postprocess"]["edge_dark_threshold"] = 93
+    body = {key: value for key, value in payload.items() if key != "request_sha256"}
+    payload["request_sha256"] = content_sha256(body)
+
+    with pytest.raises(PydanticValidationError):
+        LocalImageReferenceConditionedCompositeRequestV5.model_validate(payload)
 
 
 def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:

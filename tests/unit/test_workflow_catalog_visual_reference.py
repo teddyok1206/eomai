@@ -12,6 +12,7 @@ from tests.unit.test_local_image_adapter import (
     _binding_v2_value,
     _binding_v3_value,
     _binding_v4_value,
+    _binding_v5_value,
 )
 from tests.unit.test_visual_reference_receipts import _receipt
 from tests.unit.test_workflow_catalog_generated import (
@@ -217,9 +218,19 @@ def test_simplified_reference_binding_commits_exact_conditioning_member(
     assert binding["binding_sha256"] in committed["idempotency_key"]
 
 
-def test_base_only_reference_binding_commits_v4_without_style_adapter(
+@pytest.mark.parametrize(
+    ("binding_factory", "receipt_version", "manifest_version"),
+    (
+        (_binding_v4_value, "4.0", "generated-item-stimulus-file-set/7.0"),
+        (_binding_v5_value, "5.0", "generated-item-stimulus-file-set/8.0"),
+    ),
+)
+def test_base_only_reference_binding_commits_without_style_adapter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    binding_factory: Any,
+    receipt_version: str,
+    manifest_version: str,
 ) -> None:
     service, artifacts = _service(tmp_path)
     authoring = _content_team_authoring_result_v12()
@@ -286,7 +297,7 @@ def test_base_only_reference_binding_commits_v4_without_style_adapter(
         "eom_catalog_service.workflow_catalog.render_generated_simplified_base_reference_stimulus",
         lambda *_args, **_kwargs: _RenderedV4(),
     )
-    binding = _binding_v4_value()
+    binding = binding_factory()
     pointers = service.materialize_content_team_stimuli(
         workflow=_workflow({"local_image_provider": binding}),
         artifacts=(AUTHORING_V12, IMAGE_V12),
@@ -294,8 +305,10 @@ def test_base_only_reference_binding_commits_v4_without_style_adapter(
 
     assert len(pointers) == 1
     committed = artifacts.commits[0]
-    assert committed["manifest_version"] == "generated-item-stimulus-file-set/7.0"
-    assert committed["file_metadata"]["local-image-receipt.json"]["schema_ref"].endswith("/4.0")
+    assert committed["manifest_version"] == manifest_version
+    assert committed["file_metadata"]["local-image-receipt.json"]["schema_ref"].endswith(
+        f"/{receipt_version}"
+    )
     assert committed["expected_file_sha256"]["reference-conditioning.png"] == sha256_file(
         files["conditioning_path"]
     )

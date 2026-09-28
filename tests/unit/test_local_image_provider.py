@@ -31,6 +31,7 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
+    LocalImageReferenceConditionedCompositeRequestV5,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferencePointer,
@@ -56,15 +57,17 @@ from eom_image_provider.provider import (
     generate_reference_conditioned_composite_handoff_v2,
     generate_reference_conditioned_composite_handoff_v3,
     generate_reference_conditioned_composite_handoff_v4,
+    generate_reference_conditioned_composite_handoff_v5,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
     reuse_reference_conditioned_composite_handoff_v2,
     reuse_reference_conditioned_composite_handoff_v3,
     reuse_reference_conditioned_composite_handoff_v4,
+    reuse_reference_conditioned_composite_handoff_v5,
     verify_model_revision,
     verify_style_adapter_release,
 )
-from PIL import Image, ImageChops  # type: ignore[import-not-found]
+from PIL import Image, ImageChops, ImageDraw  # type: ignore[import-not-found]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MODEL_ID = "imgmodel_" + "1" * 32
@@ -92,6 +95,19 @@ def _png() -> bytes:
 
 def _colored_png() -> bytes:
     image = Image.new("RGB", (800, 500), (196, 132, 74))
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
+def _line_art_source_png() -> bytes:
+    image = Image.new("RGB", (800, 500), "white")
+    drawing = ImageDraw.Draw(image)
+    drawing.ellipse((190, 90, 610, 410), fill=(164, 148, 132), outline=(42, 42, 42), width=9)
+    for x in range(220, 590, 24):
+        drawing.line((x, 115, x - 40, 385), fill=(96, 89, 82), width=4)
+    for y in range(145, 370, 28):
+        drawing.arc((215, y - 38, 585, y + 38), 8, 172, fill=(56, 56, 56), width=4)
     target = io.BytesIO()
     image.save(target, format="PNG", compress_level=9)
     return target.getvalue()
@@ -438,6 +454,43 @@ def _conditioned_request_v4(
     value = {**body, "request_sha256": content_sha256(body)}
     validate_contract("reference-conditioned-composite-request-v4", value)
     return LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
+
+
+def _conditioned_request_v5(
+    manifest: LocalImageModelManifest,
+    overlay: bytes,
+    reference: bytes,
+) -> LocalImageReferenceConditionedCompositeRequestV5:
+    predecessor = _conditioned_request_v4(manifest, overlay, reference)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/5.0",
+        "composite_request": predecessor.composite_request.model_dump(mode="json"),
+        "visual_reference": predecessor.visual_reference.model_dump(mode="json"),
+        "conditioning": predecessor.conditioning.model_dump(mode="json"),
+        "postprocess": {
+            "contract": "local-image-assessment-line-art-postprocess/1.0",
+            "raw_member": "generated-background-raw.png",
+            "median_filter_size": 3,
+            "mask_blur_radius": 12,
+            "mask_luma_threshold": 224,
+            "mask_expand_size": 25,
+            "mask_contract_size": 17,
+            "edge_mid_threshold": 48,
+            "edge_dark_threshold": 92,
+            "output_tones": [48, 160, 255],
+            "horizontal_border_px": 40,
+            "vertical_border_px": 8,
+            "foreground_luma_threshold": 245,
+            "foreground_ratio_min": 0.01,
+            "foreground_ratio_max": 0.25,
+            "border_foreground_ratio_max": 0.01,
+            "edge_density_min": 0.01,
+            "edge_density_max": 0.3,
+        },
+    }
+    value = {**body, "request_sha256": content_sha256(body)}
+    validate_contract("reference-conditioned-composite-request-v5", value)
+    return LocalImageReferenceConditionedCompositeRequestV5.model_validate(value)
 
 
 def _reduced_scale_release(
@@ -1170,6 +1223,90 @@ def test_base_only_simplified_reference_handoff_is_grayscale_and_idempotent(
     validate_contract("reference-conditioned-composite-receipt-v4", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v4(
+            workspace=workspace,
+            request=request,
+        )
+        == first
+    )
+
+
+def test_assessment_line_art_handoff_preserves_raw_and_reuses_exact_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "assessment-line-art-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _isolated_reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference)
+    (workspace / "references/primary.png").chmod(0o440)
+    request = _conditioned_request_v5(manifest, overlay, reference)
+    raw = _line_art_source_png()
+    calls = 0
+
+    class BaseReferenceBackend:
+        def generate_from_reference(
+            self,
+            *,
+            model_directory: Path,
+            request: LocalImageGenerationRequest,
+            reference_png: bytes,
+            strength: float,
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            assert model_directory.name == "files"
+            assert reference_png != reference
+            assert strength == 0.35
+            generated = FakeBackend().generate(model_directory=model_directory, request=request)
+            return GeneratedBackground(png_bytes=raw, runtime=generated.runtime)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda background, _overlay: background.read_bytes(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    monkeypatch.setattr(
+        "eom_image_provider.reference_simplification.metadata.version",
+        lambda _name: "11.3.0",
+    )
+    monkeypatch.setattr(
+        "eom_image_provider.assessment_line_art.metadata.version",
+        lambda _name: "11.3.0",
+    )
+
+    first = generate_reference_conditioned_composite_handoff_v5(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+    second = generate_reference_conditioned_composite_handoff_v5(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.output_palette == "ASSESSMENT_LINE_ART"
+    assert (workspace / "generated-background-raw.png").read_bytes() == raw
+    assert (workspace / "generated-background.png").read_bytes() != raw
+    with Image.open(workspace / "generated-background.png") as generated_background:
+        generated_background.load()
+        red, green, blue = generated_background.split()
+        assert ImageChops.difference(red, green).getbbox() is None
+        assert ImageChops.difference(green, blue).getbbox() is None
+        assert {value for value, count in enumerate(red.histogram()) if count} <= {48, 160, 255}
+        assert generated_background.getpixel((0, 0)) == (255, 255, 255)
+    validate_contract("reference-conditioned-composite-receipt-v5", first.model_dump(mode="json"))
+    assert (
+        reuse_reference_conditioned_composite_handoff_v5(
             workspace=workspace,
             request=request,
         )
