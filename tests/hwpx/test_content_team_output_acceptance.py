@@ -139,13 +139,20 @@ def _render_table_only(
     )
 
 
-def _render_paired_images(tmp_path: Path) -> tuple[Path, str, ContentTeamOutputExpectation]:
+def _render_paired_images(
+    tmp_path: Path,
+    image_count: int = 2,
+) -> tuple[Path, str, ContentTeamOutputExpectation]:
+    assert image_count in {1, 2}
     base = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
     draft_value = base.model_dump(mode="json")
-    draft_value["visual_layout"] = "IMAGE_IMAGE"
+    draft_value["visual_layout"] = "IMAGE_ONLY" if image_count == 1 else "IMAGE_IMAGE"
     draft_value["visuals"] = [
-        {"kind": "IMAGE", "label": "(가)"},
-        {"kind": "IMAGE", "label": "(나)"},
+        {
+            "kind": "IMAGE",
+            "label": "" if image_count == 1 else ("(가)" if ordinal == 0 else "(나)"),
+        }
+        for ordinal in range(image_count)
     ]
     draft = type(base).model_validate(draft_value)
     markdown = serialize_content_team_markdown(draft)
@@ -164,13 +171,13 @@ def _render_paired_images(tmp_path: Path) -> tuple[Path, str, ContentTeamOutputE
     (input_root / "item-content.json").write_bytes(item_bytes)
     (input_root / "content-team-item.md").write_bytes(markdown)
     (input_root / "handoff.zip").write_bytes(HANDOFF.read_bytes())
-    image_bytes = (png_bytes(output=True), png_bytes(output=False))
+    image_bytes = tuple(png_bytes(output=ordinal == 0) for ordinal in range(image_count))
     for ordinal, payload in enumerate(image_bytes):
         (input_root / f"visual-{ordinal}.png").write_bytes(payload)
     images = tuple(
         ContentTeamImageSource(
             visual_ordinal=ordinal,
-            label="(가)" if ordinal == 0 else "(나)",
+            label="" if image_count == 1 else ("(가)" if ordinal == 0 else "(나)"),
             artifact_id="artifact_" + str(ordinal + 1) * 32,
             artifact_revision_id="rev_" + str(ordinal + 3) * 32,
             sha256=_sha256(payload),
@@ -524,6 +531,48 @@ def test_manager_accepts_two_exact_images_with_editable_panel_labels(tmp_path: P
     assert tuple(image.sha256 for image in receipt.items[0].images) == tuple(
         image.sha256 for image in expectation.images
     )
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_accepts_one_exact_image_inside_an_unlabeled_material_box(
+    tmp_path: Path,
+) -> None:
+    output, output_sha256, expectation = _render_paired_images(tmp_path, image_count=1)
+
+    receipt = verify_content_team_output(
+        output,
+        expected_sha256=output_sha256,
+        expectations=(expectation,),
+    )
+
+    assert receipt.items[0].visual_layout == "IMAGE_ONLY"
+    assert tuple(image.label for image in receipt.items[0].images) == ("",)
+    with zipfile.ZipFile(output) as archive:
+        section = archive.read("Contents/section0.xml").decode("utf-8")
+    assert "<자료>" not in section
+    assert 'binaryItemIDRef="eomContentTeamVisual0"' in section
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_rejects_changed_text_inside_an_unlabeled_image_material_box(
+    tmp_path: Path,
+) -> None:
+    output, _output_sha256, expectation = _render_paired_images(tmp_path, image_count=1)
+    changed = tmp_path / "changed-unlabeled-material.hwpx"
+
+    def replace_material(payload: bytes) -> bytes:
+        marker = "대상 X에서 특성 P가 관측되었다.".encode()
+        assert payload.count(marker) == 1
+        return payload.replace(marker, "대상 X에서 특성 Q가 관측되었다.".encode(), 1)
+
+    _rewrite_member(output, changed, "Contents/section0.xml", replace_material)
+
+    with pytest.raises(HwpxManagerError, match="unlabeled image material differs"):
+        verify_content_team_output(
+            changed,
+            expected_sha256=_sha256(changed.read_bytes()),
+            expectations=(expectation,),
+        )
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")

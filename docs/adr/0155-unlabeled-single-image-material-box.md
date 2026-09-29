@@ -49,6 +49,13 @@ before pinned PNG injection.  It fails closed on an absent or ambiguous DATA tab
 cell, paragraph, or size node.  Package safety is revalidated before replacement.  Retry uses the
 existing new-build identity; a historical delivery is never mutated.
 
+The HWPX Manager independently accepts this projection only for an IMAGE layout with pinned image
+sources and exactly one canonical DATA block.  It requires one outer `1x1` box, one nested visual
+table, exact DATA text outside that nested table, exact package-internal image bytes and placement,
+and all remaining CONDITION blocks in their labeled form.  Missing, duplicated, or changed DATA
+text therefore remains a stable `HWPX_RESULT_INVALID`; removing the heading does not weaken the
+approved-content comparison.
+
 The simpler alternative of hiding only the empty cell would retain a semantically two-column table
 and could still clip the image.  Removing only the `<자료>` text would leave a blank heading row.
 Rewriting the approved Item would incorrectly turn a presentation repair into canonical-content

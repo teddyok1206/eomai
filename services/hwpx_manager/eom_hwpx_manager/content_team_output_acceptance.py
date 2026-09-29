@@ -493,6 +493,35 @@ def _output_cell_tokens(cell: ElementTree.Element) -> tuple[tuple[str, str], ...
     return tuple(values)
 
 
+def _output_cell_tokens_outside_nested_tables(
+    cell: ElementTree.Element,
+) -> tuple[tuple[str, str], ...]:
+    """Read the outer material text without treating its visual table as authored DATA."""
+
+    values: list[tuple[str, str]] = []
+    stack: list[tuple[ElementTree.Element, tuple[str, ...]]] = [(cell, ())]
+    ordered: list[tuple[ElementTree.Element, tuple[str, ...]]] = []
+    while stack:
+        element, ancestors = stack.pop()
+        local = _local_name(element.tag).casefold()
+        if element is not cell and local == "tbl":
+            continue
+        ordered.append((element, ancestors))
+        stack.extend((child, (*ancestors, local)) for child in reversed(tuple(element)))
+    for element, ancestors in ordered:
+        local = _local_name(element.tag).casefold()
+        if local == "t":
+            text = _compact_visible_text("".join(element.itertext()))
+            if text:
+                if values and values[-1][0] == "TEXT":
+                    values[-1] = ("TEXT", values[-1][1] + text)
+                else:
+                    values.append(("TEXT", text))
+        elif local == "script" and "equation" in ancestors:
+            values.append(("EQUATION", _normalized_equation(element.text or "")))
+    return tuple(values)
+
+
 def _direct_children(element: ElementTree.Element, local: str) -> tuple[ElementTree.Element, ...]:
     return tuple(child for child in element if _local_name(child.tag).casefold() == local)
 
@@ -611,6 +640,33 @@ def _labeled_block_projection(
     ):
         return None
     return label_tokens[0][1], _output_cell_tokens(cells[1][0])
+
+
+def _unlabeled_image_material_projection(
+    table: ElementTree.Element,
+) -> _CellTokens | None:
+    """Resolve one DATA body that owns a nested one/two-image visual table."""
+
+    attributes = {_local_name(key).casefold(): value for key, value in table.attrib.items()}
+    if attributes.get("rowcnt") != "1" or attributes.get("colcnt") != "1":
+        return None
+    rows = _direct_children(table, "tr")
+    if len(rows) != 1:
+        return None
+    cells = _direct_children(rows[0], "tc")
+    if len(cells) != 1:
+        return None
+    cell = cells[0]
+    nested_image_tables = tuple(
+        candidate
+        for candidate in cell.iter()
+        if candidate is not table
+        and _local_name(candidate.tag).casefold() == "tbl"
+        and any(_local_name(node.tag).casefold() == "img" for node in candidate.iter())
+    )
+    if len(nested_image_tables) != 1:
+        return None
+    return _output_cell_tokens_outside_nested_tables(cell)
 
 
 def _binary_references(
@@ -828,6 +884,28 @@ def _accept_item(
         )
         for block in draft.labeled_blocks
     )
+    data_blocks = tuple(block for block in draft.labeled_blocks if block.kind == "DATA")
+    if draft.visual_layout in {"IMAGE_ONLY", "IMAGE_IMAGE"} and expectation.images:
+        if len(data_blocks) != 1:
+            _fail("content-team image material must bind exactly one DATA block")
+        observed_unlabeled_material = tuple(
+            projection
+            for table in section.iter()
+            if _local_name(table.tag).casefold() == "tbl"
+            and (projection := _unlabeled_image_material_projection(table)) is not None
+        )
+        expected_unlabeled_material = (_source_cell_tokens(data_blocks[0].content),)
+        if observed_unlabeled_material != expected_unlabeled_material:
+            _fail("content-team HWPX unlabeled image material differs from the approved Item")
+        expected_labeled_blocks = tuple(
+            value
+            for block, value in zip(
+                draft.labeled_blocks,
+                expected_labeled_blocks,
+                strict=True,
+            )
+            if block.kind != "DATA"
+        )
     if observed_labeled_blocks != expected_labeled_blocks:
         _fail("content-team HWPX labeled material differs from the approved Item")
     section_text = _normalized_text(
