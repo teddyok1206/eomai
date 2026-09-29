@@ -64,7 +64,9 @@ def _direct_cells_by_address(table: Any) -> dict[tuple[str, str], Any]:
     return cells
 
 
-def _assert_separate_png_cells_and_text_label_row(section: bytes, image_count: int) -> None:
+def _assert_separate_png_cells_and_text_label_row(
+    section: bytes, image_count: int, visual_layout: str
+) -> None:
     root = parse_xml(section, "Contents/section0.xml").root
     image_nodes = [
         node
@@ -82,7 +84,7 @@ def _assert_separate_png_cells_and_text_label_row(section: bytes, image_count: i
     }
     assert len(visual_tables) == 1
     table = next(iter(visual_tables.values()))
-    assert table.get("colCnt") == "2"
+    assert table.get("colCnt") == ("1" if visual_layout == "IMAGE_ONLY" else "2")
     assert table.get("rowCnt") == ("1" if image_count == 1 else "2")
     cells = _direct_cells_by_address(table)
 
@@ -96,8 +98,15 @@ def _assert_separate_png_cells_and_text_label_row(section: bytes, image_count: i
         assert addresses[0].get("colAddr") == str(ordinal)
         assert node.get("binaryItemIDRef") == f"eomContentTeamVisual{ordinal}"
 
-    if image_count == 1:
+    if visual_layout == "IMAGE_ONLY":
+        assert set(cells) == {("0", "0")}
+        size = next(child for child in cells[("0", "0")] if local_name(child.tag) == "cellSz")
+        assert size.get("width") == "28541"
+        assert int(size.get("height", "0")) >= 7875
         assert not any(row == "1" for row, _column in cells)
+        return
+    if visual_layout in {"IMAGE_TABLE", "TABLE_IMAGE"}:
+        assert set(cells) == {("0", "0"), ("0", "1")}
         return
 
     assert set(cells) == {("0", "0"), ("0", "1"), ("1", "0"), ("1", "1")}
@@ -490,7 +499,7 @@ def test_v2_renderer_replaces_image_slots_with_exact_pinned_pngs(
         assert binary_id.encode() in section
         assert manifest_items[binary_id].get("isEmbeded") == "1"
     assert "그림 삽입" not in section.decode("utf-8")
-    _assert_separate_png_cells_and_text_label_row(section, image_count)
+    _assert_separate_png_cells_and_text_label_row(section, image_count, draft.visual_layout)
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
@@ -587,7 +596,29 @@ def test_v3_renderer_combines_labeled_blocks_with_exact_pinned_images(
     section_text = section.decode("utf-8")
     assert "그림 삽입" not in section_text
     assert 'id="1729004418"' not in section_text
-    _assert_separate_png_cells_and_text_label_row(section, image_count)
+    _assert_separate_png_cells_and_text_label_row(section, image_count, combined.visual_layout)
+    root = parse_xml(section, "Contents/section0.xml").root
+    image_node = next(
+        node
+        for node in root.iter()
+        if local_name(node.tag) == "img" and node.get("binaryItemIDRef") == "eomContentTeamVisual0"
+    )
+    ancestor_tables = [
+        table for table in image_node.iterancestors() if local_name(table.tag) == "tbl"
+    ]
+    assert len(ancestor_tables) >= 3
+    _visual_table, data_table = ancestor_tables[:2]
+    assert data_table.get("rowCnt") == "1"
+    assert "<자료>" not in " ".join(
+        (node.text or "").strip() for node in data_table.iter() if local_name(node.tag) == "t"
+    )
+    nested_visual_tables = [
+        table
+        for table in data_table.iter()
+        if local_name(table.tag) == "tbl" and table is not data_table
+    ]
+    assert len(nested_visual_tables) == 1
+    assert nested_visual_tables[0].get("colCnt") == ("1" if image_count == 1 else "2")
     if image_count == 1:
         assert "(가)" not in section_text
         assert "(나)" not in section_text

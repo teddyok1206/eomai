@@ -24,6 +24,8 @@ HP = f"{{{HP_NS}}}"
 HC = f"{{{HC_NS}}}"
 OPF = f"{{{OPF_NS}}}"
 PLACEHOLDER = "그림 삽입"
+CONTENT_TEAM_IMAGE_DISPLAY_WIDTH = 12600
+CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT = 7875
 
 
 def _dimensions(data: bytes) -> tuple[int, int, int, int]:
@@ -41,8 +43,8 @@ def _dimensions(data: bytes) -> tuple[int, int, int, int]:
             "content-team image is not the pinned 800x500 PNG",
         ) from exc
     original_width, original_height = 800 * 28, 500 * 28
-    display_width = 12600
-    display_height = round(display_width * 500 / 800)
+    display_width = CONTENT_TEAM_IMAGE_DISPLAY_WIDTH
+    display_height = CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT
     return original_width, original_height, display_width, display_height
 
 

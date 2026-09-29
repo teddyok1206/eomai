@@ -44,7 +44,10 @@ from eom_hwpx_builder.content_team_handoff import (
     ContentTeamHandoffEvidence,
     inspect_content_team_handoff,
 )
-from eom_hwpx_builder.content_team_images import inject_content_team_images
+from eom_hwpx_builder.content_team_images import (
+    CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT,
+    inject_content_team_images,
+)
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.handoff import (
     finalize_failure_result,
@@ -67,6 +70,8 @@ VISUAL_AREA_TABLE_ID = "1511140813"
 VISUAL_ORIGINAL_SAMPLE_TABLE_ID = "1729004418"
 VISIBLE_BORDER_FILL_IDS = ("3", "3", "3", "19")
 HIDDEN_BORDER_FILL_ID = "7"
+COMBINED_MATERIAL_WIDTH = 28541
+IMAGE_PANEL_LABEL_HEIGHT = 1282
 PROTOTYPE_TARGETS = {
     "automation-template": "templates/automation.hwpx",
     "equation-prototypes": "templates/prototypes/v02_equation_prototypes.hwpx",
@@ -587,6 +592,214 @@ def _install_labeled_image_slots(output: Path, visual_module: Any, layout: str) 
     return slot_count
 
 
+def _required_direct_child(element: Any, name: str, *, context: str) -> Any:
+    matches = _direct_children(element, name)
+    if len(matches) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            f"{context} has ambiguous {name} children",
+        )
+    return matches[0]
+
+
+def _normalize_image_visual_table(table: Any, layout: str) -> int:
+    """Make the physical visual table match the canonical one/two-image shape."""
+
+    rows = _direct_children(table, "tr")
+    expected_rows = 1 if layout == "IMAGE_ONLY" else 2
+    if len(rows) != expected_rows:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material row topology differs",
+        )
+    top_cells = list(_direct_children(rows[0], "tc"))
+    if len(top_cells) != 2:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material column topology differs",
+        )
+
+    column_widths: tuple[int, ...]
+    if layout == "IMAGE_ONLY":
+        rows[0].remove(top_cells[1])
+        top_cells = top_cells[:1]
+        table.set("colCnt", "1")
+        column_widths = (COMBINED_MATERIAL_WIDTH,)
+    else:
+        table.set("colCnt", "2")
+        column_widths = (COMBINED_MATERIAL_WIDTH // 2, COMBINED_MATERIAL_WIDTH // 2 + 1)
+
+    table_size = _required_direct_child(table, "sz", context="content-team visual table")
+    visual_height = CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT + (
+        IMAGE_PANEL_LABEL_HEIGHT if layout == "IMAGE_IMAGE" else 0
+    )
+    table_size.set("width", str(COMBINED_MATERIAL_WIDTH))
+    table_size.set("height", str(visual_height))
+
+    for column, (cell, width) in enumerate(zip(top_cells, column_widths, strict=True)):
+        address = _required_direct_child(cell, "cellAddr", context="content-team image cell")
+        span = _required_direct_child(cell, "cellSpan", context="content-team image cell")
+        size = _required_direct_child(cell, "cellSz", context="content-team image cell")
+        address.set("rowAddr", "0")
+        address.set("colAddr", str(column))
+        span.set("rowSpan", "1")
+        span.set("colSpan", "1")
+        size.set("width", str(width))
+        size.set("height", str(CONTENT_TEAM_IMAGE_DISPLAY_HEIGHT))
+
+    if layout == "IMAGE_IMAGE":
+        label_cells = _direct_children(rows[1], "tc")
+        if len(label_cells) != 2:
+            raise HwpxError(
+                HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+                "content-team image label topology differs",
+            )
+        for column, (cell, width) in enumerate(zip(label_cells, column_widths, strict=True)):
+            address = _required_direct_child(
+                cell, "cellAddr", context="content-team image label cell"
+            )
+            size = _required_direct_child(cell, "cellSz", context="content-team image label cell")
+            address.set("rowAddr", "1")
+            address.set("colAddr", str(column))
+            size.set("width", str(width))
+            size.set("height", str(IMAGE_PANEL_LABEL_HEIGHT))
+    return visual_height
+
+
+def _compose_unlabeled_image_material_box(
+    output: Path,
+    draft: ContentTeamEditorialDraftContract,
+    labeled_block_reports: tuple[Any, ...],
+) -> bool:
+    """Project IMAGE plus its required DATA as one unlabeled student-visible box."""
+
+    if draft.visual_layout not in {"IMAGE_ONLY", "IMAGE_IMAGE"}:
+        return False
+    package = read_package(output)
+    section_entry = package.by_name().get(SECTION_MEMBER)
+    if section_entry is None:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team HWPX section is missing",
+        )
+    section = parse_xml(section_entry.data, SECTION_MEMBER)
+    visual_tables = [
+        element
+        for element in section.root.iter()
+        if local_name(element.tag) == "tbl" and element.get("id") == VISUAL_AREA_TABLE_ID
+    ]
+    if len(visual_tables) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material table is ambiguous",
+        )
+    visual_table = visual_tables[0]
+    visual_height = _normalize_image_visual_table(visual_table, draft.visual_layout)
+
+    data_reports = tuple(
+        report for report in labeled_block_reports if str(report.kind).upper() == "DATA"
+    )
+    if not data_reports and not labeled_block_reports:
+        _rewrite_section_member(
+            output,
+            serialize_xml(section),
+            ".content-team-image-layout.hwpx",
+        )
+        return False
+    if len(data_reports) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material requires one DATA table",
+        )
+    data_table_id = str(data_reports[0].table_id)
+    data_tables = [
+        element
+        for element in section.root.iter()
+        if local_name(element.tag) == "tbl" and element.get("id") == data_table_id
+    ]
+    if len(data_tables) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team DATA material table is ambiguous",
+        )
+    data_table = data_tables[0]
+    data_rows = list(_direct_children(data_table, "tr"))
+    if len(data_rows) != 2:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team DATA material row topology differs",
+        )
+    heading_text = " ".join(
+        (node.text or "").strip()
+        for node in data_rows[0].iter()
+        if local_name(node.tag) == "t" and (node.text or "").strip()
+    )
+    if heading_text != "<자료>":
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team DATA material heading differs",
+        )
+    body_cells = _direct_children(data_rows[1], "tc")
+    if len(body_cells) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team DATA material body is ambiguous",
+        )
+    body_cell = body_cells[0]
+    body_address = _required_direct_child(body_cell, "cellAddr", context="content-team DATA body")
+    body_size = _required_direct_child(body_cell, "cellSz", context="content-team DATA body")
+    body_lists = _direct_children(body_cell, "subList")
+    if len(body_lists) != 1:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team DATA body list is ambiguous",
+        )
+    visual_paragraphs = [
+        ancestor for ancestor in visual_table.iterancestors() if local_name(ancestor.tag) == "p"
+    ]
+    if not visual_paragraphs:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material paragraph is missing",
+        )
+    visual_paragraph = visual_paragraphs[0]
+    visual_hosts = [
+        ancestor
+        for ancestor in visual_paragraph.iterancestors()
+        if local_name(ancestor.tag) == "subList"
+    ]
+    if not visual_hosts or visual_hosts[0] is body_lists[0]:
+        raise HwpxError(
+            HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
+            "content-team image material host is invalid",
+        )
+
+    data_table.remove(data_rows[0])
+    data_table.set("rowCnt", "1")
+    data_table.set("repeatHeader", "0")
+    body_address.set("rowAddr", "0")
+    combined_height = max(int(body_size.get("height", "0")), visual_height + 564)
+    body_size.set("height", str(combined_height))
+    data_table_size = _required_direct_child(
+        data_table, "sz", context="content-team DATA material table"
+    )
+    data_table_size.set("height", str(combined_height))
+
+    visual_table.set("borderFillIDRef", HIDDEN_BORDER_FILL_ID)
+    for row in _direct_children(visual_table, "tr"):
+        for cell in _direct_children(row, "tc"):
+            cell.set("borderFillIDRef", HIDDEN_BORDER_FILL_ID)
+    visual_hosts[0].remove(visual_paragraph)
+    body_lists[0].append(visual_paragraph)
+
+    _rewrite_section_member(
+        output,
+        serialize_xml(section),
+        ".content-team-unlabeled-image-material.hwpx",
+    )
+    return True
+
+
 def _direct_children(element: Any, name: str) -> tuple[Any, ...]:
     return tuple(child for child in element if local_name(child.tag) == name)
 
@@ -847,7 +1060,7 @@ def _rewrite_section_member(output: Path, section_bytes: bytes, temporary_name: 
         if analysis.active_content or analysis.external_links or not analysis.sections:
             raise HwpxError(
                 HwpxErrorCode.HWPX_STRUCTURAL_VALIDATION_FAILED,
-                "content-team equation projection failed package validation",
+                "content-team section projection failed package validation",
             )
         temporary.replace(output)
     except Exception:
@@ -1117,6 +1330,11 @@ def _external_render(
             expected_answer_combination=question.answer_combination,
         )
         equation_count = _assert_exact_content_team_equations(output, handoff_draft)
+        unlabeled_image_material_box = _compose_unlabeled_image_material_box(
+            output,
+            draft,
+            tuple(engine.last_labeled_block_reports),
+        )
         report: dict[str, Any] = {
             "status": "PASS",
             "equation_count": equation_count,
@@ -1133,6 +1351,7 @@ def _external_render(
             "unused_visual_sample_hidden": unused_visual_sample_hidden,
             "labeled_image_projection_applied": labeled_image_layout is not None,
             "projected_image_slot_count": projected_image_slot_count,
+            "unlabeled_image_material_box": unlabeled_image_material_box,
         }
         if item_number_override is not None or score_display_override is not None:
             report.update(
