@@ -246,7 +246,7 @@ def materialize_execution_step(
         if (
             not isinstance(plan, ResolvedExecutionPlanV12)
             or not isinstance(step, ResolvedStepExecutionV12)
-            or step.role.value != "review"
+            or step.role != "review"
             or step.escalation_candidate is None
         ):
             raise ControlPlaneError(

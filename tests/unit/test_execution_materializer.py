@@ -1271,6 +1271,36 @@ def test_variation_materializer_stages_exact_request_and_source_item(
     assert result.materialized_member_count == 7
 
 
+def test_variation_materializer_uses_plan_pinned_escalated_review_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _past_exam_variation_fixture(tmp_path, monkeypatch)
+    workspace = _workspace(tmp_path, "variation-escalated-review")
+    plan = (
+        fixture["session"]
+        .records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+        .canonical_document
+    )
+    review_step = next(step for step in plan["steps"] if step["step_key"] == "review")
+
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="review",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=fixture["authorized"],
+        execution_tier="ESCALATED",
+    )
+
+    assert result.model == review_step["escalation_candidate"]["model"]
+    assert result.reasoning_effort == review_step["escalation_candidate"]["reasoning_effort"]
+    assert (workspace / "references/variation/request.json").is_file()
+    assert (workspace / "references/variation/source-item.json").is_file()
+    assert result.materialized_member_count == 7
+
+
 def test_variation_materializer_rejects_manifest_without_exact_source_before_staging(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
