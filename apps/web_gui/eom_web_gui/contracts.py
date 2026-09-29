@@ -1764,6 +1764,27 @@ class CurriculumEditorialOutline(WebModel):
         return self
 
 
+class PastExamVariationDraft(WebModel):
+    source_item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    variation_axes: tuple[
+        Literal[
+            "CONTEXT",
+            "DIFFICULTY",
+            "DISTRACTORS",
+            "REASONING_PATH",
+            "REPRESENTATION",
+            "VALUES",
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def sorted_unique_axes(self) -> PastExamVariationDraft:
+        if self.variation_axes != tuple(sorted(set(self.variation_axes))):
+            raise ValueError("variation axes must be sorted and unique")
+        return self
+
+
 class RequestDraftEditable(WebModel):
     subject: str = Field(min_length=1, max_length=80)
     topic: str = Field(min_length=1, max_length=160)
@@ -1781,6 +1802,7 @@ class RequestDraftEditable(WebModel):
         default=None,
         pattern=r"^eom\.is\.(large\.[1-6]|middle\.[1-6]-[1-7])$",
     )
+    past_exam_variation: PastExamVariationDraft | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -1814,11 +1836,13 @@ class RequestDraftUpdate(RequestDraftEditable):
     def exact_knowledge_grounding_scope(self) -> RequestDraftUpdate:
         if self.knowledge_grounding and self.curriculum_selected_unit_key is None:
             raise ValueError("knowledge grounding requires a selected curriculum unit")
+        if self.past_exam_variation is not None and not self.knowledge_grounding:
+            raise ValueError("past-exam variation requires exact Graph grounding")
         return self
 
 
 class RequestDraft(RequestDraftEditable):
-    schema_version: Literal["4.0"] = "4.0"
+    schema_version: Literal["5.0"] = "5.0"
     request_draft_id: str = Field(pattern=r"^requestdraft_[0-9a-f]{32}$")
     status: Literal["DRAFT"] = "DRAFT"
     language: Literal["ko"] = "ko"
@@ -1833,6 +1857,8 @@ class RequestDraft(RequestDraftEditable):
     def exact_knowledge_grounding_scope(self) -> RequestDraft:
         if self.knowledge_grounding and self.curriculum_selected_unit_key is None:
             raise ValueError("knowledge grounding requires a selected curriculum unit")
+        if self.past_exam_variation is not None and not self.knowledge_grounding:
+            raise ValueError("past-exam variation requires exact Graph grounding")
         actual = authoring_guidance_sha256(self.authoring_guidance)
         if actual != self.authoring_guidance_sha256:
             raise ValueError("authoring guidance SHA-256 does not match normalized text")

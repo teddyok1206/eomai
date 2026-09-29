@@ -583,6 +583,87 @@ def _item_production_command() -> CreateItemProductionEvidenceCommand:
     return CreateItemProductionEvidenceCommand.model_validate(value)
 
 
+def _variation_item_production_command() -> CreateItemProductionEvidenceCommand:
+    value = _item_production_command().model_dump(mode="json")
+    value["requirement"] = {
+        "schema_version": "educational-retrieval-requirement/2.0",
+        "corpus_key": "integrated-science-textbooks",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": None,
+        "topic_keys": [],
+        "required_item_elements": ["choice", "paragraph"],
+        "source_classes": ["PAST_EXAM"],
+        "past_exam_variation": {
+            "schema_version": "past-exam-variation-request/1.0",
+            "source_item_revision_id": "itemrev_" + "a" * 32,
+            "variation_axes": ["CONTEXT", "VALUES"],
+            "preserve_core_concept": True,
+            "preserve_cognitive_target": True,
+            "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+        },
+    }
+    value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    return CreateItemProductionEvidenceCommand.model_validate(value)
+
+
+def test_variation_item_production_pins_exact_target_into_private_retrieval() -> None:
+    command = _variation_item_production_command()
+    target = command.requirement.past_exam_variation.source_item_revision_id
+    snapshot = SimpleNamespace(
+        graph_snapshot_revision_id="graphrev_" + "3" * 32,
+        graph_id="graph_" + "2" * 32,
+        state="PUBLISHED",
+    )
+    corpus = SimpleNamespace(
+        lifecycle_state="ACTIVE",
+        current_graph_snapshot_revision_id=snapshot.graph_snapshot_revision_id,
+        graph_id=snapshot.graph_id,
+    )
+    policy = SimpleNamespace(
+        state="RELEASED",
+        content_sha256=command.access_policy_sha256,
+    )
+
+    class PreflightSession(_SequenceSession):
+        def get(self, model: type[object], _identity: str) -> object | None:
+            if model is retrieval_module.KnowledgeGraphSnapshotRecord:
+                return snapshot
+            if model is retrieval_module.EducationRetrievalAccessPolicyRevisionRecord:
+                return policy
+            return None
+
+    class ResultSession(_SequenceSession):
+        def get(self, _model: type[object], _identity: str) -> object:
+            return SimpleNamespace()
+
+    sessions = iter((PreflightSession([None, corpus]), ResultSession([])))
+    service = object.__new__(KnowledgeRetrievalApplicationService)
+    cast(Any, service).sessions = lambda: next(sessions)
+    captured: dict[str, object] = {}
+    published = SimpleNamespace(
+        retrieval_request_id="retrieval_" + "1" * 32,
+        evidence_bundle_revision_id="evidencerev_" + "2" * 32,
+    )
+
+    def create(inner: retrieval_module.CreateEvidenceBundleCommand, **_kwargs: object) -> object:
+        captured.update(inner.model_dump(mode="json"))
+        return published
+
+    cast(Any, service).create = create
+    cast(Any, service)._result_v2 = lambda *_args: published
+    cast(Any, service)._require_solution_evidence_result = lambda *_args, **_kwargs: None
+
+    assert service.create_item_production(command) is published
+    assert captured["target_item_revision_id"] == target
+    assert captured["source_classes"] == ["PAST_EXAM"]
+
+
 def test_item_production_graph_miss_fails_before_artifact_or_retrieval_creation() -> None:
     service = object.__new__(KnowledgeRetrievalApplicationService)
     cast(Any, service).sessions = lambda: _SequenceSession([None, None])

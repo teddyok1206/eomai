@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -23,6 +24,8 @@ from eom_orchestrator.execution_materializer import (
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow import ControlArtifactPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
+
+from tests.unit.test_content_team_v3_protocol import _content_v3
 
 ZERO_SHA = "sha256:" + "0" * 64
 GROUP_ID = os.getgid()
@@ -1123,6 +1126,181 @@ def test_knowledge_materializer_stages_exact_manifest_and_context_and_records_pr
     assert result.evidence_context_sha256 == sha256_bytes(fixture["context_payload"])
     assert result.materialized_member_count == 5
     assert all("path" not in key for key in result.event_data())
+
+
+def _past_exam_variation_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    fixture = _knowledge_fixture(
+        tmp_path,
+        monkeypatch,
+        manifest_schema_version="5.0",
+        workflow_definition_version="1.14.0",
+    )
+    session = fixture["session"]
+    assert isinstance(session, FakeSession)
+    target_revision_id = "itemrev_" + "4" * 32
+    source_artifact_id = "artifact_" + "a" * 32
+    source_revision_id = "rev_" + "a" * 32
+    source_member_path = "item-content.json"
+    source_payload = canonical_json_bytes(_content_v3().model_dump(mode="json"))
+    source_sha256 = sha256_bytes(source_payload)
+    source_root = fixture["artifact_root"] / source_artifact_id / source_revision_id
+    source_root.mkdir(parents=True)
+    (source_root / source_member_path).write_bytes(source_payload)
+    source_schema_ref = "eom://schemas/item-registry/assessment-item-content-v3"
+    session.records[(ArtifactRecord, source_artifact_id)] = SimpleNamespace(approved=True)
+    session.records[(ArtifactRevisionRecord, source_revision_id)] = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=source_artifact_id,
+        content_hash=source_sha256,
+        nas_path=str(source_root),
+        manifest={
+            "files": [
+                {
+                    "file_name": source_member_path,
+                    "sha256": source_sha256,
+                    "bytes": len(source_payload),
+                    "media_type": "application/json",
+                    "schema_ref": source_schema_ref,
+                }
+            ]
+        },
+    )
+
+    manifest = deepcopy(fixture["manifest"])
+    manifest["entries"][0]["source"] = {
+        "source_kind": "APPROVED_ITEM_REVISION",
+        "source_class": "PAST_EXAM",
+        "item_id": "item_" + "4" * 32,
+        "item_revision_id": target_revision_id,
+        "lifecycle_state": "APPROVED",
+        "artifact_member": {
+            "artifact_id": source_artifact_id,
+            "artifact_revision_id": source_revision_id,
+            "member_path": source_member_path,
+            "materialized_path": "source/item-content.json",
+            "sha256": source_sha256,
+            "bytes": len(source_payload),
+            "schema_ref": source_schema_ref,
+            "media_type": "application/json",
+            "logical_name": "item-content.json",
+        },
+    }
+    manifest["manifest_sha256"] = content_sha256(
+        {key: value for key, value in manifest.items() if key != "manifest_sha256"}
+    )
+    manifest_payload = canonical_json_bytes(manifest)
+    manifest_payload_sha256 = sha256_bytes(manifest_payload)
+    manifest_record = session.records[(ArtifactRevisionRecord, fixture["manifest_revision_id"])]
+    (Path(manifest_record.nas_path) / "evidence/manifest.json").write_bytes(manifest_payload)
+    manifest_record.content_hash = manifest_payload_sha256
+    manifest_record.manifest["files"][0]["sha256"] = manifest_payload_sha256
+    manifest_record.manifest["files"][0]["bytes"] = len(manifest_payload)
+
+    plan_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    plan = deepcopy(plan_record.canonical_document)
+    plan["schema_version"] = "resolved-execution-plan/16.0"
+    plan["workflow_definition_version"] = "1.14.0"
+    plan["retrieval_requirement"] = {
+        "schema_version": "educational-retrieval-requirement/2.0",
+        "corpus_key": "integrated-science-textbooks",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": None,
+        "topic_keys": [],
+        "required_item_elements": ["choice", "paragraph"],
+        "source_classes": ["PAST_EXAM"],
+        "past_exam_variation": {
+            "schema_version": "past-exam-variation-request/1.0",
+            "source_item_revision_id": target_revision_id,
+            "variation_axes": ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
+            "preserve_core_concept": True,
+            "preserve_cognitive_target": True,
+            "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+        },
+    }
+    plan["retrieval_requirement_sha256"] = content_sha256(plan["retrieval_requirement"])
+    plan["evidence_manifest_artifact"]["sha256"] = manifest_payload_sha256
+    plan["evidence_manifest_sha256"] = manifest["manifest_sha256"]
+    plan["resolver_version"] = "16.0.0"
+    plan["steps"][0]["escalation_candidate"] = None
+    review_step = deepcopy(plan["steps"][0])
+    review_step["step_key"] = "review"
+    review_step["role"] = "review"
+    review_step["escalation_candidate"] = {
+        "model": review_step["model"],
+        "reasoning_effort": ("xhigh" if review_step["reasoning_effort"] != "xhigh" else "high"),
+    }
+    plan["steps"].append(review_step)
+    plan["plan_sha256"] = content_sha256(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
+    plan_record.canonical_document = plan
+    plan_record.plan_sha256 = plan["plan_sha256"]
+    fixture.update(
+        {
+            "authorized": frozenset((*fixture["authorized"], source_revision_id)),
+            "manifest": manifest,
+            "manifest_payload": manifest_payload,
+            "source_payload": source_payload,
+            "target_revision_id": target_revision_id,
+        }
+    )
+    return fixture
+
+
+def test_variation_materializer_stages_exact_request_and_source_item(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _past_exam_variation_fixture(tmp_path, monkeypatch)
+    workspace = _workspace(tmp_path, "variation")
+
+    result = materialize_execution_step(
+        fixture["session"],
+        plan_id=str(fixture["plan_id"]),
+        step_key="authoring",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=fixture["authorized"],
+    )
+
+    request = json.loads((workspace / "references/variation/request.json").read_text())
+    assert request["source_item_revision_id"] == fixture["target_revision_id"]
+    assert (workspace / "references/variation/source-item.json").read_bytes() == fixture[
+        "source_payload"
+    ]
+    assert result.materialized_member_count == 7
+
+
+def test_variation_materializer_rejects_manifest_without_exact_source_before_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _past_exam_variation_fixture(tmp_path, monkeypatch)
+    plan_record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    plan = deepcopy(plan_record.canonical_document)
+    plan["retrieval_requirement"]["past_exam_variation"]["source_item_revision_id"] = (
+        "itemrev_" + "9" * 32
+    )
+    plan["retrieval_requirement_sha256"] = content_sha256(plan["retrieval_requirement"])
+    plan["plan_sha256"] = content_sha256(
+        {key: value for key, value in plan.items() if key != "plan_sha256"}
+    )
+    plan_record.canonical_document = plan
+    plan_record.plan_sha256 = plan["plan_sha256"]
+    workspace = _workspace(tmp_path, "variation-missing-source")
+
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            fixture["session"],
+            plan_id=str(fixture["plan_id"]),
+            step_key="authoring",
+            workspace=workspace,
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=fixture["authorized"],
+        )
+
+    assert captured.value.code == "CONTROL_VARIATION_SOURCE_MISSING"
+    assert not (workspace / "references/variation").exists()
 
 
 def test_knowledge_materializer_keeps_pre_110_context_only_workspace_and_count(

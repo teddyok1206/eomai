@@ -26,6 +26,7 @@ REQUEST_DRAFT_EDITABLE_FIELDS = (
     "authoring_guidance",
     "knowledge_grounding",
     "curriculum_selected_unit_key",
+    "past_exam_variation",
 )
 
 

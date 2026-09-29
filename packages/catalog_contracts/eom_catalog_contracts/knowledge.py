@@ -3810,6 +3810,60 @@ class EducationalRetrievalRequirement(FrozenModel):
         return self
 
 
+PastExamVariationAxis = Literal[
+    "CONTEXT",
+    "DIFFICULTY",
+    "DISTRACTORS",
+    "REASONING_PATH",
+    "REPRESENTATION",
+    "VALUES",
+]
+
+
+class PastExamVariationRequest(FrozenModel):
+    """One immutable past-exam source and the reviewed dimensions to transform."""
+
+    schema_version: Literal["past-exam-variation-request/1.0"] = "past-exam-variation-request/1.0"
+    source_item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    variation_axes: tuple[PastExamVariationAxis, ...] = Field(min_length=1, max_length=6)
+    preserve_core_concept: Literal[True] = True
+    preserve_cognitive_target: Literal[True] = True
+    copy_policy: Literal["NO_STEM_CHOICE_ANSWER_COPY"] = "NO_STEM_CHOICE_ANSWER_COPY"
+
+    @model_validator(mode="after")
+    def axes_are_sorted_and_unique(self) -> PastExamVariationRequest:
+        if tuple(sorted(self.variation_axes)) != self.variation_axes or len(
+            self.variation_axes
+        ) != len(set(self.variation_axes)):
+            raise ValueError("past-exam variation axes must be sorted and unique")
+        return self
+
+
+class EducationalRetrievalRequirementV2(FrozenModel):
+    """Exact one-source retrieval intent for a past-exam variation workflow."""
+
+    schema_version: Literal["educational-retrieval-requirement/2.0"] = (
+        "educational-retrieval-requirement/2.0"
+    )
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    query_kind: Literal["ITEM_PREPARATION"] = "ITEM_PREPARATION"
+    curriculum_root_key: None = None
+    topic_keys: tuple[()] = ()
+    required_item_elements: tuple[
+        Literal["paragraph", "table", "image", "equation", "statement_set", "choice"], ...
+    ] = Field(min_length=1, max_length=8)
+    source_classes: tuple[Literal["PAST_EXAM"]] = ("PAST_EXAM",)
+    past_exam_variation: PastExamVariationRequest
+
+    @model_validator(mode="after")
+    def exact_one_source_scope(self) -> EducationalRetrievalRequirementV2:
+        if tuple(sorted(self.required_item_elements)) != self.required_item_elements or len(
+            self.required_item_elements
+        ) != len(set(self.required_item_elements)):
+            raise ValueError("variation item elements must be sorted and unique")
+        return self
+
+
 class EducationRetrievalRequest(FrozenModel):
     schema_version: Literal["education-retrieval-request/1.0"] = "education-retrieval-request/1.0"
     retrieval_request_id: str = Field(pattern=r"^retrieval_[0-9a-f]{32}$")
@@ -3844,8 +3898,15 @@ class EducationRetrievalRequest(FrozenModel):
             self.curriculum_scope is None
         ):
             raise ValueError("curriculum retrieval requires a pinned curriculum scope")
-        if self.curriculum_scope is None and not self.topic_keys:
-            raise ValueError("retrieval requires a curriculum scope or controlled topic keys")
+        if (
+            self.curriculum_scope is None
+            and not self.topic_keys
+            and self.target_item_revision_id is None
+        ):
+            raise ValueError(
+                "retrieval requires a curriculum scope, controlled topic keys, or an exact target "
+                "Item Revision"
+            )
         if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
             raise ValueError("item structure retrieval requires item element filters")
         return self
@@ -3997,8 +4058,15 @@ class EducationRetrievalRequestV2(FrozenModel):
             self.curriculum_scope is None
         ):
             raise ValueError("curriculum retrieval requires a pinned curriculum scope")
-        if self.curriculum_scope is None and not self.topic_keys:
-            raise ValueError("retrieval requires a curriculum scope or controlled topic keys")
+        if (
+            self.curriculum_scope is None
+            and not self.topic_keys
+            and self.target_item_revision_id is None
+        ):
+            raise ValueError(
+                "retrieval requires a curriculum scope, controlled topic keys, or an exact target "
+                "Item Revision"
+            )
         if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
             raise ValueError("item structure retrieval requires item element filters")
         permissions_hash = content_sha256({"permission_keys": list(self.requester_permission_keys)})

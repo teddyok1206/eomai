@@ -31,6 +31,7 @@ from eom_catalog_contracts.item_review import (
 from eom_catalog_contracts.knowledge import (
     CurriculumRetrievalScope,
     EducationalRetrievalRequirement,
+    EducationalRetrievalRequirementV2,
     EvidenceBudget,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
@@ -394,8 +395,15 @@ class CreateEvidenceBundleCommand(FrozenModel):
             self.curriculum_scope is None
         ):
             raise ValueError("curriculum evidence command requires a pinned scope")
-        if self.curriculum_scope is None and not self.topic_keys:
-            raise ValueError("evidence command requires curriculum scope or topic keys")
+        if (
+            self.curriculum_scope is None
+            and not self.topic_keys
+            and self.target_item_revision_id is None
+        ):
+            raise ValueError(
+                "evidence command requires curriculum scope, topic keys, or an exact target Item "
+                "Revision"
+            )
         if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
             raise ValueError("item structure evidence requires element filters")
         body = self.model_dump(mode="json", exclude={"idempotency_key", "submission_sha256"})
@@ -408,7 +416,7 @@ class CreateItemProductionEvidenceCommand(FrozenModel):
     """Private preset-resolved request; Catalog alone selects the current graph snapshot."""
 
     operation: Literal["CREATE_ITEM_PRODUCTION_EVIDENCE"] = "CREATE_ITEM_PRODUCTION_EVIDENCE"
-    requirement: EducationalRetrievalRequirement
+    requirement: EducationalRetrievalRequirementV2 | EducationalRetrievalRequirement
     evidence_budget: EvidenceBudget
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
     access_policy_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -650,7 +658,7 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
             "catalog-application-response-v15",
         ),
         "CREATE_ITEM_PRODUCTION_EVIDENCE": CatalogApplicationSchemaRoute(
-            "catalog-application-request-v16",
+            "catalog-application-request-v17",
             "catalog-application-response-v15",
         ),
         "PUBLISH_APPROVED_ITEM_ANALYSES": CatalogApplicationSchemaRoute(

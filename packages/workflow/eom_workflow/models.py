@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     AssessmentItemContentV3,
     ContentTeamMaterialRequirementV1,
     EducationalRetrievalRequirement,
+    EducationalRetrievalRequirementV2,
     EquationBlock,
     IntegratedScienceCurriculumScope,
     ItemScore,
@@ -454,7 +455,9 @@ class WorkflowRequest(FrozenModel):
     )
     stimulus_asset: StimulusAssetSelection | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
-    educational_retrieval: EducationalRetrievalRequirement | None = None
+    educational_retrieval: (
+        EducationalRetrievalRequirementV2 | EducationalRetrievalRequirement | None
+    ) = None
     production_occurrence: WorkflowProductionOccurrence | None = None
     expected_resolution: ExpectedWorkflowResolution | None = None
     analysis_request: (
@@ -532,7 +535,15 @@ class WorkflowRequest(FrozenModel):
             self.item_brief, (ItemBriefV2, ContentTeamItemBrief)
         ):
             scope = self.item_brief.curriculum_scope
-            if (
+            if isinstance(self.educational_retrieval, EducationalRetrievalRequirementV2):
+                if (
+                    self.registry_intent is None
+                    or self.registry_intent.mode != "CREATE_ITEM"
+                    or self.registry_intent.item_id is not None
+                    or self.registry_intent.base_revision_id is not None
+                ):
+                    raise ValueError("past-exam variation must create one new logical Item")
+            elif (
                 scope is None
                 or self.educational_retrieval.curriculum_root_key != scope.graph_root_stable_key
                 or self.educational_retrieval.topic_keys

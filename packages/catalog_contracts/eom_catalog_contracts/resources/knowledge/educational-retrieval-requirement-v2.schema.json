@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/educational-retrieval-requirement/2.0",
+  "title": "EOM Educational Retrieval Requirement V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_key",
+    "query_kind",
+    "curriculum_root_key",
+    "topic_keys",
+    "required_item_elements",
+    "source_classes",
+    "past_exam_variation"
+  ],
+  "properties": {
+    "schema_version": {"const": "educational-retrieval-requirement/2.0"},
+    "corpus_key": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$"},
+    "query_kind": {"const": "ITEM_PREPARATION"},
+    "curriculum_root_key": {"type": "null"},
+    "topic_keys": {"type": "array", "maxItems": 0},
+    "required_item_elements": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {"enum": ["paragraph", "table", "image", "equation", "statement_set", "choice"]}
+    },
+    "source_classes": {
+      "type": "array",
+      "prefixItems": [{"const": "PAST_EXAM"}],
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "past_exam_variation": {
+      "$ref": "eom://schemas/knowledge/past-exam-variation-request/1.0"
+    }
+  }
+}

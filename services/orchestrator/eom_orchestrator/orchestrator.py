@@ -38,6 +38,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV16,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -154,6 +155,7 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/11.0",
         "resolved-execution-plan/12.0",
         "resolved-execution-plan/15.0",
+        "resolved-execution-plan/16.0",
     }
 )
 
@@ -220,6 +222,11 @@ def _resolved_evidence_plan_for_response(
         if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
             return ResolvedExecutionPlanV11.model_validate(plan_document)
         if result_schema in {"authoring-result@12.0", "review-result@12.0"}:
+            if (
+                isinstance(plan_document, dict)
+                and plan_document.get("schema_version") == "resolved-execution-plan/16.0"
+            ):
+                return ResolvedExecutionPlanV16.model_validate(plan_document)
             return ResolvedExecutionPlanV12.model_validate(plan_document)
         return ResolvedExecutionPlanV3.model_validate(plan_document)
     except ValidationError as exc:

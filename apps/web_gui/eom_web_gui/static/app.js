@@ -21,6 +21,7 @@ const state = {
   csrf: "",
   operator: null,
   draft: null,
+  variationSourceEntry: null,
   workflow: null,
   health: null,
   stream: null,
@@ -502,6 +503,12 @@ function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
+  $("#past-exam-variation-clear").addEventListener("click", () => {
+    state.variationSourceEntry = null;
+    if (state.draft) state.draft = {...state.draft, past_exam_variation: null};
+    syncPastExamVariation(null);
+    showMessage($("#draft-message"), "일반 신규 문항 출제로 전환했습니다.", "success");
+  });
   const form = $("#draft-form");
   form.elements.material_form.addEventListener("change", syncMaterialPanelCount);
   form.elements.curriculum_large_unit_key.addEventListener("change", (event) => {
@@ -533,6 +540,7 @@ async function analyzeDraft() {
   const pendingCurriculumSelection = {...state.curriculumSelection};
   showMessage(message, "요청을 구조화하고 있습니다.");
   try {
+    state.variationSourceEntry = null;
     const draft = await api("/request-drafts", {
       method: "POST",
       mutation: true,
@@ -564,6 +572,7 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
   const graphGroundingAvailable = state.curriculumOutline?.graph_grounding_available === true;
   form.elements.knowledge_grounding.checked = draft.knowledge_grounding && graphGroundingAvailable;
   form.elements.knowledge_grounding.disabled = !graphGroundingAvailable;
+  syncPastExamVariation(draft.past_exam_variation || null);
   syncCurriculumSelectorAvailability();
   const selectedKey = draft.curriculum_selected_unit_key || "";
   setCurriculumSelection(
@@ -589,6 +598,13 @@ function draftUpdateBody() {
   const materialPanelCount = ["TABLE", "IMAGE", "MIXED"].includes(materialForm)
     ? Number(form.elements.material_panel_count.value)
     : null;
+  const variationAxes = Array.from(form.querySelectorAll('input[name="variation_axis"]:checked'))
+    .map((input) => input.value)
+    .sort();
+  const variation = state.variationSourceEntry || state.draft?.past_exam_variation;
+  if (variation && variationAxes.length === 0) {
+    throw new Error("1:1 기출변형은 하나 이상의 변형 축을 선택해야 합니다.");
+  }
   return {
     subject: form.elements.subject.value.trim(),
     topic: form.elements.topic.value.trim(),
@@ -607,7 +623,56 @@ function draftUpdateBody() {
     authoring_guidance: normalizeAuthoringGuidance(form.elements.authoring_guidance.value),
     knowledge_grounding: form.elements.knowledge_grounding.checked,
     curriculum_selected_unit_key: selectedUnitKey,
+    past_exam_variation: variation ? {
+      source_item_revision_id: variation.item_revision_id || variation.source_item_revision_id,
+      variation_axes: variationAxes,
+    } : null,
   };
+}
+
+function syncPastExamVariation(variation) {
+  const field = $("#past-exam-variation-field");
+  const source = state.variationSourceEntry;
+  field.hidden = !variation;
+  if (!variation) return;
+  $("#past-exam-variation-source").textContent = source
+    ? `${source.occurrence_display_label} · ${source.item_number}번을 원본으로 고정`
+    : `고정 원본 문항 버전 ${variation.source_item_revision_id}`;
+  const selected = new Set(variation.variation_axes || []);
+  for (const input of field.querySelectorAll('input[name="variation_axis"]')) {
+    input.checked = selected.has(input.value);
+  }
+}
+
+async function beginPastExamVariation(entry) {
+  if (state.curriculumOutline?.graph_grounding_available !== true) {
+    throw new Error("검증된 기출 근거 연결이 활성화된 경우에만 변형할 수 있습니다.");
+  }
+  const unit = entry.curriculum_units.find((candidate) =>
+    /^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$/u.test(candidate.unit_key));
+  if (!unit) throw new Error("지원되는 대단원·중단원이 연결된 기출만 변형할 수 있습니다.");
+  const requestText = `${entry.occurrence_display_label} ${entry.item_number}번의 핵심 개념과 평가 목표를 유지한 1:1 기출변형 문항을 출제해줘.`;
+  const draft = await api("/request-drafts", {
+    method: "POST",
+    mutation: true,
+    body: {original_request_text: requestText},
+  });
+  state.variationSourceEntry = entry;
+  state.draft = draft;
+  $("#request-text").value = requestText;
+  fillDraft(draft, curriculumAncestors(state.curriculumOutline?.units || [], unit.unit_key));
+  const form = $("#draft-form");
+  form.elements.knowledge_grounding.checked = true;
+  const variation = {
+    source_item_revision_id: entry.item_revision_id,
+    variation_axes: ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
+  };
+  syncPastExamVariation(variation);
+  state.draft = {...draft, past_exam_variation: variation};
+  $("#draft-save").disabled = false;
+  $("#draft-submit").disabled = false;
+  showView("request");
+  showMessage($("#draft-message"), "원본 기출과 변형 축을 확인한 뒤 문항 제작을 시작하세요.", "success");
 }
 
 async function saveDraft() {
@@ -1235,6 +1300,13 @@ function renderItemBank() {
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
+      actionButton("1:1 기출변형", async () => {
+        try {
+          await beginPastExamVariation(entry);
+        } catch (failure) {
+          showMessage($("#item-bank-message"), `변형 요청 준비 실패: ${failure.message}`, "error");
+        }
+      }),
       actionButton("완성 문항 보기", async () => {
         $("#item-id").value = entry.item_id;
         $("#revision-id").value = entry.item_revision_id;

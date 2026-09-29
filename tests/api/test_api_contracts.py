@@ -908,6 +908,17 @@ def test_evidence_bundle_request_is_bounded_sorted_and_pointer_only() -> None:
         }
     )
     assert request.topic_keys == ("earth.plate-boundary",)
+    exact_item = CreateEvidenceBundleRequest.model_validate(
+        request.model_dump(mode="json")
+        | {
+            "topic_keys": [],
+            "target_item_revision_id": "itemrev_" + "3" * 32,
+            "source_classes": ["PAST_EXAM"],
+        }
+    )
+    assert exact_item.curriculum_scope is None
+    assert exact_item.topic_keys == ()
+    assert exact_item.target_item_revision_id == "itemrev_" + "3" * 32
     with pytest.raises(ValidationError, match="sorted and unique"):
         CreateEvidenceBundleRequest.model_validate(
             request.model_dump(mode="json") | {"source_classes": ["TEXTBOOK", "CURRICULUM"]}

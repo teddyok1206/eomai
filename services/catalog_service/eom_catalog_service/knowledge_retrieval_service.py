@@ -550,7 +550,11 @@ class KnowledgeRetrievalApplicationService:
                 curriculum_scope.model_dump(mode="json") if curriculum_scope is not None else None
             ),
             "topic_keys": list(command.requirement.topic_keys),
-            "target_item_revision_id": None,
+            "target_item_revision_id": (
+                command.requirement.past_exam_variation.source_item_revision_id
+                if command.requirement.schema_version == "educational-retrieval-requirement/2.0"
+                else None
+            ),
             "required_item_elements": list(command.requirement.required_item_elements),
             "source_classes": list(command.requirement.source_classes),
             "evidence_budget": command.evidence_budget.model_dump(mode="json"),
@@ -1266,6 +1270,12 @@ class KnowledgeRetrievalApplicationService:
                 cache=source_cache,
             )
             if source.source_class not in command.source_classes:
+                continue
+            if command.target_item_revision_id is not None and (
+                not isinstance(source, ApprovedItemKnowledgeSourceV2)
+                or source.item_revision_id != command.target_item_revision_id
+                or source.source_class != "PAST_EXAM"
+            ):
                 continue
             values.append(
                 _Candidate(

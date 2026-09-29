@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
+    EducationalRetrievalRequirementV2,
     ImageBlock,
     MediaArtifactPointer,
     candidate_visible_image_instruction_paths,
@@ -48,13 +49,19 @@ from eom_image_contracts import (
     content_json_bytes,
     text_sha256,
 )
-from eom_item_registry import ComponentPointer, RegistrationRequest
+from eom_item_registry import (
+    ComponentPointer,
+    PastExamVariationSourcePointer,
+    RegistrationRequest,
+)
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_session_factory
 from eom_workflow import (
     ArtifactPointer,
     ContentTeamItemBrief,
     ContentTeamItemBriefV4,
     ItemBriefV2,
+    ResolvedExecutionPlanV16,
     ResolvedStepExecutionV12,
     WorkflowRequest,
     WorkflowReviewEscalationDirective,
@@ -200,6 +207,7 @@ def _local_image_prompt_contract(
         "1.20.5",
         "1.20.6",
         "1.20.7",
+        "1.20.8",
     }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
@@ -226,7 +234,8 @@ def _uses_v1_reference_conditioning(
     return (
         isinstance(provider, LocalImageProviderBinding)
         and isinstance(content_pack, dict)
-        and content_pack.get("version") in {"1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.20.7"}
+        and content_pack.get("version")
+        in {"1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.20.7", "1.20.8"}
     )
 
 
@@ -564,19 +573,21 @@ class WorkflowCatalogService:
                     "1.20.5",
                     "1.20.6",
                     "1.20.7",
+                    "1.20.8",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.7",
+                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.8",
                     )
                 if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
                     "1.20.5",
                     "1.20.6",
                     "1.20.7",
+                    "1.20.8",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.7",
+                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.8",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1810,6 +1821,11 @@ class WorkflowCatalogService:
                 metadata_schema_ref=metadata_schema,
                 metadata=metadata,
                 components=components,
+                past_exam_variation_source=self._past_exam_variation_source(
+                    workflow=workflow,
+                    request=request,
+                    evidence_receipts=evidence_receipts,
+                ),
                 created_by=workflow.created_actor_id,
             )
         )
@@ -1820,6 +1836,49 @@ class WorkflowCatalogService:
             manifest_artifact_id=revision.manifest_artifact_id,
             manifest_artifact_revision_id=revision.manifest_artifact_revision_id,
             manifest_sha256=revision.manifest_sha256,
+        )
+
+    def _past_exam_variation_source(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        request: WorkflowRequest,
+        evidence_receipts: EvidenceUsageReceiptPair | None,
+    ) -> PastExamVariationSourcePointer | None:
+        requirement = request.educational_retrieval
+        if not isinstance(requirement, EducationalRetrievalRequirementV2):
+            return None
+        if evidence_receipts is None:
+            raise ValueError("past-exam variation registration requires trusted evidence receipts")
+        receipt = evidence_receipts.authoring
+        with self.sessions() as session:
+            record = session.get(ResolvedExecutionPlanRecord, receipt.plan_id)
+            if record is None:
+                raise ValueError("past-exam variation execution plan is missing")
+            plan = ResolvedExecutionPlanV16.model_validate(record.canonical_document)
+        if (
+            plan.workflow_id != workflow.workflow_id
+            or plan.plan_sha256 != record.plan_sha256
+            or plan.plan_sha256 != receipt.plan_sha256
+            or plan.retrieval_requirement != requirement
+            or plan.evidence_bundle_revision_id != receipt.evidence_bundle_revision_id
+            or plan.evidence_manifest_sha256 != receipt.evidence_manifest_sha256
+        ):
+            raise ValueError("past-exam variation registration differs from its exact plan")
+        resolved = self.registry.resolve_past_exam_variation_content(
+            requirement.past_exam_variation.source_item_revision_id
+        )
+        return PastExamVariationSourcePointer(
+            item_id=resolved.item_id,
+            item_revision_id=resolved.item_revision_id,
+            content_artifact_id=resolved.artifact_id,
+            content_artifact_revision_id=resolved.artifact_revision_id,
+            content_schema_ref=resolved.schema_ref,
+            content_sha256=resolved.sha256,
+            plan_id=plan.plan_id,
+            plan_sha256=plan.plan_sha256,
+            evidence_bundle_revision_id=plan.evidence_bundle_revision_id,
+            evidence_manifest_sha256=plan.evidence_manifest_sha256,
         )
 
     def _require_evidence_usage_receipts(
@@ -1953,6 +2012,7 @@ class WorkflowCatalogService:
             "1.20.5",
             "1.20.6",
             "1.20.7",
+            "1.20.8",
         }
         if expects_content_team:
             if not is_content_team:
@@ -1976,6 +2036,7 @@ class WorkflowCatalogService:
                     "1.20.5",
                     "1.20.6",
                     "1.20.7",
+                    "1.20.8",
                 }
             ) != is_material_v4:
                 raise ContentPackError(
@@ -1996,6 +2057,7 @@ class WorkflowCatalogService:
                 "1.20.5",
                 "1.20.6",
                 "1.20.7",
+                "1.20.8",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode

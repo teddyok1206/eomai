@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
     EducationalRetrievalRequirement,
+    EducationalRetrievalRequirementV2,
     EvidenceBudget,
     KnowledgeAnalysisBaseResultPointer,
     KnowledgeArtifactMemberPointer,
@@ -727,6 +728,7 @@ class ResolvedExecutionPlanV3(FrozenModel):
         if self.model_dump(mode="json").get("schema_version") in {
             "resolved-execution-plan/11.0",
             "resolved-execution-plan/12.0",
+            "resolved-execution-plan/16.0",
         }:
             allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (
@@ -766,6 +768,15 @@ class ResolvedExecutionPlanV12(ResolvedExecutionPlanV3):
         if len(review) != 1 or review[0].step_key != "review":
             raise ValueError("verification-planned execution requires one review step")
         return self
+
+
+class ResolvedExecutionPlanV16(ResolvedExecutionPlanV12):
+    """One-source past-exam variation plan with exact transformation intent."""
+
+    schema_version: Literal["resolved-execution-plan/16.0"] = "resolved-execution-plan/16.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.14.0"] = "1.14.0"
+    retrieval_requirement: EducationalRetrievalRequirementV2  # type: ignore[assignment]
+    resolver_version: Literal["16.0.0"] = "16.0.0"
 
 
 class ResolvedExecutionPlanV4(FrozenModel):

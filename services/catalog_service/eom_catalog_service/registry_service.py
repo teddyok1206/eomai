@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any, BinaryIO, Literal, cast
 
 from eom_catalog_contracts import (
+    ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+    ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
@@ -37,6 +40,7 @@ from eom_item_registry import (
     ComponentPointer,
     ItemRevisionState,
     ItemState,
+    PastExamVariationSourcePointer,
     RegistrationRequest,
     RegistryError,
     RegistryErrorCode,
@@ -44,6 +48,7 @@ from eom_item_registry import (
     new_item_id,
     new_item_metadata_id,
     new_item_provenance_id,
+    new_item_relationship_id,
     new_item_revision_id,
 )
 from eom_orchestrator.database import build_session_factory, transaction
@@ -124,6 +129,18 @@ class ResolvedAssessmentPages:
     pages: tuple[AssessmentPageImagePointer, ...]
 
 
+@dataclass(frozen=True)
+class ResolvedPastExamVariationContent:
+    """Small exact source projection safe to bind into a registration request."""
+
+    item_id: str
+    item_revision_id: str
+    artifact_id: str
+    artifact_revision_id: str
+    schema_ref: str
+    sha256: str
+
+
 class RegistryService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
         self.settings = settings or CatalogSettings.from_environment()
@@ -144,6 +161,7 @@ class RegistryService:
             pack, pack_record, workflow = self._validate_registration_references(session, request)
             self._validate_metadata(session, pack, request.metadata)
             self._validate_components(session, request)
+            self._validate_variation_source(session, request.past_exam_variation_source)
             if request.mode == "CREATE_ITEM":
                 item_id = new_item_id()
                 revision_number = 1
@@ -260,6 +278,7 @@ class RegistryService:
             session.add(revision)
             session.flush()
             self._add_revision_children(session, revision, request, metadata_hash)
+            self._add_variation_lineage(session, revision, request)
             prior_revision = item.current_revision_id
             if prior_revision is not None:
                 base = session.get(ItemRevisionRecord, prior_revision)
@@ -285,6 +304,22 @@ class RegistryService:
             session.flush()
             session.expunge(revision)
             return revision
+
+    def resolve_past_exam_variation_content(
+        self, item_revision_id: str
+    ) -> ResolvedPastExamVariationContent:
+        """Resolve one immutable Item-content pointer without exposing storage paths."""
+
+        with self.sessions() as session:
+            revision, component = self._resolved_variation_source(session, item_revision_id)
+            return ResolvedPastExamVariationContent(
+                item_id=revision.item_id,
+                item_revision_id=revision.item_revision_id,
+                artifact_id=component.artifact_id,
+                artifact_revision_id=component.artifact_revision_id,
+                schema_ref=component.schema_ref,
+                sha256=component.sha256,
+            )
 
     def _stage_registration_manifest(
         self,
@@ -1293,6 +1328,26 @@ class RegistryService:
         metadata_hash: str,
         created_at: datetime,
     ) -> dict[str, Any]:
+        provenance: list[dict[str, Any]] = [
+            {"type": "MANUAL_EXTERNAL_SOURCE", "intake_batch_id": batch_id}
+            for batch_id in sorted(request.source_intake_batch_ids)
+        ]
+        if request.past_exam_variation_source is not None:
+            source = request.past_exam_variation_source
+            provenance.append(
+                {
+                    "type": "PAST_EXAM_VARIATION",
+                    "source_item_id": source.item_id,
+                    "source_item_revision_id": source.item_revision_id,
+                    "source_artifact_id": source.content_artifact_id,
+                    "source_artifact_revision_id": source.content_artifact_revision_id,
+                    "source_sha256": source.content_sha256,
+                    "plan_id": source.plan_id,
+                    "plan_sha256": source.plan_sha256,
+                    "evidence_bundle_revision_id": source.evidence_bundle_revision_id,
+                    "evidence_manifest_sha256": source.evidence_manifest_sha256,
+                }
+            )
         return {
             "schema_version": "1.0",
             "item_id": item_id,
@@ -1327,10 +1382,7 @@ class RegistryService:
                 )
             ],
             "metadata": {"schema_ref": request.metadata_schema_ref, "sha256": metadata_hash},
-            "provenance": [
-                {"type": "MANUAL_EXTERNAL_SOURCE", "intake_batch_id": batch_id}
-                for batch_id in sorted(request.source_intake_batch_ids)
-            ],
+            "provenance": provenance,
             "created_at": created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         }
 
@@ -1391,6 +1443,110 @@ class RegistryService:
                     notes=None,
                 )
             )
+
+    @staticmethod
+    def _resolved_variation_source(
+        session: Session, item_revision_id: str
+    ) -> tuple[ItemRevisionRecord, ItemComponentRecord]:
+        revision = session.get(ItemRevisionRecord, item_revision_id)
+        if revision is None or revision.revision_state not in {
+            ItemRevisionState.APPROVED.value,
+            ItemRevisionState.SUPERSEDED.value,
+        }:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
+                "past-exam variation source revision is not immutable and approved",
+            )
+        components = tuple(
+            session.scalars(
+                select(ItemComponentRecord).where(
+                    ItemComponentRecord.item_revision_id == item_revision_id,
+                    ItemComponentRecord.component_type == "ITEM_CONTENT",
+                    ItemComponentRecord.ordinal == 0,
+                )
+            )
+        )
+        if len(components) != 1:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "past-exam variation source requires one Item-content component",
+            )
+        component = components[0]
+        if component.media_type != "application/json" or component.schema_ref not in {
+            ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
+            ASSESSMENT_ITEM_CONTENT_V2_SCHEMA_REF,
+            ASSESSMENT_ITEM_CONTENT_V3_SCHEMA_REF,
+            "eom://schemas/item-registry/assessment-item-content-v1",
+            "eom://schemas/item-registry/assessment-item-content-v2",
+            "eom://schemas/item-registry/assessment-item-content-v3",
+        }:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "past-exam variation source Item content is incompatible",
+            )
+        return revision, component
+
+    @classmethod
+    def _validate_variation_source(
+        cls,
+        session: Session,
+        source: PastExamVariationSourcePointer | None,
+    ) -> None:
+        if source is None:
+            return
+        revision, component = cls._resolved_variation_source(session, source.item_revision_id)
+        if (
+            revision.item_id != source.item_id
+            or component.artifact_id != source.content_artifact_id
+            or component.artifact_revision_id != source.content_artifact_revision_id
+            or component.schema_ref != source.content_schema_ref
+            or component.sha256 != source.content_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_COMPONENT_INVALID,
+                "past-exam variation source pointer is stale",
+            )
+
+    @classmethod
+    def _add_variation_lineage(
+        cls,
+        session: Session,
+        revision: ItemRevisionRecord,
+        request: RegistrationRequest,
+    ) -> None:
+        source = request.past_exam_variation_source
+        if source is None:
+            return
+        cls._validate_variation_source(session, source)
+        session.add(
+            ItemRelationshipRecord(
+                item_relationship_id=new_item_relationship_id(),
+                source_item_id=revision.item_id,
+                target_item_id=source.item_id,
+                relationship_type="PAST_EXAM_VARIANT_OF",
+            )
+        )
+        session.add(
+            ItemProvenanceRecord(
+                item_provenance_id=new_item_provenance_id(),
+                item_revision_id=revision.item_revision_id,
+                provenance_type="PAST_EXAM_VARIATION",
+                source_key=source.item_revision_id,
+                source_reference=(
+                    f"{source.item_id}@{source.item_revision_id};"
+                    f"plan={source.plan_id};evidence={source.evidence_bundle_revision_id}"
+                ),
+                source_intake_batch_id=None,
+                source_file_id=None,
+                source_artifact_id=source.content_artifact_id,
+                source_artifact_revision_id=source.content_artifact_revision_id,
+                source_sha256=source.content_sha256,
+                notes=(
+                    f"plan_sha256={source.plan_sha256};"
+                    f"evidence_manifest_sha256={source.evidence_manifest_sha256}"
+                ),
+            )
+        )
 
     @staticmethod
     def item_dict(item: ItemRecord, revision: ItemRevisionRecord | None) -> dict[str, Any]:

@@ -413,6 +413,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "15.0",
             "sha256:c0275cb355dca9efab082898f9bebdb8702519abfd15cb30e282a50509d9f743",
         ),
+        "resolved-execution-plan-v16": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v16.schema.json",
+            "resources/control-plane/resolved-execution-plan-v16.schema.json",
+            "16.0",
+            "sha256:10d3474e3b1c8ce0d54696595948165f232c83a4c20617059e29a628730040f2",
+        ),
         "document-review-evidence-validation-receipt": ControlSchemaResource(
             (
                 "schemas/workflow/control-plane/"
@@ -684,6 +690,8 @@ def _control_schema_registry() -> Registry[Any]:
         "legacy-assessment-types",
         "legacy-item-extraction-request",
         "legacy-item-editorial-compatibility-request",
+        "past-exam-variation-request",
+        "educational-retrieval-requirement-v2",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

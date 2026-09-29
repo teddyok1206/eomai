@@ -191,6 +191,8 @@ from eom_workflow import (
     PdfReviewPagePointer,
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
+    ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV16,
     RoleWorkerInput,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
@@ -4888,6 +4890,10 @@ class QueryAdapter:
             plan_type = ResolvedExecutionPlanV3
         elif schema_version == "resolved-execution-plan/11.0":
             plan_type = ResolvedExecutionPlanV11
+        elif schema_version == "resolved-execution-plan/12.0":
+            plan_type = ResolvedExecutionPlanV12
+        elif schema_version == "resolved-execution-plan/16.0":
+            plan_type = ResolvedExecutionPlanV16
         else:
             return None
         try:

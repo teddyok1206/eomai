@@ -66,6 +66,7 @@ def normalize_request(
         "authoring_guidance": text,
         "knowledge_grounding": False,
         "curriculum_selected_unit_key": None,
+        "past_exam_variation": None,
     }
     original_sha256 = text_sha256(text)
     return RequestDraft.model_validate(
@@ -116,9 +117,10 @@ def workflow_start_payload(
     draft: RequestDraft, *, graph_corpus_key: str | None = None
 ) -> dict[str, object]:
     """Map a reviewed draft to the source-optional knowledge-item workflow contract."""
+    variation = draft.past_exam_variation
     payload: dict[str, object] = {
         "definition_key": "generic-item-development",
-        "definition_version": "1.13.0",
+        "definition_version": "1.14.0" if variation is not None else "1.13.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": (
             "required" if draft.material_requirement.form in {"AUTO", "IMAGE", "MIXED"} else "skip"
@@ -155,8 +157,12 @@ def workflow_start_payload(
             or re.fullmatch(r"[a-z][a-z0-9_-]{1,63}", graph_corpus_key) is None
         ):
             raise ValueError("Graph grounding requires the API-verified production corpus")
-        payload["educational_retrieval"] = {
-            "schema_version": "educational-retrieval-requirement/1.0",
+        retrieval: dict[str, object] = {
+            "schema_version": (
+                "educational-retrieval-requirement/2.0"
+                if variation is not None
+                else "educational-retrieval-requirement/1.0"
+            ),
             "corpus_key": graph_corpus_key,
             "query_kind": "ITEM_PREPARATION",
             "curriculum_root_key": None,
@@ -169,8 +175,22 @@ def workflow_start_payload(
                     *(("table",) if draft.material_requirement.form in {"TABLE", "MIXED"} else ()),
                 }
             ),
-            "source_classes": ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"],
+            "source_classes": (
+                ["PAST_EXAM"]
+                if variation is not None
+                else ["APPROVED_ITEM", "PAST_EXAM", "TEXTBOOK"]
+            ),
         }
+        if variation is not None:
+            retrieval["past_exam_variation"] = {
+                "schema_version": "past-exam-variation-request/1.0",
+                "source_item_revision_id": variation.source_item_revision_id,
+                "variation_axes": list(variation.variation_axes),
+                "preserve_core_concept": True,
+                "preserve_cognitive_target": True,
+                "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+            }
+        payload["educational_retrieval"] = retrieval
     return payload
 
 

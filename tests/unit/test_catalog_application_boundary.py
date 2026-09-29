@@ -661,6 +661,36 @@ def _item_evidence_command() -> CreateItemProductionEvidenceCommand:
     return CreateItemProductionEvidenceCommand.model_validate(value)
 
 
+def _variation_evidence_command() -> CreateItemProductionEvidenceCommand:
+    value = _item_evidence_command().model_dump(mode="json")
+    value["requirement"] = {
+        "schema_version": "educational-retrieval-requirement/2.0",
+        "corpus_key": "integrated-science-textbooks",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": None,
+        "topic_keys": [],
+        "required_item_elements": ["choice", "paragraph"],
+        "source_classes": ["PAST_EXAM"],
+        "past_exam_variation": {
+            "schema_version": "past-exam-variation-request/1.0",
+            "source_item_revision_id": "itemrev_" + "a" * 32,
+            "variation_axes": ["CONTEXT", "VALUES"],
+            "preserve_core_concept": True,
+            "preserve_cognitive_target": True,
+            "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+        },
+    }
+    value["solution_evidence_requirement"] = "REQUIRE_ACCEPTED_SOLUTION_REPORT"
+    value["submission_sha256"] = content_sha256(
+        {
+            key: item
+            for key, item in value.items()
+            if key not in {"idempotency_key", "submission_sha256"}
+        }
+    )
+    return CreateItemProductionEvidenceCommand.model_validate(value)
+
+
 def _batch_command() -> CreateKnowledgeAnalysisBatchCommand:
     value = {
         "operation": "CREATE_KNOWLEDGE_ANALYSIS_BATCH",
@@ -1127,6 +1157,13 @@ def test_catalog_application_contract_validates_schema_and_typed_models() -> Non
     item_command = _item_evidence_command()
     item_request = CatalogApplicationRequest(root=item_command).model_dump(mode="json")
     validate_contract("catalog-application-request-v16", item_request)
+    validate_contract("catalog-application-request-v17", item_request)
+    variation_request = CatalogApplicationRequest(root=_variation_evidence_command()).model_dump(
+        mode="json"
+    )
+    validate_contract("catalog-application-request-v17", variation_request)
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("catalog-application-request-v16", variation_request)
     invalid_item_request = dict(item_request)
     invalid_item_request.pop("solution_evidence_requirement")
     with pytest.raises(JsonSchemaValidationError):

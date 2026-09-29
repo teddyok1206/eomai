@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from eom_catalog_contracts import (
+    ApprovedItemKnowledgeSourceV2,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -29,6 +30,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV3,
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV16,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceiptV3,
@@ -274,14 +276,15 @@ def validate_evidence_usage_for_commit(
         raise EvidenceUsageValidationError(
             "EVIDENCE_PLAN_INVALID", "evidence validation plan is invalid"
         )
-    expected_plan_schema = (
-        "resolved-execution-plan/12.0"
+    plan_schema = plan_document.get("schema_version")
+    expected_plan_schemas = (
+        {"resolved-execution-plan/12.0", "resolved-execution-plan/16.0"}
         if verification_planned
-        else "resolved-execution-plan/11.0"
+        else {"resolved-execution-plan/11.0"}
         if successor
-        else "resolved-execution-plan/3.0"
+        else {"resolved-execution-plan/3.0"}
     )
-    if plan_document.get("schema_version") != expected_plan_schema:
+    if plan_schema not in expected_plan_schemas:
         _require_no_evidence_claim(result)
         if isinstance(result, ContentTeamReviewRoleResultV12):
             _validate_ungrounded_review_result_v12(
@@ -300,7 +303,9 @@ def validate_evidence_usage_for_commit(
         return None
     try:
         plan = (
-            ResolvedExecutionPlanV12.model_validate(plan_document)
+            ResolvedExecutionPlanV16.model_validate(plan_document)
+            if plan_schema == "resolved-execution-plan/16.0"
+            else ResolvedExecutionPlanV12.model_validate(plan_document)
             if verification_planned
             else ResolvedExecutionPlanV11.model_validate(plan_document)
             if successor
@@ -464,6 +469,7 @@ def _validate_authoring_result(
         usage.citations,
         result.output.draft.model_dump(mode="json"),
     )
+    _validate_variation_source_citation(plan, materials.manifest, usage.citations)
     _validate_required_image_presentation(
         plan,
         materials.manifest,
@@ -477,6 +483,32 @@ def _validate_authoring_result(
         result.output.draft.model_dump(mode="json"),
     )
     return canonical_citation_set_sha256(usage.citations)
+
+
+def _validate_variation_source_citation(
+    plan: ResolvedExecutionPlanV3,
+    manifest: EvidenceManifest,
+    citations: Sequence[EvidenceUsageCitationV1],
+) -> None:
+    """Require exact-source structural use for the 1:1 past-exam variation successor."""
+
+    if not isinstance(plan, ResolvedExecutionPlanV16):
+        return
+    target_revision_id = plan.retrieval_requirement.past_exam_variation.source_item_revision_id
+    entries = {entry.evidence_id: entry for entry in manifest.entries}
+    if any(
+        citation.application == "STRUCTURE_PATTERN"
+        and (entry := entries.get(citation.evidence_id)) is not None
+        and isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+        and entry.source.source_class == "PAST_EXAM"
+        and entry.source.item_revision_id == target_revision_id
+        for citation in citations
+    ):
+        return
+    raise EvidenceUsageValidationError(
+        "EVIDENCE_VARIATION_SOURCE_NOT_USED",
+        "past-exam variation must cite the exact selected source as structural evidence",
+    )
 
 
 def _validate_required_image_presentation(

@@ -54,8 +54,14 @@ class CreateEvidenceBundleRequest(ApiModel):
             self.curriculum_scope is None
         ):
             raise ValueError("curriculum retrieval requires an exact scope")
-        if self.curriculum_scope is None and not self.topic_keys:
-            raise ValueError("retrieval requires curriculum scope or topic keys")
+        if (
+            self.curriculum_scope is None
+            and not self.topic_keys
+            and self.target_item_revision_id is None
+        ):
+            raise ValueError(
+                "retrieval requires curriculum scope, topic keys, or an exact target Item Revision"
+            )
         if self.query_kind == "APPROVED_ITEM_STRUCTURE" and not self.required_item_elements:
             raise ValueError("item structure retrieval requires element filters")
         return self

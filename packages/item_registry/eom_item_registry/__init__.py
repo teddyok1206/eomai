@@ -13,7 +13,11 @@ from eom_item_registry.identifiers import (
     new_usage_plan_id,
     new_usage_record_id,
 )
-from eom_item_registry.models import ComponentPointer, RegistrationRequest
+from eom_item_registry.models import (
+    ComponentPointer,
+    PastExamVariationSourcePointer,
+    RegistrationRequest,
+)
 from eom_item_registry.state_machine import (
     DeliverableState,
     ItemRevisionState,
@@ -28,6 +32,7 @@ __all__ = [
     "DeliverableState",
     "ItemRevisionState",
     "ItemState",
+    "PastExamVariationSourcePointer",
     "RegistrationRequest",
     "RegistryError",
     "RegistryErrorCode",

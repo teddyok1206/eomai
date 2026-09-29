@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RegistryModel(BaseModel):
@@ -43,6 +43,21 @@ class ComponentPointer(RegistryModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class PastExamVariationSourcePointer(RegistryModel):
+    """Exact approved source revision used to derive one new 1:1 variation Item."""
+
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    content_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    content_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    content_schema_ref: str = Field(min_length=1, max_length=256)
+    content_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    plan_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    evidence_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 class RegistrationRequest(RegistryModel):
     mode: Literal["CREATE_ITEM", "REVISE_ITEM"]
     registration_key: str = Field(min_length=1, max_length=200)
@@ -62,4 +77,11 @@ class RegistrationRequest(RegistryModel):
     metadata_schema_ref: str = Field(min_length=1, max_length=256)
     metadata: dict[str, Any]
     components: tuple[ComponentPointer, ...] = Field(min_length=1, max_length=100)
+    past_exam_variation_source: PastExamVariationSourcePointer | None = None
     created_by: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+    @model_validator(mode="after")
+    def variation_is_a_new_item(self) -> RegistrationRequest:
+        if self.past_exam_variation_source is not None and self.mode != "CREATE_ITEM":
+            raise ValueError("past-exam variation must create a new logical Item")
+        return self

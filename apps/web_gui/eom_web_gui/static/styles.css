@@ -342,6 +342,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-bank-card header strong { font-size: 15px; }
 .item-bank-unit-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .item-bank-unit-chip { padding: 5px 8px; border: 1px solid var(--eom-blue-200); border-radius: 999px; background: #f8fbff; color: var(--eom-info-cobalt); cursor: pointer; font: inherit; font-size: var(--eom-type-caption); }
+.variation-field { border-color: var(--eom-blue-200); background: #f8fbff; }
+.variation-field > p { margin: 0 0 10px; color: var(--eom-graphite); font-weight: 600; }
+.variation-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
 .mock-exam-assembly-panel { margin-top: 16px; padding: 15px; }
 .mock-exam-form-grid { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
 .mock-exam-form-grid label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }

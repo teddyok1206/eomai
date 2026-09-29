@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     ContentTeamMaterialRequirementV1,
+    EducationalRetrievalRequirementV2,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
     validate_content_team_material_selection,
@@ -145,6 +146,10 @@ class EducationalRetrievalIntentRequest(ApiModel):
         return self
 
 
+class EducationalRetrievalIntentRequestV2(EducationalRetrievalRequirementV2):
+    """Public exact-source variation intent; Graph and policy revisions remain server-owned."""
+
+
 class WorkflowProductionOccurrenceV1(ApiModel):
     """One planned production occurrence; distinct runs must never share this identity."""
 
@@ -207,7 +212,9 @@ class WorkflowStartRequest(ApiModel):
     ) = None
     stimulus_asset_key: Literal["eom-question-template-reference-v1"] | None = None
     execution_preset_key: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
-    educational_retrieval: EducationalRetrievalIntentRequest | None = None
+    educational_retrieval: (
+        EducationalRetrievalIntentRequestV2 | EducationalRetrievalIntentRequest | None
+    ) = None
     production_occurrence: WorkflowProductionOccurrenceV1 | None = None
     expected_resolution: WorkflowExpectedResolutionV1 | None = None
 
@@ -247,7 +254,25 @@ class WorkflowStartRequest(ApiModel):
                 ContentTeamItemBriefRequestV4,
             ),
         ):
-            if (
+            if isinstance(self.educational_retrieval, EducationalRetrievalIntentRequestV2):
+                if (
+                    self.definition_version != "1.14.0"
+                    or self.item_brief.curriculum_selected_unit_key is None
+                    or self.registry_mode != "CREATE_ITEM"
+                    or self.item_id is not None
+                    or self.base_revision_id is not None
+                    or self.educational_retrieval.corpus_key
+                    != INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
+                ):
+                    raise ValueError(
+                        "past-exam variation requires workflow 1.14, CREATE_ITEM, and the "
+                        "production corpus"
+                    )
+            elif self.definition_version == "1.14.0":
+                raise ValueError(
+                    "workflow 1.14 requires the exact past-exam variation retrieval contract"
+                )
+            elif (
                 self.item_brief.curriculum_selected_unit_key is None
                 or self.educational_retrieval.corpus_key != INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
                 or self.educational_retrieval.curriculum_root_key is not None
@@ -294,6 +319,7 @@ class WorkflowStartRequest(ApiModel):
                         "1.11.0",
                         "1.12.0",
                         "1.13.0",
+                        "1.14.0",
                     }:
                         raise ValueError("V4 material requests require workflow definition 1.10+")
                     expected_image_mode = self.item_brief.material_requirement.image_mode
@@ -308,6 +334,7 @@ class WorkflowStartRequest(ApiModel):
                             "1.11.0",
                             "1.12.0",
                             "1.13.0",
+                            "1.14.0",
                         }
                         else "skip"
                     )
@@ -319,6 +346,7 @@ class WorkflowStartRequest(ApiModel):
                     "1.11.0",
                     "1.12.0",
                     "1.13.0",
+                    "1.14.0",
                 }:
                     raise ValueError("content-team workflow definition is unsupported")
                 if self.image_mode != expected_image_mode:

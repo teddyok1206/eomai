@@ -66,6 +66,33 @@ def _validator_v3() -> Draft202012Validator:
     )
 
 
+def _validator_v4() -> Draft202012Validator:
+    paths = (
+        "schemas/api/v1/workflow-start-v1.schema.json",
+        "schemas/api/v1/workflow-start-v2.schema.json",
+        "schemas/api/v1/workflow-start-v3.schema.json",
+        "schemas/api/v1/workflow-start-v4.schema.json",
+        "schemas/workflow/knowledge-item-brief-v1.schema.json",
+        "schemas/workflow/content-team-material-requirement-v1.schema.json",
+        "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
+        "schemas/knowledge/educational-retrieval-requirement-v2.schema.json",
+        "schemas/knowledge/past-exam-variation-request-v1.schema.json",
+        "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+    )
+    resources: list[tuple[str, Resource[object]]] = []
+    schemas: dict[str, dict[str, object]] = {}
+    for path in paths:
+        schema = _schema(path)
+        identifier = schema.get("$id")
+        assert isinstance(identifier, str)
+        resources.append((identifier, Resource.from_contents(schema)))
+        schemas[path] = schema
+    return Draft202012Validator(
+        schemas["schemas/api/v1/workflow-start-v4.schema.json"],
+        registry=Registry().with_resources(resources),
+    )
+
+
 def _request() -> dict[str, object]:
     guidance = "통합과학 범위에서 검증된 근거를 사용하여 표 자료 해석 문항을 작성한다."
     return {
@@ -151,6 +178,44 @@ def test_workflow_start_v3_adds_only_verification_review_definition() -> None:
         _validator().validate(request)
     _validator_v3().validate(request)
     assert WorkflowStartRequest.model_validate(request).definition_version == "1.13.0"
+
+
+def test_workflow_start_v4_adds_only_exact_past_exam_variation_definition() -> None:
+    canonical = ROOT / "schemas/api/v1/workflow-start-v4.schema.json"
+    packaged = (
+        ROOT / "packages/api_contracts/eom_api_contracts/schemas/workflow-start-v4.schema.json"
+    )
+    assert canonical.read_bytes() == packaged.read_bytes()
+    request = _request()
+    request["definition_version"] = "1.14.0"
+    request["registry_mode"] = "CREATE_ITEM"
+    request["item_id"] = None
+    request["base_revision_id"] = None
+    request["educational_retrieval"] = {
+        "schema_version": "educational-retrieval-requirement/2.0",
+        "corpus_key": "integrated-science-textbooks",
+        "query_kind": "ITEM_PREPARATION",
+        "curriculum_root_key": None,
+        "topic_keys": [],
+        "required_item_elements": ["choice", "paragraph", "table"],
+        "source_classes": ["PAST_EXAM"],
+        "past_exam_variation": {
+            "schema_version": "past-exam-variation-request/1.0",
+            "source_item_revision_id": "itemrev_" + "a" * 32,
+            "variation_axes": ["CONTEXT", "REPRESENTATION", "VALUES"],
+            "preserve_core_concept": True,
+            "preserve_cognitive_target": True,
+            "copy_policy": "NO_STEM_CHOICE_ANSWER_COPY",
+        },
+    }
+
+    with pytest.raises(ValidationError):
+        _validator_v3().validate(request)
+    _validator_v4().validate(request)
+    parsed = WorkflowStartRequest.model_validate(request)
+    assert parsed.definition_version == "1.14.0"
+    assert parsed.educational_retrieval is not None
+    assert parsed.educational_retrieval.schema_version == "educational-retrieval-requirement/2.0"
 
 
 def test_workflow_start_v2_preserves_v1_bytes_and_accepts_legacy_branch() -> None:

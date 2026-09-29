@@ -11,6 +11,10 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from eom_catalog_contracts import (
+    ApprovedItemKnowledgeSourceV2,
+    AssessmentItemContent,
+    AssessmentItemContentV2,
+    AssessmentItemContentV3,
     AssessmentLayoutObservation,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
@@ -18,6 +22,7 @@ from eom_catalog_contracts import (
     EvidenceBundleManifestV5,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisResultV9,
+    KnowledgeAnalysisSourceArtifactMemberV2,
     KnowledgeArtifactMemberPointer,
     KnowledgeProposalArtifactMember,
     OriginArtifactMemberPointer,
@@ -47,6 +52,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV13,
     ResolvedExecutionPlanV14,
     ResolvedExecutionPlanV15,
+    ResolvedExecutionPlanV16,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -143,6 +149,8 @@ class ResolvedEvidenceMaterials:
     )
     manifest_payload: bytes
     context_payload: bytes
+    variation_request_payload: bytes | None = None
+    variation_source_payload: bytes | None = None
 
 
 def materialize_execution_step(
@@ -192,6 +200,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV13
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
+        | ResolvedExecutionPlanV16
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -221,6 +230,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/15.0":
         plan = ResolvedExecutionPlanV15.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/16.0":
+        plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -346,6 +357,11 @@ def materialize_execution_step(
             if plan_stages_evidence_manifest(plan):
                 total_bytes += len(evidence_materials.manifest_payload)
                 member_count += 1
+            if evidence_materials.variation_request_payload is not None:
+                assert evidence_materials.variation_source_payload is not None
+                total_bytes += len(evidence_materials.variation_request_payload)
+                total_bytes += len(evidence_materials.variation_source_payload)
+                member_count += 2
             _require_total_size(total_bytes, analysis=False)
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256
@@ -705,6 +721,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV13
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
+            | ResolvedExecutionPlanV16
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -732,6 +749,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/15.0":
         plan = ResolvedExecutionPlanV15.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
+        plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -1797,7 +1816,7 @@ def _validate_png_payload(
 def _materialize_evidence_context(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15,
+    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -1824,24 +1843,38 @@ def _materialize_evidence_context(
         materials.context_payload,
         group_id=worker_group_id,
     )
+    if materials.variation_request_payload is not None:
+        assert materials.variation_source_payload is not None
+        variation_root = workspace / "references" / "variation"
+        _ensure_parent(variation_root, workspace=workspace, group_id=worker_group_id)
+        _write_exclusive(
+            variation_root / "request.json",
+            materials.variation_request_payload,
+            group_id=worker_group_id,
+        )
+        _write_exclusive(
+            variation_root / "source-item.json",
+            materials.variation_source_payload,
+            group_id=worker_group_id,
+        )
     return materials
 
 
 def plan_stages_evidence_manifest(
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15,
+    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
 ) -> bool:
     """Keep historical 1.9 workspaces stable; explicit-RAG successors expose IDs."""
 
     return isinstance(plan, ResolvedExecutionPlanV15) or (
         plan.workflow_definition_key == "generic-item-development"
-        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0", "1.13.0"}
+        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0"}
     )
 
 
 def resolve_evidence_materials(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15,
+    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
     canonical_artifact_root: Path,
     authorized_artifact_revision_ids: frozenset[str],
 ) -> ResolvedEvidenceMaterials:
@@ -1913,17 +1946,80 @@ def resolve_evidence_materials(
         raise ControlPlaneError(
             "CONTROL_POINTER_ENCODING_INVALID", "Evidence context is not UTF-8"
         ) from exc
+    variation_request_payload: bytes | None = None
+    variation_source_payload: bytes | None = None
+    if isinstance(plan, ResolvedExecutionPlanV16):
+        target_revision_id = plan.retrieval_requirement.past_exam_variation.source_item_revision_id
+        matching_sources = {
+            entry.source.artifact_member
+            for entry in manifest.entries
+            if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+            and entry.source.source_class == "PAST_EXAM"
+            and entry.source.item_revision_id == target_revision_id
+        }
+        if len(matching_sources) != 1:
+            raise ControlPlaneError(
+                "CONTROL_VARIATION_SOURCE_MISSING",
+                "Evidence Bundle does not contain the exact past-exam source Item Revision",
+            )
+        source = next(iter(matching_sources))
+        if (
+            source.materialized_path != "source/item-content.json"
+            or source.logical_name != "item-content.json"
+            or source.media_type != "application/json"
+        ):
+            raise ControlPlaneError(
+                "CONTROL_VARIATION_SOURCE_INVALID",
+                "past-exam variation source pointer is incompatible",
+            )
+        source_pointer = source
+        variation_source_payload = _knowledge_member_payload(
+            session,
+            pointer=source_pointer,
+            artifact_root=artifact_root,
+            maximum_bytes=2 * 1024 * 1024,
+        )
+        try:
+            source_value = json.loads(variation_source_payload.decode("utf-8"))
+            if not isinstance(source_value, dict):
+                raise ValueError("source Item root is not an object")
+            source_schema = source_pointer.schema_ref
+            if source_schema is None:
+                raise ValueError("source Item schema is missing")
+            if source_schema.endswith("assessment-item-content/3.0") or source_schema.endswith(
+                "assessment-item-content-v3"
+            ):
+                validate_catalog_contract("assessment-item-content-v3", source_value)
+                AssessmentItemContentV3.model_validate(source_value)
+            elif source_schema.endswith("assessment-item-content/2.0") or source_schema.endswith(
+                "assessment-item-content-v2"
+            ):
+                validate_catalog_contract("assessment-item-content-v2", source_value)
+                AssessmentItemContentV2.model_validate(source_value)
+            else:
+                validate_catalog_contract("assessment-item-content", source_value)
+                AssessmentItemContent.model_validate(source_value)
+        except (UnicodeError, json.JSONDecodeError, ValueError, JsonSchemaValidationError) as exc:
+            raise ControlPlaneError(
+                "CONTROL_VARIATION_SOURCE_INVALID",
+                "past-exam variation source Item content is invalid",
+            ) from exc
+        variation_request_payload = (
+            canonical_json_bytes(plan.retrieval_requirement.past_exam_variation) + b"\n"
+        )
     return ResolvedEvidenceMaterials(
         manifest=manifest,
         manifest_payload=manifest_payload,
         context_payload=context_payload,
+        variation_request_payload=variation_request_payload,
+        variation_source_payload=variation_source_payload,
     )
 
 
 def _knowledge_member_payload(
     session: Session,
     *,
-    pointer: KnowledgeArtifactMemberPointer,
+    pointer: KnowledgeArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2,
     artifact_root: Path,
     maximum_bytes: int,
 ) -> bytes:

@@ -5,12 +5,19 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_contracts import validate_contract
-from eom_catalog_service.models import ContentPackReleaseRecord, ItemRecord
+from eom_catalog_service.models import (
+    ContentPackReleaseRecord,
+    ItemProvenanceRecord,
+    ItemRecord,
+    ItemRelationshipRecord,
+    ItemRevisionRecord,
+)
 from eom_catalog_service.registry_service import RegistryService
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_item_registry import (
     ComponentPointer,
     ItemRevisionState,
+    PastExamVariationSourcePointer,
     RegistrationRequest,
     RegistryError,
     UsagePlanState,
@@ -111,6 +118,102 @@ def test_item_manifest_is_canonical_and_schema_valid() -> None:
     )
     validate_contract("item-revision-manifest", first)
     assert canonical_json_bytes(first) == canonical_json_bytes(second)
+
+
+def _variation_source() -> PastExamVariationSourcePointer:
+    return PastExamVariationSourcePointer(
+        item_id="item_" + "a" * 32,
+        item_revision_id="itemrev_" + "b" * 32,
+        content_artifact_id="artifact_" + "c" * 32,
+        content_artifact_revision_id="rev_" + "d" * 32,
+        content_schema_ref="eom://schemas/item-registry/assessment-item-content-v3",
+        content_sha256="sha256:" + "e" * 64,
+        plan_id="execplan_" + "f" * 32,
+        plan_sha256="sha256:" + "1" * 64,
+        evidence_bundle_revision_id="evidencerev_" + "2" * 32,
+        evidence_manifest_sha256="sha256:" + "3" * 64,
+    )
+
+
+def test_variation_manifest_and_lineage_pin_source_revision_without_revising_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _variation_source()
+    request = _request().model_copy(
+        update={"past_exam_variation_source": source, "source_intake_batch_ids": ()}
+    )
+    release = ContentPackReleaseRecord(
+        content_pack_release_id=request.content_pack_release_id,
+        content_pack_id="contentpack_" + "8" * 32,
+        version="1.20.8",
+        schema_version="1.1",
+        state="RELEASED",
+        source_tree_sha256="sha256:" + "9" * 64,
+        bundle_sha256="sha256:" + "a" * 64,
+        manifest_sha256="sha256:" + "b" * 64,
+        bundle_artifact_id="artifact_" + "8" * 32,
+        bundle_artifact_revision_id="rev_" + "8" * 32,
+        canonical_manifest_json={},
+        compatibility_json={},
+        lock_version=1,
+    )
+    new_item_id = "item_" + "4" * 32
+    new_revision_id = "itemrev_" + "5" * 32
+    manifest = RegistryService._manifest(
+        request,
+        item_id=new_item_id,
+        revision_id=new_revision_id,
+        revision_number=1,
+        pack=release,
+        pack_key="generated-knowledge-item",
+        metadata_hash=content_sha256(request.metadata),
+        created_at=datetime(2026, 9, 29, tzinfo=UTC),
+    )
+    validate_contract("item-revision-manifest", manifest)
+    assert manifest["provenance"] == [
+        {
+            "type": "PAST_EXAM_VARIATION",
+            "source_item_id": source.item_id,
+            "source_item_revision_id": source.item_revision_id,
+            "source_artifact_id": source.content_artifact_id,
+            "source_artifact_revision_id": source.content_artifact_revision_id,
+            "source_sha256": source.content_sha256,
+            "plan_id": source.plan_id,
+            "plan_sha256": source.plan_sha256,
+            "evidence_bundle_revision_id": source.evidence_bundle_revision_id,
+            "evidence_manifest_sha256": source.evidence_manifest_sha256,
+        }
+    ]
+
+    class Session:
+        def __init__(self) -> None:
+            self.added: list[object] = []
+
+        def add(self, value: object) -> None:
+            self.added.append(value)
+
+    monkeypatch.setattr(
+        RegistryService,
+        "_validate_variation_source",
+        classmethod(lambda cls, session, pointer: None),
+    )
+    session = Session()
+    revision = ItemRevisionRecord(item_revision_id=new_revision_id, item_id=new_item_id)
+    RegistryService._add_variation_lineage(session, revision, request)  # type: ignore[arg-type]
+
+    relationship = next(
+        value for value in session.added if isinstance(value, ItemRelationshipRecord)
+    )
+    provenance = next(value for value in session.added if isinstance(value, ItemProvenanceRecord))
+    assert (
+        relationship.source_item_id,
+        relationship.target_item_id,
+        relationship.relationship_type,
+    ) == (new_item_id, source.item_id, "PAST_EXAM_VARIANT_OF")
+    assert provenance.item_revision_id == new_revision_id
+    assert provenance.source_key == source.item_revision_id
+    assert provenance.source_artifact_revision_id == source.content_artifact_revision_id
+    assert provenance.source_sha256 == source.content_sha256
 
 
 def test_keyset_cursor_round_trip_and_invalid_cursor() -> None:

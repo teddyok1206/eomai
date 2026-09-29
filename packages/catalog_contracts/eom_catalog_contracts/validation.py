@@ -1023,6 +1023,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "16.0",
             "sha256:90c849ae999dfa367d6cb725e7aa58a3670beb255400da9f281a41609bba59de",
         ),
+        "catalog-application-request-v17": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v17.schema.json",
+            "resources/catalog-application/catalog-application-request-v17.schema.json",
+            "17.0",
+            "sha256:f7876161668b985d4929a231eec8337a666a1fd9816dba903139ba45bd18306a",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -1667,6 +1673,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/educational-retrieval-requirement-v1.schema.json",
             "1.0",
             "sha256:378cb7997cdb2167156fe95bb30ab8f23e3924a6a5a4b3b2c7fc1bbaa8cb2ba3",
+        ),
+        "past-exam-variation-request": CatalogSchemaResource(
+            "schemas/knowledge/past-exam-variation-request-v1.schema.json",
+            "resources/knowledge/past-exam-variation-request-v1.schema.json",
+            "1.0",
+            "sha256:db804cde755161366446e17405c4fa99aa479b3e9e87e8861038c181eef2589b",
+        ),
+        "educational-retrieval-requirement-v2": CatalogSchemaResource(
+            "schemas/knowledge/educational-retrieval-requirement-v2.schema.json",
+            "resources/knowledge/educational-retrieval-requirement-v2.schema.json",
+            "2.0",
+            "sha256:887f77a30e2076a836d5353525de6de5285f14cf7f7c38a0594844f88b0e5e77",
         ),
         "education-retrieval-request": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-request-v1.schema.json",

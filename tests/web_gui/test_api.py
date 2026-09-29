@@ -277,7 +277,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         )
         assert draft.status_code == 201
         value = draft.json()
-        assert value["schema_version"] == "4.0"
+        assert value["schema_version"] == "5.0"
         assert value["material_requirement"]["form"] == "AUTO"
         assert value["topic"] == "2차원 포물선 운동"
         assert value["source_intake_batch_id"] is None

@@ -32,7 +32,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 14
+    assert len(schemas) == 15
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -276,8 +276,8 @@ def test_curriculum_outline_projection_fails_closed_on_hierarchy_drift(defect: s
         CurriculumEditorialOutline.model_validate(value)
 
 
-def _request_draft_v4_validator() -> Draft202012Validator:
-    schema = json.loads((SCHEMA_ROOT / "request-draft-v4.schema.json").read_text(encoding="utf-8"))
+def _request_draft_v5_validator() -> Draft202012Validator:
+    schema = json.loads((SCHEMA_ROOT / "request-draft-v5.schema.json").read_text(encoding="utf-8"))
     material = json.loads(
         (
             SCHEMA_ROOT.parents[0] / "workflow/content-team-material-requirement-v1.schema.json"
@@ -289,7 +289,7 @@ def _request_draft_v4_validator() -> Draft202012Validator:
 
 def test_request_draft_matches_canonical_schema() -> None:
     draft = normalize_request(RequestDraftInput(original_request_text=DEMO_REQUEST), token="0" * 32)
-    _request_draft_v4_validator().validate(draft.model_dump(mode="json"))
+    _request_draft_v5_validator().validate(draft.model_dump(mode="json"))
 
 
 def test_request_draft_v1_contract_remains_immutable() -> None:
@@ -313,7 +313,14 @@ def test_request_draft_v3_contract_remains_immutable() -> None:
     )
 
 
-def test_grounded_request_draft_matches_v4_schema() -> None:
+def test_request_draft_v4_contract_remains_immutable() -> None:
+    payload = (SCHEMA_ROOT / "request-draft-v4.schema.json").read_bytes()
+    assert hashlib.sha256(payload).hexdigest() == (
+        "ea9e53348ea4f27037c92730e43ef0087dbcb4f9fd2fc1cd2829a8fc7598c5df"
+    )
+
+
+def test_grounded_request_draft_matches_v5_schema() -> None:
     draft = normalize_request(RequestDraftInput(original_request_text=DEMO_REQUEST), token="0" * 32)
     grounded = update_draft(
         draft,
@@ -330,14 +337,38 @@ def test_grounded_request_draft_matches_v4_schema() -> None:
         ),
         now=draft.updated_at,
     )
-    _request_draft_v4_validator().validate(grounded.model_dump(mode="json"))
+    _request_draft_v5_validator().validate(grounded.model_dump(mode="json"))
+
+
+def test_past_exam_variation_request_draft_matches_v5_schema() -> None:
+    draft = normalize_request(RequestDraftInput(original_request_text=DEMO_REQUEST), token="0" * 32)
+    varied = update_draft(
+        draft,
+        RequestDraftUpdate(
+            subject=draft.subject,
+            topic=draft.topic,
+            task_type=draft.task_type,
+            difficulty=draft.difficulty,
+            material_requirement=draft.material_requirement,
+            quality_profile=draft.quality_profile,
+            authoring_guidance=draft.authoring_guidance,
+            knowledge_grounding=True,
+            curriculum_selected_unit_key="eom.is.middle.3-2",
+            past_exam_variation={
+                "source_item_revision_id": "itemrev_" + "a" * 32,
+                "variation_axes": ["CONTEXT", "VALUES"],
+            },
+        ),
+        now=draft.updated_at,
+    )
+    _request_draft_v5_validator().validate(varied.model_dump(mode="json"))
 
 
 @pytest.mark.parametrize(
     ("knowledge_grounding", "curriculum_selected_unit_key"),
     ((True, None),),
 )
-def test_request_draft_v4_schema_rejects_incoherent_grounding_scope(
+def test_request_draft_v5_schema_rejects_incoherent_grounding_scope(
     knowledge_grounding: bool, curriculum_selected_unit_key: None
 ) -> None:
     draft = normalize_request(RequestDraftInput(original_request_text=DEMO_REQUEST), token="0" * 32)
@@ -346,7 +377,7 @@ def test_request_draft_v4_schema_rejects_incoherent_grounding_scope(
         "curriculum_selected_unit_key": curriculum_selected_unit_key,
     }
     with pytest.raises(ValidationError):
-        _request_draft_v4_validator().validate(value)
+        _request_draft_v5_validator().validate(value)
 
 
 def test_schema_rejects_unknown_request_field() -> None:
@@ -354,7 +385,7 @@ def test_schema_rejects_unknown_request_field() -> None:
     value = draft.model_dump(mode="json")
     value["raw_model_name"] = "forbidden"
     with pytest.raises(ValidationError):
-        _request_draft_v4_validator().validate(value)
+        _request_draft_v5_validator().validate(value)
 
 
 def test_explorer_query_rejects_raw_sql_and_arbitrary_entity() -> None:
