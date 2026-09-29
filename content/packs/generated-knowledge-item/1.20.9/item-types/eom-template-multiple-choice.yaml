@@ -1,0 +1,8 @@
+schema_version: "1.0"
+item_type:
+  key: "eom-template-multiple-choice"
+  display_name: "EOM 템플릿 5지선다 문항"
+  required_components:
+    - "ITEM_CONTENT"
+    - "REVIEW_REPORT"
+    - "METADATA"
