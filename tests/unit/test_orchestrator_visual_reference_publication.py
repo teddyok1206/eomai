@@ -205,6 +205,13 @@ def test_hybrid_image_fails_closed_without_publication_route() -> None:
             "a flower in cross-section on white",
             ("flower cross-section", "flower cross-section illustration"),
         ),
+        (
+            "one large front view ammonite fossil with spiral shell and chamber sutures",
+            (
+                "ammonite fossil front view",
+                "ammonite fossil front view illustration",
+            ),
+        ),
     ),
 )
 def test_discovery_query_preserves_morphology_and_removes_presentation_clauses(

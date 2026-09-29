@@ -588,7 +588,21 @@ def _discovery_query_terms(subject: str) -> tuple[str, ...]:
         ),
         None,
     )
-    if viewpoint is not None and viewpoint not in core.casefold():
+    if viewpoint is not None:
+        core = re.sub(
+            rf"\b{re.escape(viewpoint)}\b",
+            " ",
+            core,
+            flags=re.IGNORECASE,
+        )
+        core = re.sub(r"\s+", " ", core).strip()
+    core = re.sub(
+        r"^(?:(?:large|small|full-size)\s+)+",
+        "",
+        core,
+        flags=re.IGNORECASE,
+    ).strip()
+    if viewpoint is not None:
         core = f"{core} {viewpoint}"
     query = core[:80].rstrip(" ._-/")
     if not query:
