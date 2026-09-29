@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     EducationalRetrievalRequirementV2,
@@ -152,6 +153,15 @@ def test_workflow_start_v4_accepts_only_exact_create_item_variation_pairing() ->
     parsed = WorkflowStartRequest.model_validate(request)
     assert parsed.definition_version == "1.14.0"
     assert isinstance(parsed.educational_retrieval, EducationalRetrievalRequirementV2)
+    internal = _workflow_request_from_api(parsed)
+    assert isinstance(internal.educational_retrieval, EducationalRetrievalRequirementV2)
+    assert internal.educational_retrieval.curriculum_root_key is None
+    assert internal.educational_retrieval.past_exam_variation.source_item_revision_id == (
+        SOURCE_REVISION_ID
+    )
+    assert internal.item_brief is not None
+    assert internal.item_brief.curriculum_scope is not None
+    assert internal.item_brief.curriculum_scope.selected_unit_key == "eom.is.middle.1-1"
 
     with pytest.raises(ValidationError, match=r"workflow 1\.14"):
         WorkflowStartRequest.model_validate(request | {"definition_version": "1.13.0"})
@@ -258,7 +268,7 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
     assert WorkflowStartRequest.model_validate(payload).definition_version == "1.14.0"
 
     studio = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
-    assert 'state.curriculumOutline?.graph_grounding_available !== true' in studio
+    assert "state.curriculumOutline?.graph_grounding_available !== true" in studio
     assert "candidate.unit_key" in studio
     assert "entry.curriculum_units[0]" not in studio
 

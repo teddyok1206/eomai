@@ -31,6 +31,7 @@ from eom_catalog_contracts import (
     CreateUsagePlan,
     DocumentReviewEvidenceSource,
     EducationalRetrievalRequirement,
+    EducationalRetrievalRequirementV2,
     FulfillUsagePlan,
     IntegratedScienceCurriculumContractError,
     IntegratedScienceCurriculumScope,
@@ -136,6 +137,10 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
         if request.educational_retrieval is not None
         else None
     )
+    exact_variation = isinstance(
+        request.educational_retrieval,
+        EducationalRetrievalRequirementV2,
+    )
     if (
         isinstance(
             request.item_brief,
@@ -154,12 +159,16 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                 "Curriculum selection is invalid",
                 "Graph-grounded item authoring requires one curriculum selection.",
             )
-        retrieval_data["curriculum_root_key"] = curriculum_scope.graph_root_stable_key
-        retrieval_data["topic_keys"] = []
+        if not exact_variation:
+            retrieval_data["curriculum_root_key"] = curriculum_scope.graph_root_stable_key
+            retrieval_data["topic_keys"] = []
     if retrieval_data is not None:
-        retrieval_data = EducationalRetrievalRequirement.model_validate(retrieval_data).model_dump(
-            mode="json"
+        retrieval_model = (
+            EducationalRetrievalRequirementV2
+            if exact_variation
+            else EducationalRetrievalRequirement
         )
+        retrieval_data = retrieval_model.model_validate(retrieval_data).model_dump(mode="json")
     request_data: dict[str, Any] = {
         "request_name": request.request_name,
         "image_mode": request.image_mode,
