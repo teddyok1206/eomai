@@ -209,6 +209,7 @@ def _local_image_prompt_contract(
         "1.20.7",
         "1.20.8",
         "1.20.9",
+        "1.20.10",
     }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
@@ -236,7 +237,16 @@ def _uses_v1_reference_conditioning(
         isinstance(provider, LocalImageProviderBinding)
         and isinstance(content_pack, dict)
         and content_pack.get("version")
-        in {"1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.20.7", "1.20.8", "1.20.9"}
+        in {
+            "1.20.3",
+            "1.20.4",
+            "1.20.5",
+            "1.20.6",
+            "1.20.7",
+            "1.20.8",
+            "1.20.9",
+            "1.20.10",
+        }
     )
 
 
@@ -576,10 +586,11 @@ class WorkflowCatalogService:
                     "1.20.7",
                     "1.20.8",
                     "1.20.9",
+                    "1.20.10",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.9",
+                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.10",
                     )
                 if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
                     "1.20.5",
@@ -587,10 +598,11 @@ class WorkflowCatalogService:
                     "1.20.7",
                     "1.20.8",
                     "1.20.9",
+                    "1.20.10",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.9",
+                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.10",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -2017,6 +2029,7 @@ class WorkflowCatalogService:
             "1.20.7",
             "1.20.8",
             "1.20.9",
+            "1.20.10",
         }
         if expects_content_team:
             if not is_content_team:
@@ -2042,6 +2055,7 @@ class WorkflowCatalogService:
                     "1.20.7",
                     "1.20.8",
                     "1.20.9",
+                    "1.20.10",
                 }
             ) != is_material_v4:
                 raise ContentPackError(
@@ -2064,6 +2078,7 @@ class WorkflowCatalogService:
                 "1.20.7",
                 "1.20.8",
                 "1.20.9",
+                "1.20.10",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
