@@ -13,6 +13,7 @@ from tests.unit.test_local_image_adapter import (
     _binding_v3_value,
     _binding_v4_value,
     _binding_v5_value,
+    _binding_v6_value,
 )
 from tests.unit.test_visual_reference_receipts import _receipt
 from tests.unit.test_workflow_catalog_generated import (
@@ -223,6 +224,7 @@ def test_simplified_reference_binding_commits_exact_conditioning_member(
     (
         (_binding_v4_value, "4.0", "generated-item-stimulus-file-set/7.0"),
         (_binding_v5_value, "5.0", "generated-item-stimulus-file-set/8.0"),
+        (_binding_v6_value, "6.0", "generated-item-stimulus-file-set/9.0"),
     ),
 )
 def test_base_only_reference_binding_commits_without_style_adapter(

@@ -4,7 +4,10 @@ import hashlib
 import io
 
 import pytest
-from eom_image_contracts import LocalImageReferenceSimplification
+from eom_image_contracts import (
+    LocalImageReferenceSimplification,
+    LocalImageReferenceSimplificationV2,
+)
 from eom_image_provider.reference_simplification import (
     ReferenceSimplificationError,
     simplify_visual_reference,
@@ -38,6 +41,22 @@ def _dark_source_with_clean_border_png() -> bytes:
             base = 80 + ((x - 30) * 150 // 739)
             value = base + (15 if ((x // 8 + y // 8) % 2) else -15)
             pixels[x, y] = (value, value, value)
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
+def _clean_monochrome_line_art_png() -> bytes:
+    image = Image.new("RGB", (800, 504), "white")
+    drawing = ImageDraw.Draw(image)
+    for offset in range(0, 145, 18):
+        drawing.arc(
+            (245 + offset // 2, 100 + offset // 2, 555 - offset // 2, 410 - offset // 2),
+            15,
+            345,
+            fill=(24, 24, 24),
+            width=4,
+        )
     target = io.BytesIO()
     image.save(target, format="PNG", compress_level=9)
     return target.getvalue()
@@ -114,3 +133,24 @@ def test_reference_simplification_rejects_wrong_canvas_and_nearly_empty_input() 
             empty.getvalue(),
             policy=LocalImageReferenceSimplification(),
         )
+
+
+def test_reference_simplification_v2_preserves_clean_monochrome_line_art() -> None:
+    source = _clean_monochrome_line_art_png()
+
+    result = simplify_visual_reference(source, policy=LocalImageReferenceSimplificationV2())
+
+    assert result.metrics.selected_mode == "PRESERVE_LINE_ART"
+    assert result.metrics.near_monochrome_ratio == 1
+    assert result.metrics.white_background_ratio >= 0.7
+    assert result.metrics.dark_foreground_fraction >= 0.5
+    assert result.metrics.edge_density_ratio >= 0.8
+
+
+def test_reference_simplification_v2_keeps_photo_detail_reduction_path() -> None:
+    source = _reference_png(texture=True)
+
+    result = simplify_visual_reference(source, policy=LocalImageReferenceSimplificationV2())
+
+    assert result.metrics.selected_mode == "REDUCE_PHOTOGRAPHIC_DETAIL"
+    assert result.metrics.conditioning_edge_density < result.metrics.source_edge_density

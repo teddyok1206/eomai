@@ -1251,6 +1251,79 @@ def conditioned_receipt_v5_schema() -> dict[str, Any]:
     return value
 
 
+def _adaptive_conditioning_schema(value: dict[str, Any]) -> None:
+    value["properties"]["contract"] = {"const": "sdxl-morphology-img2img/2.2"}
+    simplification = value["properties"]["simplification"]
+    simplification["properties"]["contract"] = {"const": "local-image-reference-simplification/1.2"}
+    simplification["properties"]["denoise_policy"] = {
+        "const": "ADAPTIVE_PRESERVE_LINE_ART_OR_REDUCE_PHOTO"
+    }
+    additions = {
+        "line_art_channel_spread_max": {"const": 8},
+        "line_art_near_monochrome_ratio_min": {"const": 0.98},
+        "line_art_white_background_ratio_min": {"const": 0.7},
+        "line_art_dark_luma_threshold": {"const": 96},
+        "line_art_dark_foreground_fraction_min": {"const": 0.5},
+    }
+    simplification["required"].extend(additions)
+    simplification["properties"].update(additions)
+
+
+def provider_binding_v6_schema() -> dict[str, Any]:
+    value = copy.deepcopy(provider_binding_v5_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/6.0"
+    value["title"] = "EOM adaptive-reference assessment-line-art provider binding v6"
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/6.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-morphology-conditioned-base-line-art/6.0"
+    }
+    _adaptive_conditioning_schema(
+        value["properties"]["reference_policy"]["properties"]["conditioning"]
+    )
+    value["required"].insert(-3, "morphology_retention_ratio_min")
+    value["properties"]["morphology_retention_ratio_min"] = {"const": 0.25}
+    return value
+
+
+def conditioned_request_v6_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_v5_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/6.0"
+    )
+    value["title"] = "EOM adaptive-reference assessment-line-art request v6"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/6.0"
+    }
+    _adaptive_conditioning_schema(value["$defs"]["conditioning"])
+    value["required"].insert(-1, "morphology_retention_ratio_min")
+    value["properties"]["morphology_retention_ratio_min"] = {"const": 0.25}
+    return value
+
+
+def conditioned_receipt_v6_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_v5_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/6.0"
+    )
+    value["title"] = "EOM adaptive-reference assessment-line-art receipt v6"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/6.0"
+    }
+    _adaptive_conditioning_schema(value["$defs"]["conditioning"])
+    metrics = value["$defs"]["simplification_metrics"]
+    additions = {
+        "selected_mode": {"enum": ["PRESERVE_LINE_ART", "REDUCE_PHOTOGRAPHIC_DETAIL"]},
+        "near_monochrome_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "white_background_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "dark_foreground_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+    }
+    metrics["required"].extend(additions)
+    metrics["properties"].update(additions)
+    value["required"].insert(-2, "morphology_retention_ratio_min")
+    value["properties"]["morphology_retention_ratio_min"] = {"const": 0.25}
+    return value
+
+
 def reference_composition_evaluation_schema() -> dict[str, Any]:
     value = _header(
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
@@ -1462,6 +1535,13 @@ SCHEMAS = {
     ),
     "local-image-reference-conditioned-composite-receipt-v5.schema.json": (
         conditioned_receipt_v5_schema()
+    ),
+    "local-image-provider-binding-v6.schema.json": provider_binding_v6_schema(),
+    "local-image-reference-conditioned-composite-request-v6.schema.json": (
+        conditioned_request_v6_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v6.schema.json": (
+        conditioned_receipt_v6_schema()
     ),
 }
 

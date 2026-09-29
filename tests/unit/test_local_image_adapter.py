@@ -19,6 +19,7 @@ from eom_catalog_service.local_image_adapter import (
     _build_reference_conditioned_request_v3,
     _build_reference_conditioned_request_v4,
     _build_reference_conditioned_request_v5,
+    _build_reference_conditioned_request_v6,
     _build_request,
     _stage_exact_file,
     load_local_image_provider_binding,
@@ -27,6 +28,7 @@ from eom_catalog_service.local_image_adapter import (
     load_local_image_provider_binding_v3,
     load_local_image_provider_binding_v4,
     load_local_image_provider_binding_v5,
+    load_local_image_provider_binding_v6,
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
@@ -51,6 +53,7 @@ from eom_image_contracts import (
     LocalImageProviderBindingV3,
     LocalImageProviderBindingV4,
     LocalImageProviderBindingV5,
+    LocalImageProviderBindingV6,
     LocalImageVisualReferencePointer,
     VisualReferenceBundleManifestPointer,
     VisualReferencePngArtifactPointer,
@@ -347,6 +350,14 @@ def _binding_v5_value() -> dict[str, object]:
     return {**body, "binding_sha256": content_sha256(body)}
 
 
+def _binding_v6_value() -> dict[str, object]:
+    return json.loads(
+        (
+            Path(__file__).resolve().parents[2] / "config/local-image-provider.ssd1b.v6.json"
+        ).read_text(encoding="utf-8")
+    )
+
+
 def _drawing() -> GeneratedVectorDrawingV5:
     return GeneratedVectorDrawingV5.model_validate(
         {
@@ -626,6 +637,51 @@ def test_v5_binding_loader_pins_assessment_line_art_postprocess(tmp_path: Path) 
             trusted_group_gid=os.getegid(),
         ),
         LocalImageProviderBindingV5,
+    )
+
+
+def test_v6_binding_loader_pins_adaptive_reference_and_retention(tmp_path: Path) -> None:
+    path = tmp_path / "binding-v6.json"
+    value = _binding_v6_value()
+    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    path.chmod(0o644)
+    binding = load_local_image_provider_binding_v6(
+        path,
+        trusted_owner_uid=os.geteuid(),
+        trusted_group_gid=os.getegid(),
+    )
+    overlay_path = tmp_path / "generated-overlay.png"
+    overlay_path.write_bytes(_overlay_png())
+    overlay_path.chmod(0o640)
+    drawing = _hybrid_drawing().model_copy(
+        update={"alt_text": "one trilobite fossil isolated on white"}
+    )
+    composite = _build_request(
+        workflow_id="workflow_" + "4" * 32,
+        result_revision_id="rev_" + "5" * 32,
+        drawing_hash=content_sha256(drawing.model_dump(mode="json")),
+        drawing=drawing,
+        binding=binding,
+        overlay_path=overlay_path,
+        prompt_contract="ASSESSMENT_MINIMAL_LINE_ART_V2",
+    )
+    request = _build_reference_conditioned_request_v6(
+        composite,
+        _reference_pointer(),
+        binding,
+    )
+
+    assert request.conditioning.simplification.contract.endswith("/1.2")
+    assert request.morphology_retention_ratio_min == 0.25
+    assert request.schema_version.endswith("/6.0")
+    assert LocalImageProviderBindingV6.model_validate(value) == binding
+    assert isinstance(
+        load_local_image_provider_binding_any(
+            path,
+            trusted_owner_uid=os.geteuid(),
+            trusted_group_gid=os.getegid(),
+        ),
+        LocalImageProviderBindingV6,
     )
 
 

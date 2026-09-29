@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-provider-binding/6.0",
+  "title": "EOM adaptive-reference assessment-line-art provider binding v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "route_contract",
+    "model",
+    "reference_policy",
+    "postprocess",
+    "morphology_retention_ratio_min",
+    "sampler",
+    "timeout_seconds",
+    "binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-provider-binding/6.0"
+    },
+    "state": {
+      "const": "ENABLED"
+    },
+    "route_contract": {
+      "const": "eom-local-morphology-conditioned-base-line-art/6.0"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "pattern": "^imgmodel_[0-9a-f]{32}$"
+        },
+        "model_revision_id": {
+          "type": "string",
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "provider_family": {
+          "const": "diffusers-ssd-1b"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-provider/1.0"
+        }
+      }
+    },
+    "sampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "inference_steps",
+        "guidance_scale",
+        "dtype"
+      ],
+      "properties": {
+        "contract": {
+          "const": "euler-discrete/ssd-1b-v1"
+        },
+        "inference_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "guidance_scale": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "dtype": {
+          "const": "float16"
+        }
+      }
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 900
+    },
+    "binding_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reference_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent_source",
+        "provider",
+        "license_policy",
+        "candidate_limit",
+        "conditioning",
+        "authority_boundary",
+        "failure_policy"
+      ],
+      "properties": {
+        "intent_source": {
+          "const": "DRAWING_ALT_TEXT"
+        },
+        "provider": {
+          "const": "WIKIMEDIA_COMMONS"
+        },
+        "license_policy": {
+          "const": "PUBLIC_DOMAIN_OR_CC0"
+        },
+        "candidate_limit": {
+          "const": 5
+        },
+        "conditioning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "strength",
+            "fit_policy",
+            "simplification"
+          ],
+          "properties": {
+            "contract": {
+              "const": "sdxl-morphology-img2img/2.2"
+            },
+            "strength": {
+              "const": 0.35
+            },
+            "fit_policy": {
+              "const": "EXACT_NORMALIZED_CANVAS"
+            },
+            "simplification": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "contract",
+                "output_member",
+                "color_policy",
+                "denoise_policy",
+                "tone_policy",
+                "foreground_luma_threshold",
+                "border_width_px",
+                "foreground_ratio_min",
+                "foreground_ratio_max",
+                "border_foreground_ratio_max",
+                "line_art_channel_spread_max",
+                "line_art_near_monochrome_ratio_min",
+                "line_art_white_background_ratio_min",
+                "line_art_dark_luma_threshold",
+                "line_art_dark_foreground_fraction_min"
+              ],
+              "properties": {
+                "contract": {
+                  "const": "local-image-reference-simplification/1.2"
+                },
+                "output_member": {
+                  "const": "reference-conditioning.png"
+                },
+                "color_policy": {
+                  "const": "GRAYSCALE_WHITE_BACKGROUND"
+                },
+                "denoise_policy": {
+                  "const": "ADAPTIVE_PRESERVE_LINE_ART_OR_REDUCE_PHOTO"
+                },
+                "tone_policy": {
+                  "const": "SIX_LEVEL_LIGHT_TONE_CONTOUR"
+                },
+                "foreground_luma_threshold": {
+                  "const": 245
+                },
+                "border_width_px": {
+                  "const": 24
+                },
+                "foreground_ratio_min": {
+                  "const": 0.005
+                },
+                "foreground_ratio_max": {
+                  "const": 0.8
+                },
+                "border_foreground_ratio_max": {
+                  "const": 0.12
+                },
+                "line_art_channel_spread_max": {
+                  "const": 8
+                },
+                "line_art_near_monochrome_ratio_min": {
+                  "const": 0.98
+                },
+                "line_art_white_background_ratio_min": {
+                  "const": 0.7
+                },
+                "line_art_dark_luma_threshold": {
+                  "const": 96
+                },
+                "line_art_dark_foreground_fraction_min": {
+                  "const": 0.5
+                }
+              }
+            }
+          }
+        },
+        "authority_boundary": {
+          "const": "MORPHOLOGY_ONLY_DETERMINISTIC_OVERLAY"
+        },
+        "failure_policy": {
+          "const": "FAIL_CLOSED"
+        }
+      }
+    },
+    "postprocess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "raw_member",
+        "median_filter_size",
+        "mask_blur_radius",
+        "mask_luma_threshold",
+        "mask_expand_size",
+        "mask_contract_size",
+        "edge_mid_threshold",
+        "edge_dark_threshold",
+        "output_tones",
+        "horizontal_border_px",
+        "vertical_border_px",
+        "foreground_luma_threshold",
+        "foreground_ratio_min",
+        "foreground_ratio_max",
+        "border_foreground_ratio_max",
+        "edge_density_min",
+        "edge_density_max"
+      ],
+      "properties": {
+        "contract": {
+          "const": "local-image-assessment-line-art-postprocess/1.0"
+        },
+        "raw_member": {
+          "const": "generated-background-raw.png"
+        },
+        "median_filter_size": {
+          "const": 3
+        },
+        "mask_blur_radius": {
+          "const": 12
+        },
+        "mask_luma_threshold": {
+          "const": 224
+        },
+        "mask_expand_size": {
+          "const": 25
+        },
+        "mask_contract_size": {
+          "const": 17
+        },
+        "edge_mid_threshold": {
+          "const": 48
+        },
+        "edge_dark_threshold": {
+          "const": 92
+        },
+        "output_tones": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": 48
+            },
+            {
+              "const": 160
+            },
+            {
+              "const": 255
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "horizontal_border_px": {
+          "const": 40
+        },
+        "vertical_border_px": {
+          "const": 8
+        },
+        "foreground_luma_threshold": {
+          "const": 245
+        },
+        "foreground_ratio_min": {
+          "const": 0.01
+        },
+        "foreground_ratio_max": {
+          "const": 0.25
+        },
+        "border_foreground_ratio_max": {
+          "const": 0.01
+        },
+        "edge_density_min": {
+          "const": 0.01
+        },
+        "edge_density_max": {
+          "const": 0.3
+        }
+      }
+    },
+    "morphology_retention_ratio_min": {
+      "const": 0.25
+    }
+  }
+}

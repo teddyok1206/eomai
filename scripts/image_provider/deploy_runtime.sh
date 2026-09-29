@@ -24,7 +24,7 @@ REFERENCE_BASE_PROVIDER_UNIT_SOURCE=${REPOSITORY}/infra/systemd/eom-image-refere
 REFERENCE_BASE_PROVIDER_UNIT_TARGET=/etc/systemd/system/eom-image-reference-base-provider@.service
 POLKIT_SOURCE=${REPOSITORY}/infra/polkit/50-eom-worker-units.rules
 POLKIT_TARGET=/etc/polkit-1/rules.d/50-eom-worker-units.rules
-BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.v5.json
+BINDING_SOURCE=${REPOSITORY}/config/local-image-provider.ssd1b.v6.json
 BINDING_TARGET=/etc/eom/local-image-provider.json
 
 fail() {

@@ -6,11 +6,14 @@ import hashlib
 import io
 from dataclasses import dataclass
 from importlib import metadata
+from typing import Literal
 
 from eom_image_contracts import (
     LocalImageReferenceConditioningOutput,
     LocalImageReferenceSimplification,
     LocalImageReferenceSimplificationMetrics,
+    LocalImageReferenceSimplificationMetricsV2,
+    LocalImageReferenceSimplificationV2,
     LocalImageReferenceSimplifierRuntime,
 )
 from PIL import (  # type: ignore[import-not-found]
@@ -33,7 +36,7 @@ class ReferenceSimplificationError(ValueError):
 class SimplifiedVisualReference:
     png_bytes: bytes
     output: LocalImageReferenceConditioningOutput
-    metrics: LocalImageReferenceSimplificationMetrics
+    metrics: LocalImageReferenceSimplificationMetrics | LocalImageReferenceSimplificationMetricsV2
     runtime: LocalImageReferenceSimplifierRuntime
 
 
@@ -92,10 +95,49 @@ def _contour_tone(value: int) -> int:
     return 48
 
 
+def _source_preserving_tone(value: int) -> int:
+    if value >= 245:
+        return 255
+    if value >= 224:
+        return 248
+    if value >= 176:
+        return 236
+    if value >= 96:
+        return 160
+    return 48
+
+
+def _classification_ratios(
+    source: Image.Image,
+    grayscale: Image.Image,
+    *,
+    policy: LocalImageReferenceSimplificationV2,
+) -> tuple[float, float, float]:
+    pixels = source.convert("RGB").load()
+    near_monochrome = 0
+    white_background = 0
+    total = source.width * source.height
+    for y in range(source.height):
+        for x in range(source.width):
+            red, green, blue = pixels[x, y]
+            if max(red, green, blue) - min(red, green, blue) <= policy.line_art_channel_spread_max:
+                near_monochrome += 1
+            if min(red, green, blue) >= policy.foreground_luma_threshold:
+                white_background += 1
+    histogram = grayscale.histogram()
+    foreground = sum(histogram[: policy.foreground_luma_threshold])
+    dark = sum(histogram[: policy.line_art_dark_luma_threshold])
+    return (
+        _ratio(near_monochrome, total),
+        _ratio(white_background, total),
+        _ratio(dark, foreground),
+    )
+
+
 def simplify_visual_reference(
     payload: bytes,
     *,
-    policy: LocalImageReferenceSimplification,
+    policy: LocalImageReferenceSimplification | LocalImageReferenceSimplificationV2,
 ) -> SimplifiedVisualReference:
     """Reduce microtexture without changing the normalized canvas or inventing pixels."""
 
@@ -106,7 +148,8 @@ def simplify_visual_reference(
             source.load()
             if source.format != "PNG" or source.size != (WIDTH, HEIGHT):
                 raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_INPUT_INVALID")
-            grayscale = ImageOps.grayscale(source)
+            source_rgb = source.convert("RGB")
+            grayscale = ImageOps.grayscale(source_rgb)
     except (OSError, UnidentifiedImageError) as exc:
         raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_INPUT_INVALID") from exc
 
@@ -115,31 +158,52 @@ def simplify_visual_reference(
         policy.foreground_luma_threshold,
     )
     source_edge_density = _edge_density(grayscale)
-    fill_source = grayscale.filter(ImageFilter.MedianFilter(size=5)).filter(
-        ImageFilter.GaussianBlur(radius=1.2)
+    near_monochrome_ratio = 0.0
+    white_background_ratio = 0.0
+    dark_foreground_fraction = 0.0
+    selected_mode: Literal["PRESERVE_LINE_ART", "REDUCE_PHOTOGRAPHIC_DETAIL"] = (
+        "REDUCE_PHOTOGRAPHIC_DETAIL"
     )
-    fill = ImageOps.autocontrast(fill_source, cutoff=1).point(
-        tuple(_light_fill_tone(value) for value in range(256))
-    )
-    contour_source = (
-        grayscale.filter(ImageFilter.MaxFilter(size=5))
-        .filter(ImageFilter.MedianFilter(size=7))
-        .filter(ImageFilter.GaussianBlur(radius=2.0))
-    )
-    contours = ImageOps.autocontrast(
-        contour_source.filter(ImageFilter.FIND_EDGES),
-        cutoff=1,
-    ).point(tuple(_contour_tone(value) for value in range(256)))
-    fill_pixels = fill.load()
-    contour_pixels = contours.load()
-    for y in range(fill.height):
-        for x in range(fill.width):
-            fill_pixels[x, y] = (
-                255
-                if x < 5 or x >= fill.width - 5 or y < 5 or y >= fill.height - 5
-                else min(fill_pixels[x, y], contour_pixels[x, y])
-            )
-    simplified = fill
+    if isinstance(policy, LocalImageReferenceSimplificationV2):
+        (
+            near_monochrome_ratio,
+            white_background_ratio,
+            dark_foreground_fraction,
+        ) = _classification_ratios(source_rgb, grayscale, policy=policy)
+        if (
+            near_monochrome_ratio >= policy.line_art_near_monochrome_ratio_min
+            and white_background_ratio >= policy.line_art_white_background_ratio_min
+            and dark_foreground_fraction >= policy.line_art_dark_foreground_fraction_min
+        ):
+            selected_mode = "PRESERVE_LINE_ART"
+    if selected_mode == "PRESERVE_LINE_ART":
+        simplified = grayscale.point(tuple(_source_preserving_tone(value) for value in range(256)))
+    else:
+        fill_source = grayscale.filter(ImageFilter.MedianFilter(size=5)).filter(
+            ImageFilter.GaussianBlur(radius=1.2)
+        )
+        fill = ImageOps.autocontrast(fill_source, cutoff=1).point(
+            tuple(_light_fill_tone(value) for value in range(256))
+        )
+        contour_source = (
+            grayscale.filter(ImageFilter.MaxFilter(size=5))
+            .filter(ImageFilter.MedianFilter(size=7))
+            .filter(ImageFilter.GaussianBlur(radius=2.0))
+        )
+        contours = ImageOps.autocontrast(
+            contour_source.filter(ImageFilter.FIND_EDGES),
+            cutoff=1,
+        ).point(tuple(_contour_tone(value) for value in range(256)))
+        fill_pixels = fill.load()
+        contour_pixels = contours.load()
+        for y in range(fill.height):
+            for x in range(fill.width):
+                fill_pixels[x, y] = (
+                    255
+                    if x < 5 or x >= fill.width - 5 or y < 5 or y >= fill.height - 5
+                    else min(fill_pixels[x, y], contour_pixels[x, y])
+                )
+        simplified = fill
     conditioning_foreground_ratio = _foreground_ratio(
         simplified,
         policy.foreground_luma_threshold,
@@ -154,14 +218,25 @@ def simplify_visual_reference(
         conditioning_edge_density / source_edge_density if source_edge_density else 0.0,
         8,
     )
-    metrics = LocalImageReferenceSimplificationMetrics(
-        source_foreground_ratio=source_foreground_ratio,
-        conditioning_foreground_ratio=conditioning_foreground_ratio,
-        border_foreground_ratio=border_foreground_ratio,
-        source_edge_density=source_edge_density,
-        conditioning_edge_density=conditioning_edge_density,
-        edge_density_ratio=edge_density_ratio,
-    )
+    metrics_body = {
+        "source_foreground_ratio": source_foreground_ratio,
+        "conditioning_foreground_ratio": conditioning_foreground_ratio,
+        "border_foreground_ratio": border_foreground_ratio,
+        "source_edge_density": source_edge_density,
+        "conditioning_edge_density": conditioning_edge_density,
+        "edge_density_ratio": edge_density_ratio,
+    }
+    metrics: LocalImageReferenceSimplificationMetrics | LocalImageReferenceSimplificationMetricsV2
+    if isinstance(policy, LocalImageReferenceSimplificationV2):
+        metrics = LocalImageReferenceSimplificationMetricsV2(
+            **metrics_body,
+            selected_mode=selected_mode,
+            near_monochrome_ratio=near_monochrome_ratio,
+            white_background_ratio=white_background_ratio,
+            dark_foreground_fraction=dark_foreground_fraction,
+        )
+    else:
+        metrics = LocalImageReferenceSimplificationMetrics(**metrics_body)
     if source_foreground_ratio < policy.foreground_ratio_min:
         raise ReferenceSimplificationError("REFERENCE_SIMPLIFICATION_FOREGROUND_INVALID")
     if (

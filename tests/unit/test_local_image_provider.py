@@ -22,6 +22,7 @@ from eom_image_contracts import (
     LocalImageGenerationRequest,
     LocalImageModelManifest,
     LocalImageMorphologyConditioning,
+    LocalImageMorphologyConditioningV2,
     LocalImageProductionStyleAdapterRelease,
     LocalImageProductionStyleAdapterReleaseV2,
     LocalImageProviderBinding,
@@ -32,6 +33,7 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
     LocalImageReferenceConditionedCompositeRequestV5,
+    LocalImageReferenceConditionedCompositeRequestV6,
     LocalImageReferenceConditioning,
     LocalImageRuntime,
     LocalImageVisualReferencePointer,
@@ -58,12 +60,14 @@ from eom_image_provider.provider import (
     generate_reference_conditioned_composite_handoff_v3,
     generate_reference_conditioned_composite_handoff_v4,
     generate_reference_conditioned_composite_handoff_v5,
+    generate_reference_conditioned_composite_handoff_v6,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
     reuse_reference_conditioned_composite_handoff_v2,
     reuse_reference_conditioned_composite_handoff_v3,
     reuse_reference_conditioned_composite_handoff_v4,
     reuse_reference_conditioned_composite_handoff_v5,
+    reuse_reference_conditioned_composite_handoff_v6,
     verify_model_revision,
     verify_style_adapter_release,
 )
@@ -151,6 +155,23 @@ def _isolated_reference_png() -> bytes:
     for x in range(220, 580):
         for y in range(140, 364):
             image.putpixel((x, y), (205, 205, 205))
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
+def _clean_line_reference_png() -> bytes:
+    image = Image.new("RGB", (800, 504), "white")
+    drawing = ImageDraw.Draw(image)
+    drawing.ellipse((190, 92, 610, 412), outline=(24, 24, 24), width=8)
+    for inset in range(35, 140, 28):
+        drawing.arc(
+            (190 + inset, 92 + inset, 610 - inset, 412 - inset),
+            10,
+            350,
+            fill=(24, 24, 24),
+            width=5,
+        )
     target = io.BytesIO()
     image.save(target, format="PNG", compress_level=9)
     return target.getvalue()
@@ -491,6 +512,25 @@ def _conditioned_request_v5(
     value = {**body, "request_sha256": content_sha256(body)}
     validate_contract("reference-conditioned-composite-request-v5", value)
     return LocalImageReferenceConditionedCompositeRequestV5.model_validate(value)
+
+
+def _conditioned_request_v6(
+    manifest: LocalImageModelManifest,
+    overlay: bytes,
+    reference: bytes,
+) -> LocalImageReferenceConditionedCompositeRequestV6:
+    predecessor = _conditioned_request_v5(manifest, overlay, reference)
+    body = {
+        "schema_version": "local-image-reference-conditioned-composite-request/6.0",
+        "composite_request": predecessor.composite_request.model_dump(mode="json"),
+        "visual_reference": predecessor.visual_reference.model_dump(mode="json"),
+        "conditioning": LocalImageMorphologyConditioningV2().model_dump(mode="json"),
+        "postprocess": predecessor.postprocess.model_dump(mode="json"),
+        "morphology_retention_ratio_min": 0.25,
+    }
+    value = {**body, "request_sha256": content_sha256(body)}
+    validate_contract("reference-conditioned-composite-request-v6", value)
+    return LocalImageReferenceConditionedCompositeRequestV6.model_validate(value)
 
 
 def _reduced_scale_release(
@@ -1307,6 +1347,87 @@ def test_assessment_line_art_handoff_preserves_raw_and_reuses_exact_receipt(
     validate_contract("reference-conditioned-composite-receipt-v5", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v5(
+            workspace=workspace,
+            request=request,
+        )
+        == first
+    )
+
+
+def test_adaptive_reference_v6_preserves_clean_line_art_and_reuses_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, manifest = _store(tmp_path)
+    workspace = tmp_path / "adaptive-reference-line-art-handoff"
+    (workspace / "references").mkdir(mode=0o750, parents=True)
+    workspace.chmod(0o1730)
+    overlay = _rgba_png()
+    reference = _clean_line_reference_png()
+    (workspace / "generated-overlay.png").write_bytes(overlay)
+    (workspace / "generated-overlay.png").chmod(0o440)
+    (workspace / "references/primary.png").write_bytes(reference)
+    (workspace / "references/primary.png").chmod(0o440)
+    request = _conditioned_request_v6(manifest, overlay, reference)
+    raw = _line_art_source_png()
+    calls = 0
+
+    class BaseReferenceBackend:
+        def generate_from_reference(
+            self,
+            *,
+            model_directory: Path,
+            request: LocalImageGenerationRequest,
+            reference_png: bytes,
+            strength: float,
+        ) -> GeneratedBackground:
+            nonlocal calls
+            calls += 1
+            assert model_directory.name == "files"
+            assert reference_png != reference
+            assert strength == 0.35
+            generated = FakeBackend().generate(model_directory=model_directory, request=request)
+            return GeneratedBackground(png_bytes=raw, runtime=generated.runtime)
+
+    monkeypatch.setattr(
+        "eom_image_provider.provider._compose_png",
+        lambda background, _overlay: background.read_bytes(),
+    )
+    monkeypatch.setattr("eom_image_provider.provider.metadata.version", lambda _name: "11.3.0")
+    monkeypatch.setattr(
+        "eom_image_provider.reference_simplification.metadata.version",
+        lambda _name: "11.3.0",
+    )
+    monkeypatch.setattr(
+        "eom_image_provider.assessment_line_art.metadata.version",
+        lambda _name: "11.3.0",
+    )
+
+    first = generate_reference_conditioned_composite_handoff_v6(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+    second = generate_reference_conditioned_composite_handoff_v6(
+        model_store_root=root,
+        workspace=workspace,
+        request=request,
+        backend=BaseReferenceBackend(),
+    )
+
+    assert first == second
+    assert calls == 1
+    assert first.simplification_metrics.selected_mode == "PRESERVE_LINE_ART"
+    assert first.simplification_metrics.edge_density_ratio >= 0.8
+    assert (
+        first.postprocess_metrics.output_foreground_ratio
+        / first.simplification_metrics.conditioning_foreground_ratio
+        >= first.morphology_retention_ratio_min
+    )
+    validate_contract("reference-conditioned-composite-receipt-v6", first.model_dump(mode="json"))
+    assert (
+        reuse_reference_conditioned_composite_handoff_v6(
             workspace=workspace,
             request=request,
         )
