@@ -44,6 +44,12 @@ Evidence Bundle, Graph snapshot, preset, Content Pack, and their hashes.
 
 Resolution must prove that the selected revision exists in the pinned Graph as an occurrence-backed
 PAST_EXAM source and that the Evidence Bundle contains only that source revision for Item evidence.
+For an exact variation, the indexed assessment-occurrence placement for the pinned Item Revision is
+the retrieval seed.  Legacy accepted past-exam Items do not have the content-team
+`item_element_refs` projection, so the output-oriented `required_item_elements` filter must not be
+used as an eligibility test for the selected source.  Ordinary non-targeted retrieval continues to
+use that filter.  The placement's source pointers must still resolve back to the exact accepted
+analysis and PAST_EXAM Item Revision before it can become evidence.
 The source content pointer is accepted only from the plan-pinned, hash-verified Evidence manifest;
 its Artifact/Revision, schema, media type, lifecycle, manifest entry, byte count, and SHA-256 are
 validated before temporary materialization.  Missing, stale, ambiguous, or mismatched pointers fail
@@ -52,9 +58,11 @@ closed.  No latest-revision substitution is allowed.
 ## Access patterns and data structures
 
 Primary operations are indexed lookup by `item_revision_id`, membership/deduplication of evidence
-and axes, ordered immutable iteration of axes, and unique lineage insertion.  In-memory maps/sets
-provide O(1) expected membership and the existing B-tree/foreign-key lookups resolve Items,
-Revisions, components, and Graph references.  The existing unique relationship key
+and axes, ordered immutable iteration of axes, and unique lineage insertion.  The exact source seed
+uses `ix_assessment_item_ref_item_revision`; generic element-filtered retrieval retains
+`ix_item_element_revision_kind`.  In-memory maps/sets provide O(1) expected membership and the
+existing B-tree/foreign-key lookups resolve Items, Revisions, components, and Graph references. The
+existing unique relationship key
 `(source_item_id, target_item_id, relationship_type)` prevents duplicate lineage.  Expected scale is
 one source and at most six axes per workflow, so plan and validation work is O(E + A), where E is the
 bounded Evidence entry count and A is the axis count.

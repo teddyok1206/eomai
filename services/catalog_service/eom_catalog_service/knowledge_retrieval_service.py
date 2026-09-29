@@ -71,6 +71,7 @@ from eom_catalog_service.knowledge_analysis_sources import (
     resolve_historically_approved_item_source,
 )
 from eom_catalog_service.knowledge_graph_models import (
+    AssessmentItemOccurrenceReferenceRecord,
     CurriculumUnitClosureRecord,
     CurriculumUnitRecord,
     EducationRetrievalAccessPolicyRevisionRecord,
@@ -107,6 +108,30 @@ KNOWLEDGE_RETRIEVAL_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+
+
+def _exact_target_placement_node_id(
+    session: Session,
+    *,
+    snapshot_id: str,
+    item_revision_id: str,
+) -> str:
+    """Resolve the one Graph placement that gives a past-exam Item its source identity."""
+
+    reference = session.scalar(
+        select(AssessmentItemOccurrenceReferenceRecord).where(
+            AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id == snapshot_id,
+            AssessmentItemOccurrenceReferenceRecord.item_revision_id == item_revision_id,
+        )
+    )
+    if reference is None:
+        raise KnowledgeRetrievalServiceError(
+            "KNOWLEDGE_RETRIEVAL_ITEM_PLACEMENT_MISSING",
+            "target past-exam Item Revision has no pinned Graph placement",
+        )
+    return str(reference.placement_node_id)
+
+
 KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_PROTOCOL = "catalog-knowledge-retrieval/1.1"
 KNOWLEDGE_RETRIEVAL_DOCUMENT_CATALOG_SCHEMA_HASH = content_sha256(
     {
@@ -1037,6 +1062,14 @@ class KnowledgeRetrievalApplicationService:
         max_nodes = min(command.evidence_budget.max_graph_nodes, MAX_RETRIEVAL_CANDIDATES)
         seed_scores: dict[str, int] = {}
 
+        if command.target_item_revision_id is not None:
+            placement_node_id = _exact_target_placement_node_id(
+                session,
+                snapshot_id=snapshot_id,
+                item_revision_id=command.target_item_revision_id,
+            )
+            seed_scores[placement_node_id] = 1000
+
         if command.curriculum_scope is not None:
             scope = command.curriculum_scope
             root = session.scalar(
@@ -1125,7 +1158,7 @@ class KnowledgeRetrievalApplicationService:
             for node_id, score in _rank_lexical_seed_rows(lexical_rows, limit=max_nodes):
                 seed_scores[node_id] = max(seed_scores.get(node_id, 0), score)
 
-        if command.required_item_elements:
+        if command.required_item_elements and command.target_item_revision_id is None:
             element_filter = [str(value) for value in command.required_item_elements]
             item_query = (
                 select(ItemElementReferenceRecord.item_revision_id)
@@ -1141,16 +1174,7 @@ class KnowledgeRetrievalApplicationService:
                 .order_by(ItemElementReferenceRecord.item_revision_id)
                 .limit(max(command.evidence_budget.max_item_revisions, 1) * 4)
             )
-            if command.target_item_revision_id is not None:
-                item_query = item_query.where(
-                    ItemElementReferenceRecord.item_revision_id == command.target_item_revision_id
-                )
             item_revisions = tuple(session.scalars(item_query))
-            if command.target_item_revision_id is not None and not item_revisions:
-                raise KnowledgeRetrievalServiceError(
-                    "KNOWLEDGE_RETRIEVAL_ITEM_STRUCTURE_MISSING",
-                    "target Item Revision lacks the required graph elements",
-                )
             if item_revisions:
                 for node_id in session.scalars(
                     select(ItemElementReferenceRecord.node_id)

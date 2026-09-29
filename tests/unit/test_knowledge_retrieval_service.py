@@ -30,6 +30,7 @@ from eom_catalog_service.knowledge_retrieval_service import (
     _ArtifactMemberValidationKey,
     _bounded_seed_scores,
     _Candidate,
+    _exact_target_placement_node_id,
     _ImmutableSourcePointerKey,
     _rank_lexical_seed_rows,
     _RequestScopedArtifactValidationCache,
@@ -42,6 +43,44 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from sqlalchemy.orm import Session
 
 NOW = "2026-08-24T00:00:00Z"
+
+
+def test_exact_past_exam_target_uses_occurrence_placement_without_item_element_projection() -> None:
+    placement_node_id = "knode_" + "7" * 32
+
+    class PlacementSession:
+        statement: object | None = None
+
+        def scalar(self, statement: object) -> object:
+            self.statement = statement
+            return SimpleNamespace(placement_node_id=placement_node_id)
+
+    session = PlacementSession()
+    assert (
+        _exact_target_placement_node_id(
+            cast(Session, session),
+            snapshot_id="graphrev_" + "3" * 32,
+            item_revision_id="itemrev_" + "4" * 32,
+        )
+        == placement_node_id
+    )
+    assert session.statement is not None
+    parameters = session.statement.compile().params  # type: ignore[union-attr]
+    assert "graphrev_" + "3" * 32 in parameters.values()
+    assert "itemrev_" + "4" * 32 in parameters.values()
+
+    class MissingPlacementSession:
+        @staticmethod
+        def scalar(_statement: object) -> None:
+            return None
+
+    with pytest.raises(KnowledgeRetrievalServiceError) as captured:
+        _exact_target_placement_node_id(
+            cast(Session, MissingPlacementSession()),
+            snapshot_id="graphrev_" + "3" * 32,
+            item_revision_id="itemrev_" + "4" * 32,
+        )
+    assert captured.value.code == "KNOWLEDGE_RETRIEVAL_ITEM_PLACEMENT_MISSING"
 
 
 def test_lexical_seed_ranking_prefers_distinct_term_overlap() -> None:
