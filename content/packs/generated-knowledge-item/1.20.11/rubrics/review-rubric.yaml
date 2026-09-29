@@ -1,0 +1,9 @@
+schema_version: "1.0"
+rubric_key: "CONTENT_TEAM_EDITORIAL_REVIEW"
+checks:
+  - key: "SCIENTIFIC_CORRECTNESS"
+    severity: "BLOCKING"
+    description: "지문, 자료, 진술, 정답 및 해설이 과학적으로 일관되는지 확인한다."
+  - key: "TEMPLATE_COMPATIBILITY"
+    severity: "BLOCKING"
+    description: "콘텐츠팀 원문과 HwpQuestionEditor 프로그램 계약에 대한 typed projection을 확인한다."
