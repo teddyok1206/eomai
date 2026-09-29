@@ -879,6 +879,21 @@ def test_assessment_style_prompt_policy_rejects_oversized_subject() -> None:
         )
 
 
+def test_reference_prompt_policy_accepts_the_pack_contract_subject_bound() -> None:
+    subject = "one ammonite fossil with a clearly visible spiral shell and broad smooth chambers "
+    subject += "isolated in side view on white"
+
+    assert 96 < len(subject) <= 180
+    plan = compose_local_gpu_prompt_plan(
+        subject=subject,
+        production_route="HYBRID_LOCAL_GENERATIVE",
+        prompt_contract="ASSESSMENT_REFERENCE_COMPOSITION_V3",
+    )
+
+    assert plan.policy_revision == "local-gpu-image-prompt-policy/1.9.1"
+    assert plan.positive_prompt.endswith(subject)
+
+
 def test_assessment_style_contract_fails_closed_on_legacy_korean_subject(tmp_path: Path) -> None:
     path = tmp_path / "generated-overlay.png"
     path.write_bytes(_overlay_png())

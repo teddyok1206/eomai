@@ -16,9 +16,9 @@ LocalGpuPromptContract = Literal[
 LOCAL_GPU_LEGACY_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.4"
 LOCAL_GPU_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.7"
 LOCAL_GPU_MINIMAL_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.8.1"
-LOCAL_GPU_REFERENCE_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.9"
+LOCAL_GPU_REFERENCE_PROMPT_POLICY_REVISION: Final = "local-gpu-image-prompt-policy/1.9.1"
 LOCAL_GPU_MAX_LEGACY_SUBJECT_CHARS: Final = 50
-LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 96
+LOCAL_GPU_MAX_SUBJECT_CHARS: Final = 180
 
 # These are provenance pins for the three reviewed inputs. They are not runtime paths and the
 # Catalog service does not dereference repository files while handling a request.
