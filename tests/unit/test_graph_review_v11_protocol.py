@@ -957,21 +957,35 @@ def test_v12_review_escalation_is_plan_pinned_one_pass_and_closes_uncertainty(
     assert directive is not None
     assert directive.next_attempt == 2
     assert directive.escalation_reasoning_effort == "xhigh"
-    escalated = ContentTeamReviewRoleResultV12.model_validate(
-        _v12_review_document(
-            fixture,
-            score=score,
-            candidate_disposition="DEMOTED",
-            review_pass="ESCALATED",
-            reasons=reasons,
-            source_review=source_pointer,
-        )
+    escalated_document = _v12_review_document(
+        fixture,
+        score=score,
+        candidate_disposition="DEMOTED",
+        review_pass="ESCALATED",
+        reasons=reasons,
+        source_review=source_pointer,
     )
+    escalated_document["output"]["independent_review_report"]["candidate_findings"][0][
+        "initial_observation"
+    ] = "The stronger pass restates the same pinned candidate before closing it."
+    escalated = ContentTeamReviewRoleResultV12.model_validate(escalated_document)
     validate_escalated_review_against_source(
         directive=directive,
         source=primary,
         escalated=escalated,
     )
+
+    changed_evidence_document = deepcopy(escalated_document)
+    changed_evidence_document["output"]["independent_review_report"]["candidate_findings"][0][
+        "draft_json_paths"
+    ] = ["/stem"]
+    changed_evidence = ContentTeamReviewRoleResultV12.model_validate(changed_evidence_document)
+    with pytest.raises(ValueError, match="candidate evidence differs"):
+        validate_escalated_review_against_source(
+            directive=directive,
+            source=primary,
+            escalated=changed_evidence,
+        )
 
     retained_uncertainty = _v12_review_document(
         fixture,

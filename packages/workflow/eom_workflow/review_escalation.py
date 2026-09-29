@@ -189,8 +189,10 @@ def validate_escalated_review_against_source(
     for candidate_id, source_candidate in source_candidates.items():
         final_candidate = final_candidates[candidate_id]
         if source_candidate.model_dump(
-            mode="json", exclude={"disposition", "conclusion"}
-        ) != final_candidate.model_dump(mode="json", exclude={"disposition", "conclusion"}):
+            mode="json", exclude={"initial_observation", "disposition", "conclusion"}
+        ) != final_candidate.model_dump(
+            mode="json", exclude={"initial_observation", "disposition", "conclusion"}
+        ):
             raise ValueError("escalated review candidate evidence differs")
         if final_candidate.disposition == "UNCERTAIN":
             raise ValueError("escalated review did not close a candidate")
