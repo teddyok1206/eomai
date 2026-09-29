@@ -38,6 +38,7 @@ from eom_workflow import (
 )
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.models import EvidenceUsageCitationV1, WorkflowRequest
+from eom_workflow_runner.engine import _parse_review_escalation_plan
 from pydantic import ValidationError
 
 from tests.unit.test_execution_materializer import _past_exam_variation_fixture
@@ -313,6 +314,9 @@ def test_resolver_pins_exact_variation_intent_in_v16_plan(
     )
 
     assert isinstance(plan, ResolvedExecutionPlanV16)
+    assert _parse_review_escalation_plan(plan.model_dump(mode="json")) == plan
+    with pytest.raises(ValueError, match="plan family is unsupported"):
+        _parse_review_escalation_plan({"schema_version": "resolved-execution-plan/15.0"})
     assert plan.retrieval_requirement.past_exam_variation.source_item_revision_id == (
         SOURCE_REVISION_ID
     )

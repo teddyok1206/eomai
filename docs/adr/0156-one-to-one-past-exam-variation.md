@@ -91,6 +91,13 @@ cite the selected source as `STRUCTURE_PATTERN`; review independently checks the
 originality.  Registration fails before Item writes if the plan, source provenance, receipt pair, or
 source Revision differs.  Existing workflows and released V1 contracts retain their behavior.
 
+The bounded primary/escalated review selector accepts both the original
+`resolved-execution-plan/12.0` family and this feature's explicit
+`resolved-execution-plan/16.0` successor. Selection is by the schema discriminator before Pydantic
+validation; it never coerces an unknown plan into V12. This keeps the primary review, optional
+stronger review, and at-most-three authoring rework cycles available without changing either
+released plan's bytes.
+
 ## Simpler alternative rejected
 
 Putting an Item ID into free-text authoring guidance is insufficient: it cannot pin a revision,

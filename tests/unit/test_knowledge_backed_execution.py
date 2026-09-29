@@ -25,6 +25,7 @@ from eom_orchestrator.execution_resolver import (
 )
 from eom_workflow import ExecutionPresetRevisionV2, ResolvedExecutionPlanV12
 from eom_workflow.control_plane import WorkerRole
+from eom_workflow_runner.engine import _parse_review_escalation_plan
 
 NOW = datetime(2026, 8, 24, 3, 0, tzinfo=UTC)
 
@@ -421,6 +422,7 @@ def test_verification_planned_v12_plan_pins_one_stronger_review_and_replays_exac
     )
 
     assert isinstance(plan, ResolvedExecutionPlanV12)
+    assert _parse_review_escalation_plan(plan.model_dump(mode="json")) == plan
     review = next(step for step in plan.steps if step.role == WorkerRole.REVIEW)
     assert (review.model, review.reasoning_effort) == ("gpt-5.6-terra", "high")
     assert review.escalation_candidate is not None

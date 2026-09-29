@@ -41,6 +41,7 @@ from eom_workflow import (
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
     ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV16,
     ResolvedStepExecutionV12,
     TerminalStep,
     WorkerRequest,
@@ -196,6 +197,19 @@ def _is_retryable_precommit_agent_failure(
 
 def _is_content_team_image_result_schema(result_schema: str) -> bool:
     return result_schema in CONTENT_TEAM_IMAGE_RESULT_SCHEMAS
+
+
+def _parse_review_escalation_plan(document: object) -> ResolvedExecutionPlanV12:
+    """Parse only released plan families that carry an escalatable review step."""
+
+    if not isinstance(document, dict):
+        raise ValueError("review escalation plan must be an object")
+    schema_version = document.get("schema_version")
+    if schema_version == "resolved-execution-plan/12.0":
+        return ResolvedExecutionPlanV12.model_validate(document)
+    if schema_version == "resolved-execution-plan/16.0":
+        return ResolvedExecutionPlanV16.model_validate(document)
+    raise ValueError("review escalation plan family is unsupported")
 
 
 def _validate_review_rework_directive(raw: object) -> WorkflowReviewReworkDirective:
@@ -2357,11 +2371,11 @@ class WorkflowRunner:
                     "workflow review escalation has no resolved execution plan",
                 )
             try:
-                plan = ResolvedExecutionPlanV12.model_validate(record.canonical_document)
+                plan = _parse_review_escalation_plan(record.canonical_document)
             except ValueError as exc:
                 raise WorkflowError(
                     WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
-                    "workflow review escalation plan is not V12",
+                    "workflow review escalation plan is not a supported escalatable plan",
                 ) from exc
             if plan.plan_id != record.plan_id or plan.plan_sha256 != record.plan_sha256:
                 raise WorkflowError(
