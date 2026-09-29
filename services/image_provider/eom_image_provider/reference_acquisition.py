@@ -267,18 +267,27 @@ class WikimediaCommonsClient:
             or not 1 <= candidate_limit <= 5
         ):
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_INPUT_INVALID")
-        query = query_terms[0]
+        ordered_query_terms = tuple(
+            sorted(
+                query_terms,
+                key=lambda value: (not value.casefold().endswith(" illustration"), value),
+            )
+        )
+        query = ordered_query_terms[0]
         selected_query = query
         discovered: list[tuple[int, VisualReferenceIntentCandidate]] = []
-        for selected_query in _reference_discovery_queries(query):
-            raw_pages = self._load_discovery_pages(
-                selected_query,
-                timeout_seconds=timeout_seconds,
-            )
-            discovered = self._verified_discovery_candidates(
-                raw_pages,
-                candidate_limit=candidate_limit,
-            )
+        for query in ordered_query_terms:
+            for selected_query in _reference_discovery_queries(query):
+                raw_pages = self._load_discovery_pages(
+                    selected_query,
+                    timeout_seconds=timeout_seconds,
+                )
+                discovered = self._verified_discovery_candidates(
+                    raw_pages,
+                    candidate_limit=candidate_limit,
+                )
+                if discovered:
+                    break
             if discovered:
                 break
         if not discovered:
@@ -299,6 +308,7 @@ class WikimediaCommonsClient:
         if not ranked:
             raise VisualReferenceAcquisitionError("VISUAL_REFERENCE_SOURCE_REJECTED")
         used_fallback = selected_query != query
+        used_illustration_query = query.casefold().endswith(" illustration")
         return tuple(
             VisualReferenceIntentCandidate.model_validate(
                 {
@@ -306,12 +316,17 @@ class WikimediaCommonsClient:
                     "rank": rank,
                     "selection_rationale": (
                         "Official Commons result selected by stable morphology suitability "
-                        "ranking; explicit aggregate titles are excluded for one-subject "
-                        "requests and other montage-like file titles are deprioritized"
+                        "ranking; a clean illustration query is preferred when declared, "
+                        "explicit aggregate titles are excluded for one-subject requests, and "
+                        "other montage-like file titles are deprioritized"
                         + (
                             " after one bounded subject-only query fallback."
                             if used_fallback
-                            else "."
+                            else (
+                                " using the bounded illustration query."
+                                if used_illustration_query
+                                else "."
+                            )
                         )
                     ),
                 }

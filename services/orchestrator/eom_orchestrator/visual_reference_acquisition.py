@@ -541,7 +541,7 @@ def _build_discovery_command(
 
 
 def _discovery_query_terms(subject: str) -> tuple[str, ...]:
-    """Derive one bounded morphology query from the validated English subject.
+    """Derive bounded morphology and clean-illustration queries from the English subject.
 
     The subject remains the immutable semantic identity. Commons search performs better when
     presentation-only clauses such as isolation, direction, and background are removed, while an
@@ -593,7 +593,9 @@ def _discovery_query_terms(subject: str) -> tuple[str, ...]:
     query = core[:80].rstrip(" ._-/")
     if not query:
         query = normalized[:80].rstrip(" ._-/")
-    return (query,)
+    illustration_stem = query[: 80 - len(" illustration")].rstrip(" ._-/")
+    illustration_query = f"{illustration_stem} illustration"
+    return tuple(sorted({query, illustration_query}))
 
 
 def _build_intent(

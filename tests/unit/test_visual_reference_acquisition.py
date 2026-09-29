@@ -364,6 +364,43 @@ class _FallbackDiscoveryOpener(_DiscoveryOpener):
         return _Response(url, "application/json", payload)
 
 
+class _IllustrationPreferredDiscoveryOpener(_DiscoveryOpener):
+    def open(self, request: Any, *, timeout: int) -> _Response:
+        url = request.full_url
+        if "gsrsearch=ammonite+fossil+illustration" not in url:
+            return super().open(request, timeout=timeout)
+        self.calls.append(url)
+        assert timeout == 120
+        page = {
+            "pageid": 301,
+            "ns": 6,
+            "title": "File:Ammonite scientific illustration.png",
+            "index": 1,
+            "canonicalurl": (
+                "https://commons.wikimedia.org/wiki/File:Ammonite_scientific_illustration.png"
+            ),
+            "revisions": [{"revid": 1301}],
+            "imageinfo": [
+                {
+                    "url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/reference-301.png",
+                    "size": 100_000,
+                    "width": 1200,
+                    "height": 800,
+                    "mime": "image/png",
+                    "extmetadata": {
+                        "License": {"value": "cc-zero"},
+                        "LicenseShortName": {"value": "CC0 1.0"},
+                        "LicenseUrl": {
+                            "value": "https://creativecommons.org/publicdomain/zero/1.0/"
+                        },
+                    },
+                }
+            ],
+        }
+        payload = json.dumps({"query": {"pages": [page]}}).encode()
+        return _Response(url, "application/json", payload)
+
+
 class _RateLimitedOpener(_Opener):
     def __init__(self, *, original: bytes, rate_limit_count: int) -> None:
         super().__init__(original=original)
@@ -594,6 +631,23 @@ def test_discovery_excludes_pavement_before_single_specimen_candidates() -> None
 
     assert 105 not in {value.page_id for value in candidates}
     assert tuple(value.rank for value in candidates) == tuple(range(1, len(candidates) + 1))
+
+
+def test_discovery_prefers_declared_clean_illustration_query_before_photo_fallback() -> None:
+    opener = _IllustrationPreferredDiscoveryOpener()
+    client = WikimediaCommonsClient(opener=opener, address_resolver=_public_resolver)  # type: ignore[arg-type]
+
+    candidates = client.discover_candidates(
+        subject="one ammonite fossil isolated on white",
+        query_terms=("ammonite fossil", "ammonite fossil illustration"),
+        candidate_limit=5,
+        timeout_seconds=120,
+    )
+
+    assert tuple(value.page_id for value in candidates) == (301,)
+    assert len(opener.calls) == 1
+    assert "gsrsearch=ammonite+fossil+illustration" in opener.calls[0]
+    assert "bounded illustration query" in candidates[0].selection_rationale
 
 
 def test_normalizer_compares_official_dimensions_after_exif_orientation() -> None:

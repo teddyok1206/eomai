@@ -192,10 +192,19 @@ def test_hybrid_image_fails_closed_without_publication_route() -> None:
         (
             "one compact passenger car in full side view with its front facing right, "
             "isolated on white",
-            ("compact passenger car side view",),
+            (
+                "compact passenger car side view",
+                "compact passenger car side view illustration",
+            ),
         ),
-        ("one trilobite fossil isolated on white", ("trilobite fossil",)),
-        ("a flower in cross-section on white", ("flower cross-section",)),
+        (
+            "one trilobite fossil isolated on white",
+            ("trilobite fossil", "trilobite fossil illustration"),
+        ),
+        (
+            "a flower in cross-section on white",
+            ("flower cross-section", "flower cross-section illustration"),
+        ),
     ),
 )
 def test_discovery_query_preserves_morphology_and_removes_presentation_clauses(
