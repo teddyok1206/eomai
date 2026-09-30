@@ -30,6 +30,7 @@ from eom_workflow import (
     WorkerLeaseView,
     validate_control_contract,
 )
+from eom_workflow.control_plane import WorkerRole
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, exists, func, select
@@ -919,7 +920,7 @@ def record_resolved_execution_plan(
         escalation = getattr(step, "escalation_candidate", None)
         if isinstance(model, (ResolvedExecutionPlanV12, ResolvedExecutionPlanV18)):
             expected = (
-                candidates[1] if step.role.value == "review" and len(candidates) == 2 else None
+                candidates[1] if step.role == WorkerRole.REVIEW and len(candidates) == 2 else None
             )
             if (escalation is None) != (expected is None) or (
                 escalation is not None and escalation.model_dump(mode="json") != expected
