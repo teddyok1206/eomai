@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import shutil
 import stat
 import tempfile
@@ -37,6 +39,7 @@ from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine, select
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.intake_evidence import IntakeEvidenceResolver
 from eom_catalog_service.intake_files import discover_source_files, source_fingerprint
 from eom_catalog_service.intake_service import IntakeService, IntakeSourceDeclaration
@@ -52,7 +55,11 @@ from eom_catalog_service.science_assessment_web_acquisition import (
 from eom_catalog_service.science_assessment_web_acquisition import (
     ScienceAssessmentAcquisitionFailure as DownloadFailure,
 )
-from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.settings import CatalogSettings, CatalogStagingArea
+from eom_catalog_service.staging import (
+    create_catalog_operation_directory,
+    require_fixed_catalog_staging_root,
+)
 
 MAX_INTAKE_FILES = 499
 MAX_INTAKE_BYTES = 2 * 1024 * 1024 * 1024
@@ -225,9 +232,10 @@ class ScienceAssessmentWebCorpusService:
         resolved: dict[str, _ResolvedSource],
     ) -> tuple[ScienceAssessmentCorpusIntakeShard, ...]:
         shards: list[ScienceAssessmentCorpusIntakeShard] = []
+        staging_root = self._managed_corpus_staging_root()
         for ordinal, shard_hashes in enumerate(_bounded_shards(hashes, aggregate), start=1):
             directory = _stage_intake_shard(
-                staging_root=self.settings.staging_root,
+                staging_root=staging_root,
                 plan=plan,
                 hashes=shard_hashes,
                 aggregate=aggregate,
@@ -337,19 +345,20 @@ class ScienceAssessmentWebCorpusService:
         validate_contract("science-assessment-web-corpus-manifest-v2", value)
         payload = canonical_json_bytes(value)
         payload_sha256 = sha256_bytes(payload)
-        control = self.settings.staging_root / "science-assessment-web-corpus" / manifest.corpus_id
-        control.mkdir(mode=0o750, parents=True, exist_ok=True)
-        path = control / f"{manifest.manifest_sha256.removeprefix('sha256:')}.json"
-        if path.exists():
-            if path.is_symlink() or sha256_file(path) != payload_sha256:
-                raise ScienceAssessmentCorpusPublicationError(
-                    "SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT"
-                )
-        else:
-            temporary = control / ".corpus-manifest.json.tmp"
-            temporary.write_bytes(payload)
-            temporary.chmod(0o600)
-            temporary.replace(path)
+        try:
+            control = create_catalog_operation_directory(
+                self._managed_corpus_staging_root(),
+                manifest.corpus_id,
+                message="science corpus manifest staging directory is unsafe",
+            )
+        except OSError as exc:
+            raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID") from exc
+        path = _materialize_corpus_manifest(
+            control=control,
+            file_name=f"{manifest.manifest_sha256.removeprefix('sha256:')}.json",
+            payload=payload,
+            payload_sha256=payload_sha256,
+        )
         committed = self.artifacts.commit_file_set(
             files={"corpus-manifest.json": path},
             primary_file="corpus-manifest.json",
@@ -394,6 +403,21 @@ class ScienceAssessmentWebCorpusService:
             artifact_revision_id=committed.revision_id,
             manifest_sha256=stored.manifest_sha256,
         )
+
+    def _managed_corpus_staging_root(self) -> Path:
+        """Resolve the process-owned corpus root before materialization."""
+        try:
+            registry_root = require_fixed_catalog_staging_root(
+                self.settings,
+                CatalogStagingArea.REGISTRY,
+            )
+            return create_catalog_operation_directory(
+                registry_root,
+                "science-assessment-web-corpus",
+                message="science corpus staging directory is unsafe",
+            )
+        except (CatalogError, OSError) as exc:
+            raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID") from exc
 
 
 def _aggregate_acquired(
@@ -478,6 +502,78 @@ def _aggregate_acquired(
             origins=origins,
         )
     return result
+
+
+def _materialize_corpus_manifest(
+    *,
+    control: Path,
+    file_name: str,
+    payload: bytes,
+    payload_sha256: str,
+) -> Path:
+    """Atomically publish one immutable manifest while allowing exact concurrent replay."""
+
+    def require_exact(path: Path) -> None:
+        try:
+            metadata = path.lstat()
+        except OSError as exc:
+            raise ScienceAssessmentCorpusPublicationError(
+                "SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT"
+            ) from exc
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_size != len(payload)
+            or sha256_file(path) != payload_sha256
+        ):
+            raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT")
+
+    try:
+        directory_descriptor = os.open(
+            control,
+            os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0),
+        )
+    except OSError as exc:
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID") from exc
+    try:
+        fcntl.flock(directory_descriptor, fcntl.LOCK_EX)
+        path = control / file_name
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise ScienceAssessmentCorpusPublicationError(
+                "SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT"
+            ) from exc
+        else:
+            require_exact(path)
+            return path
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{file_name}.",
+            suffix=".tmp",
+            dir=control,
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as output:
+                os.fchmod(output.fileno(), 0o600)
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            temporary.replace(path)
+            os.fsync(directory_descriptor)
+        finally:
+            temporary.unlink(missing_ok=True)
+        require_exact(path)
+        return path
+    except OSError as exc:
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID") from exc
+    finally:
+        fcntl.flock(directory_descriptor, fcntl.LOCK_UN)
+        os.close(directory_descriptor)
 
 
 def _bounded_shards(
@@ -792,8 +888,14 @@ def _stage_intake_shard(
             "source_sha256s": list(hashes),
         }
     ).removeprefix("sha256:")
-    parent = staging_root / "science-assessment-web-corpus" / "intake-shards"
-    parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    try:
+        parent = create_catalog_operation_directory(
+            staging_root,
+            "intake-shards",
+            message="science corpus intake shard staging directory is unsafe",
+        )
+    except OSError as exc:
+        raise ScienceAssessmentCorpusPublicationError("SCIENCE_CORPUS_STAGING_INVALID") from exc
     directory = parent / identity
     if directory.exists():
         _require_exact_staged_shard(directory, hashes, aggregate)

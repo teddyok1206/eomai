@@ -36,10 +36,11 @@ readiness가 정본입니다.
 
 | 경계 | 최신 additive 계약 |
 | --- | --- |
-| 단일 문항 Workflow | `generic-item-development@1.13.0` |
+| 단일 문항 Workflow | `generic-item-development@1.15.0` |
 | 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
-| Content Pack | `generated-knowledge-item@1.20.0` |
+| Content Pack | `generated-knowledge-item@1.20.12` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
+| 단일 문항 실행 계획 | Graph `resolved-execution-plan/17.0` / ungrounded `18.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.6` (`1.4` replay 보존) |
@@ -49,6 +50,11 @@ readiness가 정본입니다.
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 | 교육 문서 검토 | `pdf-document-review@1.2.0`, role `workflow-role/1.27.0`, result `@3.0`, plan `15.0` |
 | PDF 검토 주석 | request `document-review-pdf-annotation/3.0`, Catalog protocol `catalog/1.22` |
+
+버전 숫자는 경계마다 독립적이며 가장 큰 값을 서로 조합하지 않습니다. 새 작업 selector, 코드
+admission, 운영 activation, 25문항의 의도적인 이전 버전 pin과 historical replay의 구분은
+[Contract and runtime version matrix](docs/architecture/ACTIVE_RUNTIME_VERSION_MATRIX.md)를
+정본 안내로 사용합니다.
 
 과학 기출 이미지의 로컬 SSD-1B LoRA 학습은 외부 API 없이 별도 격리 경계에서 수행합니다.
 2026-09-26 확장 campaign은 검토된 24개 raster crop(훈련 16, 검증 4, holdout 4)으로 200-step

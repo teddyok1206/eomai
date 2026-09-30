@@ -143,7 +143,7 @@ def _read_source_crop(
     payload = _read_regular(_require_member(workspace, member), maximum_bytes=MAX_CROP_BYTES)
     if _sha256(payload) != expected_sha256:
         raise ScienceMicroProbeRunnerError("IMAGE_TRAINING_SOURCE_CROP_HASH_MISMATCH")
-    return cast(bytes, payload)
+    return payload
 
 
 def _materialize_samples(

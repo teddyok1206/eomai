@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ from eom_catalog_service.science_assessment_web_corpus_service import (
     _bounded_shards,
     _build_manifest,
     _build_manifest_v2,
+    _materialize_corpus_manifest,
     _require_acquisition_projection,
     _ResolvedSource,
     _stage_intake_shard,
@@ -357,14 +359,16 @@ def test_intake_shard_staging_is_content_addressed_and_replayable(tmp_path: Path
     )
     aggregate = _aggregate_acquired((acquired,))
 
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir(mode=0o750)
     first = _stage_intake_shard(
-        staging_root=tmp_path / "staging",
+        staging_root=staging_root,
         plan=_plan(),
         hashes=(content_hash,),
         aggregate=aggregate,
     )
     second = _stage_intake_shard(
-        staging_root=tmp_path / "staging",
+        staging_root=staging_root,
         plan=_plan(),
         hashes=(content_hash,),
         aggregate=aggregate,
@@ -389,8 +393,10 @@ def test_intake_shard_staging_rejects_replay_drift(tmp_path: Path) -> None:
         page_count=4,
     )
     aggregate = _aggregate_acquired((acquired,))
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir(mode=0o750)
     directory = _stage_intake_shard(
-        staging_root=tmp_path / "staging",
+        staging_root=staging_root,
         plan=_plan(),
         hashes=(content_hash,),
         aggregate=aggregate,
@@ -399,7 +405,7 @@ def test_intake_shard_staging_rejects_replay_drift(tmp_path: Path) -> None:
 
     with pytest.raises(ScienceAssessmentCorpusPublicationError, match="STAGING_INVALID"):
         _stage_intake_shard(
-            staging_root=tmp_path / "staging",
+            staging_root=staging_root,
             plan=_plan(),
             hashes=(content_hash,),
             aggregate=aggregate,
@@ -455,7 +461,11 @@ def test_manifest_commit_separates_semantic_self_hash_from_file_hash(tmp_path: P
     )
     artifacts.read_member.return_value = payload
     service = ScienceAssessmentWebCorpusService.__new__(ScienceAssessmentWebCorpusService)
-    service.settings = CatalogSettings(staging_root=tmp_path / "staging")
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir(mode=0o750)
+    registry_root = staging_root / "registry"
+    registry_root.mkdir(mode=0o750)
+    service.settings = CatalogSettings(staging_root=staging_root)
     service.artifacts = cast(Any, artifacts)
 
     publication = service._commit_manifest(manifest, plan)
@@ -466,3 +476,80 @@ def test_manifest_commit_separates_semantic_self_hash_from_file_hash(tmp_path: P
     call = artifacts.commit_file_set.call_args.kwargs
     assert call["expected_file_sha256"] == {"corpus-manifest.json": payload_sha256}
     assert sha256_file(call["files"]["corpus-manifest.json"]) == payload_sha256
+
+
+def test_corpus_materialization_rejects_missing_managed_staging_root(tmp_path: Path) -> None:
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir(mode=0o750)
+    service = ScienceAssessmentWebCorpusService.__new__(ScienceAssessmentWebCorpusService)
+    service.settings = CatalogSettings(staging_root=staging_root)
+
+    with pytest.raises(
+        ScienceAssessmentCorpusPublicationError,
+        match="SCIENCE_CORPUS_STAGING_INVALID",
+    ):
+        service._managed_corpus_staging_root()
+
+
+def test_corpus_materialization_rejects_symlinked_operation_root(tmp_path: Path) -> None:
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir(mode=0o750)
+    registry_root = staging_root / "registry"
+    registry_root.mkdir(mode=0o750)
+    outside = tmp_path / "outside"
+    outside.mkdir(mode=0o750)
+    (registry_root / "science-assessment-web-corpus").symlink_to(
+        outside,
+        target_is_directory=True,
+    )
+    service = ScienceAssessmentWebCorpusService.__new__(ScienceAssessmentWebCorpusService)
+    service.settings = CatalogSettings(staging_root=staging_root)
+
+    with pytest.raises(
+        ScienceAssessmentCorpusPublicationError,
+        match="SCIENCE_CORPUS_STAGING_INVALID",
+    ):
+        service._managed_corpus_staging_root()
+
+
+def test_manifest_materialization_is_exact_under_concurrent_replay(tmp_path: Path) -> None:
+    control = tmp_path / "control"
+    control.mkdir(mode=0o750)
+    payload = canonical_json_bytes({"schema_version": "test/1.0", "value": "immutable"})
+    payload_sha256 = sha256_bytes(payload)
+
+    def materialize(_index: int) -> Path:
+        return _materialize_corpus_manifest(
+            control=control,
+            file_name="manifest.json",
+            payload=payload,
+            payload_sha256=payload_sha256,
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        paths = tuple(executor.map(materialize, range(32)))
+
+    assert set(paths) == {control / "manifest.json"}
+    assert (control / "manifest.json").read_bytes() == payload
+    assert tuple(control.glob("*.tmp")) == ()
+
+
+def test_manifest_materialization_rejects_broken_symlink(tmp_path: Path) -> None:
+    control = tmp_path / "control"
+    control.mkdir(mode=0o750)
+    path = control / "manifest.json"
+    path.symlink_to(control / "missing.json")
+    payload = canonical_json_bytes({"schema_version": "test/1.0"})
+
+    with pytest.raises(
+        ScienceAssessmentCorpusPublicationError,
+        match="SCIENCE_CORPUS_LOCAL_MANIFEST_CONFLICT",
+    ):
+        _materialize_corpus_manifest(
+            control=control,
+            file_name=path.name,
+            payload=payload,
+            payload_sha256=sha256_bytes(payload),
+        )
+
+    assert path.is_symlink()

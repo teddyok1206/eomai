@@ -651,8 +651,7 @@ def _evaluation_command() -> dict[str, Any]:
                 "training_result_sha256": {"$ref": "#/$defs/sha256"},
                 "adapter_manifest": {
                     "$ref": (
-                        "eom://schemas/image-provider/"
-                        "local-image-lora-micro-adapter-manifest/1.0"
+                        "eom://schemas/image-provider/local-image-lora-micro-adapter-manifest/1.0"
                     )
                 },
                 "holdout_evaluation_plan": {"$ref": "#/$defs/artifactPointer"},

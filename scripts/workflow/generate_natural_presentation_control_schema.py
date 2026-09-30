@@ -6,13 +6,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "schemas/workflow/control-plane/resolved-execution-plan-v16.schema.json"
 TARGETS = (
     ROOT / "schemas/workflow/control-plane/resolved-execution-plan-v17.schema.json",
-    ROOT
-    / "packages/workflow/eom_workflow/resources/control-plane/"
+    ROOT / "packages/workflow/eom_workflow/resources/control-plane/"
     "resolved-execution-plan-v17.schema.json",
 )
 
