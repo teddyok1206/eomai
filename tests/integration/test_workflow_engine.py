@@ -1024,6 +1024,112 @@ def test_invalid_authored_material_fails_workflow_without_escaping_runner(
         _close(resources)
 
 
+def test_admin_cancellation_fences_active_sibling_commands_and_reconciles_idempotently(
+    integration_engine: Engine,
+) -> None:
+    runner, _executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-cancellation-fences-active-sibling",
+    )
+    try:
+        with transaction(sessions) as session:
+            start = claim_next_command(
+                session,
+                runner_id="crashed-runner",
+                lease_seconds=7_200,
+                workflow_id=workflow_id,
+            )
+            assert start is not None
+            transition_command(start, CommandState.PROCESSING)
+            cancel, created = enqueue_command(
+                session,
+                workflow_id=workflow_id,
+                command_type=CommandType.CANCEL_WORKFLOW,
+                payload={"reason": "cancel a stranded start"},
+                actor_type="human",
+                actor_id="admin_01",
+                source="test",
+                idempotency_key="cancel-stranded-start",
+            )
+            assert created
+            first_cancel_id = cancel.command_id
+
+        processed = runner.run_once(workflow_id)
+        assert processed is not None
+        assert processed.command_id == first_cancel_id
+        assert processed.state == CommandState.SUCCEEDED.value
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            start = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.CANCELLED.value
+            assert start is not None
+            assert start.state == CommandState.CANCELLED.value
+
+        with transaction(sessions) as session:
+            stranded, created = enqueue_command(
+                session,
+                workflow_id=workflow_id,
+                command_type=CommandType.ADVANCE_WORKFLOW,
+                payload={},
+                actor_type="system",
+                actor_id="crashed-runner",
+                source="test",
+                idempotency_key="stranded-after-cancel",
+            )
+            assert created
+            claimed = claim_next_command(
+                session,
+                runner_id="crashed-runner",
+                lease_seconds=7_200,
+                workflow_id=workflow_id,
+            )
+            assert claimed is not None
+            assert claimed.command_id == stranded.command_id
+            transition_command(claimed, CommandState.PROCESSING)
+            reconcile, created = enqueue_command(
+                session,
+                workflow_id=workflow_id,
+                command_type=CommandType.CANCEL_WORKFLOW,
+                payload={"reason": "reconcile cancelled workflow commands"},
+                actor_type="human",
+                actor_id="admin_01",
+                source="test",
+                idempotency_key="reconcile-cancelled-workflow",
+            )
+            assert created
+            reconcile_id = reconcile.command_id
+
+        processed = runner.run_once(workflow_id)
+        assert processed is not None
+        assert processed.command_id == reconcile_id
+        assert processed.state == CommandState.SUCCEEDED.value
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            stranded = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.idempotency_key == "stranded-after-cancel"
+                )
+            )
+            assert workflow is not None
+            assert workflow.state == WorkflowState.CANCELLED.value
+            assert stranded is not None
+            assert stranded.state == CommandState.CANCELLED.value
+            events = list_workflow_events(session, workflow_id)
+            reconciliation = next(
+                event for event in events if event.event_type == "WORKFLOW_CANCELLATION_RECONCILED"
+            )
+            assert reconciliation.payload["cancelled_command_ids"] == [stranded.command_id]
+    finally:
+        _close(resources)
+
+
 def test_review_rework_successor_returns_one_repairable_review_to_authoring(
     integration_engine: Engine,
 ) -> None:

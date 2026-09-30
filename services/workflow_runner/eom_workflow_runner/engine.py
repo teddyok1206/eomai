@@ -2195,6 +2195,46 @@ class WorkflowRunner:
             workflow = session.get(WorkflowInstanceRecord, command.workflow_id)
             if workflow is None:
                 raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "workflow not found")
+            cancelled_command_ids: list[str] = []
+            sibling_commands = tuple(
+                session.scalars(
+                    select(WorkflowCommandRecord)
+                    .where(
+                        WorkflowCommandRecord.workflow_id == command.workflow_id,
+                        WorkflowCommandRecord.command_id != command.command_id,
+                        WorkflowCommandRecord.state.in_(
+                            (
+                                CommandState.PENDING.value,
+                                CommandState.LEASED.value,
+                                CommandState.PROCESSING.value,
+                            )
+                        ),
+                    )
+                    .order_by(WorkflowCommandRecord.created_at, WorkflowCommandRecord.command_id)
+                    .with_for_update()
+                )
+            )
+            for sibling in sibling_commands:
+                if sibling.state == CommandState.PROCESSING.value:
+                    transition_command(sibling, CommandState.PENDING)
+                transition_command(sibling, CommandState.CANCELLED)
+                cancelled_command_ids.append(sibling.command_id)
+            if workflow.state == WorkflowState.CANCELLED.value:
+                record_workflow_event(
+                    session,
+                    command.workflow_id,
+                    "WORKFLOW_CANCELLATION_RECONCILED",
+                    actor_type=command.actor_type,
+                    actor_id=command.actor_id,
+                    command_id=command.command_id,
+                    step_key=workflow.current_step_key,
+                    payload={
+                        "cancelled_command_ids": cancelled_command_ids,
+                        "reason": str(command.payload.get("reason", ""))[:200],
+                        "authorization_source": authorization.namespace.value,
+                    },
+                )
+                return
             if workflow.state in TERMINAL_WORKFLOW_STATES:
                 raise WorkflowError(
                     WorkflowErrorCode.WORKFLOW_INVALID_TRANSITION,
@@ -2237,6 +2277,7 @@ class WorkflowRunner:
                 payload={
                     "reason": str(command.payload.get("reason", ""))[:200],
                     "authorization_source": authorization.namespace.value,
+                    "cancelled_command_ids": cancelled_command_ids,
                 },
             )
 
