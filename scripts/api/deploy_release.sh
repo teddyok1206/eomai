@@ -2390,6 +2390,7 @@ if not {
     "resolved-execution-plan-v14",
     "resolved-execution-plan-v15",
     "resolved-execution-plan-v16",
+    "resolved-execution-plan-v18",
     "document-review-evidence-validation-receipt",
     "resolved-execution-plan-v10",
     "resolved-execution-plan-v13",

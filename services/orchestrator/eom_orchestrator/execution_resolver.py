@@ -47,6 +47,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV15,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV18,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -82,6 +83,7 @@ GRAPH_REVIEW_RESOLVER_VERSION = "4.0.0"
 VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION = "5.0.0"
 PAST_EXAM_VARIATION_RESOLVER_VERSION = "16.0.0"
 NATURAL_PRESENTATION_RESOLVER_VERSION = "17.0.0"
+UNGROUNDED_REVIEW_RESOLVER_VERSION = "18.0.0"
 
 
 @dataclass(frozen=True)
@@ -448,7 +450,7 @@ def resolve_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlan:
+) -> ResolvedExecutionPlan | ResolvedExecutionPlanV18:
     """Resolve the currently published preset once for one exact workflow.
 
     Existing workflow plans are returned byte-for-byte. No current pointer is consulted during a
@@ -463,6 +465,8 @@ def resolve_execution_plan(
         )
     )
     if existing is not None:
+        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/18.0":
+            return ResolvedExecutionPlanV18.model_validate(existing.canonical_document)
         return ResolvedExecutionPlan.model_validate(existing.canonical_document)
 
     logical = session.scalar(
@@ -484,7 +488,16 @@ def resolve_execution_plan(
             "CONTROL_PRESET_POLICY_INVALID", "execution preset has duplicate role policies"
         )
 
-    resolved_steps: list[ResolvedStepExecution] = []
+    verification_successor = dependencies.workflow_definition_version == "1.15.0"
+    if verification_successor != (
+        dependencies.workflow_role_schema_version == "workflow-role/1.24.0"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_WORKFLOW_PROTOCOL_INVALID",
+            "ungrounded verification requires workflow 1.15 and role protocol 1.24",
+        )
+
+    resolved_steps: list[ResolvedStepExecution | ResolvedStepExecutionV12] = []
     seen_keys: set[str] = set()
     for required in steps:
         if required.step_key in seen_keys:
@@ -495,32 +508,49 @@ def resolve_execution_plan(
             raise ControlPlaneError(
                 "CONTROL_PRESET_ROLE_MISSING", "execution preset does not define a required role"
             )
-        candidate = policy.model_candidates[0]
-        resolved_steps.append(
-            ResolvedStepExecution(
-                step_key=required.step_key,
-                role=required.role,
-                model=candidate.model,
-                reasoning_effort=candidate.reasoning_effort,
-                instruction_bundle=policy.instruction_bundle,
-                reference_bundle=policy.reference_bundle,
-                worker_pool_key=policy.worker_pool_key,
-                timeout_seconds=policy.timeout_seconds,
-                sandbox=policy.sandbox,
-                network=policy.network,
-                general_knowledge_mode=(
-                    "DENIED"
-                    if preset.general_knowledge_policy == "DENY"
-                    else "ALLOWED_WITH_PROVENANCE"
-                ),
+        candidates = policy.model_candidates
+        expected_count = 2 if verification_successor and required.role == WorkerRole.REVIEW else 1
+        if verification_successor and len(candidates) != expected_count:
+            raise ControlPlaneError(
+                "CONTROL_PRESET_POLICY_INVALID",
+                "ungrounded verification preset candidate cardinality differs",
             )
-        )
+        candidate = candidates[0]
+        step_values = {
+            "step_key": required.step_key,
+            "role": required.role,
+            "model": candidate.model,
+            "reasoning_effort": candidate.reasoning_effort,
+            "instruction_bundle": policy.instruction_bundle,
+            "reference_bundle": policy.reference_bundle,
+            "worker_pool_key": policy.worker_pool_key,
+            "timeout_seconds": policy.timeout_seconds,
+            "sandbox": policy.sandbox,
+            "network": policy.network,
+            "general_knowledge_mode": (
+                "DENIED" if preset.general_knowledge_policy == "DENY" else "ALLOWED_WITH_PROVENANCE"
+            ),
+        }
+        if verification_successor:
+            step_values["evidence_access"] = "NONE"
+            step_values["escalation_candidate"] = (
+                candidates[1].model_dump(mode="json")
+                if required.role == WorkerRole.REVIEW
+                else None
+            )
+            resolved_steps.append(ResolvedStepExecutionV12.model_validate(step_values))
+        else:
+            resolved_steps.append(ResolvedStepExecution.model_validate(step_values))
 
     actual_resolved_at = resolved_at or datetime.now(UTC)
     if actual_resolved_at.tzinfo is None or actual_resolved_at.utcoffset() is None:
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document = {
-        "schema_version": "resolved-execution-plan/1.0",
+        "schema_version": (
+            "resolved-execution-plan/18.0"
+            if verification_successor
+            else "resolved-execution-plan/1.0"
+        ),
         "plan_id": new_execution_plan_id(),
         "workflow_id": dependencies.workflow_id,
         "preset_id": preset.preset_id,
@@ -535,19 +565,28 @@ def resolve_execution_plan(
         "graph_snapshot_revision_id": dependencies.graph_snapshot_revision_id,
         "evidence_bundle_revision_id": dependencies.evidence_bundle_revision_id,
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
-        "resolver_version": RESOLVER_VERSION,
-        "resolved_at": actual_resolved_at,
+        "resolver_version": (
+            UNGROUNDED_REVIEW_RESOLVER_VERSION if verification_successor else RESOLVER_VERSION
+        ),
+        "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    normalized = ResolvedExecutionPlan.model_validate(document).model_dump(mode="json")
-    normalized["plan_sha256"] = compute_control_document_hash(normalized, "plan_sha256")
-    model = ResolvedExecutionPlan.model_validate(normalized)
+    model_type = ResolvedExecutionPlanV18 if verification_successor else ResolvedExecutionPlan
+    if verification_successor:
+        document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+        normalized = ResolvedExecutionPlanV18.model_validate(document).model_dump(mode="json")
+    else:
+        normalized = ResolvedExecutionPlan.model_validate(document).model_dump(mode="json")
+        normalized["plan_sha256"] = compute_control_document_hash(normalized, "plan_sha256")
+    model = model_type.model_validate(normalized)
+    if verification_successor:
+        validate_control_contract("resolved-execution-plan-v18", normalized)
     record = record_resolved_execution_plan(
         session,
         document=model.model_dump(mode="json"),
         dependencies=dependencies,
     )
-    return ResolvedExecutionPlan.model_validate(record.canonical_document)
+    return model_type.model_validate(record.canonical_document)
 
 
 def resolve_customer_support_plan(

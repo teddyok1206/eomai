@@ -158,6 +158,7 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/15.0",
         "resolved-execution-plan/16.0",
         "resolved-execution-plan/17.0",
+        "resolved-execution-plan/18.0",
     }
 )
 

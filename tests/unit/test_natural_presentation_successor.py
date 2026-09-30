@@ -12,23 +12,29 @@ from eom_catalog_contracts import (
     PastExamVariationRequest,
     derive_content_team_material_requirement_v2,
 )
-from eom_hwpx_contracts import ContentTeamImageSlot
 from eom_catalog_service.content_pack_files import compile_pack
 from eom_catalog_service.workflow_catalog import ContentPackError, WorkflowCatalogService
+from eom_hwpx_contracts import ContentTeamImageSlot
 from eom_identifiers import content_sha256
-from eom_orchestrator.control_service import ResolvedPlanDependencyEvidence
+from eom_orchestrator.control_service import ControlPlaneError, ResolvedPlanDependencyEvidence
 from eom_orchestrator.execution_resolver import (
     ExecutionStepRequirement,
+    resolve_execution_plan,
     resolve_knowledge_backed_execution_plan,
 )
 from eom_workflow import (
     WORKFLOW_ADMISSION_BY_IDENTITY,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV18,
     compile_definition,
+    validate_control_contract,
 )
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.models import WorkflowRequest
+from eom_workflow_runner.engine import _parse_review_escalation_plan
 
+from tests.unit.test_content_team_v3_protocol import _content_v3
+from tests.unit.test_execution_resolver import FakeSession, _bundle
 from tests.unit.test_knowledge_backed_execution import (
     NOW,
     _evidence,
@@ -36,7 +42,6 @@ from tests.unit.test_knowledge_backed_execution import (
     _Session,
     _verification_preset,
 )
-from tests.unit.test_content_team_v3_protocol import _content_v3
 
 ROOT = Path(__file__).resolve().parents[2]
 PREDECESSOR = ROOT / "content/packs/generated-knowledge-item/1.20.11"
@@ -78,8 +83,7 @@ def test_natural_presentation_workflow_and_pack_form_one_immutable_successor() -
     assert workflow.definition_version == "1.15.0"
     assert workflow.limits.max_rework_cycles == 3
     assert (
-        WORKFLOW_ADMISSION_BY_IDENTITY[("generic-item-development", "1.15.0")]
-        .role_protocol_version
+        WORKFLOW_ADMISSION_BY_IDENTITY[("generic-item-development", "1.15.0")].role_protocol_version
         == "workflow-role/1.24.0"
     )
     assert pack.manifest.pack.version == "1.20.12"
@@ -230,3 +234,147 @@ def test_v17_plan_pins_general_retrieval_to_workflow_115(
     assert plan.plan_sha256 == content_sha256(
         {key: value for key, value in captured.items() if key != "plan_sha256"}
     )
+
+
+def _ungrounded_verification_preset() -> dict[str, Any]:
+    policies = []
+    for index, role in enumerate(("authoring", "image", "review", "item_management"), start=1):
+        candidates = [{"model": "gpt-5.6-terra", "reasoning_effort": "high"}]
+        if role == "review":
+            candidates.append({"model": "gpt-5.6-sol", "reasoning_effort": "xhigh"})
+        policies.append(
+            {
+                "role": role,
+                "model_candidates": candidates,
+                "instruction_bundle": _bundle(str(index), family="instr"),
+                "reference_bundle": None,
+                "worker_pool_key": role.replace("item_management", "item-management"),
+                "timeout_seconds": 1800,
+                "sandbox": "read-only",
+                "network": "disabled",
+            }
+        )
+    document: dict[str, Any] = {
+        "schema_version": "execution-preset-revision/1.0",
+        "preset_id": "execpreset_" + "5" * 32,
+        "preset_revision_id": "execpresetrev_" + "6" * 32,
+        "revision_number": 1,
+        "state": "RELEASED",
+        "display_name": "Ungrounded verification",
+        "description": "Pins one stronger review candidate without Evidence Bundle access.",
+        "role_policies": policies,
+        "capacity_policy_revision_id": "capacityrev_" + "7" * 32,
+        "general_knowledge_policy": "ALLOW_WITH_PROVENANCE",
+        "compatible_workflow_protocols": ["workflow-role/1.24.0"],
+        "content_sha256": "sha256:" + "0" * 64,
+        "created_at": NOW.isoformat().replace("+00:00", "Z"),
+    }
+    document["content_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "content_sha256"}
+    )
+    return document
+
+
+def test_v18_plan_pins_ungrounded_primary_and_escalated_review_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preset = _ungrounded_verification_preset()
+    logical = SimpleNamespace(
+        state="ACTIVE",
+        current_revision_id=preset["preset_revision_id"],
+        preset_id=preset["preset_id"],
+    )
+    revision = SimpleNamespace(
+        preset_id=preset["preset_id"],
+        state="RELEASED",
+        canonical_document=preset,
+    )
+    dependencies = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "8" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.15.0",
+        workflow_definition_sha256="sha256:" + "9" * 64,
+        workflow_role_schema_version="workflow-role/1.24.0",
+        content_pack_release_id="packrel_" + "a" * 32,
+        content_pack_sha256="sha256:" + "b" * 64,
+    )
+    captured: dict[str, Any] = {}
+
+    def record(_session: object, *, document: dict[str, Any], dependencies: object) -> object:
+        captured.update(document)
+        assert dependencies is not None
+        return SimpleNamespace(canonical_document=document)
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.record_resolved_execution_plan", record
+    )
+    plan = resolve_execution_plan(
+        FakeSession([None, logical], revision),  # type: ignore[arg-type]
+        preset_key="standard-item",
+        dependencies=dependencies,
+        steps=tuple(
+            ExecutionStepRequirement(step_key, role)
+            for step_key, role in (
+                ("authoring", WorkerRole.AUTHORING),
+                ("image", WorkerRole.IMAGE),
+                ("review", WorkerRole.REVIEW),
+                ("item_management", WorkerRole.ITEM_MANAGEMENT),
+            )
+        ),
+        resolved_at=NOW,
+    )
+
+    assert isinstance(plan, ResolvedExecutionPlanV18)
+    assert plan.schema_version == "resolved-execution-plan/18.0"
+    assert plan.graph_snapshot_revision_id is None
+    assert plan.evidence_bundle_revision_id is None
+    assert all(step.evidence_access == "NONE" for step in plan.steps)
+    review = next(step for step in plan.steps if step.role == WorkerRole.REVIEW)
+    assert review.escalation_candidate is not None
+    assert review.escalation_candidate.model == "gpt-5.6-sol"
+    validate_control_contract("resolved-execution-plan-v18", plan.model_dump(mode="json"))
+    assert _parse_review_escalation_plan(plan.model_dump(mode="json")) == plan
+    assert plan.plan_sha256 == content_sha256(
+        {key: value for key, value in captured.items() if key != "plan_sha256"}
+    )
+
+
+def test_v18_plan_rejects_missing_review_escalation_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preset = _ungrounded_verification_preset()
+    review = next(policy for policy in preset["role_policies"] if policy["role"] == "review")
+    review["model_candidates"] = review["model_candidates"][:1]
+    preset["content_sha256"] = content_sha256(
+        {key: value for key, value in preset.items() if key != "content_sha256"}
+    )
+    logical = SimpleNamespace(
+        state="ACTIVE",
+        current_revision_id=preset["preset_revision_id"],
+        preset_id=preset["preset_id"],
+    )
+    revision = SimpleNamespace(
+        preset_id=preset["preset_id"], state="RELEASED", canonical_document=preset
+    )
+    dependencies = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "c" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.15.0",
+        workflow_definition_sha256="sha256:" + "d" * 64,
+        workflow_role_schema_version="workflow-role/1.24.0",
+        content_pack_release_id="packrel_" + "e" * 32,
+        content_pack_sha256="sha256:" + "f" * 64,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.record_resolved_execution_plan",
+        lambda *_args, **_kwargs: pytest.fail("invalid plan must not be persisted"),
+    )
+
+    with pytest.raises(ControlPlaneError, match="candidate cardinality"):
+        resolve_execution_plan(
+            FakeSession([None, logical], revision),  # type: ignore[arg-type]
+            preset_key="standard-item",
+            dependencies=dependencies,
+            steps=(ExecutionStepRequirement("review", WorkerRole.REVIEW),),
+            resolved_at=NOW,
+        )

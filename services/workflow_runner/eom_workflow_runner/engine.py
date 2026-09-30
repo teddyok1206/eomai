@@ -43,6 +43,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV18,
     ResolvedStepExecutionV12,
     TerminalStep,
     WorkerRequest,
@@ -202,7 +203,12 @@ def _is_content_team_image_result_schema(result_schema: str) -> bool:
 
 def _parse_review_escalation_plan(
     document: object,
-) -> ResolvedExecutionPlanV12 | ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17:
+) -> (
+    ResolvedExecutionPlanV12
+    | ResolvedExecutionPlanV16
+    | ResolvedExecutionPlanV17
+    | ResolvedExecutionPlanV18
+):
     """Parse only released plan families that carry an escalatable review step."""
 
     if not isinstance(document, dict):
@@ -214,6 +220,8 @@ def _parse_review_escalation_plan(
         return ResolvedExecutionPlanV16.model_validate(document)
     if schema_version == "resolved-execution-plan/17.0":
         return ResolvedExecutionPlanV17.model_validate(document)
+    if schema_version == "resolved-execution-plan/18.0":
+        return ResolvedExecutionPlanV18.model_validate(document)
     raise ValueError("review escalation plan family is unsupported")
 
 

@@ -791,6 +791,29 @@ class ResolvedExecutionPlanV17(ResolvedExecutionPlanV12):
     resolver_version: Literal["17.0.0"] = "17.0.0"
 
 
+class ResolvedExecutionPlanV18(ResolvedExecutionPlan):
+    """Ungrounded item plan pinning primary and bounded escalated review candidates."""
+
+    schema_version: Literal["resolved-execution-plan/18.0"] = "resolved-execution-plan/18.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.15.0"] = "1.15.0"
+    graph_snapshot_revision_id: None = None
+    evidence_bundle_revision_id: None = None
+    steps: tuple[ResolvedStepExecutionV12, ...] = Field(min_length=1, max_length=64)
+    resolver_version: Literal["18.0.0"] = "18.0.0"
+
+    @model_validator(mode="after")
+    def one_ungrounded_escalatable_review_step(self) -> ResolvedExecutionPlanV18:
+        review = tuple(step for step in self.steps if step.role == WorkerRole.REVIEW)
+        if len(review) != 1 or review[0].step_key != "review":
+            raise ValueError("ungrounded verification plan requires one review step")
+        if any(step.evidence_access != "NONE" for step in self.steps):
+            raise ValueError("ungrounded verification plan cannot grant Evidence Bundle access")
+        body = self.model_dump(mode="json", exclude={"plan_sha256"})
+        if content_sha256(body) != self.plan_sha256:
+            raise ValueError("ungrounded verification plan hash differs")
+        return self
+
+
 class ResolvedExecutionPlanV4(FrozenModel):
     """One document analysis plan with exact bounded Markdown materialization pointers."""
 

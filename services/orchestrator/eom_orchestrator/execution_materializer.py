@@ -55,6 +55,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV15,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV18,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -204,6 +205,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
+        | ResolvedExecutionPlanV18
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -237,6 +239,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/17.0":
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/18.0":
+        plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -249,7 +253,7 @@ def materialize_execution_step(
     execution_reasoning_effort = step.reasoning_effort
     if execution_tier == "ESCALATED":
         if (
-            not isinstance(plan, ResolvedExecutionPlanV12)
+            not isinstance(plan, (ResolvedExecutionPlanV12, ResolvedExecutionPlanV18))
             or not isinstance(step, ResolvedStepExecutionV12)
             or step.role != "review"
             or step.escalation_candidate is None
@@ -728,6 +732,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
             | ResolvedExecutionPlanV17
+            | ResolvedExecutionPlanV18
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -759,6 +764,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/18.0":
+        plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (

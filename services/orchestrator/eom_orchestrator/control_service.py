@@ -22,6 +22,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV18,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -142,6 +143,7 @@ def _validated_document(
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
+        | ResolvedExecutionPlanV18
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -160,6 +162,7 @@ def _validated_document(
     | ResolvedExecutionPlanV12
     | ResolvedExecutionPlanV16
     | ResolvedExecutionPlanV17
+    | ResolvedExecutionPlanV18
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -850,9 +853,10 @@ def record_resolved_execution_plan(
     document: dict[str, Any],
     dependencies: ResolvedPlanDependencyEvidence,
 ) -> ResolvedExecutionPlanRecord:
-    model, normalized = _validated_document(
-        "resolved-execution-plan", document, ResolvedExecutionPlan
-    )
+    successor = document.get("schema_version") == "resolved-execution-plan/18.0"
+    model_type = ResolvedExecutionPlanV18 if successor else ResolvedExecutionPlan
+    schema_name = "resolved-execution-plan-v18" if successor else "resolved-execution-plan"
+    model, normalized = _validated_document(schema_name, document, model_type)
     if not isinstance(model, ResolvedExecutionPlan):
         raise AssertionError("validated execution plan has the wrong type")
     _require_declared_hash(normalized, "plan_sha256")
@@ -913,7 +917,7 @@ def record_resolved_execution_plan(
                 "CONTROL_PLAN_POLICY_MISMATCH", "resolved plan step differs from preset"
             )
         escalation = getattr(step, "escalation_candidate", None)
-        if isinstance(model, ResolvedExecutionPlanV12):
+        if isinstance(model, (ResolvedExecutionPlanV12, ResolvedExecutionPlanV18)):
             expected = (
                 candidates[1] if step.role.value == "review" and len(candidates) == 2 else None
             )

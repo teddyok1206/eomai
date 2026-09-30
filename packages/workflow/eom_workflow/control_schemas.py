@@ -425,6 +425,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "17.0",
             "sha256:16f1abb0ed73d1c4c8b5497c7f825a772cedb9a1f51df6e5f0d2d1de223d5f51",
         ),
+        "resolved-execution-plan-v18": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v18.schema.json",
+            "resources/control-plane/resolved-execution-plan-v18.schema.json",
+            "18.0",
+            "sha256:efe3cdce34eb89349b2255af6f73d45f38234ab633f97322fc7a7c14e49b59aa",
+        ),
         "document-review-evidence-validation-receipt": ControlSchemaResource(
             (
                 "schemas/workflow/control-plane/"
