@@ -387,6 +387,7 @@ class FakeWorkflowCatalog:
         self.registrations: list[tuple[str, int]] = []
         self.materializations: list[tuple[str, str]] = []
         self.content_team_image_count = 0
+        self.content_team_image_error: ValueError | None = None
         self.review_blocking_codes_by_cycle: list[tuple[str, ...]] = []
         self.escalate_primary_review = False
 
@@ -462,6 +463,8 @@ class FakeWorkflowCatalog:
         authoring: ArtifactPointer,
     ) -> int:
         del workflow, authoring
+        if self.content_team_image_error is not None:
+            raise self.content_team_image_error
         return self.content_team_image_count
 
     def prepare_prompt(
@@ -976,6 +979,47 @@ def test_content_team_v8_dispatches_only_the_validated_image_slot_count(
             if image_count == 0:
                 assert workflow.runtime_context["content_team_stimuli"] == []
         assert [role for _, _, role in executor.calls] == expected_roles
+    finally:
+        _close(resources)
+
+
+def test_invalid_authored_material_fails_workflow_without_escaping_runner(
+    integration_engine: Engine,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "required",
+        "workflow-content-team-invalid-authored-material",
+        definition_path=Path("config/workflows/generic-item-development.v1.15.yaml"),
+    )
+    catalog = cast(FakeWorkflowCatalog, runner.catalog)
+    catalog.content_team_image_error = ValueError(
+        "authored material differs from reviewed IMAGE form"
+    )
+    try:
+        assert runner.run_until_idle(workflow_id) == 1
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.FAILED.value
+            assert workflow.stage == WorkflowStage.FAILED.value
+            assert workflow.failure_code == WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            decision = next(
+                step
+                for step in list_step_runs(session, workflow_id)
+                if step.step_key == "image_decision"
+            )
+            assert decision.state == StepState.FAILED.value
+            assert decision.error_code == WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+            command = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id
+                )
+            )
+            assert command is not None
+            assert command.state == CommandState.FAILED.value
+            assert command.error_code == WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+        assert [role for _, _, role in executor.calls] == ["authoring"]
     finally:
         _close(resources)
 

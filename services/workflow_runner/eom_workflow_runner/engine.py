@@ -1685,10 +1685,49 @@ class WorkflowRunner:
                     WorkflowErrorCode.WORKFLOW_RECONCILIATION_FAILED,
                     "image decision source result is missing or ambiguous",
                 )
-            count = self.catalog.content_team_image_slot_count(
-                workflow=workflow,
-                authoring=matches[0],
-            )
+            try:
+                count = self.catalog.content_team_image_slot_count(
+                    workflow=workflow,
+                    authoring=matches[0],
+                )
+            except ValueError as exc:
+                # The Catalog validates the authored material against the immutable request.
+                # A mismatch is a terminal result defect, not a runner-process defect. Record
+                # the decision step and workflow failure in the same fenced transaction so the
+                # command can be failed by the outer command boundary without being replayed.
+                with self._fenced_transaction() as session:
+                    failed_step = self._latest_active_step(
+                        session, workflow.workflow_id, definition.key
+                    )
+                    if failed_step is None:
+                        failed_step = create_step_run(
+                            session,
+                            workflow_id=workflow.workflow_id,
+                            step_key=definition.key,
+                            step_type=definition.type,
+                            worker_role=None,
+                            result_schema=None,
+                            input_pointer_manifest={"field": definition.field},
+                            max_attempts=compiled.definition.limits.max_step_attempts,
+                        )
+                    if failed_step.state == StepState.READY.value:
+                        transition_step(failed_step, StepState.RUNNING)
+                    if failed_step.state == StepState.RUNNING.value:
+                        failed_step.error_code = WorkflowErrorCode.WORKFLOW_STEP_FAILED.value
+                        failed_step.error_summary = "image decision input failed validation"
+                        transition_step(failed_step, StepState.FAILED)
+                    self._fail_workflow(
+                        session,
+                        workflow.workflow_id,
+                        command_id,
+                        actor_type,
+                        actor_id,
+                        WorkflowErrorCode.WORKFLOW_STEP_FAILED.value,
+                    )
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_STEP_FAILED,
+                    "image decision input failed validation",
+                ) from exc
             try:
                 target = definition.branches[str(count)]
             except KeyError as exc:
