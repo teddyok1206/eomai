@@ -11,12 +11,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
-from eom_catalog_contracts import (
-    AssessmentItemContentV2,
-    AssessmentItemContentV3,
-    ContentTeamMaterialRequirementV2,
-    derive_content_team_material_requirement_v2,
-)
 
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
@@ -32,6 +26,7 @@ from eom_web_gui.contracts import (
     CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    ContentTeamMaterialRequirementV2,
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
@@ -2017,26 +2012,15 @@ class HttpApplicationGateway:
             or revision.get("revision_state") not in {"APPROVED", "SUPERSEDED"}
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
-        content_response = await self._authorized(
+        material_response = await self._authorized(
             session,
             "GET",
-            f"/api/v1/item-revisions/{item_revision_id}/structured-content",
+            f"/api/v1/item-revisions/{item_revision_id}/material-requirement",
         )
-        document = self._data(content_response)
         try:
-            schema_version = document.get("schema_version")
-            content = (
-                AssessmentItemContentV3.model_validate(document)
-                if schema_version == "3.0"
-                else AssessmentItemContentV2.model_validate(document)
-                if schema_version == "2.0"
-                else None
-            )
-            if content is None:
-                raise ValueError("source Item content schema is unsupported")
-            return derive_content_team_material_requirement_v2(content)
-        except (TypeError, ValueError) as exc:
-            raise GatewayError(status=409, code="ITEM_PRESENTATION_AMBIGUOUS") from exc
+            return ContentTeamMaterialRequirementV2.model_validate(self._data(material_response))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]:
         response = await self._authorized(

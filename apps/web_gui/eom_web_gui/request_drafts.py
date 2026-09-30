@@ -7,12 +7,9 @@ import secrets
 from datetime import UTC, datetime
 from typing import Literal
 
-from eom_catalog_contracts import (
+from eom_web_gui.contracts import (
     ContentTeamMaterialRequirementV1,
     ContentTeamMaterialRequirementV2,
-)
-
-from eom_web_gui.contracts import (
     QualityProfile,
     RequestDraft,
     RequestDraftInput,

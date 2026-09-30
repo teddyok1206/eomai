@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from tests.api.helpers import disconnected_services
 from tests.api.test_hwpx_endpoints import FakeAudit, MemoryIdempotency, _authentication
 from tests.unit.test_assessment_item_content import item_content
+from tests.web_gui.helpers import content_team_item_content
 
 REVISION_ID = "itemrev_" + "3" * 32
 NEW_REVISION_ID = "itemrev_" + "4" * 32
@@ -81,6 +82,17 @@ class FakeCatalogApplication:
                 yield content
 
         return Media()
+
+
+class NaturalPresentationCatalogApplication(FakeCatalogApplication):
+    def __init__(self, document: dict[str, object]) -> None:
+        self.document = document
+
+    def load_item_content(self, item_revision_id: str) -> object:
+        assert item_revision_id == REVISION_ID
+        from eom_catalog_contracts import AssessmentItemContentV3
+
+        return AssessmentItemContentV3.model_validate(self.document)
 
 
 def _client(*, admin: bool) -> tuple[TestClient, Any]:
@@ -180,6 +192,53 @@ def test_structured_content_read_uses_catalog_application_boundary() -> None:
             response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/structured-content")
         assert response.status_code == 200
         assert response.json()["data"] == item_content()
+    finally:
+        services.engine.dispose()
+
+
+def test_material_requirement_is_derived_by_the_api_from_the_exact_item_revision() -> None:
+    client, services = _client(admin=True)
+    document = content_team_item_content(
+        visuals=[{"kind": "IMAGE", "label": ""}],
+        layout="IMAGE_ONLY",
+    )
+    document["labeled_blocks"] = []
+    services.catalog_application = NaturalPresentationCatalogApplication(document)  # type: ignore[assignment]
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/material-requirement")
+        assert response.status_code == 200
+        assert response.json()["data"] == {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": "NONE",
+        }
+    finally:
+        services.engine.dispose()
+
+
+def test_material_requirement_rejects_an_unrepresentable_source_shape() -> None:
+    client, services = _client(admin=True)
+    document = content_team_item_content(
+        visuals=[
+            {"kind": "IMAGE", "label": ""},
+            {
+                "kind": "TABLE",
+                "label": "",
+                "headers": ["구분", "값"],
+                "rows": [["A", "1"]],
+                "alignments": ["center", "right"],
+            },
+        ],
+        layout="IMAGE_TABLE",
+    )
+    services.catalog_application = NaturalPresentationCatalogApplication(document)  # type: ignore[assignment]
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/material-requirement")
+        assert response.status_code == 409
+        assert response.json()["error_code"] == "ITEM_PRESENTATION_AMBIGUOUS"
     finally:
         services.engine.dispose()
 

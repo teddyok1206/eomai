@@ -2326,11 +2326,6 @@ async def test_content_team_table_only_item_is_available_without_image_component
 async def test_exact_source_material_requirement_uses_canonical_structured_content() -> None:
     item_id = "item_test0004"
     revision_id = "itemrev_test0004"
-    content = content_team_item_content(
-        visuals=[{"kind": "IMAGE", "label": ""}],
-        layout="IMAGE_ONLY",
-    )
-    content["labeled_blocks"] = []
     paths: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -2346,8 +2341,18 @@ async def test_exact_source_material_requirement_uses_canonical_structured_conte
                     }
                 ),
             )
-        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
-            return httpx.Response(200, json=_single(content))
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/material-requirement":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "schema_version": "content-team-material-requirement/2.0",
+                        "form": "IMAGE",
+                        "panel_count": 1,
+                        "image_supporting_data": "NONE",
+                    }
+                ),
+            )
         raise AssertionError(request.url.path)
 
     gateway = HttpApplicationGateway(
@@ -2367,7 +2372,7 @@ async def test_exact_source_material_requirement_uses_canonical_structured_conte
     }
     assert paths == [
         f"/api/v1/item-revisions/{revision_id}",
-        f"/api/v1/item-revisions/{revision_id}/structured-content",
+        f"/api/v1/item-revisions/{revision_id}/material-requirement",
     ]
     await gateway.close()
 
@@ -2376,19 +2381,6 @@ async def test_exact_source_material_requirement_uses_canonical_structured_conte
 async def test_exact_source_material_requirement_rejects_ambiguous_presentation() -> None:
     item_id = "item_test0005"
     revision_id = "itemrev_test0005"
-    content = content_team_item_content(
-        visuals=[
-            {"kind": "IMAGE", "label": ""},
-            {
-                "kind": "TABLE",
-                "label": "",
-                "headers": ["구분", "값"],
-                "rows": [["A", "1"]],
-                "alignments": ["center", "right"],
-            },
-        ],
-        layout="IMAGE_TABLE",
-    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == f"/api/v1/item-revisions/{revision_id}":
@@ -2402,8 +2394,15 @@ async def test_exact_source_material_requirement_rejects_ambiguous_presentation(
                     }
                 ),
             )
-        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
-            return httpx.Response(200, json=_single(content))
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/material-requirement":
+            return httpx.Response(
+                409,
+                json={
+                    "error_code": "ITEM_PRESENTATION_AMBIGUOUS",
+                    "message": "request cannot be completed",
+                    "request_id": "request_1234567890abcdef",
+                },
+            )
         raise AssertionError(request.url.path)
 
     gateway = HttpApplicationGateway(

@@ -12,12 +12,17 @@ from eom_api_contracts.items import (
     StructuredItemContentImportRequest,
 )
 from eom_api_contracts.usage import UsageRecordView
-from eom_catalog_contracts import AssessmentItemContentContract
+from eom_catalog_contracts import (
+    AssessmentItemContentContract,
+    ContentTeamMaterialRequirementV2,
+    derive_content_team_material_requirement_v2,
+)
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, etag, require_permission
+from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(tags=["items"])
@@ -149,6 +154,31 @@ def get_structured_content(
         request,
         request.app.state.services.catalog_application.load_item_content(item_revision_id),
     )
+
+
+@router.get(
+    "/item-revisions/{item_revision_id}/material-requirement",
+    operation_id="item_material_requirement_get",
+    response_model=SingleResponse[ContentTeamMaterialRequirementV2],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def get_material_requirement(
+    request: Request,
+    item_revision_id: str,
+) -> SingleResponse[ContentTeamMaterialRequirementV2]:
+    """Derive presentation only from the exact immutable Item content revision."""
+
+    content = request.app.state.services.catalog_application.load_item_content(item_revision_id)
+    try:
+        material = derive_content_team_material_requirement_v2(content)
+    except ValueError as exc:
+        raise ApiError(
+            409,
+            "ITEM_PRESENTATION_AMBIGUOUS",
+            "Item presentation is ambiguous",
+            "The pinned Item revision cannot be represented by the successor material contract.",
+        ) from exc
+    return one(request, material)
 
 
 @router.get(

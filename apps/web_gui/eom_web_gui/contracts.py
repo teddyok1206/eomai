@@ -8,10 +8,6 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from eom_catalog_contracts import (
-    ContentTeamMaterialRequirementV1,
-    ContentTeamMaterialRequirementV2,
-)
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eom_web_gui.draft_integrity import (
@@ -1034,6 +1030,46 @@ class QualityProfile(StrEnum):
     FAST = "fast"
     BALANCED = "balanced"
     DEEP = "deep"
+
+
+class ContentTeamMaterialRequirementV1(WebModel):
+    """Browser DTO for the immutable V1 material requirement."""
+
+    schema_version: Literal["content-team-material-requirement/1.0"] = (
+        "content-team-material-requirement/1.0"
+    )
+    form: Literal["AUTO", "TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]
+    panel_count: int | None
+
+    @model_validator(mode="after")
+    def coherent_panel_count(self) -> ContentTeamMaterialRequirementV1:
+        if self.form in {"AUTO", "TEXT", "DATA", "INQUIRY"}:
+            if self.panel_count is not None:
+                raise ValueError(f"{self.form} material cannot declare a panel count")
+        elif self.form in {"TABLE", "IMAGE"}:
+            if self.panel_count not in {1, 2}:
+                raise ValueError(f"{self.form} material requires one or two panels")
+        elif self.panel_count != 2:
+            raise ValueError("MIXED material requires exactly two panels")
+        return self
+
+
+class ContentTeamMaterialRequirementV2(ContentTeamMaterialRequirementV1):
+    """Browser DTO for the natural-presentation successor."""
+
+    schema_version: Literal["content-team-material-requirement/2.0"] = (
+        "content-team-material-requirement/2.0"  # type: ignore[assignment]
+    )
+    image_supporting_data: Literal["NONE", "LABELED_DATA"] | None
+
+    @model_validator(mode="after")
+    def explicit_image_presentation(self) -> ContentTeamMaterialRequirementV2:
+        if self.form == "IMAGE":
+            if self.image_supporting_data is None:
+                raise ValueError("IMAGE material requires an explicit supporting-data presentation")
+        elif self.image_supporting_data is not None:
+            raise ValueError("non-IMAGE material cannot declare image supporting data")
+        return self
 
 
 ContentTeamMaterialRequirement = Annotated[

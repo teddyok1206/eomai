@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from eom_catalog_contracts import ContentTeamMaterialRequirementV2
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -23,6 +22,7 @@ from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
+    ContentTeamMaterialRequirementV2,
     CustomerSupportSubmission,
     DocumentReviewAnnotationSubmission,
     DocumentReviewCorrectionSubmission,

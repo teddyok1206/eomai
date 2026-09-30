@@ -4,6 +4,7 @@ set -euo pipefail
 REPOSITORY_ROOT="/home/eom/EOM"
 EXPECTED_BRANCHES=("main" "feat/web-gui-v0" "feat/hwpx-application-api-v0")
 BUILD_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
+RUNTIME_PYTHON="/srv/eom/conda/envs/eom-web/bin/python"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -25,6 +26,7 @@ done
 [[ -z "$(git -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
   fail "working tree must be clean before release build"
 [[ -x "${BUILD_PYTHON}" ]] || fail "explicit Python 3.12 build environment is unavailable"
+[[ -x "${RUNTIME_PYTHON}" ]] || fail "Web runtime Python is unavailable"
 
 COMMIT="$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)"
 VERSION="$(PYPROJECT="${REPOSITORY_ROOT}/apps/web_gui/pyproject.toml" ${BUILD_PYTHON} -c \
@@ -126,6 +128,19 @@ with zipfile.ZipFile(os.environ["WHEEL"]) as archive:
             if any(marker in content for marker in forbidden):
                 raise SystemExit(f"forbidden runtime/source dependency in {name}")
 print("web_gui_release_artifact=PASS")
+PY
+
+# Import the wheel against the actual isolated Web runtime.  The build interpreter owns many
+# platform contract packages that are intentionally absent from the Web service environment, so a
+# build-only import would not detect a forbidden undeclared runtime dependency.
+WHEEL="${WHEEL}" "${RUNTIME_PYTHON}" -I - <<'PY'
+import os
+import sys
+
+sys.path.insert(0, os.environ["WHEEL"])
+import eom_web_gui  # noqa: F401
+
+print("web_gui_target_runtime_import=PASS")
 PY
 
 printf 'web_gui_source_commit=%s\n' "${COMMIT}"

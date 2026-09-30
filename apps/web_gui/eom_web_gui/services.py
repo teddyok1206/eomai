@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from eom_catalog_contracts import ContentTeamMaterialRequirementV2
-
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
@@ -25,6 +23,7 @@ from eom_web_gui.contracts import (
     CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    ContentTeamMaterialRequirementV2,
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
