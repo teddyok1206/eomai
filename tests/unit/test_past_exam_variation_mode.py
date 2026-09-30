@@ -238,7 +238,7 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
         token="a" * 32,
     )
     plain = workflow_start_payload(draft)
-    assert plain["definition_version"] == "1.13.0"
+    assert plain["definition_version"] == "1.15.0"
     assert "educational_retrieval" not in plain
 
     update = RequestDraftUpdate.model_validate(
@@ -263,10 +263,10 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
     )
     varied = update_draft(draft, update, now=now)
     payload = workflow_start_payload(varied, graph_corpus_key="integrated-science-textbooks")
-    assert payload["definition_version"] == "1.14.0"
+    assert payload["definition_version"] == "1.15.0"
     assert payload["registry_mode"] == "CREATE_ITEM"
     assert payload["educational_retrieval"] == _variation_requirement().model_dump(mode="json")
-    assert WorkflowStartRequest.model_validate(payload).definition_version == "1.14.0"
+    assert WorkflowStartRequest.model_validate(payload).definition_version == "1.15.0"
 
     studio = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
     assert "state.curriculumOutline?.graph_grounding_available !== true" in studio

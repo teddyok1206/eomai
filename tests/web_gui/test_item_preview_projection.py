@@ -70,8 +70,12 @@ def _content(*, visuals: list[dict[str, object]], visual_layout: str) -> dict[st
     return {
         "schema_version": "3.0",
         "renderer_profile": "content-team-hwp-question-editor-v1",
-        "authoring_prompt_sha256": "sha256:" + "a" * 64,
-        "handoff_archive_sha256": "sha256:" + "b" * 64,
+        "authoring_prompt_sha256": (
+            "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+        ),
+        "handoff_archive_sha256": (
+            "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+        ),
         "item_number": 7,
         "score_display": "2.5",
         "stem": "다음 자료를 해석하시오.",
@@ -193,6 +197,29 @@ def test_table_only_projection_never_requires_or_invents_an_image() -> None:
     )
 
     assert all(block.type != "image" for block in projected.blocks)
+
+
+def test_natural_single_image_projection_has_no_manufactured_data_block() -> None:
+    components = [_content_component(), _image_component(0)]
+    content = _content(visuals=[_image()], visual_layout="IMAGE_ONLY")
+    content["stem"] = "다음은 관측 대상 X의 모습을 나타낸 그림이다."
+    content["labeled_blocks"] = []
+
+    projected = project_item_content(
+        content=content,
+        capability=resolve_content_capability(components, REVISION_ID),
+        components=components,
+        item_id=ITEM_ID,
+        item_revision_id=REVISION_ID,
+    )
+
+    assert tuple(block.type for block in projected.blocks) == (
+        "paragraph",
+        "image",
+        "paragraph",
+    )
+    image = next(block for block in projected.blocks if block.type == "image")
+    assert image.label == ""
 
 
 def test_inquiry_projection_is_native_content_without_image_placeholder() -> None:

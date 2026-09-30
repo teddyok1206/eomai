@@ -10,7 +10,11 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from eom_catalog_contracts import MockExamAssemblyManifestV1, MockExamAssemblyManifestV2
+from eom_catalog_contracts import (
+    ContentTeamMaterialRequirementV2,
+    MockExamAssemblyManifestV1,
+    MockExamAssemblyManifestV2,
+)
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamBuildResultV3,
@@ -587,6 +591,27 @@ def test_content_team_image_components_become_ordered_pinned_sources() -> None:
     ]
     with pytest.raises(HwpxManagerError, match="ordinals are ambiguous"):
         HwpxApplicationService._content_team_image_sources({"components": [image, image]})
+
+
+def test_content_team_material_requirement_is_loaded_from_exact_component_metadata() -> None:
+    component = {
+        "metadata": {
+            "material_requirement": {
+                "schema_version": "content-team-material-requirement/2.0",
+                "form": "IMAGE",
+                "panel_count": 1,
+                "image_supporting_data": "NONE",
+            }
+        }
+    }
+
+    requirement = HwpxApplicationService._content_team_material_requirement(component)
+
+    assert isinstance(requirement, ContentTeamMaterialRequirementV2)
+    assert requirement.image_supporting_data == "NONE"
+    component["metadata"]["material_requirement"].pop("image_supporting_data")
+    with pytest.raises(HwpxManagerError, match="material requirement metadata"):
+        HwpxApplicationService._content_team_material_requirement(component)
 
 
 def test_runner_returns_sanitized_failure_without_traceback(

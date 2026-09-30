@@ -21,6 +21,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -140,6 +141,7 @@ def _validated_document(
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -157,6 +159,7 @@ def _validated_document(
     | ResolvedExecutionPlanV11
     | ResolvedExecutionPlanV12
     | ResolvedExecutionPlanV16
+    | ResolvedExecutionPlanV17
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -991,12 +994,14 @@ def record_knowledge_backed_execution_plan(
         "resolved-execution-plan/11.0": "resolved-execution-plan-v11",
         "resolved-execution-plan/12.0": "resolved-execution-plan-v12",
         "resolved-execution-plan/16.0": "resolved-execution-plan-v16",
+        "resolved-execution-plan/17.0": "resolved-execution-plan-v17",
     }.get(str(schema_version), "resolved-execution-plan-v3")
     model_type: type[
         ResolvedExecutionPlanV3
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
     ]
     if schema_version == "resolved-execution-plan/11.0":
         model_type = ResolvedExecutionPlanV11
@@ -1004,6 +1009,8 @@ def record_knowledge_backed_execution_plan(
         model_type = ResolvedExecutionPlanV12
     elif schema_version == "resolved-execution-plan/16.0":
         model_type = ResolvedExecutionPlanV16
+    elif schema_version == "resolved-execution-plan/17.0":
+        model_type = ResolvedExecutionPlanV17
     else:
         model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from eom_catalog_contracts import ContentTeamMaterialRequirement
 from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
@@ -23,7 +24,7 @@ from eom_hwpx_contracts import (
 from eom_identifiers import content_sha256, new_hwpx_build_id
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import Engine, select
 
 from eom_hwpx_manager.application_adapter import FixedKordocBuilderAdapter
@@ -78,6 +79,9 @@ CONTENT_TEAM_RENDERER_VERSION_V3 = "3.0.0"
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 AUTOMATIC_RENDERER = "auto"
 AUTOMATIC_DOCUMENT_PROFILE = "item-revision-auto"
+CONTENT_TEAM_MATERIAL_REQUIREMENT_ADAPTER: TypeAdapter[ContentTeamMaterialRequirement] = (
+    TypeAdapter(ContentTeamMaterialRequirement)
+)
 
 
 class ItemRevisionResolver(Protocol):
@@ -133,6 +137,7 @@ class ContentTeamRenderer(Protocol):
         *,
         item_revision_id: str,
         image_sources: tuple[ContentTeamImageSource, ...],
+        material_requirement: ContentTeamMaterialRequirement | None,
         idempotency_key: str,
         build_id: str,
         handoff_snapshot: ContentTeamHandoffSnapshot,
@@ -211,6 +216,7 @@ class HwpxApplicationService:
                 )
             handoff_snapshot = self.content_team_renderer.snapshot()
             is_v3 = component.get("schema_ref") in CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS
+            material_requirement = self._content_team_material_requirement(component)
             normalized_options = dict(options) | {
                 "document_profile": (
                     "content-team-hwp-question-editor-v3"
@@ -222,6 +228,10 @@ class HwpxApplicationService:
                 "handoff": handoff_snapshot.model_dump(mode="json"),
                 "content_team_images": self._content_team_image_sources(revision),
             }
+            if material_requirement is not None:
+                normalized_options["material_requirement"] = material_requirement.model_dump(
+                    mode="json"
+                )
             renderer_version = (
                 CONTENT_TEAM_RENDERER_VERSION_V3 if is_v3 else CONTENT_TEAM_RENDERER_VERSION
             )
@@ -401,6 +411,13 @@ class HwpxApplicationService:
                         ContentTeamImageSource.model_validate(value)
                         for value in record.options.get("content_team_images", [])
                     ),
+                    material_requirement=(
+                        CONTENT_TEAM_MATERIAL_REQUIREMENT_ADAPTER.validate_python(
+                            record.options["material_requirement"]
+                        )
+                        if "material_requirement" in record.options
+                        else None
+                    ),
                     idempotency_key=record.idempotency_key,
                     build_id=record.build_id,
                     handoff_snapshot=ContentTeamHandoffSnapshot.model_validate(handoff_raw),
@@ -537,6 +554,29 @@ class HwpxApplicationService:
                 "Item Revision must have exactly one supported content-team ITEM_CONTENT component",
             )
         return eligible[0]
+
+    @staticmethod
+    def _content_team_material_requirement(
+        component: dict[str, Any],
+    ) -> ContentTeamMaterialRequirement | None:
+        """Resolve the reviewed material intent pinned on the exact ITEM_CONTENT component."""
+
+        metadata = component.get("metadata")
+        if not isinstance(metadata, dict):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "content-team ITEM_CONTENT metadata is missing",
+            )
+        value = metadata.get("material_requirement")
+        if value is None:
+            return None
+        try:
+            return CONTENT_TEAM_MATERIAL_REQUIREMENT_ADAPTER.validate_python(value)
+        except ValidationError as exc:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_SOURCE_AMBIGUOUS,
+                "content-team material requirement metadata is malformed",
+            ) from exc
 
     @staticmethod
     def _content_team_image_sources(revision: dict[str, Any]) -> list[dict[str, Any]]:

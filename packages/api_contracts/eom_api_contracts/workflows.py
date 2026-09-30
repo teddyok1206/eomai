@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirementV2,
     EducationalRetrievalRequirementV2,
     KnowledgeSourceClass,
     normalize_reviewed_authoring_guidance,
@@ -117,6 +118,13 @@ class ContentTeamItemBriefRequestV4(ContentTeamItemBriefRequestV3):
         return self
 
 
+class ContentTeamItemBriefRequestV5(ContentTeamItemBriefRequestV4):
+    """Natural-presentation request with one explicit IMAGE supporting-data decision."""
+
+    schema_version: Literal["5.0"] = "5.0"  # type: ignore[assignment]
+    material_requirement: ContentTeamMaterialRequirementV2
+
+
 class EducationalRetrievalIntentRequest(ApiModel):
     """Presentation-level intent; V2 curriculum roots are resolved after outer validation."""
 
@@ -206,6 +214,7 @@ class WorkflowStartRequest(ApiModel):
     item_brief: (
         KnowledgeItemBriefRequest
         | KnowledgeItemBriefRequestV2
+        | ContentTeamItemBriefRequestV5
         | ContentTeamItemBriefRequestV4
         | ContentTeamItemBriefRequestV3
         | None
@@ -252,11 +261,12 @@ class WorkflowStartRequest(ApiModel):
                 KnowledgeItemBriefRequestV2,
                 ContentTeamItemBriefRequestV3,
                 ContentTeamItemBriefRequestV4,
+                ContentTeamItemBriefRequestV5,
             ),
         ):
             if isinstance(self.educational_retrieval, EducationalRetrievalIntentRequestV2):
                 if (
-                    self.definition_version != "1.14.0"
+                    self.definition_version not in {"1.14.0", "1.15.0"}
                     or self.item_brief.curriculum_selected_unit_key is None
                     or self.registry_mode != "CREATE_ITEM"
                     or self.item_id is not None
@@ -265,7 +275,7 @@ class WorkflowStartRequest(ApiModel):
                     != INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY
                 ):
                     raise ValueError(
-                        "past-exam variation requires workflow 1.14, CREATE_ITEM, and the "
+                        "past-exam variation requires workflow 1.14/1.15, CREATE_ITEM, and the "
                         "production corpus"
                     )
             elif self.definition_version == "1.14.0":
@@ -313,7 +323,11 @@ class WorkflowStartRequest(ApiModel):
             ):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
-                if isinstance(self.item_brief, ContentTeamItemBriefRequestV4):
+                if isinstance(self.item_brief, ContentTeamItemBriefRequestV5):
+                    if self.definition_version != "1.15.0":
+                        raise ValueError("V5 material requests require workflow definition 1.15")
+                    expected_image_mode = self.item_brief.material_requirement.image_mode
+                elif isinstance(self.item_brief, ContentTeamItemBriefRequestV4):
                     if self.definition_version not in {
                         "1.10.0",
                         "1.11.0",
@@ -347,6 +361,7 @@ class WorkflowStartRequest(ApiModel):
                     "1.12.0",
                     "1.13.0",
                     "1.14.0",
+                    "1.15.0",
                 }:
                     raise ValueError("content-team workflow definition is unsupported")
                 if self.image_mode != expected_image_mode:

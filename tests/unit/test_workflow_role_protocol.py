@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     AssessmentPageImageInput,
     AssessmentSourceMaterialization,
     ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirementV2,
     EducationalRetrievalRequirement,
     KnowledgeArtifactMemberPointer,
     KnowledgeGraphSnapshotPointer,
@@ -536,6 +537,40 @@ def test_constrained_grounded_v10_schema_binds_mixed_table_position_alternatives
     assert "when visual 1 is TABLE" in paths["description"]
     assert "/visuals/0/headers/0" in paths["description"]
     assert "/visuals/1/headers/0" in paths["description"]
+
+
+@pytest.mark.parametrize(
+    ("supporting_data", "expected_path"),
+    [("NONE", False), ("LABELED_DATA", True)],
+)
+def test_constrained_grounded_schema_binds_v2_image_presentation(
+    supporting_data: str,
+    expected_path: bool,
+) -> None:
+    schema = constrained_result_schema(
+        "authoring-result@10.0",
+        _v10_input("authoring"),
+        evidence_access="EVIDENCE_CONTEXT",
+        resolved_evidence_plan=_projectable_evidence_plan(
+            required_item_elements=("choice", "image", "paragraph")
+        ),
+        material_requirement=ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=1,
+            image_supporting_data=supporting_data,  # type: ignore[arg-type]
+        ),
+    )
+    validate_codex_structured_output_schema(schema)
+
+    draft = schema["$defs"]["AssessmentItemContentV3"]["properties"]
+    labeled_blocks = draft["labeled_blocks"]
+    if supporting_data == "NONE":
+        assert labeled_blocks["maxItems"] == 1
+        assert "Do not create a DATA block" in labeled_blocks["description"]
+    else:
+        assert labeled_blocks["minItems"] == 1
+    paths = schema["$defs"]["EvidenceUsageCitationV1"]["properties"]["draft_json_paths"]
+    assert ("/labeled_blocks/0/content" in paths["description"]) is expected_path
 
 
 def test_constrained_grounded_v10_schema_rejects_material_retrieval_drift() -> None:

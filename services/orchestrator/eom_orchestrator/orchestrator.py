@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
 
-from eom_catalog_contracts import ContentTeamMaterialRequirementV1
+from eom_catalog_contracts import ContentTeamMaterialRequirement
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_image_contracts import (
     LocalImageVisualReferencePublicationReceipt,
@@ -39,6 +39,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -156,6 +157,7 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/12.0",
         "resolved-execution-plan/15.0",
         "resolved-execution-plan/16.0",
+        "resolved-execution-plan/17.0",
     }
 )
 
@@ -222,11 +224,15 @@ def _resolved_evidence_plan_for_response(
         if result_schema in {"authoring-result@11.0", "review-result@11.0"}:
             return ResolvedExecutionPlanV11.model_validate(plan_document)
         if result_schema in {"authoring-result@12.0", "review-result@12.0"}:
-            if (
-                isinstance(plan_document, dict)
-                and plan_document.get("schema_version") == "resolved-execution-plan/16.0"
-            ):
-                return ResolvedExecutionPlanV16.model_validate(plan_document)
+            if isinstance(plan_document, dict) and plan_document.get("schema_version") in {
+                "resolved-execution-plan/16.0",
+                "resolved-execution-plan/17.0",
+            }:
+                return (
+                    ResolvedExecutionPlanV17.model_validate(plan_document)
+                    if plan_document.get("schema_version") == "resolved-execution-plan/17.0"
+                    else ResolvedExecutionPlanV16.model_validate(plan_document)
+                )
             return ResolvedExecutionPlanV12.model_validate(plan_document)
         return ResolvedExecutionPlanV3.model_validate(plan_document)
     except ValidationError as exc:
@@ -530,7 +536,7 @@ class Orchestrator:
         idempotency_key: str,
         prompt_path: Path | None = None,
         prompt_text: str | None = None,
-        material_requirement: ContentTeamMaterialRequirementV1 | None = None,
+        material_requirement: ContentTeamMaterialRequirement | None = None,
         before_execute: Callable[[str], None] | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     ) -> JobRecord:
@@ -1067,6 +1073,7 @@ class Orchestrator:
                             result=result,
                             result_artifact=result_artifact_pointer,
                             canonical_artifact_root=self.settings.nas_artifact_root,
+                            material_requirement=material_requirement,
                         )
                     evidence_event_data = evidence_receipt_event_data(
                         result,

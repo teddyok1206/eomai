@@ -13,6 +13,7 @@ from eom_workflow import (
     AgentStep,
     CompiledWorkflowDefinition,
     ContentTeamItemBriefV4,
+    ContentTeamItemBriefV5,
     WorkflowRequest,
     workflow_admission,
     workflow_definition_is_admitted,
@@ -287,6 +288,10 @@ def workflow_request_storage_document(request: WorkflowRequest) -> dict[str, Any
         stored_brief = request.item_brief.model_dump(mode="json", exclude_none=True)
         stored_material = dict(stored_brief["material_requirement"])
         stored_material["panel_count"] = request.item_brief.material_requirement.panel_count
+        if isinstance(request.item_brief, ContentTeamItemBriefV5):
+            stored_material["image_supporting_data"] = (
+                request.item_brief.material_requirement.image_supporting_data
+            )
         stored_brief["material_requirement"] = stored_material
         document["item_brief"] = stored_brief
     return document
@@ -306,7 +311,7 @@ def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest
         normalized_analysis.setdefault("prior_graph_snapshot", None)
         normalized["analysis_request"] = normalized_analysis
     item_brief = normalized.get("item_brief")
-    if isinstance(item_brief, dict) and item_brief.get("schema_version") == "4.0":
+    if isinstance(item_brief, dict) and item_brief.get("schema_version") in {"4.0", "5.0"}:
         material_requirement = item_brief.get("material_requirement")
         if isinstance(material_requirement, dict) and material_requirement.get("form") in {
             "AUTO",
@@ -316,6 +321,8 @@ def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest
         }:
             normalized_material_requirement = dict(material_requirement)
             normalized_material_requirement.setdefault("panel_count", None)
+            if item_brief.get("schema_version") == "5.0":
+                normalized_material_requirement.setdefault("image_supporting_data", None)
             normalized_item_brief = dict(item_brief)
             normalized_item_brief["material_requirement"] = normalized_material_requirement
             normalized["item_brief"] = normalized_item_brief

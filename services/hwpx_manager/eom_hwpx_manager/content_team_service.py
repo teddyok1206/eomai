@@ -9,7 +9,11 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
-from eom_catalog_contracts import AssessmentItemContentV2, AssessmentItemContentV3
+from eom_catalog_contracts import (
+    AssessmentItemContentV2,
+    AssessmentItemContentV3,
+    ContentTeamMaterialRequirement,
+)
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
@@ -143,6 +147,7 @@ class ContentTeamHwpxService:
         *,
         item_revision_id: str,
         image_sources: tuple[ContentTeamImageSource, ...],
+        material_requirement: ContentTeamMaterialRequirement | None = None,
         idempotency_key: str,
         build_id: str,
         handoff_snapshot: ContentTeamHandoffSnapshot,
@@ -315,6 +320,7 @@ class ContentTeamHwpxService:
                         item_revision_id=item_revision_id,
                         draft=content,
                         images=tuple(image for image, _path in image_inputs),
+                        material_requirement=material_requirement,
                     ),
                 ),
             )

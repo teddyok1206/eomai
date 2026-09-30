@@ -12,6 +12,9 @@ from typing import Any
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
+    ContentTeamMaterialRequirement,
+    ContentTeamMaterialRequirementV2,
+    EducationalRetrievalRequirementV2,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -31,6 +34,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceiptV3,
@@ -185,6 +189,7 @@ def validate_evidence_usage_for_commit(
     result: RoleResult,
     result_artifact: ResultArtifactPointer,
     canonical_artifact_root: Path,
+    material_requirement: ContentTeamMaterialRequirement | None = None,
 ) -> EvidenceReceipt | None:
     """Reload trusted pins and produce the receipt required for one @10 result commit."""
 
@@ -278,7 +283,11 @@ def validate_evidence_usage_for_commit(
         )
     plan_schema = plan_document.get("schema_version")
     expected_plan_schemas = (
-        {"resolved-execution-plan/12.0", "resolved-execution-plan/16.0"}
+        {
+            "resolved-execution-plan/12.0",
+            "resolved-execution-plan/16.0",
+            "resolved-execution-plan/17.0",
+        }
         if verification_planned
         else {"resolved-execution-plan/11.0"}
         if successor
@@ -303,7 +312,9 @@ def validate_evidence_usage_for_commit(
         return None
     try:
         plan = (
-            ResolvedExecutionPlanV16.model_validate(plan_document)
+            ResolvedExecutionPlanV17.model_validate(plan_document)
+            if plan_schema == "resolved-execution-plan/17.0"
+            else ResolvedExecutionPlanV16.model_validate(plan_document)
             if plan_schema == "resolved-execution-plan/16.0"
             else ResolvedExecutionPlanV12.model_validate(plan_document)
             if verification_planned
@@ -370,21 +381,27 @@ def validate_evidence_usage_for_commit(
             raise EvidenceUsageValidationError(
                 "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@12 result pointer family differs"
             )
-        citation_hash = _validate_authoring_result(plan, materials, result)
+        citation_hash = _validate_authoring_result(
+            plan, materials, result, material_requirement=material_requirement
+        )
         return _authoring_receipt_v3(plan, result_artifact, citation_hash)
     if isinstance(result, ContentTeamAuthoringRoleResultV11):
         if not isinstance(result_artifact, EvidenceResultArtifactPointerV2):
             raise EvidenceUsageValidationError(
                 "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@11 result pointer family differs"
             )
-        citation_hash = _validate_authoring_result(plan, materials, result)
+        citation_hash = _validate_authoring_result(
+            plan, materials, result, material_requirement=material_requirement
+        )
         return _authoring_receipt_v2(plan, result_artifact, citation_hash)
     if isinstance(result, ContentTeamAuthoringRoleResultV10):
         if not isinstance(result_artifact, EvidenceResultArtifactPointer):
             raise EvidenceUsageValidationError(
                 "EVIDENCE_RESULT_IDENTITY_MISMATCH", "@10 result pointer family differs"
             )
-        citation_hash = _validate_authoring_result(plan, materials, result)
+        citation_hash = _validate_authoring_result(
+            plan, materials, result, material_requirement=material_requirement
+        )
         return _authoring_receipt(plan, result_artifact, citation_hash)
 
     if isinstance(result, ContentTeamReviewRoleResultV12):
@@ -396,6 +413,7 @@ def validate_evidence_usage_for_commit(
             result=result,
             result_artifact=result_artifact,
             canonical_artifact_root=canonical_artifact_root,
+            material_requirement=material_requirement,
         )
     if isinstance(result, ContentTeamReviewRoleResultV11):
         return _validate_review_result_v11(
@@ -406,6 +424,7 @@ def validate_evidence_usage_for_commit(
             result=result,
             result_artifact=result_artifact,
             canonical_artifact_root=canonical_artifact_root,
+            material_requirement=material_requirement,
         )
 
     if not isinstance(result_artifact, EvidenceResultArtifactPointer):
@@ -420,6 +439,7 @@ def validate_evidence_usage_for_commit(
         result=result,
         result_artifact=result_artifact,
         canonical_artifact_root=canonical_artifact_root,
+        material_requirement=material_requirement,
     )
 
 
@@ -446,6 +466,8 @@ def _validate_authoring_result(
     plan: ResolvedExecutionPlanV3,
     materials: ResolvedEvidenceMaterials,
     result: ContentTeamAuthoringRoleResultV10,
+    *,
+    material_requirement: ContentTeamMaterialRequirement | None = None,
 ) -> str:
     usage = result.output.evidence_usage
     if result.output.metadata.knowledge_source_mode != "graph_grounded" or usage is None:
@@ -475,6 +497,7 @@ def _validate_authoring_result(
         materials.manifest,
         usage.citations,
         result.output.draft.model_dump(mode="json"),
+        material_requirement=material_requirement,
     )
     _validate_required_table_presentation(
         plan,
@@ -492,7 +515,9 @@ def _validate_variation_source_citation(
 ) -> None:
     """Require exact-source structural use for the 1:1 past-exam variation successor."""
 
-    if not isinstance(plan, ResolvedExecutionPlanV16):
+    if not isinstance(plan, ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17) or not isinstance(
+        plan.retrieval_requirement, EducationalRetrievalRequirementV2
+    ):
         return
     target_revision_id = plan.retrieval_requirement.past_exam_variation.source_item_revision_id
     entries = {entry.evidence_id: entry for entry in manifest.entries}
@@ -516,6 +541,8 @@ def _validate_required_image_presentation(
     manifest: EvidenceManifest,
     citations: Sequence[EvidenceUsageCitationV1],
     draft: Mapping[str, Any],
+    *,
+    material_requirement: ContentTeamMaterialRequirement | None = None,
 ) -> None:
     """Bind an image-filtered RAG request to an authored and cited image presentation.
 
@@ -558,10 +585,15 @@ def _validate_required_image_presentation(
             if isinstance(block, Mapping) and block.get("kind") == "DATA"
         )
     mixed_material = "table" in plan.retrieval_requirement.required_item_elements
-    if not mixed_material and not data_ordinals:
+    expected_data_count = 0 if mixed_material else 1
+    if isinstance(material_requirement, ContentTeamMaterialRequirementV2):
+        expected_data_count = (
+            1 if material_requirement.image_supporting_data == "LABELED_DATA" else 0
+        )
+    if len(data_ordinals) != expected_data_count:
         raise EvidenceUsageValidationError(
             "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING",
-            "image-filtered evidence requires a separate authored DATA material block",
+            "image-filtered evidence differs from its reviewed DATA presentation",
         )
 
     entries_by_id = {entry.evidence_id: entry for entry in manifest.entries}
@@ -666,6 +698,7 @@ def _validate_review_result(
     result: ContentTeamReviewRoleResultV10,
     result_artifact: EvidenceResultArtifactPointer,
     canonical_artifact_root: Path,
+    material_requirement: ContentTeamMaterialRequirement | None,
 ) -> ReviewEvidenceUsageValidationReceipt:
     attestation = result.output.evidence_usage_attestation
     if attestation is None:
@@ -705,7 +738,9 @@ def _validate_review_result(
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result family differs"
         )
-    authoring_hash = _validate_authoring_result(plan, materials, authoring)
+    authoring_hash = _validate_authoring_result(
+        plan, materials, authoring, material_requirement=material_requirement
+    )
     review_hash = canonical_citation_set_sha256(attestation.citations)
     authoring_usage = authoring.output.evidence_usage
     assert authoring_usage is not None
@@ -761,6 +796,7 @@ def _validate_review_result_v11(
     result: ContentTeamReviewRoleResultV11,
     result_artifact: ResultArtifactPointer,
     canonical_artifact_root: Path,
+    material_requirement: ContentTeamMaterialRequirement | None,
 ) -> ReviewEvidenceUsageValidationReceiptV2:
     if not isinstance(plan, ResolvedExecutionPlanV11) or not isinstance(
         result_artifact, EvidenceResultArtifactPointerV2
@@ -806,7 +842,9 @@ def _validate_review_result_v11(
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result family differs"
         )
-    authoring_hash = _validate_authoring_result(plan, materials, authoring)
+    authoring_hash = _validate_authoring_result(
+        plan, materials, authoring, material_requirement=material_requirement
+    )
     review_hash = canonical_citation_set_sha256(attestation.citations)
     authoring_usage = authoring.output.evidence_usage
     assert authoring_usage is not None
@@ -844,6 +882,7 @@ def _validate_review_result_v12(
     result: ContentTeamReviewRoleResultV12,
     result_artifact: ResultArtifactPointer,
     canonical_artifact_root: Path,
+    material_requirement: ContentTeamMaterialRequirement | None,
 ) -> ReviewEvidenceUsageValidationReceiptV3:
     """Validate one verification-planned review against exact V12 authoring evidence."""
 
@@ -891,7 +930,9 @@ def _validate_review_result_v12(
         raise EvidenceUsageValidationError(
             "EVIDENCE_AUTHORING_RESULT_INVALID", "authoring result family differs"
         )
-    authoring_hash = _validate_authoring_result(plan, materials, authoring)
+    authoring_hash = _validate_authoring_result(
+        plan, materials, authoring, material_requirement=material_requirement
+    )
     review_hash = canonical_citation_set_sha256(attestation.citations)
     authoring_usage = authoring.output.evidence_usage
     assert authoring_usage is not None

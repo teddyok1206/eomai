@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from eom_catalog_contracts import ContentTeamMaterialRequirementV2
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
@@ -165,8 +166,12 @@ def content_team_item_content(
     return {
         "schema_version": "3.0",
         "renderer_profile": "content-team-hwp-question-editor-v1",
-        "authoring_prompt_sha256": "sha256:" + "a" * 64,
-        "handoff_archive_sha256": "sha256:" + "b" * 64,
+        "authoring_prompt_sha256": (
+            "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435"
+        ),
+        "handoff_archive_sha256": (
+            "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
+        ),
         "item_number": 7,
         "score_display": "2.5",
         "stem": "다음 자료를 해석하시오.",
@@ -337,9 +342,10 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.13.0"
+        assert payload["definition_version"] == "1.15.0"
         brief = payload["item_brief"]
         assert isinstance(brief, dict)
+        assert brief["schema_version"] == "5.0"
         material = brief["material_requirement"]
         assert isinstance(material, dict)
         expected_image_mode = (
@@ -757,6 +763,17 @@ class FakeGateway:
                     statement_id="statement_n", text="중력 때문에 수직 속도는 변한다."
                 ),
             ),
+        )
+
+    async def item_material_requirement(
+        self, session: WebSession, item_id: str, item_revision_id: str
+    ) -> ContentTeamMaterialRequirementV2:
+        del session
+        assert item_id == ITEM_ID and item_revision_id == REVISION_ID
+        return ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=1,
+            image_supporting_data="NONE",
         )
 
     async def item_media(

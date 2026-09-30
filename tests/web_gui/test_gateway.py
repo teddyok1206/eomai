@@ -2323,6 +2323,103 @@ async def test_content_team_table_only_item_is_available_without_image_component
 
 
 @pytest.mark.anyio
+async def test_exact_source_material_requirement_uses_canonical_structured_content() -> None:
+    item_id = "item_test0004"
+    revision_id = "itemrev_test0004"
+    content = content_team_item_content(
+        visuals=[{"kind": "IMAGE", "label": ""}],
+        layout="IMAGE_ONLY",
+    )
+    content["labeled_blocks"] = []
+    paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        paths.append(request.url.path)
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "item_id": item_id,
+                        "revision_state": "APPROVED",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+            return httpx.Response(200, json=_single(content))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    requirement = await gateway.item_material_requirement(_session(), item_id, revision_id)
+
+    assert requirement.model_dump(mode="json") == {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "IMAGE",
+        "panel_count": 1,
+        "image_supporting_data": "NONE",
+    }
+    assert paths == [
+        f"/api/v1/item-revisions/{revision_id}",
+        f"/api/v1/item-revisions/{revision_id}/structured-content",
+    ]
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_exact_source_material_requirement_rejects_ambiguous_presentation() -> None:
+    item_id = "item_test0005"
+    revision_id = "itemrev_test0005"
+    content = content_team_item_content(
+        visuals=[
+            {"kind": "IMAGE", "label": ""},
+            {
+                "kind": "TABLE",
+                "label": "",
+                "headers": ["구분", "값"],
+                "rows": [["A", "1"]],
+                "alignments": ["center", "right"],
+            },
+        ],
+        layout="IMAGE_TABLE",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}":
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "item_id": item_id,
+                        "revision_state": "SUPERSEDED",
+                    }
+                ),
+            )
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+            return httpx.Response(200, json=_single(content))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(GatewayError, match="ITEM_PRESENTATION_AMBIGUOUS") as failure:
+        await gateway.item_material_requirement(_session(), item_id, revision_id)
+    assert failure.value.status == 409
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_content_team_visual_stream_is_revision_scoped_and_hash_verified() -> None:
     item_id = "item_" + "1" * 32
     revision_id = "itemrev_" + "2" * 32

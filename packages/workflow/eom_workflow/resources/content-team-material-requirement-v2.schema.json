@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/content-team-material-requirement/2.0",
+  "title": "Content-team student-visible material requirement V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "form",
+    "panel_count",
+    "image_supporting_data"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "content-team-material-requirement/2.0"
+    },
+    "form": {
+      "enum": [
+        "AUTO",
+        "TEXT",
+        "DATA",
+        "TABLE",
+        "IMAGE",
+        "MIXED",
+        "INQUIRY"
+      ]
+    },
+    "panel_count": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      ]
+    },
+    "image_supporting_data": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "NONE",
+            "LABELED_DATA"
+          ]
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "enum": [
+              "AUTO",
+              "TEXT",
+              "DATA",
+              "INQUIRY"
+            ]
+          }
+        },
+        "required": [
+          "form"
+        ]
+      },
+      "then": {
+        "properties": {
+          "panel_count": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "enum": [
+              "TABLE",
+              "IMAGE"
+            ]
+          }
+        },
+        "required": [
+          "form"
+        ]
+      },
+      "then": {
+        "properties": {
+          "panel_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "MIXED"
+          }
+        },
+        "required": [
+          "form"
+        ]
+      },
+      "then": {
+        "properties": {
+          "panel_count": {
+            "const": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "form": {
+            "const": "IMAGE"
+          }
+        },
+        "required": [
+          "form"
+        ]
+      },
+      "then": {
+        "properties": {
+          "image_supporting_data": {
+            "enum": [
+              "NONE",
+              "LABELED_DATA"
+            ]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "image_supporting_data": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

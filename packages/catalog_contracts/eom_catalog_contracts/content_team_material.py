@@ -19,6 +19,7 @@ ContentTeamMaterialForm = Literal[
     "INQUIRY",
 ]
 ContentTeamRetrievalElement = Literal["choice", "image", "paragraph", "table"]
+ContentTeamImageSupportingData = Literal["NONE", "LABELED_DATA"]
 
 
 class ContentTeamMaterialRequirementV1(FrozenModel):
@@ -53,8 +54,80 @@ class ContentTeamMaterialRequirementV1(FrozenModel):
         return "required" if self.form in {"AUTO", "IMAGE", "MIXED"} else "skip"
 
 
+class ContentTeamMaterialRequirementV2(ContentTeamMaterialRequirementV1):
+    """Successor distinguishing natural image flow from a genuinely labeled source block."""
+
+    schema_version: Literal["content-team-material-requirement/2.0"] = (
+        "content-team-material-requirement/2.0"  # type: ignore[assignment]
+    )
+    image_supporting_data: ContentTeamImageSupportingData | None
+
+    @model_validator(mode="after")
+    def explicit_image_presentation(self) -> ContentTeamMaterialRequirementV2:
+        if self.form == "IMAGE":
+            if self.image_supporting_data is None:
+                raise ValueError("IMAGE material requires an explicit supporting-data presentation")
+        elif self.image_supporting_data is not None:
+            raise ValueError("non-IMAGE material cannot declare image supporting data")
+        return self
+
+
+ContentTeamMaterialRequirement = ContentTeamMaterialRequirementV1 | ContentTeamMaterialRequirementV2
+
+
+def derive_content_team_material_requirement_v2(
+    draft: ContentTeamEditorialDraftContract,
+) -> ContentTeamMaterialRequirementV2:
+    """Derive one explicit successor requirement from a pinned typed source Item.
+
+    The draft collections are bounded by the canonical Item contract, so this is O(v + b) time
+    and O(v) bounded auxiliary space.  It preserves ordered visual kinds and rejects source shapes
+    that cannot be represented without silently inventing or removing a DATA block.
+    """
+
+    visual_kinds = tuple(visual.kind for visual in draft.visuals)
+    data_block_count = sum(block.kind == "DATA" for block in draft.labeled_blocks)
+    if draft.inquiry is not None:
+        if data_block_count:
+            raise ValueError("inquiry source cannot be reduced with a separate DATA block")
+        return ContentTeamMaterialRequirementV2(
+            form="INQUIRY",
+            panel_count=None,
+            image_supporting_data=None,
+        )
+    if not visual_kinds:
+        return ContentTeamMaterialRequirementV2(
+            form="DATA" if data_block_count == 1 else "TEXT",
+            panel_count=None,
+            image_supporting_data=None,
+        )
+    if set(visual_kinds) == {"IMAGE", "TABLE"}:
+        if data_block_count:
+            raise ValueError("mixed source with a separate DATA block is presentation-ambiguous")
+        return ContentTeamMaterialRequirementV2(
+            form="MIXED",
+            panel_count=2,
+            image_supporting_data=None,
+        )
+    if set(visual_kinds) == {"TABLE"}:
+        if data_block_count:
+            raise ValueError("table source with a separate DATA block is presentation-ambiguous")
+        return ContentTeamMaterialRequirementV2(
+            form="TABLE",
+            panel_count=len(visual_kinds),
+            image_supporting_data=None,
+        )
+    if set(visual_kinds) == {"IMAGE"}:
+        return ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=len(visual_kinds),
+            image_supporting_data="LABELED_DATA" if data_block_count == 1 else "NONE",
+        )
+    raise ValueError("source visual order is not representable by the material requirement")
+
+
 def content_team_material_required_retrieval_elements(
-    requirement: ContentTeamMaterialRequirementV1,
+    requirement: ContentTeamMaterialRequirement,
 ) -> tuple[ContentTeamRetrievalElement, ...]:
     """Return the canonical sorted RAG filter for one reviewed material requirement."""
 
@@ -67,7 +140,7 @@ def content_team_material_required_retrieval_elements(
 
 
 def validate_content_team_material_selection(
-    requirement: ContentTeamMaterialRequirementV1,
+    requirement: ContentTeamMaterialRequirement,
     *,
     task_type: str,
     allowed_forms: tuple[str, ...],
@@ -89,7 +162,7 @@ def validate_content_team_material_selection(
 
 
 def validate_content_team_material_requirement(
-    requirement: ContentTeamMaterialRequirementV1,
+    requirement: ContentTeamMaterialRequirement,
     draft: ContentTeamEditorialDraftContract,
 ) -> None:
     """Fail closed when an authored draft differs from the reviewed material form.
@@ -103,6 +176,9 @@ def validate_content_team_material_requirement(
 
     visual_kinds = tuple(visual.kind for visual in draft.visuals)
     data_block_count = sum(block.kind == "DATA" for block in draft.labeled_blocks)
+    image_data_blocks = 1
+    if isinstance(requirement, ContentTeamMaterialRequirementV2):
+        image_data_blocks = 1 if requirement.image_supporting_data == "LABELED_DATA" else 0
     expected: tuple[str, tuple[str, ...], bool, int | None] = {
         "TEXT": ("NONE", (), False, 0),
         "DATA": ("NONE", (), False, 1),
@@ -116,7 +192,7 @@ def validate_content_team_material_requirement(
             "IMAGE_ONLY" if requirement.panel_count == 1 else "IMAGE_IMAGE",
             ("IMAGE",) * (requirement.panel_count or 0),
             False,
-            1,
+            image_data_blocks,
         ),
         "MIXED": (draft.visual_layout, visual_kinds, False, 0),
         "INQUIRY": ("INQUIRY_BOX", (), True, 0),

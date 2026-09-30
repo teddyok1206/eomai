@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     ImageBlock,
     MediaArtifactPointer,
     candidate_visible_image_instruction_paths,
+    derive_content_team_material_requirement_v2,
     validate_content_team_material_requirement,
     validate_contract,
     validate_eom_question_template_content,
@@ -60,8 +61,10 @@ from eom_workflow import (
     ArtifactPointer,
     ContentTeamItemBrief,
     ContentTeamItemBriefV4,
+    ContentTeamItemBriefV5,
     ItemBriefV2,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     ResolvedStepExecutionV12,
     WorkflowRequest,
     WorkflowReviewEscalationDirective,
@@ -211,6 +214,7 @@ def _local_image_prompt_contract(
         "1.20.9",
         "1.20.10",
         "1.20.11",
+        "1.20.12",
     }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
@@ -248,6 +252,7 @@ def _uses_v1_reference_conditioning(
             "1.20.9",
             "1.20.10",
             "1.20.11",
+            "1.20.12",
         }
     )
 
@@ -521,6 +526,7 @@ class WorkflowCatalogService:
                 )
             self._require_compatibility(release, definition_key, definition_version)
             self._require_item_brief_release(pack.pack_key, release.version, request)
+            self._require_v5_source_presentation(request)
             profile_keys = request.profiles.model_dump(mode="json", exclude_none=True)
             profiles = self._profile_snapshots(resolved_session, release, profile_keys)
             intake_ids = request.source_intake.batch_ids if request.source_intake else ()
@@ -590,10 +596,11 @@ class WorkflowCatalogService:
                     "1.20.9",
                     "1.20.10",
                     "1.20.11",
+                    "1.20.12",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.11",
+                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.12",
                     )
                 if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
                     "1.20.5",
@@ -603,10 +610,11 @@ class WorkflowCatalogService:
                     "1.20.9",
                     "1.20.10",
                     "1.20.11",
+                    "1.20.12",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.11",
+                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.12",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1874,7 +1882,11 @@ class WorkflowCatalogService:
             record = session.get(ResolvedExecutionPlanRecord, receipt.plan_id)
             if record is None:
                 raise ValueError("past-exam variation execution plan is missing")
-            plan = ResolvedExecutionPlanV16.model_validate(record.canonical_document)
+            plan = (
+                ResolvedExecutionPlanV17.model_validate(record.canonical_document)
+                if record.canonical_document.get("schema_version") == "resolved-execution-plan/17.0"
+                else ResolvedExecutionPlanV16.model_validate(record.canonical_document)
+            )
         if (
             plan.workflow_id != workflow.workflow_id
             or plan.plan_sha256 != record.plan_sha256
@@ -2003,7 +2015,10 @@ class WorkflowCatalogService:
         if request.item_brief is None:
             return
         is_content_team = isinstance(request.item_brief, ContentTeamItemBrief)
-        is_material_v4 = isinstance(request.item_brief, ContentTeamItemBriefV4)
+        is_material_v5 = isinstance(request.item_brief, ContentTeamItemBriefV5)
+        is_material_v4 = (
+            isinstance(request.item_brief, ContentTeamItemBriefV4) and not is_material_v5
+        )
         expects_content_team = pack_key == "generated-knowledge-item" and release_version in {
             "1.12.0",
             "1.13.0",
@@ -2035,6 +2050,7 @@ class WorkflowCatalogService:
             "1.20.9",
             "1.20.10",
             "1.20.11",
+            "1.20.12",
         }
         if expects_content_team:
             if not is_content_team:
@@ -2042,28 +2058,27 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            if (
-                release_version
-                in {
-                    "1.16.0",
-                    "1.16.1",
-                    "1.17.0",
-                    "1.18.0",
-                    "1.19.0",
-                    "1.20.0",
-                    "1.20.1",
-                    "1.20.2",
-                    "1.20.3",
-                    "1.20.4",
-                    "1.20.5",
-                    "1.20.6",
-                    "1.20.7",
-                    "1.20.8",
-                    "1.20.9",
-                    "1.20.10",
-                    "1.20.11",
-                }
-            ) != is_material_v4:
+            expects_material_v5 = release_version == "1.20.12"
+            expects_material_v4 = release_version in {
+                "1.16.0",
+                "1.16.1",
+                "1.17.0",
+                "1.18.0",
+                "1.19.0",
+                "1.20.0",
+                "1.20.1",
+                "1.20.2",
+                "1.20.3",
+                "1.20.4",
+                "1.20.5",
+                "1.20.6",
+                "1.20.7",
+                "1.20.8",
+                "1.20.9",
+                "1.20.10",
+                "1.20.11",
+            }
+            if expects_material_v5 != is_material_v5 or expects_material_v4 != is_material_v4:
                 raise ContentPackError(
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "Content Pack release and material-aware item brief differ",
@@ -2086,6 +2101,7 @@ class WorkflowCatalogService:
                 "1.20.9",
                 "1.20.10",
                 "1.20.11",
+                "1.20.12",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode
@@ -2156,6 +2172,36 @@ class WorkflowCatalogService:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                 "item brief version does not match the immutable Content Pack release",
+            )
+
+    def _require_v5_source_presentation(self, request: WorkflowRequest) -> None:
+        """Bind exact-source V5 presentation intent to the pinned approved source Item."""
+
+        brief = request.item_brief
+        retrieval = request.educational_retrieval
+        if not isinstance(brief, ContentTeamItemBriefV5) or not isinstance(
+            retrieval, EducationalRetrievalRequirementV2
+        ):
+            return
+        source = self.registry.load_item_content(
+            retrieval.past_exam_variation.source_item_revision_id
+        )
+        if not isinstance(source, AssessmentItemContentV2 | AssessmentItemContentV3):
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "past-exam source does not expose a typed content-team presentation",
+            )
+        try:
+            expected = derive_content_team_material_requirement_v2(source)
+        except ValueError as exc:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "past-exam source presentation is ambiguous",
+            ) from exc
+        if brief.material_requirement != expected:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "reviewed material presentation differs from the exact past-exam source",
             )
 
     @staticmethod

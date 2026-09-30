@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from eom_catalog_contracts import ContentTeamMaterialRequirementV2
+
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
@@ -388,6 +390,11 @@ class WebServices:
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview:
         return await self.gateway.item_preview(session, item_id, item_revision_id)
+
+    async def item_material_requirement(
+        self, session: WebSession, item_id: str, item_revision_id: str
+    ) -> ContentTeamMaterialRequirementV2:
+        return await self.gateway.item_material_requirement(session, item_id, item_revision_id)
 
     async def recent_items(self, session: WebSession) -> tuple[dict[str, object], ...]:
         values = await self.gateway.recent_items(session)

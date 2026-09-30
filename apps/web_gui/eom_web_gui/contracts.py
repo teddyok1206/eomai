@@ -8,6 +8,10 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
+from eom_catalog_contracts import (
+    ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirementV2,
+)
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eom_web_gui.draft_integrity import (
@@ -1032,26 +1036,10 @@ class QualityProfile(StrEnum):
     DEEP = "deep"
 
 
-class ContentTeamMaterialRequirement(WebModel):
-    """Presentation DTO mirroring the canonical reviewed material requirement."""
-
-    schema_version: Literal["content-team-material-requirement/1.0"] = (
-        "content-team-material-requirement/1.0"
-    )
-    form: Literal["AUTO", "TEXT", "DATA", "TABLE", "IMAGE", "MIXED", "INQUIRY"]
-    panel_count: int | None
-
-    @model_validator(mode="after")
-    def coherent_panel_count(self) -> ContentTeamMaterialRequirement:
-        if self.form in {"AUTO", "TEXT", "DATA", "INQUIRY"}:
-            if self.panel_count is not None:
-                raise ValueError(f"{self.form} material cannot declare a panel count")
-        elif self.form in {"TABLE", "IMAGE"}:
-            if self.panel_count not in {1, 2}:
-                raise ValueError(f"{self.form} material requires one or two panels")
-        elif self.panel_count != 2:
-            raise ValueError("MIXED material requires exactly two panels")
-        return self
+ContentTeamMaterialRequirement = Annotated[
+    ContentTeamMaterialRequirementV1 | ContentTeamMaterialRequirementV2,
+    Field(discriminator="schema_version"),
+]
 
 
 class ContentIntakeOption(WebModel):
@@ -1806,20 +1794,31 @@ class RequestDraftEditable(WebModel):
 
     @model_validator(mode="before")
     @classmethod
-    def migrate_legacy_image_request(cls, value: object) -> object:
-        """Keep the former boolean write API while storing only the typed V4 contract."""
+    def migrate_legacy_material_request(cls, value: object) -> object:
+        """Preserve V1 meaning while every new draft stores the V2 presentation contract."""
 
-        if not isinstance(value, dict) or "material_requirement" in value:
-            return value
-        if value.get("image_required") is not True:
+        if not isinstance(value, dict):
             return value
         migrated = dict(value)
+        material = migrated.get("material_requirement")
+        if isinstance(material, dict) and material.get("schema_version") == (
+            "content-team-material-requirement/1.0"
+        ):
+            legacy = ContentTeamMaterialRequirementV1.model_validate(material)
+            migrated["material_requirement"] = ContentTeamMaterialRequirementV2(
+                form=legacy.form,
+                panel_count=legacy.panel_count,
+                image_supporting_data="LABELED_DATA" if legacy.form == "IMAGE" else None,
+            ).model_dump(mode="json")
+            return migrated
+        if "material_requirement" in migrated or migrated.get("image_required") is not True:
+            return value
         migrated.pop("image_required")
-        migrated["material_requirement"] = {
-            "schema_version": "content-team-material-requirement/1.0",
-            "form": "IMAGE",
-            "panel_count": 1,
-        }
+        migrated["material_requirement"] = ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=1,
+            image_supporting_data="LABELED_DATA",
+        ).model_dump(mode="json")
         return migrated
 
     @field_validator("authoring_guidance")
@@ -1842,7 +1841,7 @@ class RequestDraftUpdate(RequestDraftEditable):
 
 
 class RequestDraft(RequestDraftEditable):
-    schema_version: Literal["5.0"] = "5.0"
+    schema_version: Literal["6.0"] = "6.0"
     request_draft_id: str = Field(pattern=r"^requestdraft_[0-9a-f]{32}$")
     status: Literal["DRAFT"] = "DRAFT"
     language: Literal["ko"] = "ko"

@@ -1225,10 +1225,11 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/workflow-start-v2.schema.json",
         "eom_api_contracts/schemas/workflow-start-v3.schema.json",
         "eom_api_contracts/schemas/workflow-start-v4.schema.json",
+        "eom_api_contracts/schemas/workflow-start-v5.schema.json",
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 48 packaged API schemas including paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
+            "expected exactly 49 packaged API schemas including paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -2022,6 +2023,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         "1.12",
         "1.13",
         "1.14",
+        "1.15",
     ):
         definition = root / f"generic-item-development.v{version}.yaml"
         definition.write_bytes(
@@ -2132,7 +2134,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2415,9 +2417,10 @@ compiled_versions = {
         definition_v1_12,
         definition_v1_13,
         definition_v1_14,
+        definition_v1_15,
     )
 }
-if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0"}:
+if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0"}:
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
@@ -2467,6 +2470,7 @@ admitted_definitions = (
     compile_definition(Path(definition_v1_12), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(definition_v1_13), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(definition_v1_14), {"authoring", "image", "review", "item_management"}),
+    compile_definition(Path(definition_v1_15), {"authoring", "image", "review", "item_management"}),
     compile_definition(Path(analysis_v1), {"support"}),
     compile_definition(Path(analysis_v4), {"support"}),
     compile_definition(Path(analysis_v8), {"support"}),

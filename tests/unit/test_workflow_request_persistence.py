@@ -4,12 +4,14 @@ from copy import deepcopy
 import pytest
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirementV2,
     KnowledgeAnalysisRequestV2,
     PdfReviewDocumentPointer,
 )
 from eom_identifiers import content_sha256
 from eom_workflow import (
     ContentTeamItemBriefV4,
+    ContentTeamItemBriefV5,
     WorkflowRequest,
     build_pdf_document_review_request,
 )
@@ -104,6 +106,44 @@ def _material_workflow_request(*, form: str, panel_count: int | None) -> Workflo
             original_request_sha256=guidance_sha256,
             material_requirement=ContentTeamMaterialRequirementV1.model_validate(
                 {"form": form, "panel_count": panel_count}
+            ),
+        ),
+    )
+
+
+def _natural_material_workflow_request(
+    *, form: str, panel_count: int | None, image_supporting_data: str | None
+) -> WorkflowRequest:
+    guidance = "검토된 자료 형식을 사용하여 새로운 통합과학 문항을 작성한다."
+    guidance_sha256 = hashlib.sha256(guidance.encode("utf-8")).hexdigest()
+    return WorkflowRequest(
+        request_name="GENERATED_KNOWLEDGE_ITEM_REQUEST",
+        image_mode="required" if form in {"AUTO", "IMAGE", "MIXED"} else "skip",
+        content_pack=ContentPackSelection(
+            pack_key="generated-knowledge-item",
+            environment="development",
+        ),
+        profiles=WorkflowProfiles(
+            authoring="content-team-authoring",
+            review="content-team-review",
+            image=("generated-stimulus-drawing" if form in {"AUTO", "IMAGE", "MIXED"} else None),
+            registration="content-team-registration",
+        ),
+        registry_intent=RegistryIntent(mode="CREATE_ITEM"),
+        item_brief=ContentTeamItemBriefV5(
+            subject="통합과학",
+            topic="측정 자료 해석",
+            task_type=form,
+            difficulty="MEDIUM",
+            authoring_guidance=guidance,
+            authoring_guidance_sha256=f"sha256:{guidance_sha256}",
+            original_request_sha256=guidance_sha256,
+            material_requirement=ContentTeamMaterialRequirementV2.model_validate(
+                {
+                    "form": form,
+                    "panel_count": panel_count,
+                    "image_supporting_data": image_supporting_data,
+                }
             ),
         ),
     )
@@ -233,6 +273,36 @@ def test_loader_does_not_invent_nonnullable_material_panel_count() -> None:
     del stored["item_brief"]["material_requirement"]["panel_count"]
 
     with pytest.raises(ValidationError, match="panel_count"):
+        load_persisted_workflow_request(stored)
+
+
+def test_v5_storage_preserves_required_nullable_image_supporting_data() -> None:
+    stored = workflow_request_storage_document(
+        _natural_material_workflow_request(
+            form="AUTO", panel_count=None, image_supporting_data=None
+        )
+    )
+
+    material = stored["item_brief"]["material_requirement"]
+    assert material["schema_version"] == "content-team-material-requirement/2.0"
+    assert material["image_supporting_data"] is None
+
+    loaded = load_persisted_workflow_request(stored)
+
+    assert isinstance(loaded.item_brief, ContentTeamItemBriefV5)
+    assert loaded.item_brief.material_requirement.image_supporting_data is None
+    assert workflow_request_storage_document(loaded) == stored
+
+
+def test_v5_loader_rejects_omitted_image_supporting_data() -> None:
+    stored = workflow_request_storage_document(
+        _natural_material_workflow_request(
+            form="IMAGE", panel_count=1, image_supporting_data="NONE"
+        )
+    )
+    del stored["item_brief"]["material_requirement"]["image_supporting_data"]
+
+    with pytest.raises(ValidationError, match="image_supporting_data"):
         load_persisted_workflow_request(stored)
 
 

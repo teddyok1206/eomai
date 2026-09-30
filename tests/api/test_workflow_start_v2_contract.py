@@ -93,6 +93,35 @@ def _validator_v4() -> Draft202012Validator:
     )
 
 
+def _validator_v5() -> Draft202012Validator:
+    paths = (
+        "schemas/api/v1/workflow-start-v1.schema.json",
+        "schemas/api/v1/workflow-start-v2.schema.json",
+        "schemas/api/v1/workflow-start-v3.schema.json",
+        "schemas/api/v1/workflow-start-v4.schema.json",
+        "schemas/api/v1/workflow-start-v5.schema.json",
+        "schemas/workflow/knowledge-item-brief-v1.schema.json",
+        "schemas/workflow/content-team-material-requirement-v1.schema.json",
+        "schemas/workflow/content-team-material-requirement-v2.schema.json",
+        "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
+        "schemas/knowledge/educational-retrieval-requirement-v2.schema.json",
+        "schemas/knowledge/past-exam-variation-request-v1.schema.json",
+        "schemas/assessment-assembly/mock-exam-production-plan-v1.schema.json",
+    )
+    resources: list[tuple[str, Resource[object]]] = []
+    schemas: dict[str, dict[str, object]] = {}
+    for path in paths:
+        schema = _schema(path)
+        identifier = schema.get("$id")
+        assert isinstance(identifier, str)
+        resources.append((identifier, Resource.from_contents(schema)))
+        schemas[path] = schema
+    return Draft202012Validator(
+        schemas["schemas/api/v1/workflow-start-v5.schema.json"],
+        registry=Registry().with_resources(resources),
+    )
+
+
 def _request() -> dict[str, object]:
     guidance = "통합과학 범위에서 검증된 근거를 사용하여 표 자료 해석 문항을 작성한다."
     return {
@@ -216,6 +245,42 @@ def test_workflow_start_v4_adds_only_exact_past_exam_variation_definition() -> N
     assert parsed.definition_version == "1.14.0"
     assert parsed.educational_retrieval is not None
     assert parsed.educational_retrieval.schema_version == "educational-retrieval-requirement/2.0"
+
+
+@pytest.mark.parametrize("supporting_data", ["NONE", "LABELED_DATA"])
+def test_workflow_start_v5_adds_explicit_image_presentation(
+    supporting_data: str,
+) -> None:
+    canonical = ROOT / "schemas/api/v1/workflow-start-v5.schema.json"
+    packaged = (
+        ROOT / "packages/api_contracts/eom_api_contracts/schemas/workflow-start-v5.schema.json"
+    )
+    assert canonical.read_bytes() == packaged.read_bytes()
+    request = _request()
+    request["definition_version"] = "1.15.0"
+    request["image_mode"] = "required"
+    brief = request["item_brief"]
+    assert isinstance(brief, dict)
+    brief["schema_version"] = "5.0"
+    brief["task_type"] = "IMAGE"
+    brief["material_requirement"] = {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "IMAGE",
+        "panel_count": 1,
+        "image_supporting_data": supporting_data,
+    }
+    retrieval = request["educational_retrieval"]
+    assert isinstance(retrieval, dict)
+    retrieval["required_item_elements"] = ["choice", "image", "paragraph"]
+
+    with pytest.raises(ValidationError):
+        _validator_v4().validate(request)
+    _validator_v5().validate(request)
+    parsed = WorkflowStartRequest.model_validate(request)
+    assert parsed.definition_version == "1.15.0"
+    assert parsed.item_brief is not None
+    assert parsed.item_brief.schema_version == "5.0"
+    assert parsed.item_brief.material_requirement.image_supporting_data == supporting_data
 
 
 def test_workflow_start_v2_preserves_v1_bytes_and_accepts_legacy_branch() -> None:

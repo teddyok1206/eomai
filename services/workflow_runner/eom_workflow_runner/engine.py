@@ -13,7 +13,7 @@ from threading import Event, Thread
 from typing import Protocol
 from uuid import uuid4
 
-from eom_catalog_contracts import ContentTeamMaterialRequirementV1
+from eom_catalog_contracts import ContentTeamMaterialRequirement
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
@@ -42,6 +42,7 @@ from eom_workflow import (
     PdfDocumentReviewWorkerRequest,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     ResolvedStepExecutionV12,
     TerminalStep,
     WorkerRequest,
@@ -199,7 +200,9 @@ def _is_content_team_image_result_schema(result_schema: str) -> bool:
     return result_schema in CONTENT_TEAM_IMAGE_RESULT_SCHEMAS
 
 
-def _parse_review_escalation_plan(document: object) -> ResolvedExecutionPlanV12:
+def _parse_review_escalation_plan(
+    document: object,
+) -> ResolvedExecutionPlanV12 | ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17:
     """Parse only released plan families that carry an escalatable review step."""
 
     if not isinstance(document, dict):
@@ -209,6 +212,8 @@ def _parse_review_escalation_plan(document: object) -> ResolvedExecutionPlanV12:
         return ResolvedExecutionPlanV12.model_validate(document)
     if schema_version == "resolved-execution-plan/16.0":
         return ResolvedExecutionPlanV16.model_validate(document)
+    if schema_version == "resolved-execution-plan/17.0":
+        return ResolvedExecutionPlanV17.model_validate(document)
     raise ValueError("review escalation plan family is unsupported")
 
 
@@ -275,10 +280,12 @@ def _authoring_material_requirement(
     request: WorkflowRequest,
     *,
     worker_role: str | None,
-) -> ContentTeamMaterialRequirementV1 | None:
+) -> ContentTeamMaterialRequirement | None:
     """Return only the small reviewed material value needed by the authoring schema boundary."""
 
-    if worker_role != "authoring" or not isinstance(request.item_brief, ContentTeamItemBriefV4):
+    if worker_role not in {"authoring", "review"} or not isinstance(
+        request.item_brief, ContentTeamItemBriefV4
+    ):
         return None
     return request.item_brief.material_requirement
 
@@ -313,7 +320,7 @@ class RoleJobExecutor(Protocol):
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
-        material_requirement: ContentTeamMaterialRequirementV1 | None,
+        material_requirement: ContentTeamMaterialRequirement | None,
     ) -> RoleExecutionResult: ...
 
 
@@ -356,7 +363,7 @@ class PlatformRoleJobExecutor:
         upstream: tuple[ArtifactPointer, ...],
         idempotency_key: str,
         prompt_text: str | None,
-        material_requirement: ContentTeamMaterialRequirementV1 | None = None,
+        material_requirement: ContentTeamMaterialRequirement | None = None,
     ) -> RoleExecutionResult:
         if step.worker_role is None or step.result_schema is None:
             raise WorkflowError(

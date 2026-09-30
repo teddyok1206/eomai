@@ -30,6 +30,7 @@ def test_demo_request_normalization_is_deterministic_and_structured() -> None:
     assert first.equation_required is True
     assert first.material_requirement.form == "AUTO"
     assert first.material_requirement.panel_count is None
+    assert first.material_requirement.image_supporting_data is None
     assert first.choice_count == 5
     assert first.knowledge_grounding is False
     assert first.curriculum_selected_unit_key is None
@@ -45,18 +46,19 @@ def test_request_text_becomes_reviewed_bounded_authoring_guidance() -> None:
     )
     payload = workflow_start_payload(draft)
     assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-    assert payload["definition_version"] == "1.13.0"
+    assert payload["definition_version"] == "1.15.0"
     assert payload["image_mode"] == "required"
     assert payload["pack_key"] == "generated-knowledge-item"
     assert payload["execution_preset_key"] == "standard-item"
     assert payload["source_intake_batch_ids"] == []
     brief = payload["item_brief"]
     assert isinstance(brief, dict)
-    assert brief["schema_version"] == "4.0"
+    assert brief["schema_version"] == "5.0"
     assert brief["material_requirement"] == {
-        "schema_version": "content-team-material-requirement/1.0",
+        "schema_version": "content-team-material-requirement/2.0",
         "form": "AUTO",
         "panel_count": None,
+        "image_supporting_data": None,
     }
     assert brief["authoring_guidance"] == DEMO_REQUEST
     assert brief["authoring_guidance_sha256"] == draft.authoring_guidance_sha256
@@ -118,6 +120,7 @@ def test_legacy_image_required_update_is_migrated_to_exact_image_material() -> N
 
     assert migrated.material_requirement.form == "IMAGE"
     assert migrated.material_requirement.panel_count == 1
+    assert migrated.material_requirement.image_supporting_data == "LABELED_DATA"
 
 
 def test_quality_profile_is_closed_policy_mapping() -> None:

@@ -11,7 +11,8 @@ from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
 
 from eom_catalog_contracts import (
-    ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirement,
+    ContentTeamMaterialRequirementV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
     KnowledgeAnalysisRequestV5,
@@ -538,8 +539,18 @@ def load_content_team_material_requirement_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
+def load_content_team_material_requirement_v2_schema() -> dict[str, Any]:
+    logical_name = "content-team-material-requirement-v2.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
 def load_knowledge_item_brief_v4_schema() -> dict[str, Any]:
     logical_name = "knowledge-item-brief-v4.schema.json"
+    return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
+
+
+def load_knowledge_item_brief_v5_schema() -> dict[str, Any]:
+    logical_name = "knowledge-item-brief-v5.schema.json"
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
@@ -1707,7 +1718,7 @@ def constrained_result_schema(
     *,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None = None,
     resolved_evidence_plan: ResolvedExecutionPlanV3 | None = None,
-    material_requirement: ContentTeamMaterialRequirementV1 | None = None,
+    material_requirement: ContentTeamMaterialRequirement | None = None,
 ) -> dict[str, Any]:
     schema = load_codex_result_schema(schema_id)
     properties = _mapping(schema, "properties")
@@ -2185,7 +2196,7 @@ def _bind_evidence_result_branch(
     schema_id: str,
     evidence_access: Literal["NONE", "EVIDENCE_CONTEXT"] | None,
     resolved_evidence_plan: ResolvedExecutionPlanV3 | None,
-    material_requirement: ContentTeamMaterialRequirementV1 | None,
+    material_requirement: ContentTeamMaterialRequirement | None,
 ) -> None:
     """Bind nullable evidence branches to the immutable resolved-plan step.
 
@@ -2298,7 +2309,7 @@ def _bind_required_material_result_branch(
     schema: dict[str, Any],
     *,
     resolved_evidence_plan: ResolvedExecutionPlanV3,
-    material_requirement: ContentTeamMaterialRequirementV1 | None,
+    material_requirement: ContentTeamMaterialRequirement | None,
 ) -> None:
     """Project plan-required TABLE/IMAGE presence into the authoring response schema.
 
@@ -2379,9 +2390,9 @@ def _bind_required_material_result_branch(
 
 def _bind_exact_material_shape(
     draft_properties: dict[str, Any],
-    requirement: ContentTeamMaterialRequirementV1,
+    requirement: ContentTeamMaterialRequirement,
 ) -> None:
-    """Project the reviewed V4 material form into one bounded worker response schema."""
+    """Project the reviewed material form into one bounded worker response schema."""
 
     if requirement.form not in {"TABLE", "IMAGE", "MIXED"}:
         return
@@ -2397,17 +2408,34 @@ def _bind_exact_material_shape(
 
     if requirement.form == "IMAGE":
         labeled_blocks = _mapping(draft_properties, "labeled_blocks")
-        labeled_blocks["minItems"] = 1
-        _append_projection_instruction(
-            labeled_blocks,
-            "The first block must be the one required DATA block; an optional CONDITION may "
-            "follow it.",
-        )
+        if (
+            isinstance(requirement, ContentTeamMaterialRequirementV2)
+            and requirement.image_supporting_data == "NONE"
+        ):
+            block_definition = _mapping(
+                _mapping(draft_properties, "labeled_blocks"),
+                "items",
+            )
+            if block_definition.get("$ref") != "#/$defs/ContentTeamLabeledBlock":
+                raise WorkflowSchemaError("labeled block projection is incompatible")
+            labeled_blocks["maxItems"] = 1
+            _append_projection_instruction(
+                labeled_blocks,
+                "Do not create a DATA block. Put the natural visual introduction in stem; an "
+                "independent CONDITION is the only allowed labeled block.",
+            )
+        else:
+            labeled_blocks["minItems"] = 1
+            _append_projection_instruction(
+                labeled_blocks,
+                "The first block must be the one required DATA block; an optional CONDITION may "
+                "follow it.",
+            )
 
 
 def _bind_exact_past_exam_material_citations(
     definitions: dict[str, Any],
-    requirement: ContentTeamMaterialRequirementV1,
+    requirement: ContentTeamMaterialRequirement,
 ) -> None:
     """State the exact cross-citation paths checked after V4 PAST_EXAM generation.
 
@@ -2442,8 +2470,14 @@ def _bind_exact_past_exam_material_citations(
         requirement_text = f"Across all citations include {', '.join(required_paths)}."
     elif requirement.form == "IMAGE":
         assert requirement.panel_count is not None
+        data_paths = (
+            ("/labeled_blocks/0/content",)
+            if not isinstance(requirement, ContentTeamMaterialRequirementV2)
+            or requirement.image_supporting_data == "LABELED_DATA"
+            else ()
+        )
         required_paths = (
-            "/labeled_blocks/0/content",
+            *data_paths,
             "/stem",
             *(f"/visuals/{ordinal}/kind" for ordinal in range(requirement.panel_count)),
         )

@@ -277,7 +277,7 @@ def test_request_draft_workflow_submission_and_replay() -> None:
         )
         assert draft.status_code == 201
         value = draft.json()
-        assert value["schema_version"] == "5.0"
+        assert value["schema_version"] == "6.0"
         assert value["material_requirement"]["form"] == "AUTO"
         assert value["topic"] == "2차원 포물선 운동"
         assert value["source_intake_batch_id"] is None
@@ -627,6 +627,16 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
             "paragraph",
             "statement_set",
         ]
+        material = client.get(
+            f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/material-requirement"
+        )
+        assert material.status_code == 200
+        assert material.json() == {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": "NONE",
+        }
         media = client.get(
             f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/media/block_image"
         )

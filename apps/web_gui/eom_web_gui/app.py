@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
+from eom_catalog_contracts import ContentTeamMaterialRequirementV2
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -716,6 +717,14 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> ItemPreview:
         return await actual.preview(session, item_id, item_revision_id)
+
+    @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/material-requirement")
+    async def item_material_requirement(
+        item_id: str,
+        item_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> ContentTeamMaterialRequirementV2:
+        return await actual.item_material_requirement(session, item_id, item_revision_id)
 
     @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/media/{{block_id}}")
     async def item_media(

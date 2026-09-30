@@ -193,6 +193,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV11,
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     RoleWorkerInput,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
@@ -4894,6 +4895,8 @@ class QueryAdapter:
             plan_type = ResolvedExecutionPlanV12
         elif schema_version == "resolved-execution-plan/16.0":
             plan_type = ResolvedExecutionPlanV16
+        elif schema_version == "resolved-execution-plan/17.0":
+            plan_type = ResolvedExecutionPlanV17
         else:
             return None
         try:

@@ -119,7 +119,7 @@ def test_runner_configuration_installer_has_narrow_operator_scope() -> None:
 
     assert 'WORKFLOW_ROOT="${CONFIG_ROOT}/workflows"' in source
     assert 'PROMPT_ROOT="${CONFIG_ROOT}/workflow-prompts"' in source
-    assert "generic-item-development.v1.14.yaml" in source
+    assert "generic-item-development.v1.15.yaml" in source
     assert "generic-item-development.v1.13.yaml" not in source
     assert "generic-item-development.v1.12.yaml" not in source
     assert "generic-item-development.v1.11.yaml" not in source

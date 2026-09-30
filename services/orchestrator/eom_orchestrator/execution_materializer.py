@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     AssessmentItemContentV2,
     AssessmentItemContentV3,
     AssessmentLayoutObservation,
+    EducationalRetrievalRequirementV2,
     EvidenceBundleManifestV2,
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -53,6 +54,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV14,
     ResolvedExecutionPlanV15,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -201,6 +203,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
         plan = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
@@ -232,6 +235,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV15.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/16.0":
         plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/17.0":
+        plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -722,6 +727,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
+            | ResolvedExecutionPlanV17
         ) = ResolvedExecutionPlanV2.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/3.0":
         plan = ResolvedExecutionPlanV3.model_validate(plan_record.canonical_document)
@@ -751,6 +757,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV15.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
         plan = ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
+        plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -1816,7 +1824,12 @@ def _validate_png_payload(
 def _materialize_evidence_context(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
+    plan: (
+        ResolvedExecutionPlanV3
+        | ResolvedExecutionPlanV15
+        | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
+    ),
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -1861,20 +1874,31 @@ def _materialize_evidence_context(
 
 
 def plan_stages_evidence_manifest(
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
+    plan: (
+        ResolvedExecutionPlanV3
+        | ResolvedExecutionPlanV15
+        | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
+    ),
 ) -> bool:
     """Keep historical 1.9 workspaces stable; explicit-RAG successors expose IDs."""
 
     return isinstance(plan, ResolvedExecutionPlanV15) or (
         plan.workflow_definition_key == "generic-item-development"
-        and plan.workflow_definition_version in {"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0"}
+        and plan.workflow_definition_version
+        in {"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0"}
     )
 
 
 def resolve_evidence_materials(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV3 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV16,
+    plan: (
+        ResolvedExecutionPlanV3
+        | ResolvedExecutionPlanV15
+        | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
+    ),
     canonical_artifact_root: Path,
     authorized_artifact_revision_ids: frozenset[str],
 ) -> ResolvedEvidenceMaterials:
@@ -1948,7 +1972,9 @@ def resolve_evidence_materials(
         ) from exc
     variation_request_payload: bytes | None = None
     variation_source_payload: bytes | None = None
-    if isinstance(plan, ResolvedExecutionPlanV16):
+    if isinstance(plan, ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17) and isinstance(
+        plan.retrieval_requirement, EducationalRetrievalRequirementV2
+    ):
         target_revision_id = plan.retrieval_requirement.past_exam_variation.source_item_revision_id
         matching_sources = {
             entry.source.artifact_member

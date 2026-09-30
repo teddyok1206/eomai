@@ -729,6 +729,7 @@ class ResolvedExecutionPlanV3(FrozenModel):
             "resolved-execution-plan/11.0",
             "resolved-execution-plan/12.0",
             "resolved-execution-plan/16.0",
+            "resolved-execution-plan/17.0",
         }:
             allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (
@@ -777,6 +778,17 @@ class ResolvedExecutionPlanV16(ResolvedExecutionPlanV12):
     workflow_definition_version: Literal["1.14.0"] = "1.14.0"
     retrieval_requirement: EducationalRetrievalRequirementV2  # type: ignore[assignment]
     resolver_version: Literal["16.0.0"] = "16.0.0"
+
+
+class ResolvedExecutionPlanV17(ResolvedExecutionPlanV12):
+    """Natural-presentation plan supporting general and exact-source Graph retrieval."""
+
+    schema_version: Literal["resolved-execution-plan/17.0"] = "resolved-execution-plan/17.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.15.0"] = "1.15.0"
+    retrieval_requirement: (  # type: ignore[assignment]
+        EducationalRetrievalRequirement | EducationalRetrievalRequirementV2
+    )
+    resolver_version: Literal["17.0.0"] = "17.0.0"
 
 
 class ResolvedExecutionPlanV4(FrozenModel):

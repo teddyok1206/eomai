@@ -8,6 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts import ContentTeamMaterialRequirementV2
 from eom_hwpx_builder.content_team_renderer import render_content_team_workspace
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
@@ -142,10 +143,15 @@ def _render_table_only(
 def _render_paired_images(
     tmp_path: Path,
     image_count: int = 2,
+    *,
+    include_labeled_data: bool = True,
 ) -> tuple[Path, str, ContentTeamOutputExpectation]:
     assert image_count in {1, 2}
     base = parse_content_team_markdown_v2(LABELED_BLOCK_ITEM.encode("utf-8"))
     draft_value = base.model_dump(mode="json")
+    if not include_labeled_data:
+        draft_value["stem"] = "다음은 관측 대상 X의 모습을 나타낸 그림이다."
+        draft_value["labeled_blocks"] = []
     draft_value["visual_layout"] = "IMAGE_ONLY" if image_count == 1 else "IMAGE_IMAGE"
     draft_value["visuals"] = [
         {
@@ -218,6 +224,15 @@ def _render_paired_images(
             item_revision_id=request.item_revision_id,
             draft=draft,
             images=images,
+            material_requirement=(
+                ContentTeamMaterialRequirementV2(
+                    form="IMAGE",
+                    panel_count=1,
+                    image_supporting_data="NONE",
+                )
+                if image_count == 1 and not include_labeled_data
+                else None
+            ),
         ),
     )
 
@@ -551,6 +566,32 @@ def test_manager_accepts_one_exact_image_inside_an_unlabeled_material_box(
         section = archive.read("Contents/section0.xml").decode("utf-8")
     assert "<자료>" not in section
     assert 'binaryItemIDRef="eomContentTeamVisual0"' in section
+
+
+@pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")
+def test_manager_accepts_one_natural_image_without_a_manufactured_data_block(
+    tmp_path: Path,
+) -> None:
+    output, output_sha256, expectation = _render_paired_images(
+        tmp_path,
+        image_count=1,
+        include_labeled_data=False,
+    )
+
+    receipt = verify_content_team_output(
+        output,
+        expected_sha256=output_sha256,
+        expectations=(expectation,),
+    )
+
+    assert receipt.items[0].visual_layout == "IMAGE_ONLY"
+    assert receipt.items[0].labeled_block_count == 0
+    assert tuple(image.label for image in receipt.items[0].images) == ("",)
+    with zipfile.ZipFile(output) as archive:
+        section = archive.read("Contents/section0.xml").decode("utf-8")
+    assert "<자료>" not in section
+    assert "대상 X에서 특성 P가 관측되었다." not in section
+    assert section.count('binaryItemIDRef="eomContentTeamVisual0"') == 1
 
 
 @pytest.mark.skipif(not HANDOFF.is_file(), reason="content-team handoff ZIP is unavailable")

@@ -21,6 +21,11 @@ from typing import NoReturn
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
+from eom_catalog_contracts import (
+    ContentTeamMaterialRequirement,
+    ContentTeamMaterialRequirementV2,
+    validate_content_team_material_requirement,
+)
 from eom_hwpx_contracts import (
     ContentTeamAcceptedImageV1,
     ContentTeamAcceptedItemV1,
@@ -87,6 +92,7 @@ class ContentTeamOutputExpectation:
     item_revision_id: str
     draft: ContentTeamEditorialDraftContract
     images: tuple[ContentTeamImageSource, ...]
+    material_requirement: ContentTeamMaterialRequirement | None = None
 
 
 @dataclass(frozen=True)
@@ -657,14 +663,14 @@ def _unlabeled_image_material_projection(
     if len(cells) != 1:
         return None
     cell = cells[0]
-    nested_image_tables = tuple(
+    nested_tables = tuple(
         candidate
         for candidate in cell.iter()
-        if candidate is not table
-        and _local_name(candidate.tag).casefold() == "tbl"
-        and any(_local_name(node.tag).casefold() == "img" for node in candidate.iter())
+        if candidate is not table and _local_name(candidate.tag).casefold() == "tbl"
     )
-    if len(nested_image_tables) != 1:
+    if len(nested_tables) != 1 or not any(
+        _local_name(node.tag).casefold() == "img" for node in nested_tables[0].iter()
+    ):
         return None
     return _output_cell_tokens_outside_nested_tables(cell)
 
@@ -885,16 +891,28 @@ def _accept_item(
         for block in draft.labeled_blocks
     )
     data_blocks = tuple(block for block in draft.labeled_blocks if block.kind == "DATA")
+    if expectation.material_requirement is not None:
+        try:
+            validate_content_team_material_requirement(expectation.material_requirement, draft)
+        except ValueError as exc:
+            _fail(f"content-team material requirement differs from the approved Item: {exc}")
     if draft.visual_layout in {"IMAGE_ONLY", "IMAGE_IMAGE"} and expectation.images:
-        if len(data_blocks) != 1:
-            _fail("content-team image material must bind exactly one DATA block")
+        natural_image = (
+            isinstance(expectation.material_requirement, ContentTeamMaterialRequirementV2)
+            and expectation.material_requirement.image_supporting_data == "NONE"
+        )
+        if natural_image:
+            expected_unlabeled_material: tuple[_CellTokens, ...] = ()
+        else:
+            if len(data_blocks) != 1:
+                _fail("content-team image material must bind exactly one DATA block")
+            expected_unlabeled_material = (_source_cell_tokens(data_blocks[0].content),)
         observed_unlabeled_material = tuple(
             projection
             for table in section.iter()
             if _local_name(table.tag).casefold() == "tbl"
             and (projection := _unlabeled_image_material_projection(table)) is not None
         )
-        expected_unlabeled_material = (_source_cell_tokens(data_blocks[0].content),)
         if observed_unlabeled_material != expected_unlabeled_material:
             _fail("content-team HWPX unlabeled image material differs from the approved Item")
         expected_labeled_blocks = tuple(

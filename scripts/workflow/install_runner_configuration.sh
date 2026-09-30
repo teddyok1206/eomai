@@ -18,7 +18,7 @@ fail() {
   fail "repository root mismatch"
 
 declare -A FILES=(
-  ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.14.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/generic-item-development.v1.15.yaml"]="${WORKFLOW_ROOT}/generic-item-development.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v10.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/customer-support.v1.yaml"]="${WORKFLOW_ROOT}/customer-support.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/pdf-document-review.v1.2.yaml"]="${WORKFLOW_ROOT}/pdf-document-review.yaml"

@@ -533,6 +533,10 @@ function syncMaterialPanelCount() {
     form.elements.material_panel_count.value = "2";
     form.elements.material_panel_count.disabled = true;
   }
+  const supportingDataField = $("#image-supporting-data-field");
+  supportingDataField.hidden = materialForm !== "IMAGE";
+  form.elements.image_supporting_data.disabled = materialForm !== "IMAGE";
+  if (materialForm !== "IMAGE") form.elements.image_supporting_data.value = "NONE";
 }
 
 async function analyzeDraft() {
@@ -565,6 +569,9 @@ function fillDraft(draft, fallbackCurriculumSelection = {large: "", middle: "", 
   form.elements.equation_required.checked = draft.equation_required;
   form.elements.material_form.value = draft.material_requirement.form;
   form.elements.material_panel_count.value = String(draft.material_requirement.panel_count || 1);
+  form.elements.image_supporting_data.value = draft.material_requirement.image_supporting_data
+    || (draft.material_requirement.schema_version === "content-team-material-requirement/1.0"
+      && draft.material_requirement.form === "IMAGE" ? "LABELED_DATA" : "NONE");
   syncMaterialPanelCount();
   form.elements.quality_profile.value = draft.quality_profile;
   form.elements.source_intake_batch_id.value = draft.source_intake_batch_id || "";
@@ -614,9 +621,12 @@ function draftUpdateBody() {
     choice_count: Number(form.elements.choice_count.value),
     equation_required: form.elements.equation_required.checked,
     material_requirement: {
-      schema_version: "content-team-material-requirement/1.0",
+      schema_version: "content-team-material-requirement/2.0",
       form: materialForm,
       panel_count: materialForm === "MIXED" ? 2 : materialPanelCount,
+      image_supporting_data: materialForm === "IMAGE"
+        ? form.elements.image_supporting_data.value
+        : null,
     },
     quality_profile: form.elements.quality_profile.value,
     source_intake_batch_id: form.elements.source_intake_batch_id.value || null,
@@ -651,6 +661,9 @@ async function beginPastExamVariation(entry) {
   const unit = entry.curriculum_units.find((candidate) =>
     /^eom\.is\.(?:large\.[1-6]|middle\.[1-6]-[1-7])$/u.test(candidate.unit_key));
   if (!unit) throw new Error("지원되는 대단원·중단원이 연결된 기출만 변형할 수 있습니다.");
+  const sourceMaterial = await api(
+    `/items/${encodeURIComponent(entry.item_id)}/revisions/${encodeURIComponent(entry.item_revision_id)}/material-requirement`,
+  );
   const requestText = `${entry.occurrence_display_label} ${entry.item_number}번의 핵심 개념과 평가 목표를 유지한 1:1 기출변형 문항을 출제해줘.`;
   const draft = await api("/request-drafts", {
     method: "POST",
@@ -662,13 +675,17 @@ async function beginPastExamVariation(entry) {
   $("#request-text").value = requestText;
   fillDraft(draft, curriculumAncestors(state.curriculumOutline?.units || [], unit.unit_key));
   const form = $("#draft-form");
+  form.elements.material_form.value = sourceMaterial.form;
+  form.elements.material_panel_count.value = String(sourceMaterial.panel_count || 1);
+  form.elements.image_supporting_data.value = sourceMaterial.image_supporting_data || "NONE";
+  syncMaterialPanelCount();
   form.elements.knowledge_grounding.checked = true;
   const variation = {
     source_item_revision_id: entry.item_revision_id,
     variation_axes: ["CONTEXT", "DISTRACTORS", "REASONING_PATH", "VALUES"],
   };
   syncPastExamVariation(variation);
-  state.draft = {...draft, past_exam_variation: variation};
+  state.draft = {...draft, material_requirement: sourceMaterial, past_exam_variation: variation};
   $("#draft-save").disabled = false;
   $("#draft-submit").disabled = false;
   showView("request");

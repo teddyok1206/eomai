@@ -46,6 +46,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV14,
     ResolvedExecutionPlanV15,
     ResolvedExecutionPlanV16,
+    ResolvedExecutionPlanV17,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -80,6 +81,7 @@ KNOWLEDGE_BACKED_RESOLVER_VERSION = "3.0.0"
 GRAPH_REVIEW_RESOLVER_VERSION = "4.0.0"
 VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION = "5.0.0"
 PAST_EXAM_VARIATION_RESOLVER_VERSION = "16.0.0"
+NATURAL_PRESENTATION_RESOLVER_VERSION = "17.0.0"
 
 
 @dataclass(frozen=True)
@@ -200,7 +202,7 @@ def resolve_knowledge_backed_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV3 | ResolvedExecutionPlanV16:
+) -> ResolvedExecutionPlanV3 | ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17:
     """Pin an exact preset and Catalog-produced Evidence Bundle to one fresh workflow."""
 
     if not steps:
@@ -211,6 +213,8 @@ def resolve_knowledge_backed_execution_plan(
         )
     )
     if existing is not None:
+        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
+            return ResolvedExecutionPlanV17.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
             return ResolvedExecutionPlanV16.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
@@ -229,14 +233,21 @@ def resolve_knowledge_backed_execution_plan(
         ) from exc
     validate_educational_retrieval_policy(preset, requirement)
     variation_successor = isinstance(requirement, EducationalRetrievalRequirementV2)
-    if variation_successor != (dependencies.workflow_definition_version == "1.14.0"):
+    natural_presentation_successor = dependencies.workflow_definition_version == "1.15.0"
+    if (dependencies.workflow_definition_version == "1.14.0") != (
+        variation_successor and not natural_presentation_successor
+    ) or (
+        variation_successor and dependencies.workflow_definition_version not in {"1.14.0", "1.15.0"}
+    ):
         raise ControlPlaneError(
             "CONTROL_VARIATION_PROTOCOL_MISMATCH",
-            "past-exam variation requires workflow definition 1.14 and retrieval requirement V2",
+            "past-exam variation requires workflow definition 1.14/1.15 "
+            "and retrieval requirement V2",
         )
     verification_review_successor = dependencies.workflow_definition_version in {
         "1.13.0",
         "1.14.0",
+        "1.15.0",
     }
     verification_role_successor = (
         dependencies.workflow_role_schema_version == "workflow-role/1.24.0"
@@ -332,15 +343,19 @@ def resolve_knowledge_backed_execution_plan(
     actual_resolved_at = resolved_at or datetime.now(UTC)
     document: dict[str, object] = {
         "schema_version": (
-            "resolved-execution-plan/16.0"
-            if variation_successor
+            "resolved-execution-plan/17.0"
+            if natural_presentation_successor
             else (
-                "resolved-execution-plan/12.0"
-                if verification_inputs
+                "resolved-execution-plan/16.0"
+                if variation_successor
                 else (
-                    "resolved-execution-plan/11.0"
-                    if graph_review_successor
-                    else "resolved-execution-plan/3.0"
+                    "resolved-execution-plan/12.0"
+                    if verification_inputs
+                    else (
+                        "resolved-execution-plan/11.0"
+                        if graph_review_successor
+                        else "resolved-execution-plan/3.0"
+                    )
                 )
             )
         ),
@@ -371,15 +386,19 @@ def resolve_knowledge_backed_execution_plan(
         "evidence_context_artifact": evidence.context_artifact.model_dump(mode="json"),
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
         "resolver_version": (
-            PAST_EXAM_VARIATION_RESOLVER_VERSION
-            if variation_successor
+            NATURAL_PRESENTATION_RESOLVER_VERSION
+            if natural_presentation_successor
             else (
-                VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION
-                if verification_inputs
+                PAST_EXAM_VARIATION_RESOLVER_VERSION
+                if variation_successor
                 else (
-                    GRAPH_REVIEW_RESOLVER_VERSION
-                    if graph_review_successor
-                    else KNOWLEDGE_BACKED_RESOLVER_VERSION
+                    VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION
+                    if verification_inputs
+                    else (
+                        GRAPH_REVIEW_RESOLVER_VERSION
+                        if graph_review_successor
+                        else KNOWLEDGE_BACKED_RESOLVER_VERSION
+                    )
                 )
             )
         ),
@@ -392,8 +411,12 @@ def resolve_knowledge_backed_execution_plan(
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
+        | ResolvedExecutionPlanV17
     )
-    if variation_successor:
+    if natural_presentation_successor:
+        validate_control_contract("resolved-execution-plan-v17", document)
+        model = ResolvedExecutionPlanV17.model_validate(document)
+    elif variation_successor:
         validate_control_contract("resolved-execution-plan-v16", document)
         model = ResolvedExecutionPlanV16.model_validate(document)
     elif verification_inputs:
@@ -407,6 +430,8 @@ def resolve_knowledge_backed_execution_plan(
         document=model.model_dump(mode="json"),
         dependencies=dependencies,
     )
+    if natural_presentation_successor:
+        return ResolvedExecutionPlanV17.model_validate(record.canonical_document)
     if variation_successor:
         return ResolvedExecutionPlanV16.model_validate(record.canonical_document)
     if verification_inputs:

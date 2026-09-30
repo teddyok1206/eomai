@@ -745,10 +745,11 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 48 packaged API schemas" in deployment
+    assert "expected exactly 49 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v4.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/workflow-start-v5.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/production-item-candidate-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
@@ -877,7 +878,7 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
 
     assert '"1.10",\n        "1.11",' in deployment
     assert "definition_v1_9, definition_v1_10, definition_v1_11" in deployment
-    assert '"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0"}' in deployment
+    assert '"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0"}' in deployment
     assert "MockExamProductionExecutionV3" in deployment
     assert "MockExamProductionExecutionV4" in deployment
     assert "MockExamProductionExecutionV5" in deployment

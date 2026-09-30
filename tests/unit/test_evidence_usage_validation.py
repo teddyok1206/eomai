@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 import pytest
-from eom_catalog_contracts import EvidenceBundleManifestV2
+from eom_catalog_contracts import ContentTeamMaterialRequirementV2, EvidenceBundleManifestV2
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_models import (
     ExecutionBundleRevisionRecord,
@@ -666,6 +666,44 @@ def test_required_image_presentation_accepts_observational_image_facts() -> None
             "visuals": [{"kind": "IMAGE"}],
         },
     )
+
+
+def test_required_image_presentation_accepts_natural_v2_without_data_block() -> None:
+    _validate_required_image_presentation(
+        _required_image_plan(),
+        _required_image_manifest(),
+        (_required_image_citation(paths=("/stem", "/visuals/0/kind")),),
+        {
+            "stem": "그림은 포물선 운동에서 두 시각의 공 위치를 나타낸다.",
+            "labeled_blocks": [],
+            "visuals": [{"kind": "IMAGE"}],
+        },
+        material_requirement=ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=1,
+            image_supporting_data="NONE",
+        ),
+    )
+
+
+def test_required_image_presentation_rejects_unplanned_data_in_natural_v2() -> None:
+    with pytest.raises(EvidenceUsageValidationError) as captured:
+        _validate_required_image_presentation(
+            _required_image_plan(),
+            _required_image_manifest(),
+            (_required_image_citation(paths=("/stem", "/visuals/0/kind")),),
+            {
+                "stem": "그림은 포물선 운동을 나타낸다.",
+                "labeled_blocks": [{"kind": "DATA", "content": "불필요한 자료"}],
+                "visuals": [{"kind": "IMAGE"}],
+            },
+            material_requirement=ContentTeamMaterialRequirementV2(
+                form="IMAGE",
+                panel_count=1,
+                image_supporting_data="NONE",
+            ),
+        )
+    assert captured.value.code == "EVIDENCE_REQUIRED_IMAGE_DATA_MISSING"
 
 
 def test_required_image_presentation_rejects_missing_image_slot() -> None:

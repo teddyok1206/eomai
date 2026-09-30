@@ -18,6 +18,7 @@ from eom_api_contracts.usage import CreateUsagePlanRequest, FulfillUsagePlanRequ
 from eom_api_contracts.workflows import (
     ContentTeamItemBriefRequestV3,
     ContentTeamItemBriefRequestV4,
+    ContentTeamItemBriefRequestV5,
     KnowledgeItemBriefRequestV2,
     WorkflowActionRequest,
     WorkflowStartRequest,
@@ -113,6 +114,7 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                 KnowledgeItemBriefRequestV2,
                 ContentTeamItemBriefRequestV3,
                 ContentTeamItemBriefRequestV4,
+                ContentTeamItemBriefRequestV5,
             ),
         ):
             item_brief_data.pop("curriculum_selected_unit_key")
@@ -148,6 +150,7 @@ def _workflow_request_from_api(request: WorkflowStartRequest) -> WorkflowRequest
                 KnowledgeItemBriefRequestV2,
                 ContentTeamItemBriefRequestV3,
                 ContentTeamItemBriefRequestV4,
+                ContentTeamItemBriefRequestV5,
             ),
         )
         and retrieval_data is not None
@@ -351,7 +354,7 @@ class CommandAdapter:
             )
             solution_evidence_requirement: Literal["NONE", "REQUIRE_ACCEPTED_SOLUTION_REPORT"] = (
                 "REQUIRE_ACCEPTED_SOLUTION_REPORT"
-                if request.definition_version in {"1.11.0", "1.12.0", "1.13.0", "1.14.0"}
+                if request.definition_version in {"1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0"}
                 else "NONE"
             )
             command_value = {

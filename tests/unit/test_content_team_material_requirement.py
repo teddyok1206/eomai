@@ -11,9 +11,11 @@ from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV1,
+    ContentTeamMaterialRequirementV2,
     build_integrated_science_mock_exam_production_plan_v4,
     classify_content_team_mock_exam_material_profile,
     content_team_material_required_retrieval_elements,
+    derive_content_team_material_requirement_v2,
     load_integrated_science_editorial_outline,
     load_integrated_science_mock_exam_layout_policy,
     load_integrated_science_mock_exam_policy,
@@ -30,6 +32,7 @@ from eom_workflow.schemas import (
     load_content_team_editorial_material_schema,
     load_content_team_image_route_schema,
     load_content_team_material_requirement_schema,
+    load_content_team_material_requirement_v2_schema,
     load_knowledge_item_brief_v3_schema,
     load_knowledge_item_brief_v4_schema,
 )
@@ -44,6 +47,7 @@ from tests.unit.test_content_team_v3_protocol import _content_v3
 ROOT = Path(__file__).resolve().parents[2]
 PACK = ROOT / "content/packs/generated-knowledge-item/1.16.0"
 PACK_SUCCESSOR = ROOT / "content/packs/generated-knowledge-item/1.16.1"
+V1_MATERIAL_SCHEMA_SHA256 = "7f1b878aa24f4fc2136ef4d3284f142041ea22a76ffd1c91fb2c50361cdf4f58"
 
 
 class _RegistrationCapture:
@@ -71,6 +75,160 @@ def _table(label: str = "") -> ContentTeamTable:
             "alignments": ["left", "right"],
         }
     )
+
+
+def test_material_requirement_v2_schema_preserves_v1_bytes() -> None:
+    canonical = ROOT / "schemas/workflow/content-team-material-requirement-v1.schema.json"
+    packaged = (
+        ROOT / "packages/workflow/eom_workflow/resources/"
+        "content-team-material-requirement-v1.schema.json"
+    )
+
+    assert hashlib.sha256(canonical.read_bytes()).hexdigest() == V1_MATERIAL_SCHEMA_SHA256
+    assert packaged.read_bytes() == canonical.read_bytes()
+
+
+@pytest.mark.parametrize("supporting_data", ["NONE", "LABELED_DATA"])
+def test_material_requirement_v2_schema_accepts_explicit_image_presentation(
+    supporting_data: str,
+) -> None:
+    schema = load_content_team_material_requirement_v2_schema()
+    Draft202012Validator.check_schema(schema)
+
+    Draft202012Validator(schema).validate(
+        {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": supporting_data,
+        }
+    )
+    requirement = ContentTeamMaterialRequirementV2.model_validate(
+        {
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": supporting_data,
+        }
+    )
+    assert requirement.image_mode == "required"
+    assert requirement.image_supporting_data == supporting_data
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": None,
+        },
+        {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "TABLE",
+            "panel_count": 1,
+            "image_supporting_data": "NONE",
+        },
+        {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "IMAGE",
+            "panel_count": 1,
+        },
+    ],
+)
+def test_material_requirement_v2_schema_rejects_ambiguous_image_presentation(
+    value: dict[str, object],
+) -> None:
+    with pytest.raises(JsonSchemaValidationError):
+        Draft202012Validator(load_content_team_material_requirement_v2_schema()).validate(value)
+    with pytest.raises(ValueError):
+        ContentTeamMaterialRequirementV2.model_validate(value)
+
+
+@pytest.mark.parametrize(
+    ("supporting_data", "data_blocks"),
+    [("NONE", ()), ("LABELED_DATA", ({"kind": "DATA", "content": "관측 자료"},))],
+)
+def test_material_requirement_v2_validates_exact_image_data_count(
+    supporting_data: str,
+    data_blocks: tuple[dict[str, str], ...],
+) -> None:
+    values = _content_v3(
+        visuals=(ContentTeamImageSlot(),),
+        visual_layout="IMAGE_ONLY",
+    ).model_dump(mode="json")
+    values["labeled_blocks"] = data_blocks
+    content = type(_content_v3()).model_validate(values)
+    requirement = ContentTeamMaterialRequirementV2.model_validate(
+        {
+            "form": "IMAGE",
+            "panel_count": 1,
+            "image_supporting_data": supporting_data,
+        }
+    )
+
+    validate_content_team_material_requirement(requirement, content)
+
+    opposite = (
+        ContentTeamMaterialRequirementV2(
+            form="IMAGE", panel_count=1, image_supporting_data="LABELED_DATA"
+        )
+        if supporting_data == "NONE"
+        else ContentTeamMaterialRequirementV2(
+            form="IMAGE", panel_count=1, image_supporting_data="NONE"
+        )
+    )
+    with pytest.raises(ValueError, match="DATA blocks"):
+        validate_content_team_material_requirement(opposite, content)
+
+
+def test_source_presentation_derivation_preserves_natural_and_labeled_images() -> None:
+    natural = _content_v3(
+        visuals=(ContentTeamImageSlot(),),
+        visual_layout="IMAGE_ONLY",
+    )
+    labeled_values = natural.model_dump(mode="json")
+    labeled_values["labeled_blocks"] = [{"kind": "DATA", "content": "독립 관측 자료"}]
+    labeled = type(natural).model_validate(labeled_values)
+
+    natural_requirement = derive_content_team_material_requirement_v2(natural)
+    labeled_requirement = derive_content_team_material_requirement_v2(labeled)
+
+    assert natural_requirement.image_supporting_data == "NONE"
+    assert labeled_requirement.image_supporting_data == "LABELED_DATA"
+
+
+def test_source_presentation_derivation_preserves_table_and_mixed_order() -> None:
+    table = _content_v3(visuals=(_table(),), visual_layout="TABLE_ONLY")
+    mixed = _content_v3(
+        visuals=(_table(), ContentTeamImageSlot()),
+        visual_layout="TABLE_IMAGE",
+    )
+
+    assert derive_content_team_material_requirement_v2(table).model_dump(mode="json") == {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "TABLE",
+        "panel_count": 1,
+        "image_supporting_data": None,
+    }
+    assert derive_content_team_material_requirement_v2(mixed).model_dump(mode="json") == {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "MIXED",
+        "panel_count": 2,
+        "image_supporting_data": None,
+    }
+
+
+def test_source_presentation_derivation_rejects_ambiguous_mixed_data() -> None:
+    values = _content_v3(
+        visuals=(_table(), ContentTeamImageSlot()),
+        visual_layout="TABLE_IMAGE",
+    ).model_dump(mode="json")
+    values["labeled_blocks"] = [{"kind": "DATA", "content": "ambiguous"}]
+    source = type(_content_v3()).model_validate(values)
+
+    with pytest.raises(ValueError, match="presentation-ambiguous"):
+        derive_content_team_material_requirement_v2(source)
 
 
 def _brief_request(*, form: str, panel_count: int | None, image_mode: str) -> WorkflowStartRequest:
@@ -329,7 +487,9 @@ def test_v4_api_request_maps_to_internal_brief_and_skips_image_profile_for_table
     assert _authoring_material_requirement(internal, worker_role="authoring") == (
         internal.item_brief.material_requirement
     )
-    assert _authoring_material_requirement(internal, worker_role="review") is None
+    assert _authoring_material_requirement(internal, worker_role="review") == (
+        internal.item_brief.material_requirement
+    )
 
 
 def test_v4_api_request_rejects_image_capability_drift() -> None:
