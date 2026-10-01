@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     AssessmentItemContent,
     AssessmentItemContentV2,
     AssessmentItemContentV3,
+    ContentTeamMaterialRequirementV2,
     EducationalRetrievalRequirementV2,
     ImageBlock,
     MediaArtifactPointer,
@@ -446,12 +447,33 @@ class WorkflowCatalogService:
             self.settings,
         )
 
+    def source_material_requirement(
+        self,
+        request: WorkflowRequest,
+    ) -> ContentTeamMaterialRequirementV2 | None:
+        """Resolve exact-source presentation for trusted in-process Catalog callers."""
+
+        requirement = request.educational_retrieval
+        if not isinstance(requirement, EducationalRetrievalRequirementV2):
+            return None
+        source = self.registry.load_item_content(
+            requirement.past_exam_variation.source_item_revision_id
+        )
+        try:
+            return derive_item_content_material_requirement_v2(source)
+        except ValueError as exc:
+            raise ContentPackError(
+                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
+                "past-exam source presentation is ambiguous",
+            ) from exc
+
     def bind_request(
         self,
         request: WorkflowRequest,
         *,
         definition_key: str,
         definition_version: str,
+        past_exam_source_material_requirement: ContentTeamMaterialRequirementV2 | None = None,
         session: Session | None = None,
     ) -> dict[str, Any]:
         if (
@@ -530,7 +552,10 @@ class WorkflowCatalogService:
                 )
             self._require_compatibility(release, definition_key, definition_version)
             self._require_item_brief_release(pack.pack_key, release.version, request)
-            self._require_v5_source_presentation(request)
+            self._require_v5_source_presentation(
+                request,
+                source_material_requirement=past_exam_source_material_requirement,
+            )
             profile_keys = request.profiles.model_dump(mode="json", exclude_none=True)
             profiles = self._profile_snapshots(resolved_session, release, profile_keys)
             intake_ids = request.source_intake.batch_ids if request.source_intake else ()
@@ -2189,7 +2214,12 @@ class WorkflowCatalogService:
                 "item brief version does not match the immutable Content Pack release",
             )
 
-    def _require_v5_source_presentation(self, request: WorkflowRequest) -> None:
+    @staticmethod
+    def _require_v5_source_presentation(
+        request: WorkflowRequest,
+        *,
+        source_material_requirement: ContentTeamMaterialRequirementV2 | None,
+    ) -> None:
         """Bind exact-source V5 presentation intent to the pinned approved source Item."""
 
         brief = request.item_brief
@@ -2198,17 +2228,12 @@ class WorkflowCatalogService:
             retrieval, EducationalRetrievalRequirementV2
         ):
             return
-        source = self.registry.load_item_content(
-            retrieval.past_exam_variation.source_item_revision_id
-        )
-        try:
-            expected = derive_item_content_material_requirement_v2(source)
-        except ValueError as exc:
+        if source_material_requirement is None:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                "past-exam source presentation is ambiguous",
-            ) from exc
-        if brief.material_requirement != expected:
+                "past-exam source presentation was not resolved at the Catalog boundary",
+            )
+        if brief.material_requirement != source_material_requirement:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                 "reviewed material presentation differs from the exact past-exam source",

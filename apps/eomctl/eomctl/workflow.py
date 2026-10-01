@@ -221,6 +221,9 @@ def workflow_start(
                 request,
                 definition_key=stored_definition.definition_key,
                 definition_version=stored_definition.definition_version,
+                past_exam_source_material_requirement=(
+                    catalog.source_material_requirement(request)
+                ),
                 session=session,
             )
             if request.content_pack is not None

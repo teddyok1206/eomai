@@ -8,17 +8,19 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from eom_api.services.command_adapter import _workflow_request_from_api
+from eom_api.services.command_adapter import CommandAdapter, _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
     AssessmentItemContent,
     EducationalRetrievalRequirementV2,
     EvidenceBundleManifestV5,
     PastExamVariationRequest,
+    derive_item_content_material_requirement_v2,
     validate_contract,
 )
 from eom_catalog_service.content_pack_files import compile_pack
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_content_pack import ContentPackError
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ResolvedPlanDependencyEvidence
@@ -293,18 +295,47 @@ def test_catalog_accepts_exact_legacy_source_presentation_for_variation() -> Non
     }
     request = WorkflowRequest.model_validate(value)
     service = object.__new__(WorkflowCatalogService)
-    service.registry = cast(
+    source = AssessmentItemContent.model_validate(item_content())
+    source_material = derive_item_content_material_requirement_v2(source)
+
+    service._require_v5_source_presentation(
+        request,
+        source_material_requirement=source_material,
+    )
+    with pytest.raises(ContentPackError, match="not resolved at the Catalog boundary"):
+        service._require_v5_source_presentation(
+            request,
+            source_material_requirement=None,
+        )
+
+
+def test_api_resolves_variation_presentation_through_catalog_application_boundary() -> None:
+    value = json.loads(
+        (
+            ROOT / "content/packs/generated-knowledge-item/1.20.13/fixtures/smoke-request.json"
+        ).read_text(encoding="utf-8")
+    )
+    value["educational_retrieval"] = _variation_requirement().model_dump(mode="json")
+    value["execution_preset_key"] = "knowledge-grounded-item"
+    value["item_brief"]["material_requirement"] = {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "MIXED",
+        "panel_count": 2,
+        "image_supporting_data": None,
+    }
+    request = WorkflowRequest.model_validate(value)
+    source = AssessmentItemContent.model_validate(item_content())
+    seen: list[str] = []
+    adapter = object.__new__(CommandAdapter)
+    adapter.catalog_application = cast(
         Any,
-        SimpleNamespace(
-            load_item_content=lambda revision_id: (
-                AssessmentItemContent.model_validate(item_content())
-                if revision_id == SOURCE_REVISION_ID
-                else None
-            )
-        ),
+        SimpleNamespace(load_item_content=lambda revision_id: seen.append(revision_id) or source),
     )
 
-    service._require_v5_source_presentation(request)
+    resolved = adapter._resolve_past_exam_source_material_requirement(request)
+
+    assert seen == [SOURCE_REVISION_ID]
+    assert resolved == request.item_brief.material_requirement
 
 
 def test_resolver_pins_exact_variation_intent_in_v16_plan(

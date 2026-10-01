@@ -21,6 +21,7 @@ const state = {
   csrf: "",
   operator: null,
   draft: null,
+  draftSubmissionPending: false,
   variationSourceEntry: null,
   workflow: null,
   health: null,
@@ -701,7 +702,7 @@ async function saveDraft() {
     });
     fillDraft(state.draft);
     showMessage($("#draft-message"), "문항 요청 초안이 저장되었습니다.", "success");
-    $("#draft-submit").disabled = false;
+    $("#draft-submit").disabled = state.draftSubmissionPending;
     return true;
   } catch (failure) {
     showMessage($("#draft-message"), `초안 저장 실패: ${failure.message}`, "error");
@@ -710,10 +711,17 @@ async function saveDraft() {
 }
 
 async function submitDraft() {
-  if (!state.draft) return;
-  if (!(await saveDraft())) return;
-  const key = `studio:${state.draft.request_draft_id}:${state.draft.draft_spec_sha256}`;
+  if (!state.draft || state.draftSubmissionPending) return;
+  state.draftSubmissionPending = true;
+  const submitButton = $("#draft-submit");
+  const saveButton = $("#draft-save");
+  submitButton.disabled = true;
+  saveButton.disabled = true;
+  submitButton.textContent = "제작 요청 중";
   try {
+    if (!(await saveDraft())) return;
+    const key = `studio:${state.draft.request_draft_id}:${state.draft.draft_spec_sha256}`;
+    showMessage($("#draft-message"), "원본 근거와 실행 설정을 확인하고 있습니다.");
     const result = await api(`/request-drafts/${encodeURIComponent(state.draft.request_draft_id)}/submissions`, {
       method: "POST", mutation: true, body: {idempotency_key: key},
     });
@@ -726,7 +734,16 @@ async function submitDraft() {
       await loadWorkflow();
     }
   } catch (failure) {
-    showMessage($("#draft-message"), `문항 제작 시작 실패: ${failure.message}`, "error");
+    if (failure instanceof StudioApiError && failure.code === "API_IDEMPOTENCY_IN_PROGRESS") {
+      showMessage($("#draft-message"), "동일한 문항 제작 요청을 이미 처리하고 있습니다. 잠시 후 진행 목록을 확인하세요.");
+    } else {
+      showMessage($("#draft-message"), `문항 제작 시작 실패: ${failure.message}`, "error");
+    }
+  } finally {
+    state.draftSubmissionPending = false;
+    submitButton.textContent = "문항 제작 시작";
+    submitButton.disabled = !state.draft;
+    saveButton.disabled = !state.draft;
   }
 }
 

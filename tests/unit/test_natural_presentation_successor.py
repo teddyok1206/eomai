@@ -141,11 +141,10 @@ def test_catalog_binds_v5_variation_to_exact_source_presentation() -> None:
             | {"material_requirement": expected.model_dump(mode="json")},
         }
     )
-    service = SimpleNamespace(
-        registry=SimpleNamespace(load_item_content=lambda _revision_id: source)
+    WorkflowCatalogService._require_v5_source_presentation(
+        exact,
+        source_material_requirement=expected,
     )
-
-    WorkflowCatalogService._require_v5_source_presentation(service, exact)  # type: ignore[arg-type]
 
     mismatched = exact.model_copy(
         update={
@@ -161,9 +160,9 @@ def test_catalog_binds_v5_variation_to_exact_source_presentation() -> None:
         }
     )
     with pytest.raises(ContentPackError, match="exact past-exam source"):
-        WorkflowCatalogService._require_v5_source_presentation(  # type: ignore[arg-type]
-            service,
+        WorkflowCatalogService._require_v5_source_presentation(
             mismatched,
+            source_material_requirement=expected,
         )
 
 

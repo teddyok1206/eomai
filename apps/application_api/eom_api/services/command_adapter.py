@@ -24,6 +24,7 @@ from eom_api_contracts.workflows import (
     WorkflowStartRequest,
 )
 from eom_catalog_contracts import (
+    ContentTeamMaterialRequirementV2,
     CreateDeliverable,
     CreateDocumentReviewEvidenceCommand,
     CreateItemProductionEvidenceCommand,
@@ -37,6 +38,7 @@ from eom_catalog_contracts import (
     IntegratedScienceCurriculumContractError,
     IntegratedScienceCurriculumScope,
     ReviewedItemContentImportCommand,
+    derive_item_content_material_requirement_v2,
     resolve_integrated_science_curriculum_scope,
 )
 from eom_catalog_service.content_pack_service import ContentPackService
@@ -283,6 +285,7 @@ class CommandAdapter:
         )
         if replay is not None:
             return replay
+        past_exam_source_material_requirement: ContentTeamMaterialRequirementV2 | None = None
         knowledge_preset = None
         knowledge_evidence = None
         preflight_definition_hash: str | None = None
@@ -348,6 +351,9 @@ class CommandAdapter:
                         "The selected execution preset is not published for this workflow.",
                     ) from exc
                 preflight_definition_hash = preflight_definition.definition_hash
+            past_exam_source_material_requirement = (
+                self._resolve_past_exam_source_material_requirement(workflow_request)
+            )
             requester_role = self._knowledge_requester_role(actor)
             requester_permission_keys = tuple(
                 sorted(permission.value for permission in actor.permissions)
@@ -463,6 +469,7 @@ class CommandAdapter:
                     workflow_request,
                     definition_key=definition.definition_key,
                     definition_version=definition.definition_version,
+                    past_exam_source_material_requirement=(past_exam_source_material_requirement),
                     session=session,
                 )
                 if workflow_request.content_pack is not None
@@ -597,6 +604,33 @@ class CommandAdapter:
             assert command is not None
             command_id = command.command_id
             return command_id, workflow.workflow_id, workflow.lock_version
+
+    def _resolve_past_exam_source_material_requirement(
+        self,
+        request: WorkflowRequest,
+    ) -> ContentTeamMaterialRequirementV2 | None:
+        """Resolve exact-source presentation through the private Catalog boundary.
+
+        The Application API runtime cannot dereference NAS artifacts.  Catalog validates the
+        pinned Item content and returns the existing typed content value; only the small derived
+        material requirement crosses into workflow binding.
+        """
+
+        requirement = request.educational_retrieval
+        if not isinstance(requirement, EducationalRetrievalRequirementV2):
+            return None
+        source = self.catalog_application.load_item_content(
+            requirement.past_exam_variation.source_item_revision_id
+        )
+        try:
+            return derive_item_content_material_requirement_v2(source)
+        except ValueError as exc:
+            raise ApiError(
+                409,
+                "ITEM_PRESENTATION_AMBIGUOUS",
+                "Item presentation is ambiguous",
+                "The pinned source Item cannot be represented by the material contract.",
+            ) from exc
 
     def start_customer_support(
         self,
