@@ -196,6 +196,22 @@ def test_structured_content_read_uses_catalog_application_boundary() -> None:
         services.engine.dispose()
 
 
+def test_material_requirement_supports_legacy_item_content_for_variation_prep() -> None:
+    client, services = _client(admin=True)
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/material-requirement")
+        assert response.status_code == 200
+        assert response.json()["data"] == {
+            "schema_version": "content-team-material-requirement/2.0",
+            "form": "MIXED",
+            "panel_count": 2,
+            "image_supporting_data": None,
+        }
+    finally:
+        services.engine.dispose()
+
+
 def test_material_requirement_is_derived_by_the_api_from_the_exact_item_revision() -> None:
     client, services = _client(admin=True)
     document = content_team_item_content(

@@ -7,6 +7,12 @@ from typing import Literal
 from eom_hwpx_contracts import ContentTeamEditorialDraftContract
 from pydantic import model_validator
 
+from eom_catalog_contracts.assessment_item import (
+    AssessmentItemContent,
+    AssessmentItemContentContract,
+    ImageBlock,
+    TableBlock,
+)
 from eom_catalog_contracts.models import FrozenModel
 
 ContentTeamMaterialForm = Literal[
@@ -124,6 +130,55 @@ def derive_content_team_material_requirement_v2(
             image_supporting_data="LABELED_DATA" if data_block_count == 1 else "NONE",
         )
     raise ValueError("source visual order is not representable by the material requirement")
+
+
+def derive_item_content_material_requirement_v2(
+    content: AssessmentItemContentContract,
+) -> ContentTeamMaterialRequirementV2:
+    """Project any immutable Item-content revision into the successor material contract.
+
+    Content-team V2/V3 Items already expose the authored visual structure. Legacy V1 Items keep
+    the same presentation identity as ordered body blocks, so this adapter classifies only their
+    native IMAGE and TABLE blocks instead of inventing a content-team draft. Item bodies are
+    bounded to 100 blocks; the legacy branch is O(b) time and O(b) bounded auxiliary space.
+    """
+
+    if not isinstance(content, AssessmentItemContent):
+        return derive_content_team_material_requirement_v2(content)
+
+    visual_kinds = tuple(
+        "IMAGE" if isinstance(block, ImageBlock) else "TABLE"
+        for block in content.body
+        if isinstance(block, ImageBlock | TableBlock)
+    )
+    if not visual_kinds:
+        return ContentTeamMaterialRequirementV2(
+            form="TEXT",
+            panel_count=None,
+            image_supporting_data=None,
+        )
+    if len(visual_kinds) > 2:
+        raise ValueError("legacy source has more than two visual panels")
+    visual_kind_set = set(visual_kinds)
+    if visual_kind_set == {"IMAGE", "TABLE"}:
+        return ContentTeamMaterialRequirementV2(
+            form="MIXED",
+            panel_count=2,
+            image_supporting_data=None,
+        )
+    if visual_kind_set == {"TABLE"}:
+        return ContentTeamMaterialRequirementV2(
+            form="TABLE",
+            panel_count=len(visual_kinds),
+            image_supporting_data=None,
+        )
+    if visual_kind_set == {"IMAGE"}:
+        return ContentTeamMaterialRequirementV2(
+            form="IMAGE",
+            panel_count=len(visual_kinds),
+            image_supporting_data="NONE",
+        )
+    raise ValueError("legacy source presentation is not representable by the material requirement")
 
 
 def content_team_material_required_retrieval_elements(

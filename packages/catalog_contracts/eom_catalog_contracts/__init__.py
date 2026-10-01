@@ -144,6 +144,7 @@ from eom_catalog_contracts.content_team_material import (
     ContentTeamRetrievalElement,
     content_team_material_required_retrieval_elements,
     derive_content_team_material_requirement_v2,
+    derive_item_content_material_requirement_v2,
     validate_content_team_material_requirement,
     validate_content_team_material_selection,
 )
@@ -1480,6 +1481,7 @@ __all__ = [
     "content_team_material_required_retrieval_elements",
     "content_team_material_requirement_for_mock_exam_profile",
     "derive_content_team_material_requirement_v2",
+    "derive_item_content_material_requirement_v2",
     "derive_legacy_extraction_result_identity_collisions",
     "derive_legacy_item_extraction_recovery_successor",
     "expected_corpus_completion_command_sha256",

@@ -20,7 +20,7 @@ from eom_catalog_contracts import (
     ImageBlock,
     MediaArtifactPointer,
     candidate_visible_image_instruction_paths,
-    derive_content_team_material_requirement_v2,
+    derive_item_content_material_requirement_v2,
     validate_content_team_material_requirement,
     validate_contract,
     validate_eom_question_template_content,
@@ -2201,13 +2201,8 @@ class WorkflowCatalogService:
         source = self.registry.load_item_content(
             retrieval.past_exam_variation.source_item_revision_id
         )
-        if not isinstance(source, AssessmentItemContentV2 | AssessmentItemContentV3):
-            raise ContentPackError(
-                ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                "past-exam source does not expose a typed content-team presentation",
-            )
         try:
-            expected = derive_content_team_material_requirement_v2(source)
+            expected = derive_item_content_material_requirement_v2(source)
         except ValueError as exc:
             raise ContentPackError(
                 ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from eom_api.services.command_adapter import _workflow_request_from_api
 from eom_api_contracts.workflows import WorkflowStartRequest
 from eom_catalog_contracts import (
+    AssessmentItemContent,
     EducationalRetrievalRequirementV2,
     EvidenceBundleManifestV5,
     PastExamVariationRequest,
@@ -41,6 +43,7 @@ from eom_workflow.models import EvidenceUsageCitationV1, WorkflowRequest
 from eom_workflow_runner.engine import _parse_review_escalation_plan
 from pydantic import ValidationError
 
+from tests.unit.test_assessment_item_content import item_content
 from tests.unit.test_execution_materializer import _past_exam_variation_fixture
 from tests.unit.test_knowledge_backed_execution import (
     NOW,
@@ -272,6 +275,36 @@ def test_request_draft_emits_exact_source_v2_intent_without_changing_normal_gene
     assert "state.curriculumOutline?.graph_grounding_available !== true" in studio
     assert "candidate.unit_key" in studio
     assert "entry.curriculum_units[0]" not in studio
+
+
+def test_catalog_accepts_exact_legacy_source_presentation_for_variation() -> None:
+    value = json.loads(
+        (
+            ROOT / "content/packs/generated-knowledge-item/1.20.13/fixtures/smoke-request.json"
+        ).read_text(encoding="utf-8")
+    )
+    value["educational_retrieval"] = _variation_requirement().model_dump(mode="json")
+    value["execution_preset_key"] = "knowledge-grounded-item"
+    value["item_brief"]["material_requirement"] = {
+        "schema_version": "content-team-material-requirement/2.0",
+        "form": "MIXED",
+        "panel_count": 2,
+        "image_supporting_data": None,
+    }
+    request = WorkflowRequest.model_validate(value)
+    service = object.__new__(WorkflowCatalogService)
+    service.registry = cast(
+        Any,
+        SimpleNamespace(
+            load_item_content=lambda revision_id: (
+                AssessmentItemContent.model_validate(item_content())
+                if revision_id == SOURCE_REVISION_ID
+                else None
+            )
+        ),
+    )
+
+    service._require_v5_source_presentation(request)
 
 
 def test_resolver_pins_exact_variation_intent_in_v16_plan(

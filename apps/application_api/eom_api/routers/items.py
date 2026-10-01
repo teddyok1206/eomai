@@ -16,7 +16,7 @@ from eom_api_contracts.usage import UsageRecordView
 from eom_catalog_contracts import (
     AssessmentItemContentContract,
     ContentTeamMaterialRequirementV2,
-    derive_content_team_material_requirement_v2,
+    derive_item_content_material_requirement_v2,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
@@ -228,7 +228,7 @@ def get_material_requirement(
 
     content = request.app.state.services.catalog_application.load_item_content(item_revision_id)
     try:
-        material = derive_content_team_material_requirement_v2(content)
+        material = derive_item_content_material_requirement_v2(content)
     except ValueError as exc:
         raise ApiError(
             409,
