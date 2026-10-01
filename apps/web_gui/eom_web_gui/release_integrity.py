@@ -35,6 +35,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/curriculum-selector.js",
         "static/eom-mark.svg",
         "static/execution-preset-editor.js",
+        "static/hwpx-delivery-target.js",
         "static/index.html",
         "static/item-preview.js",
         "static/login.html",

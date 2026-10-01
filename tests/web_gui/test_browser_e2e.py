@@ -22,10 +22,12 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "시험지 ↔ 문항 ↔ 교육과정 Graph",
             "문항 검토 승인",
             "HWPX 제작 및 다운로드",
+            "완성 문항 등록 후 계속",
+            "문항 제작 진행에서 선택",
+            "완성 문항에서 선택",
             "기존 제작 결과 불러오기",
             "최근 HWPX 제작 결과",
             "운영 데이터 조회",
-            "근거에서 출판 문서까지",
             "편집 가능한 표",
             "교육과정 범위",
             "대단원 선택",
@@ -46,7 +48,11 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert client.get("/studio/assets/execution-preset-editor.js").status_code == 200
         assert client.get("/studio/assets/eom-mark.svg").status_code == 200
         assert client.get("/studio/assets/item-preview.js").status_code == 200
+        assert client.get("/studio/assets/hwpx-delivery-target.js").status_code == 200
         assert client.get("/studio/assets/presentation-vocabulary.ko-KR.json").status_code == 200
+        assert 'data-view-target="dashboard" aria-label="홈으로 이동"' in shell.text
+        assert "근거에서 출판 문서까지" not in shell.text
+        assert "일반 문항 제작 · 균형형" not in shell.text
         learning_corpus = client.get("/studio/api/v1/admin/assessment-learning-corpus")
         assert learning_corpus.status_code == 200
         assert learning_corpus.json()["approved_item_count"] == 520
@@ -206,7 +212,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert 'input name="knowledge_grounding" type="checkbox" disabled' in html
     assert "graph_grounding_available === true" in javascript
     assert 'workflow.state === "COMPLETED" && registration' in javascript
-    assert '$("#hwpx-revision-id").value = registration.item_revision_id' in javascript
+    assert "hwpxTargetFromWorkflow(bundle)" in javascript
+    assert "selectHwpxDeliveryTarget(state.workflowHwpxTarget);" in javascript
+    assert 'id="workflow-hwpx-continue"' in html
+    assert 'class="technical-details inline-technical-details admin-only"' in html
     assert "curriculum_large_unit_key.disabled = !outlineLoaded" in javascript
     assert "curriculum_middle_unit_key.disabled = !outlineLoaded" in javascript
     assert "curriculum_small_unit_key.disabled = !smallAvailable" in javascript

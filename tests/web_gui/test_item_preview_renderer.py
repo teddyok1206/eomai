@@ -72,10 +72,15 @@ def test_item_preview_clears_stale_hwpx_target_and_requires_capability_pair() ->
     source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
 
     assert "const ITEM_REVISION_PATTERN = /^itemrev_[a-f0-9]{32}$/;" in source
-    assert 'preview.template_delivery_available\n    ? preview.item_revision_id\n    : ""' in source
+    assert "const hwpxTarget = hwpxTargetFromItemPreview(preview);" in source
+    assert "selectHwpxDeliveryTarget(hwpxTarget);" in source
+    assert '$("#item-hwpx-continue").disabled = hwpxTarget === null;' in source
     assert "state.hwpxCapability?.build_available === true" in source
-    assert "!(capabilityReady && revisionReady)" in source
-    assert "if (!ITEM_REVISION_PATTERN.test(revision))" in source
+    assert "state.hwpxDeliveryTarget?.itemRevisionId === selectedRevision" in source
+    assert (
+        "capabilityReady\n    && revisionReady\n    && !state.hwpxBuildSubmissionPending" in source
+    )
+    assert "state.hwpxDeliveryTarget?.itemRevisionId !== revision" in source
 
 
 def test_item_preview_request_fails_closed_and_ignores_stale_responses() -> None:
@@ -88,11 +93,8 @@ def test_item_preview_request_fails_closed_and_ignores_stale_responses() -> None
     reset = source.split("function resetItemPreviewSelection", maxsplit=1)[1].split(
         "function renderItemPreview", maxsplit=1
     )[0]
-    for identifier in (
-        "#structured-base-revision",
-        "#structured-revision-etag",
-        "#hwpx-revision-id",
-    ):
+    for identifier in ("#structured-base-revision", "#structured-revision-etag"):
         assert f'$("{identifier}").value = "";' in reset
+    assert "selectHwpxDeliveryTarget(null);" in reset
     assert '$("#preview-content").hidden = true;' in reset
     assert '$("#preview-empty").hidden = false;' in reset

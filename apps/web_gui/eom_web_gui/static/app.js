@@ -10,6 +10,12 @@ import {
   guidedPresetBases,
   reviewedPresetDraft,
 } from "./execution-preset-editor.js";
+import {
+  hwpxTargetFromAdminRevision,
+  hwpxTargetFromBuild,
+  hwpxTargetFromItemPreview,
+  hwpxTargetFromWorkflow,
+} from "./hwpx-delivery-target.js";
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
 
 const API = "/studio/api/v1";
@@ -24,12 +30,17 @@ const state = {
   draftSubmissionPending: false,
   variationSourceEntry: null,
   workflow: null,
+  workflowRequestSequence: 0,
   health: null,
   stream: null,
   pollTimer: null,
   explorerCursor: null,
   explorerRow: null,
   hwpxCapability: null,
+  workflowHwpxTarget: null,
+  hwpxDeliveryTarget: null,
+  hwpxBuildSubmissionPending: false,
+  hwpxBuildSubmissionIntent: null,
   hwpxBuildId: null,
   hwpxBuild: null,
   hwpxPollTimer: null,
@@ -750,20 +761,28 @@ async function submitDraft() {
 function installWorkflow() {
   $("#workflow-load").addEventListener("click", loadWorkflow);
   $("#timeline-refresh").addEventListener("click", loadWorkflow);
+  $("#workflow-hwpx-continue").addEventListener("click", continueWorkflowToHwpx);
   $("#workflow-id").addEventListener("keydown", (event) => { if (event.key === "Enter") loadWorkflow(); });
 }
 
 async function loadWorkflow() {
   const workflowId = $("#workflow-id").value.trim();
   if (!workflowId.startsWith("workflow_")) return toast("올바른 문항 제작 진행 ID를 입력하세요.");
+  const requestSequence = ++state.workflowRequestSequence;
   stopWorkflowUpdates();
+  state.workflow = null;
+  state.workflowHwpxTarget = null;
+  renderWorkflowHwpxHandoff(null, "LOADING", null);
+  if (state.hwpxDeliveryTarget?.source === "WORKFLOW") selectHwpxDeliveryTarget(null);
   try {
     const value = await api(`/workflows/${encodeURIComponent(workflowId)}`);
+    if (requestSequence !== state.workflowRequestSequence) return;
     state.workflow = value;
     renderWorkflow(value);
     $("#approval-workflow-id").value = workflowId;
-    startWorkflowUpdates(workflowId);
+    startWorkflowUpdates(workflowId, requestSequence);
   } catch (failure) {
+    if (requestSequence !== state.workflowRequestSequence) return;
     setStatus($("#workflow-state"), "danger", "!", "조회 실패");
     toast(`문항 제작 진행 조회 실패: ${failure.message}`);
   }
@@ -796,14 +815,49 @@ function renderWorkflow(bundle) {
   renderStages(workflow, bundle.steps || []);
   renderTimeline(bundle.timeline || []);
   renderOperationalLog(bundle);
+  let workflowHwpxTarget = null;
+  try {
+    workflowHwpxTarget = hwpxTargetFromWorkflow(bundle);
+  } catch (_) {
+    workflowHwpxTarget = null;
+  }
+  state.workflowHwpxTarget = workflowHwpxTarget;
+  renderWorkflowHwpxHandoff(workflowHwpxTarget, workflow.state, registration);
   if (workflow.state === "COMPLETED" && registration) {
     $("#item-id").value = registration.item_id;
     $("#revision-id").value = registration.item_revision_id;
-    $("#hwpx-revision-id").value = registration.item_revision_id;
-    updateHwpxDeliveryGuide();
   }
+  if (
+    state.hwpxDeliveryTarget?.source === "WORKFLOW"
+    && state.hwpxDeliveryTarget.workflowId !== workflowHwpxTarget?.workflowId
+  ) selectHwpxDeliveryTarget(null);
   $("#approval-etag").value = bundle.etag || "";
   renderApprovalSummary(bundle);
+}
+
+function renderWorkflowHwpxHandoff(target, workflowState, registration) {
+  const button = $("#workflow-hwpx-continue");
+  const message = $("#workflow-hwpx-message");
+  button.disabled = target === null;
+  if (target) {
+    message.textContent = "완성 문항이 고정된 버전으로 등록되었습니다. ID를 다시 입력하지 않고 문서 제작을 이어갈 수 있습니다.";
+    button.textContent = "HWPX 제작으로 계속";
+    return;
+  }
+  button.textContent = "완성 문항 등록 후 계속";
+  message.textContent = workflowState === "COMPLETED" && registration
+    ? "등록 결과의 문항 버전을 확인할 수 없어 문서 제작을 시작하지 않습니다."
+    : "문항 제작과 버전 등록이 끝나면 여기에서 HWPX 제작으로 이어집니다.";
+}
+
+function continueWorkflowToHwpx() {
+  if (!state.workflowHwpxTarget) {
+    toast("완성 문항 버전이 등록된 제작 진행을 먼저 선택하세요.");
+    return;
+  }
+  selectHwpxDeliveryTarget(state.workflowHwpxTarget);
+  showView("hwpx");
+  $("#hwpx-target-title").focus();
 }
 
 function appendEvidenceChip(root, label, value, technicalValue = "") {
@@ -969,26 +1023,46 @@ function renderOperationalLog(bundle) {
   }
 }
 
-function startWorkflowUpdates(workflowId) {
-  if (typeof window.EventSource !== "function") return startPolling(workflowId);
+function startWorkflowUpdates(workflowId, requestSequence) {
+  if (typeof window.EventSource !== "function") return startPolling(workflowId, requestSequence);
   const stream = new EventSource(`${API}/workflows/${encodeURIComponent(workflowId)}/stream`, {withCredentials: true});
   state.stream = stream;
   stream.addEventListener("open", () => setStatus($("#stream-status"), "success", "●", "실시간 갱신"));
   stream.addEventListener("workflow", (event) => {
-    try { state.workflow = JSON.parse(event.data); renderWorkflow(state.workflow); } catch (_) { /* invalid events are ignored and polling remains available */ }
+    if (requestSequence !== state.workflowRequestSequence) return;
+    try {
+      const value = JSON.parse(event.data);
+      if (value?.workflow?.workflow_id !== workflowId) return;
+      state.workflow = value;
+      renderWorkflow(value);
+    } catch (_) { /* invalid events are ignored and polling remains available */ }
   });
   stream.addEventListener("error", () => {
+    if (requestSequence !== state.workflowRequestSequence) return;
     stream.close();
     if (state.stream === stream) state.stream = null;
     setStatus($("#stream-status"), "warning", "◆", "주기적 갱신");
-    startPolling(workflowId);
+    startPolling(workflowId, requestSequence);
   });
 }
 
-function startPolling(workflowId) {
+function startPolling(workflowId, requestSequence) {
   if (state.pollTimer) return;
   state.pollTimer = window.setInterval(async () => {
-    try { const value = await api(`/workflows/${encodeURIComponent(workflowId)}`); state.workflow = value; renderWorkflow(value); } catch (_) { setStatus($("#stream-status"), "danger", "!", "업데이트 중단"); }
+    if (requestSequence !== state.workflowRequestSequence) return;
+    try {
+      const value = await api(`/workflows/${encodeURIComponent(workflowId)}`);
+      if (
+        requestSequence !== state.workflowRequestSequence
+        || value?.workflow?.workflow_id !== workflowId
+      ) return;
+      state.workflow = value;
+      renderWorkflow(value);
+    } catch (_) {
+      if (requestSequence === state.workflowRequestSequence) {
+        setStatus($("#stream-status"), "danger", "!", "업데이트 중단");
+      }
+    }
   }, 5000);
 }
 
@@ -1417,9 +1491,8 @@ async function loadItemPreview() {
 function resetItemPreviewSelection(title, detail) {
   $("#structured-base-revision").value = "";
   $("#structured-revision-etag").value = "";
-  $("#hwpx-revision-id").value = "";
-  syncHwpxBuildAvailability();
-  updateHwpxDeliveryGuide();
+  selectHwpxDeliveryTarget(null);
+  $("#item-hwpx-continue").disabled = true;
   setStatus($("#revision-state"), "neutral", "■", "선택 안 됨");
   delete $("#revision-state").dataset.rawState;
   delete $("#revision-state").dataset.presentationKnown;
@@ -1445,11 +1518,9 @@ function renderItemPreview(preview) {
   renderDefinitionList($("#item-inspector"), {"문항 ID": preview.item_id, "문항 버전 ID": preview.item_revision_id, "문항 제작 진행 ID": preview.workflow_id, "제작 기준 버전": preview.content_pack_release_id, "승인 상태": preview.approval?.status === "PENDING" ? "승인 대기" : "승인 완료", "EOM 문항 템플릿": preview.template_delivery_available ? "사용 가능" : "구조화 문항 필요"});
   $("#structured-base-revision").value = preview.item_revision_id;
   $("#structured-revision-etag").value = preview.revision_etag;
-  $("#hwpx-revision-id").value = preview.template_delivery_available
-    ? preview.item_revision_id
-    : "";
-  syncHwpxBuildAvailability();
-  updateHwpxDeliveryGuide();
+  const hwpxTarget = hwpxTargetFromItemPreview(preview);
+  selectHwpxDeliveryTarget(hwpxTarget);
+  $("#item-hwpx-continue").disabled = hwpxTarget === null;
   $("#preview-page-state").textContent = statePresentation("generic", preview.preview_state).label;
   if (preview.preview_state !== "AVAILABLE") {
     $("#preview-content").hidden = true;
@@ -1661,7 +1732,6 @@ async function importStructuredItem() {
       body: {base_revision_id: baseRevision, revision_etag: $("#structured-revision-etag").value.trim(), idempotency_key: `studio:structured-import:${baseRevision}:${crypto.randomUUID()}`, reviewed: true, review_reason: $("#structured-review-reason").value.trim(), content},
     });
     $("#revision-id").value = result.resource_id;
-    $("#hwpx-revision-id").value = result.resource_id;
     showMessage(message, "변경되지 않는 새 문항 버전이 등록되었습니다.", "success");
     await loadItemPreview();
   } catch (failure) {
@@ -1711,8 +1781,56 @@ async function loadHwpx() {
 
 function syncHwpxBuildAvailability() {
   const capabilityReady = state.hwpxCapability?.build_available === true;
-  const revisionReady = ITEM_REVISION_PATTERN.test($("#hwpx-revision-id").value.trim());
-  $("#hwpx-build-submit").disabled = !(capabilityReady && revisionReady);
+  const selectedRevision = $("#hwpx-revision-id").value.trim();
+  const revisionReady = ITEM_REVISION_PATTERN.test(selectedRevision)
+    && state.hwpxDeliveryTarget?.itemRevisionId === selectedRevision;
+  $("#hwpx-build-submit").disabled = !(
+    capabilityReady
+    && revisionReady
+    && !state.hwpxBuildSubmissionPending
+  );
+}
+
+function renderHwpxDeliveryTarget() {
+  const target = state.hwpxDeliveryTarget;
+  const title = $("#hwpx-target-title");
+  const message = $("#hwpx-target-message");
+  if (!target) {
+    title.textContent = "제작할 완성 문항을 선택하세요";
+    message.textContent = "문항 제작 진행 또는 완성 문항에서 HWPX로 이어가면 버전 ID가 자동으로 고정됩니다.";
+    return;
+  }
+  title.textContent = target.source === "WORKFLOW"
+    ? "문항 제작 진행의 완성 문항"
+    : target.source === "ITEM_PREVIEW"
+      ? "미리보기에서 선택한 완성 문항"
+      : target.source === "HWPX_BUILD"
+        ? "기존 제작 결과의 완성 문항"
+        : "관리자가 지정한 완성 문항";
+  message.textContent = "고정된 문항 버전을 대상으로 HWPX를 제작합니다. 다른 문항을 선택하면 기존 제작 결과 선택은 해제됩니다.";
+}
+
+function clearHwpxBuildSelection() {
+  resetHwpxBuildResult(true);
+}
+
+function selectHwpxDeliveryTarget(target, {preserveBuild = false} = {}) {
+  const nextRevision = target?.itemRevisionId || "";
+  const currentBuildRevision = state.hwpxBuild?.item_revision_id || null;
+  if (
+    !preserveBuild
+    && state.hwpxBuildId
+    && currentBuildRevision !== nextRevision
+  ) clearHwpxBuildSelection();
+  if (state.hwpxBuildSubmissionIntent?.itemRevisionId !== nextRevision) {
+    state.hwpxBuildSubmissionIntent = null;
+  }
+  state.hwpxDeliveryTarget = target;
+  $("#hwpx-revision-id").value = nextRevision;
+  renderHwpxDeliveryTarget();
+  renderRecentHwpxBuilds();
+  syncHwpxBuildAvailability();
+  updateHwpxDeliveryGuide();
 }
 
 function installHwpx() {
@@ -1726,10 +1844,20 @@ function installHwpx() {
   $("#hwpx-recent-refresh").addEventListener("click", loadRecentHwpxBuilds);
   $("#hwpx-approval-submit").addEventListener("click", approveHwpxItemRevision);
   $("#hwpx-revision-id").addEventListener("input", () => {
-    renderRecentHwpxBuilds();
-    syncHwpxBuildAvailability();
-    updateHwpxDeliveryGuide();
+    const revision = $("#hwpx-revision-id").value.trim();
+    try {
+      selectHwpxDeliveryTarget(
+        revision ? hwpxTargetFromAdminRevision(revision) : null,
+      );
+    } catch (_) {
+      state.hwpxDeliveryTarget = null;
+      renderHwpxDeliveryTarget();
+      renderRecentHwpxBuilds();
+      syncHwpxBuildAvailability();
+      updateHwpxDeliveryGuide();
+    }
   });
+  renderHwpxDeliveryTarget();
   syncHwpxBuildAvailability();
   updateHwpxDeliveryGuide();
 }
@@ -1744,9 +1872,19 @@ function selectHwpxBuild(buildId) {
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-function resetHwpxBuildResult() {
+function resetHwpxBuildResult(clearSelection = false) {
   window.clearTimeout(state.hwpxPollTimer);
   state.hwpxBuild = null;
+  if (clearSelection) {
+    state.hwpxBuildId = null;
+    $("#hwpx-existing-build-id").value = "";
+    $("#hwpx-build-id").textContent = "-";
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("hwpx_build_id")) {
+      url.searchParams.delete("hwpx_build_id");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
   setStatus($("#hwpx-job-badge"), "neutral", "■", "조회 중");
   $("#hwpx-resource-state").textContent = "-";
   $("#hwpx-artifact-revision").textContent = "-";
@@ -1778,28 +1916,59 @@ function restoreHwpxBuild() {
 }
 
 async function createHwpxBuild() {
+  if (state.hwpxBuildSubmissionPending) return;
   const revision = $("#hwpx-revision-id").value.trim();
-  if (!ITEM_REVISION_PATTERN.test(revision)) return toast("등록된 문항 버전 ID를 입력하세요.");
+  if (
+    !ITEM_REVISION_PATTERN.test(revision)
+    || state.hwpxDeliveryTarget?.itemRevisionId !== revision
+  ) return toast("문항 제작 진행 또는 완성 문항에서 제작 대상을 선택하세요.");
   const itemNumber = Number.parseInt($("#hwpx-item-number").value, 10);
   if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > 999) return toast("문항 번호는 1~999 범위여야 합니다.");
-  const idempotency = `studio:hwpx:${revision}:${crypto.randomUUID()}`;
+  const fingerprint = `${revision}:${itemNumber}`;
+  if (state.hwpxBuildSubmissionIntent?.fingerprint !== fingerprint) {
+    state.hwpxBuildSubmissionIntent = {
+      fingerprint,
+      itemRevisionId: revision,
+      idempotencyKey: `studio:hwpx:${crypto.randomUUID()}`,
+    };
+  }
+  const intent = state.hwpxBuildSubmissionIntent;
+  state.hwpxBuildSubmissionPending = true;
+  const submit = $("#hwpx-build-submit");
+  submit.textContent = "HWPX 제작 요청 중";
+  syncHwpxBuildAvailability();
   try {
     const command = await api("/hwpx/builds", {
       method: "POST",
       mutation: true,
       body: {
         item_revision_id: revision,
-        idempotency_key: idempotency,
+        idempotency_key: intent.idempotencyKey,
         require_native_equations: false,
         require_native_tables: false,
         item_number: itemNumber,
       },
     });
+    if (
+      state.hwpxBuildSubmissionIntent !== intent
+      || state.hwpxDeliveryTarget?.itemRevisionId !== revision
+    ) {
+      toast("이전에 선택한 문항의 HWPX 제작 요청이 접수되었습니다. 현재 선택은 유지합니다.");
+      return;
+    }
+    state.hwpxBuildSubmissionIntent = null;
     selectHwpxBuild(command.resource_id);
     showMessage($("#hwpx-build-message"), "HWPX 제작 요청을 접수했습니다.", "success");
     await loadHwpxBuild();
   } catch (failure) {
-    showMessage($("#hwpx-build-message"), `HWPX 제작 요청 실패: ${failure.message}`, "error");
+    if (
+      state.hwpxBuildSubmissionIntent === intent
+      && state.hwpxDeliveryTarget?.itemRevisionId === revision
+    ) showMessage($("#hwpx-build-message"), `HWPX 제작 요청 실패: ${failure.message}`, "error");
+  } finally {
+    state.hwpxBuildSubmissionPending = false;
+    submit.textContent = "문항 HWPX 만들기";
+    syncHwpxBuildAvailability();
   }
 }
 
@@ -1817,8 +1986,7 @@ async function loadHwpxBuild() {
     $("#hwpx-tables").textContent = value.native_table_count === null ? "대기" : String(value.native_table_count);
     $("#hwpx-artifact-revision").textContent = value.output_artifact_revision_id || "-";
     $("#hwpx-completed-at").textContent = value.completed_at || "-";
-    $("#hwpx-revision-id").value = value.item_revision_id;
-    syncHwpxBuildAvailability();
+    selectHwpxDeliveryTarget(hwpxTargetFromBuild(value), {preserveBuild: true});
     const download = $("#hwpx-download-link");
     download.hidden = !value.download_available;
     download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";

@@ -49,6 +49,10 @@ def test_workflow_presents_process_and_pinned_evidence_without_unsafe_html() -> 
     assert "innerHTML" not in JAVASCRIPT
     assert "heading.textContent = label;" in JAVASCRIPT
     assert "chip.title = technicalValue;" in JAVASCRIPT
+    assert 'class="brand" type="button" data-view-target="dashboard"' in HTML
+    assert 'aria-label="홈으로 이동"' in HTML
+    assert "근거에서 출판 문서까지" not in HTML
+    assert "일반 문항 제작 · 균형형" not in HTML
 
 
 def test_semantic_tokens_and_accessibility_rules_are_part_of_the_css_contract() -> None:
