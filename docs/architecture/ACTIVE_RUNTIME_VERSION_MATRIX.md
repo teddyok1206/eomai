@@ -27,7 +27,7 @@ result schema를 기준으로 정리한다.
 
 | 제품 경로 | Workflow definition | Role protocol | 결과 계약 | 관련 selector |
 | --- | --- | --- | --- | --- |
-| 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.13`; Graph plan `19.0`; ungrounded plan `20.0` |
+| 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.14`; Graph plan `19.0`; ungrounded plan `20.0` |
 | 풀이보고서 | `knowledge-analysis@10.0.0` | `workflow-role/1.21.0` | proposal `@10.0` | accepted knowledge analysis `10.0` |
 | 고객지원 | `customer-support@1.0.0` | `workflow-role/1.22.0` | customer support `@1.0` | customer-support preset |
 | 문서 검토 V3 | `pdf-document-review@1.2.0` | `workflow-role/1.27.0` | PDF document review `@3.0` | plan `15.0`, control bootstrap `5.0` |
@@ -51,7 +51,7 @@ result schema를 기준으로 정리한다.
 | Item Brief / material requirement | `4.0` / `1.0` |
 | Review publication family | production V5가 선언한 exact review decision/publication/eligibility |
 
-단일 문항 selector가 1.16/1.20.13으로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
+단일 문항 selector가 1.16/1.20.14로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
 필요하면 predecessor bytes를 수정하지 않고 successor production contract를 먼저 추가한다.
 
 ## 코드가 허용하는 새 Workflow 조합
@@ -74,21 +74,21 @@ UTC의 사람이 읽는 요약이며 `tests/unit/test_runtime_version_admission.
 
 ## 운영 snapshot
 
-아래 값은 2026-09-30 UTC에 운영 DB를 repeatable-read/read-only transaction으로 조회한 결과다.
+아래 값은 2026-10-01 UTC에 운영 DB를 read-only로 조회하고 설치 release를 검증한 결과다.
 mutable 상태이므로 배포나 canary 직전에는 다시 조회한다.
 
 | 경계 | 운영 상태 |
 | --- | --- |
-| 단일 문항 definitions | 1.8–1.15 admission 조합의 snapshots 존재; 최신 요청은 1.15 사용 |
-| 단일 문항 Pack | development activation `generated-knowledge-item@1.20.12` |
+| 단일 문항 definitions | 1.8–1.16 admission 조합의 snapshots 존재; 최신 요청은 1.16 사용 |
+| 단일 문항 Pack | development activation `generated-knowledge-item@1.20.14`; release `packrel_752cb927d929471eaefa374a1f581580`; bundle `sha256:72150b33965cbd70465cd13738df41eef66d9a9ed51d7a16b84897227c53a391` |
 | 단일 문항 presets | `standard-item` revision 34, `knowledge-grounded-item` revision 28; role 1.24 호환 |
 | 풀이보고서 | definition 10.0 snapshot, `knowledge-analysis` preset revision 40; role 1.21 호환 |
 | 고객지원 | definition 1.0 snapshot, preset revision 2; role 1.22 호환 |
 | 문서 검토 | definitions 1.0/1.1과 preset revision 8(role 1.25/1.26) 활성 |
 | 문서 검토 V3 | source 1.2/role 1.27은 repository candidate; 운영 definition/preset activation 미확인 |
 
-단일 문항의 repository selector는 1.16이지만 위 2026-09-30 운영 snapshot은 1.15 활성 상태를
-기록한다. 1.16의 source/admission 존재를 live activation으로 확대 해석하지 않는다.
+단일 문항의 repository selector와 위 2026-10-01 운영 snapshot은 Workflow 1.16 / Pack 1.20.14로
+정렬됐다. 이미 시작된 Workflow는 시작 시점에 pin한 predecessor release를 계속 사용한다.
 
 따라서 문서 검토 V3의 source 존재나 admission만 보고 live라고 표시하면 안 된다. bootstrap,
 definition import, preset release/current selection과 authenticated canary를 모두 마친 뒤 이 snapshot을

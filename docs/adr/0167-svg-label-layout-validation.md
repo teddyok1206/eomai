@@ -106,5 +106,6 @@ modified.
 - canvas overflow, required-label cardinality, label-label overlap, and renderer drift fail closed.
 - old Pack/schema bytes are unchanged and old Pack `1.20.13` does not acquire the new semantic rule.
 - Catalog repeats the policy before materializing successor-Pack images.
-- focused tests, Ruff, strict mypy, wheel/package-resource checks, and an opt-in bounded live item
-  smoke pass before activation.
+- focused tests, Ruff, strict mypy, wheel/package-resource checks, and an installed-runtime
+  valid/collision renderer smoke pass before declaring activation complete.  A model-consuming
+  Item canary remains opt-in and is not required to mutate production state for this pure boundary.
