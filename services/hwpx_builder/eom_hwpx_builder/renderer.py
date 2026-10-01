@@ -14,6 +14,7 @@ from eom_hwpx_contracts import (
     BuildResultStatus,
     HwpxBuildResult,
     HwpxItemDocument,
+    parse_contract_json,
     validate_contract,
 )
 from PIL import Image
@@ -188,7 +189,7 @@ def _package_manifest(output: Path, semantic_hash: str, warnings: list[str]) -> 
 
 def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
     started = datetime.now(UTC)
-    request_raw: dict[str, Any] = json.loads(request_path.read_text(encoding="utf-8"))
+    request_raw = parse_contract_json("render-request", request_path.read_bytes())
     request = RenderRequest.model_validate(request_raw)
     workspace = request_path.parent.resolve(strict=True)
     if result_path.resolve(strict=False).parent != workspace:
@@ -210,7 +211,8 @@ def render_workspace(request_path: Path, result_path: Path) -> HwpxBuildResult:
     validate_contract("item-document", document_raw)
     document = HwpxItemDocument.model_validate(document_raw)
     input_sha256 = sha256_bytes(canonical_json_bytes(document.model_dump(mode="json")))
-    bindings = BindingManifest.model_validate_json(bindings_path.read_text(encoding="utf-8"))
+    bindings_raw = parse_contract_json("template-binding-manifest", bindings_path.read_bytes())
+    bindings = BindingManifest.model_validate(bindings_raw)
     if (
         bindings.template_id != request.template_id
         or bindings.template_revision_id != request.template_revision_id
@@ -344,7 +346,8 @@ def failed_result(
     request_path: Path, result_path: Path, started: datetime, error: Exception
 ) -> HwpxBuildResult | None:
     try:
-        request = RenderRequest.model_validate_json(request_path.read_text(encoding="utf-8"))
+        request_raw = parse_contract_json("render-request", request_path.read_bytes())
+        request = RenderRequest.model_validate(request_raw)
     except (OSError, ValidationError, ValueError):
         return None
     code = (

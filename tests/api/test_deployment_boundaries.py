@@ -409,6 +409,9 @@ def test_hwpx_release_verifies_content_team_handoff_runtime() -> None:
     assert "eom_hwpx_builder/content_team_handoff.py" in source
     assert "hwpx-content-team-exam-render-request-v2.schema.json" in source
     assert "hwpx-content-team-exam-build-result-v2.schema.json" in source
+    assert "hwpx-render-request-v1.schema.json" in source
+    assert "hwpx-template-binding-manifest-v1.schema.json" in source
+    assert "hwpx-kordoc-bridge-report-v1.schema.json" in source
 
 
 def test_content_team_font_installer_pins_exact_files_and_never_depends_on_eomis() -> None:
@@ -745,7 +748,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 49 packaged API schemas" in deployment
+    assert "expected exactly 53 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v4.schema.json"' in deployment
@@ -754,6 +757,12 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/production-item-candidate-v2.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-assembly-policy-view-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json"' in deployment
+    assert '"eom_api_contracts/schemas/mock-exam-explicit-rating-set-v1.schema.json"' in deployment
+    assert (
+        '"eom_api_contracts/schemas/mock-exam-graph-publication-input-v1.schema.json"' in deployment
+    )
     assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/document-review-upload-v2.schema.json"' in deployment
     assert (

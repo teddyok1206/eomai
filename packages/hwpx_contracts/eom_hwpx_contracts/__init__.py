@@ -75,8 +75,13 @@ from eom_hwpx_contracts.models import (
     HwpxItemDocument,
     HwpxManagerDownloadRequest,
     HwpxManagerDownloadResponse,
+    HwpxRenderRequest,
+    HwpxTemplateBinding,
+    HwpxTemplateBindingKind,
+    HwpxTemplateBindingManifest,
     ImageInput,
     ItemInput,
+    KordocBridgeReport,
     KordocBuildResult,
     KordocExpectedStructure,
     KordocRendererDependency,
@@ -91,7 +96,7 @@ from eom_hwpx_contracts.models import (
     content_team_image_slot_projection,
     validate_content_team_image_bindings,
 )
-from eom_hwpx_contracts.validation import load_schema, validate_contract
+from eom_hwpx_contracts.validation import load_schema, parse_contract_json, validate_contract
 
 __all__ = [
     "CONTENT_TEAM_HANDOFF_MEMBERS",
@@ -149,8 +154,13 @@ __all__ = [
     "HwpxItemDocument",
     "HwpxManagerDownloadRequest",
     "HwpxManagerDownloadResponse",
+    "HwpxRenderRequest",
+    "HwpxTemplateBinding",
+    "HwpxTemplateBindingKind",
+    "HwpxTemplateBindingManifest",
     "ImageInput",
     "ItemInput",
+    "KordocBridgeReport",
     "KordocBuildResult",
     "KordocExpectedStructure",
     "KordocRenderOptions",
@@ -176,6 +186,7 @@ __all__ = [
     "normalize_content_team_stem",
     "parse_content_team_markdown",
     "parse_content_team_markdown_v2",
+    "parse_contract_json",
     "project_content_team_equation_script",
     "serialize_content_team_markdown",
     "statement_texts",

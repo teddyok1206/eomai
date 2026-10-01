@@ -27,6 +27,7 @@ from eom_operator_identity import (
     ActorType,
     PermissionKey,
 )
+from pydantic import BaseModel
 from typer.testing import CliRunner
 
 RUNNER = CliRunner()
@@ -170,6 +171,33 @@ def test_cli_rejects_invalid_pointer_document_before_application_call(
         "status": "FAILED",
     }
     assert "must-not-echo" not in result.stdout
+
+
+def test_pointer_document_loader_runs_json_schema_before_pydantic_and_rejects_duplicates(
+    tmp_path: Path,
+) -> None:
+    class PermissiveDocument(BaseModel):
+        pass
+
+    invalid = tmp_path / "invalid-rating.json"
+    invalid.write_text("{}", encoding="utf-8")
+    with pytest.raises(production_cli.MockExamProductionCliInputError) as invalid_error:
+        production_cli._load_pointer_document(
+            invalid,
+            PermissiveDocument,
+            "mock-exam-explicit-rating-set-v1.schema.json",
+        )
+    assert invalid_error.value.code == "OPERATOR_POINTER_DOCUMENT_INVALID"
+
+    duplicate = tmp_path / "duplicate-rating.json"
+    duplicate.write_text('{"schema_version":"x","schema_version":"x"}', encoding="utf-8")
+    with pytest.raises(production_cli.MockExamProductionCliInputError) as duplicate_error:
+        production_cli._load_pointer_document(
+            duplicate,
+            PermissiveDocument,
+            "mock-exam-explicit-rating-set-v1.schema.json",
+        )
+    assert duplicate_error.value.code == "OPERATOR_POINTER_DOCUMENT_INVALID"
 
 
 def test_access_token_reader_requires_same_owner_regular_mode_0600_file(

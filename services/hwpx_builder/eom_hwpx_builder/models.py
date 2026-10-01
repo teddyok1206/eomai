@@ -5,7 +5,18 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
+from eom_hwpx_contracts import (
+    HwpxRenderRequest,
+    HwpxTemplateBinding,
+    HwpxTemplateBindingKind,
+    HwpxTemplateBindingManifest,
+)
 from pydantic import BaseModel, ConfigDict, Field
+
+RenderRequest = HwpxRenderRequest
+TemplateBinding = HwpxTemplateBinding
+BindingKind = HwpxTemplateBindingKind
+BindingManifest = HwpxTemplateBindingManifest
 
 
 class StrictModel(BaseModel):
@@ -55,38 +66,6 @@ class PackageAnalysis(StrictModel):
     warnings: tuple[str, ...]
 
 
-class BindingKind(StrEnum):
-    TEXT_MARKER = "TEXT_MARKER"
-    TABLE_CELL_MARKER = "TABLE_CELL_MARKER"
-    IMAGE_BINARY = "IMAGE_BINARY"
-    EQUATION_SCRIPT = "EQUATION_SCRIPT"
-    EQUATION_ANCHOR = "EQUATION_ANCHOR"
-    METADATA = "METADATA"
-
-
-class TemplateBinding(StrictModel):
-    field_name: str
-    part_name: str
-    binding_kind: BindingKind
-    locator: dict[str, Any]
-    expected_occurrence_count: Literal[1] = 1
-    expected_original_value: str
-    object_id: str | None = None
-    binary_part: str | None = None
-    reference_ids: tuple[str, ...] = ()
-    constraints: dict[str, Any] = Field(default_factory=dict)
-
-
-class BindingManifest(StrictModel):
-    manifest_version: Literal["1.0"] = "1.0"
-    template_id: str = Field(pattern=r"^hwpxtpl_[a-f0-9]{32}$")
-    template_revision_id: str = Field(pattern=r"^hwpxrev_[a-f0-9]{32}$")
-    template_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    binding_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    bindings: tuple[TemplateBinding, ...]
-    warnings: tuple[str, ...] = ()
-
-
 class CheckStatus(StrEnum):
     PASS = "PASS"
     WARN = "WARN"
@@ -125,18 +104,3 @@ class SemanticValidationReport(StrictModel):
     semantic_hash: str
     fields: dict[str, SemanticComparison]
     extracted: dict[str, Any]
-
-
-class RenderRequest(StrictModel):
-    request_version: Literal["1.0"] = "1.0"
-    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
-    template_id: str = Field(pattern=r"^hwpxtpl_[a-f0-9]{32}$")
-    template_revision_id: str = Field(pattern=r"^hwpxrev_[a-f0-9]{32}$")
-    template_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    template_file: Literal["template.hwpx"] = "template.hwpx"
-    bindings_file: Literal["template-bindings.json"] = "template-bindings.json"
-    document_file: Literal["input/document.json"] = "input/document.json"
-    image_file: Literal["input/eom-placeholder-image-output.png"] = (
-        "input/eom-placeholder-image-output.png"
-    )
-    output_directory: Literal["output"] = "output"

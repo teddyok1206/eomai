@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from eom_hwpx_contracts import parse_contract_json
 
 from eom_hwpx_builder.analyzer import analyze_package
 from eom_hwpx_builder.bindings import compile_bindings
@@ -181,7 +182,8 @@ def render_content_team(
 
 def _bindings(path: Path | None, input_path: Path) -> BindingManifest:
     actual = path or input_path.parent / "template-bindings.json"
-    return BindingManifest.model_validate_json(actual.read_text(encoding="utf-8"))
+    value = parse_contract_json("template-binding-manifest", actual.read_bytes())
+    return BindingManifest.model_validate(value)
 
 
 @app.command("extract-semantic")

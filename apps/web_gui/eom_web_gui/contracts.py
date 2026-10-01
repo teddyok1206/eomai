@@ -1724,7 +1724,9 @@ class CurriculumEditorialUnitOption(WebModel):
 
 
 class CurriculumEditorialOutline(WebModel):
-    schema_version: Literal["integrated-science-editorial-outline/1.0"]
+    """Studio projection of the pinned Catalog outline, not the Catalog source document."""
+
+    schema_version: Literal["curriculum-editorial-outline-view/1.0"]
     outline_key: Literal["eom-integrated-science-editorial-outline"]
     outline_revision: Literal["1.0"]
     subject_key: Literal["integrated-science"]
@@ -2102,6 +2104,12 @@ class PresetRolePolicyDraft(WebModel):
 
 
 class ExecutionPresetDraftSubmission(WebModel):
+    schema_version: Literal["execution-preset-draft-request/1.0"] = (
+        "execution-preset-draft-request/1.0"
+    )
+    target_revision_schema_version: Literal["execution-preset-revision/1.0"] = (
+        "execution-preset-revision/1.0"
+    )
     preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)

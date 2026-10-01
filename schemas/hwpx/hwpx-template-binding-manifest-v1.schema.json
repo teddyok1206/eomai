@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/template-binding-manifest/1.0",
+  "title": "HWPX Template Binding Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "template_id", "template_revision_id", "template_sha256", "binding_manifest_sha256", "bindings"
+  ],
+  "properties": {
+    "manifest_version": {"const": "1.0"},
+    "template_id": {"type": "string", "pattern": "^hwpxtpl_[a-f0-9]{32}$"},
+    "template_revision_id": {"type": "string", "pattern": "^hwpxrev_[a-f0-9]{32}$"},
+    "template_sha256": {"$ref": "#/$defs/sha256"},
+    "binding_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "bindings": {"type": "array", "items": {"$ref": "#/$defs/binding"}},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["field_name", "part_name", "binding_kind", "locator", "expected_original_value"],
+      "properties": {
+        "field_name": {"type": "string"},
+        "part_name": {"type": "string"},
+        "binding_kind": {"enum": ["TEXT_MARKER", "TABLE_CELL_MARKER", "IMAGE_BINARY", "EQUATION_SCRIPT", "EQUATION_ANCHOR", "METADATA"]},
+        "locator": {"type": "object"},
+        "expected_occurrence_count": {"const": 1},
+        "expected_original_value": {"type": "string"},
+        "object_id": {"type": ["string", "null"]},
+        "binary_part": {"type": ["string", "null"]},
+        "reference_ids": {"type": "array", "items": {"type": "string"}},
+        "constraints": {"type": "object"}
+      }
+    }
+  }
+}

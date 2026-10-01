@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/kordoc-bridge-report/1.0",
+  "title": "HWPX Kordoc Bridge Report V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kordoc_version", "source_sha256", "output_sha256", "validation_ok",
+    "validation_issue_count", "parse_success", "parsed_markdown_sha256",
+    "parse_warning_count", "parsed_table_count"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "kordoc_version": {"const": "4.9.0"},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "output_sha256": {"$ref": "#/$defs/sha256"},
+    "validation_ok": {"type": "boolean"},
+    "validation_issue_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+    "parse_success": {"type": "boolean"},
+    "parsed_markdown_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "parse_warning_count": {"type": "integer", "minimum": 0, "maximum": 1000},
+    "parsed_table_count": {"type": "integer", "minimum": 0, "maximum": 20}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

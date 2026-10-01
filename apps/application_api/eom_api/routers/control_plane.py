@@ -11,7 +11,7 @@ from eom_api_contracts.control_plane import (
     CodexAuthEnrollmentView,
     CodexControlCommandView,
     CodexDeviceChallengeView,
-    CreateExecutionPresetDraftRequest,
+    ExecutionPresetDraftRequest,
     ExecutionPresetView,
 )
 from eom_operator_identity import PermissionKey
@@ -274,7 +274,7 @@ def get_execution_preset(
 )
 def create_execution_preset_draft(
     request: Request,
-    body: CreateExecutionPresetDraftRequest,
+    body: ExecutionPresetDraftRequest,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CommandResult]:

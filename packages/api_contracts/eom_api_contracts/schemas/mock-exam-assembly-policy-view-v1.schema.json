@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/mock-exam-assembly-policy-view/1.0",
+  "title": "Mock Exam Assembly Policy API View V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_key", "policy_revision_id", "policy_sha256", "subject_key",
+    "item_count", "total_points_milli", "score_distribution", "required_slot_count",
+    "balance_slot_count", "inquiry_min_count", "inquiry_max_count", "coverage_requirements",
+    "eligible_item_revision_states", "outline_key", "outline_revision", "outline_sha256",
+    "guidance_revision", "guidance_reviewed_document_sha256", "guidance_original_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "mock-exam-assembly-policy-view/1.0"},
+    "policy_key": {"type": "string"},
+    "policy_revision_id": {"type": "string", "pattern": "^assemblypolicyrev_[0-9a-f]{32}$"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "subject_key": {"type": "string"},
+    "item_count": {"type": "integer", "minimum": 1},
+    "total_points_milli": {"type": "integer", "minimum": 1},
+    "score_distribution": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/score_bucket"}
+    },
+    "required_slot_count": {"type": "integer", "minimum": 0},
+    "balance_slot_count": {"type": "integer", "minimum": 0},
+    "inquiry_min_count": {"type": "integer", "minimum": 0},
+    "inquiry_max_count": {"type": "integer", "minimum": 0},
+    "coverage_requirements": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/coverage_requirement"}
+    },
+    "eligible_item_revision_states": {
+      "type": "array",
+      "items": {"enum": ["APPROVED", "SUPERSEDED"]}
+    },
+    "outline_key": {"type": "string"},
+    "outline_revision": {"type": "string"},
+    "outline_sha256": {"$ref": "#/$defs/sha256"},
+    "guidance_revision": {"type": "integer", "minimum": 1},
+    "guidance_reviewed_document_sha256": {"$ref": "#/$defs/sha256"},
+    "guidance_original_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^(?:sha256:)?[0-9a-f]{64}$"},
+    "score_bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points_milli", "count"],
+      "properties": {
+        "points_milli": {"type": "integer", "minimum": 1},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "coverage_requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirement_id", "selection_count", "distinct_units", "allowed_unit_keys"],
+      "properties": {
+        "requirement_id": {"type": "string"},
+        "selection_count": {"type": "integer", "minimum": 1},
+        "distinct_units": {"type": "boolean"},
+        "allowed_unit_keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}

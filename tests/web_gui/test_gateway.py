@@ -1150,7 +1150,7 @@ async def test_gateway_creates_only_the_exact_previewed_server_plan() -> None:
         planned_at=planned_at,
     )
     policy_data = {
-        "schema_version": policy.schema_version,
+        "schema_version": "mock-exam-assembly-policy-view/1.0",
         "policy_key": policy.policy_key,
         "policy_revision_id": policy.policy_revision_id,
         "policy_sha256": content_sha256(policy.model_dump(mode="json")),
@@ -1177,7 +1177,7 @@ async def test_gateway_creates_only_the_exact_previewed_server_plan() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/api/v1/assessment-assemblies/policy":
+        if request.url.path == "/api/v1/assessment-assemblies/policy-view":
             return httpx.Response(200, json=_single(policy_data))
         if request.url.path == "/api/v1/curriculum/integrated-science-graph-capability":
             return httpx.Response(

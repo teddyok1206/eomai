@@ -1197,13 +1197,17 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/document-review-set-view-v1.schema.json",
         "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
+        "eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
         "eom_api_contracts/schemas/hwpx-v2.schema.json",
         "eom_api_contracts/schemas/item-bank-entry-v1.schema.json",
         "eom_api_contracts/schemas/items.schema.json",
         "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json",
+        "eom_api_contracts/schemas/mock-exam-assembly-policy-view-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-explicit-analysis-review-set-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-explicit-rating-set-v1.schema.json",
+        "eom_api_contracts/schemas/mock-exam-graph-publication-input-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json",
         "eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json",
@@ -1229,7 +1233,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 49 packaged API schemas including paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
+            "expected exactly 53 packaged API schemas including paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "

@@ -68,10 +68,7 @@ class PresetRetrievalPolicyInput(ApiModel):
         return self
 
 
-class CreateExecutionPresetDraftRequest(ApiModel):
-    schema_version: Literal["execution-preset-revision/1.0", "execution-preset-revision/2.0"] = (
-        "execution-preset-revision/1.0"
-    )
+class _ExecutionPresetDraftFields(ApiModel):
     preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     display_name: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1, max_length=1000)
@@ -81,9 +78,8 @@ class CreateExecutionPresetDraftRequest(ApiModel):
     compatible_workflow_protocols: tuple[str, ...] = Field(min_length=1, max_length=16)
     retrieval_policy: PresetRetrievalPolicyInput | None = None
 
-    @model_validator(mode="after")
-    def exact_schema_family(self) -> CreateExecutionPresetDraftRequest:
-        is_v2 = self.schema_version == "execution-preset-revision/2.0"
+    def _require_revision_family(self, target_revision_schema_version: str) -> None:
+        is_v2 = target_revision_schema_version == "execution-preset-revision/2.0"
         if is_v2 != (self.retrieval_policy is not None):
             raise ValueError("V2 preset drafts require exactly one retrieval policy")
         evidence_values = [policy.evidence_access for policy in self.role_policies]
@@ -91,7 +87,38 @@ class CreateExecutionPresetDraftRequest(ApiModel):
             raise ValueError("V2 preset roles require explicit evidence access")
         if not is_v2 and any(value is not None for value in evidence_values):
             raise ValueError("V1 preset roles cannot declare evidence access")
+
+
+class CreateExecutionPresetDraftRequest(_ExecutionPresetDraftFields):
+    """Legacy request envelope retained for compatible callers."""
+
+    schema_version: Literal["execution-preset-revision/1.0", "execution-preset-revision/2.0"] = (
+        "execution-preset-revision/1.0"
+    )
+
+    @model_validator(mode="after")
+    def exact_schema_family(self) -> CreateExecutionPresetDraftRequest:
+        self._require_revision_family(self.schema_version)
         return self
+
+
+class ExecutionPresetDraftRequestV2(_ExecutionPresetDraftFields):
+    """Current request envelope; target revision identity is an explicit value."""
+
+    schema_version: Literal["execution-preset-draft-request/1.0"] = (
+        "execution-preset-draft-request/1.0"
+    )
+    target_revision_schema_version: Literal[
+        "execution-preset-revision/1.0", "execution-preset-revision/2.0"
+    ]
+
+    @model_validator(mode="after")
+    def exact_schema_family(self) -> ExecutionPresetDraftRequestV2:
+        self._require_revision_family(self.target_revision_schema_version)
+        return self
+
+
+ExecutionPresetDraftRequest = CreateExecutionPresetDraftRequest | ExecutionPresetDraftRequestV2
 
 
 class CodexAccountCommandRequest(ApiModel):

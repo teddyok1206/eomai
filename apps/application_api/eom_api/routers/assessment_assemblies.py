@@ -10,6 +10,7 @@ from eom_api_contracts.assessment_assemblies import (
     CreatePlannedMockExamAssemblyRequest,
     MockExamAssemblyPlanView,
     MockExamAssemblyPolicyView,
+    MockExamAssemblyPolicyViewV2,
     MockExamAssemblyViewContract,
     PreviewMockExamAssemblyPlanRequest,
 )
@@ -30,6 +31,16 @@ router = APIRouter(prefix="/assessment-assemblies", tags=["assessment-assemblies
 )
 def get_policy(request: Request) -> SingleResponse[MockExamAssemblyPolicyView]:
     return one(request, request.app.state.services.queries.mock_exam_assembly_policy())
+
+
+@router.get(
+    "/policy-view",
+    operation_id="mock_exam_assembly_policy_view_get",
+    response_model=SingleResponse[MockExamAssemblyPolicyViewV2],
+    dependencies=[Depends(require_permission(PermissionKey.DELIVERABLE_READ))],
+)
+def get_policy_view(request: Request) -> SingleResponse[MockExamAssemblyPolicyViewV2]:
+    return one(request, request.app.state.services.queries.mock_exam_assembly_policy_view())
 
 
 @router.get(

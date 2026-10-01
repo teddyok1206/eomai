@@ -501,7 +501,7 @@ def test_curriculum_outline_is_authenticated_and_reviewed() -> None:
         response = client.get("/studio/api/v1/curriculum/editorial-outline")
         assert response.status_code == 200
         outline = response.json()
-        assert outline["schema_version"] == "integrated-science-editorial-outline/1.0"
+        assert outline["schema_version"] == "curriculum-editorial-outline-view/1.0"
         assert outline["graph_mapping_status"] == "RESERVED_CANDIDATES_NOT_PUBLICATION_PROOF"
         assert outline["graph_grounding_available"] is False
         units = outline["units"]
@@ -952,6 +952,56 @@ def test_codex_control_plane_rejects_non_admin_and_credential_fields() -> None:
         )
         assert reauth.status_code == 422
         assert "MUST_NOT_ENTER_CONTRACT" not in reauth.text
+
+
+def test_execution_preset_draft_projects_the_current_request_contract() -> None:
+    client, gateway = make_client()
+    artifact = {
+        "artifact_id": "artifact_" + "1" * 32,
+        "artifact_revision_id": "rev_" + "2" * 32,
+        "sha256": "sha256:" + "3" * 64,
+        "schema_ref": "eom.test/instruction-bundle-manifest/1.0",
+        "media_type": "application/json",
+        "logical_name": "manifest.json",
+    }
+    with client:
+        session = login(client)
+        response = client.post(
+            "/studio/api/v1/admin/execution-presets",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "preset_key": "standard-item",
+                "display_name": "표준 문항 제작",
+                "description": "검토된 표준 실행 정책",
+                "role_policies": [
+                    {
+                        "role": "authoring",
+                        "model_candidates": [
+                            {"model": "gpt-5.6-terra", "reasoning_effort": "high"}
+                        ],
+                        "instruction_bundle": {
+                            "bundle_id": "instrbundle_" + "4" * 32,
+                            "bundle_revision_id": "instrrev_" + "5" * 32,
+                            "manifest_artifact": artifact,
+                            "manifest_sha256": "sha256:" + "6" * 64,
+                        },
+                        "reference_bundle": None,
+                        "worker_pool_key": "item-workers",
+                        "timeout_seconds": 1800,
+                    }
+                ],
+                "capacity_policy_revision_id": "capacityrev_" + "7" * 32,
+                "general_knowledge_policy": "DENY",
+                "compatible_workflow_protocols": ["workflow-role/1.20.0"],
+                "idempotency_key": "studio:preset:draft:contract-v1",
+            },
+        )
+    assert response.status_code == 201
+    assert gateway.last_preset_payload is not None
+    assert gateway.last_preset_payload["schema_version"] == ("execution-preset-draft-request/1.0")
+    assert gateway.last_preset_payload["target_revision_schema_version"] == (
+        "execution-preset-revision/1.0"
+    )
 
 
 def test_mutations_require_csrf() -> None:

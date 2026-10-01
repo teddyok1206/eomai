@@ -26,8 +26,7 @@ class MockExamCoverageRequirementView(ApiModel):
     allowed_unit_keys: tuple[str, ...] = Field(min_length=1)
 
 
-class MockExamAssemblyPolicyView(ApiModel):
-    schema_version: Literal["mock-exam-assembly-policy/1.0"]
+class _MockExamAssemblyPolicyViewFields(ApiModel):
     policy_key: str
     policy_revision_id: str = Field(pattern=r"^assemblypolicyrev_[0-9a-f]{32}$")
     policy_sha256: Sha256
@@ -47,6 +46,18 @@ class MockExamAssemblyPolicyView(ApiModel):
     guidance_revision: int = Field(ge=1)
     guidance_reviewed_document_sha256: Sha256
     guidance_original_sha256: Sha256
+
+
+class MockExamAssemblyPolicyView(_MockExamAssemblyPolicyViewFields):
+    """Legacy projection whose discriminator collides with the Catalog contract."""
+
+    schema_version: Literal["mock-exam-assembly-policy/1.0"]
+
+
+class MockExamAssemblyPolicyViewV2(_MockExamAssemblyPolicyViewFields):
+    """Current API projection with a wire identity distinct from Catalog storage."""
+
+    schema_version: Literal["mock-exam-assembly-policy-view/1.0"]
 
 
 class MockExamAssemblySelectionInput(ApiModel):

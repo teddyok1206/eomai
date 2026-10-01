@@ -30,6 +30,81 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+class HwpxTemplateBindingKind(StrEnum):
+    TEXT_MARKER = "TEXT_MARKER"
+    TABLE_CELL_MARKER = "TABLE_CELL_MARKER"
+    IMAGE_BINARY = "IMAGE_BINARY"
+    EQUATION_SCRIPT = "EQUATION_SCRIPT"
+    EQUATION_ANCHOR = "EQUATION_ANCHOR"
+    METADATA = "METADATA"
+
+
+class HwpxTemplateBinding(StrictModel):
+    field_name: str
+    part_name: str
+    binding_kind: HwpxTemplateBindingKind
+    locator: dict[str, Any]
+    expected_occurrence_count: Literal[1] = 1
+    expected_original_value: str
+    object_id: str | None = None
+    binary_part: str | None = None
+    reference_ids: tuple[str, ...] = ()
+    constraints: dict[str, Any] = Field(default_factory=dict)
+
+
+class HwpxTemplateBindingManifest(StrictModel):
+    manifest_version: Literal["1.0"] = "1.0"
+    template_id: str = Field(pattern=r"^hwpxtpl_[a-f0-9]{32}$")
+    template_revision_id: str = Field(pattern=r"^hwpxrev_[a-f0-9]{32}$")
+    template_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    binding_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    bindings: tuple[HwpxTemplateBinding, ...]
+    warnings: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def self_hash_matches_payload(self) -> HwpxTemplateBindingManifest:
+        payload = self.model_dump(mode="json", exclude={"binding_manifest_sha256"})
+        if self.binding_manifest_sha256 != _small_contract_sha256(payload):
+            raise ValueError("template binding manifest SHA-256 does not match")
+        return self
+
+
+class HwpxRenderRequest(StrictModel):
+    request_version: Literal["1.0"] = "1.0"
+    build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    template_id: str = Field(pattern=r"^hwpxtpl_[a-f0-9]{32}$")
+    template_revision_id: str = Field(pattern=r"^hwpxrev_[a-f0-9]{32}$")
+    template_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    template_file: Literal["template.hwpx"] = "template.hwpx"
+    bindings_file: Literal["template-bindings.json"] = "template-bindings.json"
+    document_file: Literal["input/document.json"] = "input/document.json"
+    image_file: Literal["input/eom-placeholder-image-output.png"] = (
+        "input/eom-placeholder-image-output.png"
+    )
+    output_directory: Literal["output"] = "output"
+
+
+class KordocBridgeReport(StrictModel):
+    schema_version: Literal["1.0"]
+    kordoc_version: Literal["4.9.0"]
+    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    output_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    validation_ok: bool
+    validation_issue_count: int = Field(ge=0, le=1000)
+    parse_success: bool
+    parsed_markdown_sha256: str | None = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    parse_warning_count: int = Field(ge=0, le=1000)
+    parsed_table_count: int = Field(ge=0, le=20)
+
+    @model_validator(mode="after")
+    def coherent_parse_result(self) -> KordocBridgeReport:
+        if self.parse_success != (self.parsed_markdown_sha256 is not None):
+            raise ValueError("Kordoc parse status and Markdown hash must agree")
+        if not self.parse_success and (self.parse_warning_count or self.parsed_table_count):
+            raise ValueError("failed Kordoc parse cannot report parsed structure")
+        return self
+
+
 class ContentTeamTable(StrictModel):
     """Semantic Markdown table consumed by the reviewed content-team renderer."""
 

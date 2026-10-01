@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/mock-exam-graph-publication-input-v1.schema.json",
+  "title": "Mock Exam Graph Publication Input V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "current_graph_snapshot_revision_id", "current_graph_snapshot_sha256",
+    "access_policy_revision_id", "access_policy_sha256", "authorized_at",
+    "supersedes_authorization_sha256", "authorization_sha256"
+  ],
+  "properties": {
+    "current_graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+    "current_graph_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "access_policy_sha256": {"$ref": "#/$defs/sha256"},
+    "authorized_at": {"type": "string", "format": "date-time"},
+    "supersedes_authorization_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "authorization_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

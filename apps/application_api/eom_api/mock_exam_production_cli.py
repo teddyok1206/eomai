@@ -10,8 +10,10 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from eom_api_contracts.mock_exam_execution import (
@@ -20,6 +22,9 @@ from eom_api_contracts.mock_exam_execution import (
     MockExamGraphPublicationInputV1,
 )
 from eom_operator_identity import ActorContext
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ValidationError
 
 from eom_api.lifespan import AppServices, build_services
@@ -250,7 +255,11 @@ def review_analyses(
         lambda session: session.runtime.application.review_analyses(
             execution_id,
             session.actor,
-            _load_pointer_document(review_set_file, MockExamExplicitAnalysisReviewSetV1),
+            _load_pointer_document(
+                review_set_file,
+                MockExamExplicitAnalysisReviewSetV1,
+                "mock-exam-explicit-analysis-review-set-v1.schema.json",
+            ),
         ),
     )
 
@@ -276,6 +285,7 @@ def publish_graph(
             _load_pointer_document(
                 publication_input_file,
                 MockExamGraphPublicationInputV1,
+                "mock-exam-graph-publication-input-v1.schema.json",
             ),
         ),
     )
@@ -299,7 +309,11 @@ def publish_ratings(
         lambda session: session.runtime.application.publish_ratings(
             execution_id,
             session.actor,
-            _load_pointer_document(rating_set_file, MockExamExplicitRatingSetV1),
+            _load_pointer_document(
+                rating_set_file,
+                MockExamExplicitRatingSetV1,
+                "mock-exam-explicit-rating-set-v1.schema.json",
+            ),
         ),
     )
 
@@ -357,12 +371,46 @@ def _read_access_token(path: Path) -> str:
     return value
 
 
-def _load_pointer_document[ModelT: BaseModel](path: Path, model: type[ModelT]) -> ModelT:
+def _load_pointer_document[ModelT: BaseModel](
+    path: Path,
+    model: type[ModelT],
+    schema_resource: str,
+) -> ModelT:
     try:
         payload = _read_bounded(path, _MAX_POINTER_DOCUMENT_BYTES)
-        return model.model_validate_json(payload)
-    except (OSError, UnicodeError, ValueError, ValidationError) as exc:
+        value = json.loads(payload, object_pairs_hook=_unique_json_object)
+        if not isinstance(value, dict):
+            raise ValueError("operator pointer document must be an object")
+        _pointer_document_validator(schema_resource).validate(value)
+        return model.model_validate(value)
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        ValidationError,
+        JsonSchemaValidationError,
+        SchemaError,
+    ) as exc:
         raise MockExamProductionCliInputError("OPERATOR_POINTER_DOCUMENT_INVALID") from exc
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
+
+
+@lru_cache(maxsize=8)
+def _pointer_document_validator(schema_resource: str) -> Draft202012Validator:
+    if not re.fullmatch(r"[a-z0-9-]+-v[0-9]+\.schema\.json", schema_resource):
+        raise ValueError("operator pointer schema resource is invalid")
+    raw = files("eom_api_contracts.schemas").joinpath(schema_resource).read_text(encoding="utf-8")
+    schema = json.loads(raw, object_pairs_hook=_unique_json_object)
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
 
 
 def _read_bounded(

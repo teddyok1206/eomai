@@ -660,6 +660,42 @@ def test_runtime_fails_closed_without_node_and_does_not_expose_details(tmp_path:
     assert "missing-node" not in str(caught.value)
 
 
+def test_runtime_maps_bridge_schema_failure_to_the_stable_validation_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime = KordocRuntime()
+
+    def invalid_bridge_report(
+        arguments: list[str], *, workspace: Path | None = None, preset: str | None = None
+    ) -> subprocess.CompletedProcess[bytes]:
+        del arguments, preset
+        assert workspace is not None
+        (workspace / ".kordoc-generated.hwpx").write_bytes(b"invalid-test-output")
+        (workspace / ".kordoc-report.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "kordoc_version": "latest",
+                    "source_sha256": "sha256:" + "1" * 64,
+                    "output_sha256": "sha256:" + "2" * 64,
+                    "validation_ok": True,
+                    "validation_issue_count": 0,
+                    "parse_success": True,
+                    "parsed_markdown_sha256": "sha256:" + "3" * 64,
+                    "parse_warning_count": 0,
+                    "parsed_table_count": 1,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess([], 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(runtime, "_run", invalid_bridge_report)
+    with pytest.raises(HwpxError) as caught:
+        runtime.render(tmp_path, "report")
+    assert caught.value.code == HwpxErrorCode.HWPX_KORDOC_VALIDATION_FAILED
+
+
 def test_runtime_rejects_end_of_life_node_20(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

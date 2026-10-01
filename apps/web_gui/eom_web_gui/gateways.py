@@ -870,7 +870,7 @@ class HttpApplicationGateway:
         try:
             return CurriculumEditorialOutline.model_validate(
                 {
-                    "schema_version": value["schema_version"],
+                    "schema_version": "curriculum-editorial-outline-view/1.0",
                     "outline_key": value["outline_key"],
                     "outline_revision": value["outline_revision"],
                     "subject_key": value["subject_key"],
@@ -2095,10 +2095,12 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
-        response = await self._authorized(session, "GET", "/api/v1/assessment-assemblies/policy")
+        response = await self._authorized(
+            session, "GET", "/api/v1/assessment-assemblies/policy-view"
+        )
         policy = self._data(response)
         if (
-            policy.get("schema_version") != "mock-exam-assembly-policy/1.0"
+            policy.get("schema_version") != "mock-exam-assembly-policy-view/1.0"
             or policy.get("item_count") != 25
             or policy.get("total_points_milli") != 50_000
             or not isinstance(policy.get("policy_revision_id"), str)

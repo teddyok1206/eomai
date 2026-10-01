@@ -32,7 +32,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 16
+    assert len(schemas) == 17
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -74,7 +74,7 @@ def _curriculum_outline_projection() -> dict[str, object]:
         ).read_text(encoding="utf-8")
     )
     return {
-        "schema_version": source["schema_version"],
+        "schema_version": "curriculum-editorial-outline-view/1.0",
         "outline_key": source["outline_key"],
         "outline_revision": source["outline_revision"],
         "subject_key": source["subject_key"],
@@ -93,7 +93,7 @@ def _curriculum_outline_projection() -> dict[str, object]:
 def test_curriculum_outline_projection_matches_web_schema() -> None:
     value = CurriculumEditorialOutline.model_validate(_curriculum_outline_projection())
     schema = json.loads(
-        (SCHEMA_ROOT / "curriculum-editorial-outline-v1.schema.json").read_text(encoding="utf-8")
+        (SCHEMA_ROOT / "curriculum-editorial-outline-v2.schema.json").read_text(encoding="utf-8")
     )
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 
@@ -256,7 +256,7 @@ def test_curriculum_outline_ready_capability_pair_matches_web_schema() -> None:
     projection["graph_grounding_available"] = True
     value = CurriculumEditorialOutline.model_validate(projection)
     schema = json.loads(
-        (SCHEMA_ROOT / "curriculum-editorial-outline-v1.schema.json").read_text(encoding="utf-8")
+        (SCHEMA_ROOT / "curriculum-editorial-outline-v2.schema.json").read_text(encoding="utf-8")
     )
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 

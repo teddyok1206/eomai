@@ -224,6 +224,7 @@ class FakeGateway:
         self.auth_enrollment_calls = 0
         self.auth_challenge_reveal_calls = 0
         self.preset_mutation_calls = 0
+        self.last_preset_payload: dict[str, Any] | None = None
         self.customer_support_create_calls = 0
         self.customer_support_inquiry_ids: list[str] = []
         self.customer_support_cursors: list[str | None] = []
@@ -320,7 +321,7 @@ class FakeGateway:
             )
         return CurriculumEditorialOutline.model_validate(
             {
-                "schema_version": "integrated-science-editorial-outline/1.0",
+                "schema_version": "curriculum-editorial-outline-view/1.0",
                 "outline_key": "eom-integrated-science-editorial-outline",
                 "outline_revision": "1.0",
                 "subject_key": "integrated-science",
@@ -1221,7 +1222,7 @@ class FakeGateway:
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
         del session
         return {
-            "schema_version": "mock-exam-assembly-policy/1.0",
+            "schema_version": "mock-exam-assembly-policy-view/1.0",
             "policy_revision_id": "assemblypolicyrev_" + "1" * 32,
             "policy_sha256": "sha256:" + "2" * 64,
             "item_count": 25,
@@ -1531,8 +1532,9 @@ class FakeGateway:
     async def create_execution_preset_draft(
         self, session: WebSession, payload: dict[str, Any], idempotency_key: str
     ) -> dict[str, Any]:
-        del session, payload, idempotency_key
+        del session, idempotency_key
         self.preset_mutation_calls += 1
+        self.last_preset_payload = payload
         return {"resource_id": "execpresetrev_" + "6" * 32, "status": "COMPLETED"}
 
     async def release_execution_preset(

@@ -27,10 +27,22 @@ SCHEMA_FILES = {
     "content-team-output-acceptance-v1": ("hwpx-content-team-output-acceptance-v1.schema.json"),
     "item-document": "hwpx-item-document-v1.schema.json",
     "build-result": "hwpx-build-result-v1.schema.json",
+    "render-request": "hwpx-render-request-v1.schema.json",
+    "template-binding-manifest": "hwpx-template-binding-manifest-v1.schema.json",
     "kordoc-render-request": "hwpx-kordoc-render-request-v1.schema.json",
     "kordoc-build-result": "hwpx-kordoc-build-result-v1.schema.json",
+    "kordoc-bridge-report": "hwpx-kordoc-bridge-report-v1.schema.json",
     "manager-download": "hwpx-manager-download-v1.schema.json",
 }
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
 
 
 @lru_cache(maxsize=len(SCHEMA_FILES))
@@ -53,3 +65,18 @@ def validate_contract(name: str, value: dict[str, Any], *, definition: str | Non
             raise ValueError(f"unknown HWPX contract definition: {name}:{definition}")
         schema = definitions[definition]
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
+
+
+def parse_contract_json(
+    name: str,
+    payload: bytes | str,
+    *,
+    definition: str | None = None,
+) -> dict[str, Any]:
+    """Parse one untrusted JSON object once, rejecting duplicate keys before validation."""
+
+    value: Any = json.loads(payload, object_pairs_hook=_unique_object)
+    if not isinstance(value, dict):
+        raise ValueError("HWPX contract payload must be a JSON object")
+    validate_contract(name, value, definition=definition)
+    return value

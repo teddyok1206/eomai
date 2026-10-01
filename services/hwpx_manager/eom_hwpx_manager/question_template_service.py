@@ -19,6 +19,8 @@ from eom_catalog_contracts import (
 from eom_hwpx_contracts import (
     BuildResultStatus,
     HwpxBuildResult,
+    HwpxTemplateBindingManifest,
+    parse_contract_json,
 )
 from eom_hwpx_contracts import (
     validate_contract as validate_hwpx_contract,
@@ -39,6 +41,8 @@ from eom_orchestrator.repository import (
     submit_structured_job,
 )
 from eom_orchestrator.state_machine import JobState, transition_job
+from jsonschema import ValidationError as JsonSchemaValidationError
+from pydantic import ValidationError
 from sqlalchemy import Engine, select
 
 from eom_hwpx_manager.adapter import BuilderRun
@@ -418,20 +422,25 @@ class QuestionTemplateHwpxService:
         binding = self._artifact_file(primary.parent, "template-bindings.json")
         self._verify_manifest_member(snapshot, "template-bindings.json", binding)
         try:
-            value: object = json.loads(binding.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            value = parse_contract_json("template-binding-manifest", binding.read_bytes())
+            manifest = HwpxTemplateBindingManifest.model_validate(value)
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            JsonSchemaValidationError,
+            ValidationError,
+            ValueError,
+        ) as exc:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
                 "question-template binding manifest is invalid",
             ) from exc
-        if not isinstance(value, dict) or any(
-            value.get(key) != expected
-            for key, expected in (
-                ("template_id", snapshot.template_id),
-                ("template_revision_id", snapshot.template_revision_id),
-                ("template_sha256", snapshot.template_source_sha256),
-                ("binding_manifest_sha256", snapshot.binding_manifest_sha256),
-            )
+        if (
+            manifest.template_id != snapshot.template_id
+            or manifest.template_revision_id != snapshot.template_revision_id
+            or manifest.template_sha256 != snapshot.template_source_sha256
+            or manifest.binding_manifest_sha256 != snapshot.binding_manifest_sha256
         ):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,

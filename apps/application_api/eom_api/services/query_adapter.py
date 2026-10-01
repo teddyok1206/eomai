@@ -12,6 +12,7 @@ from typing import Any, Literal, Never, cast
 from eom_api_contracts.assessment_assemblies import (
     MockExamAssemblyPlanView,
     MockExamAssemblyPolicyView,
+    MockExamAssemblyPolicyViewV2,
     MockExamAssemblyView,
     MockExamAssemblyViewContract,
     MockExamAssemblyViewV2,
@@ -487,6 +488,14 @@ class QueryAdapter:
             guidance_revision=policy.guidance_pointer.revision,
             guidance_reviewed_document_sha256=(policy.guidance_pointer.reviewed_document_sha256),
             guidance_original_sha256=policy.guidance_pointer.original_sha256,
+        )
+
+    @staticmethod
+    def mock_exam_assembly_policy_view() -> MockExamAssemblyPolicyViewV2:
+        legacy = QueryAdapter.mock_exam_assembly_policy()
+        return MockExamAssemblyPolicyViewV2.model_validate(
+            legacy.model_dump(mode="json")
+            | {"schema_version": "mock-exam-assembly-policy-view/1.0"}
         )
 
     def mock_exam_assembly(self, assembly_revision_id: str) -> MockExamAssemblyViewContract:

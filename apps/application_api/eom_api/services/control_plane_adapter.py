@@ -16,7 +16,7 @@ from eom_api_contracts.control_plane import (
     CodexDeviceChallengeView,
     CodexUsageObservationView,
     CodexUsageWindowView,
-    CreateExecutionPresetDraftRequest,
+    ExecutionPresetDraftRequest,
     ExecutionPresetEvaluationView,
     ExecutionPresetRevisionView,
     ExecutionPresetView,
@@ -462,7 +462,7 @@ class ControlPlaneAdapter:
         return matches[0]
 
     def create_preset_draft(
-        self, *, body: CreateExecutionPresetDraftRequest, actor: ActorContext
+        self, *, body: ExecutionPresetDraftRequest, actor: ActorContext
     ) -> ExecutionPresetRevisionView:
         try:
             with transaction(self.sessions) as session:

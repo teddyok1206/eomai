@@ -11,6 +11,8 @@ from eom_hwpx_contracts import (
     BuildResultStatus,
     HwpxBuildResult,
     HwpxItemDocument,
+    HwpxRenderRequest,
+    HwpxTemplateBindingManifest,
     validate_contract,
 )
 from eom_identifiers import (
@@ -250,7 +252,9 @@ class HwpxService:
             self._platform_transition(job_id, JobState.VALIDATING_RESULT, "HWPX_BINDINGS_RECEIVED")
             analysis = self.adapter.load_json(workspace / "template-analysis.json", workspace)
             bindings = self.adapter.load_json(workspace / "template-bindings.json", workspace)
-            if bindings.get("template_sha256") != source_hash:
+            validate_contract("template-binding-manifest", bindings)
+            binding_manifest = HwpxTemplateBindingManifest.model_validate(bindings)
+            if binding_manifest.template_sha256 != source_hash:
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
                     "binding manifest does not match reference bytes",
@@ -394,10 +398,15 @@ class HwpxService:
                 template_hash = source_revision.content_hash
 
             workspace = self.adapter.create_workspace(build_id)
-            self.adapter.stage_file(workspace, "template.hwpx", template_root / "template.hwpx")
-            self.adapter.stage_file(
-                workspace, "template-bindings.json", template_root / "template-bindings.json"
+            template_bindings = template_root / "template-bindings.json"
+            binding_value = self.adapter.load_json(template_bindings, template_root)
+            validate_contract(
+                "template-binding-manifest",
+                binding_value,
             )
+            HwpxTemplateBindingManifest.model_validate(binding_value)
+            self.adapter.stage_file(workspace, "template.hwpx", template_root / "template.hwpx")
+            self.adapter.stage_file(workspace, "template-bindings.json", template_bindings)
             self.adapter.stage_file(workspace, "input/document.json", input_path)
             image_source = input_path.parent / document.item.image.source_path
             self.adapter.stage_file(
@@ -415,6 +424,8 @@ class HwpxService:
                 "image_file": "input/eom-placeholder-image-output.png",
                 "output_directory": "output",
             }
+            validate_contract("render-request", request)
+            HwpxRenderRequest.model_validate(request)
             self.adapter.write_json(workspace, "request.json", request)
             log_root = self.settings.staging_root / job_id
             self._transition_both(

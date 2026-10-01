@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/render-request/1.0",
+  "title": "HWPX Render Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["build_id", "template_id", "template_revision_id", "template_sha256"],
+  "properties": {
+    "request_version": {"const": "1.0"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[a-f0-9]{32}$"},
+    "template_id": {"type": "string", "pattern": "^hwpxtpl_[a-f0-9]{32}$"},
+    "template_revision_id": {"type": "string", "pattern": "^hwpxrev_[a-f0-9]{32}$"},
+    "template_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "template_file": {"const": "template.hwpx"},
+    "bindings_file": {"const": "template-bindings.json"},
+    "document_file": {"const": "input/document.json"},
+    "image_file": {"const": "input/eom-placeholder-image-output.png"},
+    "output_directory": {"const": "output"}
+  }
+}

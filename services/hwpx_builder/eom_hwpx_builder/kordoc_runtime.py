@@ -12,7 +12,9 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, Final, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from eom_hwpx_contracts import KordocBridgeReport, parse_contract_json
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 
@@ -22,21 +24,6 @@ KORDOC_PACKAGE_LOCK_SHA256: Final = (
 )
 SUPPORTED_NODE_MAJOR: Final = 22
 MAX_BRIDGE_OUTPUT_BYTES = 64 * 1024
-
-
-class KordocBridgeReport(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: Literal["1.0"]
-    kordoc_version: Literal["4.9.0"]
-    source_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    output_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    validation_ok: bool
-    validation_issue_count: int = Field(ge=0, le=1000)
-    parse_success: bool
-    parsed_markdown_sha256: str | None = Field(pattern=r"^sha256:[a-f0-9]{64}$")
-    parse_warning_count: int = Field(ge=0, le=1000)
-    parsed_table_count: int = Field(ge=0, le=20)
 
 
 class KordocCapability(BaseModel):
@@ -205,8 +192,15 @@ class KordocRuntime:
         ):
             raise HwpxError(HwpxErrorCode.HWPX_KORDOC_RENDER_FAILED, "Kordoc output is unsafe")
         try:
-            return KordocBridgeReport.model_validate_json(raw)
-        except ValidationError as exc:
+            value = parse_contract_json("kordoc-bridge-report", raw)
+            return KordocBridgeReport.model_validate(value)
+        except (
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            JsonSchemaValidationError,
+            ValidationError,
+            ValueError,
+        ) as exc:
             raise HwpxError(
                 HwpxErrorCode.HWPX_KORDOC_VALIDATION_FAILED,
                 "Kordoc validation report is invalid",
