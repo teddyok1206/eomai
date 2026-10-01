@@ -8,7 +8,10 @@ from eom_identifiers import content_sha256
 from eom_image_contracts import (
     LocalImageVisualReferencePointer,
     LocalImageVisualReferencePublicationReceipt,
+    SvgLabelLayoutValidationReceipt,
     VisualReferenceImageResultArtifactPointer,
+    sanitize_svg_overlay,
+    text_sha256,
     validate_contract,
 )
 from eom_orchestrator.models import (
@@ -19,7 +22,7 @@ from eom_orchestrator.models import (
 )
 from eom_protocol import ArtifactManifest
 from eom_workflow import ArtifactPointer, RoleWorkerInput
-from eom_workflow.models import ContentTeamImageRoleResultV12
+from eom_workflow.models import ContentTeamImageRoleResultV12, GeneratedVectorDrawingV6
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
@@ -39,6 +42,7 @@ _EVENT_DATA_KEYS = frozenset(
         "visual_reference_publication_receipt",
     }
 )
+_SVG_LABEL_RECEIPT_KEY = "svg_label_layout_validation_receipts"
 
 
 class VisualReferenceReceiptResolutionError(RuntimeError):
@@ -209,7 +213,8 @@ class OrchestratorVisualReferenceReceiptResolver:
             or event.to_state != "SUCCEEDED"
             or event.event != "ARTIFACT_COMMITTED"
             or not isinstance(data, dict)
-            or frozenset(data) != _EVENT_DATA_KEYS
+            or frozenset(data)
+            not in {_EVENT_DATA_KEYS, _EVENT_DATA_KEYS | {_SVG_LABEL_RECEIPT_KEY}}
             or data.get("logical_artifact_id") != image_result.logical_artifact_id
             or data.get("revision_id") != image_result.revision_id
             or data.get("content_hash") != image_result.content_hash
@@ -217,6 +222,8 @@ class OrchestratorVisualReferenceReceiptResolver:
             raise VisualReferenceReceiptResolutionError(
                 "visual-reference result differs from its immutable pointer"
             )
+        if _SVG_LABEL_RECEIPT_KEY in data:
+            _validate_svg_label_receipts(data[_SVG_LABEL_RECEIPT_KEY], result)
         raw_receipt = data.get("visual_reference_publication_receipt")
         if not isinstance(raw_receipt, dict):
             raise VisualReferenceReceiptResolutionError(
@@ -239,6 +246,58 @@ class OrchestratorVisualReferenceReceiptResolver:
                 "visual-reference receipt does not bind the exact image result"
             )
         return receipt
+
+
+def _validate_svg_label_receipts(
+    value: object,
+    result: ContentTeamImageRoleResultV12,
+) -> None:
+    expected = {
+        item.visual_ordinal: (
+            content_sha256(item.drawing.model_dump(mode="json")),
+            text_sha256(
+                sanitize_svg_overlay(item.drawing.svg_overlay, item.drawing.required_labels)
+            ),
+            tuple(sorted(item.drawing.required_labels)),
+        )
+        for item in result.output.drawings
+        if isinstance(item.drawing, GeneratedVectorDrawingV6)
+    }
+    if not isinstance(value, list) or len(value) != len(expected):
+        raise VisualReferenceReceiptResolutionError("SVG label receipt set is invalid")
+    observed: dict[int, tuple[str, str, tuple[str, ...]]] = {}
+    for entry in value:
+        if not isinstance(entry, dict) or frozenset(entry) != {
+            "visual_ordinal",
+            "drawing_sha256",
+            "receipt",
+        }:
+            raise VisualReferenceReceiptResolutionError("SVG label receipt entry is invalid")
+        ordinal = entry.get("visual_ordinal")
+        drawing_sha256 = entry.get("drawing_sha256")
+        receipt_document = entry.get("receipt")
+        if (
+            not isinstance(ordinal, int)
+            or isinstance(ordinal, bool)
+            or not isinstance(drawing_sha256, str)
+            or not isinstance(receipt_document, dict)
+            or ordinal in observed
+        ):
+            raise VisualReferenceReceiptResolutionError("SVG label receipt entry is invalid")
+        try:
+            validate_contract("svg-label-layout-validation-receipt", receipt_document)
+            receipt = SvgLabelLayoutValidationReceipt.model_validate(receipt_document)
+        except (JsonSchemaValidationError, PydanticValidationError, ValueError) as exc:
+            raise VisualReferenceReceiptResolutionError("SVG label receipt is invalid") from exc
+        observed[ordinal] = (
+            drawing_sha256,
+            receipt.overlay_sha256,
+            receipt.required_labels,
+        )
+    if observed != expected:
+        raise VisualReferenceReceiptResolutionError(
+            "SVG label receipts do not bind the exact image drawings"
+        )
 
 
 __all__ = [

@@ -42,6 +42,8 @@ from eom_hwpx_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_image_contracts import (
     SVG_ALLOWED_FONT_FAMILIES,
+    SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256,
+    SVG_LABEL_LAYOUT_PACK_VERSION,
     LocalImageProviderBinding,
     LocalImageProviderBindingV2,
     LocalImageProviderBindingV3,
@@ -179,6 +181,7 @@ from eom_catalog_service.vector_stimulus import (
     SVG_MEDIA_TYPE,
     SVG_MEMBER,
     SVG_RENDERER_CONTRACT,
+    validate_vector_drawing_label_layout,
 )
 from eom_catalog_service.visual_reference_receipts import (
     OrchestratorVisualReferenceReceiptResolver,
@@ -201,6 +204,17 @@ ComponentType = Literal[
 ]
 
 
+def _enforces_svg_label_layout(workflow: WorkflowInstanceRecord) -> bool:
+    """Bind the new semantic rule to one immutable Content Pack release."""
+
+    content_pack = workflow.runtime_context.get("content_pack")
+    return (
+        isinstance(content_pack, dict)
+        and content_pack.get("version") == SVG_LABEL_LAYOUT_PACK_VERSION
+        and content_pack.get("release_sha256") == SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256
+    )
+
+
 def _local_image_prompt_contract(
     workflow: WorkflowInstanceRecord,
 ) -> LocalGpuPromptContract:
@@ -219,6 +233,7 @@ def _local_image_prompt_contract(
         "1.20.11",
         "1.20.12",
         "1.20.13",
+        "1.20.14",
     }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
@@ -258,6 +273,7 @@ def _uses_v1_reference_conditioning(
             "1.20.11",
             "1.20.12",
             "1.20.13",
+            "1.20.14",
         }
     )
 
@@ -627,10 +643,11 @@ class WorkflowCatalogService:
                     "1.20.11",
                     "1.20.12",
                     "1.20.13",
+                    "1.20.14",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.13",
+                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.14",
                     )
                 if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
                     "1.20.5",
@@ -642,10 +659,11 @@ class WorkflowCatalogService:
                     "1.20.11",
                     "1.20.12",
                     "1.20.13",
+                    "1.20.14",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.13",
+                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.14",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1423,6 +1441,10 @@ class WorkflowCatalogService:
         committed: list[ContentTeamStimulusPointer] = []
         for item in image_drawings:
             drawing = item.drawing
+            if _enforces_svg_label_layout(workflow) and isinstance(
+                drawing, GeneratedVectorDrawingV6
+            ):
+                validate_vector_drawing_label_layout(drawing)
             drawing_hash = content_sha256(drawing.model_dump(mode="json"))
             suffix = f"visual-{item.visual_ordinal}"
             provider_request_identity: tuple[str, str] | None = None
@@ -2090,6 +2112,7 @@ class WorkflowCatalogService:
             "1.20.11",
             "1.20.12",
             "1.20.13",
+            "1.20.14",
         }
         if expects_content_team:
             if not is_content_team:
@@ -2097,7 +2120,7 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            expects_material_v5 = release_version in {"1.20.12", "1.20.13"}
+            expects_material_v5 = release_version in {"1.20.12", "1.20.13", "1.20.14"}
             expects_material_v4 = release_version in {
                 "1.16.0",
                 "1.16.1",
@@ -2142,6 +2165,7 @@ class WorkflowCatalogService:
                 "1.20.11",
                 "1.20.12",
                 "1.20.13",
+                "1.20.14",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode

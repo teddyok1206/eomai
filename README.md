@@ -40,7 +40,7 @@ readiness가 정본입니다.
 | --- | --- |
 | 단일 문항 Workflow | `generic-item-development@1.16.0` |
 | 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
-| Content Pack | `generated-knowledge-item@1.20.13` |
+| Content Pack | `generated-knowledge-item@1.20.14` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
 | 단일 문항 실행 계획 | Graph `resolved-execution-plan/19.0` / ungrounded `20.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
@@ -229,6 +229,12 @@ worker는 세 파일을 순서대로 모두 읽고 authoring 결과의 실제 `v
 의미 설명과 흑백·흰 배경·장식 금지 정책만 전달하고, 전체 팀장 원문과 정확한 기하·label은
 Artifact provenance와 검증 단계에 남깁니다. HWPX staging은 symlink를 따르지 않는 file descriptor,
 bounded read, SHA-256, identity 재확인과 fresh-target copy를 사용합니다.
+
+Pack `1.20.14`부터 결정론적 SVG의 글자 배치는 고정 `librsvg`와 고정 폰트로 별도 렌더해
+검증합니다. 필수 label은 한 번만 존재해야 하고, 실제 글자 경계는 도선·장치 외곽선·축·다른
+label과 최소 8px 떨어져야 합니다. 오케스트레이터가 image Artifact commit 전에 검증 영수증을
+만들고 Catalog가 PNG materialization 전에 같은 규칙을 다시 실행합니다. 좌표를 자동 이동해 과학적
+의미를 바꾸지 않으며, 이전 Pack과 등록된 SVG/PNG는 재해석하지 않습니다.
 
 이미지 policy 1.6은 occurrence-backed 기출 520개에서 층화한 대표 시각 패턴 12개를 같은 로컬
 SSD-1B 모델·seed로 세 가지 prompt에 입력한 36건 비교에서 정했습니다. HYBRID route는 worker가

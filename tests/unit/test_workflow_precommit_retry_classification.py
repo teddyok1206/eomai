@@ -40,6 +40,23 @@ def test_deterministic_evidence_pointer_failure_is_terminal() -> None:
         )
 
 
+def test_worker_authored_svg_label_layout_failure_is_bounded_retryable() -> None:
+    for detail in (
+        "SVG_REQUIRED_LABEL_CARDINALITY_INVALID",
+        "SVG_LABEL_OUT_OF_BOUNDS",
+        "SVG_LABEL_GEOMETRY_COLLISION",
+        "SVG_LABEL_LABEL_COLLISION",
+    ):
+        assert _is_retryable_precommit_agent_failure(
+            error_code="WORKER_RESULT_INVALID",
+            error_detail=detail,
+        )
+    assert not _is_retryable_precommit_agent_failure(
+        error_code="WORKER_RESULT_INVALID",
+        error_detail="SVG_LABEL_LAYOUT_RECEIPT_INVALID",
+    )
+
+
 def test_non_retryable_worker_code_stays_terminal() -> None:
     assert not _is_retryable_precommit_agent_failure(
         error_code="WORKFLOW_INPUT_INVALID",

@@ -14,6 +14,7 @@ from eom_catalog_contracts import ContentTeamMaterialRequirement
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_image_contracts import (
     LocalImageVisualReferencePublicationReceipt,
+    SvgLabelLayoutValidationError,
     VisualReferenceImageResultArtifactPointer,
     VisualReferencePublicationEntry,
     text_sha256,
@@ -135,6 +136,10 @@ from eom_orchestrator.repository import (
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
+from eom_orchestrator.svg_label_layout_validation import (
+    svg_label_layout_event_data,
+    validate_image_result_svg_label_layout,
+)
 from eom_orchestrator.visual_reference_acquisition import (
     VisualReferenceAcquisitionCoordinator,
     VisualReferenceCoordinatorError,
@@ -869,6 +874,11 @@ class Orchestrator:
                         ErrorCode.WORKER_RESULT_INVALID,
                         "exhaustive paired review result differs from its immutable request",
                     ) from exc
+            svg_label_layout_receipts = validate_image_result_svg_label_layout(
+                result=result,
+                result_schema=result_schema,
+                plan_document=plan_document,
+            )
             result_document = result.model_dump(mode="json")
             evidence_receipt = None
             evidence_event_data: dict[str, object] = {}
@@ -1116,6 +1126,7 @@ class Orchestrator:
                     "content_hash": content_hash,
                     **evidence_event_data,
                     **visual_reference_event_data,
+                    **svg_label_layout_event_data(svg_label_layout_receipts),
                 }
                 transition_job(
                     session,
@@ -1127,6 +1138,8 @@ class Orchestrator:
         except WorkflowSchemaError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, str(exc), slot)
         except EvidenceUsageValidationError as exc:
+            self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, exc.code, slot)
+        except SvgLabelLayoutValidationError as exc:
             self._fail(job_id, ErrorCode.WORKER_RESULT_INVALID, exc.code, slot)
         except VisualReferenceCoordinatorError as exc:
             self._fail(job_id, ErrorCode.WORKER_UNAVAILABLE, exc.code, slot)

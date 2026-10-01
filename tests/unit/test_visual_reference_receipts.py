@@ -11,10 +11,14 @@ from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_image_contracts import (
     LocalImageVisualReferencePointer,
     LocalImageVisualReferencePublicationReceipt,
+    SvgLabelBounds,
+    SvgLabelLayoutValidationReceipt,
     VisualReferenceBundleManifestPointer,
     VisualReferenceImageResultArtifactPointer,
     VisualReferencePngArtifactPointer,
     VisualReferencePublicationEntry,
+    sanitize_svg_overlay,
+    text_sha256,
 )
 from eom_orchestrator.models import (
     ArtifactRecord,
@@ -24,7 +28,11 @@ from eom_orchestrator.models import (
 )
 from eom_protocol import ArtifactManifest
 from eom_workflow import ArtifactPointer, RoleWorkerInput, WorkerRequest
-from eom_workflow.models import ArtifactSpec
+from eom_workflow.models import (
+    ArtifactSpec,
+    ContentTeamImageRoleResultV12,
+    GeneratedVectorDrawingV6,
+)
 
 from tests.unit.test_workflow_catalog_generated import (
     IMAGE_V12,
@@ -216,4 +224,77 @@ def test_visual_reference_receipt_rejects_duplicate_terminal_events() -> None:
             artifact=artifact,
             revision=revision,
             events=(event, event),
+        )
+
+
+def _svg_label_receipts(result_document: dict[str, object]) -> list[dict[str, object]]:
+    result = ContentTeamImageRoleResultV12.model_validate(result_document)
+    entries: list[dict[str, object]] = []
+    for item in result.output.drawings:
+        drawing = item.drawing
+        if not isinstance(drawing, GeneratedVectorDrawingV6):
+            continue
+        labels = tuple(
+            SvgLabelBounds(
+                text=text,
+                occurrence=1,
+                left=100 + index * 100,
+                top=100,
+                right=120 + index * 100,
+                bottom=120,
+            )
+            for index, text in enumerate(sorted(drawing.required_labels))
+        )
+        body = {
+            "schema_version": "svg-label-layout-validation-receipt/1.0",
+            "policy_revision": "eom-svg-label-layout/1.0",
+            "overlay_sha256": text_sha256(
+                sanitize_svg_overlay(drawing.svg_overlay, drawing.required_labels)
+            ),
+            "renderer_contract": "eom-safe-svg-compositor/1.1",
+            "renderer_version": "rsvg-convert version 2.58.0",
+            "renderer_sha256": _sha("1"),
+            "font_manifest_sha256": _sha("2"),
+            "clearance_px": 8,
+            "required_labels": tuple(sorted(drawing.required_labels)),
+            "labels": tuple(label.model_dump(mode="json") for label in labels),
+        }
+        receipt = SvgLabelLayoutValidationReceipt.model_validate(
+            {**body, "receipt_sha256": content_sha256(body)}
+        )
+        entries.append(
+            {
+                "visual_ordinal": item.visual_ordinal,
+                "drawing_sha256": content_sha256(drawing.model_dump(mode="json")),
+                "receipt": receipt.model_dump(mode="json"),
+            }
+        )
+    return entries
+
+
+def test_visual_reference_receipt_accepts_and_binds_svg_layout_receipts() -> None:
+    pointer, job, artifact, revision, event = _records()
+    event.data["svg_label_layout_validation_receipts"] = _svg_label_receipts(revision.result)
+    receipt = OrchestratorVisualReferenceReceiptResolver._validate_image_result(
+        image_result=pointer,
+        workflow_id=WORKFLOW_ID,
+        job=job,
+        artifact=artifact,
+        revision=revision,
+        events=(event,),
+    )
+    assert receipt.image_result_artifact.revision_id == pointer.revision_id
+
+    entries = event.data["svg_label_layout_validation_receipts"]
+    assert isinstance(entries, list)
+    assert isinstance(entries[0], dict)
+    entries[0]["drawing_sha256"] = _sha("f")
+    with pytest.raises(VisualReferenceReceiptResolutionError, match="exact image drawings"):
+        OrchestratorVisualReferenceReceiptResolver._validate_image_result(
+            image_result=pointer,
+            workflow_id=WORKFLOW_ID,
+            job=job,
+            artifact=artifact,
+            revision=revision,
+            events=(event,),
         )

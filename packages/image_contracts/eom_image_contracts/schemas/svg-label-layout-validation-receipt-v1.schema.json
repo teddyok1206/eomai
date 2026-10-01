@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/svg-label-layout-validation-receipt/1.0",
+  "title": "SVG label layout validation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_revision",
+    "overlay_sha256",
+    "renderer_contract",
+    "renderer_version",
+    "renderer_sha256",
+    "font_manifest_sha256",
+    "clearance_px",
+    "required_labels",
+    "labels",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "svg-label-layout-validation-receipt/1.0"
+    },
+    "policy_revision": {
+      "const": "eom-svg-label-layout/1.0"
+    },
+    "overlay_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "renderer_contract": {
+      "const": "eom-safe-svg-compositor/1.1"
+    },
+    "renderer_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^rsvg-convert version 2\\.58\\."
+    },
+    "renderer_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "font_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "clearance_px": {
+      "const": 8
+    },
+    "required_labels": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    },
+    "labels": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/labelBounds"
+      }
+    },
+    "receipt_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "labelBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "occurrence",
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "left": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 799
+        },
+        "top": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 499
+        },
+        "right": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 799
+        },
+        "bottom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 499
+        }
+      }
+    }
+  }
+}

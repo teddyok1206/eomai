@@ -1323,6 +1323,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_orchestrator/legacy_item_editorial_compatibility_artifact.py",
         "eom_orchestrator/legacy_item_editorial_compatibility_bootstrap.py",
         "eom_orchestrator/preset_lifecycle.py",
+        "eom_orchestrator/svg_label_layout_validation.py",
         "eom_workflow/control_plane.py",
         "eom_workflow/control_schemas.py",
         "eom_workflow/models.py",
@@ -1341,6 +1342,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
     catalog_staging_runtime = {
         "eom_image_contracts/models.py",
         "eom_image_contracts/safe_svg.py",
+        "eom_image_contracts/svg_label_layout.py",
         "eom_image_contracts/validation.py",
         "eom_hwpx_contracts/models.py",
         "eom_hwpx_contracts/content_team_equations.py",
@@ -1995,6 +1997,7 @@ image_resources = {
     "local-image-training-crop-review-v1.schema.json": "schemas/image-provider/local-image-training-crop-review-v1.schema.json",
     "local-image-training-dataset-manifest-v1.schema.json": "schemas/image-provider/local-image-training-dataset-manifest-v1.schema.json",
     "local-image-training-eligibility-review-v1.schema.json": "schemas/image-provider/local-image-training-eligibility-review-v1.schema.json",
+    "svg-label-layout-validation-receipt-v1.schema.json": "schemas/image-provider/svg-label-layout-validation-receipt-v1.schema.json",
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

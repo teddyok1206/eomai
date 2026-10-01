@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import html
-import json
 import os
 import stat
 import subprocess
@@ -13,7 +12,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from eom_image_contracts import sanitize_svg_overlay
+from eom_image_contracts import (
+    SVG_LABEL_LAYOUT_FONT_PROFILE,
+    SVG_LABEL_LAYOUT_FONT_SPECS,
+    SVG_LABEL_LAYOUT_RENDERER_PATH,
+    SvgLabelLayoutValidationReceipt,
+    sanitize_svg_overlay,
+    svg_label_layout_font_manifest_sha256,
+    validate_contract,
+    validate_svg_label_layout,
+)
 from eom_workflow.models import (
     GeneratedLineGraphDrawingV5,
     GeneratedLineGraphDrawingV6,
@@ -26,18 +34,17 @@ SVG_MEDIA_TYPE: Final = "image/svg+xml"
 SVG_WIDTH: Final = 800
 SVG_HEIGHT: Final = 500
 SVG_MAX_BYTES: Final = 96 * 1024
-SVG_RASTERIZER: Final = Path("/usr/bin/rsvg-convert")
-SVG_FONT_PROFILE: Final = "eom-content-team-diagram-fonts/1.0"
-SVG_FONT_ROOT: Final = Path("/usr/local/share/fonts/eom")
-SVG_FONT: Final = SVG_FONT_ROOT / "SMJGothicStd-Regular.otf"
-SVG_KOREAN_FALLBACK_FONT: Final = SVG_FONT_ROOT / "NotoSansCJKkr-Regular.otf"
+SVG_RASTERIZER: Final = Path(SVG_LABEL_LAYOUT_RENDERER_PATH)
+SVG_FONT_PROFILE: Final = SVG_LABEL_LAYOUT_FONT_PROFILE
+SVG_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[0].path)
+SVG_KOREAN_FALLBACK_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[1].path)
 SVG_FONT_FAMILY: Final = "SM JGothic Std, Noto Sans CJK KR"
-SVG_LATIN_FONT: Final = SVG_FONT_ROOT / "CenturyOldStyle-Regular.otf"
-SVG_LATIN_ITALIC_FONT: Final = SVG_FONT_ROOT / "CenturyOldStyle-Italic.otf"
+SVG_LATIN_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[2].path)
+SVG_LATIN_ITALIC_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[3].path)
 SVG_LATIN_FONT_FAMILY: Final = "Century Old Style"
-SVG_MATH_FONT: Final = Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
+SVG_MATH_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[4].path)
 SVG_MATH_FONT_FAMILY: Final = "DejaVu Serif"
-SVG_LEGACY_FONT: Final = Path("/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf")
+SVG_LEGACY_FONT: Final = Path(SVG_LABEL_LAYOUT_FONT_SPECS[5].path)
 SVG_LEGACY_FONT_FAMILY: Final = "Droid Sans Fallback"
 SVG_RENDERER_CONTRACT: Final = "eom-safe-svg-compositor/1.1"
 
@@ -50,49 +57,15 @@ class _FixedSvgFont(NamedTuple):
     expected_sha256: str
 
 
-_FIXED_SVG_FONTS: Final = (
+_FIXED_SVG_FONTS: Final = tuple(
     _FixedSvgFont(
-        "korean_label",
-        "SM JGothic Std",
-        "regular",
-        SVG_FONT,
-        "sha256:9200e1e46cca77f0ff9481c5345c3333caf22d50487418df74f830e4221adea1",
-    ),
-    _FixedSvgFont(
-        "korean_fallback",
-        "Noto Sans CJK KR",
-        "regular",
-        SVG_KOREAN_FALLBACK_FONT,
-        "sha256:6bcb2a0703aa137e874fc2dffa85f6c21ba9a67fa329e81b8c801663af7e992a",
-    ),
-    _FixedSvgFont(
-        "latin_label",
-        SVG_LATIN_FONT_FAMILY,
-        "regular",
-        SVG_LATIN_FONT,
-        "sha256:7f9420403e10e7e74f002fbb48e8034d48f64cbdbef556d4f964b266043de338",
-    ),
-    _FixedSvgFont(
-        "latin_label",
-        SVG_LATIN_FONT_FAMILY,
-        "italic",
-        SVG_LATIN_ITALIC_FONT,
-        "sha256:44b00cbdab9fdb7b4307db79784c5b90cbc52c5ffb0add32ac8239d73e567809",
-    ),
-    _FixedSvgFont(
-        "math_label",
-        SVG_MATH_FONT_FAMILY,
-        "regular",
-        SVG_MATH_FONT,
-        "sha256:8f2c103bfa3fd5de71f1b92b18f21906b5a26871fb7e19a9a4c9af539c3cc7ab",
-    ),
-    _FixedSvgFont(
-        "legacy_korean_compatibility",
-        SVG_LEGACY_FONT_FAMILY,
-        "regular",
-        SVG_LEGACY_FONT,
-        "sha256:acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8",
-    ),
+        specification.role,
+        specification.family,
+        specification.style,
+        Path(specification.path),
+        specification.sha256,
+    )
+    for specification in SVG_LABEL_LAYOUT_FONT_SPECS
 )
 
 
@@ -239,6 +212,50 @@ def rasterize_vector_svg(svg_path: Path, png_path: Path) -> SvgRendererProvenanc
     return provenance
 
 
+def validate_vector_drawing_label_layout(
+    drawing: GeneratedVectorDrawingV6,
+) -> SvgLabelLayoutValidationReceipt:
+    """Repeat the authoritative rendered-label check at Catalog's render boundary."""
+
+    provenance = svg_renderer_provenance()
+    receipt = validate_svg_label_layout(
+        overlay=drawing.svg_overlay,
+        required_labels=drawing.required_labels,
+        render_svg=_rasterize_svg_bytes,
+        renderer_version=provenance.renderer_version,
+        renderer_sha256=provenance.renderer_sha256,
+        font_manifest_sha256=provenance.font_manifest_sha256,
+    )
+    validate_contract("svg-label-layout-validation-receipt", receipt.model_dump(mode="json"))
+    return receipt
+
+
+def _rasterize_svg_bytes(payload: bytes) -> bytes:
+    if not payload or len(payload) > SVG_MAX_BYTES:
+        raise ValueError("generated stimulus SVG bytes are invalid")
+    try:
+        completed = subprocess.run(
+            [
+                str(SVG_RASTERIZER),
+                "--format=png",
+                "--width=800",
+                "--height=500",
+            ],
+            cwd="/",
+            env={"HOME": "/nonexistent", "LANG": "C.UTF-8", "PATH": "/usr/bin:/bin"},
+            input=payload,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+    except subprocess.SubprocessError as exc:
+        raise ValueError("fixed SVG rasterizer failed") from exc
+    if completed.returncode != 0 or not 0 < len(completed.stdout) <= 16 * 1024 * 1024:
+        raise ValueError("fixed SVG rasterizer failed")
+    return completed.stdout
+
+
 def svg_renderer_provenance() -> SvgRendererProvenance:
     """Validate fixed renderer/font identities and return their immutable byte provenance."""
 
@@ -297,30 +314,11 @@ def _cached_svg_renderer_provenance(*identity: int) -> SvgRendererProvenance:
         for font, actual in zip(_FIXED_SVG_FONTS, font_hashes, strict=True)
     ):
         raise ValueError("fixed SVG font hash is invalid")
-    font_manifest = {
-        "schema_version": "1.0",
-        "profile": SVG_FONT_PROFILE,
-        "fonts": [
-            {
-                "role": font.role,
-                "family": font.family,
-                "style": font.style,
-                "sha256": font.expected_sha256,
-            }
-            for font in _FIXED_SVG_FONTS
-        ],
-    }
-    manifest_bytes = json.dumps(
-        font_manifest,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
     return SvgRendererProvenance(
         renderer_version=version,
         renderer_sha256=_sha256_file(SVG_RASTERIZER),
         font_sha256=font_hashes[0],
-        font_manifest_sha256="sha256:" + hashlib.sha256(manifest_bytes).hexdigest(),
+        font_manifest_sha256=svg_label_layout_font_manifest_sha256(),
     )
 
 

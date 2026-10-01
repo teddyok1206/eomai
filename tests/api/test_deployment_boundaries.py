@@ -343,7 +343,9 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
 
     for required in (
         "eom_image_contracts/models.py",
+        "eom_image_contracts/svg_label_layout.py",
         "eom_image_contracts/validation.py",
+        "eom_orchestrator/svg_label_layout_validation.py",
         "eom_catalog_service/generated_stimulus.py",
         "eom_catalog_service/local_image_adapter.py",
         "eom_catalog_service/vector_stimulus.py",
@@ -365,6 +367,7 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
         "local-image-science-visual-campaign-crop-set-v2.schema.json",
         "local-image-science-object-line-art-suitability-review-v1.schema.json",
         "local-image-science-object-line-art-crop-set-v1.schema.json",
+        "svg-label-layout-validation-receipt-v1.schema.json",
         "local-image-science-campaign-lora-micro-probe-plan-v1.schema.json",
         "local-image-science-campaign-lora-micro-probe-plan-v2.schema.json",
         "local-image-science-campaign-lora-micro-probe-plan-v3.schema.json",
@@ -925,6 +928,9 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
         assert control_schema in deployment
     for runtime in (
         "eom_image_contracts/safe_svg.py",
+        "eom_image_contracts/svg_label_layout.py",
+        "eom_orchestrator/svg_label_layout_validation.py",
+        "svg-label-layout-validation-receipt-v1.schema.json",
         "hwpx-content-team-editorial-question-v2.schema.json",
         "hwpx-content-team-render-request-v3.schema.json",
         "hwpx-content-team-build-result-v3.schema.json",

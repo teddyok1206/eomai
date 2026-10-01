@@ -275,6 +275,7 @@ SCHEMA_FILES = {
         "local-image-flux2-reference-probe-command-v2.schema.json"
     ),
     "flux2-reference-probe-result-v2": "local-image-flux2-reference-probe-result-v2.schema.json",
+    "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
@@ -621,6 +622,9 @@ SCHEMA_SHA256 = {
     ),
     "flux2-reference-probe-result-v2": (
         "sha256:a808adb23481ec00399db1f91879455c72b9e136d8c9dbff7e782c37942a3d26"
+    ),
+    "svg-label-layout-validation-receipt": (
+        "sha256:97fd5aeac833ada2883dfef2f1f033f0c66a59aeb977630b0707af200d23f569"
     ),
 }
 
