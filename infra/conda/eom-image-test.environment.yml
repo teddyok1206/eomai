@@ -1,0 +1,10 @@
+name: eom-image-test
+channels:
+  - defaults
+dependencies:
+  - python=3.12.13
+  - pip
+
+# This environment is test-only. It deliberately excludes CUDA, Torch, Diffusers, model weights,
+# and every production service entry point. Unit tests inject fake backend modules at the adapter
+# boundary, while Pillow and NumPy exercise the real bounded raster transformations.

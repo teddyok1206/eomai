@@ -399,13 +399,15 @@ cd eomai
 /srv/eom/conda/envs/eom-api/bin/ruff format --check .
 /srv/eom/conda/envs/eom-api/bin/ruff check .
 /srv/eom/conda/envs/eom-api/bin/python -m mypy --cache-dir=/tmp/eom-mypy-cache
+scripts/infra/provision_image_test_environment.sh
 scripts/infra/test_repository_non_live.sh
 scripts/infra/check_repository_boundaries.sh
 git diff --check
 ```
 
 각 runtime은 `infra/conda/`의 명시적 환경을 사용합니다. HWPX test는 `eom-hwpx`, API·Catalog·
-Orchestrator test는 `eom-api`, 실제 GPU runtime은 `eom-image` 환경에서 실행합니다. 위 스크립트는
+Orchestrator test는 `eom-api`, 이미지 unit test는 Python 3.12 `eom-image-test`, 실제 GPU runtime은
+Python 3.11 `eom-image` 환경에서 실행합니다. 위 스크립트는
 서로 다른 Pydantic runtime을 한 Python process에 섞지 않고 non-live suite를 분리하며, live·DB·
 privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. PostgreSQL integration은 배포 DB가 아니라
 [API Integration Test Database](docs/operations/API_INTEGRATION_TEST_DATABASE.md)의 disposable DB를
@@ -419,6 +421,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 - [M02 25-Item Educational Review Baseline](docs/status/M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md)
 - [Repository agent rules](AGENTS.md)
 - [Module boundaries and dependency direction](docs/architecture/MODULE_BOUNDARIES.md)
+- [Image unit-test environment](docs/operations/IMAGE_TEST_ENVIRONMENT.md)
 - [Knowledge-backed Item Execution V3](docs/architecture/KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md)
 - [Trusted Evidence Registration Gate](docs/architecture/TRUSTED_EVIDENCE_REGISTRATION_GATE.md)
 - [Mock-exam Trusted RAG Production V3](docs/architecture/MOCK_EXAM_TRUSTED_RAG_PRODUCTION_V3.md)

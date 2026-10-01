@@ -124,7 +124,10 @@ class _Client:
         timeout_seconds: int,
     ) -> tuple[VisualReferenceIntentCandidate, ...]:
         assert subject == "one compact car in side view isolated on white"
-        assert query_terms == ("compact car side view",)
+        assert query_terms == (
+            "compact car side view",
+            "compact car side view illustration",
+        )
         assert candidate_limit == 5
         assert timeout_seconds == 120
         return (

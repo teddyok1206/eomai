@@ -1,0 +1,28 @@
+# Unit tests that directly import Pillow, NumPy, or an isolated image runtime package.
+# Keep this list sorted. tests/unit/test_image_test_environment_boundary.py enforces completeness.
+tests/unit/test_assessment_line_art.py
+tests/unit/test_crop_locator_v2.py
+tests/unit/test_flux2_reference_layout_lock.py
+tests/unit/test_flux2_reference_probe_runner.py
+tests/unit/test_image_diffusers_backend.py
+tests/unit/test_local_image_crop_locator.py
+tests/unit/test_local_image_crop_locator_runner.py
+tests/unit/test_local_image_crop_processing.py
+tests/unit/test_local_image_crop_proposal_builder.py
+tests/unit/test_local_image_dataset_builder.py
+tests/unit/test_local_image_micro_evaluation_runner.py
+tests/unit/test_local_image_micro_probe_runner.py
+tests/unit/test_local_image_provider.py
+tests/unit/test_local_image_training_checkpoints.py
+tests/unit/test_local_image_training_runner.py
+tests/unit/test_reference_composition.py
+tests/unit/test_reference_simplification.py
+tests/unit/test_science_campaign_micro_evaluation_runner.py
+tests/unit/test_science_campaign_micro_probe_runner.py
+tests/unit/test_science_corpus_visual_runner.py
+tests/unit/test_science_micro_evaluation_runner.py
+tests/unit/test_science_micro_probe_runner.py
+tests/unit/test_science_subject_benchmark_runner.py
+tests/unit/test_science_subject_multiseed_runner.py
+tests/unit/test_visual_reference_acquisition.py
+tests/unit/test_visual_reference_coordinator.py

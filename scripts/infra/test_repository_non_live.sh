@@ -4,8 +4,10 @@ set -euo pipefail
 REPOSITORY_ROOT="/home/eom/EOM"
 API_PYTHON="/srv/eom/conda/envs/eom-api/bin/python"
 HWPX_PYTHON="/srv/eom/conda/envs/eom-hwpx/bin/python"
+IMAGE_TEST_PYTHON="/srv/eom/conda/envs/eom-image-test/bin/python"
 API_SITE_PACKAGES="/srv/eom/conda/envs/eom-api/lib/python3.12/site-packages"
 HWPX_SITE_PACKAGES="/srv/eom/conda/envs/eom-hwpx/lib/python3.12/site-packages"
+IMAGE_TEST_MANIFEST="${REPOSITORY_ROOT}/config/testing/image-unit-tests.txt"
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -35,6 +37,7 @@ done
 [[ -x "${HWPX_PYTHON}" ]] || fail "HWPX test interpreter is unavailable"
 [[ -d "${API_SITE_PACKAGES}" ]] || fail "Application API site-packages are unavailable"
 [[ -d "${HWPX_SITE_PACKAGES}" ]] || fail "HWPX site-packages are unavailable"
+[[ -f "${IMAGE_TEST_MANIFEST}" ]] || fail "image unit-test manifest is unavailable"
 cd "${REPOSITORY_ROOT}"
 
 mapfile -t source_roots < <(
@@ -43,23 +46,38 @@ mapfile -t source_roots < <(
 )
 [[ ${#source_roots[@]} -gt 0 ]] || fail "repository source roots are unavailable"
 SOURCE_PATHS=$(IFS=:; printf '%s' "${source_roots[*]}")
+mapfile -t image_unit_tests < <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' \
+  "${IMAGE_TEST_MANIFEST}")
+[[ ${#image_unit_tests[@]} -gt 0 ]] || fail "image unit-test manifest is empty"
+image_test_ignores=()
+for test_path in "${image_unit_tests[@]}"; do
+  [[ -f "${test_path}" ]] || fail "image unit-test path is unavailable: ${test_path}"
+  image_test_ignores+=("--ignore=${test_path}")
+done
 
 run_api() {
   printf '%s\n' "repository_non_live_phase=api"
   PYTHONNOUSERSITE=1 PYTHONPATH="${SOURCE_PATHS}" "${API_PYTHON}" -m pytest -q \
     tests/unit tests/api tests/content_intake tests/content_pack tests/item_registry \
     tests/observe tests/web_gui tests/e2e \
-    --ignore=tests/unit/test_local_image_provider.py
+    "${image_test_ignores[@]}"
 }
 
 run_hwpx() {
-  printf '%s\n' "repository_non_live_phase=hwpx_and_local_image"
+  printf '%s\n' "repository_non_live_phase=hwpx"
   # Keep the HWPX environment's pinned Pydantic/Pillow ahead of the API test-only pytest and
   # SQLAlchemy dependencies. This is a test harness boundary, never a runtime import path.
   PYTHONNOUSERSITE=1 \
     PYTHONPATH="${SOURCE_PATHS}:${HWPX_SITE_PACKAGES}:${API_SITE_PACKAGES}" \
-    "${HWPX_PYTHON}" -m pytest -q \
-    tests/hwpx tests/unit/test_local_image_provider.py
+    "${HWPX_PYTHON}" -m pytest -q tests/hwpx
+}
+
+run_image() {
+  printf '%s\n' "repository_non_live_phase=image_unit"
+  [[ -x "${IMAGE_TEST_PYTHON}" ]] || \
+    fail "Image test interpreter is unavailable; run scripts/infra/provision_image_test_environment.sh"
+  PYTHONNOUSERSITE=1 PYTHONPATH="${SOURCE_PATHS}" "${IMAGE_TEST_PYTHON}" -m pytest -q \
+    "${image_unit_tests[@]}"
 }
 
 run_integration_collection() {
@@ -72,6 +90,7 @@ case "${1:-all}" in
   all)
     run_api
     run_hwpx
+    run_image
     run_integration_collection
     ;;
   api)
@@ -80,10 +99,13 @@ case "${1:-all}" in
   hwpx)
     run_hwpx
     ;;
+  image)
+    run_image
+    ;;
   integration-collection)
     run_integration_collection
     ;;
   *)
-    fail "usage: $0 {all|api|hwpx|integration-collection}"
+    fail "usage: $0 {all|api|hwpx|image|integration-collection}"
     ;;
 esac
