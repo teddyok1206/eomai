@@ -62,6 +62,7 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
 )
 from eom_workflow.models import CustomerSupportCase
+from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -224,17 +225,22 @@ def resolve_knowledge_backed_execution_plan(
         )
     )
     if existing is not None:
-        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
-            return ResolvedExecutionPlanV19.model_validate(existing.canonical_document)
-        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
-            return ResolvedExecutionPlanV17.model_validate(existing.canonical_document)
-        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
-            return ResolvedExecutionPlanV16.model_validate(existing.canonical_document)
-        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
-            return ResolvedExecutionPlanV12.model_validate(existing.canonical_document)
-        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
-            return ResolvedExecutionPlanV11.model_validate(existing.canonical_document)
-        return ResolvedExecutionPlanV3.model_validate(existing.canonical_document)
+        try:
+            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
+                return ResolvedExecutionPlanV19.model_validate(existing.canonical_document)
+            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
+                return ResolvedExecutionPlanV17.model_validate(existing.canonical_document)
+            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
+                return ResolvedExecutionPlanV16.model_validate(existing.canonical_document)
+            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/12.0":
+                return ResolvedExecutionPlanV12.model_validate(existing.canonical_document)
+            if existing.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
+                return ResolvedExecutionPlanV11.model_validate(existing.canonical_document)
+            return ResolvedExecutionPlanV3.model_validate(existing.canonical_document)
+        except ValueError as exc:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_INVALID", "stored knowledge-backed execution plan is invalid"
+            ) from exc
     preset_record = session.get(ExecutionPresetRevisionRecord, preset_revision_id)
     if preset_record is None or preset_record.state != "RELEASED":
         raise ControlPlaneError("CONTROL_PRESET_POINTER_INVALID", "pinned preset is stale")
@@ -441,21 +447,26 @@ def resolve_knowledge_backed_execution_plan(
         | ResolvedExecutionPlanV17
         | ResolvedExecutionPlanV19
     )
-    if post_registration_successor:
-        validate_control_contract("resolved-execution-plan-v19", document)
-        model = ResolvedExecutionPlanV19.model_validate(document)
-    elif natural_presentation_successor:
-        validate_control_contract("resolved-execution-plan-v17", document)
-        model = ResolvedExecutionPlanV17.model_validate(document)
-    elif variation_successor:
-        validate_control_contract("resolved-execution-plan-v16", document)
-        model = ResolvedExecutionPlanV16.model_validate(document)
-    elif verification_inputs:
-        model = ResolvedExecutionPlanV12.model_validate(document)
-    elif graph_review_successor:
-        model = ResolvedExecutionPlanV11.model_validate(document)
-    else:
-        model = ResolvedExecutionPlanV3.model_validate(document)
+    try:
+        if post_registration_successor:
+            validate_control_contract("resolved-execution-plan-v19", document)
+            model = ResolvedExecutionPlanV19.model_validate(document)
+        elif natural_presentation_successor:
+            validate_control_contract("resolved-execution-plan-v17", document)
+            model = ResolvedExecutionPlanV17.model_validate(document)
+        elif variation_successor:
+            validate_control_contract("resolved-execution-plan-v16", document)
+            model = ResolvedExecutionPlanV16.model_validate(document)
+        elif verification_inputs:
+            model = ResolvedExecutionPlanV12.model_validate(document)
+        elif graph_review_successor:
+            model = ResolvedExecutionPlanV11.model_validate(document)
+        else:
+            model = ResolvedExecutionPlanV3.model_validate(document)
+    except (JsonSchemaValidationError, ValueError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_PLAN_INVALID", "resolved knowledge-backed execution plan is invalid"
+        ) from exc
     record = record_knowledge_backed_execution_plan(
         session,
         document=model.model_dump(mode="json"),

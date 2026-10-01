@@ -546,25 +546,33 @@ class CommandAdapter:
                         ),
                     )
                     plan: ResolvedExecutionPlan | ResolvedExecutionPlanV3
-                    if knowledge_evidence is not None:
-                        selected_preset = transaction_preset or knowledge_preset
-                        assert selected_preset is not None
-                        assert workflow_request.educational_retrieval is not None
-                        plan = resolve_knowledge_backed_execution_plan(
-                            session,
-                            preset_revision_id=selected_preset.preset_revision_id,
-                            requirement=workflow_request.educational_retrieval,
-                            evidence=knowledge_evidence,
-                            dependencies=dependencies,
-                            steps=requirements,
-                        )
-                    else:
-                        plan = resolve_execution_plan(
-                            session,
-                            preset_key=workflow_request.execution_preset_key,
-                            dependencies=dependencies,
-                            steps=requirements,
-                        )
+                    try:
+                        if knowledge_evidence is not None:
+                            selected_preset = transaction_preset or knowledge_preset
+                            assert selected_preset is not None
+                            assert workflow_request.educational_retrieval is not None
+                            plan = resolve_knowledge_backed_execution_plan(
+                                session,
+                                preset_revision_id=selected_preset.preset_revision_id,
+                                requirement=workflow_request.educational_retrieval,
+                                evidence=knowledge_evidence,
+                                dependencies=dependencies,
+                                steps=requirements,
+                            )
+                        else:
+                            plan = resolve_execution_plan(
+                                session,
+                                preset_key=workflow_request.execution_preset_key,
+                                dependencies=dependencies,
+                                steps=requirements,
+                            )
+                    except ControlPlaneError as exc:
+                        raise ApiError(
+                            503,
+                            exc.code,
+                            "Execution plan unavailable",
+                            "The workflow execution plan could not be validated.",
+                        ) from exc
                     context = dict(workflow.runtime_context)
                     context["execution_plan"] = {
                         "plan_id": plan.plan_id,

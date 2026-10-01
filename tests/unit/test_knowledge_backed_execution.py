@@ -23,9 +23,15 @@ from eom_orchestrator.execution_resolver import (
     resolve_knowledge_backed_execution_plan,
     validate_educational_retrieval_policy,
 )
-from eom_workflow import ExecutionPresetRevisionV2, ResolvedExecutionPlanV12
+from eom_workflow import (
+    ExecutionPresetRevisionV2,
+    ResolvedExecutionPlanV12,
+    ResolvedExecutionPlanV19,
+)
 from eom_workflow.control_plane import WorkerRole
+from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow_runner.engine import _parse_review_escalation_plan
+from jsonschema import ValidationError as JsonSchemaValidationError
 
 NOW = datetime(2026, 8, 24, 3, 0, tzinfo=UTC)
 
@@ -449,6 +455,73 @@ def test_verification_planned_v12_plan_pins_one_stronger_review_and_replays_exac
     )
     assert isinstance(replayed, ResolvedExecutionPlanV12)
     assert replayed == plan
+
+
+def test_post_registration_v19_plan_accepts_required_evidence_manifest_v5(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preset = _verification_preset()
+    evidence = _evidence(manifest_schema_version="5.0")
+    dependencies = ResolvedPlanDependencyEvidence(
+        workflow_id="workflow_" + "c" * 32,
+        workflow_definition_key="generic-item-development",
+        workflow_definition_version="1.16.0",
+        workflow_definition_sha256="sha256:" + "d" * 64,
+        workflow_role_schema_version="workflow-role/1.24.0",
+        content_pack_release_id="packrel_" + "e" * 32,
+        content_pack_sha256="sha256:" + "f" * 64,
+        graph_snapshot_revision_id=evidence.graph_snapshot.graph_snapshot_revision_id,
+        evidence_bundle_revision_id=evidence.evidence_bundle_revision_id,
+    )
+
+    def record(_session: object, *, document: dict[str, Any], dependencies: object) -> object:
+        del dependencies
+        validate_control_contract("resolved-execution-plan-v19", document)
+        return SimpleNamespace(canonical_document=document)
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.record_knowledge_backed_execution_plan", record
+    )
+
+    plan = resolve_knowledge_backed_execution_plan(
+        _Session(preset),  # type: ignore[arg-type]
+        preset_revision_id=preset.preset_revision_id,
+        requirement=_requirement(),
+        evidence=evidence,
+        dependencies=dependencies,
+        steps=(
+            ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),
+            ExecutionStepRequirement("review", WorkerRole.REVIEW),
+        ),
+        resolved_at=NOW,
+    )
+
+    assert isinstance(plan, ResolvedExecutionPlanV19)
+    assert plan.schema_version == "resolved-execution-plan/19.0"
+    assert plan.evidence_manifest_artifact.schema_ref == (
+        "eom://schemas/knowledge/evidence-bundle-manifest/5.0"
+    )
+
+    def reject_contract(_schema_name: str, _document: dict[str, object]) -> None:
+        raise JsonSchemaValidationError("invalid execution plan")
+
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_resolver.validate_control_contract", reject_contract
+    )
+    with pytest.raises(ControlPlaneError) as captured:
+        resolve_knowledge_backed_execution_plan(
+            _Session(preset),  # type: ignore[arg-type]
+            preset_revision_id=preset.preset_revision_id,
+            requirement=_requirement(),
+            evidence=evidence,
+            dependencies=dependencies,
+            steps=(
+                ExecutionStepRequirement("authoring", WorkerRole.AUTHORING),
+                ExecutionStepRequirement("review", WorkerRole.REVIEW),
+            ),
+            resolved_at=NOW,
+        )
+    assert captured.value.code == "CONTROL_PLAN_INVALID"
 
 
 def test_v3_plan_rejects_stale_evidence_policy_before_persist(
