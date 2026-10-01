@@ -5,8 +5,10 @@ import sys
 import zipfile
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import pytest
+from eom_workflow import schemas as workflow_schemas
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_workflow.schemas import (
     INPUT_SCHEMA_FILES,
@@ -96,6 +98,38 @@ def test_workflow_schemas_load_from_package_resources() -> None:
         assert "-result" in load_role_result_schema(schema_id)["$id"]
     for name, _ in control_schema_inventory():
         assert isinstance(load_control_schema(name), dict)
+
+
+def test_cached_role_schema_materialization_returns_isolated_public_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workflow_schemas._role_result_schema.cache_clear()
+    original_loader = workflow_schemas.load_json_schema
+    calls = 0
+
+    def counted_loader(resource: Any, logical_name: str) -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return original_loader(resource, logical_name)
+
+    monkeypatch.setattr(workflow_schemas, "load_json_schema", counted_loader)
+    first = load_role_result_schema("authoring-result@12.0")
+    second = load_role_result_schema("authoring-result@12.0")
+
+    assert calls == 1
+    assert first == second
+    assert first is not second
+    first["x-caller-mutation"] = True
+    assert "x-caller-mutation" not in load_role_result_schema("authoring-result@12.0")
+
+
+def test_cached_content_team_schema_materialization_returns_isolated_public_values() -> None:
+    first = load_content_team_editorial_material_schema()
+    second = load_content_team_editorial_material_schema()
+    assert first == second
+    assert first is not second
+    first["x-caller-mutation"] = True
+    assert "x-caller-mutation" not in load_content_team_editorial_material_schema()
 
 
 def test_missing_workflow_schema_is_a_typed_resource_error(tmp_path: Path) -> None:

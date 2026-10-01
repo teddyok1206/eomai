@@ -291,6 +291,9 @@ Revision, 관계, 상태, pointer와 hash만 저장합니다.
 - **Idempotent boundaries:** HTTP command, Workflow step, registration과 build는 입력 identity로
   exact replay와 conflict를 구분합니다.
 - **Human authority:** 자동 검토는 증거이고 최종 승인은 사람의 결정입니다.
+- **Clear module boundaries:** contract/domain은 runtime infrastructure를 참조하지 않고, app은 typed
+  use case를 통해 동작합니다. 현재 경계와 regression gate는
+  [Module boundaries](docs/architecture/MODULE_BOUNDARIES.md)에 기록합니다.
 
 ## 현재 검증 상태
 
@@ -415,6 +418,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 - [M01 Solution-report Backfill Recovery](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md)
 - [M02 25-Item Educational Review Baseline](docs/status/M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md)
 - [Repository agent rules](AGENTS.md)
+- [Module boundaries and dependency direction](docs/architecture/MODULE_BOUNDARIES.md)
 - [Knowledge-backed Item Execution V3](docs/architecture/KNOWLEDGE_BACKED_ITEM_EXECUTION_V3.md)
 - [Trusted Evidence Registration Gate](docs/architecture/TRUSTED_EVIDENCE_REGISTRATION_GATE.md)
 - [Mock-exam Trusted RAG Production V3](docs/architecture/MOCK_EXAM_TRUSTED_RAG_PRODUCTION_V3.md)

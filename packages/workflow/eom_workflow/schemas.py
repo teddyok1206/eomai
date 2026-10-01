@@ -6,6 +6,7 @@ import copy
 import json
 import re
 from contextlib import suppress
+from functools import cache, lru_cache
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from typing import Any, Literal, cast
@@ -554,19 +555,32 @@ def load_knowledge_item_brief_v5_schema() -> dict[str, Any]:
     return load_json_schema(WORKFLOW_RESOURCE_ROOT.joinpath(logical_name), logical_name)
 
 
-def load_content_team_editorial_material_schema() -> dict[str, Any]:
+@lru_cache(maxsize=1)
+def _content_team_editorial_material_schema() -> dict[str, Any]:
     file_name = "content-team-editorial-material-v1.schema.json"
     return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), f"roles/{file_name}")
 
 
-def load_content_team_image_route_schema() -> dict[str, Any]:
+def load_content_team_editorial_material_schema() -> dict[str, Any]:
+    """Return an isolated copy of the canonical editorial-material schema."""
+
+    return copy.deepcopy(_content_team_editorial_material_schema())
+
+
+@lru_cache(maxsize=1)
+def _content_team_image_route_schema() -> dict[str, Any]:
     file_name = "content-team-image-route-v1.schema.json"
     return load_json_schema(ROLE_RESOURCE_ROOT.joinpath(file_name), f"roles/{file_name}")
 
 
-def load_role_input_schema(
-    role: str, protocol_version: str = "workflow-role/1.0.1"
-) -> dict[str, Any]:
+def load_content_team_image_route_schema() -> dict[str, Any]:
+    """Return an isolated copy of the canonical image-route schema."""
+
+    return copy.deepcopy(_content_team_image_route_schema())
+
+
+@cache
+def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1") -> dict[str, Any]:
     try:
         file_name = PROTOCOL_INPUT_SCHEMAS[protocol_version][role]
     except KeyError as exc:
@@ -625,7 +639,16 @@ def load_role_input_schema(
     )
 
 
-def load_role_result_schema(schema_id: str) -> dict[str, Any]:
+def load_role_input_schema(
+    role: str, protocol_version: str = "workflow-role/1.0.1"
+) -> dict[str, Any]:
+    """Return an isolated copy while retaining one validated canonical schema per identity."""
+
+    return copy.deepcopy(_role_input_schema(role, protocol_version))
+
+
+@cache
+def _role_result_schema(schema_id: str) -> dict[str, Any]:
     try:
         file_name = RESULT_SCHEMA_FILES[schema_id]
     except KeyError as exc:
@@ -647,6 +670,12 @@ def load_role_result_schema(schema_id: str) -> dict[str, Any]:
     )
 
 
+def load_role_result_schema(schema_id: str) -> dict[str, Any]:
+    """Return an isolated copy while retaining one validated canonical schema per identity."""
+
+    return copy.deepcopy(_role_result_schema(schema_id))
+
+
 def validate_schema_message(schema: dict[str, Any], value: object, name: str) -> None:
     validator = Draft202012Validator(
         schema,
@@ -663,7 +692,7 @@ def validate_schema_message(schema: dict[str, Any], value: object, name: str) ->
 def validate_role_input(
     value: object, role: str, protocol_version: str = "workflow-role/1.0.1"
 ) -> RoleWorkerInput:
-    validate_schema_message(load_role_input_schema(role, protocol_version), value, f"{role}-input")
+    validate_schema_message(_role_input_schema(role, protocol_version), value, f"{role}-input")
     try:
         parsed = RoleWorkerInput.model_validate(value)
     except ValidationError as exc:
@@ -907,7 +936,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         output = canonical_value.get("output")
         draft = output.get("draft") if isinstance(output, dict) else None
         validate_schema_message(
-            load_content_team_editorial_material_schema(),
+            _content_team_editorial_material_schema(),
             draft,
             "content-team-editorial-material/1.0",
         )
@@ -921,11 +950,11 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         and role == "image"
     ):
         validate_schema_message(
-            load_content_team_image_route_schema(),
+            _content_team_image_route_schema(),
             canonical_value,
             "content-team-image-route/1.0",
         )
-    validate_schema_message(load_role_result_schema(schema_id), canonical_value, schema_id)
+    validate_schema_message(_role_result_schema(schema_id), canonical_value, schema_id)
     if schema_id == "knowledge-analysis-proposal-result@9.0" and role == "support":
         canonical_value = _filter_invalid_knowledge_analysis_v9_edges(canonical_value)
     elif schema_id == "knowledge-analysis-proposal-result@10.0" and role == "support":
@@ -2916,7 +2945,7 @@ def _bind_assessment_page_image_observations(
 def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     """Project the canonical result contract into Codex's strict JSON Schema subset."""
 
-    schema = copy.deepcopy(load_role_result_schema(schema_id))
+    schema = copy.deepcopy(_role_result_schema(schema_id))
     schema.pop("$schema", None)
     schema.pop("$id", None)
     if schema_id == "authoring-result@2.0":

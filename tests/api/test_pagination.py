@@ -4,7 +4,12 @@ from datetime import UTC, datetime
 
 import pytest
 from eom_api.errors import ApiError
-from eom_api.services.query_adapter import CursorCodec
+from eom_api.services.pagination import CursorCodec
+from eom_api.services.query_adapter import CursorCodec as QueryAdapterCursorCodec
+
+
+def test_query_adapter_preserves_the_pagination_public_import() -> None:
+    assert QueryAdapterCursorCodec is CursorCodec
 
 
 def test_cursor_is_opaque_typed_and_tamper_evident() -> None:

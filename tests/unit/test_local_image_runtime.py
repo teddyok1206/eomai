@@ -9,7 +9,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from eom_image_contracts import LocalImageProviderBinding, LocalImageProviderBindingV4
+from eom_image_contracts import (
+    LocalImageProviderBinding,
+    LocalImageProviderBindingV4,
+    LocalImageProviderBindingV6,
+)
 
 from scripts.image_provider.normalize_runtime_permissions import _load_provider_binding
 from scripts.image_trainer.stage_crop_locator import _make_trainer_readonly_directory
@@ -17,7 +21,7 @@ from scripts.image_trainer.stage_crop_locator import _make_trainer_readonly_dire
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_runtime_permission_normalizer_accepts_pinned_v1_and_v4_bindings() -> None:
+def test_runtime_permission_normalizer_accepts_historical_and_current_bindings() -> None:
     assert isinstance(
         _load_provider_binding(ROOT / "config/local-image-provider.ssd1b.json"),
         LocalImageProviderBinding,
@@ -25,6 +29,10 @@ def test_runtime_permission_normalizer_accepts_pinned_v1_and_v4_bindings() -> No
     assert isinstance(
         _load_provider_binding(ROOT / "config/local-image-provider.ssd1b.v4.json"),
         LocalImageProviderBindingV4,
+    )
+    assert isinstance(
+        _load_provider_binding(ROOT / "config/local-image-provider.ssd1b.v6.json"),
+        LocalImageProviderBindingV6,
     )
 
 
@@ -432,7 +440,7 @@ def test_local_image_release_scripts_are_offline_scoped_and_non_recursive() -> N
     assert "LOCAL_IMAGE_SHARED_CONFIG_ROOT_DRIFT" in deploy
     assert "install -d -o root -g eom -m 0750 /etc/eom" not in deploy
     assert 'install -o root -g root -m 0644 "${BINDING_SOURCE}"' in deploy
-    assert "config/local-image-provider.ssd1b.v4.json" in deploy
+    assert "config/local-image-provider.ssd1b.v6.json" in deploy
     assert "os.walk(files_root, followlinks=False)" in normalize
     assert "manifest.files" in normalize
 
