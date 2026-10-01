@@ -1,12 +1,13 @@
 # EOM Scientific Studio
 
-> 기출·교과서 근거를 검색하고, 역할별 검증과 사람 승인을 거쳐 문항을 등록한 뒤 HWPX로
-> 전달하는 protocol-first 평가 문항 제작 플랫폼
+> 기출·교과서 근거를 검색하고, 역할별 검증과 불변 문항 등록, HWPX 검토, 사람 승인을
+> 연결하는 protocol-first 평가 문항 제작 플랫폼
 
 EOM은 하나의 프롬프트가 문항 파일을 바로 만드는 도구가 아닙니다. 요청 시점의 Workflow,
 Content Pack, 실행 정책과 RAG 근거를 불변 Revision으로 고정하고, 격리된 worker의 구조화 결과를
-JSON Schema 2020-12와 Pydantic으로 검증합니다. 승인된 결과만 Item Revision으로 등록되며 PNG와
-HWPX는 그 정본을 참조하는 별도 Artifact Revision입니다.
+JSON Schema 2020-12와 Pydantic으로 검증합니다. 최신 단일 문항 경로는 검증된 결과를 먼저
+`IN_REVIEW` Item Revision으로 등록하고, 그 정확한 Revision의 HWPX를 사람이 확인한 뒤
+`APPROVED`로 전환합니다. PNG와 HWPX는 정본 Item을 참조하는 별도 Artifact Revision입니다.
 
 ```text
 logical Item
@@ -19,7 +20,8 @@ logical Item
 ## 지금 할 수 있는 일
 
 - Scientific Studio에서 통합과학 단일 문항을 요청하고 진행 상태 확인
-- Authoring → Image(조건부) → Review → 최대 3회 bounded 개선 → Human Approval → Registration 실행
+- Authoring → Image(조건부) → Review → 최대 3회 bounded 개선 → Registration → HWPX Review →
+  Human Approval 실행
 - 검증된 기출 PDF Graph를 검색해 Evidence Bundle을 만들고, 인용한 evidence·anchor·문항 적용
   위치를 authoring/review 영수증으로 다시 검증
 - 표, 수식, `<자료>`, `<조건>`, 탐구, `ㄱ/ㄴ/ㄷ`, 5지선다와 해설을 구조화된 Item으로 등록
@@ -36,11 +38,11 @@ readiness가 정본입니다.
 
 | 경계 | 최신 additive 계약 |
 | --- | --- |
-| 단일 문항 Workflow | `generic-item-development@1.15.0` |
+| 단일 문항 Workflow | `generic-item-development@1.16.0` |
 | 역할 protocol / 결과 | `workflow-role/1.24.0` / `authoring·image·review·registration-result@12.0` |
-| Content Pack | `generated-knowledge-item@1.20.12` |
+| Content Pack | `generated-knowledge-item@1.20.13` |
 | 표준 / RAG 실행 정책 | `standard-control-bootstrap/17.0` / `knowledge-item-control-bootstrap/14.0` |
-| 단일 문항 실행 계획 | Graph `resolved-execution-plan/17.0` / ungrounded `18.0` |
+| 단일 문항 실행 계획 | Graph `resolved-execution-plan/19.0` / ungrounded `20.0` |
 | Canonical Item | `assessment-item-content/3.0`, Catalog protocol `catalog/1.13` |
 | HWPX | `hwpx-content-team/3.0` |
 | 로컬 GPU prompt policy | `local-gpu-image-prompt-policy/1.6` (`1.4` replay 보존) |

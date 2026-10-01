@@ -914,6 +914,50 @@ def test_image_skip_approval_and_registration_flow(integration_engine: Engine) -
         _close(resources)
 
 
+def test_post_registration_review_workflow_registers_and_completes_without_human_gate(
+    integration_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, executor, sessions, workflow_id, resources = _environment(
+        integration_engine,
+        "skip",
+        "workflow-post-registration-review",
+        definition_path=Path("config/workflows/generic-item-development.v1.16.yaml"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_resolved_v12_review_step",
+        lambda _workflow: _verification_review_plan_step(),
+    )
+    try:
+        runner.run_until_idle(workflow_id)
+        with sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            assert workflow is not None
+            assert workflow.state == WorkflowState.COMPLETED.value
+            assert workflow.stage == WorkflowStage.COMPLETED.value
+            assert active_approval(session, workflow_id) is None
+            assert [role for _, _, role in executor.calls] == [
+                "authoring",
+                "review",
+                "item_management",
+            ]
+            assert workflow.runtime_context["item_registration"]["item_revision_id"] == (
+                "itemrev_" + "5" * 32
+            )
+            events = list_workflow_events(session, workflow_id)
+            event_types = [event.event_type for event in events]
+            assert "HUMAN_APPROVAL_STAGE_ENTERED" not in event_types
+            assert "HUMAN_APPROVAL_REQUESTED" not in event_types
+            assert event_types.count("REGISTRATION_STARTED") == 1
+            assert event_types.count("REGISTRATION_STAGE_ENTERED") == 1
+            assert event_types[-1] == "WORKFLOW_COMPLETED"
+            sequences = [event.sequence for event in events]
+            assert sequences == list(range(1, len(sequences) + 1))
+    finally:
+        _close(resources)
+
+
 def test_direct_authoring_to_review_records_image_skip_stage(
     integration_engine: Engine,
 ) -> None:

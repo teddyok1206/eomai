@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from eom_api.errors import ApiError
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.query_adapter import QueryAdapter
+from eom_api_contracts.items import ItemApprovalView
 from eom_catalog_contracts import (
     ApproveItemRevisionCommandV1,
     ItemRevisionApprovalReceiptV1,
@@ -29,6 +33,14 @@ from eom_item_registry import (
 )
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from eom_workflow import WORKFLOW_ADMISSION_BY_IDENTITY, compile_definition
+from eom_workflow_runner.state_machine import (
+    STAGE_TRANSITIONS,
+    WORKFLOW_TRANSITIONS,
+    WorkflowStage,
+    WorkflowState,
+)
+from jsonschema import Draft202012Validator
+from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,6 +100,8 @@ def test_successor_workflow_registers_before_external_human_approval() -> None:
         WORKFLOW_ADMISSION_BY_IDENTITY[("generic-item-development", "1.16.0")].role_protocol_version
         == "workflow-role/1.24.0"
     )
+    assert WorkflowState.REGISTERING in WORKFLOW_TRANSITIONS[WorkflowState.RUNNING]
+    assert WorkflowStage.REGISTERING in STAGE_TRANSITIONS[WorkflowStage.REVIEWING]
 
 
 def test_successor_pack_changes_only_immutable_identity_and_compatibility() -> None:
@@ -154,6 +168,38 @@ def test_post_registration_mode_is_closed_to_successor_create_item() -> None:
         )
 
 
+def test_item_approval_view_requires_exact_human_receipt_evidence() -> None:
+    schema = json.loads(
+        (ROOT / "schemas/api/v1/item-approval-view-v1.schema.json").read_text(encoding="utf-8")
+    )
+    invalid_approved = {
+        "schema_version": "item-approval-view/1.0",
+        "status": "APPROVED",
+        "human_review_required": True,
+        "approved_at": None,
+        "approved_by": None,
+        "approval_receipt_sha256": None,
+        "hwpx_build_id": None,
+    }
+    with pytest.raises(JsonSchemaValidationError):
+        Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(
+            invalid_approved
+        )
+    with pytest.raises(ValidationError, match="exact receipt and HWPX evidence"):
+        ItemApprovalView.model_validate(invalid_approved)
+
+    invalid_pending = invalid_approved | {
+        "status": "PENDING",
+        "approved_at": datetime(2026, 10, 1, tzinfo=UTC).isoformat(),
+    }
+    with pytest.raises(JsonSchemaValidationError):
+        Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(
+            invalid_pending
+        )
+    with pytest.raises(ValidationError, match="must not carry"):
+        ItemApprovalView.model_validate(invalid_pending)
+
+
 def test_approval_command_and_receipt_reject_hash_repair() -> None:
     command_body = {
         "operation": "APPROVE_ITEM_REVISION",
@@ -206,6 +252,8 @@ def test_approval_command_and_receipt_reject_hash_repair() -> None:
 
 def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> None:
     class Registry:
+        validated_revision_id: str | None = None
+
         def inspect_revision(self, _revision_id: str) -> dict[str, Any]:
             return {
                 "item_id": "item_" + "1" * 32,
@@ -216,10 +264,14 @@ def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> Non
         def inspect_item(self, _item_id: str) -> dict[str, Any]:
             return {"current_revision_id": "itemrev_" + "2" * 32}
 
+        def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
+            self.validated_revision_id = item_revision_id
+
     service = object.__new__(HwpxApplicationService)
     service.registry = Registry()  # type: ignore[assignment]
     revision_id = "itemrev_" + "2" * 32
     assert service._eligible_revision(revision_id)["revision_state"] == "IN_REVIEW"
+    assert service.registry.validated_revision_id == revision_id
 
     class LegacyRegistry(Registry):
         def inspect_revision(self, _revision_id: str) -> dict[str, Any]:
@@ -233,11 +285,31 @@ def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> Non
     with pytest.raises(HwpxManagerError, match="not current and eligible"):
         service._eligible_revision(revision_id)
 
+    class InvalidManifestRegistry(Registry):
+        def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
+            del item_revision_id
+            raise RegistryError(
+                RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                "review manifest differs",
+            )
+
+    service.registry = InvalidManifestRegistry()  # type: ignore[assignment]
+    with pytest.raises(HwpxManagerError, match="review manifest is not eligible"):
+        service._eligible_revision(revision_id)
+
 
 def test_item_projection_exposes_pending_and_exact_approval_receipt() -> None:
     pending_revision = SimpleNamespace(
+        item_id="item_" + "1" * 32,
+        item_revision_id="itemrev_" + "2" * 32,
+        revision_number=1,
         revision_state="IN_REVIEW",
         workflow_definition_version="1.16.0",
+        manifest_artifact_id="artifact_" + "3" * 32,
+        manifest_artifact_revision_id="rev_" + "4" * 32,
+        manifest_sha256="sha256:" + "5" * 64,
+        workflow_id="workflow_" + "6" * 32,
+        source_workflow_step_run_id="steprun_" + "7" * 32,
         approved_at=None,
         approved_by=None,
     )
@@ -247,30 +319,66 @@ def test_item_projection_exposes_pending_and_exact_approval_receipt() -> None:
     assert pending.approval_receipt_sha256 is None
     assert pending.hwpx_build_id is None
 
+    approved_at = datetime(2026, 10, 1, tzinfo=UTC)
     approved_revision = SimpleNamespace(
-        revision_state="APPROVED",
-        workflow_definition_version="1.16.0",
-        approved_at=datetime(2026, 10, 1, tzinfo=UTC),
-        approved_by="operator_review",
-    )
-    approval_event = SimpleNamespace(
-        payload={
-            "approval_receipt": {
-                "receipt_sha256": "sha256:" + "d" * 64,
-                "hwpx_build_id": "hwpxbuild_" + "e" * 32,
+        **(
+            vars(pending_revision)
+            | {
+                "revision_state": "APPROVED",
+                "approved_at": approved_at,
+                "approved_by": "operator_review",
             }
-        }
+        )
+    )
+    receipt_body = {
+        "schema_version": "item-revision-approval-receipt/1.0",
+        "item_id": approved_revision.item_id,
+        "item_revision_id": approved_revision.item_revision_id,
+        "item_revision_number": approved_revision.revision_number,
+        "prior_revision_state": "IN_REVIEW",
+        "approved_revision_state": "APPROVED",
+        "manifest_artifact_id": approved_revision.manifest_artifact_id,
+        "manifest_artifact_revision_id": approved_revision.manifest_artifact_revision_id,
+        "manifest_sha256": approved_revision.manifest_sha256,
+        "workflow_id": approved_revision.workflow_id,
+        "registration_step_run_id": approved_revision.source_workflow_step_run_id,
+        "hwpx_build_id": "hwpxbuild_" + "8" * 32,
+        "hwpx_output_artifact_id": "artifact_" + "9" * 32,
+        "hwpx_output_artifact_revision_id": "rev_" + "a" * 32,
+        "hwpx_output_sha256": "sha256:" + "b" * 64,
+        "approved_at": approved_at.isoformat().replace("+00:00", "Z"),
+        "approved_by": approved_revision.approved_by,
+        "reason_sha256": "sha256:" + "c" * 64,
+        "idempotency_key": "post-registration-approval-projection",
+        "approval_submission_sha256": "sha256:" + "d" * 64,
+    }
+    receipt = receipt_body | {"receipt_sha256": content_sha256(receipt_body)}
+    approval_event = SimpleNamespace(
+        item_id=approved_revision.item_id,
+        item_revision_id=approved_revision.item_revision_id,
+        event_type="ITEM_REVISION_APPROVED",
+        new_state="APPROVED",
+        payload={"approval_receipt": receipt},
     )
     approved = QueryAdapter._approval(  # type: ignore[arg-type]
         approved_revision,
         approval_event,
     )
     assert approved.status == "APPROVED"
-    assert approved.approval_receipt_sha256 == "sha256:" + "d" * 64
-    assert approved.hwpx_build_id == "hwpxbuild_" + "e" * 32
+    assert approved.approval_receipt_sha256 == receipt["receipt_sha256"]
+    assert approved.hwpx_build_id == "hwpxbuild_" + "8" * 32
+
+    with pytest.raises(ApiError) as missing_receipt:
+        QueryAdapter._approval(approved_revision, None)  # type: ignore[arg-type]
+    assert missing_receipt.value.error_code == "ITEM_APPROVAL_PROJECTION_INVALID"
 
 
-def test_catalog_approval_rejects_output_from_another_hwpx_build() -> None:
+def test_catalog_approval_rejects_output_from_another_hwpx_build(tmp_path: Path) -> None:
+    hwpx_bytes = b"PK\x03\x04post-registration-review"
+    output_sha256 = "sha256:" + hashlib.sha256(hwpx_bytes).hexdigest()
+    output_root = tmp_path / "hwpx-output"
+    output_root.mkdir()
+    (output_root / "content-team-item.hwpx").write_bytes(hwpx_bytes)
     body = {
         "operation": "APPROVE_ITEM_REVISION",
         "item_revision_id": "itemrev_" + "1" * 32,
@@ -278,7 +386,7 @@ def test_catalog_approval_rejects_output_from_another_hwpx_build() -> None:
         "hwpx_build_id": "hwpxbuild_" + "2" * 32,
         "hwpx_output_artifact_id": "artifact_" + "3" * 32,
         "hwpx_output_artifact_revision_id": "rev_" + "4" * 32,
-        "hwpx_output_sha256": "sha256:" + "5" * 64,
+        "hwpx_output_sha256": output_sha256,
         "reason": "검증된 HWPX를 확인했습니다.",
         "approved_by": "operator_review",
         "idempotency_key": "post-registration-output-key",
@@ -297,7 +405,15 @@ def test_catalog_approval_rejects_output_from_another_hwpx_build() -> None:
             "artifact_type": "hwpx-content-team-build",
             "primary_file": "content-team-item.hwpx",
             "content_hash": command.hwpx_output_sha256,
+            "files": [
+                {
+                    "file_name": "content-team-item.hwpx",
+                    "sha256": command.hwpx_output_sha256,
+                    "bytes": len(hwpx_bytes),
+                }
+            ],
         },
+        nas_path=str(output_root),
         result={
             "builder_result": {
                 "status": "SUCCEEDED",

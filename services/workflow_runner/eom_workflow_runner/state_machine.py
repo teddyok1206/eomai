@@ -111,6 +111,7 @@ WORKFLOW_TRANSITIONS: dict[WorkflowState, frozenset[WorkflowState]] = {
     WorkflowState.RUNNING: frozenset(
         {
             WorkflowState.AWAITING_HUMAN_APPROVAL,
+            WorkflowState.REGISTERING,
             WorkflowState.COMPLETED,
             WorkflowState.FAILED,
             WorkflowState.CANCELLED,
@@ -161,6 +162,7 @@ STAGE_TRANSITIONS: dict[WorkflowStage, frozenset[WorkflowStage]] = {
         {
             WorkflowStage.AUTHORING,
             WorkflowStage.AWAITING_HUMAN_APPROVAL,
+            WorkflowStage.REGISTERING,
             WorkflowStage.FAILED,
             WorkflowStage.CANCELLED,
         }

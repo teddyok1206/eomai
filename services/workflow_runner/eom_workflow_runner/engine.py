@@ -847,6 +847,7 @@ class WorkflowRunner:
                 self._move_after_agent(
                     session,
                     current,
+                    compiled,
                     definition,
                     command_id,
                     actor_type,
@@ -1239,6 +1240,7 @@ class WorkflowRunner:
                     self._move_after_agent(
                         session,
                         current,
+                        compiled,
                         definition,
                         command_id,
                         actor_type,
@@ -1640,6 +1642,7 @@ class WorkflowRunner:
         self,
         session: Session,
         workflow: WorkflowInstanceRecord,
+        compiled: CompiledWorkflowDefinition,
         definition: AgentStep,
         command_id: str | None,
         actor_type: str,
@@ -1668,6 +1671,31 @@ class WorkflowRunner:
                 command_id=command_id,
             )
         elif definition.worker_role == "review":
+            successor = compiled.steps_by_key.get(definition.on_success)
+            if isinstance(successor, AgentStep) and successor.worker_role == "item_management":
+                transition_workflow(
+                    session,
+                    workflow.workflow_id,
+                    WorkflowState.REGISTERING,
+                    "REGISTRATION_STARTED",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    command_id=command_id,
+                    step_key=definition.on_success,
+                    payload={"from_step": definition.key},
+                )
+                transition_stage(
+                    session,
+                    workflow.workflow_id,
+                    WorkflowStage.REGISTERING,
+                    definition.on_success,
+                    "REGISTRATION_STAGE_ENTERED",
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    command_id=command_id,
+                    payload={"from_step": definition.key},
+                )
+                return
             transition_stage(
                 session,
                 workflow.workflow_id,

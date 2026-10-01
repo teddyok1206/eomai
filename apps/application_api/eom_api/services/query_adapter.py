@@ -101,6 +101,7 @@ from eom_catalog_contracts import (
     DocumentReviewResultMemberPointer,
     GraphGroundedDocumentReviewResultMemberPointer,
     InspectMockExamAssemblyQuery,
+    ItemRevisionApprovalReceiptV1,
     PdfDocumentReviewResultMemberPointer,
     PreviewMockExamAssemblyPlanCommand,
     load_integrated_science_mock_exam_policy,
@@ -5111,19 +5112,58 @@ class QueryAdapter:
                 "RETIRED": "RETIRED",
             }[revision.revision_state],
         )
-        receipt = event.payload.get("approval_receipt") if event is not None else None
-        receipt_value = receipt if isinstance(receipt, dict) else {}
-        receipt_sha256 = receipt_value.get("receipt_sha256")
-        hwpx_build_id = receipt_value.get("hwpx_build_id")
+        human_review_required = revision.workflow_definition_version == "1.16.0"
+        parsed_receipt: ItemRevisionApprovalReceiptV1 | None = None
+        if human_review_required and event is not None:
+            receipt = event.payload.get("approval_receipt")
+            try:
+                parsed_receipt = ItemRevisionApprovalReceiptV1.model_validate(receipt)
+            except (TypeError, ValueError):
+                QueryAdapter._item_approval_projection_invalid()
+            if (
+                event.item_id != revision.item_id
+                or event.item_revision_id != revision.item_revision_id
+                or event.event_type != "ITEM_REVISION_APPROVED"
+                or event.new_state != "APPROVED"
+                or parsed_receipt.item_id != revision.item_id
+                or parsed_receipt.item_revision_id != revision.item_revision_id
+                or parsed_receipt.item_revision_number != revision.revision_number
+                or parsed_receipt.manifest_artifact_id != revision.manifest_artifact_id
+                or parsed_receipt.manifest_artifact_revision_id
+                != revision.manifest_artifact_revision_id
+                or parsed_receipt.manifest_sha256 != revision.manifest_sha256
+                or parsed_receipt.workflow_id != revision.workflow_id
+                or parsed_receipt.registration_step_run_id != revision.source_workflow_step_run_id
+                or parsed_receipt.approved_by != revision.approved_by
+                or parsed_receipt.approved_at != revision.approved_at
+            ):
+                QueryAdapter._item_approval_projection_invalid()
+        if human_review_required:
+            approved_history = status in {"APPROVED", "SUPERSEDED", "RETIRED"}
+            if approved_history != (parsed_receipt is not None):
+                QueryAdapter._item_approval_projection_invalid()
+            if status in {"PENDING", "REJECTED"} and (
+                revision.approved_at is not None or revision.approved_by is not None
+            ):
+                QueryAdapter._item_approval_projection_invalid()
         return ItemApprovalView(
             status=status,
-            human_review_required=revision.workflow_definition_version == "1.16.0",
+            human_review_required=human_review_required,
             approved_at=revision.approved_at,
             approved_by=revision.approved_by,
             approval_receipt_sha256=(
-                str(receipt_sha256) if isinstance(receipt_sha256, str) else None
+                parsed_receipt.receipt_sha256 if parsed_receipt is not None else None
             ),
-            hwpx_build_id=str(hwpx_build_id) if isinstance(hwpx_build_id, str) else None,
+            hwpx_build_id=(parsed_receipt.hwpx_build_id if parsed_receipt is not None else None),
+        )
+
+    @staticmethod
+    def _item_approval_projection_invalid() -> Never:
+        raise ApiError(
+            500,
+            "ITEM_APPROVAL_PROJECTION_INVALID",
+            "Item approval projection is invalid",
+            "Canonical Item approval state and receipt evidence are incomplete or inconsistent.",
         )
 
     @staticmethod
@@ -5156,7 +5196,15 @@ class QueryAdapter:
             )
             .order_by(ItemEventRecord.sequence)
         )
-        return {str(row.item_revision_id): row for row in rows if row.item_revision_id is not None}
+        events: dict[str, ItemEventRecord] = {}
+        for row in rows:
+            if row.item_revision_id is None:
+                continue
+            revision_id = str(row.item_revision_id)
+            if revision_id in events:
+                QueryAdapter._item_approval_projection_invalid()
+            events[revision_id] = row
+        return events
 
     def _component(self, row: ItemComponentRecord) -> ItemComponentView:
         return ItemComponentView(

@@ -95,6 +95,8 @@ class ItemRevisionResolver(Protocol):
 
     def inspect_item(self, item_id: str) -> dict[str, Any]: ...
 
+    def require_hwpx_review_eligibility(self, item_revision_id: str) -> None: ...
+
 
 class HwpxRenderer(Protocol):
     """Closed renderer port implemented by the isolated Kordoc adapter."""
@@ -501,6 +503,14 @@ class HwpxApplicationService:
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
                 "Item Revision is not current and eligible for HWPX review",
             )
+        if supported_review_revision:
+            try:
+                self.registry.require_hwpx_review_eligibility(revision_id)
+            except Exception as exc:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
+                    "Item Revision review manifest is not eligible for HWPX review",
+                ) from exc
         return revision
 
     @staticmethod

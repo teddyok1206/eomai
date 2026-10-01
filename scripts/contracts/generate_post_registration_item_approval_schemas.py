@@ -177,7 +177,52 @@ def _approval_view_v1() -> dict[str, object]:
                 "pattern": r"^hwpxbuild_[0-9a-f]{32}$",
             },
         },
+        "allOf": _approval_projection_semantics(),
     }
+
+
+def _approval_projection_semantics() -> list[dict[str, object]]:
+    evidence_fields = [
+        "approved_at",
+        "approved_by",
+        "approval_receipt_sha256",
+        "hwpx_build_id",
+    ]
+    return [
+        {
+            "if": {
+                "properties": {
+                    "status": {"enum": ["APPROVED", "SUPERSEDED", "RETIRED"]},
+                    "human_review_required": {"const": True},
+                },
+                "required": ["status", "human_review_required"],
+            },
+            "then": {
+                "required": evidence_fields,
+                "properties": {
+                    "approved_at": {"type": "string", "format": "date-time"},
+                    "approved_by": {
+                        "type": "string",
+                        "pattern": r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+                    },
+                    "approval_receipt_sha256": {"type": "string", "pattern": SHA256},
+                    "hwpx_build_id": {
+                        "type": "string",
+                        "pattern": r"^hwpxbuild_[0-9a-f]{32}$",
+                    },
+                },
+            },
+        },
+        {
+            "if": {
+                "properties": {"status": {"const": "PENDING"}},
+                "required": ["status"],
+            },
+            "then": {
+                "properties": {field: {"const": None} for field in evidence_fields},
+            },
+        },
+    ]
 
 
 def _item_preview_v4() -> dict[str, object]:
@@ -218,6 +263,7 @@ def _item_preview_v4() -> dict[str, object]:
                 "pattern": r"^hwpxbuild_[0-9a-f]{32}$",
             },
         },
+        "allOf": _approval_projection_semantics(),
     }
     required.append("approval")
     all_of = value.setdefault("allOf", [])

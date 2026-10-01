@@ -611,7 +611,83 @@
           ],
           "pattern": "^hwpxbuild_[0-9a-f]{32}$"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "APPROVED",
+                  "SUPERSEDED",
+                  "RETIRED"
+                ]
+              },
+              "human_review_required": {
+                "const": true
+              }
+            },
+            "required": [
+              "status",
+              "human_review_required"
+            ]
+          },
+          "then": {
+            "required": [
+              "approved_at",
+              "approved_by",
+              "approval_receipt_sha256",
+              "hwpx_build_id"
+            ],
+            "properties": {
+              "approved_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "approved_by": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+              },
+              "approval_receipt_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "hwpx_build_id": {
+                "type": "string",
+                "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "PENDING"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "approved_at": {
+                "const": null
+              },
+              "approved_by": {
+                "const": null
+              },
+              "approval_receipt_sha256": {
+                "const": null
+              },
+              "hwpx_build_id": {
+                "const": null
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "allOf": [

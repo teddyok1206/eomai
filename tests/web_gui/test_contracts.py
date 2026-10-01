@@ -217,7 +217,19 @@ def test_item_preview_v4_exposes_pending_post_registration_approval() -> None:
     )
     schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
-    with pytest.raises(ValueError, match="pending human approval"):
+    invalid_approved = value.model_dump(mode="json") | {
+        "approval": {
+            "status": "APPROVED",
+            "human_review_required": True,
+            "approved_at": None,
+            "approved_by": None,
+            "approval_receipt_sha256": None,
+            "hwpx_build_id": None,
+        }
+    }
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema).validate(invalid_approved)
+    with pytest.raises(ValueError, match="exact receipt and HWPX evidence"):
         ItemPreview.model_validate(
             value.model_dump(mode="json")
             | {"approval": {"status": "APPROVED", "human_review_required": True}}

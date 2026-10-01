@@ -2398,6 +2398,24 @@ class ItemPreviewApproval(WebModel):
         pattern=r"^hwpxbuild_[0-9a-f]{32}$",
     )
 
+    @model_validator(mode="after")
+    def exact_human_approval_evidence(self) -> ItemPreviewApproval:
+        evidence = (
+            self.approved_at,
+            self.approved_by,
+            self.approval_receipt_sha256,
+            self.hwpx_build_id,
+        )
+        if self.status == "PENDING" and any(value is not None for value in evidence):
+            raise ValueError("pending Item approval must not carry approval evidence")
+        if (
+            self.status == "APPROVED"
+            and self.human_review_required
+            and any(value is None for value in evidence)
+        ):
+            raise ValueError("human-reviewed approval requires exact receipt and HWPX evidence")
+        return self
+
 
 class ItemPreview(WebModel):
     """Current presentation contract for every supported immutable Item content revision."""

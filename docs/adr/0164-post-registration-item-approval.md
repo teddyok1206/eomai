@@ -34,6 +34,12 @@ retargeted.  Moving the dedicated 25-Item coordinator to this lifecycle requires
 plan/execution contract because its existing checkpoint model binds Workflow human approval before
 registration.
 
+The runner derives the post-review transition from the compiled successor step rather than a
+Workflow version or step-name convention.  A review whose successor is the `item_management` agent
+atomically enters Workflow/state stage `REGISTERING`; a review whose successor is a human gate keeps
+the released pre-registration approval behavior.  This keeps the transition table truthful and
+allows the registration terminal to enter `COMPLETED` without synthesizing a human decision.
+
 The Application API accepts an approval only for an exact current `IN_REVIEW` revision and an exact
 validated HWPX build.  It sends a typed command through the Catalog application boundary.  The
 Application API owns the HWPX application-record lookup and binds its terminal `SUCCEEDED/PASS`
@@ -103,6 +109,12 @@ true:
 - the source components and Artifact Revisions resolve exactly;
 - the build request uses the authenticated Item-review application endpoint.
 
+The Registry owns this eligibility decision.  Before the HWPX Manager accepts the `IN_REVIEW`
+exception, the Registry safe-resolves the V2 manifest bytes and matches the exact Item/Revision,
+revision number, Workflow definition, Content Pack release, metadata snapshot, and ordered component
+pointers.  Approval repeats the same check and additionally safe-resolves the committed HWPX member
+bytes.  The HWPX Manager does not reimplement Catalog persistence rules.
+
 The output is a normal immutable HWPX Artifact.  Approval requires a terminal `SUCCEEDED` build with
 validation `PASS`; requested, running, failed, stale, or differently pinned builds are rejected.
 
@@ -113,6 +125,11 @@ projection.  `IN_REVIEW` is presented as `PENDING`; `APPROVED` as `APPROVED`; re
 states remain distinct.  The UI enables human approval only after the selected registered Revision
 has a validated HWPX build, and it links the exact build used by the decision.  Legacy Workflow
 approval UI remains available only for legacy Workflows that still own a human gate.
+
+For a human-reviewed `APPROVED`, `SUPERSEDED`, or `RETIRED` Revision, the projection is valid only
+when the typed approval receipt is present and exactly matches the Revision, manifest, Workflow,
+actor, time, and HWPX build.  `PENDING` carries no approval evidence.  Missing, malformed, duplicate,
+or mismatched approval events fail the read projection instead of manufacturing a partial approval.
 
 ### Failure, retry, and rollback
 

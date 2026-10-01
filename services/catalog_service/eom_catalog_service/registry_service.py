@@ -396,39 +396,7 @@ class RegistryService:
                 output=output,
                 command=command,
             )
-            manifest_revision = session.get(
-                ArtifactRevisionRecord, revision.manifest_artifact_revision_id
-            )
-
-            if (
-                manifest_revision is None
-                or manifest_revision.logical_artifact_id != revision.manifest_artifact_id
-                or manifest_revision.content_hash != revision.manifest_sha256
-            ):
-                raise RegistryError(
-                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
-                    "Item Revision manifest pointer is stale",
-                )
-            try:
-                manifest_value = json.loads(
-                    self._artifact_primary_file(manifest_revision).read_text(encoding="utf-8")
-                )
-                validate_contract("item-revision-manifest-v2", manifest_value)
-                manifest = ItemRevisionManifestV2.model_validate(manifest_value)
-            except (OSError, UnicodeError, ValueError, JsonSchemaValidationError) as exc:
-                raise RegistryError(
-                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
-                    "post-registration Item manifest is invalid",
-                ) from exc
-            if (
-                manifest.item_id != item.item_id
-                or manifest.item_revision_id != revision.item_revision_id
-                or manifest.workflow.workflow_id != revision.workflow_id
-            ):
-                raise RegistryError(
-                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
-                    "post-registration Item manifest identity differs",
-                )
+            self._require_post_registration_manifest(session, item, revision)
             require_revision_transition(ItemRevisionState.IN_REVIEW, ItemRevisionState.APPROVED)
             approved_at = datetime.now(UTC)
             receipt_body = {
@@ -477,6 +445,146 @@ class RegistryService:
             session.flush()
             return receipt
 
+    def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
+        """Fail closed unless one current IN_REVIEW revision has an exact V2 manifest."""
+
+        with self.sessions() as session:
+            revision = session.get(ItemRevisionRecord, item_revision_id)
+            if revision is None:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                    "Item Revision does not exist",
+                )
+            item = session.get(ItemRecord, revision.item_id)
+            if (
+                item is None
+                or item.current_revision_id != revision.item_revision_id
+                or revision.workflow_definition_version != "1.16.0"
+                or revision.revision_state != ItemRevisionState.IN_REVIEW.value
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_APPROVAL_INELIGIBLE,
+                    "Item Revision is not current and awaiting post-registration approval",
+                )
+            self._require_post_registration_manifest(session, item, revision)
+
+    @classmethod
+    def _require_post_registration_manifest(
+        cls,
+        session: Session,
+        item: ItemRecord,
+        revision: ItemRevisionRecord,
+    ) -> ItemRevisionManifestV2:
+        manifest_artifact = session.get(ArtifactRecord, revision.manifest_artifact_id)
+        manifest_revision = session.get(
+            ArtifactRevisionRecord, revision.manifest_artifact_revision_id
+        )
+        if (
+            manifest_artifact is None
+            or manifest_revision is None
+            or not manifest_artifact.approved
+            or not manifest_revision.approved
+            or manifest_artifact.artifact_type != "item-revision-manifest"
+            or manifest_revision.logical_artifact_id != revision.manifest_artifact_id
+            or manifest_revision.content_hash != revision.manifest_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                "Item Revision manifest pointer is stale",
+            )
+        try:
+            manifest_value = json.loads(
+                cls._artifact_primary_file(manifest_revision).read_text(encoding="utf-8")
+            )
+            validate_contract("item-revision-manifest-v2", manifest_value)
+            manifest = ItemRevisionManifestV2.model_validate(manifest_value)
+        except (
+            OSError,
+            UnicodeError,
+            ValueError,
+            JsonSchemaValidationError,
+            RegistryError,
+        ) as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                "post-registration Item manifest is invalid",
+            ) from exc
+
+        workflow = session.get(WorkflowInstanceRecord, revision.workflow_id)
+        pack_release = session.get(ContentPackReleaseRecord, revision.content_pack_release_id)
+        pack = (
+            session.get(ContentPackRecord, pack_release.content_pack_id)
+            if pack_release is not None
+            else None
+        )
+        metadata = session.scalar(
+            select(ItemMetadataSnapshotRecord).where(
+                ItemMetadataSnapshotRecord.item_revision_id == revision.item_revision_id
+            )
+        )
+        components = tuple(
+            session.scalars(
+                select(ItemComponentRecord)
+                .where(ItemComponentRecord.item_revision_id == revision.item_revision_id)
+                .order_by(ItemComponentRecord.component_type, ItemComponentRecord.ordinal)
+            )
+        )
+        manifest_components = tuple(
+            (
+                component.component_type,
+                component.ordinal,
+                component.schema_ref,
+                component.media_type,
+                component.artifact_id,
+                component.artifact_revision_id,
+                component.sha256,
+                component.logical_name,
+                component.required,
+            )
+            for component in manifest.components
+        )
+        stored_components = tuple(
+            (
+                component.component_type,
+                component.ordinal,
+                component.schema_ref,
+                component.media_type,
+                component.artifact_id,
+                component.artifact_revision_id,
+                component.sha256,
+                component.logical_name,
+                component.required,
+            )
+            for component in components
+        )
+        if (
+            workflow is None
+            or pack_release is None
+            or pack is None
+            or metadata is None
+            or manifest.item_id != item.item_id
+            or manifest.item_revision_id != revision.item_revision_id
+            or manifest.revision_number != revision.revision_number
+            or manifest.workflow.workflow_id != revision.workflow_id
+            or manifest.workflow.definition_key != "generic-item-development"
+            or manifest.workflow.definition_key != workflow.definition_key
+            or manifest.workflow.definition_version != workflow.definition_version
+            or manifest.workflow.definition_version != revision.workflow_definition_version
+            or manifest.content_pack.release_id != revision.content_pack_release_id
+            or manifest.content_pack.pack_key != pack.pack_key
+            or manifest.content_pack.version != pack_release.version
+            or manifest.content_pack.sha256 != pack_release.bundle_sha256
+            or manifest.metadata.schema_ref != metadata.schema_ref
+            or manifest.metadata.sha256 != revision.metadata_sha256
+            or manifest.metadata.sha256 != metadata.metadata_sha256
+            or manifest_components != stored_components
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                "post-registration Item manifest identity differs",
+            )
+        return manifest
+
     @staticmethod
     def _require_hwpx_approval_output(
         *,
@@ -504,6 +612,13 @@ class RegistryService:
                 RegistryErrorCode.ITEM_APPROVAL_HWPX_INVALID,
                 "validated HWPX output pointer does not resolve",
             )
+        try:
+            RegistryService._artifact_primary_file(output)
+        except RegistryError as exc:
+            raise RegistryError(
+                RegistryErrorCode.ITEM_APPROVAL_HWPX_INVALID,
+                "validated HWPX output bytes are missing or stale",
+            ) from exc
         builder_result = output.result.get("builder_result")
         if not isinstance(builder_result, dict) or (
             builder_result.get("status") != "SUCCEEDED"

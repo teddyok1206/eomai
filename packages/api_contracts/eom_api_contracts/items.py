@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from eom_catalog_contracts import AssessmentItemContentContract
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, ArtifactPointer, OpaqueId, UtcDatetime
 
@@ -18,6 +18,24 @@ class ItemApprovalView(ApiModel):
     approved_by: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
     approval_receipt_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     hwpx_build_id: str | None = Field(default=None, pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+
+    @model_validator(mode="after")
+    def exact_human_approval_evidence(self) -> ItemApprovalView:
+        evidence = (
+            self.approved_at,
+            self.approved_by,
+            self.approval_receipt_sha256,
+            self.hwpx_build_id,
+        )
+        if self.status == "PENDING" and any(value is not None for value in evidence):
+            raise ValueError("pending Item approval must not carry approval evidence")
+        if (
+            self.status in {"APPROVED", "SUPERSEDED", "RETIRED"}
+            and self.human_review_required
+            and any(value is None for value in evidence)
+        ):
+            raise ValueError("human-reviewed approval requires exact receipt and HWPX evidence")
+        return self
 
 
 class ItemView(ApiModel):

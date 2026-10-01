@@ -27,16 +27,17 @@ result schema를 기준으로 정리한다.
 
 | 제품 경로 | Workflow definition | Role protocol | 결과 계약 | 관련 selector |
 | --- | --- | --- | --- | --- |
-| 단일 문항 | `generic-item-development@1.15.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.12`; Graph plan `17.0`; ungrounded plan `18.0` |
+| 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.13`; Graph plan `19.0`; ungrounded plan `20.0` |
 | 풀이보고서 | `knowledge-analysis@10.0.0` | `workflow-role/1.21.0` | proposal `@10.0` | accepted knowledge analysis `10.0` |
 | 고객지원 | `customer-support@1.0.0` | `workflow-role/1.22.0` | customer support `@1.0` | customer-support preset |
 | 문서 검토 V3 | `pdf-document-review@1.2.0` | `workflow-role/1.27.0` | PDF document review `@3.0` | plan `15.0`, control bootstrap `5.0` |
 | Legacy extraction | `legacy-item-extraction@1.0.0` | `workflow-role/1.14.0` | extraction `@1.0` | historical intake compatibility |
 | Legacy editorial | `legacy-item-editorial-compatibility@1.0.0` | `workflow-role/1.16.0` | compatibility `@1.0` | historical editorial compatibility |
 
-단일 문항의 plan `17.0`과 `18.0`은 경쟁하는 latest가 아니다. `17.0`은 pinned Graph/Evidence를
-소비하고, `18.0`은 근거를 가장하지 않는 ungrounded 검토 경로다. 둘 다 Workflow 1.15와 role
-1.24 결과를 검증한다.
+단일 문항의 plan `19.0`과 `20.0`은 경쟁하는 latest가 아니다. `19.0`은 pinned Graph/Evidence를
+소비하고, `20.0`은 근거를 가장하지 않는 ungrounded 검토 경로다. 둘 다 Workflow 1.16과 role
+1.24 결과를 검증하며, 검토 뒤 등록·HWPX 확인·사람 승인 순서를 사용한다. Predecessor plan
+`17.0`/`18.0`과 Workflow 1.15의 실행 의미는 그대로 보존한다.
 
 ## 25문항 생산의 독립 pin
 
@@ -50,18 +51,18 @@ result schema를 기준으로 정리한다.
 | Item Brief / material requirement | `4.0` / `1.0` |
 | Review publication family | production V5가 선언한 exact review decision/publication/eligibility |
 
-단일 문항 selector가 1.15/1.20.12로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
+단일 문항 selector가 1.16/1.20.13으로 올라가도 V5 생산을 묵시적으로 변경하지 않는다. 새 묶음이
 필요하면 predecessor bytes를 수정하지 않고 successor production contract를 먼저 추가한다.
 
 ## 코드가 허용하는 새 Workflow 조합
 
-정본은 `packages/workflow/eom_workflow/admission.py`의 O(1) identity map이다. 이 표는 2026-09-30
+정본은 `packages/workflow/eom_workflow/admission.py`의 O(1) identity map이다. 이 표는 2026-10-01
 UTC의 사람이 읽는 요약이며 `tests/unit/test_runtime_version_admission.py`가 checked-in YAML과
 정확히 대조한다.
 
 | Definition | Admitted versions | 대응 role protocol |
 | --- | --- | --- |
-| generic-item-development | 1.8, 1.9, 1.10, 1.11–1.12, 1.13–1.15 | 1.17, 1.19, 1.20, 1.23, 1.24 |
+| generic-item-development | 1.8, 1.9, 1.10, 1.11–1.12, 1.13–1.16 | 1.17, 1.19, 1.20, 1.23, 1.24 |
 | knowledge-analysis | 1, 4, 8, 9, 10 | 1.4, 1.7, 1.11, 1.18, 1.21 |
 | customer-support | 1 | 1.22 |
 | pdf-document-review | 1, 1.1, 1.2 | 1.25, 1.26, 1.27 |
@@ -86,6 +87,9 @@ mutable 상태이므로 배포나 canary 직전에는 다시 조회한다.
 | 문서 검토 | definitions 1.0/1.1과 preset revision 8(role 1.25/1.26) 활성 |
 | 문서 검토 V3 | source 1.2/role 1.27은 repository candidate; 운영 definition/preset activation 미확인 |
 
+단일 문항의 repository selector는 1.16이지만 위 2026-09-30 운영 snapshot은 1.15 활성 상태를
+기록한다. 1.16의 source/admission 존재를 live activation으로 확대 해석하지 않는다.
+
 따라서 문서 검토 V3의 source 존재나 admission만 보고 live라고 표시하면 안 된다. bootstrap,
 definition import, preset release/current selection과 authenticated canary를 모두 마친 뒤 이 snapshot을
 갱신한다. 운영 snapshot의 release ID와 SHA는 배포 증거에 남기되 이 문서를 mutable ID 저장소로
@@ -98,7 +102,7 @@ definition import, preset release/current selection과 authenticated canary를 �
 | Canonical Item | `assessment-item-content/3.0`, Catalog `catalog/1.13` | logical Item과 immutable revision/hash 분리 |
 | HWPX | `hwpx-content-team/3.0` | Item/Assembly pointer를 projection하며 원본을 수정하지 않음 |
 | 실행 정책 | standard bootstrap `17.0`, knowledge bootstrap `14.0` | preset revision은 별도 immutable identity |
-| Evidence usage | Graph plan `17.0`, ungrounded plan `18.0` | boolean이 아닌 pointer/hash/receipt로 검증 |
+| Evidence usage | Graph plan `19.0`, ungrounded plan `20.0` | boolean이 아닌 pointer/hash/receipt로 검증; predecessor `17.0`/`18.0` replay 보존 |
 | GPU prompt policy | `local-gpu-image-prompt-policy/1.6` | predecessor `1.4` replay 보존 |
 | 자료 형식 | material requirement `1.0`, Item Brief `4.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음 |
 | PDF annotation | request `3.0`, Catalog `catalog/1.22` | 원본 보존, 파생 Artifact만 생성 |
