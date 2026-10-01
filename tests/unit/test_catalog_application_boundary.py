@@ -39,10 +39,12 @@ from eom_catalog_contracts import (
     CreatePlannedMockExamAssemblyCommand,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
     ItemMediaQuery,
+    ItemRevisionHwpxEligibilityV1,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
     MockExamAssemblyManifestV3,
@@ -98,6 +100,26 @@ class FakeImports:
 
 
 class FakeRegistry:
+    def require_hwpx_review_eligibility(
+        self, item_revision_id: str
+    ) -> ItemRevisionHwpxEligibilityV1:
+        body = {
+            "schema_version": "item-revision-hwpx-eligibility/1.0",
+            "eligible": True,
+            "item_id": "item_" + "1" * 32,
+            "item_revision_id": item_revision_id,
+            "item_revision_number": 1,
+            "revision_state": "IN_REVIEW",
+            "workflow_id": "workflow_" + "2" * 32,
+            "workflow_definition_version": "1.16.0",
+            "manifest_artifact_id": "artifact_" + "3" * 32,
+            "manifest_artifact_revision_id": "rev_" + "4" * 32,
+            "manifest_sha256": "sha256:" + "5" * 64,
+        }
+        return ItemRevisionHwpxEligibilityV1.model_validate(
+            body | {"eligibility_sha256": content_sha256(body)}
+        )
+
     def load_item_content(self, _revision_id: str) -> AssessmentItemContent:
         return AssessmentItemContent.model_validate(item_content())
 
@@ -815,6 +837,23 @@ def test_catalog_assembly_uses_its_bounded_response_window() -> None:
         CatalogApplicationClient._response_timeout_seconds(command)
         == ASSEMBLY_RESPONSE_TIMEOUT_SECONDS
     )
+
+
+def test_hwpx_review_eligibility_round_trips_through_catalog_socket(tmp_path: Path) -> None:
+    query = InspectItemRevisionHwpxEligibilityQueryV1(item_revision_id="itemrev_" + "6" * 32)
+    server = _server(tmp_path)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        proof = _client(server).inspect_item_revision_hwpx_eligibility(query)
+        assert proof.item_revision_id == query.item_revision_id
+        assert proof.revision_state == "IN_REVIEW"
+        assert proof.workflow_definition_version == "1.16.0"
+        validate_contract("item-revision-hwpx-eligibility", proof.model_dump(mode="json"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_catalog_evidence_response_window_is_applied_to_the_unix_socket(

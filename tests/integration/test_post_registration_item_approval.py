@@ -8,7 +8,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from eom_catalog_contracts import ApproveItemRevisionCommandV1, ItemRevisionApprovalReceiptV1
+from eom_catalog_contracts import (
+    ApproveItemRevisionCommandV1,
+    ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
+)
 from eom_catalog_service.models import (
     ContentPackRecord,
     ContentPackReleaseRecord,
@@ -429,6 +433,38 @@ def test_approval_is_atomic_and_exact_replay_returns_one_receipt(
     with pytest.raises(RegistryError) as captured:
         service.approve_revision(conflict)
     assert captured.value.code == RegistryErrorCode.ITEM_APPROVAL_RECEIPT_INVALID
+
+
+def test_hwpx_review_eligibility_proof_binds_current_manifest(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    fixture = _seed_fixture(integration_engine, tmp_path / "files")
+    service = RegistryService(integration_engine, _settings(tmp_path))
+
+    proof = service.require_hwpx_review_eligibility(fixture.item_revision_id)
+    assert isinstance(proof, ItemRevisionHwpxEligibilityV1)
+    assert proof.item_id == fixture.item_id
+    assert proof.item_revision_id == fixture.item_revision_id
+    assert proof.manifest_artifact_id == fixture.manifest_artifact_id
+    assert proof.manifest_artifact_revision_id == fixture.manifest_artifact_revision_id
+    assert proof.manifest_sha256 == fixture.manifest_sha256
+
+
+def test_hwpx_review_eligibility_rejects_manifest_identity_drift(
+    integration_engine: Engine,
+    tmp_path: Path,
+) -> None:
+    fixture = _seed_fixture(
+        integration_engine,
+        tmp_path / "files",
+        manifest_pack_release_override=_opaque("packrel_"),
+    )
+    service = RegistryService(integration_engine, _settings(tmp_path))
+
+    with pytest.raises(RegistryError) as captured:
+        service.require_hwpx_review_eligibility(fixture.item_revision_id)
+    assert captured.value.code == RegistryErrorCode.ITEM_MANIFEST_INVALID
 
 
 def test_concurrent_approval_serializes_to_one_receipt(

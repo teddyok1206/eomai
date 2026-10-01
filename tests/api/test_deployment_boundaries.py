@@ -294,6 +294,11 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         "catalog-application/catalog-application-request-v16.schema.json",
         "catalog-application/catalog-application-response-v15.schema.json",
         "catalog-application/catalog-application-response-v16.schema.json",
+        "catalog-application/catalog-application-request-v18.schema.json",
+        "catalog-application/catalog-application-response-v17.schema.json",
+        "catalog-application/catalog-application-request-v19.schema.json",
+        "catalog-application/catalog-application-response-v18.schema.json",
+        "item-registry/item-revision-hwpx-eligibility-v1.schema.json",
         "item-registry/assessment-item-content-v2.schema.json",
         "item-registry/assessment-item-content-v3.schema.json",
         "catalog-application/catalog-item-media-request-v1.schema.json",
@@ -689,6 +694,10 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
         "catalog-application-request-v15.schema.json",
         "catalog-application-request-v16.schema.json",
         "catalog-application-response-v16.schema.json",
+        "catalog-application-request-v18.schema.json",
+        "catalog-application-response-v17.schema.json",
+        "catalog-application-request-v19.schema.json",
+        "catalog-application-response-v18.schema.json",
     ):
         assert f'"catalog-application/{resource}": ' in deployment
         assert f'"schemas/catalog-application/{resource}"' in deployment

@@ -76,6 +76,37 @@ class ItemRevisionManifestV2(FrozenModel):
         return self
 
 
+class InspectItemRevisionHwpxEligibilityQueryV1(FrozenModel):
+    operation: Literal["INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"] = (
+        "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"
+    )
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+
+
+class ItemRevisionHwpxEligibilityV1(FrozenModel):
+    schema_version: Literal["item-revision-hwpx-eligibility/1.0"] = (
+        "item-revision-hwpx-eligibility/1.0"
+    )
+    eligible: Literal[True] = True
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_revision_number: int = Field(ge=1)
+    revision_state: Literal["IN_REVIEW"] = "IN_REVIEW"
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    workflow_definition_version: Literal["1.16.0"] = "1.16.0"
+    manifest_artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    manifest_artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    eligibility_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def exact_eligibility_hash(self) -> Self:
+        body = self.model_dump(mode="json", exclude={"eligibility_sha256"})
+        if content_sha256(body) != self.eligibility_sha256:
+            raise ValueError("HWPX review eligibility hash differs")
+        return self
+
+
 class ApproveItemRevisionCommandV1(FrozenModel):
     operation: Literal["APPROVE_ITEM_REVISION"] = "APPROVE_ITEM_REVISION"
     item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")

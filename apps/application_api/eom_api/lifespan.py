@@ -30,6 +30,9 @@ from eom_api.services.document_review_correction_service import (
     DocumentReviewCorrectionApplicationService,
 )
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
+from eom_api.services.hwpx_item_revision_resolver import (
+    CatalogBackedHwpxItemRevisionResolver,
+)
 from eom_api.services.idempotency_service import IdempotencyService
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.paired_document_review_service import (
@@ -106,7 +109,11 @@ class AppServices:
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
-        self.hwpx = HwpxApplicationService(engine, registry=self.registry)
+        self.hwpx_item_revisions = CatalogBackedHwpxItemRevisionResolver(
+            self.registry,
+            self.catalog_application,
+        )
+        self.hwpx = HwpxApplicationService(engine, registry=self.hwpx_item_revisions)
         self.item_approvals = ItemApprovalApplicationService(
             hwpx=self.hwpx,
             catalog=self.catalog_application,

@@ -24,7 +24,9 @@ from eom_catalog_contracts.assessment_assembly import (
 from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
 from eom_catalog_contracts.item_approval import (
     ApproveItemRevisionCommandV1,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
 )
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
@@ -79,6 +81,7 @@ CatalogApplicationOperation = Literal[
     "CREATE_MOCK_EXAM_ASSEMBLY",
     "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
     "INSPECT_MOCK_EXAM_ASSEMBLY",
+    "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY",
     "APPROVE_ITEM_REVISION",
 ]
 
@@ -486,6 +489,7 @@ CatalogApplicationRequestValue = Annotated[
     | CreateMockExamAssemblyCommand
     | CreatePlannedMockExamAssemblyCommand
     | InspectMockExamAssemblyQuery
+    | InspectItemRevisionHwpxEligibilityQueryV1
     | ApproveItemRevisionCommandV1,
     Field(discriminator="operation"),
 ]
@@ -552,6 +556,7 @@ class CatalogApplicationResponse(FrozenModel):
     content: AssessmentItemContentContract | None = None
     assembly_plan: MockExamAssemblyPlanContract | None = None
     assembly: MockExamAssemblyManifestContract | None = None
+    hwpx_review_eligibility: ItemRevisionHwpxEligibilityV1 | None = None
     item_approval: ItemRevisionApprovalReceiptV1 | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
@@ -571,6 +576,7 @@ class CatalogApplicationResponse(FrozenModel):
                 self.content,
                 self.assembly_plan,
                 self.assembly,
+                self.hwpx_review_eligibility,
                 self.item_approval,
                 self.error_code,
             )
@@ -630,6 +636,11 @@ class CatalogApplicationResponse(FrozenModel):
             raise ValueError("mock-exam assembly operation requires a manifest")
         if self.operation == "APPROVE_ITEM_REVISION" and self.item_approval is None:
             raise ValueError("Item approval response requires an approval receipt")
+        if (
+            self.operation == "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"
+            and self.hwpx_review_eligibility is None
+        ):
+            raise ValueError("Item HWPX review eligibility response requires a proof")
         return self
 
 
@@ -702,6 +713,10 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         "APPROVE_ITEM_REVISION": CatalogApplicationSchemaRoute(
             "catalog-application-request-v18",
             "catalog-application-response-v17",
+        ),
+        "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v19",
+            "catalog-application-response-v18",
         ),
     }
 )

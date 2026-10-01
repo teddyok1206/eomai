@@ -50,6 +50,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMediaResponse,
     DocumentReviewPdfAnnotationResponse,
     DocumentReviewPdfAnnotationResponseV2,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
@@ -367,6 +368,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "CREATE_MOCK_EXAM_ASSEMBLY",
                 "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
                 "INSPECT_MOCK_EXAM_ASSEMBLY",
+                "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY",
                 "APPROVE_ITEM_REVISION",
             }:
                 operation = raw_operation
@@ -525,6 +527,16 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     operation=request.operation,
                     assembly=self.server.mock_exam_assemblies.inspect_revision(
                         request.assessment_assembly_revision_id
+                    ),
+                )
+            elif isinstance(request, InspectItemRevisionHwpxEligibilityQueryV1):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    hwpx_review_eligibility=(
+                        self.server.registry.require_hwpx_review_eligibility(
+                            request.item_revision_id
+                        )
                     ),
                 )
             elif isinstance(request, ApproveItemRevisionCommandV1):
@@ -1499,6 +1511,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                         "CREATE_MOCK_EXAM_ASSEMBLY",
                         "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
                         "INSPECT_MOCK_EXAM_ASSEMBLY",
+                        "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY",
                         "APPROVE_ITEM_REVISION",
                     ],
                     operation,

@@ -383,6 +383,109 @@ def _catalog_response_v17() -> dict[str, object]:
     }
 
 
+def _hwpx_review_eligibility_v1() -> dict[str, object]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "eom://schemas/item-registry/item-revision-hwpx-eligibility/1.0",
+        "title": "Item Revision HWPX Review Eligibility V1",
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "schema_version",
+            "eligible",
+            "item_id",
+            "item_revision_id",
+            "item_revision_number",
+            "revision_state",
+            "workflow_id",
+            "workflow_definition_version",
+            "manifest_artifact_id",
+            "manifest_artifact_revision_id",
+            "manifest_sha256",
+            "eligibility_sha256",
+        ],
+        "properties": {
+            "schema_version": {"const": "item-revision-hwpx-eligibility/1.0"},
+            "eligible": {"const": True},
+            "item_id": {"type": "string", "pattern": r"^item_[0-9a-f]{32}$"},
+            "item_revision_id": {
+                "type": "string",
+                "pattern": r"^itemrev_[0-9a-f]{32}$",
+            },
+            "item_revision_number": {"type": "integer", "minimum": 1},
+            "revision_state": {"const": "IN_REVIEW"},
+            "workflow_id": {
+                "type": "string",
+                "pattern": r"^workflow_[0-9a-f]{32}$",
+            },
+            "workflow_definition_version": {"const": "1.16.0"},
+            "manifest_artifact_id": {
+                "type": "string",
+                "pattern": r"^artifact_[0-9a-f]{32}$",
+            },
+            "manifest_artifact_revision_id": {
+                "type": "string",
+                "pattern": r"^rev_[0-9a-f]{32}$",
+            },
+            "manifest_sha256": {"type": "string", "pattern": SHA256},
+            "eligibility_sha256": {"type": "string", "pattern": SHA256},
+        },
+    }
+
+
+def _catalog_request_v19() -> dict[str, object]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "eom://schemas/catalog-application/catalog-application-request-v19",
+        "title": "EOM Catalog Item Revision HWPX Eligibility Request V19",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["operation", "item_revision_id"],
+        "properties": {
+            "operation": {"const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"},
+            "item_revision_id": {
+                "type": "string",
+                "pattern": r"^itemrev_[0-9a-f]{32}$",
+            },
+        },
+    }
+
+
+def _catalog_response_v18() -> dict[str, object]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "eom://schemas/catalog-application/catalog-application-response-v18",
+        "title": "EOM Catalog Item Revision HWPX Eligibility Response V18",
+        "oneOf": [
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["status", "operation", "hwpx_review_eligibility"],
+                "properties": {
+                    "status": {"const": "OK"},
+                    "operation": {"const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"},
+                    "hwpx_review_eligibility": {
+                        "$ref": ("eom://schemas/item-registry/item-revision-hwpx-eligibility/1.0")
+                    },
+                },
+            },
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["status", "operation", "error_code"],
+                "properties": {
+                    "status": {"const": "ERROR"},
+                    "operation": {"const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"},
+                    "error_code": {
+                        "type": "string",
+                        "pattern": r"^[A-Z][A-Z0-9_]{2,127}$",
+                    },
+                },
+            },
+        ],
+    }
+
+
 def _workflow_start_v6() -> dict[str, object]:
     source = json.loads((ROOT / "schemas/api/v1/workflow-start-v5.schema.json").read_text())
     value = cast(dict[str, object], deepcopy(source))
@@ -454,6 +557,24 @@ def main() -> None:
         "packages/catalog_contracts/eom_catalog_contracts/resources/catalog-application",
         "catalog-application-response-v17.schema.json",
         _catalog_response_v17(),
+    )
+    _write_pair(
+        "schemas/item-registry",
+        "packages/catalog_contracts/eom_catalog_contracts/resources/item-registry",
+        "item-revision-hwpx-eligibility-v1.schema.json",
+        _hwpx_review_eligibility_v1(),
+    )
+    _write_pair(
+        "schemas/catalog-application",
+        "packages/catalog_contracts/eom_catalog_contracts/resources/catalog-application",
+        "catalog-application-request-v19.schema.json",
+        _catalog_request_v19(),
+    )
+    _write_pair(
+        "schemas/catalog-application",
+        "packages/catalog_contracts/eom_catalog_contracts/resources/catalog-application",
+        "catalog-application-response-v18.schema.json",
+        _catalog_response_v18(),
     )
     _write_pair(
         "schemas/api/v1",

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-registry/item-revision-hwpx-eligibility/1.0",
+  "title": "Item Revision HWPX Review Eligibility V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "eligible",
+    "item_id",
+    "item_revision_id",
+    "item_revision_number",
+    "revision_state",
+    "workflow_id",
+    "workflow_definition_version",
+    "manifest_artifact_id",
+    "manifest_artifact_revision_id",
+    "manifest_sha256",
+    "eligibility_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "item-revision-hwpx-eligibility/1.0"
+    },
+    "eligible": {
+      "const": true
+    },
+    "item_id": {
+      "type": "string",
+      "pattern": "^item_[0-9a-f]{32}$"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "item_revision_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "revision_state": {
+      "const": "IN_REVIEW"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "workflow_definition_version": {
+      "const": "1.16.0"
+    },
+    "manifest_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "manifest_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "eligibility_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

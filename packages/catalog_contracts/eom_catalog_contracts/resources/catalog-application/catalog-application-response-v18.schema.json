@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v18",
+  "title": "EOM Catalog Item Revision HWPX Eligibility Response V18",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "operation",
+        "hwpx_review_eligibility"
+      ],
+      "properties": {
+        "status": {
+          "const": "OK"
+        },
+        "operation": {
+          "const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"
+        },
+        "hwpx_review_eligibility": {
+          "$ref": "eom://schemas/item-registry/item-revision-hwpx-eligibility/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "operation",
+        "error_code"
+      ],
+      "properties": {
+        "status": {
+          "const": "ERROR"
+        },
+        "operation": {
+          "const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}

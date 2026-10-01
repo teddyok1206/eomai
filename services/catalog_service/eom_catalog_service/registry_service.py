@@ -30,6 +30,7 @@ from eom_catalog_contracts import (
     AssessmentPageImagePointer,
     ImageBlock,
     ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
     ItemRevisionManifestV2,
     MediaArtifactPointer,
     OfficeDocumentReviewIntakeManifest,
@@ -445,8 +446,10 @@ class RegistryService:
             session.flush()
             return receipt
 
-    def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
-        """Fail closed unless one current IN_REVIEW revision has an exact V2 manifest."""
+    def require_hwpx_review_eligibility(
+        self, item_revision_id: str
+    ) -> ItemRevisionHwpxEligibilityV1:
+        """Return a pinned proof only for a current IN_REVIEW Revision with an exact V2 manifest."""
 
         with self.sessions() as session:
             revision = session.get(ItemRevisionRecord, item_revision_id)
@@ -467,6 +470,22 @@ class RegistryService:
                     "Item Revision is not current and awaiting post-registration approval",
                 )
             self._require_post_registration_manifest(session, item, revision)
+            body = {
+                "schema_version": "item-revision-hwpx-eligibility/1.0",
+                "eligible": True,
+                "item_id": item.item_id,
+                "item_revision_id": revision.item_revision_id,
+                "item_revision_number": revision.revision_number,
+                "revision_state": revision.revision_state,
+                "workflow_id": revision.workflow_id,
+                "workflow_definition_version": revision.workflow_definition_version,
+                "manifest_artifact_id": revision.manifest_artifact_id,
+                "manifest_artifact_revision_id": revision.manifest_artifact_revision_id,
+                "manifest_sha256": revision.manifest_sha256,
+            }
+            value = body | {"eligibility_sha256": content_sha256(body)}
+            validate_contract("item-revision-hwpx-eligibility", value)
+            return ItemRevisionHwpxEligibilityV1.model_validate(value)
 
     @classmethod
     def _require_post_registration_manifest(

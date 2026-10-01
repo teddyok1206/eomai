@@ -885,6 +885,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:f388cca728cf7df1b6d0b74f258a49870b99c7e6fb45ef840ed015dbd652ba0c",
         ),
+        "item-revision-hwpx-eligibility": CatalogSchemaResource(
+            "schemas/item-registry/item-revision-hwpx-eligibility-v1.schema.json",
+            "resources/item-registry/item-revision-hwpx-eligibility-v1.schema.json",
+            "1.0",
+            "sha256:bcbe2f90b8b5012d1c60ebe04cf35e956d417d832f7328e26c83426ca8cefda2",
+        ),
         "assessment-item-content": CatalogSchemaResource(
             "schemas/item-registry/assessment-item-content-v1.schema.json",
             "resources/item-registry/assessment-item-content-v1.schema.json",
@@ -1047,6 +1053,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "18.0",
             "sha256:a42dc7754170545ae4f7d34d950204ce0ecb1262bc72dab52017cb17de312554",
         ),
+        "catalog-application-request-v19": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v19.schema.json",
+            "resources/catalog-application/catalog-application-request-v19.schema.json",
+            "19.0",
+            "sha256:1dc59dcae45f521dd7c39e2d7e5ebbdbfe89580e9c2173abf5e98cae9ad7610b",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -1112,6 +1124,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v17.schema.json",
             "17.0",
             "sha256:bb60cc10fecdaca25cadd91b9c878fc3f1cf07a043c5f20d01c9a0a41c1811ac",
+        ),
+        "catalog-application-response-v18": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v18.schema.json",
+            "resources/catalog-application/catalog-application-response-v18.schema.json",
+            "18.0",
+            "sha256:b4290c8a0942035246179d5d828d51724069f1843ee223e7cc837f42811f9fe5",
         ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",

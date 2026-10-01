@@ -260,8 +260,10 @@ from eom_catalog_contracts.guidance_document import (
 )
 from eom_catalog_contracts.item_approval import (
     ApproveItemRevisionCommandV1,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     ItemRevisionApprovalPolicyV1,
     ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
     ItemRevisionManifestV2,
 )
 from eom_catalog_contracts.item_origin import (
@@ -1074,6 +1076,7 @@ __all__ = [
     "HumanDecision",
     "HwpQuestionEditorProfilePointer",
     "ImageBlock",
+    "InspectItemRevisionHwpxEligibilityQueryV1",
     "InspectMockExamAssemblyQuery",
     "InspectMockExamReviewEligibilityQuery",
     "InstitutionalOriginProof",
@@ -1099,6 +1102,7 @@ __all__ = [
     "ItemPlacementV1",
     "ItemRevisionApprovalPolicyV1",
     "ItemRevisionApprovalReceiptV1",
+    "ItemRevisionHwpxEligibilityV1",
     "ItemRevisionManifestV2",
     "ItemScore",
     "ItemSolution",

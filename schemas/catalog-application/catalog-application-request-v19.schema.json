@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v19",
+  "title": "EOM Catalog Item Revision HWPX Eligibility Request V19",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "item_revision_id"
+  ],
+  "properties": {
+    "operation": {
+      "const": "INSPECT_ITEM_REVISION_HWPX_ELIGIBILITY"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    }
+  }
+}

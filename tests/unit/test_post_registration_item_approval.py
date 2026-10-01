@@ -9,12 +9,18 @@ from typing import Any
 
 import pytest
 from eom_api.errors import ApiError
+from eom_api.services.hwpx_item_revision_resolver import (
+    CatalogBackedHwpxItemRevisionResolver,
+)
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api_contracts.items import ItemApprovalView
 from eom_catalog_contracts import (
     ApproveItemRevisionCommandV1,
+    CatalogApplicationResponse,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
     ItemRevisionManifestV2,
     validate_contract,
 )
@@ -257,15 +263,38 @@ def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> Non
         def inspect_revision(self, _revision_id: str) -> dict[str, Any]:
             return {
                 "item_id": "item_" + "1" * 32,
+                "revision_number": 1,
                 "revision_state": "IN_REVIEW",
+                "workflow_id": "workflow_" + "3" * 32,
                 "workflow_definition_version": "1.16.0",
+                "manifest_artifact_id": "artifact_" + "4" * 32,
+                "manifest_artifact_revision_id": "rev_" + "5" * 32,
+                "manifest_sha256": "sha256:" + "6" * 64,
             }
 
         def inspect_item(self, _item_id: str) -> dict[str, Any]:
             return {"current_revision_id": "itemrev_" + "2" * 32}
 
-        def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
+        def require_hwpx_review_eligibility(
+            self, item_revision_id: str
+        ) -> ItemRevisionHwpxEligibilityV1:
             self.validated_revision_id = item_revision_id
+            body = {
+                "schema_version": "item-revision-hwpx-eligibility/1.0",
+                "eligible": True,
+                "item_id": "item_" + "1" * 32,
+                "item_revision_id": item_revision_id,
+                "item_revision_number": 1,
+                "revision_state": "IN_REVIEW",
+                "workflow_id": "workflow_" + "3" * 32,
+                "workflow_definition_version": "1.16.0",
+                "manifest_artifact_id": "artifact_" + "4" * 32,
+                "manifest_artifact_revision_id": "rev_" + "5" * 32,
+                "manifest_sha256": "sha256:" + "6" * 64,
+            }
+            return ItemRevisionHwpxEligibilityV1.model_validate(
+                body | {"eligibility_sha256": content_sha256(body)}
+            )
 
     service = object.__new__(HwpxApplicationService)
     service.registry = Registry()  # type: ignore[assignment]
@@ -286,7 +315,9 @@ def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> Non
         service._eligible_revision(revision_id)
 
     class InvalidManifestRegistry(Registry):
-        def require_hwpx_review_eligibility(self, item_revision_id: str) -> None:
+        def require_hwpx_review_eligibility(
+            self, item_revision_id: str
+        ) -> ItemRevisionHwpxEligibilityV1:
             del item_revision_id
             raise RegistryError(
                 RegistryErrorCode.ITEM_MANIFEST_INVALID,
@@ -296,6 +327,132 @@ def test_hwpx_eligibility_allows_only_current_successor_review_revision() -> Non
     service.registry = InvalidManifestRegistry()  # type: ignore[assignment]
     with pytest.raises(HwpxManagerError, match="review manifest is not eligible"):
         service._eligible_revision(revision_id)
+
+    class MismatchedProofRegistry(Registry):
+        def require_hwpx_review_eligibility(
+            self, item_revision_id: str
+        ) -> ItemRevisionHwpxEligibilityV1:
+            proof = super().require_hwpx_review_eligibility(item_revision_id)
+            body = proof.model_dump(mode="json", exclude={"eligibility_sha256"}) | {
+                "manifest_sha256": "sha256:" + "7" * 64
+            }
+            return ItemRevisionHwpxEligibilityV1.model_validate(
+                body | {"eligibility_sha256": content_sha256(body)}
+            )
+
+    service.registry = MismatchedProofRegistry()  # type: ignore[assignment]
+    with pytest.raises(HwpxManagerError, match="review manifest is not eligible"):
+        service._eligible_revision(revision_id)
+
+
+def test_hwpx_review_eligibility_contract_binds_exact_revision_and_manifest() -> None:
+    query = InspectItemRevisionHwpxEligibilityQueryV1(item_revision_id="itemrev_" + "1" * 32)
+    validate_contract("catalog-application-request-v19", query.model_dump(mode="json"))
+    body = {
+        "schema_version": "item-revision-hwpx-eligibility/1.0",
+        "eligible": True,
+        "item_id": "item_" + "2" * 32,
+        "item_revision_id": query.item_revision_id,
+        "item_revision_number": 1,
+        "revision_state": "IN_REVIEW",
+        "workflow_id": "workflow_" + "3" * 32,
+        "workflow_definition_version": "1.16.0",
+        "manifest_artifact_id": "artifact_" + "4" * 32,
+        "manifest_artifact_revision_id": "rev_" + "5" * 32,
+        "manifest_sha256": "sha256:" + "6" * 64,
+    }
+    proof = ItemRevisionHwpxEligibilityV1.model_validate(
+        body | {"eligibility_sha256": content_sha256(body)}
+    )
+    response = CatalogApplicationResponse(
+        status="OK",
+        operation=query.operation,
+        hwpx_review_eligibility=proof,
+    )
+    validate_contract("item-revision-hwpx-eligibility", proof.model_dump(mode="json"))
+    validate_contract(
+        "catalog-application-response-v18",
+        response.model_dump(mode="json", exclude_none=True),
+    )
+
+    with pytest.raises(ValidationError, match="eligibility hash differs"):
+        ItemRevisionHwpxEligibilityV1.model_validate(
+            proof.model_dump(mode="json") | {"manifest_sha256": "sha256:" + "7" * 64}
+        )
+
+
+def test_api_hwpx_resolver_routes_manifest_validation_to_catalog_boundary() -> None:
+    revision_id = "itemrev_" + "1" * 32
+    revision = {
+        "item_revision_id": revision_id,
+        "item_id": "item_" + "2" * 32,
+        "revision_number": 1,
+        "revision_state": "IN_REVIEW",
+        "workflow_id": "workflow_" + "3" * 32,
+        "workflow_definition_version": "1.16.0",
+        "manifest_artifact_id": "artifact_" + "4" * 32,
+        "manifest_artifact_revision_id": "rev_" + "5" * 32,
+        "manifest_sha256": "sha256:" + "6" * 64,
+    }
+    proof_body = {
+        "schema_version": "item-revision-hwpx-eligibility/1.0",
+        "eligible": True,
+        "item_id": revision["item_id"],
+        "item_revision_id": revision_id,
+        "item_revision_number": 1,
+        "revision_state": "IN_REVIEW",
+        "workflow_id": revision["workflow_id"],
+        "workflow_definition_version": "1.16.0",
+        "manifest_artifact_id": revision["manifest_artifact_id"],
+        "manifest_artifact_revision_id": revision["manifest_artifact_revision_id"],
+        "manifest_sha256": revision["manifest_sha256"],
+    }
+    proof = ItemRevisionHwpxEligibilityV1.model_validate(
+        proof_body | {"eligibility_sha256": content_sha256(proof_body)}
+    )
+
+    class LocalRegistry:
+        local_manifest_reads = 0
+
+        def inspect_revision(self, item_revision_id: str) -> dict[str, Any]:
+            assert item_revision_id == revision_id
+            return revision
+
+        def inspect_revisions(
+            self, item_revision_ids: tuple[str, ...]
+        ) -> tuple[dict[str, Any], ...]:
+            assert item_revision_ids == (revision_id,)
+            return (revision,)
+
+        def inspect_item(self, item_id: str) -> dict[str, Any]:
+            assert item_id == revision["item_id"]
+            return {"current_revision_id": revision_id}
+
+        def require_hwpx_review_eligibility(
+            self, item_revision_id: str
+        ) -> ItemRevisionHwpxEligibilityV1:
+            del item_revision_id
+            self.local_manifest_reads += 1
+            raise AssertionError("API sandbox must not dereference the NAS manifest")
+
+    class CatalogBoundary:
+        requested_revision_id: str | None = None
+
+        def inspect_item_revision_hwpx_eligibility(
+            self, query: InspectItemRevisionHwpxEligibilityQueryV1
+        ) -> ItemRevisionHwpxEligibilityV1:
+            self.requested_revision_id = query.item_revision_id
+            return proof
+
+    local = LocalRegistry()
+    catalog = CatalogBoundary()
+    resolver = CatalogBackedHwpxItemRevisionResolver(local, catalog)  # type: ignore[arg-type]
+    service = object.__new__(HwpxApplicationService)
+    service.registry = resolver
+
+    assert service._eligible_revision(revision_id) == revision
+    assert catalog.requested_revision_id == revision_id
+    assert local.local_manifest_reads == 0
 
 
 def test_item_projection_exposes_pending_and_exact_approval_receipt() -> None:

@@ -59,12 +59,14 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
+    InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
     ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
     ItemRevisionApprovalReceiptV1,
+    ItemRevisionHwpxEligibilityV1,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
     MockExamAssemblyManifestContract,
@@ -1039,6 +1041,17 @@ class CatalogApplicationClient:
             )
         return response.item_approval
 
+    def inspect_item_revision_hwpx_eligibility(
+        self, query: InspectItemRevisionHwpxEligibilityQueryV1
+    ) -> ItemRevisionHwpxEligibilityV1:
+        response = self._request(query)
+        if response.operation != query.operation or response.hwpx_review_eligibility is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog Item HWPX review eligibility response is invalid",
+            )
+        return response.hwpx_review_eligibility
+
     def _assembly_request(
         self,
         command: (
@@ -1129,6 +1142,7 @@ class CatalogApplicationClient:
         | CreateMockExamAssemblyCommand
         | CreatePlannedMockExamAssemblyCommand
         | InspectMockExamAssemblyQuery
+        | InspectItemRevisionHwpxEligibilityQueryV1
         | ApproveItemRevisionCommandV1,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
@@ -1220,6 +1234,7 @@ class CatalogApplicationClient:
         | CreateMockExamAssemblyCommand
         | CreatePlannedMockExamAssemblyCommand
         | InspectMockExamAssemblyQuery
+        | InspectItemRevisionHwpxEligibilityQueryV1
         | ApproveItemRevisionCommandV1,
     ) -> float:
         if isinstance(command, (CreateEvidenceBundleCommand, CreateItemProductionEvidenceCommand)):

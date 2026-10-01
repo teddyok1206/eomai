@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from eom_catalog_contracts import ContentTeamMaterialRequirement
+from eom_catalog_contracts import ContentTeamMaterialRequirement, ItemRevisionHwpxEligibilityV1
 from eom_hwpx_contracts import (
     ContentTeamHandoffSnapshot,
     ContentTeamImageSource,
@@ -95,7 +95,9 @@ class ItemRevisionResolver(Protocol):
 
     def inspect_item(self, item_id: str) -> dict[str, Any]: ...
 
-    def require_hwpx_review_eligibility(self, item_revision_id: str) -> None: ...
+    def require_hwpx_review_eligibility(
+        self, item_revision_id: str
+    ) -> ItemRevisionHwpxEligibilityV1: ...
 
 
 class HwpxRenderer(Protocol):
@@ -505,7 +507,31 @@ class HwpxApplicationService:
             )
         if supported_review_revision:
             try:
-                self.registry.require_hwpx_review_eligibility(revision_id)
+                eligibility = self.registry.require_hwpx_review_eligibility(revision_id)
+                expected = (
+                    str(revision["item_id"]),
+                    revision_id,
+                    int(revision["revision_number"]),
+                    str(revision["revision_state"]),
+                    str(revision["workflow_id"]),
+                    str(revision["workflow_definition_version"]),
+                    str(revision["manifest_artifact_id"]),
+                    str(revision["manifest_artifact_revision_id"]),
+                    str(revision["manifest_sha256"]),
+                )
+                actual = (
+                    eligibility.item_id,
+                    eligibility.item_revision_id,
+                    eligibility.item_revision_number,
+                    eligibility.revision_state,
+                    eligibility.workflow_id,
+                    eligibility.workflow_definition_version,
+                    eligibility.manifest_artifact_id,
+                    eligibility.manifest_artifact_revision_id,
+                    eligibility.manifest_sha256,
+                )
+                if not eligibility.eligible or actual != expected:
+                    raise ValueError("HWPX review eligibility proof differs from the Revision")
             except Exception as exc:
                 raise HwpxManagerError(
                     HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
