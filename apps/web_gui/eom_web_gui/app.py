@@ -32,6 +32,7 @@ from eom_web_gui.contracts import (
     ExplorerQuery,
     HwpxBuildRequest,
     ItemPreview,
+    ItemRevisionApprovalSubmission,
     MockExamAssemblySubmission,
     MockExamHwpxBuildRequest,
     PairedDocumentReviewSubmission,
@@ -921,6 +922,13 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return (await actual.hwpx_build(session, build_id)).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/items/revision-approvals")
+    async def item_revision_approval(
+        value: ItemRevisionApprovalSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.approve_item_revision(session, value)
 
     @app.get(f"{API_PREFIX}/hwpx/builds/{{build_id}}/download")
     async def hwpx_download(

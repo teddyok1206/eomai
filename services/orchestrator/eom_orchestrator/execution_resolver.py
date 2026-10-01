@@ -48,6 +48,8 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV18,
+    ResolvedExecutionPlanV19,
+    ResolvedExecutionPlanV20,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -84,6 +86,8 @@ VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION = "5.0.0"
 PAST_EXAM_VARIATION_RESOLVER_VERSION = "16.0.0"
 NATURAL_PRESENTATION_RESOLVER_VERSION = "17.0.0"
 UNGROUNDED_REVIEW_RESOLVER_VERSION = "18.0.0"
+POST_REGISTRATION_GROUNDED_RESOLVER_VERSION = "19.0.0"
+POST_REGISTRATION_UNGROUNDED_RESOLVER_VERSION = "20.0.0"
 
 
 @dataclass(frozen=True)
@@ -204,7 +208,12 @@ def resolve_knowledge_backed_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV3 | ResolvedExecutionPlanV16 | ResolvedExecutionPlanV17:
+) -> (
+    ResolvedExecutionPlanV3
+    | ResolvedExecutionPlanV16
+    | ResolvedExecutionPlanV17
+    | ResolvedExecutionPlanV19
+):
     """Pin an exact preset and Catalog-produced Evidence Bundle to one fresh workflow."""
 
     if not steps:
@@ -215,6 +224,8 @@ def resolve_knowledge_backed_execution_plan(
         )
     )
     if existing is not None:
+        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
+            return ResolvedExecutionPlanV19.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/17.0":
             return ResolvedExecutionPlanV17.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/16.0":
@@ -235,21 +246,27 @@ def resolve_knowledge_backed_execution_plan(
         ) from exc
     validate_educational_retrieval_policy(preset, requirement)
     variation_successor = isinstance(requirement, EducationalRetrievalRequirementV2)
-    natural_presentation_successor = dependencies.workflow_definition_version == "1.15.0"
+    post_registration_successor = dependencies.workflow_definition_version == "1.16.0"
+    natural_presentation_successor = dependencies.workflow_definition_version in {
+        "1.15.0",
+        "1.16.0",
+    }
     if (dependencies.workflow_definition_version == "1.14.0") != (
         variation_successor and not natural_presentation_successor
     ) or (
-        variation_successor and dependencies.workflow_definition_version not in {"1.14.0", "1.15.0"}
+        variation_successor
+        and dependencies.workflow_definition_version not in {"1.14.0", "1.15.0", "1.16.0"}
     ):
         raise ControlPlaneError(
             "CONTROL_VARIATION_PROTOCOL_MISMATCH",
-            "past-exam variation requires workflow definition 1.14/1.15 "
+            "past-exam variation requires workflow definition 1.14-1.16 "
             "and retrieval requirement V2",
         )
     verification_review_successor = dependencies.workflow_definition_version in {
         "1.13.0",
         "1.14.0",
         "1.15.0",
+        "1.16.0",
     }
     verification_role_successor = (
         dependencies.workflow_role_schema_version == "workflow-role/1.24.0"
@@ -345,18 +362,22 @@ def resolve_knowledge_backed_execution_plan(
     actual_resolved_at = resolved_at or datetime.now(UTC)
     document: dict[str, object] = {
         "schema_version": (
-            "resolved-execution-plan/17.0"
-            if natural_presentation_successor
+            "resolved-execution-plan/19.0"
+            if post_registration_successor
             else (
-                "resolved-execution-plan/16.0"
-                if variation_successor
+                "resolved-execution-plan/17.0"
+                if natural_presentation_successor
                 else (
-                    "resolved-execution-plan/12.0"
-                    if verification_inputs
+                    "resolved-execution-plan/16.0"
+                    if variation_successor
                     else (
-                        "resolved-execution-plan/11.0"
-                        if graph_review_successor
-                        else "resolved-execution-plan/3.0"
+                        "resolved-execution-plan/12.0"
+                        if verification_inputs
+                        else (
+                            "resolved-execution-plan/11.0"
+                            if graph_review_successor
+                            else "resolved-execution-plan/3.0"
+                        )
                     )
                 )
             )
@@ -388,18 +409,22 @@ def resolve_knowledge_backed_execution_plan(
         "evidence_context_artifact": evidence.context_artifact.model_dump(mode="json"),
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
         "resolver_version": (
-            NATURAL_PRESENTATION_RESOLVER_VERSION
-            if natural_presentation_successor
+            POST_REGISTRATION_GROUNDED_RESOLVER_VERSION
+            if post_registration_successor
             else (
-                PAST_EXAM_VARIATION_RESOLVER_VERSION
-                if variation_successor
+                NATURAL_PRESENTATION_RESOLVER_VERSION
+                if natural_presentation_successor
                 else (
-                    VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION
-                    if verification_inputs
+                    PAST_EXAM_VARIATION_RESOLVER_VERSION
+                    if variation_successor
                     else (
-                        GRAPH_REVIEW_RESOLVER_VERSION
-                        if graph_review_successor
-                        else KNOWLEDGE_BACKED_RESOLVER_VERSION
+                        VERIFICATION_PLANNED_REVIEW_RESOLVER_VERSION
+                        if verification_inputs
+                        else (
+                            GRAPH_REVIEW_RESOLVER_VERSION
+                            if graph_review_successor
+                            else KNOWLEDGE_BACKED_RESOLVER_VERSION
+                        )
                     )
                 )
             )
@@ -414,8 +439,12 @@ def resolve_knowledge_backed_execution_plan(
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
+        | ResolvedExecutionPlanV19
     )
-    if natural_presentation_successor:
+    if post_registration_successor:
+        validate_control_contract("resolved-execution-plan-v19", document)
+        model = ResolvedExecutionPlanV19.model_validate(document)
+    elif natural_presentation_successor:
         validate_control_contract("resolved-execution-plan-v17", document)
         model = ResolvedExecutionPlanV17.model_validate(document)
     elif variation_successor:
@@ -432,6 +461,8 @@ def resolve_knowledge_backed_execution_plan(
         document=model.model_dump(mode="json"),
         dependencies=dependencies,
     )
+    if post_registration_successor:
+        return ResolvedExecutionPlanV19.model_validate(record.canonical_document)
     if natural_presentation_successor:
         return ResolvedExecutionPlanV17.model_validate(record.canonical_document)
     if variation_successor:
@@ -450,7 +481,7 @@ def resolve_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlan | ResolvedExecutionPlanV18:
+) -> ResolvedExecutionPlan | ResolvedExecutionPlanV18 | ResolvedExecutionPlanV20:
     """Resolve the currently published preset once for one exact workflow.
 
     Existing workflow plans are returned byte-for-byte. No current pointer is consulted during a
@@ -465,6 +496,8 @@ def resolve_execution_plan(
         )
     )
     if existing is not None:
+        if existing.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
+            return ResolvedExecutionPlanV20.model_validate(existing.canonical_document)
         if existing.canonical_document.get("schema_version") == "resolved-execution-plan/18.0":
             return ResolvedExecutionPlanV18.model_validate(existing.canonical_document)
         return ResolvedExecutionPlan.model_validate(existing.canonical_document)
@@ -488,13 +521,14 @@ def resolve_execution_plan(
             "CONTROL_PRESET_POLICY_INVALID", "execution preset has duplicate role policies"
         )
 
-    verification_successor = dependencies.workflow_definition_version == "1.15.0"
+    post_registration_successor = dependencies.workflow_definition_version == "1.16.0"
+    verification_successor = dependencies.workflow_definition_version in {"1.15.0", "1.16.0"}
     if verification_successor != (
         dependencies.workflow_role_schema_version == "workflow-role/1.24.0"
     ):
         raise ControlPlaneError(
             "CONTROL_WORKFLOW_PROTOCOL_INVALID",
-            "ungrounded verification requires workflow 1.15 and role protocol 1.24",
+            "ungrounded verification requires workflow 1.15/1.16 and role protocol 1.24",
         )
 
     resolved_steps: list[ResolvedStepExecution | ResolvedStepExecutionV12] = []
@@ -547,9 +581,13 @@ def resolve_execution_plan(
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document = {
         "schema_version": (
-            "resolved-execution-plan/18.0"
-            if verification_successor
-            else "resolved-execution-plan/1.0"
+            "resolved-execution-plan/20.0"
+            if post_registration_successor
+            else (
+                "resolved-execution-plan/18.0"
+                if verification_successor
+                else "resolved-execution-plan/1.0"
+            )
         ),
         "plan_id": new_execution_plan_id(),
         "workflow_id": dependencies.workflow_id,
@@ -566,20 +604,32 @@ def resolve_execution_plan(
         "evidence_bundle_revision_id": dependencies.evidence_bundle_revision_id,
         "steps": [step.model_dump(mode="json") for step in resolved_steps],
         "resolver_version": (
-            UNGROUNDED_REVIEW_RESOLVER_VERSION if verification_successor else RESOLVER_VERSION
+            POST_REGISTRATION_UNGROUNDED_RESOLVER_VERSION
+            if post_registration_successor
+            else (
+                UNGROUNDED_REVIEW_RESOLVER_VERSION if verification_successor else RESOLVER_VERSION
+            )
         ),
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    model_type = ResolvedExecutionPlanV18 if verification_successor else ResolvedExecutionPlan
+    model_type = (
+        ResolvedExecutionPlanV20
+        if post_registration_successor
+        else ResolvedExecutionPlanV18
+        if verification_successor
+        else ResolvedExecutionPlan
+    )
     if verification_successor:
         document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-        normalized = ResolvedExecutionPlanV18.model_validate(document).model_dump(mode="json")
+        normalized = model_type.model_validate(document).model_dump(mode="json")
     else:
         normalized = ResolvedExecutionPlan.model_validate(document).model_dump(mode="json")
         normalized["plan_sha256"] = compute_control_document_hash(normalized, "plan_sha256")
     model = model_type.model_validate(normalized)
-    if verification_successor:
+    if post_registration_successor:
+        validate_control_contract("resolved-execution-plan-v20", normalized)
+    elif verification_successor:
         validate_control_contract("resolved-execution-plan-v18", normalized)
     record = record_resolved_execution_plan(
         session,

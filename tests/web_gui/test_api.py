@@ -617,7 +617,7 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
         assert gateway.approval_calls == 1
         preview = client.get(f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/preview")
         assert preview.status_code == 200
-        assert preview.json()["schema_version"] == "3.0"
+        assert preview.json()["schema_version"] == "4.0"
         assert preview.json()["preview_state"] == "AVAILABLE"
         assert [block["type"] for block in preview.json()["blocks"]] == [
             "paragraph",
@@ -661,6 +661,14 @@ def test_recent_items_returns_current_revision_pointers() -> None:
                 "item_id": ITEM_ID,
                 "item_revision_id": REVISION_ID,
                 "lifecycle_state": "ACTIVE",
+                "approval": {
+                    "status": "APPROVED",
+                    "human_review_required": False,
+                    "approved_at": None,
+                    "approved_by": None,
+                    "approval_receipt_sha256": None,
+                    "hwpx_build_id": None,
+                },
                 "human_reference_code": "EOM-SAMPLE-001",
                 "created_at": "2026-08-21T07:00:00Z",
             }
@@ -742,6 +750,26 @@ def test_hwpx_ready_build_status_and_download_use_application_api_boundary() -> 
         assert download.status_code == 200
         assert download.content == b"TEST_ONLY_HWPX"
         assert gateway.hwpx_build_calls == 1
+
+
+def test_validated_hwpx_can_approve_registered_revision() -> None:
+    gateway = FakeGateway(hwpx_state="READY")
+    client, _ = make_client(gateway=gateway)
+    with client:
+        session = login(client)
+        response = client.post(
+            "/studio/api/v1/items/revision-approvals",
+            json={
+                "item_revision_id": "itemrev_" + "1" * 32,
+                "hwpx_build_id": "hwpxbuild_" + "a" * 32,
+                "reason": "검증된 HWPX를 확인했습니다.",
+                "idempotency_key": "studio:item-approval:test",
+            },
+            headers={"X-CSRF-Token": session["csrf_token"]},
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "COMPLETED"
+        assert gateway.item_approval_calls == 1
 
 
 def test_mock_exam_hwpx_build_status_and_download_use_application_api_boundary() -> None:

@@ -2384,17 +2384,33 @@ PreviewBlockV3 = Annotated[
 ]
 
 
+class ItemPreviewApproval(WebModel):
+    status: Literal["PENDING", "APPROVED"] = "APPROVED"
+    human_review_required: bool = False
+    approved_at: UtcDatetime | None = None
+    approved_by: str | None = None
+    approval_receipt_sha256: str | None = Field(
+        default=None,
+        pattern=r"^sha256:[0-9a-f]{64}$",
+    )
+    hwpx_build_id: str | None = Field(
+        default=None,
+        pattern=r"^hwpxbuild_[0-9a-f]{32}$",
+    )
+
+
 class ItemPreview(WebModel):
     """Current presentation contract for every supported immutable Item content revision."""
 
-    schema_version: Literal["3.0"] = "3.0"
+    schema_version: Literal["4.0"] = "4.0"
     preview_state: Literal["AVAILABLE", "UNSUPPORTED"]
     unavailable_reason: Literal["UNSUPPORTED_CONTENT_SCHEMA"] | None = None
     workflow_id: str = Field(pattern=r"^workflow_[a-z0-9]{8,55}$")
     item_id: str = Field(pattern=r"^item_[a-z0-9]{8,55}$")
     item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
     revision_etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
-    revision_state: Literal["APPROVED"]
+    revision_state: Literal["IN_REVIEW", "APPROVED"]
+    approval: ItemPreviewApproval = Field(default_factory=ItemPreviewApproval)
     content_pack_release_id: str = Field(pattern=r"^packrel_[a-z0-9]{8,55}$")
     content_schema_ref: str = Field(min_length=1, max_length=256)
     content_profile: Literal["BLOCKS_V1", "CONTENT_TEAM_V2", "CONTENT_TEAM_V3"] | None = None
@@ -2418,6 +2434,12 @@ class ItemPreview(WebModel):
 
     @model_validator(mode="after")
     def exact_preview_variant(self) -> ItemPreview:
+        if self.revision_state == "IN_REVIEW" and (
+            self.approval.status != "PENDING" or self.approval.human_review_required is not True
+        ):
+            raise ValueError("IN_REVIEW preview requires pending human approval")
+        if self.revision_state == "APPROVED" and self.approval.status != "APPROVED":
+            raise ValueError("APPROVED preview requires approved status")
         content_values = (
             self.locale,
             self.title,
@@ -2488,6 +2510,7 @@ class RecentItemOption(WebModel):
     item_id: str = Field(pattern=r"^item_[a-z0-9]{8,55}$")
     item_revision_id: str = Field(pattern=r"^itemrev_[a-z0-9]{8,55}$")
     lifecycle_state: Literal["ACTIVE"] = "ACTIVE"
+    approval: ItemPreviewApproval = Field(default_factory=ItemPreviewApproval)
     human_reference_code: str | None = Field(default=None, max_length=128)
     created_at: UtcDatetime
 
@@ -2575,6 +2598,17 @@ class HwpxBuildRequest(WebModel):
     require_native_equations: bool = False
     require_native_tables: bool = False
     item_number: int = Field(default=1, ge=1, le=999)
+
+
+class ItemRevisionApprovalSubmission(WebModel):
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-f0-9]{32}$")
+    hwpx_build_id: str = Field(pattern=r"^hwpxbuild_[a-f0-9]{32}$")
+    reason: str = Field(min_length=1, max_length=2000)
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
 
 
 class HwpxBuildView(WebModel):

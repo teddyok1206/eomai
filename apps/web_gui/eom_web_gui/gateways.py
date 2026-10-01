@@ -45,6 +45,7 @@ from eom_web_gui.contracts import (
     HwpxCapability,
     ItemBankEntry,
     ItemPreview,
+    ItemRevisionApprovalSubmission,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     MockExamAssemblySubmission,
@@ -81,6 +82,46 @@ def _document_review_view(value: object) -> DocumentReviewView:
     if "documents" in value:
         return PairedDocumentReviewView.model_validate(value)
     return PdfDocumentReviewView.model_validate(value)
+
+
+def _item_preview_approval(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or value.get("status") not in {"PENDING", "APPROVED"}:
+        return None
+    return {
+        "status": value["status"],
+        "human_review_required": value.get("human_review_required") is True,
+        "approved_at": value.get("approved_at"),
+        "approved_by": value.get("approved_by"),
+        "approval_receipt_sha256": value.get("approval_receipt_sha256"),
+        "hwpx_build_id": value.get("hwpx_build_id"),
+    }
+
+
+def _reviewable_item_revision_approval(revision: dict[str, Any]) -> dict[str, Any] | None:
+    state = revision.get("revision_state")
+    approval = revision.get("approval")
+    if state == "APPROVED":
+        if approval is None:
+            return {
+                "status": "APPROVED",
+                "human_review_required": False,
+                "approved_at": None,
+                "approved_by": None,
+                "approval_receipt_sha256": None,
+                "hwpx_build_id": None,
+            }
+        projected = _item_preview_approval(approval)
+        if projected is not None and projected["status"] == "APPROVED":
+            return projected
+        return None
+    if (
+        state == "IN_REVIEW"
+        and isinstance(approval, dict)
+        and approval.get("status") == "PENDING"
+        and approval.get("human_review_required") is True
+    ):
+        return _item_preview_approval(approval)
+    return None
 
 
 def _verified_curriculum_graph_corpus_key(capability: dict[str, Any]) -> str | None:
@@ -516,6 +557,12 @@ class ApplicationGateway(Protocol):
     ) -> dict[str, Any]: ...
 
     async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView: ...
+
+    async def approve_item_revision(
+        self,
+        session: WebSession,
+        value: ItemRevisionApprovalSubmission,
+    ) -> dict[str, Any]: ...
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload: ...
 
@@ -1919,6 +1966,7 @@ class HttpApplicationGateway:
         )
         item = self._data(item_response)
         revision = self._data(revision_response)
+        approval = _reviewable_item_revision_approval(revision)
         revision_etag = revision_response.headers.get("etag")
         workflow_id = revision.get("workflow_id")
         content_pack_release_id = revision.get("content_pack_release_id")
@@ -1927,7 +1975,7 @@ class HttpApplicationGateway:
             or revision.get("item_revision_id") != item_revision_id
             or revision.get("item_id") != item_id
             or item.get("current_revision_id") != item_revision_id
-            or revision.get("revision_state") != "APPROVED"
+            or approval is None
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
         if (
@@ -1952,7 +2000,8 @@ class HttpApplicationGateway:
             "item_id": item_id,
             "item_revision_id": item_revision_id,
             "revision_etag": revision_etag,
-            "revision_state": "APPROVED",
+            "revision_state": revision["revision_state"],
+            "approval": approval,
             "content_pack_release_id": content_pack_release_id,
             "content_schema_ref": capability.schema_ref,
             "template_delivery_available": capability.template_delivery_available,
@@ -2037,12 +2086,24 @@ class HttpApplicationGateway:
                         "item_id": value["item_id"],
                         "item_revision_id": value["current_revision_id"],
                         "lifecycle_state": value["lifecycle_state"],
+                        "approval": _item_preview_approval(value.get("approval"))
+                        or {
+                            "status": "APPROVED",
+                            "human_review_required": False,
+                        },
                         "human_reference_code": value.get("human_reference_code"),
                         "created_at": value["created_at"],
                     }
                 )
                 for value in values
-                if isinstance(value, dict) and value.get("current_revision_id") is not None
+                if (
+                    isinstance(value, dict)
+                    and value.get("current_revision_id") is not None
+                    and (
+                        not isinstance(value.get("approval"), dict)
+                        or value["approval"].get("status") in {"PENDING", "APPROVED"}
+                    )
+                )
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
@@ -2360,10 +2421,11 @@ class HttpApplicationGateway:
             f"/api/v1/item-revisions/{item_revision_id}",
         )
         revision = self._data(revision_response)
+        approval = _reviewable_item_revision_approval(revision)
         if (
             revision.get("item_revision_id") != item_revision_id
             or revision.get("item_id") != item_id
-            or revision.get("revision_state") != "APPROVED"
+            or approval is None
         ):
             raise GatewayError(status=409, code="ITEM_REVISION_POINTER_MISMATCH")
         response = await self._authorized(
@@ -2499,6 +2561,45 @@ class HttpApplicationGateway:
         _require_id(build_id, "hwpxbuild_")
         response = await self._authorized(session, "GET", f"/api/v1/hwpx-builds/{build_id}")
         return HwpxBuildView.model_validate(self._data(response))
+
+    async def approve_item_revision(
+        self,
+        session: WebSession,
+        value: ItemRevisionApprovalSubmission,
+    ) -> dict[str, Any]:
+        _require_id(value.item_revision_id, "itemrev_")
+        _require_id(value.hwpx_build_id, "hwpxbuild_")
+        revision_response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-revisions/{value.item_revision_id}",
+        )
+        revision = self._data(revision_response)
+        resource_version = revision.get("resource_version")
+        approval = revision.get("approval")
+        if (
+            not isinstance(resource_version, int)
+            or resource_version < 1
+            or not isinstance(approval, dict)
+            or approval.get("status") != "PENDING"
+            or approval.get("human_review_required") is not True
+        ):
+            raise GatewayError(status=409, code="ITEM_APPROVAL_INELIGIBLE")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-revisions/{value.item_revision_id}/approvals",
+            json={
+                "schema_version": "item-revision-approval-request/1.0",
+                "hwpx_build_id": value.hwpx_build_id,
+                "reason": value.reason,
+            },
+            headers={
+                "Idempotency-Key": value.idempotency_key,
+                "If-Match": f'"v{resource_version}"',
+            },
+        )
+        return sanitize_mapping(self._data(response))
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
         _require_id(build_id, "hwpxbuild_")

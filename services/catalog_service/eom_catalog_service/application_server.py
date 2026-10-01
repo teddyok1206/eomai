@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
     ApplyDocumentReviewHwpxCorrections,
+    ApproveItemRevisionCommandV1,
     AssessmentPageListQuery,
     AssessmentPageMediaQuery,
     CatalogApplicationErrorCode,
@@ -366,6 +367,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 "CREATE_MOCK_EXAM_ASSEMBLY",
                 "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
                 "INSPECT_MOCK_EXAM_ASSEMBLY",
+                "APPROVE_ITEM_REVISION",
             }:
                 operation = raw_operation
             if raw_operation == "IMPORT_REVIEWED_ITEM_CONTENT":
@@ -524,6 +526,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     assembly=self.server.mock_exam_assemblies.inspect_revision(
                         request.assessment_assembly_revision_id
                     ),
+                )
+            elif isinstance(request, ApproveItemRevisionCommandV1):
+                response = CatalogApplicationResponse(
+                    status="OK",
+                    operation=request.operation,
+                    item_approval=self.server.registry.approve_revision(request),
                 )
             else:  # pragma: no cover - discriminated contract makes this unreachable
                 raise TypeError("unsupported catalog application request")
@@ -1491,6 +1499,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                         "CREATE_MOCK_EXAM_ASSEMBLY",
                         "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
                         "INSPECT_MOCK_EXAM_ASSEMBLY",
+                        "APPROVE_ITEM_REVISION",
                     ],
                     operation,
                 ),

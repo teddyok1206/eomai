@@ -22,6 +22,7 @@ from eom_web_gui.contracts import (
     ExplorerEntity,
     ExplorerQuery,
     HwpxBuildRequest,
+    ItemRevisionApprovalSubmission,
     MockExamHwpxBuildRequest,
     PdfDocumentReviewSubmission,
     PlannedMockExamAssemblySubmission,
@@ -29,6 +30,7 @@ from eom_web_gui.contracts import (
 from eom_web_gui.gateways import (
     GatewayError,
     HttpApplicationGateway,
+    _reviewable_item_revision_approval,
     _verified_mock_exam_plan,
 )
 from eom_web_gui.sessions import ApiTokens, WebSession
@@ -126,6 +128,27 @@ def _hwpx_build_data(build_id: str) -> dict[str, object]:
         "completed_at": (NOW + timedelta(seconds=2)).isoformat(),
         "resource_version": 3,
     }
+
+
+def test_post_registration_revision_is_readable_only_with_explicit_pending_approval() -> None:
+    pending = {
+        "revision_state": "IN_REVIEW",
+        "approval": {
+            "status": "PENDING",
+            "human_review_required": True,
+            "approved_at": None,
+            "approved_by": None,
+            "approval_receipt_sha256": None,
+            "hwpx_build_id": None,
+        },
+    }
+    assert _reviewable_item_revision_approval(pending) == pending["approval"]
+    assert (
+        _reviewable_item_revision_approval(
+            pending | {"approval": {"status": "PENDING", "human_review_required": False}}
+        )
+        is None
+    )
 
 
 def _pdf_review_data(*, state: str = "REVIEWING") -> dict[str, object]:
@@ -1037,6 +1060,75 @@ async def test_gateway_requests_revision_derived_hwpx_profile_without_shape_requ
 
 
 @pytest.mark.anyio
+async def test_gateway_approves_exact_pending_revision_with_resource_version() -> None:
+    revision_id = "itemrev_" + "3" * 32
+    build_id = "hwpxbuild_" + "4" * 32
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            assert request.method == "GET"
+            assert request.url.path == f"/api/v1/item-revisions/{revision_id}"
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "item_revision_id": revision_id,
+                        "resource_version": 7,
+                        "approval": {
+                            "schema_version": "item-approval-view/1.0",
+                            "status": "PENDING",
+                            "human_review_required": True,
+                        },
+                    }
+                ),
+            )
+        assert request.method == "POST"
+        assert request.url.path == f"/api/v1/item-revisions/{revision_id}/approvals"
+        assert request.headers["if-match"] == '"v7"'
+        assert request.headers["idempotency-key"] == "studio:item-approval:test"
+        assert json.loads(request.read()) == {
+            "schema_version": "item-revision-approval-request/1.0",
+            "hwpx_build_id": build_id,
+            "reason": "검증된 HWPX를 확인했습니다.",
+        }
+        return httpx.Response(
+            200,
+            json=_single(
+                {
+                    "command_id": "itemapproval_" + "5" * 32,
+                    "resource_type": "item_revision",
+                    "resource_id": revision_id,
+                    "status": "COMPLETED",
+                    "resource_version": 8,
+                }
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    result = await gateway.approve_item_revision(
+        _session(),
+        ItemRevisionApprovalSubmission(
+            item_revision_id=revision_id,
+            hwpx_build_id=build_id,
+            reason="검증된 HWPX를 확인했습니다.",
+            idempotency_key="studio:item-approval:test",
+        ),
+    )
+    assert result["resource_version"] == 8
+    assert calls == 2
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_uses_pinned_assembly_for_whole_exam_hwpx() -> None:
     assembly_revision_id = "assemblyrev_" + "1" * 32
     build_id = "hwpxbuild_" + "2" * 32
@@ -1559,6 +1651,15 @@ async def test_gateway_projects_recent_items_with_current_revision_in_one_query(
                         "human_reference_code": "EOM-SAMPLE-001",
                         "lifecycle_state": "ACTIVE",
                         "current_revision_id": revision_id,
+                        "approval": {
+                            "schema_version": "item-approval-view/1.0",
+                            "status": "PENDING",
+                            "human_review_required": True,
+                            "approved_at": None,
+                            "approved_by": None,
+                            "approval_receipt_sha256": None,
+                            "hwpx_build_id": None,
+                        },
                         "resource_version": 1,
                         "created_at": NOW.isoformat(),
                     },
@@ -1586,6 +1687,7 @@ async def test_gateway_projects_recent_items_with_current_revision_in_one_query(
     assert len(result) == 1
     assert result[0].item_id == item_id
     assert result[0].item_revision_id == revision_id
+    assert result[0].approval.status == "PENDING"
     await gateway.close()
 
 
@@ -2309,7 +2411,7 @@ async def test_content_team_table_only_item_is_available_without_image_component
     )
     preview = await gateway.item_preview(_session(), item_id, revision_id)
 
-    assert preview.schema_version == "3.0"
+    assert preview.schema_version == "4.0"
     assert preview.preview_state == "AVAILABLE"
     assert preview.content_profile == "CONTENT_TEAM_V3"
     assert preview.item_number == 7

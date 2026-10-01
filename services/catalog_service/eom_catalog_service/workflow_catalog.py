@@ -52,6 +52,7 @@ from eom_image_contracts import (
 )
 from eom_item_registry import (
     ComponentPointer,
+    ItemRevisionApprovalMode,
     PastExamVariationSourcePointer,
     RegistrationRequest,
 )
@@ -65,6 +66,7 @@ from eom_workflow import (
     ItemBriefV2,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV19,
     ResolvedStepExecutionV12,
     WorkflowRequest,
     WorkflowReviewEscalationDirective,
@@ -215,6 +217,7 @@ def _local_image_prompt_contract(
         "1.20.10",
         "1.20.11",
         "1.20.12",
+        "1.20.13",
     }:
         return "ASSESSMENT_REFERENCE_COMPOSITION_V3"
     if isinstance(content_pack, dict) and content_pack.get("version") in {"1.20.1", "1.20.2"}:
@@ -253,6 +256,7 @@ def _uses_v1_reference_conditioning(
             "1.20.10",
             "1.20.11",
             "1.20.12",
+            "1.20.13",
         }
     )
 
@@ -597,10 +601,11 @@ class WorkflowCatalogService:
                     "1.20.10",
                     "1.20.11",
                     "1.20.12",
+                    "1.20.13",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.12",
+                        "assessment-line-art binding requires Content Pack 1.20.5-1.20.13",
                     )
                 if isinstance(binding, LocalImageProviderBindingV6) and release.version not in {
                     "1.20.5",
@@ -611,10 +616,11 @@ class WorkflowCatalogService:
                     "1.20.10",
                     "1.20.11",
                     "1.20.12",
+                    "1.20.13",
                 }:
                     raise ContentPackError(
                         ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
-                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.12",
+                        "adaptive-reference line-art binding requires Content Pack 1.20.5-1.20.13",
                     )
                 if isinstance(binding, LocalImageProviderBindingV2) and release.version != "1.20.0":
                     raise ContentPackError(
@@ -1853,6 +1859,11 @@ class WorkflowCatalogService:
                     request=request,
                     evidence_receipts=evidence_receipts,
                 ),
+                approval_mode=(
+                    ItemRevisionApprovalMode.POST_REGISTRATION_HUMAN_REVIEW
+                    if workflow.definition_version == "1.16.0"
+                    else ItemRevisionApprovalMode.IMMEDIATE
+                ),
                 created_by=workflow.created_actor_id,
             )
         )
@@ -1883,7 +1894,9 @@ class WorkflowCatalogService:
             if record is None:
                 raise ValueError("past-exam variation execution plan is missing")
             plan = (
-                ResolvedExecutionPlanV17.model_validate(record.canonical_document)
+                ResolvedExecutionPlanV19.model_validate(record.canonical_document)
+                if record.canonical_document.get("schema_version") == "resolved-execution-plan/19.0"
+                else ResolvedExecutionPlanV17.model_validate(record.canonical_document)
                 if record.canonical_document.get("schema_version") == "resolved-execution-plan/17.0"
                 else ResolvedExecutionPlanV16.model_validate(record.canonical_document)
             )
@@ -2051,6 +2064,7 @@ class WorkflowCatalogService:
             "1.20.10",
             "1.20.11",
             "1.20.12",
+            "1.20.13",
         }
         if expects_content_team:
             if not is_content_team:
@@ -2058,7 +2072,7 @@ class WorkflowCatalogService:
                     ContentPackErrorCode.CONTENT_PACK_COMPATIBILITY_FAILED,
                     "content-team pack requires a typed content-team item brief",
                 )
-            expects_material_v5 = release_version == "1.20.12"
+            expects_material_v5 = release_version in {"1.20.12", "1.20.13"}
             expects_material_v4 = release_version in {
                 "1.16.0",
                 "1.16.1",
@@ -2102,6 +2116,7 @@ class WorkflowCatalogService:
                 "1.20.10",
                 "1.20.11",
                 "1.20.12",
+                "1.20.13",
             }:
                 assert isinstance(request.item_brief, ContentTeamItemBriefV4)
                 expected_image_mode = request.item_brief.material_requirement.image_mode

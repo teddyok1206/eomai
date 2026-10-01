@@ -873,6 +873,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:9c6be99f5331d72fa43d3112f37bda45c0337829d44e8f91a05e145030a2c399",
         ),
+        "item-revision-manifest-v2": CatalogSchemaResource(
+            "schemas/item-registry/item-revision-manifest-v2.schema.json",
+            "resources/item-registry/item-revision-manifest-v2.schema.json",
+            "2.0",
+            "sha256:b37d4683eced80a8bcb0eef8c669c991fdb556882dbf120a8c0fdab278b86c3e",
+        ),
+        "item-revision-approval-receipt": CatalogSchemaResource(
+            "schemas/item-registry/item-revision-approval-receipt-v1.schema.json",
+            "resources/item-registry/item-revision-approval-receipt-v1.schema.json",
+            "1.0",
+            "sha256:f388cca728cf7df1b6d0b74f258a49870b99c7e6fb45ef840ed015dbd652ba0c",
+        ),
         "assessment-item-content": CatalogSchemaResource(
             "schemas/item-registry/assessment-item-content-v1.schema.json",
             "resources/item-registry/assessment-item-content-v1.schema.json",
@@ -1029,6 +1041,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "17.0",
             "sha256:f7876161668b985d4929a231eec8337a666a1fd9816dba903139ba45bd18306a",
         ),
+        "catalog-application-request-v18": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-request-v18.schema.json",
+            "resources/catalog-application/catalog-application-request-v18.schema.json",
+            "18.0",
+            "sha256:a42dc7754170545ae4f7d34d950204ce0ecb1262bc72dab52017cb17de312554",
+        ),
         "catalog-application-response-v7": CatalogSchemaResource(
             "schemas/catalog-application/catalog-application-response-v7.schema.json",
             "resources/catalog-application/catalog-application-response-v7.schema.json",
@@ -1088,6 +1106,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-application-response-v16.schema.json",
             "16.0",
             "sha256:3749d78f9b1f0804cc8454ed6e1aac628fbf5eaceb49f865b1690f9b1c587b41",
+        ),
+        "catalog-application-response-v17": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-application-response-v17.schema.json",
+            "resources/catalog-application/catalog-application-response-v17.schema.json",
+            "17.0",
+            "sha256:bb60cc10fecdaca25cadd91b9c878fc3f1cf07a043c5f20d01c9a0a41c1811ac",
         ),
         "catalog-item-media-request": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-request-v1.schema.json",

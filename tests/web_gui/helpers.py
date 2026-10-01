@@ -32,6 +32,7 @@ from eom_web_gui.contracts import (
     ItemBankCurriculumUnit,
     ItemBankEntry,
     ItemPreview,
+    ItemRevisionApprovalSubmission,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     MockExamHwpxBuildRequest,
@@ -217,6 +218,7 @@ class FakeGateway:
         self.hwpx_state = hwpx_state
         self.graph_grounding_available = graph_grounding_available
         self.hwpx_build_calls = 0
+        self.item_approval_calls = 0
         self.mock_exam_hwpx_build_calls = 0
         self.planned_mock_exam_calls = 0
         self.structured_import_calls = 0
@@ -343,7 +345,7 @@ class FakeGateway:
     ) -> dict[str, Any]:
         del session, idempotency_key
         assert payload["request_name"] == "GENERATED_KNOWLEDGE_ITEM_REQUEST"
-        assert payload["definition_version"] == "1.15.0"
+        assert payload["definition_version"] == "1.16.0"
         brief = payload["item_brief"]
         assert isinstance(brief, dict)
         assert brief["schema_version"] == "5.0"
@@ -900,6 +902,23 @@ class FakeGateway:
             completed_at=NOW + timedelta(seconds=2),
             resource_version=3,
         )
+
+    async def approve_item_revision(
+        self,
+        session: WebSession,
+        value: ItemRevisionApprovalSubmission,
+    ) -> dict[str, Any]:
+        del session
+        assert value.item_revision_id == "itemrev_" + "1" * 32
+        assert value.hwpx_build_id == "hwpxbuild_" + "a" * 32
+        self.item_approval_calls += 1
+        return {
+            "command_id": "itemapproval_" + "b" * 32,
+            "resource_type": "item_revision",
+            "resource_id": value.item_revision_id,
+            "status": "COMPLETED",
+            "resource_version": 2,
+        }
 
     async def hwpx_download(self, session: WebSession, build_id: str) -> HwpxDownload:
         del session

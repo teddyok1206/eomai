@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -9,6 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class RegistryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ItemRevisionApprovalMode(StrEnum):
+    """Registration-time approval policy for one immutable Item Revision."""
+
+    IMMEDIATE = "IMMEDIATE"
+    POST_REGISTRATION_HUMAN_REVIEW = "POST_REGISTRATION_HUMAN_REVIEW"
 
 
 class ComponentPointer(RegistryModel):
@@ -78,10 +86,21 @@ class RegistrationRequest(RegistryModel):
     metadata: dict[str, Any]
     components: tuple[ComponentPointer, ...] = Field(min_length=1, max_length=100)
     past_exam_variation_source: PastExamVariationSourcePointer | None = None
+    approval_mode: ItemRevisionApprovalMode = ItemRevisionApprovalMode.IMMEDIATE
     created_by: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
     @model_validator(mode="after")
     def variation_is_a_new_item(self) -> RegistrationRequest:
         if self.past_exam_variation_source is not None and self.mode != "CREATE_ITEM":
             raise ValueError("past-exam variation must create a new logical Item")
+        if self.approval_mode == ItemRevisionApprovalMode.POST_REGISTRATION_HUMAN_REVIEW and (
+            (self.workflow_definition_key, self.workflow_definition_version)
+            != ("generic-item-development", "1.16.0")
+            or self.mode != "CREATE_ITEM"
+            or self.item_id is not None
+            or self.base_revision_id is not None
+        ):
+            raise ValueError(
+                "post-registration approval requires a new Item from workflow definition 1.16"
+            )
         return self

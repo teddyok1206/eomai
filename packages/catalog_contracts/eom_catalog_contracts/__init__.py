@@ -257,6 +257,12 @@ from eom_catalog_contracts.guidance_document import (
     GuidanceRule,
     parse_guidance_markdown,
 )
+from eom_catalog_contracts.item_approval import (
+    ApproveItemRevisionCommandV1,
+    ItemRevisionApprovalPolicyV1,
+    ItemRevisionApprovalReceiptV1,
+    ItemRevisionManifestV2,
+)
 from eom_catalog_contracts.item_origin import (
     AssessmentOccurrencePointer,
     AssessmentOccurrenceRevision,
@@ -872,6 +878,7 @@ __all__ = [
     "AppliedLegacyItemMediaCompatibility",
     "ApplyDocumentReviewHwpxCorrections",
     "ApproveItemRevision",
+    "ApproveItemRevisionCommandV1",
     "ApprovedItemCurriculumAlignmentBinding",
     "ApprovedItemGraphPublicationResult",
     "ApprovedItemKnowledgeAnalysisSelection",
@@ -1089,6 +1096,9 @@ __all__ = [
     "ItemOriginProfile",
     "ItemOriginProvenance",
     "ItemPlacementV1",
+    "ItemRevisionApprovalPolicyV1",
+    "ItemRevisionApprovalReceiptV1",
+    "ItemRevisionManifestV2",
     "ItemScore",
     "ItemSolution",
     "KnowledgeAnalysisAcceptedResultArtifactMember",

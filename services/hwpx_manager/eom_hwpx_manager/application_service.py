@@ -490,13 +490,16 @@ class HwpxApplicationService:
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
                 "Item Revision does not exist",
             ) from exc
-        if (
-            revision.get("revision_state") != "APPROVED"
-            or item.get("current_revision_id") != revision_id
-        ):
+        state = revision.get("revision_state")
+        supported_review_revision = (
+            state == "IN_REVIEW" and revision.get("workflow_definition_version") == "1.16.0"
+        )
+        if (state != "APPROVED" and not supported_review_revision) or item.get(
+            "current_revision_id"
+        ) != revision_id:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_REVISION_INELIGIBLE,
-                "Item Revision is not the current approved revision",
+                "Item Revision is not current and eligible for HWPX review",
             )
         return revision
 

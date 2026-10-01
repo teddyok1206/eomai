@@ -1,11 +1,23 @@
 """Item Registry query DTOs."""
 
+from __future__ import annotations
+
 from typing import Literal
 
 from eom_catalog_contracts import AssessmentItemContentContract
 from pydantic import Field
 
 from eom_api_contracts.common import ApiModel, ArtifactPointer, OpaqueId, UtcDatetime
+
+
+class ItemApprovalView(ApiModel):
+    schema_version: Literal["item-approval-view/1.0"] = "item-approval-view/1.0"
+    status: Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"]
+    human_review_required: bool
+    approved_at: UtcDatetime | None = None
+    approved_by: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+    approval_receipt_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    hwpx_build_id: str | None = Field(default=None, pattern=r"^hwpxbuild_[0-9a-f]{32}$")
 
 
 class ItemView(ApiModel):
@@ -15,6 +27,15 @@ class ItemView(ApiModel):
     current_revision_id: OpaqueId | None = None
     resource_version: int = Field(ge=1)
     created_at: UtcDatetime
+    approval: ItemApprovalView | None = None
+
+
+class ItemRevisionApprovalRequest(ApiModel):
+    schema_version: Literal["item-revision-approval-request/1.0"] = (
+        "item-revision-approval-request/1.0"
+    )
+    hwpx_build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class ItemRevisionView(ApiModel):
@@ -28,6 +49,7 @@ class ItemRevisionView(ApiModel):
     manifest: ArtifactPointer
     resource_version: int = Field(ge=1)
     created_at: UtcDatetime
+    approval: ItemApprovalView
 
 
 class ItemComponentView(ApiModel):

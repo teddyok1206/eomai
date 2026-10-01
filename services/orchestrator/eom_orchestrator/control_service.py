@@ -23,6 +23,8 @@ from eom_workflow import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV18,
+    ResolvedExecutionPlanV19,
+    ResolvedExecutionPlanV20,
     WorkerCapacityPolicy,
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
@@ -145,6 +147,8 @@ def _validated_document(
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
         | ResolvedExecutionPlanV18
+        | ResolvedExecutionPlanV19
+        | ResolvedExecutionPlanV20
         | CodexAuthHealthView
         | CodexCapabilitySnapshot
     ],
@@ -164,6 +168,8 @@ def _validated_document(
     | ResolvedExecutionPlanV16
     | ResolvedExecutionPlanV17
     | ResolvedExecutionPlanV18
+    | ResolvedExecutionPlanV19
+    | ResolvedExecutionPlanV20
     | CodexAuthHealthView
     | CodexCapabilitySnapshot,
     dict[str, Any],
@@ -854,9 +860,25 @@ def record_resolved_execution_plan(
     document: dict[str, Any],
     dependencies: ResolvedPlanDependencyEvidence,
 ) -> ResolvedExecutionPlanRecord:
-    successor = document.get("schema_version") == "resolved-execution-plan/18.0"
-    model_type = ResolvedExecutionPlanV18 if successor else ResolvedExecutionPlan
-    schema_name = "resolved-execution-plan-v18" if successor else "resolved-execution-plan"
+    schema_version = document.get("schema_version")
+    successor = schema_version in {
+        "resolved-execution-plan/18.0",
+        "resolved-execution-plan/20.0",
+    }
+    model_type = (
+        ResolvedExecutionPlanV20
+        if schema_version == "resolved-execution-plan/20.0"
+        else ResolvedExecutionPlanV18
+        if successor
+        else ResolvedExecutionPlan
+    )
+    schema_name = (
+        "resolved-execution-plan-v20"
+        if schema_version == "resolved-execution-plan/20.0"
+        else "resolved-execution-plan-v18"
+        if successor
+        else "resolved-execution-plan"
+    )
     model, normalized = _validated_document(schema_name, document, model_type)
     if not isinstance(model, ResolvedExecutionPlan):
         raise AssertionError("validated execution plan has the wrong type")
@@ -1000,6 +1022,7 @@ def record_knowledge_backed_execution_plan(
         "resolved-execution-plan/12.0": "resolved-execution-plan-v12",
         "resolved-execution-plan/16.0": "resolved-execution-plan-v16",
         "resolved-execution-plan/17.0": "resolved-execution-plan-v17",
+        "resolved-execution-plan/19.0": "resolved-execution-plan-v19",
     }.get(str(schema_version), "resolved-execution-plan-v3")
     model_type: type[
         ResolvedExecutionPlanV3
@@ -1007,6 +1030,7 @@ def record_knowledge_backed_execution_plan(
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
+        | ResolvedExecutionPlanV19
     ]
     if schema_version == "resolved-execution-plan/11.0":
         model_type = ResolvedExecutionPlanV11
@@ -1016,6 +1040,8 @@ def record_knowledge_backed_execution_plan(
         model_type = ResolvedExecutionPlanV16
     elif schema_version == "resolved-execution-plan/17.0":
         model_type = ResolvedExecutionPlanV17
+    elif schema_version == "resolved-execution-plan/19.0":
+        model_type = ResolvedExecutionPlanV19
     else:
         model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)

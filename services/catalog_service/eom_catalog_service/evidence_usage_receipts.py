@@ -28,6 +28,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV19,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceiptV3,
@@ -224,7 +225,10 @@ class OrchestratorEvidenceUsageReceiptResolver:
             plan = None
             if plan_record is not None:
                 plan = (
-                    ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
+                    ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+                    if plan_record.canonical_document.get("schema_version")
+                    == "resolved-execution-plan/19.0"
+                    else ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
                     if plan_record.canonical_document.get("schema_version")
                     == "resolved-execution-plan/17.0"
                     else ResolvedExecutionPlanV16.model_validate(plan_record.canonical_document)
@@ -406,7 +410,9 @@ class OrchestratorEvidenceUsageReceiptResolver:
             and plan.workflow_definition_key == "generic-item-development"
             and plan.workflow_definition_version
             in (
-                {"1.15.0"}
+                {"1.16.0"}
+                if isinstance(plan, ResolvedExecutionPlanV19)
+                else {"1.15.0"}
                 if isinstance(plan, ResolvedExecutionPlanV17)
                 else {"1.14.0"}
                 if isinstance(plan, ResolvedExecutionPlanV16)

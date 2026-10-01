@@ -7,6 +7,7 @@ from eom_api_contracts.items import (
     ItemComponentView,
     ItemRelationshipView,
     ItemRetirementRequest,
+    ItemRevisionApprovalRequest,
     ItemRevisionView,
     ItemView,
     StructuredItemContentImportRequest,
@@ -26,6 +27,63 @@ from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(tags=["items"])
+
+
+@router.post(
+    "/item-revisions/{item_revision_id}/approvals",
+    operation_id="item_revision_approve",
+    response_model=SingleResponse[CommandResult],
+    dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_APPROVE))],
+)
+def approve_revision(
+    request: Request,
+    item_revision_id: str,
+    body: ItemRevisionApprovalRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    del authentication
+
+    def execute() -> CommandResult:
+        actor = request.state.request_context.actor()
+        domain_key = request.app.state.services.idempotency.submission_key(
+            operator_id=actor.actor_id,
+            endpoint_key="item_revision_approve",
+            raw_key=idempotency_key,
+        )
+        receipt = request.app.state.services.item_approvals.approve(
+            item_revision_id,
+            hwpx_build_id=body.hwpx_build_id,
+            reason=body.reason,
+            expected_revision_version=expected_version,
+            actor=actor,
+            idempotency_key=domain_key,
+        )
+        revision = request.app.state.services.queries.revision(receipt.item_revision_id)
+        return CommandResult(
+            command_id=f"itemapproval_{receipt.receipt_sha256.removeprefix('sha256:')[:32]}",
+            resource_type="item_revision",
+            resource_id=receipt.item_revision_id,
+            status="COMPLETED",
+            resource_version=revision.resource_version,
+            status_url=f"/api/v1/item-revisions/{receipt.item_revision_id}",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body=body.model_dump(mode="json")
+            | {
+                "item_revision_id": item_revision_id,
+                "expected_revision_version": expected_version,
+            },
+            resource_type="item_revision",
+            callback=execute,
+        ),
+    )
 
 
 @router.post(

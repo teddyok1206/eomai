@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-request-v18",
+  "title": "EOM Catalog Item Revision Approval Request V18",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "item_revision_id",
+    "expected_revision_version",
+    "hwpx_build_id",
+    "hwpx_output_artifact_id",
+    "hwpx_output_artifact_revision_id",
+    "hwpx_output_sha256",
+    "reason",
+    "approved_by",
+    "idempotency_key",
+    "submission_sha256"
+  ],
+  "properties": {
+    "operation": {
+      "const": "APPROVE_ITEM_REVISION"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "expected_revision_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "hwpx_build_id": {
+      "type": "string",
+      "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+    },
+    "hwpx_output_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "hwpx_output_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "hwpx_output_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "approved_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 200
+    },
+    "submission_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
     ApprovedItemGraphPublicationResult,
+    ApproveItemRevisionCommandV1,
     AssessmentItemContentContract,
     AssessmentPageImagePointer,
     AssessmentPageListQuery,
@@ -63,6 +64,7 @@ from eom_catalog_contracts import (
     ItemComponentMediaQuery,
     ItemContentQuery,
     ItemMediaQuery,
+    ItemRevisionApprovalReceiptV1,
     KnowledgeAnalysisApplicationResult,
     KnowledgeAnalysisBatchApplicationResult,
     MockExamAssemblyManifestContract,
@@ -1026,6 +1028,17 @@ class CatalogApplicationClient:
     ) -> MockExamAssemblyManifestContract:
         return self._assembly_request(query)
 
+    def approve_item_revision(
+        self, command: ApproveItemRevisionCommandV1
+    ) -> ItemRevisionApprovalReceiptV1:
+        response = self._request(command)
+        if response.operation != command.operation or response.item_approval is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog Item approval response is invalid",
+            )
+        return response.item_approval
+
     def _assembly_request(
         self,
         command: (
@@ -1115,7 +1128,8 @@ class CatalogApplicationClient:
         | PreviewMockExamAssemblyPlanCommand
         | CreateMockExamAssemblyCommand
         | CreatePlannedMockExamAssemblyCommand
-        | InspectMockExamAssemblyQuery,
+        | InspectMockExamAssemblyQuery
+        | ApproveItemRevisionCommandV1,
     ) -> CatalogApplicationResponse:
         payload = CatalogApplicationRequest(root=command).model_dump(mode="json")
         content_schema_version = (
@@ -1205,7 +1219,8 @@ class CatalogApplicationClient:
         | PreviewMockExamAssemblyPlanCommand
         | CreateMockExamAssemblyCommand
         | CreatePlannedMockExamAssemblyCommand
-        | InspectMockExamAssemblyQuery,
+        | InspectMockExamAssemblyQuery
+        | ApproveItemRevisionCommandV1,
     ) -> float:
         if isinstance(command, (CreateEvidenceBundleCommand, CreateItemProductionEvidenceCommand)):
             return EVIDENCE_RESPONSE_TIMEOUT_SECONDS

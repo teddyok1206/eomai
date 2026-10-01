@@ -44,6 +44,8 @@ from eom_workflow import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV18,
+    ResolvedExecutionPlanV19,
+    ResolvedExecutionPlanV20,
     ResolvedStepExecutionV12,
     TerminalStep,
     WorkerRequest,
@@ -208,6 +210,8 @@ def _parse_review_escalation_plan(
     | ResolvedExecutionPlanV16
     | ResolvedExecutionPlanV17
     | ResolvedExecutionPlanV18
+    | ResolvedExecutionPlanV19
+    | ResolvedExecutionPlanV20
 ):
     """Parse only released plan families that carry an escalatable review step."""
 
@@ -222,6 +226,10 @@ def _parse_review_escalation_plan(
         return ResolvedExecutionPlanV17.model_validate(document)
     if schema_version == "resolved-execution-plan/18.0":
         return ResolvedExecutionPlanV18.model_validate(document)
+    if schema_version == "resolved-execution-plan/19.0":
+        return ResolvedExecutionPlanV19.model_validate(document)
+    if schema_version == "resolved-execution-plan/20.0":
+        return ResolvedExecutionPlanV20.model_validate(document)
     raise ValueError("review escalation plan family is unsupported")
 
 

@@ -31,6 +31,7 @@ from eom_api.services.document_review_correction_service import (
 )
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.idempotency_service import IdempotencyService
+from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.paired_document_review_service import (
     PairedDocumentReviewApplicationService,
 )
@@ -106,6 +107,10 @@ class AppServices:
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.hwpx = HwpxApplicationService(engine, registry=self.registry)
+        self.item_approvals = ItemApprovalApplicationService(
+            hwpx=self.hwpx,
+            catalog=self.catalog_application,
+        )
         self.exam_hwpx = ExamHwpxApplicationService(engine, registry=self.registry)
         self.hwpx_downloads = HwpxDownloadClient()
         self.hwpx_capability = HwpxCapabilityService(manager_registered=True)

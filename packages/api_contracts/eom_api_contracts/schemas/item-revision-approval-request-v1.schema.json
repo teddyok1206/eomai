@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/item-revision-approval-request/1.0",
+  "title": "Item Revision Approval Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "hwpx_build_id",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "item-revision-approval-request/1.0"
+    },
+    "hwpx_build_id": {
+      "type": "string",
+      "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  }
+}

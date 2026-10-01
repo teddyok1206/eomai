@@ -266,7 +266,7 @@ class WorkflowStartRequest(ApiModel):
         ):
             if isinstance(self.educational_retrieval, EducationalRetrievalIntentRequestV2):
                 if (
-                    self.definition_version not in {"1.14.0", "1.15.0"}
+                    self.definition_version not in {"1.14.0", "1.15.0", "1.16.0"}
                     or self.item_brief.curriculum_selected_unit_key is None
                     or self.registry_mode != "CREATE_ITEM"
                     or self.item_id is not None
@@ -324,8 +324,8 @@ class WorkflowStartRequest(ApiModel):
                 raise ValueError("generated item request is missing its workflow contract")
             if content_team_request:
                 if isinstance(self.item_brief, ContentTeamItemBriefRequestV5):
-                    if self.definition_version != "1.15.0":
-                        raise ValueError("V5 material requests require workflow definition 1.15")
+                    if self.definition_version not in {"1.15.0", "1.16.0"}:
+                        raise ValueError("V5 material requests require workflow definition 1.15+")
                     expected_image_mode = self.item_brief.material_requirement.image_mode
                 elif isinstance(self.item_brief, ContentTeamItemBriefRequestV4):
                     if self.definition_version not in {
@@ -362,8 +362,17 @@ class WorkflowStartRequest(ApiModel):
                     "1.13.0",
                     "1.14.0",
                     "1.15.0",
+                    "1.16.0",
                 }:
                     raise ValueError("content-team workflow definition is unsupported")
+                if self.definition_version == "1.16.0" and (
+                    self.registry_mode != "CREATE_ITEM"
+                    or self.item_id is not None
+                    or self.base_revision_id is not None
+                ):
+                    raise ValueError(
+                        "workflow 1.16 post-registration approval supports CREATE_ITEM only"
+                    )
                 if self.image_mode != expected_image_mode:
                     raise ValueError(
                         "content-team image capability differs from the workflow definition"

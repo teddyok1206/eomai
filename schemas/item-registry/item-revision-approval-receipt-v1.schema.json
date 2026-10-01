@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/item-registry/item-revision-approval-receipt/1.0",
+  "title": "Item Revision Approval Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "item_id",
+    "item_revision_id",
+    "item_revision_number",
+    "prior_revision_state",
+    "approved_revision_state",
+    "manifest_artifact_id",
+    "manifest_artifact_revision_id",
+    "manifest_sha256",
+    "workflow_id",
+    "registration_step_run_id",
+    "hwpx_build_id",
+    "hwpx_output_artifact_id",
+    "hwpx_output_artifact_revision_id",
+    "hwpx_output_sha256",
+    "approved_by",
+    "approved_at",
+    "reason_sha256",
+    "idempotency_key",
+    "approval_submission_sha256",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "item-revision-approval-receipt/1.0"
+    },
+    "item_id": {
+      "type": "string",
+      "pattern": "^item_[0-9a-f]{32}$"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "item_revision_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "prior_revision_state": {
+      "const": "IN_REVIEW"
+    },
+    "approved_revision_state": {
+      "const": "APPROVED"
+    },
+    "manifest_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "manifest_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "registration_step_run_id": {
+      "type": "string",
+      "pattern": "^steprun_[0-9a-f]{32}$"
+    },
+    "hwpx_build_id": {
+      "type": "string",
+      "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+    },
+    "hwpx_output_artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "hwpx_output_artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "hwpx_output_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "approved_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reason_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 200
+    },
+    "approval_submission_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "receipt_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

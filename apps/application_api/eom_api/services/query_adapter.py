@@ -71,6 +71,7 @@ from eom_api_contracts.item_bank import (
     ProductionPastExamContextView,
 )
 from eom_api_contracts.items import (
+    ItemApprovalView,
     ItemComponentView,
     ItemRelationshipView,
     ItemRevisionView,
@@ -193,6 +194,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV19,
     RoleWorkerInput,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
@@ -3998,27 +4000,53 @@ class QueryAdapter:
                 limit,
                 cursor,
             )
-            return PageResult(tuple(self._item(row) for row in rows), next_cursor, more)
+            revisions = self._current_item_revisions(session, rows)
+            approval_events = self._approval_events(
+                session,
+                tuple(row.item_id for row in rows),
+            )
+            return PageResult(
+                tuple(
+                    self._item(
+                        row,
+                        revisions.get(str(row.current_revision_id)),
+                        approval_events,
+                    )
+                    for row in rows
+                ),
+                next_cursor,
+                more,
+            )
 
     def item(self, item_id: str) -> ItemView:
         with self.sessions() as session:
             row = self._require(session, ItemRecord, item_id, "ITEM_NOT_FOUND")
-            return self._item(row)
+            revision = (
+                session.get(ItemRevisionRecord, row.current_revision_id)
+                if row.current_revision_id is not None
+                else None
+            )
+            events = self._approval_events(session, (row.item_id,))
+            return self._item(row, revision, events)
 
     def item_revisions(self, item_id: str) -> tuple[ItemRevisionView, ...]:
         with self.sessions() as session:
             self._require(session, ItemRecord, item_id, "ITEM_NOT_FOUND")
-            rows = session.scalars(
-                select(ItemRevisionRecord)
-                .where(ItemRevisionRecord.item_id == item_id)
-                .order_by(ItemRevisionRecord.revision_number)
+            rows = tuple(
+                session.scalars(
+                    select(ItemRevisionRecord)
+                    .where(ItemRevisionRecord.item_id == item_id)
+                    .order_by(ItemRevisionRecord.revision_number)
+                )
             )
-            return tuple(self._revision(row) for row in rows)
+            events = self._approval_events(session, (item_id,))
+            return tuple(self._revision(row, events.get(row.item_revision_id)) for row in rows)
 
     def revision(self, revision_id: str) -> ItemRevisionView:
         with self.sessions() as session:
             row = self._require(session, ItemRevisionRecord, revision_id, "ITEM_REVISION_NOT_FOUND")
-            return self._revision(row)
+            events = self._approval_events(session, (row.item_id,))
+            return self._revision(row, events.get(revision_id))
 
     def components(self, revision_id: str) -> tuple[ItemComponentView, ...]:
         with self.sessions() as session:
@@ -4823,6 +4851,8 @@ class QueryAdapter:
             plan_type = ResolvedExecutionPlanV16
         elif schema_version == "resolved-execution-plan/17.0":
             plan_type = ResolvedExecutionPlanV17
+        elif schema_version == "resolved-execution-plan/19.0":
+            plan_type = ResolvedExecutionPlanV19
         else:
             return None
         try:
@@ -5014,7 +5044,11 @@ class QueryAdapter:
         return WorkflowStepView.model_validate(row, from_attributes=True)
 
     @staticmethod
-    def _item(row: ItemRecord) -> ItemView:
+    def _item(
+        row: ItemRecord,
+        revision: ItemRevisionRecord | None = None,
+        approval_events: dict[str, ItemEventRecord] | None = None,
+    ) -> ItemView:
         return ItemView(
             item_id=row.item_id,
             human_reference_code=row.human_reference_code,
@@ -5022,9 +5056,21 @@ class QueryAdapter:
             current_revision_id=row.current_revision_id,
             resource_version=row.lock_version,
             created_at=row.created_at,
+            approval=(
+                QueryAdapter._approval(
+                    revision,
+                    (approval_events or {}).get(revision.item_revision_id),
+                )
+                if revision is not None
+                else None
+            ),
         )
 
-    def _revision(self, row: ItemRevisionRecord) -> ItemRevisionView:
+    def _revision(
+        self,
+        row: ItemRevisionRecord,
+        approval_event: ItemEventRecord | None = None,
+    ) -> ItemRevisionView:
         return ItemRevisionView(
             item_revision_id=row.item_revision_id,
             item_id=row.item_id,
@@ -5037,12 +5083,80 @@ class QueryAdapter:
                 row.manifest_artifact_id,
                 row.manifest_artifact_revision_id,
                 row.manifest_sha256,
-                "urn:eom:schema:item-manifest:1.0",
+                (
+                    "eom://schemas/item-registry/item-revision-manifest-v2"
+                    if row.workflow_definition_version == "1.16.0"
+                    else "urn:eom:schema:item-manifest:1.0"
+                ),
                 "application/json",
             ),
             resource_version=row.lock_version,
             created_at=row.created_at,
+            approval=self._approval(row, approval_event),
         )
+
+    @staticmethod
+    def _approval(
+        revision: ItemRevisionRecord,
+        event: ItemEventRecord | None,
+    ) -> ItemApprovalView:
+        status = cast(
+            Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"],
+            {
+                "DRAFT": "PENDING",
+                "IN_REVIEW": "PENDING",
+                "APPROVED": "APPROVED",
+                "REJECTED": "REJECTED",
+                "SUPERSEDED": "SUPERSEDED",
+                "RETIRED": "RETIRED",
+            }[revision.revision_state],
+        )
+        receipt = event.payload.get("approval_receipt") if event is not None else None
+        receipt_value = receipt if isinstance(receipt, dict) else {}
+        receipt_sha256 = receipt_value.get("receipt_sha256")
+        hwpx_build_id = receipt_value.get("hwpx_build_id")
+        return ItemApprovalView(
+            status=status,
+            human_review_required=revision.workflow_definition_version == "1.16.0",
+            approved_at=revision.approved_at,
+            approved_by=revision.approved_by,
+            approval_receipt_sha256=(
+                str(receipt_sha256) if isinstance(receipt_sha256, str) else None
+            ),
+            hwpx_build_id=str(hwpx_build_id) if isinstance(hwpx_build_id, str) else None,
+        )
+
+    @staticmethod
+    def _current_item_revisions(
+        session: Any,
+        items: tuple[ItemRecord, ...] | list[ItemRecord],
+    ) -> dict[str, ItemRevisionRecord]:
+        revision_ids = tuple(
+            str(item.current_revision_id) for item in items if item.current_revision_id is not None
+        )
+        if not revision_ids:
+            return {}
+        rows = session.scalars(
+            select(ItemRevisionRecord).where(ItemRevisionRecord.item_revision_id.in_(revision_ids))
+        )
+        return {row.item_revision_id: row for row in rows}
+
+    @staticmethod
+    def _approval_events(
+        session: Any,
+        item_ids: tuple[str, ...],
+    ) -> dict[str, ItemEventRecord]:
+        if not item_ids:
+            return {}
+        rows = session.scalars(
+            select(ItemEventRecord)
+            .where(
+                ItemEventRecord.item_id.in_(item_ids),
+                ItemEventRecord.event_type == "ITEM_REVISION_APPROVED",
+            )
+            .order_by(ItemEventRecord.sequence)
+        )
+        return {str(row.item_revision_id): row for row in rows if row.item_revision_id is not None}
 
     def _component(self, row: ItemComponentRecord) -> ItemComponentView:
         return ItemComponentView(

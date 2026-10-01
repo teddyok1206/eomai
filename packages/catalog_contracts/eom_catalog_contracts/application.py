@@ -22,6 +22,10 @@ from eom_catalog_contracts.assessment_assembly import (
     PreviewMockExamAssemblyPlan,
 )
 from eom_catalog_contracts.assessment_item import AssessmentItemContentContract
+from eom_catalog_contracts.item_approval import (
+    ApproveItemRevisionCommandV1,
+    ItemRevisionApprovalReceiptV1,
+)
 from eom_catalog_contracts.item_review import (
     InspectMockExamReviewEligibilityQuery,
     MockExamItemReviewPublicationResultContract,
@@ -75,6 +79,7 @@ CatalogApplicationOperation = Literal[
     "CREATE_MOCK_EXAM_ASSEMBLY",
     "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY",
     "INSPECT_MOCK_EXAM_ASSEMBLY",
+    "APPROVE_ITEM_REVISION",
 ]
 
 
@@ -480,7 +485,8 @@ CatalogApplicationRequestValue = Annotated[
     | PreviewMockExamAssemblyPlanCommand
     | CreateMockExamAssemblyCommand
     | CreatePlannedMockExamAssemblyCommand
-    | InspectMockExamAssemblyQuery,
+    | InspectMockExamAssemblyQuery
+    | ApproveItemRevisionCommandV1,
     Field(discriminator="operation"),
 ]
 
@@ -546,6 +552,7 @@ class CatalogApplicationResponse(FrozenModel):
     content: AssessmentItemContentContract | None = None
     assembly_plan: MockExamAssemblyPlanContract | None = None
     assembly: MockExamAssemblyManifestContract | None = None
+    item_approval: ItemRevisionApprovalReceiptV1 | None = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
 
     @model_validator(mode="after")
@@ -564,6 +571,7 @@ class CatalogApplicationResponse(FrozenModel):
                 self.content,
                 self.assembly_plan,
                 self.assembly,
+                self.item_approval,
                 self.error_code,
             )
         )
@@ -620,6 +628,8 @@ class CatalogApplicationResponse(FrozenModel):
             and self.assembly is None
         ):
             raise ValueError("mock-exam assembly operation requires a manifest")
+        if self.operation == "APPROVE_ITEM_REVISION" and self.item_approval is None:
+            raise ValueError("Item approval response requires an approval receipt")
         return self
 
 
@@ -688,6 +698,10 @@ CATALOG_APPLICATION_SCHEMA_ROUTES: Final = MappingProxyType(
         "INSPECT_MOCK_EXAM_ASSEMBLY": CatalogApplicationSchemaRoute(
             "catalog-application-request-v15",
             "catalog-application-response-v16",
+        ),
+        "APPROVE_ITEM_REVISION": CatalogApplicationSchemaRoute(
+            "catalog-application-request-v18",
+            "catalog-application-response-v17",
         ),
     }
 )

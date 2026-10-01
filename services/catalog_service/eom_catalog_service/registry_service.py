@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
+    ApproveItemRevisionCommandV1,
     AssessmentItemContent,
     AssessmentItemContentContract,
     AssessmentItemContentV2,
@@ -28,6 +29,8 @@ from eom_catalog_contracts import (
     AssessmentLayoutObservation,
     AssessmentPageImagePointer,
     ImageBlock,
+    ItemRevisionApprovalReceiptV1,
+    ItemRevisionManifestV2,
     MediaArtifactPointer,
     OfficeDocumentReviewIntakeManifest,
     OfficeDocumentReviewIntakeManifestV3,
@@ -38,6 +41,7 @@ from eom_catalog_contracts import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 from eom_item_registry import (
     ComponentPointer,
+    ItemRevisionApprovalMode,
     ItemRevisionState,
     ItemState,
     PastExamVariationSourcePointer,
@@ -50,6 +54,7 @@ from eom_item_registry import (
     new_item_provenance_id,
     new_item_relationship_id,
     new_item_revision_id,
+    require_revision_transition,
 )
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
@@ -73,6 +78,7 @@ from eom_catalog_service.models import (
     ContentPackRecord,
     ContentPackReleaseRecord,
     ItemComponentRecord,
+    ItemEventRecord,
     ItemMetadataSnapshotRecord,
     ItemProvenanceRecord,
     ItemRecord,
@@ -199,7 +205,14 @@ class RegistryService:
             metadata_hash=metadata_hash,
             created_at=workflow.created_at,
         )
-        validate_contract("item-revision-manifest", manifest)
+        manifest_schema = (
+            "item-revision-manifest-v2"
+            if request.approval_mode == ItemRevisionApprovalMode.POST_REGISTRATION_HUMAN_REVIEW
+            else "item-revision-manifest"
+        )
+        validate_contract(manifest_schema, manifest)
+        if manifest_schema == "item-revision-manifest-v2":
+            ItemRevisionManifestV2.model_validate(manifest)
         manifest_path = self._stage_registration_manifest(request.registration_key, manifest)
         artifact = self.artifacts.commit_file_set(
             files={"item-revision-manifest.json": manifest_path},
@@ -252,11 +265,21 @@ class RegistryService:
                         RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
                         "base revision is no longer approved",
                     )
+            post_registration_review = (
+                request.approval_mode == ItemRevisionApprovalMode.POST_REGISTRATION_HUMAN_REVIEW
+            )
+            revision_state = (
+                ItemRevisionState.IN_REVIEW.value
+                if post_registration_review
+                else ItemRevisionState.APPROVED.value
+            )
+            approved_at = None if post_registration_review else datetime.now(UTC)
+            approved_by = None if post_registration_review else request.created_by
             revision = ItemRevisionRecord(
                 item_revision_id=revision_id,
                 item_id=item.item_id,
                 revision_number=revision_number,
-                revision_state=ItemRevisionState.APPROVED.value,
+                revision_state=revision_state,
                 registration_key=request.registration_key,
                 content_pack_release_id=request.content_pack_release_id,
                 workflow_id=request.workflow_id,
@@ -271,8 +294,8 @@ class RegistryService:
                 metadata_json=request.metadata,
                 metadata_sha256=metadata_hash,
                 created_by=request.created_by,
-                approved_at=datetime.now(UTC),
-                approved_by=request.created_by,
+                approved_at=approved_at,
+                approved_by=approved_by,
                 lock_version=1,
             )
             session.add(revision)
@@ -295,15 +318,203 @@ class RegistryService:
                 item_revision_id=revision.item_revision_id,
                 event_type=("ITEM_CREATED" if prior_revision is None else "ITEM_REVISED"),
                 prior_state=None if prior_revision is None else ItemRevisionState.APPROVED.value,
-                new_state=ItemRevisionState.APPROVED.value,
+                new_state=revision_state,
                 actor_id=request.created_by,
                 source="REGISTRATION_SERVICE",
                 idempotency_key=request.registration_key,
-                payload={"revision_number": revision_number},
+                payload={
+                    "revision_number": revision_number,
+                    "approval_mode": request.approval_mode.value,
+                },
             )
             session.flush()
             session.expunge(revision)
             return revision
+
+    def approve_revision(
+        self, command: ApproveItemRevisionCommandV1
+    ) -> ItemRevisionApprovalReceiptV1:
+        """Approve one current IN_REVIEW revision after exact HWPX output validation."""
+
+        with transaction(self.sessions) as session:
+            revision = session.execute(
+                select(ItemRevisionRecord)
+                .where(ItemRevisionRecord.item_revision_id == command.item_revision_id)
+                .with_for_update()
+            ).scalar_one_or_none()
+            if revision is None:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
+                    "Item Revision does not exist",
+                )
+            item = session.execute(
+                select(ItemRecord).where(ItemRecord.item_id == revision.item_id).with_for_update()
+            ).scalar_one()
+            replay = session.scalar(
+                select(ItemEventRecord).where(
+                    ItemEventRecord.item_revision_id == revision.item_revision_id,
+                    ItemEventRecord.event_type == "ITEM_REVISION_APPROVED",
+                    ItemEventRecord.idempotency_key == command.idempotency_key,
+                )
+            )
+            if replay is not None:
+                receipt = replay.payload.get("approval_receipt")
+                if not isinstance(receipt, dict):
+                    raise RegistryError(
+                        RegistryErrorCode.ITEM_APPROVAL_RECEIPT_INVALID,
+                        "stored Item approval receipt is invalid",
+                    )
+                parsed_receipt = ItemRevisionApprovalReceiptV1.model_validate(receipt)
+                if (
+                    parsed_receipt.item_revision_id != command.item_revision_id
+                    or parsed_receipt.approval_submission_sha256 != command.submission_sha256
+                ):
+                    raise RegistryError(
+                        RegistryErrorCode.ITEM_APPROVAL_RECEIPT_INVALID,
+                        "Item approval idempotency key was reused with different input",
+                    )
+                return parsed_receipt
+            if revision.lock_version != command.expected_revision_version:
+                raise RegistryError(
+                    RegistryErrorCode.CATALOG_CONCURRENCY_CONFLICT,
+                    "Item Revision approval version is stale",
+                )
+            if (
+                item.current_revision_id != revision.item_revision_id
+                or revision.workflow_definition_version != "1.16.0"
+                or revision.revision_state != ItemRevisionState.IN_REVIEW.value
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_APPROVAL_INELIGIBLE,
+                    "Item Revision is not current and awaiting post-registration approval",
+                )
+            output = session.get(ArtifactRevisionRecord, command.hwpx_output_artifact_revision_id)
+            artifact = session.get(ArtifactRecord, command.hwpx_output_artifact_id)
+            self._require_hwpx_approval_output(
+                revision=revision,
+                artifact=artifact,
+                output=output,
+                command=command,
+            )
+            manifest_revision = session.get(
+                ArtifactRevisionRecord, revision.manifest_artifact_revision_id
+            )
+
+            if (
+                manifest_revision is None
+                or manifest_revision.logical_artifact_id != revision.manifest_artifact_id
+                or manifest_revision.content_hash != revision.manifest_sha256
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                    "Item Revision manifest pointer is stale",
+                )
+            try:
+                manifest_value = json.loads(
+                    self._artifact_primary_file(manifest_revision).read_text(encoding="utf-8")
+                )
+                validate_contract("item-revision-manifest-v2", manifest_value)
+                manifest = ItemRevisionManifestV2.model_validate(manifest_value)
+            except (OSError, UnicodeError, ValueError, JsonSchemaValidationError) as exc:
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                    "post-registration Item manifest is invalid",
+                ) from exc
+            if (
+                manifest.item_id != item.item_id
+                or manifest.item_revision_id != revision.item_revision_id
+                or manifest.workflow.workflow_id != revision.workflow_id
+            ):
+                raise RegistryError(
+                    RegistryErrorCode.ITEM_MANIFEST_INVALID,
+                    "post-registration Item manifest identity differs",
+                )
+            require_revision_transition(ItemRevisionState.IN_REVIEW, ItemRevisionState.APPROVED)
+            approved_at = datetime.now(UTC)
+            receipt_body = {
+                "schema_version": "item-revision-approval-receipt/1.0",
+                "item_id": item.item_id,
+                "item_revision_id": revision.item_revision_id,
+                "item_revision_number": revision.revision_number,
+                "prior_revision_state": "IN_REVIEW",
+                "approved_revision_state": "APPROVED",
+                "manifest_artifact_id": revision.manifest_artifact_id,
+                "manifest_artifact_revision_id": revision.manifest_artifact_revision_id,
+                "manifest_sha256": revision.manifest_sha256,
+                "workflow_id": revision.workflow_id,
+                "registration_step_run_id": revision.source_workflow_step_run_id,
+                "hwpx_build_id": command.hwpx_build_id,
+                "hwpx_output_artifact_id": command.hwpx_output_artifact_id,
+                "hwpx_output_artifact_revision_id": command.hwpx_output_artifact_revision_id,
+                "hwpx_output_sha256": command.hwpx_output_sha256,
+                "approved_by": command.approved_by,
+                "approved_at": approved_at.isoformat().replace("+00:00", "Z"),
+                "reason_sha256": content_sha256(command.reason),
+                "idempotency_key": command.idempotency_key,
+                "approval_submission_sha256": command.submission_sha256,
+            }
+            receipt = ItemRevisionApprovalReceiptV1.model_validate(
+                receipt_body | {"receipt_sha256": content_sha256(receipt_body)}
+            )
+            validate_contract("item-revision-approval-receipt", receipt.model_dump(mode="json"))
+            revision.revision_state = ItemRevisionState.APPROVED.value
+            revision.approved_at = approved_at
+            revision.approved_by = command.approved_by
+            revision.lock_version += 1
+            item.lock_version += 1
+            append_item_event(
+                session,
+                item,
+                item_revision_id=revision.item_revision_id,
+                event_type="ITEM_REVISION_APPROVED",
+                prior_state=ItemRevisionState.IN_REVIEW.value,
+                new_state=ItemRevisionState.APPROVED.value,
+                actor_id=command.approved_by,
+                source="CATALOG_APPLICATION",
+                idempotency_key=command.idempotency_key,
+                payload={"approval_receipt": receipt.model_dump(mode="json")},
+            )
+            session.flush()
+            return receipt
+
+    @staticmethod
+    def _require_hwpx_approval_output(
+        *,
+        revision: ItemRevisionRecord,
+        artifact: ArtifactRecord | None,
+        output: ArtifactRevisionRecord | None,
+        command: ApproveItemRevisionCommandV1,
+    ) -> None:
+        """Validate the immutable HWPX artifact identity without querying HWPX state tables."""
+
+        if (
+            output is None
+            or artifact is None
+            or not output.approved
+            or not artifact.approved
+            or output.logical_artifact_id != command.hwpx_output_artifact_id
+            or output.content_hash != command.hwpx_output_sha256
+            or artifact.artifact_type != "hwpx-content-team-build"
+            or output.manifest.get("manifest_version") != "content-team-hwpx-artifact/1.0"
+            or output.manifest.get("artifact_type") != "hwpx-content-team-build"
+            or output.manifest.get("primary_file") != "content-team-item.hwpx"
+            or output.manifest.get("content_hash") != command.hwpx_output_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_APPROVAL_HWPX_INVALID,
+                "validated HWPX output pointer does not resolve",
+            )
+        builder_result = output.result.get("builder_result")
+        if not isinstance(builder_result, dict) or (
+            builder_result.get("status") != "SUCCEEDED"
+            or builder_result.get("build_id") != command.hwpx_build_id
+            or builder_result.get("item_revision_id") != revision.item_revision_id
+            or builder_result.get("output_sha256") != command.hwpx_output_sha256
+        ):
+            raise RegistryError(
+                RegistryErrorCode.ITEM_APPROVAL_HWPX_INVALID,
+                "validated HWPX output does not bind the requested build and Item Revision",
+            )
 
     def resolve_past_exam_variation_content(
         self, item_revision_id: str
@@ -480,10 +691,10 @@ class RegistryService:
                     RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
                     "item revision not found",
                 )
-            if revision.revision_state != ItemRevisionState.APPROVED.value:
+            if not self._revision_is_readable_for_review(revision):
                 raise RegistryError(
                     RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
-                    "item revision is not approved",
+                    "item revision is not approved or awaiting supported human review",
                 )
             content = self._load_item_content(session, revision_id)
             matches = [
@@ -515,10 +726,10 @@ class RegistryService:
                     RegistryErrorCode.ITEM_REVISION_NOT_FOUND,
                     "item revision not found",
                 )
-            if revision.revision_state != ItemRevisionState.APPROVED.value:
+            if not self._revision_is_readable_for_review(revision):
                 raise RegistryError(
                     RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
-                    "item revision is not approved",
+                    "item revision is not approved or awaiting supported human review",
                 )
             component = session.scalar(
                 select(ItemComponentRecord).where(
@@ -1348,8 +1559,11 @@ class RegistryService:
                     "evidence_manifest_sha256": source.evidence_manifest_sha256,
                 }
             )
-        return {
-            "schema_version": "1.0",
+        post_registration_review = (
+            request.approval_mode == ItemRevisionApprovalMode.POST_REGISTRATION_HUMAN_REVIEW
+        )
+        manifest = {
+            "schema_version": "2.0" if post_registration_review else "1.0",
             "item_id": item_id,
             "item_revision_id": revision_id,
             "revision_number": revision_number,
@@ -1385,6 +1599,16 @@ class RegistryService:
             "provenance": provenance,
             "created_at": created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         }
+        if post_registration_review:
+            manifest |= {
+                "revision_state": "IN_REVIEW",
+                "approval_policy": {
+                    "mode": "POST_REGISTRATION_HUMAN_REVIEW",
+                    "initial_revision_state": "IN_REVIEW",
+                    "required_review_artifact": "VALIDATED_HWPX",
+                },
+            }
+        return manifest
 
     @staticmethod
     def _add_revision_children(
@@ -1569,6 +1793,7 @@ class RegistryService:
             "revision_state": revision.revision_state,
             "content_pack_release_id": revision.content_pack_release_id,
             "workflow_id": revision.workflow_id,
+            "workflow_definition_version": revision.workflow_definition_version,
             "manifest_artifact_id": revision.manifest_artifact_id,
             "manifest_artifact_revision_id": revision.manifest_artifact_revision_id,
             "manifest_sha256": revision.manifest_sha256,
@@ -1578,8 +1803,16 @@ class RegistryService:
             "metadata_sha256": revision.metadata_sha256,
             "created_at": revision.created_at,
             "approved_at": revision.approved_at,
+            "approved_by": revision.approved_by,
             "superseded_by_revision_id": revision.superseded_by_revision_id,
         }
+
+    @staticmethod
+    def _revision_is_readable_for_review(revision: ItemRevisionRecord) -> bool:
+        return revision.revision_state == ItemRevisionState.APPROVED.value or (
+            revision.revision_state == ItemRevisionState.IN_REVIEW.value
+            and revision.workflow_definition_version == "1.16.0"
+        )
 
     @staticmethod
     def component_dict(component: ItemComponentRecord) -> dict[str, Any]:

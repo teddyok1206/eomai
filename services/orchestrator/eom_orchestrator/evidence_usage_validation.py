@@ -35,6 +35,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV19,
     ReviewEvidenceUsageValidationReceipt,
     ReviewEvidenceUsageValidationReceiptV2,
     ReviewEvidenceUsageValidationReceiptV3,
@@ -287,6 +288,7 @@ def validate_evidence_usage_for_commit(
             "resolved-execution-plan/12.0",
             "resolved-execution-plan/16.0",
             "resolved-execution-plan/17.0",
+            "resolved-execution-plan/19.0",
         }
         if verification_planned
         else {"resolved-execution-plan/11.0"}
@@ -312,7 +314,9 @@ def validate_evidence_usage_for_commit(
         return None
     try:
         plan = (
-            ResolvedExecutionPlanV17.model_validate(plan_document)
+            ResolvedExecutionPlanV19.model_validate(plan_document)
+            if plan_schema == "resolved-execution-plan/19.0"
+            else ResolvedExecutionPlanV17.model_validate(plan_document)
             if plan_schema == "resolved-execution-plan/17.0"
             else ResolvedExecutionPlanV16.model_validate(plan_document)
             if plan_schema == "resolved-execution-plan/16.0"

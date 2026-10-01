@@ -15,6 +15,7 @@ from eom_item_registry.identifiers import (
 )
 from eom_item_registry.models import (
     ComponentPointer,
+    ItemRevisionApprovalMode,
     PastExamVariationSourcePointer,
     RegistrationRequest,
 )
@@ -30,6 +31,7 @@ from eom_item_registry.state_machine import (
 __all__ = [
     "ComponentPointer",
     "DeliverableState",
+    "ItemRevisionApprovalMode",
     "ItemRevisionState",
     "ItemState",
     "PastExamVariationSourcePointer",

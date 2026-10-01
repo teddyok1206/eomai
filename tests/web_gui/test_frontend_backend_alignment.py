@@ -280,7 +280,7 @@ def test_direct_browser_stream_download_and_media_routes_exist() -> None:
     ):
         assert fragment in source
 
-    preview_schema = (ROOT / "schemas/web-gui/item-preview-v3.schema.json").read_text(
+    preview_schema = (ROOT / "schemas/web-gui/item-preview-v4.schema.json").read_text(
         encoding="utf-8"
     )
     assert "media/block_" in preview_schema
@@ -319,7 +319,7 @@ def test_browser_dom_references_and_static_module_graph_are_closed() -> None:
 
 def test_preview_schema_discriminators_match_browser_acceptance_and_renderer() -> None:
     schema = json.loads(
-        (ROOT / "schemas/web-gui/item-preview-v3.schema.json").read_text(encoding="utf-8")
+        (ROOT / "schemas/web-gui/item-preview-v4.schema.json").read_text(encoding="utf-8")
     )
     schema_types = {
         schema["$defs"][reference["$ref"].rsplit("/", 1)[-1]]["properties"]["type"]["const"]

@@ -131,7 +131,7 @@ def workflow_start_payload(
         )
     payload: dict[str, object] = {
         "definition_key": "generic-item-development",
-        "definition_version": "1.15.0",
+        "definition_version": "1.16.0",
         "request_name": "GENERATED_KNOWLEDGE_ITEM_REQUEST",
         "image_mode": (
             "required" if material_requirement.form in {"AUTO", "IMAGE", "MIXED"} else "skip"

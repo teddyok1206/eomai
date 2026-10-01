@@ -42,6 +42,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemPreview,
+    ItemRevisionApprovalSubmission,
     KnowledgeAnalysisBatchRangeStatus,
     KnowledgeAnalysisBatchStatus,
     KnowledgeAnalysisQualityReport,
@@ -635,6 +636,13 @@ class WebServices:
 
     async def hwpx_build(self, session: WebSession, build_id: str) -> HwpxBuildView:
         return await self.gateway.hwpx_build(session, build_id)
+
+    async def approve_item_revision(
+        self,
+        session: WebSession,
+        value: ItemRevisionApprovalSubmission,
+    ) -> dict[str, Any]:
+        return await self.gateway.approve_item_revision(session, value)
 
 
 def build_services(settings: WebSettings, gateway: ApplicationGateway) -> WebServices:

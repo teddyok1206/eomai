@@ -40,6 +40,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV19,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -159,6 +160,8 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = frozenset(
         "resolved-execution-plan/16.0",
         "resolved-execution-plan/17.0",
         "resolved-execution-plan/18.0",
+        "resolved-execution-plan/19.0",
+        "resolved-execution-plan/20.0",
     }
 )
 
@@ -228,9 +231,12 @@ def _resolved_evidence_plan_for_response(
             if isinstance(plan_document, dict) and plan_document.get("schema_version") in {
                 "resolved-execution-plan/16.0",
                 "resolved-execution-plan/17.0",
+                "resolved-execution-plan/19.0",
             }:
                 return (
-                    ResolvedExecutionPlanV17.model_validate(plan_document)
+                    ResolvedExecutionPlanV19.model_validate(plan_document)
+                    if plan_document.get("schema_version") == "resolved-execution-plan/19.0"
+                    else ResolvedExecutionPlanV17.model_validate(plan_document)
                     if plan_document.get("schema_version") == "resolved-execution-plan/17.0"
                     else ResolvedExecutionPlanV16.model_validate(plan_document)
                 )

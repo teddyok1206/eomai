@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/item-approval-view/1.0",
+  "title": "Item Approval View V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "human_review_required"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "item-approval-view/1.0"
+    },
+    "status": {
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "SUPERSEDED",
+        "RETIRED"
+      ]
+    },
+    "human_review_required": {
+      "type": "boolean"
+    },
+    "approved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "approved_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "approval_receipt_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hwpx_build_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+    }
+  }
+}

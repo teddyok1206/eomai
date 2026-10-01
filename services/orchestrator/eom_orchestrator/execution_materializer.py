@@ -56,6 +56,8 @@ from eom_workflow import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV18,
+    ResolvedExecutionPlanV19,
+    ResolvedExecutionPlanV20,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     validate_control_contract,
@@ -205,6 +207,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
         | ResolvedExecutionPlanV17
+        | ResolvedExecutionPlanV19
         | ResolvedExecutionPlanV18
     )
     if plan_schema_version == "resolved-execution-plan/2.0":
@@ -241,6 +244,10 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/18.0":
         plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/19.0":
+        plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/20.0":
+        plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if plan.plan_sha256 != plan_record.plan_sha256:
@@ -766,6 +773,10 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV17.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/18.0":
         plan = ResolvedExecutionPlanV18.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/19.0":
+        plan = ResolvedExecutionPlanV19.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/20.0":
+        plan = ResolvedExecutionPlanV20.model_validate(plan_record.canonical_document)
     else:
         plan = ResolvedExecutionPlan.model_validate(plan_record.canonical_document)
     if (
@@ -1893,7 +1904,7 @@ def plan_stages_evidence_manifest(
     return isinstance(plan, ResolvedExecutionPlanV15) or (
         plan.workflow_definition_key == "generic-item-development"
         and plan.workflow_definition_version
-        in {"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0"}
+        in {"1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "1.15.0", "1.16.0"}
     )
 
 

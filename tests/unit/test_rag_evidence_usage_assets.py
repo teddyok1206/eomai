@@ -219,9 +219,9 @@ def test_api_preserves_v120_and_accepts_v123_successor_start_contract() -> None:
     assert verification_review.definition_version == "1.13.0"
 
 
-def test_runner_installer_selects_v124_natural_presentation_successor() -> None:
+def test_runner_installer_selects_v124_post_registration_approval_successor() -> None:
     source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
-    assert "generic-item-development.v1.15.yaml" in source
+    assert "generic-item-development.v1.16.yaml" in source
     assert "generic-item-development.v1.14.yaml" not in source
     assert "generic-item-development.v1.13.yaml" not in source
     assert "generic-item-development.v1.12.yaml" not in source

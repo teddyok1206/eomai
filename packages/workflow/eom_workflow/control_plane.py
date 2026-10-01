@@ -814,6 +814,22 @@ class ResolvedExecutionPlanV18(ResolvedExecutionPlan):
         return self
 
 
+class ResolvedExecutionPlanV19(ResolvedExecutionPlanV17):
+    """Grounded post-registration approval plan."""
+
+    schema_version: Literal["resolved-execution-plan/19.0"] = "resolved-execution-plan/19.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.16.0"] = "1.16.0"  # type: ignore[assignment]
+    resolver_version: Literal["19.0.0"] = "19.0.0"  # type: ignore[assignment]
+
+
+class ResolvedExecutionPlanV20(ResolvedExecutionPlanV18):
+    """Ungrounded post-registration approval plan."""
+
+    schema_version: Literal["resolved-execution-plan/20.0"] = "resolved-execution-plan/20.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.16.0"] = "1.16.0"  # type: ignore[assignment]
+    resolver_version: Literal["20.0.0"] = "20.0.0"  # type: ignore[assignment]
+
+
 class ResolvedExecutionPlanV4(FrozenModel):
     """One document analysis plan with exact bounded Markdown materialization pointers."""
 

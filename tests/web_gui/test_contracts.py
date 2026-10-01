@@ -9,6 +9,7 @@ from eom_web_gui.contracts import (
     CurriculumEditorialOutline,
     ExplorerQuery,
     ItemPreview,
+    ItemPreviewApproval,
     ItemPreviewV2,
     PairedDocumentReviewOutputView,
     PreviewChoice,
@@ -32,7 +33,7 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 17
+    assert len(schemas) == 18
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -152,7 +153,7 @@ def test_item_preview_v2_schema_rejects_content_in_metadata_only_projection() ->
         Draft202012Validator(schema).validate(value)
 
 
-def _item_preview_v3_table_only() -> ItemPreview:
+def _item_preview_v4_table_only() -> ItemPreview:
     return ItemPreview(
         preview_state="AVAILABLE",
         workflow_id="workflow_test0001",
@@ -198,15 +199,34 @@ def _item_preview_v3_table_only() -> ItemPreview:
     )
 
 
-def test_item_preview_v3_table_only_projection_matches_web_schema() -> None:
-    value = _item_preview_v3_table_only()
-    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+def test_item_preview_v4_table_only_projection_matches_web_schema() -> None:
+    value = _item_preview_v4_table_only()
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 
 
-def test_item_preview_v3_schema_rejects_labeled_text_kind_label_drift() -> None:
-    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
-    value = _item_preview_v3_table_only().model_dump(mode="json")
+def test_item_preview_v4_exposes_pending_post_registration_approval() -> None:
+    value = _item_preview_v4_table_only().model_copy(
+        update={
+            "revision_state": "IN_REVIEW",
+            "approval": ItemPreviewApproval(
+                status="PENDING",
+                human_review_required=True,
+            ),
+        }
+    )
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(value.model_dump(mode="json"))
+    with pytest.raises(ValueError, match="pending human approval"):
+        ItemPreview.model_validate(
+            value.model_dump(mode="json")
+            | {"approval": {"status": "APPROVED", "human_review_required": True}}
+        )
+
+
+def test_item_preview_v4_schema_rejects_labeled_text_kind_label_drift() -> None:
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
+    value = _item_preview_v4_table_only().model_dump(mode="json")
     value["blocks"][1]["label"] = "<조건>"
 
     with pytest.raises(ValidationError):
@@ -223,9 +243,9 @@ def test_item_preview_v3_schema_rejects_labeled_text_kind_label_drift() -> None:
         ("revision_state", "DRAFT"),
     ),
 )
-def test_item_preview_v3_rejects_invented_or_mutable_provenance(field: str, invalid: str) -> None:
-    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
-    value = _item_preview_v3_table_only().model_dump(mode="json")
+def test_item_preview_v4_rejects_invented_or_mutable_provenance(field: str, invalid: str) -> None:
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
+    value = _item_preview_v4_table_only().model_dump(mode="json")
     value[field] = invalid
 
     with pytest.raises(ValidationError):
@@ -234,7 +254,7 @@ def test_item_preview_v3_rejects_invented_or_mutable_provenance(field: str, inva
         ItemPreview.model_validate(value)
 
 
-def test_item_preview_v3_unsupported_variant_is_not_processing_state() -> None:
+def test_item_preview_v4_unsupported_variant_is_not_processing_state() -> None:
     value = ItemPreview(
         preview_state="UNSUPPORTED",
         unavailable_reason="UNSUPPORTED_CONTENT_SCHEMA",
@@ -246,7 +266,7 @@ def test_item_preview_v3_unsupported_variant_is_not_processing_state() -> None:
         content_pack_release_id="packrel_test0001",
         content_schema_ref="eom.assessment.item-content/99.0",
     )
-    schema = json.loads((SCHEMA_ROOT / "item-preview-v3.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads((SCHEMA_ROOT / "item-preview-v4.schema.json").read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(value.model_dump(mode="json"))
 
 

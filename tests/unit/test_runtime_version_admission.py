@@ -41,6 +41,7 @@ ADMITTED_DEFINITIONS = {
     ("generic-item-development", "1.13.0"): "generic-item-development.v1.13.yaml",
     ("generic-item-development", "1.14.0"): "generic-item-development.v1.14.yaml",
     ("generic-item-development", "1.15.0"): "generic-item-development.v1.15.yaml",
+    ("generic-item-development", "1.16.0"): "generic-item-development.v1.16.yaml",
     ("knowledge-analysis", "1.0.0"): "knowledge-analysis.v1.yaml",
     ("knowledge-analysis", "4.0.0"): "knowledge-analysis.v4.yaml",
     ("knowledge-analysis", "8.0.0"): "knowledge-analysis.v8.yaml",
@@ -316,6 +317,7 @@ def test_catalog_socket_operation_schema_routes_are_total_and_immutable() -> Non
         "CREATE_MOCK_EXAM_ASSEMBLY": (15, 16),
         "CREATE_PLANNED_MOCK_EXAM_ASSEMBLY": (15, 16),
         "INSPECT_MOCK_EXAM_ASSEMBLY": (15, 16),
+        "APPROVE_ITEM_REVISION": (18, 17),
     }
     assert set(CATALOG_APPLICATION_SCHEMA_ROUTES) == set(expected)
     for operation, (request_version, response_version) in expected.items():

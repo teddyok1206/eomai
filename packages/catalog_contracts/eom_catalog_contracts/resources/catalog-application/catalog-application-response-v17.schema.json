@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-application-response-v17",
+  "title": "EOM Catalog Item Revision Approval Response V17",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "operation",
+        "item_approval"
+      ],
+      "properties": {
+        "status": {
+          "const": "OK"
+        },
+        "operation": {
+          "const": "APPROVE_ITEM_REVISION"
+        },
+        "item_approval": {
+          "$ref": "eom://schemas/item-registry/item-revision-approval-receipt/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "operation",
+        "error_code"
+      ],
+      "properties": {
+        "status": {
+          "const": "ERROR"
+        },
+        "operation": {
+          "const": "APPROVE_ITEM_REVISION"
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}
