@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/infra/artifact-store-snapshot-manifest/1.0",
+  "title": "Artifact Store Snapshot Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "captured_at", "artifact_root_label", "artifact_revision_count", "inventory_sha256", "snapshot_sha256"],
+  "properties": {
+    "schema_version": {"const": "artifact-store-snapshot-manifest/1.0"},
+    "snapshot_id": {"type": "string", "pattern": "^artifactsnapshot_[0-9a-f]{32}$"},
+    "captured_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "artifact_root_label": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"},
+    "artifact_revision_count": {"type": "integer", "minimum": 0},
+    "inventory_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "snapshot_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

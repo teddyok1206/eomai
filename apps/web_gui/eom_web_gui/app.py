@@ -27,6 +27,7 @@ from eom_web_gui.contracts import (
     DocumentReviewAnnotationSubmission,
     DocumentReviewCorrectionSubmission,
     DraftSubmission,
+    EducationalQualityCommandSubmission,
     ExecutionPresetDraftSubmission,
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
@@ -586,6 +587,23 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return await actual.mock_exam_assembly_policy(session)
+
+    @app.get(f"{API_PREFIX}/educational-quality-reviews/workbench")
+    async def educational_quality_workbench(
+        session: Annotated[WebSession, Depends(require_session)],
+        plan_id: Annotated[
+            str | None,
+            Query(pattern=r"^qualityplan_[0-9a-f]{32}$"),
+        ] = None,
+    ) -> dict[str, Any]:
+        return await actual.gateway.educational_quality_workbench(session, plan_id)
+
+    @app.post(f"{API_PREFIX}/educational-quality-reviews/commands")
+    async def educational_quality_command(
+        value: EducationalQualityCommandSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.gateway.submit_educational_quality_command(session, value)
 
     @app.get(f"{API_PREFIX}/mock-exam-assemblies/plan")
     async def mock_exam_assembly_plan(

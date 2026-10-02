@@ -398,8 +398,10 @@ The following repository documents are sufficient to reconstruct the major desig
 
 The current documents and verified runtime evidence support this order:
 
-1. Perform the prepared M02 human quality review of the existing 25-Item accepted set; do not rerun
-   production merely to collect the scorecard.
+1. Deploy the additive M02 quality-workbench migration/API/Studio release after its disposable
+   PostgreSQL gate, then evaluate the existing 25-Item accepted set without rerunning production.
+   A scorecard is `READY` only after the full primary review, independent ten-Item sample, and all
+   differing-observation resolutions are complete.
 2. Keep a small release-blocking material matrix with one independently checked example for TEXT,
    DATA, one/two TABLE, one/two IMAGE, MIXED, and INQUIRY. Validate the registered Item manifest and
    rendered HWPX for each branch before relying on a whole-exam aggregate.
@@ -412,3 +414,9 @@ The current documents and verified runtime evidence support this order:
 5. Introduce a successor production contract only when a changed Pack or acceptance rule requires
    it. Preserve V5 reproducibility and reuse the existing pointer, idempotency, approval, and
    disposable-database gates.
+
+Database backup validation alone is not complete disaster-recovery evidence. The repository now
+contains a protocol-first paired DB/Artifact verifier and runbook. Every run compares the complete
+ordered Artifact revision inventory; sampled and full member-byte modes remain distinct. An actual
+DR PASS still requires an operator-owned immutable Artifact snapshot and a disposable restored
+database.

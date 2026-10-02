@@ -311,7 +311,9 @@ Revision, 관계, 상태, pointer와 hash만 저장합니다.
 현재 제품 계약입니다.
 
 - S01–S04 자동화 경계: PASS; Gate A browser/download: PASS;
-- M02: 기존 25문항의 사람 품질평가 worksheet 준비 완료, 평가는 진행 전;
+- M02: 기존 25문항의 고정 Assembly/Item Revision을 대상으로 하는 사람 품질평가 workbench가
+  저장소 후보로 구현됨. 전체 검토와 독립 표본 검토, optimistic lock, 불일치 판정, 최종 파생
+  scorecard를 지원하며 실제 사람 평가는 진행 전;
 - M03 자동 UX 기반과 M04 관리자 관측성: PASS;
 - L01 제한 교과서 evidence 기술 파일럿: PASS, 교육적 개선 효과는 미평가;
 - L02 반복 생산 기술 경계: PASS, M02 결과 전 새 25문항 생성은 시작하지 않음;
@@ -427,6 +429,7 @@ privileged opt-in 변수가 설정돼 있으면 실행을 거부합니다. Postg
 - [Document Review Detail Audit](docs/status/DOCUMENT_REVIEW_DETAIL_AUDIT_2026-09-24.md)
 - [M01 Solution-report Backfill Recovery](docs/status/M01_SOLUTION_REPORT_BACKFILL_2026-09-15.md)
 - [M02 25-Item Educational Review Baseline](docs/status/M02_25_ITEM_EDUCATIONAL_REVIEW_BASELINE_2026-09-15.md)
+- [Database and Artifact Recovery Drill](docs/operations/DATABASE_ARTIFACT_RECOVERY_DRILL.md)
 - [Repository agent rules](AGENTS.md)
 - [Module boundaries and dependency direction](docs/architecture/MODULE_BOUNDARIES.md)
 - [Image unit-test environment](docs/operations/IMAGE_TEST_ENVIRONMENT.md)

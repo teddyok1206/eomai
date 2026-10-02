@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/api/v1/educational-quality-review-command-v1.schema.json",
+  "title": "Educational Quality Review Command V1",
+  "oneOf": [
+    {"$ref": "#/$defs/createPlan"},
+    {"$ref": "#/$defs/startSession"},
+    {"$ref": "#/$defs/upsertObservation"},
+    {"$ref": "#/$defs/finalizeSession"},
+    {"$ref": "#/$defs/resolveDisagreement"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "planId": {"type": "string", "pattern": "^qualityplan_[0-9a-f]{32}$"},
+    "sessionId": {"type": "string", "pattern": "^qualitysession_[0-9a-f]{32}$"},
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position", "item_revision_id", "preview_checked", "hwpx_checked",
+        "evidence_checked", "science_score", "critical_error", "unique_answer",
+        "evidence_score", "authoring_value_score", "visual_score",
+        "visual_not_applicable_reason", "explanation_quality_score", "disposition",
+        "edit_minutes", "short_reason"
+      ],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "preview_checked": {"type": "boolean"},
+        "hwpx_checked": {"type": "boolean"},
+        "evidence_checked": {"type": "boolean"},
+        "science_score": {"type": "integer", "minimum": 1, "maximum": 5},
+        "critical_error": {"type": "boolean"},
+        "unique_answer": {"enum": ["PASS", "FAIL", "AMBIGUOUS"]},
+        "evidence_score": {"type": "integer", "minimum": 1, "maximum": 5},
+        "authoring_value_score": {"type": "integer", "minimum": 1, "maximum": 5},
+        "visual_score": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "visual_not_applicable_reason": {"type": ["string", "null"], "minLength": 1, "maxLength": 240},
+        "explanation_quality_score": {"type": "integer", "minimum": 1, "maximum": 5},
+        "disposition": {"enum": ["NO_EDIT", "MINOR_EDIT", "MAJOR_EDIT", "DISCARD"]},
+        "edit_minutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+        "short_reason": {"type": "string", "minLength": 1, "maxLength": 1000}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"visual_score": {"type": "null"}}, "required": ["visual_score"]},
+          "then": {"properties": {"visual_not_applicable_reason": {"type": "string"}}},
+          "else": {"properties": {"visual_not_applicable_reason": {"type": "null"}}}
+        }
+      ]
+    },
+    "createPlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "assembly_revision_id", "assembly_manifest_sha256", "secondary_positions"],
+      "properties": {
+        "operation": {"const": "CREATE_PLAN"},
+        "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "assembly_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "secondary_positions": {
+          "type": "array", "minItems": 1, "maxItems": 200, "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1, "maximum": 200}
+        }
+      }
+    },
+    "startSession": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "plan_id", "plan_sha256", "reviewer_role"],
+      "properties": {
+        "operation": {"const": "START_SESSION"},
+        "plan_id": {"$ref": "#/$defs/planId"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "reviewer_role": {"enum": ["PRIMARY", "SECONDARY"]}
+      }
+    },
+    "upsertObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "session_id", "expected_lock_version", "observation"],
+      "properties": {
+        "operation": {"const": "UPSERT_OBSERVATION"},
+        "session_id": {"$ref": "#/$defs/sessionId"},
+        "expected_lock_version": {"type": "integer", "minimum": 1},
+        "observation": {"$ref": "#/$defs/observation"}
+      }
+    },
+    "finalizeSession": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "session_id", "expected_lock_version"],
+      "properties": {
+        "operation": {"const": "FINALIZE_SESSION"},
+        "session_id": {"$ref": "#/$defs/sessionId"},
+        "expected_lock_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "resolveDisagreement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "plan_id", "plan_sha256", "position", "chosen_session_id", "notes"],
+      "properties": {
+        "operation": {"const": "RESOLVE_DISAGREEMENT"},
+        "plan_id": {"$ref": "#/$defs/planId"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "chosen_session_id": {"$ref": "#/$defs/sessionId"},
+        "notes": {"type": "string", "minLength": 1, "maxLength": 1000}
+      }
+    }
+  }
+}

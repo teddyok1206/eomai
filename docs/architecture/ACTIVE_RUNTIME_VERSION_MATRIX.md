@@ -106,6 +106,8 @@ definition import, preset release/current selection과 authenticated canary를 �
 | GPU prompt policy | `local-gpu-image-prompt-policy/1.6` | predecessor `1.4` replay 보존 |
 | 자료 형식 | material requirement `1.0`, Item Brief `4.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음 |
 | PDF annotation | request `3.0`, Catalog `catalog/1.22` | 원본 보존, 파생 Artifact만 생성 |
+| Human quality workbench | command/workbench `1.0` | released Assembly와 immutable Item Revision pointer만 평가; runtime migration/activation 별도 |
+| Recovery evidence | Artifact snapshot/receipt `1.0` | full metadata inventory는 항상 비교; sampled/full byte verification 구분 |
 
 ## Catalog application route 숫자
 

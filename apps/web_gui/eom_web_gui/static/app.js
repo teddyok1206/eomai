@@ -102,6 +102,10 @@ const state = {
   pdfDocumentReviewPendingCorrection: null,
   pdfDocumentReviewAnnotation: null,
   pdfDocumentReviewPendingAnnotation: null,
+  educationalQualityWorkbench: null,
+  educationalQualitySelectedPlanId: null,
+  educationalQualitySessionId: null,
+  educationalQualityPosition: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -120,6 +124,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   explorer: "engine",
   support: "human",
   "pdf-review": "human",
+  "quality-review": "human",
   dashboard: "human",
 });
 
@@ -322,6 +327,7 @@ function showView(name) {
     stopPdfDocumentReviewPolling();
     state.pdfDocumentReviewRequestSequence += 1;
   }
+  if (name === "quality-review") loadEducationalQualityWorkbench();
   if (name === "dashboard" && state.health) renderDashboard(state.health);
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   window.scrollTo({top: 0, behavior});
@@ -3742,6 +3748,546 @@ function installCustomerSupport() {
   $("#support-more").addEventListener("click", () => loadCustomerSupportCases(true));
 }
 
+function educationalQualityCommandKey(operation) {
+  return `studio:educational-quality:${operation.toLowerCase()}:${crypto.randomUUID()}`;
+}
+
+function selectedEducationalQualityPlan() {
+  return state.educationalQualityWorkbench?.selected_plan || null;
+}
+
+function selectedEducationalQualitySession() {
+  const plan = selectedEducationalQualityPlan();
+  if (!plan) return null;
+  const exact = plan.sessions.find(
+    (session) => session.session_id === state.educationalQualitySessionId,
+  );
+  if (exact) return exact;
+  const role = $("#quality-reviewer-role").value;
+  const reviewerId = state.operator?.operator_id;
+  return plan.sessions.find(
+    (session) => session.reviewer_id === reviewerId && session.reviewer_role === role,
+  ) || null;
+}
+
+function educationalQualityDispositionLabel(value) {
+  return {
+    NO_EDIT: "무수정",
+    MINOR_EDIT: "경미 수정",
+    MAJOR_EDIT: "대폭 수정",
+    DISCARD: "폐기",
+  }[value] || value;
+}
+
+function renderEducationalQualityAssemblyOptions(workbench) {
+  const select = $("#quality-assembly-select");
+  const prior = select.value;
+  select.replaceChildren(new Option(
+    workbench.candidate_assemblies.length ? "완성 시험지 선택" : "평가 가능한 시험지 없음",
+    "",
+  ));
+  workbench.candidate_assemblies.forEach((candidate, index) => {
+    const suffix = candidate.existing_plan_id ? " · 계획 있음" : "";
+    select.append(new Option(
+      `시험지 ${index + 1} · ${candidate.item_count}문항${suffix} · ${formatSeoulDateTime(candidate.created_at)}`,
+      candidate.assembly_revision_id,
+    ));
+  });
+  if (workbench.candidate_assemblies.some((candidate) => candidate.assembly_revision_id === prior)) {
+    select.value = prior;
+  }
+}
+
+function renderEducationalQualityPlanList(workbench) {
+  const root = $("#quality-plan-list");
+  root.replaceChildren();
+  if (!workbench.plans.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "아직 만든 평가 계획이 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const [index, plan] of workbench.plans.entries()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `quality-plan-card${plan.plan_id === state.educationalQualitySelectedPlanId ? " selected" : ""}`;
+    const title = document.createElement("strong");
+    title.textContent = `평가 계획 ${index + 1} · ${plan.item_count}문항`;
+    const progress = document.createElement("span");
+    const primary = plan.primary_finalized ? "전체 검토 완료" : "전체 검토 중";
+    const secondary = plan.secondary_finalized ? "이중 검토 완료" : "이중 검토 중";
+    progress.textContent = `${primary} · ${secondary} · 판정 ${plan.resolved_count}`;
+    const created = document.createElement("small");
+    created.textContent = formatSeoulDateTime(plan.created_at);
+    button.append(title, progress, created);
+    button.addEventListener("click", () => loadEducationalQualityWorkbench(plan.plan_id));
+    root.append(button);
+  }
+}
+
+function renderEducationalQualityTechnical(plan) {
+  const root = $("#quality-technical");
+  root.replaceChildren();
+  const rows = [
+    ["평가 계획", plan.summary.plan_id],
+    ["계획 검증값", plan.summary.plan_sha256],
+    ["시험지 버전", plan.summary.assembly_revision_id],
+    ["시험지 검증값", plan.summary.assembly_manifest_sha256],
+  ];
+  for (const [label, value] of rows) {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = value;
+    root.append(term, detail);
+  }
+}
+
+function educationalQualityObservationFingerprint(observation) {
+  if (!observation) return null;
+  const copy = {...observation};
+  delete copy.updated_at;
+  return JSON.stringify(copy);
+}
+
+function educationalQualityObservationSummary(observation) {
+  if (!observation) return "평가 없음";
+  const critical = observation.critical_error ? "치명 오류 있음" : "치명 오류 없음";
+  return `과학 ${observation.science_score}/5 · 정답 ${observation.unique_answer} · ${critical} · ${educationalQualityDispositionLabel(observation.disposition)}`;
+}
+
+function educationalQualityMilliScore(value) {
+  return typeof value === "number" ? (value / 1000).toFixed(2) : "해당 없음";
+}
+
+function renderEducationalQualityScorecard(plan) {
+  const panel = $("#quality-scorecard");
+  if (!plan) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const scorecard = plan.scorecard;
+  const metrics = scorecard.metrics;
+  const ready = scorecard.state === "READY" && metrics;
+  setStatus(
+    $("#quality-scorecard-state"),
+    ready ? "success" : "warning",
+    ready ? "✓" : "◆",
+    ready
+      ? "최종 점수표"
+      : scorecard.unresolved_disagreement_count
+        ? `판정 ${scorecard.unresolved_disagreement_count}건 남음`
+        : "독립 평가 진행 중",
+  );
+  $("#quality-scorecard-adoptable").textContent = ready
+    ? `${metrics.adoptable_count} / ${metrics.item_count}`
+    : "-";
+  $("#quality-scorecard-critical").textContent = ready
+    ? String(metrics.critical_error_count)
+    : "-";
+  $("#quality-scorecard-answer").textContent = ready
+    ? `${metrics.unique_answer_pass_count} / ${metrics.item_count}`
+    : "-";
+  $("#quality-scorecard-edit-time").textContent = ready
+    ? `${metrics.total_edit_minutes}분`
+    : "-";
+  $("#quality-scorecard-science").textContent = ready
+    ? `${educationalQualityMilliScore(metrics.science_score_milli)} / 5`
+    : "-";
+  $("#quality-scorecard-visual").textContent = ready
+    ? `${educationalQualityMilliScore(metrics.visual_score_milli)} / 5`
+    : "-";
+}
+
+function renderEducationalQualityResolutions() {
+  const plan = selectedEducationalQualityPlan();
+  const panel = $("#quality-resolution-panel");
+  const root = $("#quality-resolution-list");
+  root.replaceChildren();
+  if (!plan) {
+    panel.hidden = true;
+    return;
+  }
+  const primary = plan.sessions.find(
+    (session) => session.reviewer_role === "PRIMARY" && session.state === "FINALIZED",
+  );
+  const secondary = plan.sessions.find(
+    (session) => session.reviewer_role === "SECONDARY" && session.state === "FINALIZED",
+  );
+  if (!primary || !secondary) {
+    panel.hidden = true;
+    return;
+  }
+  const primaryByPosition = new Map(primary.observations.map((row) => [row.position, row]));
+  const secondaryByPosition = new Map(secondary.observations.map((row) => [row.position, row]));
+  const resolutions = new Map(plan.resolutions.map((row) => [row.position, row]));
+  const disagreements = plan.secondary_positions.filter((position) => (
+    educationalQualityObservationFingerprint(primaryByPosition.get(position))
+    !== educationalQualityObservationFingerprint(secondaryByPosition.get(position))
+  ));
+  panel.hidden = disagreements.length === 0;
+  for (const position of disagreements) {
+    const resolved = resolutions.get(position);
+    const card = document.createElement("article");
+    card.className = "quality-resolution-card";
+    const title = document.createElement("strong");
+    title.textContent = `${position}번 · ${resolved ? "판정 완료" : "판정 필요"}`;
+    const primarySummary = document.createElement("p");
+    primarySummary.textContent = `전체 검토: ${educationalQualityObservationSummary(primaryByPosition.get(position))}`;
+    const secondarySummary = document.createElement("p");
+    secondarySummary.textContent = `이중 검토: ${educationalQualityObservationSummary(secondaryByPosition.get(position))}`;
+    card.append(title, primarySummary, secondarySummary);
+    if (resolved) {
+      const note = document.createElement("p");
+      note.className = "muted-label";
+      note.textContent = `판정 근거: ${resolved.notes}`;
+      card.append(note);
+    } else {
+      const notes = document.createElement("textarea");
+      notes.rows = 2;
+      notes.maxLength = 1000;
+      notes.placeholder = "두 평가 중 하나를 선택한 근거를 입력하세요.";
+      const actions = document.createElement("div");
+      actions.className = "form-actions";
+      const primaryButton = document.createElement("button");
+      primaryButton.type = "button";
+      primaryButton.className = "button quiet";
+      primaryButton.textContent = "전체 검토 판정 채택";
+      primaryButton.addEventListener("click", () => resolveEducationalQualityDisagreement(
+        position, primary.session_id, notes.value.trim(), primaryButton, secondaryButton,
+      ));
+      const secondaryButton = document.createElement("button");
+      secondaryButton.type = "button";
+      secondaryButton.className = "button quiet";
+      secondaryButton.textContent = "이중 검토 판정 채택";
+      secondaryButton.addEventListener("click", () => resolveEducationalQualityDisagreement(
+        position, secondary.session_id, notes.value.trim(), primaryButton, secondaryButton,
+      ));
+      actions.append(primaryButton, secondaryButton);
+      card.append(notes, actions);
+    }
+    root.append(card);
+  }
+}
+
+function populateEducationalQualityObservation(position) {
+  const plan = selectedEducationalQualityPlan();
+  const session = selectedEducationalQualitySession();
+  if (!plan || !session || !session.required_positions.includes(position)) return;
+  const item = plan.items.find((candidate) => candidate.position === position);
+  if (!item) return;
+  state.educationalQualityPosition = position;
+  const observation = session.observations.find((candidate) => candidate.position === position);
+  const form = $("#quality-observation-form");
+  form.reset();
+  $("#quality-position").value = String(position);
+  $("#quality-item-revision").value = item.item_revision_id;
+  form.elements.preview_checked.checked = observation?.preview_checked === true;
+  form.elements.hwpx_checked.checked = observation?.hwpx_checked === true;
+  form.elements.evidence_checked.checked = observation?.evidence_checked === true;
+  form.elements.science_score.value = String(observation?.science_score || 5);
+  form.elements.critical_error.checked = observation?.critical_error === true;
+  form.elements.unique_answer.value = observation?.unique_answer || "PASS";
+  form.elements.evidence_score.value = String(observation?.evidence_score || 5);
+  form.elements.authoring_value_score.value = String(observation?.authoring_value_score || 5);
+  form.elements.visual_score.value = observation?.visual_score === null ? "" : String(observation?.visual_score || 5);
+  form.elements.visual_not_applicable_reason.value = observation?.visual_not_applicable_reason || "";
+  form.elements.explanation_quality_score.value = String(observation?.explanation_quality_score || 5);
+  form.elements.disposition.value = observation?.disposition || "NO_EDIT";
+  form.elements.edit_minutes.value = String(observation?.edit_minutes || 0);
+  form.elements.short_reason.value = observation?.short_reason || "";
+  syncEducationalQualityVisualReason();
+  renderEducationalQualityItemList();
+}
+
+function renderEducationalQualityItemList() {
+  const plan = selectedEducationalQualityPlan();
+  const session = selectedEducationalQualitySession();
+  const root = $("#quality-item-list");
+  root.replaceChildren();
+  if (!plan || !session) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "평가 역할을 선택하고 세션을 시작하세요.";
+    root.append(empty);
+    return;
+  }
+  const observations = new Map(session.observations.map((row) => [row.position, row]));
+  for (const position of session.required_positions) {
+    const item = plan.items.find((candidate) => candidate.position === position);
+    if (!item) continue;
+    const observation = observations.get(position);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `quality-item-card${position === state.educationalQualityPosition ? " selected" : ""}`;
+    const title = document.createElement("strong");
+    title.textContent = `${item.display_number}번 · ${item.material_type}`;
+    const status = document.createElement("span");
+    status.textContent = observation
+      ? `기록 완료 · ${educationalQualityDispositionLabel(observation.disposition)}`
+      : "평가 필요";
+    button.append(title, status);
+    button.addEventListener("click", () => populateEducationalQualityObservation(position));
+    root.append(button);
+  }
+}
+
+function renderEducationalQualityPlan() {
+  const plan = selectedEducationalQualityPlan();
+  $("#quality-review-empty").hidden = Boolean(plan);
+  $("#quality-review-content").hidden = !plan;
+  if (!plan) {
+    setStatus($("#quality-review-state"), "neutral", "■", "계획 선택 필요");
+    renderEducationalQualityScorecard(null);
+    return;
+  }
+  const session = selectedEducationalQualitySession();
+  if (session) state.educationalQualitySessionId = session.session_id;
+  const finalized = session?.state === "FINALIZED";
+  setStatus(
+    $("#quality-review-state"),
+    finalized ? "success" : session ? "primary" : "warning",
+    finalized ? "✓" : session ? "●" : "◆",
+    finalized ? "내 평가 완료" : session ? "내 평가 작성 중" : "평가 세션 필요",
+  );
+  $("#quality-item-count").textContent = String(plan.items.length);
+  $("#quality-required-count").textContent = session ? String(session.required_positions.length) : "-";
+  $("#quality-observation-count").textContent = session ? String(session.observations.length) : "0";
+  $("#quality-resolution-count").textContent = String(plan.resolutions.length);
+  $("#quality-session-start").disabled = Boolean(session);
+  $("#quality-session-finalize").disabled = !session || finalized || session.observations.length !== session.required_positions.length;
+  $("#quality-observation-form").hidden = !session || finalized || state.educationalQualityPosition === null;
+  renderEducationalQualityScorecard(plan);
+  renderEducationalQualityTechnical(plan);
+  renderEducationalQualityItemList();
+  renderEducationalQualityResolutions();
+  if (session && state.educationalQualityPosition === null && session.required_positions.length) {
+    populateEducationalQualityObservation(session.required_positions[0]);
+  }
+}
+
+async function resolveEducationalQualityDisagreement(position, chosenSessionId, notes, ...buttons) {
+  const plan = selectedEducationalQualityPlan();
+  if (!plan) return;
+  if (!notes) {
+    showMessage($("#quality-plan-message"), "이중 검토 판정 근거를 입력하세요.", "error");
+    return;
+  }
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    await api("/educational-quality-reviews/commands", {
+      method: "POST",
+      mutation: true,
+      body: {
+        operation: "RESOLVE_DISAGREEMENT",
+        plan_id: plan.summary.plan_id,
+        plan_sha256: plan.summary.plan_sha256,
+        position,
+        chosen_session_id: chosenSessionId,
+        notes,
+        idempotency_key: educationalQualityCommandKey("resolve-disagreement"),
+      },
+    });
+    showMessage($("#quality-plan-message"), `${position}번 이중 검토 판정을 기록했습니다.`, "success");
+    await loadEducationalQualityWorkbench(plan.summary.plan_id);
+  } catch (failure) {
+    showMessage($("#quality-plan-message"), `이중 검토 판정 실패: ${failure.message}`, "error");
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
+
+function renderEducationalQualityWorkbench() {
+  const workbench = state.educationalQualityWorkbench;
+  if (!workbench) return;
+  renderEducationalQualityAssemblyOptions(workbench);
+  renderEducationalQualityPlanList(workbench);
+  renderEducationalQualityPlan();
+}
+
+async function loadEducationalQualityWorkbench(planId = state.educationalQualitySelectedPlanId) {
+  try {
+    const path = planId
+      ? `/educational-quality-reviews/workbench?plan_id=${encodeURIComponent(planId)}`
+      : "/educational-quality-reviews/workbench";
+    const workbench = await api(path);
+    state.educationalQualityWorkbench = workbench;
+    state.educationalQualitySelectedPlanId = workbench.selected_plan?.summary?.plan_id || null;
+    const plan = workbench.selected_plan;
+    if (plan && !plan.sessions.some((session) => session.session_id === state.educationalQualitySessionId)) {
+      state.educationalQualitySessionId = null;
+      state.educationalQualityPosition = null;
+    }
+    renderEducationalQualityWorkbench();
+  } catch (failure) {
+    showMessage($("#quality-plan-message"), `품질 평가 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function parseEducationalQualityPositions(value) {
+  const positions = value.split(",").map((part) => Number(part.trim())).filter(Number.isInteger);
+  return [...new Set(positions)].sort((left, right) => left - right);
+}
+
+async function createEducationalQualityPlan(event) {
+  event.preventDefault();
+  const revisionId = $("#quality-assembly-select").value;
+  const candidate = state.educationalQualityWorkbench?.candidate_assemblies.find(
+    (value) => value.assembly_revision_id === revisionId,
+  );
+  const positions = parseEducationalQualityPositions($("#quality-secondary-positions").value);
+  if (!candidate || !positions.length || positions.some((position) => position < 1 || position > candidate.item_count)) {
+    return showMessage($("#quality-plan-message"), "시험지와 유효한 이중 검토 문항 위치를 확인하세요.", "error");
+  }
+  $("#quality-plan-create").disabled = true;
+  try {
+    const result = await api("/educational-quality-reviews/commands", {
+      method: "POST",
+      mutation: true,
+      body: {
+        operation: "CREATE_PLAN",
+        assembly_revision_id: candidate.assembly_revision_id,
+        assembly_manifest_sha256: candidate.manifest_sha256,
+        secondary_positions: positions,
+        idempotency_key: educationalQualityCommandKey("create-plan"),
+      },
+    });
+    showMessage($("#quality-plan-message"), "고정된 시험지 평가 계획을 만들었습니다.", "success");
+    await loadEducationalQualityWorkbench(result.resource_id);
+  } catch (failure) {
+    showMessage($("#quality-plan-message"), `평가 계획 생성 실패: ${failure.message}`, "error");
+  } finally {
+    $("#quality-plan-create").disabled = false;
+  }
+}
+
+async function startEducationalQualitySession() {
+  const plan = selectedEducationalQualityPlan();
+  if (!plan) return;
+  const role = $("#quality-reviewer-role").value;
+  $("#quality-session-start").disabled = true;
+  try {
+    const result = await api("/educational-quality-reviews/commands", {
+      method: "POST",
+      mutation: true,
+      body: {
+        operation: "START_SESSION",
+        plan_id: plan.summary.plan_id,
+        plan_sha256: plan.summary.plan_sha256,
+        reviewer_role: role,
+        idempotency_key: educationalQualityCommandKey("start-session"),
+      },
+    });
+    state.educationalQualitySessionId = result.resource_id;
+    state.educationalQualityPosition = null;
+    await loadEducationalQualityWorkbench(plan.summary.plan_id);
+  } catch (failure) {
+    showMessage($("#quality-observation-message"), `평가 세션 시작 실패: ${failure.message}`, "error");
+  } finally {
+    $("#quality-session-start").disabled = false;
+  }
+}
+
+function syncEducationalQualityVisualReason() {
+  const form = $("#quality-observation-form");
+  const notApplicable = form.elements.visual_score.value === "";
+  $("#quality-visual-na-field").hidden = !notApplicable;
+  form.elements.visual_not_applicable_reason.required = notApplicable;
+  if (!notApplicable) form.elements.visual_not_applicable_reason.value = "";
+}
+
+async function saveEducationalQualityObservation(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const plan = selectedEducationalQualityPlan();
+  const session = selectedEducationalQualitySession();
+  if (!plan || !session || session.state !== "DRAFT") return;
+  const visualScore = form.elements.visual_score.value;
+  const body = {
+    operation: "UPSERT_OBSERVATION",
+    session_id: session.session_id,
+    expected_lock_version: session.lock_version,
+    observation: {
+      position: Number($("#quality-position").value),
+      item_revision_id: $("#quality-item-revision").value,
+      preview_checked: form.elements.preview_checked.checked,
+      hwpx_checked: form.elements.hwpx_checked.checked,
+      evidence_checked: form.elements.evidence_checked.checked,
+      science_score: Number(form.elements.science_score.value),
+      critical_error: form.elements.critical_error.checked,
+      unique_answer: form.elements.unique_answer.value,
+      evidence_score: Number(form.elements.evidence_score.value),
+      authoring_value_score: Number(form.elements.authoring_value_score.value),
+      visual_score: visualScore ? Number(visualScore) : null,
+      visual_not_applicable_reason: visualScore ? null : form.elements.visual_not_applicable_reason.value.trim(),
+      explanation_quality_score: Number(form.elements.explanation_quality_score.value),
+      disposition: form.elements.disposition.value,
+      edit_minutes: Number(form.elements.edit_minutes.value),
+      short_reason: form.elements.short_reason.value.trim(),
+    },
+    idempotency_key: educationalQualityCommandKey("save-observation"),
+  };
+  try {
+    await api("/educational-quality-reviews/commands", {method: "POST", mutation: true, body});
+    showMessage($("#quality-observation-message"), "문항 평가를 저장했습니다.", "success");
+    await loadEducationalQualityWorkbench(plan.summary.plan_id);
+  } catch (failure) {
+    showMessage($("#quality-observation-message"), `문항 평가 저장 실패: ${failure.message}`, "error");
+  }
+}
+
+async function finalizeEducationalQualitySession() {
+  const plan = selectedEducationalQualityPlan();
+  const session = selectedEducationalQualitySession();
+  if (!plan || !session || session.state !== "DRAFT") return;
+  $("#quality-session-finalize").disabled = true;
+  try {
+    await api("/educational-quality-reviews/commands", {
+      method: "POST",
+      mutation: true,
+      body: {
+        operation: "FINALIZE_SESSION",
+        session_id: session.session_id,
+        expected_lock_version: session.lock_version,
+        idempotency_key: educationalQualityCommandKey("finalize-session"),
+      },
+    });
+    state.educationalQualityPosition = null;
+    await loadEducationalQualityWorkbench(plan.summary.plan_id);
+  } catch (failure) {
+    showMessage($("#quality-observation-message"), `평가 완료 실패: ${failure.message}`, "error");
+  } finally {
+    $("#quality-session-finalize").disabled = false;
+  }
+}
+
+async function openEducationalQualityItem() {
+  const plan = selectedEducationalQualityPlan();
+  const item = plan?.items.find((candidate) => candidate.position === state.educationalQualityPosition);
+  if (!item) return;
+  $("#item-id").value = item.item_id;
+  $("#revision-id").value = item.item_revision_id;
+  showView("item");
+  await loadItemPreview();
+}
+
+function installEducationalQualityReview() {
+  $("#quality-review-refresh").addEventListener("click", () => loadEducationalQualityWorkbench());
+  $("#quality-plan-form").addEventListener("submit", createEducationalQualityPlan);
+  $("#quality-session-start").addEventListener("click", startEducationalQualitySession);
+  $("#quality-session-finalize").addEventListener("click", finalizeEducationalQualitySession);
+  $("#quality-reviewer-role").addEventListener("change", () => {
+    state.educationalQualitySessionId = null;
+    state.educationalQualityPosition = null;
+    renderEducationalQualityPlan();
+  });
+  $("#quality-observation-form").addEventListener("submit", saveEducationalQualityObservation);
+  $("#quality-observation-form").elements.visual_score.addEventListener("change", syncEducationalQualityVisualReason);
+  $("#quality-open-item").addEventListener("click", openEducationalQualityItem);
+}
+
 function pdfReviewState(value) {
   return {
     SUBMITTED: {label: "접수", tone: "neutral", icon: "■"},
@@ -4536,6 +5082,7 @@ async function boot() {
   installKnowledgeQuality();
   installExplorer();
   installCustomerSupport();
+  installEducationalQualityReview();
   installPdfDocumentReview();
   $("#logout").addEventListener("click", logout);
   await initializeSession();

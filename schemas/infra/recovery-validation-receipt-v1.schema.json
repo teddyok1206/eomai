@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/infra/recovery-validation-receipt/1.0",
+  "title": "Recovery Validation Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "verification_mode", "database_backup_id", "database_backup_created_at", "database_backup_sha256", "database_manifest_sha256", "database_inventory_sha256", "artifact_snapshot_id", "artifact_snapshot_captured_at", "artifact_snapshot_sha256", "artifact_inventory_sha256", "restored_database_identity", "artifact_revision_count", "verified_revision_count", "verified_member_count", "evidence_revision_count", "evidence_member_count", "evidence_revisions", "validated_at", "receipt_sha256"],
+  "properties": {
+    "schema_version": {"const": "recovery-validation-receipt/1.0"},
+    "verification_mode": {"enum": ["SAMPLED", "FULL"]},
+    "database_backup_id": {"type": "string", "pattern": "^pgbackup_[0-9]{8}T[0-9]{6}Z_[0-9a-f]{12}$"},
+    "database_backup_created_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "database_backup_sha256": {"$ref": "#/$defs/sha256"},
+    "database_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "database_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "artifact_snapshot_id": {"type": "string", "pattern": "^artifactsnapshot_[0-9a-f]{32}$"},
+    "artifact_snapshot_captured_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "artifact_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "artifact_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "restored_database_identity": {"type": "string", "pattern": "^(eom_restore|eom_test)_[a-z0-9_]{1,63}$"},
+    "artifact_revision_count": {"type": "integer", "minimum": 0},
+    "verified_revision_count": {"type": "integer", "minimum": 0},
+    "verified_member_count": {"type": "integer", "minimum": 0},
+    "evidence_revision_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "evidence_member_count": {"type": "integer", "minimum": 0},
+    "evidence_revisions": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/revision"}},
+    "validated_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "revision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "artifact_type", "content_sha256", "manifest_sha256", "primary_file", "member_count"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "artifact_type": {"type": "string", "minLength": 1, "maxLength": 64},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "primary_file": {"type": "string", "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001f\\u007f]+$", "minLength": 1, "maxLength": 512},
+        "member_count": {"type": "integer", "minimum": 1, "maximum": 100000}
+      }
+    }
+  }
+}

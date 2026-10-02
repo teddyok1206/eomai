@@ -760,7 +760,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
 
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 56 packaged API schemas" in deployment
+    assert "expected exactly 59 packaged API schemas" in deployment
     assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/workflow-start-v4.schema.json"' in deployment
@@ -772,6 +772,14 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert '"eom_api_contracts/schemas/mock-exam-assembly-policy-view-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/mock-exam-explicit-rating-set-v1.schema.json"' in deployment
+    assert (
+        '"eom_api_contracts/schemas/educational-quality-review-command-v1.schema.json"'
+        in deployment
+    )
+    assert (
+        '"eom_api_contracts/schemas/educational-quality-review-workbench-v1.schema.json"'
+        in deployment
+    )
     assert (
         '"eom_api_contracts/schemas/mock-exam-graph-publication-input-v1.schema.json"' in deployment
     )
@@ -825,8 +833,9 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "mock-exam contract package exports are incomplete" in deployment
     assert "mock-exam terminal-state contract export is incomplete" in deployment
     assert "mock-exam retirement contract package exports are incomplete" in deployment
+    assert "educational quality review contract package exports are incomplete" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20260925_0044"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20261002_0045"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v2.schema.json"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment

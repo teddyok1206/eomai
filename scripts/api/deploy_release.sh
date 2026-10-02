@@ -1045,10 +1045,12 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/build_info.py",
         "eom_api/build-info.json",
         "eom_api/cli.py",
+        "eom_api/educational_quality_models.py",
         "eom_api/mock_exam_production_cli.py",
         "eom_api/runtime_isolation_pidfd.py",
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/routers/control_plane.py",
+        "eom_api/routers/educational_quality_reviews.py",
         "eom_api/routers/knowledge_analysis.py",
         "eom_api/routers/assessment_assemblies.py",
         "eom_api/routers/item_bank.py",
@@ -1065,6 +1067,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/control_plane_adapter.py",
         "eom_api/services/document_review_correction_service.py",
         "eom_api/services/document_review_annotation_service.py",
+        "eom_api/services/educational_quality_service.py",
         "eom_api/services/pdf_document_review_service.py",
         "eom_api/services/paired_document_review_service.py",
         "eom_api/services/pdf_upload_stager.py",
@@ -1196,6 +1199,8 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/schemas/document-review-set-create-v1.schema.json",
         "eom_api_contracts/schemas/document-review-set-view-v1.schema.json",
         "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
+        "eom_api_contracts/schemas/educational-quality-review-command-v1.schema.json",
+        "eom_api_contracts/schemas/educational-quality-review-workbench-v1.schema.json",
         "eom_api_contracts/schemas/errors.schema.json",
         "eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json",
         "eom_api_contracts/schemas/hwpx.schema.json",
@@ -1236,7 +1241,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 56 packaged API schemas including Item approval, paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
+            "expected exactly 59 packaged API schemas including educational quality review, Item approval, paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
             "and mock-exam "
             "production execution/review/retirement contracts, "
             f"missing={sorted(expected_api_schemas - schemas)} "
@@ -1247,6 +1252,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/assessment_assemblies.py",
         "eom_api_contracts/customer_support.py",
         "eom_api_contracts/document_review.py",
+        "eom_api_contracts/educational_quality.py",
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
@@ -2162,6 +2168,8 @@ from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_api_contracts import (
     ApiReleaseBuildInfo,
+    EducationalQualityReviewCommand,
+    EducationalQualityReviewWorkbenchView,
     MockExamExplicitAnalysisReviewSetV1,
     MockExamExplicitRatingSetV1,
     MockExamGenerationBlockResolutionV1,
@@ -2279,6 +2287,13 @@ if any(
     raise SystemExit("mock-exam contract package exports are incomplete")
 if ApiReleaseBuildInfo.__module__ != "eom_api_contracts.system":
     raise SystemExit("API release build information contract export is incomplete")
+if (
+    EducationalQualityReviewCommand.__module__
+    != "eom_api_contracts.educational_quality"
+    or EducationalQualityReviewWorkbenchView.__module__
+    != "eom_api_contracts.educational_quality"
+):
+    raise SystemExit("educational quality review contract package exports are incomplete")
 build_info = get_build_info()
 if (
     build_info.source_commit != expected_commit
@@ -2307,7 +2322,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20260925_0044":
+if CURRENT_MIGRATION_REVISION != "20261002_0045":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():

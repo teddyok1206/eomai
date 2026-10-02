@@ -68,6 +68,18 @@ CURRENT_WIRE_IDENTITIES = {
     "schemas/api/v1/mock-exam-graph-publication-input-v1.schema.json": (
         "https://eom.local/schemas/api/v1/mock-exam-graph-publication-input-v1.schema.json"
     ),
+    "schemas/api/v1/educational-quality-review-command-v1.schema.json": (
+        "https://eom.local/schemas/api/v1/educational-quality-review-command-v1.schema.json"
+    ),
+    "schemas/api/v1/educational-quality-review-workbench-v1.schema.json": (
+        "https://eom.local/schemas/api/v1/educational-quality-review-workbench-v1.schema.json"
+    ),
+    "schemas/infra/artifact-store-snapshot-manifest-v1.schema.json": (
+        "eom://schemas/infra/artifact-store-snapshot-manifest/1.0"
+    ),
+    "schemas/infra/recovery-validation-receipt-v1.schema.json": (
+        "eom://schemas/infra/recovery-validation-receipt/1.0"
+    ),
     "schemas/hwpx/hwpx-render-request-v1.schema.json": "eom://schemas/hwpx/render-request/1.0",
     "schemas/hwpx/hwpx-template-binding-manifest-v1.schema.json": (
         "eom://schemas/hwpx/template-binding-manifest/1.0"

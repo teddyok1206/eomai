@@ -37,6 +37,7 @@ from eom_web_gui.contracts import (
     DocumentReviewCorrectionView,
     DocumentReviewSetView,
     DocumentReviewView,
+    EducationalQualityCommandSubmission,
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
@@ -523,6 +524,16 @@ class ApplicationGateway(Protocol):
     ) -> ItemBankPage: ...
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]: ...
+
+    async def educational_quality_workbench(
+        self, session: WebSession, plan_id: str | None
+    ) -> dict[str, Any]: ...
+
+    async def submit_educational_quality_command(
+        self,
+        session: WebSession,
+        value: EducationalQualityCommandSubmission,
+    ) -> dict[str, Any]: ...
 
     async def mock_exam_assembly_plan(self, session: WebSession) -> dict[str, Any]: ...
 
@@ -2171,6 +2182,56 @@ class HttpApplicationGateway:
         ):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
         return sanitize_mapping(policy)
+
+    async def educational_quality_workbench(
+        self, session: WebSession, plan_id: str | None
+    ) -> dict[str, Any]:
+        if plan_id is not None and re.fullmatch(r"qualityplan_[0-9a-f]{32}", plan_id) is None:
+            raise GatewayError(status=422, code="RESOURCE_ID_INVALID")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/educational-quality-reviews/workbench",
+            params={"plan_id": plan_id},
+        )
+        value = self._data(response)
+        if (
+            value.get("schema_version") != "educational-quality-review-workbench/1.0"
+            or not isinstance(value.get("candidate_assemblies"), list)
+            or not isinstance(value.get("plans"), list)
+            or (
+                value.get("selected_plan") is not None
+                and not isinstance(value["selected_plan"], dict)
+            )
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return sanitize_mapping(value)
+
+    async def submit_educational_quality_command(
+        self,
+        session: WebSession,
+        value: EducationalQualityCommandSubmission,
+    ) -> dict[str, Any]:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/educational-quality-reviews/commands",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        result = self._data(response)
+        if (
+            result.get("status") != "COMPLETED"
+            or result.get("resource_type")
+            not in {
+                "educational_quality_review_plan",
+                "educational_quality_review_session",
+            }
+            or not isinstance(result.get("resource_id"), str)
+            or not isinstance(result.get("resource_version"), int)
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return sanitize_mapping(result)
 
     async def _mock_exam_planning_context(
         self, session: WebSession

@@ -1,6 +1,6 @@
 # M02 25-Item educational review baseline
 
-Status: `PREPARED_FOR_HUMAN_REVIEW`
+Status: `WORKBENCH_REPOSITORY_CANDIDATE`; human observations remain pending
 
 Evidence time: 2026-09-15 13:35 UTC
 
@@ -27,6 +27,19 @@ The existing production rating is `C` for all 25 Items. That value is an assembl
 under `integrated-science-item-rating/1.0`; it is not evidence that all Items have the same scientific
 quality, editing cost, or publication readiness. M02 observations remain a separate human product
 evaluation and must not rewrite the immutable production decision.
+
+## Additive workbench implementation
+
+The repository now contains `educational-quality-review-workbench/1.0` and its command contract.
+The Application API creates one immutable plan for this exact Assembly revision, stores only pinned
+Item-revision pointers and small observations, and requires different operators for the primary and
+secondary roles. Finalized observations are immutable. A derived scorecard remains `IN_PROGRESS`
+until both sessions are finalized and every differing sample observation has an explicit immutable
+resolution; it never averages unresolved disagreement away.
+
+This is a repository candidate, not proof that migration `20261002_0045` is installed or that the
+human review is complete. The Markdown table below remains readable evidence and a fallback, not a
+second persistence authority once the workbench is activated.
 
 ## Coverage baseline
 

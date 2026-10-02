@@ -294,7 +294,7 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
 def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliation() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert "{verify|migrate|hwpx-tests|pdf-review-tests|tests}" in source
+    assert "{verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|tests}" in source
     hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
     runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
     assert hwpx_branch < runtime_environment
@@ -312,10 +312,20 @@ def test_disposable_database_runs_pdf_review_persistence_after_runtime_reconcili
     assert "test_pdf_review_migration_matches_authoritative_models" in source
 
 
+def test_disposable_database_runs_educational_quality_persistence() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+
+    quality_branch = source.index('if [[ "${action}" == "quality-review-tests" ]]')
+    runtime_environment = source.rindex('runtime_environment="${state_directory}/runtime.env"')
+    assert quality_branch < runtime_environment
+    assert "tests/api/test_educational_quality_review_contract.py" in source
+    assert "tests/api/test_educational_quality_review_persistence.py" in source
+
+
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert "{verify|migrate|hwpx-tests|pdf-review-tests|tests}" in source
+    assert "{verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|tests}" in source
     assert "validate_application_schema_metadata" in source
     assert "SELECT version_num FROM app.alembic_version" in source
     assert "app.reject_identity_key_change()" in source

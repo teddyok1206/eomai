@@ -12,9 +12,10 @@ fail() {
 
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
-    "$1" != "pdf-review-tests" && "$1" != "tests" ]]; then
+    "$1" != "pdf-review-tests" && "$1" != "quality-review-tests" && \
+    "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -177,6 +178,15 @@ if [[ "${action}" == "pdf-review-tests" ]]; then
     tests/api/test_pdf_document_review_upload_intent_persistence.py::test_pdf_review_migration_matches_authoritative_models \
     tests/api/test_paired_document_review_service.py::test_paired_review_set_persists_parent_before_members_on_postgresql
   printf 'Disposable PDF document-review persistence tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "quality-review-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  "${PYTHON}" -m pytest -q \
+    tests/api/test_educational_quality_review_contract.py \
+    tests/api/test_educational_quality_review_persistence.py
+  printf 'Disposable educational-quality review persistence tests passed.\n'
   exit 0
 fi
 

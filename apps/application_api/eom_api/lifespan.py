@@ -29,6 +29,9 @@ from eom_api.services.document_review_annotation_service import (
 from eom_api.services.document_review_correction_service import (
     DocumentReviewCorrectionApplicationService,
 )
+from eom_api.services.educational_quality_service import (
+    EducationalQualityReviewApplicationService,
+)
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.hwpx_item_revision_resolver import (
     CatalogBackedHwpxItemRevisionResolver,
@@ -116,6 +119,10 @@ class AppServices:
         self.hwpx = HwpxApplicationService(engine, registry=self.hwpx_item_revisions)
         self.item_approvals = ItemApprovalApplicationService(
             hwpx=self.hwpx,
+            catalog=self.catalog_application,
+        )
+        self.educational_quality_reviews = EducationalQualityReviewApplicationService(
+            engine,
             catalog=self.catalog_application,
         )
         self.exam_hwpx = ExamHwpxApplicationService(engine, registry=self.registry)

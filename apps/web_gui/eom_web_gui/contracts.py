@@ -2652,3 +2652,88 @@ class HwpxBuildView(WebModel):
     started_at: UtcDatetime | None = None
     completed_at: UtcDatetime | None = None
     resource_version: int = Field(ge=1)
+
+
+class EducationalQualityObservationSubmission(WebModel):
+    position: int = Field(ge=1, le=200)
+    item_revision_id: str = Field(pattern=r"^itemrev_[a-f0-9]{32}$")
+    preview_checked: bool
+    hwpx_checked: bool
+    evidence_checked: bool
+    science_score: int = Field(ge=1, le=5)
+    critical_error: bool
+    unique_answer: Literal["PASS", "FAIL", "AMBIGUOUS"]
+    evidence_score: int = Field(ge=1, le=5)
+    authoring_value_score: int = Field(ge=1, le=5)
+    visual_score: int | None = Field(default=None, ge=1, le=5)
+    visual_not_applicable_reason: str | None = Field(default=None, min_length=1, max_length=240)
+    explanation_quality_score: int = Field(ge=1, le=5)
+    disposition: Literal["NO_EDIT", "MINOR_EDIT", "MAJOR_EDIT", "DISCARD"]
+    edit_minutes: int = Field(ge=0, le=1440)
+    short_reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def visual_contract(self) -> EducationalQualityObservationSubmission:
+        if (self.visual_score is None) != (self.visual_not_applicable_reason is not None):
+            raise ValueError("visual score and not-applicable reason are incoherent")
+        return self
+
+
+class _EducationalQualityMutation(WebModel):
+    idempotency_key: str = Field(
+        min_length=16,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+
+
+class CreateEducationalQualityPlanSubmission(_EducationalQualityMutation):
+    operation: Literal["CREATE_PLAN"]
+    assembly_revision_id: str = Field(pattern=r"^assemblyrev_[a-f0-9]{32}$")
+    assembly_manifest_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    secondary_positions: tuple[int, ...] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def ordered_unique_positions(self) -> CreateEducationalQualityPlanSubmission:
+        if self.secondary_positions != tuple(sorted(set(self.secondary_positions))):
+            raise ValueError("secondary positions must be sorted and unique")
+        return self
+
+
+class StartEducationalQualitySessionSubmission(_EducationalQualityMutation):
+    operation: Literal["START_SESSION"]
+    plan_id: str = Field(pattern=r"^qualityplan_[a-f0-9]{32}$")
+    plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    reviewer_role: Literal["PRIMARY", "SECONDARY"]
+
+
+class UpsertEducationalQualityObservationSubmission(_EducationalQualityMutation):
+    operation: Literal["UPSERT_OBSERVATION"]
+    session_id: str = Field(pattern=r"^qualitysession_[a-f0-9]{32}$")
+    expected_lock_version: int = Field(ge=1)
+    observation: EducationalQualityObservationSubmission
+
+
+class FinalizeEducationalQualitySessionSubmission(_EducationalQualityMutation):
+    operation: Literal["FINALIZE_SESSION"]
+    session_id: str = Field(pattern=r"^qualitysession_[a-f0-9]{32}$")
+    expected_lock_version: int = Field(ge=1)
+
+
+class ResolveEducationalQualityDisagreementSubmission(_EducationalQualityMutation):
+    operation: Literal["RESOLVE_DISAGREEMENT"]
+    plan_id: str = Field(pattern=r"^qualityplan_[a-f0-9]{32}$")
+    plan_sha256: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    position: int = Field(ge=1, le=200)
+    chosen_session_id: str = Field(pattern=r"^qualitysession_[a-f0-9]{32}$")
+    notes: str = Field(min_length=1, max_length=1000)
+
+
+EducationalQualityCommandSubmission = Annotated[
+    CreateEducationalQualityPlanSubmission
+    | StartEducationalQualitySessionSubmission
+    | UpsertEducationalQualityObservationSubmission
+    | FinalizeEducationalQualitySessionSubmission
+    | ResolveEducationalQualityDisagreementSubmission,
+    Field(discriminator="operation"),
+]

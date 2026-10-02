@@ -26,6 +26,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260922_0042_document_review_pdf_annotations",
     "migrations.versions.20260923_0043_durable_document_review_sources",
     "migrations.versions.20260925_0044_content_intake_source_sha",
+    "migrations.versions.20261002_0045_educational_quality_reviews",
 )
 
 
