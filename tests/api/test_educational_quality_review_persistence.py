@@ -12,7 +12,15 @@ from eom_api.educational_quality_models import (
     EducationalQualityReviewSessionRecord,
 )
 from eom_orchestrator.database import build_engine
-from sqlalchemy import Index, LargeBinary, Table, UniqueConstraint, inspect, text
+from sqlalchemy import (
+    ForeignKeyConstraint,
+    Index,
+    LargeBinary,
+    Table,
+    UniqueConstraint,
+    inspect,
+    text,
+)
 
 MODELS = (
     EducationalQualityReviewPlanRecord,
@@ -57,7 +65,19 @@ def test_quality_review_persistence_is_pointer_only_and_indexed() -> None:
     }
     assert constraints == {
         "uq_educational_quality_session_independent_reviewer",
+        "uq_educational_quality_session_identity_plan",
         "uq_educational_quality_session_plan_role",
+    }
+
+    resolution = cast(Table, EducationalQualityReviewResolutionRecord.__table__)
+    assert {
+        constraint.name
+        for constraint in resolution.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+    } == {
+        "fk_quality_resolution_observation",
+        "fk_quality_resolution_session_plan",
+        None,
     }
 
 
@@ -86,8 +106,27 @@ def test_quality_review_migration_matches_authoritative_models() -> None:
                 ("plan_id", "reviewer_id"),
             ),
             (
+                "uq_educational_quality_session_identity_plan",
+                ("session_id", "plan_id"),
+            ),
+            (
                 "uq_educational_quality_session_plan_role",
                 ("plan_id", "reviewer_role"),
+            ),
+        }
+        assert {
+            (value["name"], tuple(value["constrained_columns"]))
+            for value in inspector.get_foreign_keys(
+                "educational_quality_review_resolutions", schema="app"
+            )
+        } >= {
+            (
+                "fk_quality_resolution_session_plan",
+                ("chosen_session_id", "plan_id"),
+            ),
+            (
+                "fk_quality_resolution_observation",
+                ("chosen_session_id", "position"),
             ),
         }
         with engine.connect() as connection:

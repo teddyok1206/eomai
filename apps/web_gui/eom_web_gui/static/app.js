@@ -3752,6 +3752,13 @@ function educationalQualityCommandKey(operation) {
   return `studio:educational-quality:${operation.toLowerCase()}:${crypto.randomUUID()}`;
 }
 
+function canWriteEducationalQualityReview() {
+  const permissions = state.operator && Array.isArray(state.operator.effective_permissions)
+    ? state.operator.effective_permissions
+    : [];
+  return permissions.includes("workflow:approve");
+}
+
 function selectedEducationalQualityPlan() {
   return state.educationalQualityWorkbench?.selected_plan || null;
 }
@@ -3945,6 +3952,14 @@ function renderEducationalQualityResolutions() {
       note.textContent = `판정 근거: ${resolved.notes}`;
       card.append(note);
     } else {
+      if (!canWriteEducationalQualityReview()) {
+        const notice = document.createElement("p");
+        notice.className = "muted-label";
+        notice.textContent = "판정 기록 권한이 있는 검토자가 선택해야 합니다.";
+        card.append(notice);
+        root.append(card);
+        continue;
+      }
       const notes = document.createElement("textarea");
       notes.rows = 2;
       notes.maxLength = 1000;
@@ -4015,8 +4030,9 @@ function renderEducationalQualityItemList() {
     return;
   }
   const observations = new Map(session.observations.map((row) => [row.position, row]));
+  const items = new Map(plan.items.map((row) => [row.position, row]));
   for (const position of session.required_positions) {
-    const item = plan.items.find((candidate) => candidate.position === position);
+    const item = items.get(position);
     if (!item) continue;
     const observation = observations.get(position);
     const button = document.createElement("button");
@@ -4036,6 +4052,10 @@ function renderEducationalQualityItemList() {
 
 function renderEducationalQualityPlan() {
   const plan = selectedEducationalQualityPlan();
+  const canWrite = canWriteEducationalQualityReview();
+  $("#quality-plan-create").disabled = !canWrite;
+  $("#quality-assembly-select").disabled = !canWrite;
+  $("#quality-secondary-positions").disabled = !canWrite;
   $("#quality-review-empty").hidden = Boolean(plan);
   $("#quality-review-content").hidden = !plan;
   if (!plan) {
@@ -4056,9 +4076,9 @@ function renderEducationalQualityPlan() {
   $("#quality-required-count").textContent = session ? String(session.required_positions.length) : "-";
   $("#quality-observation-count").textContent = session ? String(session.observations.length) : "0";
   $("#quality-resolution-count").textContent = String(plan.resolutions.length);
-  $("#quality-session-start").disabled = Boolean(session);
-  $("#quality-session-finalize").disabled = !session || finalized || session.observations.length !== session.required_positions.length;
-  $("#quality-observation-form").hidden = !session || finalized || state.educationalQualityPosition === null;
+  $("#quality-session-start").disabled = !canWrite || Boolean(session);
+  $("#quality-session-finalize").disabled = !canWrite || !session || finalized || session.observations.length !== session.required_positions.length;
+  $("#quality-observation-form").hidden = !canWrite || !session || finalized || state.educationalQualityPosition === null;
   renderEducationalQualityScorecard(plan);
   renderEducationalQualityTechnical(plan);
   renderEducationalQualityItemList();
@@ -4071,6 +4091,10 @@ function renderEducationalQualityPlan() {
 async function resolveEducationalQualityDisagreement(position, chosenSessionId, notes, ...buttons) {
   const plan = selectedEducationalQualityPlan();
   if (!plan) return;
+  if (!canWriteEducationalQualityReview()) {
+    showMessage($("#quality-plan-message"), "평가 판정 기록 권한이 없습니다.", "error");
+    return;
+  }
   if (!notes) {
     showMessage($("#quality-plan-message"), "이중 검토 판정 근거를 입력하세요.", "error");
     return;
@@ -4126,18 +4150,23 @@ async function loadEducationalQualityWorkbench(planId = state.educationalQuality
 }
 
 function parseEducationalQualityPositions(value) {
-  const positions = value.split(",").map((part) => Number(part.trim())).filter(Number.isInteger);
+  const normalized = value.trim();
+  if (!/^\d+(?:\s*,\s*\d+)*$/.test(normalized)) return null;
+  const positions = normalized.split(",").map((part) => Number(part.trim()));
   return [...new Set(positions)].sort((left, right) => left - right);
 }
 
 async function createEducationalQualityPlan(event) {
   event.preventDefault();
+  if (!canWriteEducationalQualityReview()) {
+    return showMessage($("#quality-plan-message"), "평가 계획 생성 권한이 없습니다.", "error");
+  }
   const revisionId = $("#quality-assembly-select").value;
   const candidate = state.educationalQualityWorkbench?.candidate_assemblies.find(
     (value) => value.assembly_revision_id === revisionId,
   );
   const positions = parseEducationalQualityPositions($("#quality-secondary-positions").value);
-  if (!candidate || !positions.length || positions.some((position) => position < 1 || position > candidate.item_count)) {
+  if (!candidate || !positions?.length || positions.some((position) => position < 1 || position > candidate.item_count)) {
     return showMessage($("#quality-plan-message"), "시험지와 유효한 이중 검토 문항 위치를 확인하세요.", "error");
   }
   $("#quality-plan-create").disabled = true;
@@ -4165,6 +4194,10 @@ async function createEducationalQualityPlan(event) {
 async function startEducationalQualitySession() {
   const plan = selectedEducationalQualityPlan();
   if (!plan) return;
+  if (!canWriteEducationalQualityReview()) {
+    showMessage($("#quality-observation-message"), "평가 세션 시작 권한이 없습니다.", "error");
+    return;
+  }
   const role = $("#quality-reviewer-role").value;
   $("#quality-session-start").disabled = true;
   try {
@@ -4199,6 +4232,10 @@ function syncEducationalQualityVisualReason() {
 
 async function saveEducationalQualityObservation(event) {
   event.preventDefault();
+  if (!canWriteEducationalQualityReview()) {
+    showMessage($("#quality-observation-message"), "문항 평가 기록 권한이 없습니다.", "error");
+    return;
+  }
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const plan = selectedEducationalQualityPlan();
@@ -4242,6 +4279,10 @@ async function finalizeEducationalQualitySession() {
   const plan = selectedEducationalQualityPlan();
   const session = selectedEducationalQualitySession();
   if (!plan || !session || session.state !== "DRAFT") return;
+  if (!canWriteEducationalQualityReview()) {
+    showMessage($("#quality-observation-message"), "평가 완료 권한이 없습니다.", "error");
+    return;
+  }
   $("#quality-session-finalize").disabled = true;
   try {
     await api("/educational-quality-reviews/commands", {

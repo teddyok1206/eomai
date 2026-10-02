@@ -7,8 +7,10 @@ import pytest
 from eom_api_contracts.educational_quality import (
     CreateEducationalQualityPlanCommand,
     EducationalQualityObservationInput,
+    EducationalQualityPlanDetailView,
     EducationalQualityReviewWorkbenchView,
     EducationalQualityScoreMetricsView,
+    EducationalQualitySessionView,
 )
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -134,3 +136,83 @@ def test_score_metrics_reject_incoherent_disposition_totals() -> None:
             visual_scored_item_count=0,
             visual_score_milli=None,
         )
+
+
+def test_score_metrics_reject_incoherent_derived_mean() -> None:
+    with pytest.raises(PydanticValidationError, match="score metrics"):
+        EducationalQualityScoreMetricsView(
+            item_count=2,
+            no_edit_count=2,
+            minor_edit_count=0,
+            major_edit_count=0,
+            discard_count=0,
+            adoptable_count=2,
+            critical_error_count=0,
+            unique_answer_pass_count=2,
+            unique_answer_ambiguous_count=0,
+            unique_answer_fail_count=0,
+            total_edit_minutes=4,
+            mean_edit_minutes_milli=1999,
+            science_score_milli=5000,
+            evidence_score_milli=5000,
+            authoring_value_score_milli=5000,
+            explanation_quality_score_milli=5000,
+            visual_scored_item_count=0,
+            visual_score_milli=None,
+        )
+
+
+def test_finalized_session_requires_exact_sorted_checked_coverage() -> None:
+    payload = {
+        "session_id": "qualitysession_" + "a" * 32,
+        "reviewer_id": "operator_" + "b" * 32,
+        "reviewer_role": "PRIMARY",
+        "state": "FINALIZED",
+        "lock_version": 2,
+        "required_positions": [1, 2],
+        "observations": [_observation() | {"updated_at": "2026-10-02T00:00:00Z"}],
+        "created_at": "2026-10-02T00:00:00Z",
+        "finalized_at": "2026-10-02T00:01:00Z",
+    }
+    with pytest.raises(PydanticValidationError, match="cover every assigned"):
+        EducationalQualitySessionView.model_validate(payload)
+
+
+def test_plan_detail_rejects_noncontiguous_item_projection() -> None:
+    payload = {
+        "summary": {
+            "plan_id": "qualityplan_" + "1" * 32,
+            "plan_sha256": "sha256:" + "2" * 64,
+            "assembly_revision_id": "assemblyrev_" + "3" * 32,
+            "assembly_manifest_sha256": "sha256:" + "4" * 64,
+            "item_count": 1,
+            "primary_finalized": False,
+            "secondary_finalized": False,
+            "resolved_count": 0,
+            "created_at": "2026-10-02T00:00:00Z",
+        },
+        "assembly_id": "assembly_" + "5" * 32,
+        "secondary_positions": [1],
+        "items": [
+            {
+                "position": 2,
+                "display_number": "1",
+                "item_id": "item_" + "6" * 32,
+                "item_revision_id": "itemrev_" + "7" * 32,
+                "item_manifest_sha256": "sha256:" + "8" * 64,
+                "material_type": "TABLE",
+                "difficulty_band": "MEDIUM",
+            }
+        ],
+        "sessions": [],
+        "resolutions": [],
+        "scorecard": {
+            "state": "IN_PROGRESS",
+            "primary_observation_count": 0,
+            "secondary_observation_count": 0,
+            "unresolved_disagreement_count": 0,
+            "metrics": None,
+        },
+    }
+    with pytest.raises(PydanticValidationError, match="contiguous"):
+        EducationalQualityPlanDetailView.model_validate(payload)

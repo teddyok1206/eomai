@@ -9,6 +9,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -107,6 +108,9 @@ class EducationalQualityReviewSessionRecord(Base):
         UniqueConstraint(
             "plan_id", "reviewer_id", name="uq_educational_quality_session_independent_reviewer"
         ),
+        UniqueConstraint(
+            "session_id", "plan_id", name="uq_educational_quality_session_identity_plan"
+        ),
         Index("ix_educational_quality_session_plan", "plan_id", "reviewer_role", "state"),
     )
 
@@ -190,6 +194,24 @@ class EducationalQualityReviewResolutionRecord(Base):
         CheckConstraint(
             "position BETWEEN 1 AND 200", name="ck_educational_quality_resolution_position"
         ),
+        ForeignKeyConstraint(
+            ("chosen_session_id", "plan_id"),
+            (
+                "educational_quality_review_sessions.session_id",
+                "educational_quality_review_sessions.plan_id",
+            ),
+            name="fk_quality_resolution_session_plan",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("chosen_session_id", "position"),
+            (
+                "educational_quality_review_observations.session_id",
+                "educational_quality_review_observations.position",
+            ),
+            name="fk_quality_resolution_observation",
+            ondelete="RESTRICT",
+        ),
         Index("ix_educational_quality_resolution_session", "chosen_session_id"),
     )
 
@@ -198,10 +220,7 @@ class EducationalQualityReviewResolutionRecord(Base):
         primary_key=True,
     )
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
-    chosen_session_id: Mapped[str] = mapped_column(
-        ForeignKey("educational_quality_review_sessions.session_id", ondelete="RESTRICT"),
-        nullable=False,
-    )
+    chosen_session_id: Mapped[str] = mapped_column(String(47), nullable=False)
     resolved_by: Mapped[str] = mapped_column(
         ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )

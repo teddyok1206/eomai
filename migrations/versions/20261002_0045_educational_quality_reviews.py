@@ -145,6 +145,9 @@ def upgrade() -> None:
             "reviewer_id",
             name="uq_educational_quality_session_independent_reviewer",
         ),
+        sa.UniqueConstraint(
+            "session_id", "plan_id", name="uq_educational_quality_session_identity_plan"
+        ),
     )
     op.create_index(
         "ix_educational_quality_session_plan",
@@ -218,12 +221,7 @@ def upgrade() -> None:
             primary_key=True,
         ),
         sa.Column("position", sa.Integer(), primary_key=True),
-        sa.Column(
-            "chosen_session_id",
-            sa.String(47),
-            sa.ForeignKey("educational_quality_review_sessions.session_id", ondelete="RESTRICT"),
-            nullable=False,
-        ),
+        sa.Column("chosen_session_id", sa.String(47), nullable=False),
         sa.Column(
             "resolved_by",
             sa.String(128),
@@ -236,6 +234,24 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "position BETWEEN 1 AND 200", name="ck_educational_quality_resolution_position"
+        ),
+        sa.ForeignKeyConstraint(
+            ["chosen_session_id", "plan_id"],
+            [
+                "educational_quality_review_sessions.session_id",
+                "educational_quality_review_sessions.plan_id",
+            ],
+            name="fk_quality_resolution_session_plan",
+            ondelete="RESTRICT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["chosen_session_id", "position"],
+            [
+                "educational_quality_review_observations.session_id",
+                "educational_quality_review_observations.position",
+            ],
+            name="fk_quality_resolution_observation",
+            ondelete="RESTRICT",
         ),
     )
     op.create_index(

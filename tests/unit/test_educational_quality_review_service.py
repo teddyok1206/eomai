@@ -20,11 +20,13 @@ from eom_api.services.educational_quality_service import (
 )
 from eom_api_contracts.educational_quality import (
     CreateEducationalQualityPlanCommand,
+    ResolveEducationalQualityDisagreementCommand,
     StartEducationalQualitySessionCommand,
 )
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 
 NOW = datetime(2026, 10, 2, tzinfo=UTC)
 OPERATOR_ID = "operator_" + "1" * 32
@@ -282,3 +284,63 @@ def test_scorecard_requires_resolution_then_uses_chosen_review() -> None:
     assert ready.metrics is not None
     assert ready.metrics.science_score_milli == 5000
     assert ready.metrics.adoptable_count == 1
+
+
+def test_resolution_race_fails_with_stable_conflict(monkeypatch: pytest.MonkeyPatch) -> None:
+    plan = SimpleNamespace(
+        plan_id="qualityplan_" + "a" * 32,
+        plan_sha256="sha256:" + "b" * 64,
+        secondary_positions=[1],
+    )
+    primary_id = "qualitysession_" + "c" * 32
+    secondary_id = "qualitysession_" + "d" * 32
+    primary_observation = _observation(primary_id, science_score=4)
+    secondary_observation = _observation(secondary_id, science_score=5)
+
+    class _ResolutionRaceSession(_Session):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scalar_values = iter((primary_id, secondary_id))
+
+        def get(self, model: object, identity: object) -> object | None:
+            if model is EducationalQualityReviewPlanRecord:
+                return plan
+            if model is EducationalQualityReviewSessionRecord:
+                return SimpleNamespace(
+                    session_id=secondary_id, plan_id=plan.plan_id, state="FINALIZED"
+                )
+            if model is EducationalQualityReviewObservationRecord:
+                return primary_observation if identity == (primary_id, 1) else secondary_observation
+            if model is EducationalQualityReviewResolutionRecord:
+                return None
+            return None
+
+        def scalar(self, _statement: object) -> object | None:
+            return next(self.scalar_values)
+
+        def flush(self) -> None:
+            raise IntegrityError("INSERT", {}, Exception("unique race"))
+
+    fake_session = _ResolutionRaceSession()
+
+    @contextmanager
+    def fake_transaction(_sessions: object) -> Iterator[_ResolutionRaceSession]:
+        yield fake_session
+
+    monkeypatch.setattr(
+        "eom_api.services.educational_quality_service.transaction", fake_transaction
+    )
+    service = _service(_manifest())
+    with pytest.raises(ApiError) as raised:
+        service.resolve_disagreement(
+            ResolveEducationalQualityDisagreementCommand(
+                operation="RESOLVE_DISAGREEMENT",
+                plan_id=plan.plan_id,
+                plan_sha256=plan.plan_sha256,
+                position=1,
+                chosen_session_id=secondary_id,
+                notes="두 번째 독립 검토를 채택",
+            ),
+            _actor(),
+        )
+    assert raised.value.error_code == "EDUCATIONAL_QUALITY_RESOLUTION_CONCURRENT_CONFLICT"

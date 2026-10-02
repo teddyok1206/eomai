@@ -543,6 +543,13 @@ class EducationalQualityReviewApplicationService:
                     notes=command.notes,
                 )
             )
+            try:
+                session.flush()
+            except IntegrityError as exc:
+                raise self._conflict(
+                    "EDUCATIONAL_QUALITY_RESOLUTION_CONCURRENT_CONFLICT",
+                    "This disagreement was resolved concurrently.",
+                ) from exc
         return _command_id(), command.plan_id, 1
 
     def execute(

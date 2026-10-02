@@ -142,6 +142,26 @@ class EducationalQualitySessionView(ApiModel):
     created_at: UtcDatetime
     finalized_at: UtcDatetime | None = None
 
+    @model_validator(mode="after")
+    def lifecycle_and_coverage_are_coherent(self) -> Self:
+        required = self.required_positions
+        observed = tuple(value.position for value in self.observations)
+        if required != tuple(sorted(set(required))):
+            raise ValueError("required_positions must be sorted and unique")
+        if observed != tuple(sorted(set(observed))) or not set(observed).issubset(required):
+            raise ValueError("session observations must be sorted, unique, and assigned")
+        if (self.state == "FINALIZED") != (self.finalized_at is not None):
+            raise ValueError("session lifecycle timestamp does not match state")
+        if self.state == "FINALIZED" and (
+            observed != required
+            or any(
+                not value.preview_checked or not value.hwpx_checked or not value.evidence_checked
+                for value in self.observations
+            )
+        ):
+            raise ValueError("finalized session must cover every assigned quality check")
+        return self
+
 
 class EducationalQualityResolutionView(ApiModel):
     position: int = Field(ge=1, le=200)
@@ -181,7 +201,11 @@ class EducationalQualityScoreMetricsView(ApiModel):
             + self.unique_answer_ambiguous_count
             + self.unique_answer_fail_count
             != self.item_count
+            or self.critical_error_count > self.item_count
+            or self.visual_scored_item_count > self.item_count
             or (self.visual_scored_item_count == 0) != (self.visual_score_milli is None)
+            or self.mean_edit_minutes_milli
+            != (self.total_edit_minutes * 1000 + self.item_count // 2) // self.item_count
         ):
             raise ValueError("educational quality score metrics are incoherent")
         return self
@@ -198,6 +222,12 @@ class EducationalQualityScorecardView(ApiModel):
     def ready_state_matches_metrics(self) -> Self:
         if (self.state == "READY") != (self.metrics is not None):
             raise ValueError("ready scorecard state requires exact canonical metrics")
+        if self.state == "READY" and (
+            self.unresolved_disagreement_count != 0
+            or self.metrics is None
+            or self.primary_observation_count != self.metrics.item_count
+        ):
+            raise ValueError("ready scorecard counts do not match canonical metrics")
         return self
 
 
@@ -209,6 +239,40 @@ class EducationalQualityPlanDetailView(ApiModel):
     sessions: tuple[EducationalQualitySessionView, ...] = Field(max_length=32)
     resolutions: tuple[EducationalQualityResolutionView, ...] = Field(max_length=200)
     scorecard: EducationalQualityScorecardView
+
+    @model_validator(mode="after")
+    def pinned_plan_shape_is_coherent(self) -> Self:
+        positions = tuple(value.position for value in self.items)
+        expected = tuple(range(1, self.summary.item_count + 1))
+        secondary = self.secondary_positions
+        resolution_positions = tuple(value.position for value in self.resolutions)
+        if positions != expected:
+            raise ValueError("plan Items must be the exact contiguous pinned sequence")
+        if len({value.item_revision_id for value in self.items}) != len(self.items):
+            raise ValueError("plan Item revisions must be unique")
+        if secondary != tuple(sorted(set(secondary))) or not set(secondary).issubset(expected):
+            raise ValueError("secondary_positions must be sorted, unique, and assigned")
+        if resolution_positions != tuple(sorted(set(resolution_positions))) or not set(
+            resolution_positions
+        ).issubset(secondary):
+            raise ValueError("resolutions must be sorted, unique, and secondary-assigned")
+        if self.summary.resolved_count != len(self.resolutions):
+            raise ValueError("summary resolved_count does not match immutable resolutions")
+        session_roles = tuple(value.reviewer_role for value in self.sessions)
+        if len(set(session_roles)) != len(session_roles):
+            raise ValueError("plan can contain at most one session per reviewer role")
+        item_by_position = {value.position: value for value in self.items}
+        for session in self.sessions:
+            required = expected if session.reviewer_role == "PRIMARY" else secondary
+            if session.required_positions != required:
+                raise ValueError("session assignment does not match the pinned plan")
+            if any(
+                observation.item_revision_id
+                != item_by_position[observation.position].item_revision_id
+                for observation in session.observations
+            ):
+                raise ValueError("session observation points to a different Item revision")
+        return self
 
 
 class EducationalQualityReviewWorkbenchView(ApiModel):

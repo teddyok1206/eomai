@@ -14,6 +14,9 @@ snapshot identity.  Every drill compares the complete ordered database inventory
 validates either a bounded deterministic sample of Artifact bytes or every Artifact byte in
 explicit `FULL` mode; the receipt distinguishes these modes and reports both verified counts and a
 bounded evidence sample.
+The receipt validation timestamp must be UTC and cannot predate either immutable input, preventing
+a structurally valid receipt from claiming a check that happened before the backup or snapshot
+existed.
 
 The verifier is an operations adapter.  It may read only an explicitly disposable restored
 database and an explicitly supplied read-only Artifact snapshot root.  It never writes NAS,

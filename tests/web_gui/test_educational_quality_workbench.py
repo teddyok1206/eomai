@@ -74,3 +74,19 @@ def test_quality_workbench_exposes_human_rubric_and_derived_scorecard() -> None:
     assert "science_score_milli" in JAVASCRIPT
     assert "visual_score_milli" in JAVASCRIPT
     assert "item_manifest_sha256" not in HTML
+
+
+def test_quality_workbench_uses_permission_and_indexed_item_lookup() -> None:
+    assert 'permissions.includes("workflow:approve")' in JAVASCRIPT
+    assert "const items = new Map(plan.items.map" in JAVASCRIPT
+    render_start = JAVASCRIPT.index("function renderEducationalQualityItemList()")
+    render_end = JAVASCRIPT.index("function renderEducationalQualityPlan()")
+    assert ".items.find(" not in JAVASCRIPT[render_start:render_end]
+
+
+def test_quality_position_input_fails_closed_on_mixed_text() -> None:
+    parser_start = JAVASCRIPT.index("function parseEducationalQualityPositions(value)")
+    parser_end = JAVASCRIPT.index("async function createEducationalQualityPlan")
+    parser = JAVASCRIPT[parser_start:parser_end]
+    assert "return null" in parser
+    assert ".filter(Number.isInteger)" not in parser

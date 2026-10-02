@@ -152,7 +152,7 @@ def test_recovery_receipt_rejects_wrong_self_hash() -> None:
         "evidence_revision_count": 0,
         "evidence_member_count": 0,
         "evidence_revisions": [],
-        "validated_at": "2026-10-02T00:00:00Z",
+        "validated_at": "2026-10-02T00:00:02Z",
         "receipt_sha256": "sha256:" + "0" * 64,
     }
     with pytest.raises(ValueError, match="receipt hash"):
@@ -191,6 +191,33 @@ def test_recovery_receipt_rejects_inventory_or_full_coverage_mismatch() -> None:
     base["artifact_inventory_sha256"] = base["database_inventory_sha256"]
     with pytest.raises(ValueError, match="every Artifact revision"):
         RecoveryValidationReceiptV1.model_validate(base)
+
+
+def test_recovery_receipt_rejects_validation_before_snapshot() -> None:
+    payload = {
+        "schema_version": "recovery-validation-receipt/1.0",
+        "verification_mode": "SAMPLED",
+        "database_backup_id": "pgbackup_20261002T000000Z_" + "1" * 12,
+        "database_backup_created_at": "2026-10-02T00:00:00Z",
+        "database_backup_sha256": "sha256:" + "1" * 64,
+        "database_manifest_sha256": "sha256:" + "2" * 64,
+        "database_inventory_sha256": "sha256:" + "3" * 64,
+        "artifact_snapshot_id": "artifactsnapshot_" + "4" * 32,
+        "artifact_snapshot_captured_at": "2026-10-02T00:00:02Z",
+        "artifact_snapshot_sha256": "sha256:" + "5" * 64,
+        "artifact_inventory_sha256": "sha256:" + "3" * 64,
+        "restored_database_identity": "eom_restore_drill",
+        "artifact_revision_count": 0,
+        "verified_revision_count": 0,
+        "verified_member_count": 0,
+        "evidence_revision_count": 0,
+        "evidence_member_count": 0,
+        "evidence_revisions": [],
+        "validated_at": "2026-10-02T00:00:01Z",
+        "receipt_sha256": "sha256:" + "0" * 64,
+    }
+    with pytest.raises(ValueError, match="cannot predate"):
+        RecoveryValidationReceiptV1.model_validate(payload)
 
 
 def test_snapshot_manifest_model_rejects_forged_identity() -> None:

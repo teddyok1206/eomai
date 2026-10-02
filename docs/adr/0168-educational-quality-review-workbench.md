@@ -39,6 +39,10 @@ observations use `(session_id, position)` as their key and update under a sessio
 precondition.  Finalization is allowed only when every position required by that role has one
 complete observation.  A finalized session is immutable.  A resolution for a doubly reviewed
 position must select one finalized observation and is unique per plan and position.
+Composite foreign keys bind the chosen session to the same plan and to an existing observation at
+that exact position.  The application still independently checks finalization and disagreement
+semantics before insertion; the database constraints prevent a bypass from creating a dangling or
+cross-plan resolution.
 
 The scorecard is a non-persisted projection.  It becomes `READY` only after both independent
 sessions are finalized and every differing sampled observation has an immutable resolution.  It

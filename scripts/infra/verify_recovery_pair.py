@@ -129,6 +129,11 @@ class RecoveryValidationReceiptV1(BaseModel):
         )
         if any(value.utcoffset() != UTC.utcoffset(value) for value in timestamps):
             raise ValueError("recovery receipt timestamps must be UTC")
+        if self.validated_at < max(
+            self.database_backup_created_at,
+            self.artifact_snapshot_captured_at,
+        ):
+            raise ValueError("recovery validation cannot predate either immutable input")
         expected_backup_id = (
             "pgbackup_"
             + self.database_backup_created_at.strftime("%Y%m%dT%H%M%SZ")
