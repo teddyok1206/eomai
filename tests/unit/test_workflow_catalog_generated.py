@@ -1378,6 +1378,28 @@ def test_prompt_context_revalidates_the_pinned_local_provider_binding(tmp_path: 
         )
 
 
+def test_prompt_context_rejects_v7_until_catalog_file_set_successor_exists(
+    tmp_path: Path,
+) -> None:
+    service, _ = _service(tmp_path)
+    candidate = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.v7.json").read_text(encoding="utf-8")
+    )
+    step = cast(
+        Any,
+        SimpleNamespace(step_key="authoring", worker_role="authoring", attempt=1),
+    )
+
+    with pytest.raises(ValueError, match="local image provider binding is not deployed"):
+        service._prompt_context(
+            _workflow({"local_image_provider": candidate}),
+            step,
+            _request(),
+            (),
+            "packrel_" + "1" * 32,
+        )
+
+
 def test_v5_generated_stimulus_reentry_rejects_a_changed_sidecar_hash() -> None:
     hashes = {
         "generated-stimulus.png": "sha256:" + "a" * 64,

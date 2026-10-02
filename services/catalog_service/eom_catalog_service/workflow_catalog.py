@@ -157,6 +157,7 @@ from eom_catalog_service.knowledge_stimulus import KnowledgeStimulusService
 from eom_catalog_service.local_image_adapter import (
     FixedLocalImageProviderAdapter,
     load_local_image_provider_binding_any,
+    parse_local_image_provider_binding,
 )
 from eom_catalog_service.local_image_prompt_policy import LocalGpuPromptContract
 from eom_catalog_service.models import (
@@ -1424,19 +1425,7 @@ class WorkflowCatalogService:
             | None
         ) = None
         if isinstance(provider_value, dict):
-            provider_schema = provider_value.get("schema_version")
-            if provider_schema == "local-image-provider-binding/6.0":
-                provider = LocalImageProviderBindingV6.model_validate(provider_value)
-            elif provider_schema == "local-image-provider-binding/5.0":
-                provider = LocalImageProviderBindingV5.model_validate(provider_value)
-            elif provider_schema == "local-image-provider-binding/4.0":
-                provider = LocalImageProviderBindingV4.model_validate(provider_value)
-            elif provider_schema == "local-image-provider-binding/3.0":
-                provider = LocalImageProviderBindingV3.model_validate(provider_value)
-            elif provider_schema == "local-image-provider-binding/2.0":
-                provider = LocalImageProviderBindingV2.model_validate(provider_value)
-            else:
-                provider = LocalImageProviderBinding.model_validate(provider_value)
+            provider = parse_local_image_provider_binding(provider_value)
         prompt_contract = _local_image_prompt_contract(workflow)
         committed: list[ContentTeamStimulusPointer] = []
         for item in image_drawings:
@@ -2410,27 +2399,7 @@ class WorkflowCatalogService:
             context["generated_stimulus"] = generated
         provider = workflow.runtime_context.get("local_image_provider")
         if isinstance(provider, dict):
-            provider_schema = provider.get("schema_version")
-            validated_provider: (
-                LocalImageProviderBinding
-                | LocalImageProviderBindingV2
-                | LocalImageProviderBindingV3
-                | LocalImageProviderBindingV4
-                | LocalImageProviderBindingV5
-                | LocalImageProviderBindingV6
-            )
-            if provider_schema == "local-image-provider-binding/6.0":
-                validated_provider = LocalImageProviderBindingV6.model_validate(provider)
-            elif provider_schema == "local-image-provider-binding/5.0":
-                validated_provider = LocalImageProviderBindingV5.model_validate(provider)
-            elif provider_schema == "local-image-provider-binding/4.0":
-                validated_provider = LocalImageProviderBindingV4.model_validate(provider)
-            elif provider_schema == "local-image-provider-binding/3.0":
-                validated_provider = LocalImageProviderBindingV3.model_validate(provider)
-            elif provider_schema == "local-image-provider-binding/2.0":
-                validated_provider = LocalImageProviderBindingV2.model_validate(provider)
-            else:
-                validated_provider = LocalImageProviderBinding.model_validate(provider)
+            validated_provider = parse_local_image_provider_binding(provider)
             provider_context = validated_provider.model_dump(mode="json")
             # The provider contract legitimately contains a floating-point sampler value. EOM
             # message hashing rejects floats, so expose only its already validated canonical JSON

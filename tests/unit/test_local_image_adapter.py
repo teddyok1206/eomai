@@ -29,6 +29,7 @@ from eom_catalog_service.local_image_adapter import (
     load_local_image_provider_binding_v4,
     load_local_image_provider_binding_v5,
     load_local_image_provider_binding_v6,
+    parse_local_image_provider_binding,
 )
 from eom_catalog_service.local_image_prompt_policy import (
     LOCAL_GPU_ASSESSMENT_NEGATIVE_REQUIREMENTS,
@@ -683,6 +684,17 @@ def test_v6_binding_loader_pins_adaptive_reference_and_retention(tmp_path: Path)
         ),
         LocalImageProviderBindingV6,
     )
+
+
+def test_catalog_parser_rejects_v7_until_publication_successor_is_deployed() -> None:
+    candidate = json.loads(
+        (
+            Path(__file__).resolve().parents[2] / "config/local-image-provider.ssd1b.v7.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(ValueError, match="local image provider binding is not deployed"):
+        parse_local_image_provider_binding(candidate)
 
 
 @pytest.mark.parametrize("mode", (0o640, 0o664))

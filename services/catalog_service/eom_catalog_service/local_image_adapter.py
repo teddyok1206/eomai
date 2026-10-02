@@ -344,29 +344,49 @@ def load_local_image_provider_binding_any(
         trusted_group_gid=trusted_group_gid,
         maximum_bytes=512 * 1024,
     )
-    schema_version = value.get("schema_version")
     try:
-        if schema_version == "local-image-provider-binding/1.0":
-            validate_contract("provider-binding", value)
-            return LocalImageProviderBinding.model_validate(value)
-        if schema_version == "local-image-provider-binding/2.0":
-            validate_contract("provider-binding-v2", value)
-            return LocalImageProviderBindingV2.model_validate(value)
-        if schema_version == "local-image-provider-binding/3.0":
-            validate_contract("provider-binding-v3", value)
-            return LocalImageProviderBindingV3.model_validate(value)
-        if schema_version == "local-image-provider-binding/4.0":
-            validate_contract("provider-binding-v4", value)
-            return LocalImageProviderBindingV4.model_validate(value)
-        if schema_version == "local-image-provider-binding/5.0":
-            validate_contract("provider-binding-v5", value)
-            return LocalImageProviderBindingV5.model_validate(value)
-        if schema_version == "local-image-provider-binding/6.0":
-            validate_contract("provider-binding-v6", value)
-            return LocalImageProviderBindingV6.model_validate(value)
+        return parse_local_image_provider_binding(value)
     except Exception as exc:
         raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED") from exc
-    raise LocalImageAdapterError("LOCAL_IMAGE_ROUTE_UNDEPLOYED")
+
+
+def parse_local_image_provider_binding(
+    value: dict[str, object],
+) -> (
+    LocalImageProviderBinding
+    | LocalImageProviderBindingV2
+    | LocalImageProviderBindingV3
+    | LocalImageProviderBindingV4
+    | LocalImageProviderBindingV5
+    | LocalImageProviderBindingV6
+):
+    """Parse only provider revisions deployed by the Catalog publication path.
+
+    Contract packages may contain a newer candidate revision before Catalog has a matching
+    generated-stimulus file-set successor.  Keep that candidate fail-closed instead of allowing it
+    to fall through to the V1 model or an older publication contract.
+    """
+
+    schema_version = value.get("schema_version")
+    if schema_version == "local-image-provider-binding/1.0":
+        validate_contract("provider-binding", value)
+        return LocalImageProviderBinding.model_validate(value)
+    if schema_version == "local-image-provider-binding/2.0":
+        validate_contract("provider-binding-v2", value)
+        return LocalImageProviderBindingV2.model_validate(value)
+    if schema_version == "local-image-provider-binding/3.0":
+        validate_contract("provider-binding-v3", value)
+        return LocalImageProviderBindingV3.model_validate(value)
+    if schema_version == "local-image-provider-binding/4.0":
+        validate_contract("provider-binding-v4", value)
+        return LocalImageProviderBindingV4.model_validate(value)
+    if schema_version == "local-image-provider-binding/5.0":
+        validate_contract("provider-binding-v5", value)
+        return LocalImageProviderBindingV5.model_validate(value)
+    if schema_version == "local-image-provider-binding/6.0":
+        validate_contract("provider-binding-v6", value)
+        return LocalImageProviderBindingV6.model_validate(value)
+    raise ValueError("local image provider binding is not deployed")
 
 
 def _load_provider_binding_document(

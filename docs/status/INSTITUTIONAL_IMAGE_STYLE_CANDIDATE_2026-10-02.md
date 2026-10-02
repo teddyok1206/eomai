@@ -92,6 +92,10 @@ count, and any generated side marked `REJECT` makes a canary-eligible verdict in
 
 The final dormant V7 binding is pinned by
 `sha256:15291519fca12605a0775505483b9491d179b53470d248f8d0a004950def1565`.
+Catalog now parses deployed provider revisions through one authoritative discriminator and
+explicitly rejects V7 as not deployed.  This prevents a candidate binding from falling through to
+the V1 parser or being published under V6's `generated-item-stimulus-file-set/9.0` identity while
+the required successor file-set and Content Pack do not yet exist.
 
 ## Verification status
 
