@@ -22,7 +22,6 @@ from eom_web_gui.contracts import (
     StudioOperatorCreate,
     StudioProblem,
     StudioSelfCredentialUpdate,
-    WorkflowApproval,
 )
 from eom_web_gui.request_drafts import DEMO_REQUEST, normalize_request, update_draft
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
@@ -35,11 +34,18 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 20
+    assert len(schemas) == 21
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(schema)
+
+
+def test_retired_legacy_workbench_v1_contract_is_byte_stable() -> None:
+    source = (SCHEMA_ROOT / "studio-workbench-overview-v1.schema.json").read_bytes()
+    assert hashlib.sha256(source).hexdigest() == (
+        "af9df3a3c9107e5bd14d1afbd5cd7044794691fcf76dd9c4761564125f96417e"
+    )
 
 
 def test_account_management_schema_matches_typed_requests() -> None:
@@ -60,6 +66,22 @@ def test_account_management_schema_matches_typed_requests() -> None:
     ).model_dump(mode="json")
     Draft202012Validator(schema["$defs"]["self_credential_update"]).validate(credential)
     Draft202012Validator(schema["$defs"]["operator_create"]).validate(created)
+    Draft202012Validator(schema["$defs"]["self_credential_update"]).validate(
+        StudioSelfCredentialUpdate(
+            current_password="current",
+            new_password="x",
+            expected_resource_version=3,
+        ).model_dump(mode="json", exclude_none=True)
+    )
+    Draft202012Validator(schema["$defs"]["operator_create"]).validate(
+        StudioOperatorCreate(
+            username="short01",
+            display_name="짧은 비밀번호 테스트",
+            temporary_password="x",
+            initial_roles=("VIEWER",),
+            idempotency_key="studio:operator:create:short-001",
+        ).model_dump(mode="json")
+    )
     with pytest.raises(ValueError, match="omitted instead of null"):
         StudioSelfCredentialUpdate.model_validate(
             {
@@ -465,17 +487,6 @@ def test_schema_rejects_unknown_request_field() -> None:
 def test_explorer_query_rejects_raw_sql_and_arbitrary_entity() -> None:
     with pytest.raises(ValueError):
         ExplorerQuery.model_validate({"entity": "raw_sql", "sql": "SELECT 1"})
-
-
-def test_workflow_approval_accepts_the_application_api_strong_etag_contract() -> None:
-    value = {
-        "etag": '"v4"',
-        "idempotency_key": "studio:test-approval-0001",
-        "reason": None,
-    }
-    assert WorkflowApproval.model_validate(value).etag == '"v4"'
-    with pytest.raises(ValueError):
-        WorkflowApproval.model_validate({**value, "etag": '"4"'})
 
 
 def test_scientific_studio_design_tokens_are_role_based() -> None:

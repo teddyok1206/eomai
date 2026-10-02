@@ -21,14 +21,14 @@ def test_password_policy_accepts_unicode_and_whitespace() -> None:
     service = PasswordService()
     unicode_password = "통합과학 안전한 암호 2026"
     service.validate(unicode_password, username="author01", display_name="작성자")
-    service.validate(" " * 15, username="author01", display_name="작성자")
+    service.validate("x", username="author01", display_name="작성자")
+    service.validate(" ", username="author01", display_name="작성자")
 
 
 @pytest.mark.parametrize(
     "password",
     [
         "",
-        "short password",
         "author01",
         "작성자",
         "passwordpassword",

@@ -69,6 +69,12 @@ def test_update_credentials_schema_matches_pydantic_and_rejects_null_changes() -
         expected_resource_version=4,
     ).model_dump(mode="json", exclude_none=True)
     Draft202012Validator(schema["$defs"]["update_credentials_request"]).validate(value)
+    short_password = UpdateCredentialsRequest(
+        current_password="current",
+        new_password="x",
+        expected_resource_version=4,
+    ).model_dump(mode="json", exclude_none=True)
+    Draft202012Validator(schema["$defs"]["update_credentials_request"]).validate(short_password)
     with pytest.raises(ValidationError, match="omitted instead of null"):
         UpdateCredentialsRequest.model_validate(
             {
@@ -630,6 +636,13 @@ def test_operator_contract_never_serializes_temporary_password() -> None:
         initial_roles=("REVIEWER",),
     )
     assert "TEST_ONLY temporary password 42" not in request.model_dump_json()
+    short_password = CreateOperatorRequest(
+        username="short01",
+        display_name="짧은 비밀번호 테스트",
+        temporary_password="x",
+        initial_roles=("VIEWER",),
+    )
+    assert "x" not in short_password.model_dump_json()
     with pytest.raises(ValidationError, match="initial roles must be unique"):
         CreateOperatorRequest(
             username="review02",

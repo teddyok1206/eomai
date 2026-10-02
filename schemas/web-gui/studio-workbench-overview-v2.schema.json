@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/web-gui/studio-workbench-overview-v2.schema.json",
+  "title": "Studio Workbench Overview V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "source_truncated", "counts", "items"],
+  "properties": {
+    "schema_version": {"const": "studio-workbench-overview/2.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "source_truncated": {"type": "boolean"},
+    "counts": {"$ref": "#/$defs/counts"},
+    "items": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {"$ref": "#/$defs/item"}
+    }
+  },
+  "$defs": {
+    "nullableWorkflowId": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}]
+    },
+    "nullableItemId": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^item_[0-9a-f]{32}$"}]
+    },
+    "nullableItemRevisionId": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}]
+    },
+    "nullableHwpxBuildId": {
+      "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"}]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in_progress", "approval_waiting", "hwpx_attention", "recent_completed"],
+      "properties": {
+        "in_progress": {"type": "integer", "minimum": 0, "maximum": 100},
+        "approval_waiting": {"type": "integer", "minimum": 0, "maximum": 100},
+        "hwpx_attention": {"type": "integer", "minimum": 0, "maximum": 100},
+        "recent_completed": {"type": "integer", "minimum": 0, "maximum": 100}
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "title", "state", "next_action", "approval_mode", "workflow_id",
+        "item_id", "item_revision_id", "hwpx_build_id", "human_reference_code", "created_at"
+      ],
+      "properties": {
+        "kind": {"enum": ["WORKFLOW", "ITEM_APPROVAL", "HWPX_BUILD"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 160},
+        "state": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,39}$"},
+        "next_action": {
+          "enum": [
+            "OPEN_WORKFLOW", "BUILD_REVIEW_HWPX", "REVIEW_AND_APPROVE_ITEM", "OPEN_ITEM",
+            "OPEN_HWPX"
+          ]
+        },
+        "approval_mode": {"enum": ["NONE", "POST_REGISTRATION_HWPX"]},
+        "workflow_id": {"$ref": "#/$defs/nullableWorkflowId"},
+        "item_id": {"$ref": "#/$defs/nullableItemId"},
+        "item_revision_id": {"$ref": "#/$defs/nullableItemRevisionId"},
+        "hwpx_build_id": {"$ref": "#/$defs/nullableHwpxBuildId"},
+        "human_reference_code": {
+          "oneOf": [{"type": "null"}, {"type": "string", "minLength": 1, "maxLength": 128}]
+        },
+        "created_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"next_action": {"const": "OPEN_WORKFLOW"}}},
+          "then": {"properties": {"workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"}}}
+        },
+        {
+          "if": {"properties": {"next_action": {"enum": ["OPEN_ITEM", "BUILD_REVIEW_HWPX"]}}},
+          "then": {
+            "properties": {
+              "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+              "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"next_action": {"enum": ["OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"]}}},
+          "then": {"properties": {"hwpx_build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"}}}
+        },
+        {
+          "if": {"properties": {"approval_mode": {"const": "POST_REGISTRATION_HWPX"}}},
+          "then": {"properties": {"item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"}}}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "WORKFLOW"}}},
+          "then": {
+            "properties": {
+              "next_action": {"const": "OPEN_WORKFLOW"},
+              "item_id": {"type": "null"},
+              "item_revision_id": {"type": "null"},
+              "hwpx_build_id": {"type": "null"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "ITEM_APPROVAL"}}},
+          "then": {
+            "properties": {
+              "next_action": {
+                "enum": ["BUILD_REVIEW_HWPX", "REVIEW_AND_APPROVE_ITEM", "OPEN_ITEM"]
+              },
+              "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+              "item_revision_id": {
+                "type": "string",
+                "pattern": "^itemrev_[0-9a-f]{32}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "HWPX_BUILD"}}},
+          "then": {
+            "properties": {
+              "next_action": {"enum": ["OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"]},
+              "hwpx_build_id": {
+                "type": "string",
+                "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

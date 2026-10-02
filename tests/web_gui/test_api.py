@@ -659,8 +659,8 @@ def test_server_planned_mock_exam_routes_are_authenticated_and_csrf_protected() 
         assert gateway.planned_mock_exam_calls == 1
 
 
-def test_workflow_timeline_approval_etag_and_item_preview() -> None:
-    client, gateway = make_client()
+def test_workflow_timeline_has_no_legacy_approval_route_and_item_preview() -> None:
+    client, _ = make_client()
     with client:
         session = login(client)
         headers = {"X-CSRF-Token": session["csrf_token"]}
@@ -674,7 +674,7 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
             "승인 대기",
             "Job 종료",
         }
-        approval = client.post(
+        retired_approval = client.post(
             f"/studio/api/v1/workflows/{WORKFLOW_ID}/approvals",
             json={
                 "etag": '"v4"',
@@ -683,8 +683,7 @@ def test_workflow_timeline_approval_etag_and_item_preview() -> None:
             },
             headers=headers,
         )
-        assert approval.status_code == 202
-        assert gateway.approval_calls == 1
+        assert retired_approval.status_code == 404
         preview = client.get(f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/preview")
         assert preview.status_code == 200
         assert preview.json()["schema_version"] == "4.0"

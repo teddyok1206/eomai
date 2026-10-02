@@ -1,6 +1,5 @@
 const ACTION_LABELS = Object.freeze({
   OPEN_WORKFLOW: "제작 진행 열기",
-  REVIEW_LEGACY_WORKFLOW: "이전 승인 열기",
   BUILD_REVIEW_HWPX: "HWPX 확인·승인",
   REVIEW_AND_APPROVE_ITEM: "HWPX 확인·승인",
   OPEN_ITEM: "문항 열기",

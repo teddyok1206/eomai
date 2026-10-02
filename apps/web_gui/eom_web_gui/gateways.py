@@ -517,16 +517,6 @@ class ApplicationGateway(Protocol):
 
     async def workflow_bundle(self, session: WebSession, workflow_id: str) -> dict[str, Any]: ...
 
-    async def approve_workflow(
-        self,
-        session: WebSession,
-        workflow_id: str,
-        *,
-        etag: str,
-        idempotency_key: str,
-        reason: str | None,
-    ) -> dict[str, Any]: ...
-
     async def item_preview(
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview: ...
@@ -2110,25 +2100,6 @@ class HttpApplicationGateway:
             "observe": _sanitize_observe_workflow(observe),
         }
 
-    async def approve_workflow(
-        self,
-        session: WebSession,
-        workflow_id: str,
-        *,
-        etag: str,
-        idempotency_key: str,
-        reason: str | None,
-    ) -> dict[str, Any]:
-        _require_id(workflow_id, "workflow_")
-        response = await self._authorized(
-            session,
-            "POST",
-            f"/api/v1/workflows/{workflow_id}/approvals",
-            json={"reason": reason},
-            headers={"Idempotency-Key": idempotency_key, "If-Match": etag},
-        )
-        return sanitize_mapping(self._data(response))
-
     async def item_preview(
         self, session: WebSession, item_id: str, item_revision_id: str
     ) -> ItemPreview:
@@ -2326,22 +2297,19 @@ class HttpApplicationGateway:
             for value in workflows:
                 workflow_id = value["workflow_id"]
                 workflow_state = value["state"]
-                if workflow_state in terminal_workflow_states:
+                if (
+                    workflow_state in terminal_workflow_states
+                    or workflow_state == "AWAITING_HUMAN_APPROVAL"
+                ):
                     continue
-                legacy_approval = workflow_state == "AWAITING_HUMAN_APPROVAL"
-                if legacy_approval:
-                    approval_waiting += 1
-                else:
-                    in_progress += 1
+                in_progress += 1
                 projected.append(
                     StudioWorkbenchItem(
                         kind="WORKFLOW",
-                        title="이전 방식 문항 승인" if legacy_approval else "진행 중인 문항 제작",
+                        title="진행 중인 문항 제작",
                         state=workflow_state,
-                        next_action=(
-                            "REVIEW_LEGACY_WORKFLOW" if legacy_approval else "OPEN_WORKFLOW"
-                        ),
-                        approval_mode="LEGACY_WORKFLOW" if legacy_approval else "NONE",
+                        next_action="OPEN_WORKFLOW",
+                        approval_mode="NONE",
                         workflow_id=workflow_id,
                         item_id=None,
                         item_revision_id=None,
@@ -2407,7 +2375,6 @@ class HttpApplicationGateway:
 
         projected.sort(key=lambda value: value.created_at, reverse=True)
         action_priority = {
-            "REVIEW_LEGACY_WORKFLOW": 0,
             "BUILD_REVIEW_HWPX": 0,
             "REVIEW_AND_APPROVE_ITEM": 0,
             "OPEN_WORKFLOW": 1,

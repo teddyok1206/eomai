@@ -64,7 +64,6 @@ from eom_web_gui.contracts import (
     StudioOperatorVersionCommand,
     StudioOperatorView,
     StudioSelfCredentialUpdate,
-    WorkflowApproval,
 )
 from eom_web_gui.gateways import (
     ApplicationGateway,
@@ -430,17 +429,6 @@ class WebServices:
             )
         ]
         return value
-
-    async def approve(
-        self, session: WebSession, workflow_id: str, value: WorkflowApproval
-    ) -> dict[str, Any]:
-        return await self.gateway.approve_workflow(
-            session,
-            workflow_id,
-            etag=value.etag,
-            idempotency_key=value.idempotency_key,
-            reason=value.reason,
-        )
 
     async def preview(
         self, session: WebSession, item_id: str, item_revision_id: str

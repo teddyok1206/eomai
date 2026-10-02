@@ -65,7 +65,7 @@ StudioIdempotencyKey = Annotated[
 class StudioSelfCredentialUpdate(WebModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_username: StudioUsername | None = None
-    new_password: str | None = Field(default=None, min_length=15, max_length=128)
+    new_password: str | None = Field(default=None, min_length=1, max_length=128)
     expected_resource_version: int = Field(ge=1)
 
     @model_validator(mode="after")
@@ -102,7 +102,7 @@ class StudioOperatorCreate(WebModel):
         max_length=128,
         pattern=r"^[^\x00-\x1f\x7f]+$",
     )
-    temporary_password: str = Field(min_length=15, max_length=128)
+    temporary_password: str = Field(min_length=1, max_length=128)
     initial_roles: tuple[StudioRoleKey, ...] = Field(min_length=1, max_length=5)
     idempotency_key: StudioIdempotencyKey
 
@@ -2211,12 +2211,6 @@ class ExecutionPresetLifecycleCommand(WebModel):
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
-class WorkflowApproval(WebModel):
-    etag: str = Field(pattern=r'^"v[1-9][0-9]*"$')
-    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
-    reason: str | None = Field(default=None, max_length=2000)
-
-
 class TimelineEvent(WebModel):
     schema_version: Literal["1.0"] = "1.0"
     event_id: str = Field(min_length=1, max_length=128)
@@ -2632,13 +2626,12 @@ class StudioWorkbenchItem(WebModel):
     state: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,39}$")
     next_action: Literal[
         "OPEN_WORKFLOW",
-        "REVIEW_LEGACY_WORKFLOW",
         "BUILD_REVIEW_HWPX",
         "REVIEW_AND_APPROVE_ITEM",
         "OPEN_ITEM",
         "OPEN_HWPX",
     ]
-    approval_mode: Literal["NONE", "LEGACY_WORKFLOW", "POST_REGISTRATION_HWPX"]
+    approval_mode: Literal["NONE", "POST_REGISTRATION_HWPX"]
     workflow_id: str | None = Field(default=None, pattern=r"^workflow_[0-9a-f]{32}$")
     item_id: str | None = Field(default=None, pattern=r"^item_[0-9a-f]{32}$")
     item_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
@@ -2648,7 +2641,7 @@ class StudioWorkbenchItem(WebModel):
 
     @model_validator(mode="after")
     def action_has_exact_pointer(self) -> StudioWorkbenchItem:
-        if self.next_action in {"OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"}:
+        if self.next_action == "OPEN_WORKFLOW":
             if self.workflow_id is None:
                 raise ValueError("workflow action requires a pinned Workflow ID")
         elif self.next_action in {"OPEN_ITEM", "BUILD_REVIEW_HWPX"}:
@@ -2659,14 +2652,10 @@ class StudioWorkbenchItem(WebModel):
             and self.hwpx_build_id is None
         ):
             raise ValueError("HWPX action requires a pinned build ID")
-        if self.approval_mode == "LEGACY_WORKFLOW" and self.next_action != "REVIEW_LEGACY_WORKFLOW":
-            raise ValueError("legacy approval mode must use the legacy Workflow action")
-        if self.next_action == "REVIEW_LEGACY_WORKFLOW" and self.approval_mode != "LEGACY_WORKFLOW":
-            raise ValueError("legacy Workflow action must use legacy approval mode")
         if self.approval_mode == "POST_REGISTRATION_HWPX" and self.item_revision_id is None:
             raise ValueError("post-registration approval must pin an Item Revision")
         actions_by_kind = {
-            "WORKFLOW": {"OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"},
+            "WORKFLOW": {"OPEN_WORKFLOW"},
             "ITEM_APPROVAL": {"BUILD_REVIEW_HWPX", "REVIEW_AND_APPROVE_ITEM", "OPEN_ITEM"},
             "HWPX_BUILD": {"OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"},
         }
@@ -2682,7 +2671,7 @@ class StudioWorkbenchItem(WebModel):
 
 
 class StudioWorkbenchOverview(WebModel):
-    schema_version: Literal["studio-workbench-overview/1.0"] = "studio-workbench-overview/1.0"
+    schema_version: Literal["studio-workbench-overview/2.0"] = "studio-workbench-overview/2.0"
     generated_at: UtcDatetime
     source_truncated: bool
     counts: StudioWorkbenchCounts

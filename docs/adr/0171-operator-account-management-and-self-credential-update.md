@@ -63,6 +63,12 @@ Admin creation and management continue to use the existing Application API idemp
 `If-Match` boundaries. A self update is not automatically retried because it consumes current-session
 tokens; the client replaces its token pair only after a successful response.
 
+Passwords have no product-level minimum character count beyond being non-empty. The bounded
+128-character and 256-byte limits remain input-safety limits rather than password-strength rules;
+NUL values, the Operator's own identity values, and the explicit common-password denylist remain
+invalid. Argon2id hashing, current-password proof, forced temporary-password replacement, session
+rotation, and audit behavior are unchanged.
+
 ## Dependency direction and adapters
 
 Studio -> Application API -> Identity application services -> identity contracts/models. PostgreSQL,

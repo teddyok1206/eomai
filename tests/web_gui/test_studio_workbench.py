@@ -21,7 +21,7 @@ NOW = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 
 def _schema() -> dict[str, object]:
     value = json.loads(
-        (ROOT / "schemas/web-gui/studio-workbench-overview-v1.schema.json").read_text(
+        (ROOT / "schemas/web-gui/studio-workbench-overview-v2.schema.json").read_text(
             encoding="utf-8"
         )
     )
@@ -46,7 +46,7 @@ def test_workbench_contract_schema_and_pydantic_reject_missing_action_pointer() 
         "created_at": NOW.isoformat(),
     }
     invalid_overview = {
-        "schema_version": "studio-workbench-overview/1.0",
+        "schema_version": "studio-workbench-overview/2.0",
         "generated_at": NOW.isoformat(),
         "source_truncated": False,
         "counts": {
@@ -63,29 +63,7 @@ def test_workbench_contract_schema_and_pydantic_reject_missing_action_pointer() 
         StudioWorkbenchItem.model_validate(invalid)
 
 
-@pytest.mark.parametrize(
-    ("changes", "message"),
-    (
-        (
-            {"kind": "WORKFLOW", "next_action": "OPEN_ITEM"},
-            "resource kind and action",
-        ),
-        (
-            {
-                "kind": "WORKFLOW",
-                "next_action": "REVIEW_LEGACY_WORKFLOW",
-                "approval_mode": "NONE",
-                "workflow_id": "workflow_" + "3" * 32,
-                "item_id": None,
-                "item_revision_id": None,
-            },
-            "legacy Workflow action",
-        ),
-    ),
-)
-def test_workbench_contract_rejects_semantically_incoherent_items(
-    changes: dict[str, object], message: str
-) -> None:
+def test_workbench_contract_rejects_semantically_incoherent_items() -> None:
     value = {
         "kind": "ITEM_APPROVAL",
         "title": "완성 문항",
@@ -99,9 +77,9 @@ def test_workbench_contract_rejects_semantically_incoherent_items(
         "human_reference_code": None,
         "created_at": NOW.isoformat(),
     }
-    value.update(changes)
+    value.update({"kind": "WORKFLOW", "next_action": "OPEN_ITEM"})
     overview = {
-        "schema_version": "studio-workbench-overview/1.0",
+        "schema_version": "studio-workbench-overview/2.0",
         "generated_at": NOW.isoformat(),
         "source_truncated": False,
         "counts": {
@@ -114,12 +92,12 @@ def test_workbench_contract_rejects_semantically_incoherent_items(
     }
     with pytest.raises(ValidationError):
         Draft202012Validator(_schema(), format_checker=FormatChecker()).validate(overview)
-    with pytest.raises(PydanticValidationError, match=message):
+    with pytest.raises(PydanticValidationError, match="resource kind and action"):
         StudioWorkbenchItem.model_validate(value)
 
 
 @pytest.mark.anyio
-async def test_workbench_gateway_composes_bounded_current_and_legacy_actions() -> None:
+async def test_workbench_gateway_hides_retired_legacy_approval_workflows() -> None:
     workflow_id = "workflow_" + "1" * 32
     item_id = "item_" + "2" * 32
     revision_id = "itemrev_" + "3" * 32
@@ -187,12 +165,9 @@ async def test_workbench_gateway_composes_bounded_current_and_legacy_actions() -
         transport=httpx.MockTransport(handler),
     )
     overview = await gateway.studio_workbench_overview(_session())
-    assert overview.counts.approval_waiting == 2
+    assert overview.counts.approval_waiting == 1
     assert overview.counts.hwpx_attention == 1
-    assert {item.next_action for item in overview.items} == {
-        "REVIEW_LEGACY_WORKFLOW",
-        "BUILD_REVIEW_HWPX",
-    }
+    assert {item.next_action for item in overview.items} == {"BUILD_REVIEW_HWPX"}
     Draft202012Validator(_schema(), format_checker=FormatChecker()).validate(
         overview.model_dump(mode="json")
     )
@@ -246,7 +221,7 @@ def test_authenticated_workbench_route_uses_typed_projection() -> None:
     response = client.get("/studio/api/v1/workbench/overview")
     assert response.status_code == 200
     value = response.json()
-    assert value["schema_version"] == "studio-workbench-overview/1.0"
+    assert value["schema_version"] == "studio-workbench-overview/2.0"
     assert value["counts"]["approval_waiting"] == 1
     Draft202012Validator(_schema(), format_checker=FormatChecker()).validate(value)
     latest = client.get(
@@ -314,6 +289,8 @@ def test_route_and_permission_modules_fail_closed_and_round_trip(tmp_path: Path)
       if (/[?#]/.test(supportContextRoute(route))) process.exit(3);
       const invalid = studioRouteFromLocation({{search: "?view=unknown&workflow_id=../../secret"}});
       if (invalid.view !== "dashboard" || invalid.workflow_id !== undefined) process.exit(4);
+      const retired = studioRouteFromLocation({{search: "?view=approval"}});
+      if (retired.view !== "dashboard") process.exit(10);
       const context = supportContextRoute(route);
       if (supportContextFromHistory({{support_origin_route: context}}) !== context) process.exit(5);
       const invalidContext = {{support_origin_route: "/studio/../../secret"}};

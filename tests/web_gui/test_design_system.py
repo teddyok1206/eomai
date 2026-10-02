@@ -26,7 +26,6 @@ def test_surface_mode_is_route_derived_and_not_a_user_theme() -> None:
         'request: "human"',
         'item: "human"',
         '"item-bank": "human"',
-        'approval: "human"',
         'hwpx: "human"',
         'control: "engine"',
         '"admin-settings": "engine"',
@@ -114,7 +113,7 @@ def test_readable_type_scale_keeps_explanatory_text_out_of_micro_sizes() -> None
         "body { margin: 0; min-width: 320px; background: var(--eom-background); "
         "font-size: var(--eom-type-body)" in CSS
     )
-    assert ".decision-checklist ul" in CSS and "font-size: var(--eom-type-label)" in CSS
+    assert ".policy-notice" in CSS and "font-size: var(--eom-type-label)" in CSS
     assert 'class="eyebrow"' not in HTML
     assert 'class="eyebrow"' not in LOGIN_HTML
     assert 'class="curriculum-helper"' not in HTML
@@ -148,8 +147,9 @@ def test_non_actionable_identifiers_are_hidden_without_removing_exact_id_paths()
     assert "function technicalDisclosure(label, values" in JAVASCRIPT
     assert '<summary>요청 기술 정보</summary><div class="draft-meta">' in HTML
     assert "<summary>ID로 문항 열기</summary>" in HTML
-    assert '<input id="approval-etag" type="hidden">' in HTML
-    assert 'id="approval-technical-summary"' in HTML
+    assert 'data-view-target="approval"' not in HTML
+    assert 'data-view="approval"' not in HTML
+    assert "/workflows/${encodeURIComponent(workflowId)}/approvals" not in JAVASCRIPT
     assert "<summary>제작 기술 정보</summary>" in HTML
     assert '<input id="mock-exam-assembly-revision" type="hidden">' in HTML
     assert "<summary>학습 기술 정보</summary>" in HTML
@@ -208,6 +208,10 @@ def test_account_management_separates_self_service_from_admin_controls() -> None
     assert 'id="account-current-password"' in HTML
     assert 'id="operator-create-form"' in HTML
     assert 'id="operator-list"' in HTML
+    assert 'class="form-grid account-credentials-form panel-body"' in HTML
+    assert ".account-create-form, .account-credentials-form" in CSS
+    assert ".login-panel input { width: 100%; min-height: 44px" in CSS
+    assert 'minlength="15"' not in HTML
     assert 'data-required-permission="operator:create"' in HTML
     assert "expected_resource_version: state.operator.resource_version" in JAVASCRIPT
     assert "if (newUsername) body.new_username = newUsername;" in JAVASCRIPT

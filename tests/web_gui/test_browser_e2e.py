@@ -20,7 +20,6 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "완성 문항",
             "Graph 문항은행",
             "시험지 ↔ 문항 ↔ 교육과정 Graph",
-            "이전 방식 문항 승인",
             "HWPX 제작 및 다운로드",
             "완성 문항 등록 후 계속",
             "문항 제작 진행에서 선택",
@@ -97,14 +96,10 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
         assert (
             client.post(
                 f"/studio/api/v1/workflows/{WORKFLOW_ID}/approvals",
-                json={
-                    "etag": '"v4"',
-                    "idempotency_key": "browser-e2e-approval-0001",
-                    "reason": None,
-                },
+                json={},
                 headers=csrf,
             ).status_code
-            == 202
+            == 404
         )
         preview = client.get(
             f"/studio/api/v1/items/{ITEM_ID}/revisions/{REVISION_ID}/preview"
@@ -130,7 +125,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             ).status_code
             == 200
         )
-        assert gateway.start_calls == gateway.approval_calls == 1
+        assert gateway.start_calls == 1
 
 
 def test_browser_assets_are_offline_and_xss_safe() -> None:

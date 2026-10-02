@@ -21,7 +21,7 @@ class RefreshRequest(ApiModel):
 
 class ChangePasswordRequest(ApiModel):
     current_password: SecretStr = Field(min_length=1, max_length=128)
-    new_password: SecretStr = Field(min_length=15, max_length=128)
+    new_password: SecretStr = Field(min_length=1, max_length=128)
 
 
 class UpdateCredentialsRequest(ApiModel):
@@ -32,7 +32,7 @@ class UpdateCredentialsRequest(ApiModel):
         max_length=64,
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
     )
-    new_password: SecretStr | None = Field(default=None, min_length=15, max_length=128)
+    new_password: SecretStr | None = Field(default=None, min_length=1, max_length=128)
     expected_resource_version: int = Field(ge=1)
 
     @model_validator(mode="after")

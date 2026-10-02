@@ -51,7 +51,6 @@ from eom_web_gui.contracts import (
     StudioProblem,
     StudioSelfCredentialUpdate,
     StudioWorkbenchOverview,
-    WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
 from eom_web_gui.resources import installed_web_source_commit, static_resource
@@ -824,14 +823,6 @@ def create_app(
                 await asyncio.sleep(2)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
-
-    @app.post(f"{API_PREFIX}/workflows/{{workflow_id}}/approvals", status_code=202)
-    async def approve_workflow(
-        workflow_id: str,
-        value: WorkflowApproval,
-        session: Annotated[WebSession, Depends(require_csrf)],
-    ) -> dict[str, Any]:
-        return await actual.approve(session, workflow_id, value)
 
     @app.get(f"{API_PREFIX}/items/{{item_id}}/revisions/{{item_revision_id}}/preview")
     async def item_preview(

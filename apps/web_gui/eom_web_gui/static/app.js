@@ -132,7 +132,6 @@ const UI_MODE_BY_VIEW = Object.freeze({
   request: "human",
   item: "human",
   "item-bank": "human",
-  approval: "human",
   hwpx: "human",
   control: "engine",
   "admin-settings": "engine",
@@ -353,7 +352,7 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   if (history) updateStudioHistory(window, historyRoute, {replace});
   if (name === "hwpx") loadHwpx();
   else stopHwpxBuildObservation();
-  if (!["workflow", "approval"].includes(name)) {
+  if (name !== "workflow") {
     stopWorkflowUpdates();
     state.workflowRequestSequence += 1;
   }
@@ -445,11 +444,9 @@ async function initializeSession() {
 }
 
 async function openStudioWorkbenchItem(item) {
-  if (["OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"].includes(item.next_action)) {
+  if (item.next_action === "OPEN_WORKFLOW") {
     $("#workflow-id").value = item.workflow_id;
-    $("#approval-workflow-id").value = item.workflow_id;
-    const view = item.next_action === "REVIEW_LEGACY_WORKFLOW" ? "approval" : "workflow";
-    showView(view, {route: {view, workflow_id: item.workflow_id}});
+    showView("workflow", {route: {view: "workflow", workflow_id: item.workflow_id}});
     await loadWorkflow();
     return;
   }
@@ -502,7 +499,6 @@ async function restoreStudioRoute(route) {
   const view = UI_MODE_BY_VIEW[route.view] ? route.view : "dashboard";
   if (route.workflow_id) {
     $("#workflow-id").value = route.workflow_id;
-    $("#approval-workflow-id").value = route.workflow_id;
   }
   if (route.item_id) $("#item-id").value = route.item_id;
   if (route.item_revision_id) $("#revision-id").value = route.item_revision_id;
@@ -512,7 +508,7 @@ async function restoreStudioRoute(route) {
     selectHwpxDeliveryTarget(hwpxTargetFromAdminRevision(route.item_revision_id));
   }
   showView(view, {history: false});
-  if (["workflow", "approval"].includes(view) && route.workflow_id) await loadWorkflow();
+  if (view === "workflow" && route.workflow_id) await loadWorkflow();
   if (view === "item" && route.item_id && route.item_revision_id) await loadItemPreview();
   if (view === "hwpx" && route.hwpx_build_id) await loadHwpxBuild();
 }
@@ -886,7 +882,6 @@ async function submitDraft() {
     showMessage($("#draft-message"), result.replayed ? "동일 요청 결과를 안전하게 재표시했습니다." : "문항 제작 요청이 접수되었습니다.", "success");
     if (typeof workflowId === "string") {
       $("#workflow-id").value = workflowId;
-      $("#approval-workflow-id").value = workflowId;
       showView("workflow");
       await loadWorkflow();
     }
@@ -925,7 +920,6 @@ async function loadWorkflow() {
     if (requestSequence !== state.workflowRequestSequence) return;
     state.workflow = value;
     renderWorkflow(value);
-    $("#approval-workflow-id").value = workflowId;
     updateStudioHistory(window, {view: state.currentView, workflow_id: workflowId}, {replace: true});
     startWorkflowUpdates(workflowId, requestSequence);
   } catch (failure) {
@@ -978,8 +972,6 @@ function renderWorkflow(bundle) {
     state.hwpxDeliveryTarget?.source === "WORKFLOW"
     && state.hwpxDeliveryTarget.workflowId !== workflowHwpxTarget?.workflowId
   ) selectHwpxDeliveryTarget(null);
-  $("#approval-etag").value = bundle.etag || "";
-  renderApprovalSummary(bundle);
 }
 
 function renderWorkflowHwpxHandoff(target, workflowState, registration) {
@@ -1271,48 +1263,6 @@ function formatSeoulDateTime(value) {
     }).format(new Date(value));
   } catch (_) {
     return "초기화 시각 확인 불가";
-  }
-}
-
-function installApproval() {
-  $("#approval-load").addEventListener("click", async () => {
-    $("#workflow-id").value = $("#approval-workflow-id").value.trim();
-    await loadWorkflow();
-  });
-  $("#approval-submit").addEventListener("click", approveWorkflow);
-}
-
-function renderApprovalSummary(bundle) {
-  const workflow = bundle.workflow || {};
-  renderDefinitionList($("#approval-summary"), {
-    "진행 상태": statePresentation("workflow", workflow.state).label,
-    "현재 단계": stageLabel(workflow.current_step_key),
-  });
-  renderDefinitionList($("#approval-technical-summary"), {
-    "문항 제작 진행 ID": workflow.workflow_id,
-    "동시 편집 확인값": bundle.etag,
-  });
-  const waiting = ["AWAITING_HUMAN_APPROVAL", "AWAITING_APPROVAL"].includes(workflow.state) || String(workflow.stage || "").includes("APPROVAL");
-  if (waiting) setStatus($("#approval-state"), "warning", "◆", "검토 승인 대기");
-  else setStateStatus($("#approval-state"), "workflow", workflow.state);
-  $("#approval-submit").disabled = !waiting || !bundle.etag;
-}
-
-async function approveWorkflow() {
-  const workflowId = $("#approval-workflow-id").value.trim();
-  const etag = $("#approval-etag").value;
-  const message = $("#approval-message");
-  try {
-    await api(`/workflows/${encodeURIComponent(workflowId)}/approvals`, {
-      method: "POST", mutation: true,
-      body: {etag, idempotency_key: `studio-approval:${workflowId}:${etag.replaceAll('"', "")}`, reason: $("#approval-reason").value.trim() || null},
-    });
-    showMessage(message, "검토 승인 요청이 접수되었습니다.", "success");
-    $("#workflow-id").value = workflowId;
-    await loadWorkflow();
-    showView("approval");
-  } catch (failure) {
-    showMessage(message, `승인 실패: ${failure.message}`, "error");
   }
 }
 
@@ -5683,7 +5633,6 @@ async function boot() {
   installPermissionRequirements(document);
   installRequestDraft();
   installWorkflow();
-  installApproval();
   installItemPreview();
   installItemBank();
   installStructuredImport();

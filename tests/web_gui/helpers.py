@@ -222,7 +222,6 @@ class FakeGateway:
         graph_grounding_available: bool = False,
     ) -> None:
         self.start_calls = 0
-        self.approval_calls = 0
         self.closed = False
         self.roles = roles or ["ADMIN", "REVIEWER"]
         self.hwpx_state = hwpx_state
@@ -751,26 +750,6 @@ class FakeGateway:
                     }
                 ]
             },
-        }
-
-    async def approve_workflow(
-        self,
-        session: WebSession,
-        workflow_id: str,
-        *,
-        etag: str,
-        idempotency_key: str,
-        reason: str | None,
-    ) -> dict[str, Any]:
-        del session, idempotency_key, reason
-        assert workflow_id == WORKFLOW_ID
-        assert etag == '"v4"'
-        self.approval_calls += 1
-        return {
-            "command_id": "command_test_approval",
-            "resource_id": workflow_id,
-            "status": "ACCEPTED",
-            "resource_version": 5,
         }
 
     async def item_preview(

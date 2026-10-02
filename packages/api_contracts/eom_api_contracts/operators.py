@@ -39,7 +39,7 @@ class CreateOperatorRequest(ApiModel):
         max_length=128,
         pattern=r"^[^\x00-\x1f\x7f]+$",
     )
-    temporary_password: SecretStr = Field(min_length=15, max_length=128)
+    temporary_password: SecretStr = Field(min_length=1, max_length=128)
     initial_roles: tuple[OperatorRoleKey, ...] = Field(min_length=1, max_length=5)
 
     @field_validator("initial_roles")

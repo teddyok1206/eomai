@@ -33,7 +33,8 @@ a complete corpus inventory.
 Every work item declares one approval mode:
 
 - `POST_REGISTRATION_HWPX` for the current Item Revision approval path;
-- `LEGACY_WORKFLOW` only for a legacy workflow already awaiting its preserved approval;
+- Legacy Workflow approval was initially exposed only for preserved historical work. ADR 0172
+  retires that Studio surface after draining the bounded backlog while retaining core history.
 - `NONE` otherwise.
 
 When a user opens a pending current Item, the BFF performs one exact indexed lookup for the newest

@@ -26,7 +26,6 @@ COMMON_PASSWORDS = frozenset(
 
 @dataclass(frozen=True)
 class PasswordPolicy:
-    minimum_characters: int = 15
     maximum_characters: int = 128
     maximum_encoded_bytes: int = 256
 
@@ -47,7 +46,6 @@ class PasswordService:
         invalid = (
             not password
             or "\x00" in password
-            or len(password) < self.policy.minimum_characters
             or len(password) > self.policy.maximum_characters
             or len(encoded) > self.policy.maximum_encoded_bytes
             or normalized in identities
