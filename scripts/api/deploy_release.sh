@@ -2168,7 +2168,7 @@ from eom_workflow import AgentStep, WORKFLOW_ADMISSION_BY_IDENTITY
 from eom_workflow.control_schemas import control_schema_inventory, load_control_schema
 from eom_api_contracts import (
     ApiReleaseBuildInfo,
-    EducationalQualityReviewCommand,
+    CreateEducationalQualityPlanCommand,
     EducationalQualityReviewWorkbenchView,
     MockExamExplicitAnalysisReviewSetV1,
     MockExamExplicitRatingSetV1,
@@ -2288,7 +2288,7 @@ if any(
 if ApiReleaseBuildInfo.__module__ != "eom_api_contracts.system":
     raise SystemExit("API release build information contract export is incomplete")
 if (
-    EducationalQualityReviewCommand.__module__
+    CreateEducationalQualityPlanCommand.__module__
     != "eom_api_contracts.educational_quality"
     or EducationalQualityReviewWorkbenchView.__module__
     != "eom_api_contracts.educational_quality"
