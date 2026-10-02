@@ -1880,6 +1880,148 @@ def institutional_style_evaluation_review_schema() -> dict[str, Any]:
     return value
 
 
+def _institutional_style_blind_member() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "width_px",
+            "height_px",
+            "size_bytes",
+            "sha256",
+        ],
+        "properties": {
+            "member_path": {
+                "type": "string",
+                "pattern": "^presentation/[0-9a-f]{64}\\.png$",
+            },
+            "schema_ref": {
+                "const": (
+                    "eom://schemas/image-provider/"
+                    "local-image-institutional-style-blind-presentation-png/1.0"
+                )
+            },
+            "media_type": {"const": "image/png"},
+            "width_px": {"const": 800},
+            "height_px": {"const": 500},
+            "size_bytes": {"type": "integer", "minimum": 64, "maximum": 8388608},
+            "sha256": SHA256,
+        },
+    }
+
+
+def institutional_style_review_packet_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-institutional-style-review-packet/1.0",
+        "EOM local image institutional style blinded review packet v1",
+    )
+    value["$defs"] = {
+        "blindMember": _institutional_style_blind_member(),
+        "case": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "case_id",
+                "subject_family",
+                "depiction_key",
+                "presentation_token",
+                "left_image",
+                "right_image",
+            ],
+            "properties": {
+                "case_id": {"type": "string", "pattern": "^imgstylecase_[0-9a-f]{32}$"},
+                "subject_family": {
+                    "enum": [
+                        "EARTH_SPACE",
+                        "LAB_APPARATUS",
+                        "LIVING_ORGANISM",
+                        "NATURAL_OBJECT",
+                        "PHYSICAL_OBJECT",
+                        "REAL_WORLD_SCENE",
+                    ]
+                },
+                "depiction_key": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                },
+                "presentation_token": {
+                    "type": "string",
+                    "pattern": "^blind_[0-9a-f]{32}$",
+                },
+                "left_image": {"$ref": "#/$defs/blindMember"},
+                "right_image": {"$ref": "#/$defs/blindMember"},
+            },
+        },
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "plan_sha256",
+        "presentation_policy",
+        "cases",
+        "packet_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-institutional-style-review-packet/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
+        "plan_sha256": SHA256,
+        "presentation_policy": {"const": "FOREGROUND_BBOX_FIT_800X500_V1"},
+        "cases": {
+            "type": "array",
+            "minItems": 12,
+            "maxItems": 32,
+            "items": {"$ref": "#/$defs/case"},
+        },
+        "packet_sha256": SHA256,
+    }
+    return value
+
+
+def institutional_style_answer_key_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-institutional-style-answer-key/1.0",
+        "EOM local image institutional style hidden answer key v1",
+    )
+    value["$defs"] = {
+        "entry": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["case_id", "presentation_token", "left_origin"],
+            "properties": {
+                "case_id": {"type": "string", "pattern": "^imgstylecase_[0-9a-f]{32}$"},
+                "presentation_token": {
+                    "type": "string",
+                    "pattern": "^blind_[0-9a-f]{32}$",
+                },
+                "left_origin": {"enum": ["GENERATED", "INSTITUTIONAL"]},
+            },
+        }
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "plan_sha256",
+        "entries",
+        "answer_key_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-institutional-style-answer-key/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
+        "plan_sha256": SHA256,
+        "entries": {
+            "type": "array",
+            "minItems": 12,
+            "maxItems": 32,
+            "items": {"$ref": "#/$defs/entry"},
+        },
+        "answer_key_sha256": SHA256,
+    }
+    return value
+
+
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
@@ -1950,6 +2092,12 @@ SCHEMAS = {
     ),
     "local-image-institutional-style-evaluation-review-v1.schema.json": (
         institutional_style_evaluation_review_schema()
+    ),
+    "local-image-institutional-style-review-packet-v1.schema.json": (
+        institutional_style_review_packet_schema()
+    ),
+    "local-image-institutional-style-answer-key-v1.schema.json": (
+        institutional_style_answer_key_schema()
     ),
 }
 

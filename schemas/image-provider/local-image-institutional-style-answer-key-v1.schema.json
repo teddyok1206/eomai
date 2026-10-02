@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-institutional-style-answer-key/1.0",
+  "title": "EOM local image institutional style hidden answer key v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "presentation_token",
+        "left_origin"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^imgstylecase_[0-9a-f]{32}$"
+        },
+        "presentation_token": {
+          "type": "string",
+          "pattern": "^blind_[0-9a-f]{32}$"
+        },
+        "left_origin": {
+          "enum": [
+            "GENERATED",
+            "INSTITUTIONAL"
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "plan_sha256",
+    "entries",
+    "answer_key_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-institutional-style-answer-key/1.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^imgstyleeval_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "answer_key_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

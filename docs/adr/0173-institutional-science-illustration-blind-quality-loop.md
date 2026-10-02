@@ -43,7 +43,20 @@ institutional member and one generated candidate in the same style track.  Both 
 the same exact semantic subject identified by a unique `depiction_key`; sharing only a broad family
 such as `LIVING_ORGANISM` is insufficient.  The candidate must not reproduce the exact source
 artwork.  A canonical SHA-256-derived ordering token assigns opaque labels and presentation order.
-The answer key is stored separately from the reviewer form.
+The answer key is stored separately from the reviewer form.  The evaluation plan is an internal
+orchestrator input and must never be used as the reviewer payload because each case contains
+`left_origin`.  A typed review-packet successor contains only content-addressed normalized left and
+right PNG members plus the case token and same-depiction metadata.  A separate typed answer-key
+artifact contains the token-to-origin mapping.  Both bind the exact evaluation and plan hash.
+
+The packet builder resolves each pinned source member once, applies the plan's deterministic
+presentation policy, and deduplicates normalized bytes by SHA-256 in a keyed map.  Dominant access
+patterns are O(1) case/member lookup and stable ordered iteration; construction is O(C*W*H) time and
+O(U*W*H) output space for `C` cases and `U` unique normalized images.  It writes only to a local
+workspace.  The orchestrator remains the sole owner of separate NAS commits for reviewer packet and
+answer key.  Retry with the same plan is byte-identical; any plan or image change produces a new
+hash.  Keeping only the plan and relying on UI field hiding is simpler but insufficient because one
+serialization mistake would disclose the blind key.
 The reviewer records, without seeing origin:
 
 - guessed origin and confidence;
