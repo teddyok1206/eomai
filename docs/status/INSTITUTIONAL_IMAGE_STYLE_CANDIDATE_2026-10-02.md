@@ -82,6 +82,8 @@ New additive JSON Schema 2020-12 families and matching frozen Pydantic models co
 - institutional-style evaluation plan, automated result and independent human review;
 - a reviewer-safe packet containing only content-addressed normalized left/right PNGs and a
   separately hashed answer key; the evaluator plan itself is never a reviewer payload;
+- independent unique 128-bit CSPRNG presentation tokens; origin-derived hashes are forbidden
+  because a reviewer could test the two possible answers;
 - immutable input/output members, balanced blinded order, at least four subject families, one
   explicit style track, unique exact depiction keys, exact content-derived identities, full case
   coverage and canonical hashes;

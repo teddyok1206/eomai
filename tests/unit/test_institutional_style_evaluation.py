@@ -75,9 +75,7 @@ def _case(index: int) -> InstitutionalStyleEvaluationCase:
     identity = content_sha256(body).removeprefix("sha256:")[:32]
     case_id = f"imgstylecase_{identity}"
     left_origin = "GENERATED" if index % 2 else "INSTITUTIONAL"
-    token = content_sha256({"case_id": case_id, "left_origin": left_origin}).removeprefix(
-        "sha256:"
-    )[:32]
+    token = content_sha256({"fixture_blind_token": index}).removeprefix("sha256:")[:32]
     return InstitutionalStyleEvaluationCase.model_validate(
         {
             **body,
@@ -92,6 +90,7 @@ def _plan() -> LocalImageInstitutionalStyleEvaluationPlan:
     cases = tuple(sorted((_case(index) for index in range(12)), key=lambda value: value.case_id))
     identity_body = {
         "selection_method": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1",
+        "blinding_method": "CSPRNG_128_BIT_TOKEN_V1",
         "style_track": "OBJECT_LINE_ART",
         "presentation_policy": "FOREGROUND_BBOX_FIT_800X500_V1",
         "provider_binding_sha256": _sha("binding"),
@@ -219,17 +218,29 @@ def test_institutional_style_plan_rejects_repeated_depiction_key() -> None:
     changed["case_id"] = (
         "imgstylecase_" + content_sha256(identity_body).removeprefix("sha256:")[:32]
     )
-    changed["presentation_token"] = (
-        "blind_"
-        + content_sha256(
-            {"case_id": changed["case_id"], "left_origin": changed["left_origin"]}
-        ).removeprefix("sha256:")[:32]
-    )
     plan["cases"] = sorted(plan["cases"], key=lambda value: value["case_id"])
     plan["plan_sha256"] = content_sha256(plan)
 
     with pytest.raises(ValueError, match="repeats a depiction key"):
         LocalImageInstitutionalStyleEvaluationPlan.model_validate(plan)
+
+
+def test_institutional_style_plan_requires_independent_unique_blind_tokens() -> None:
+    plan = _plan()
+    for case in plan.cases:
+        guessable = (
+            "blind_"
+            + content_sha256(
+                {"case_id": case.case_id, "left_origin": case.left_origin}
+            ).removeprefix("sha256:")[:32]
+        )
+        assert case.presentation_token != guessable
+
+    changed = plan.model_dump(mode="json", exclude={"plan_sha256"})
+    changed["cases"][1]["presentation_token"] = changed["cases"][0]["presentation_token"]
+    changed["plan_sha256"] = content_sha256(changed)
+    with pytest.raises(ValueError, match="repeats a presentation token"):
+        LocalImageInstitutionalStyleEvaluationPlan.model_validate(changed)
 
 
 def test_institutional_style_plan_rejects_unstratified_population() -> None:
@@ -248,12 +259,6 @@ def test_institutional_style_plan_rejects_unstratified_population() -> None:
             )
         }
         case["case_id"] = "imgstylecase_" + content_sha256(body).removeprefix("sha256:")[:32]
-        case["presentation_token"] = (
-            "blind_"
-            + content_sha256(
-                {"case_id": case["case_id"], "left_origin": case["left_origin"]}
-            ).removeprefix("sha256:")[:32]
-        )
     plan["cases"] = sorted(plan["cases"], key=lambda value: value["case_id"])
     plan["plan_sha256"] = content_sha256(plan)
 
@@ -446,9 +451,7 @@ def _material_plan() -> tuple[
         }
         case_id = "imgstylecase_" + content_sha256(body).removeprefix("sha256:")[:32]
         left_origin = "GENERATED" if index % 2 else "INSTITUTIONAL"
-        token = content_sha256({"case_id": case_id, "left_origin": left_origin}).removeprefix(
-            "sha256:"
-        )[:32]
+        token = content_sha256({"material_blind_token": index}).removeprefix("sha256:")[:32]
         cases.append(
             InstitutionalStyleEvaluationCase.model_validate(
                 {
@@ -462,6 +465,7 @@ def _material_plan() -> tuple[
     cases.sort(key=lambda value: value.case_id)
     identity_body = {
         "selection_method": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1",
+        "blinding_method": "CSPRNG_128_BIT_TOKEN_V1",
         "style_track": "OBJECT_LINE_ART",
         "presentation_policy": "FOREGROUND_BBOX_FIT_800X500_V1",
         "provider_binding_sha256": _sha("material-binding"),

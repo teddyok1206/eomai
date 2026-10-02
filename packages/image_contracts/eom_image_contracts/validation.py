@@ -401,7 +401,7 @@ SCHEMA_SHA256 = {
         "sha256:58ec74c1d1485fdaa5847bdfa8adb8603743d68db7f6c612ac36cf2f524a3335"
     ),
     "institutional-style-evaluation-plan": (
-        "sha256:4ca932114e649dccbb8ccb2637b56577bf7d9ae745aa1e942f6e1e7aa5e38c69"
+        "sha256:4fb6ef1bf1dae3adad7be0828970d454eaa705dbb02b462bb25f10696c3b5140"
     ),
     "institutional-style-evaluation-result": (
         "sha256:5a4fde9509b3c8a63952b1d886467aaaf5fb82eaf24b2fe01909fb2e6316b761"

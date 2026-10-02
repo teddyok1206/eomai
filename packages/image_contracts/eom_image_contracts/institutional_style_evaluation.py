@@ -85,11 +85,6 @@ class InstitutionalStyleEvaluationCase(FrozenModel):
         ).removeprefix("sha256:")[:32]
         if self.case_id != f"imgstylecase_{identity}":
             raise ValueError("institutional-style case ID mismatch")
-        token = content_sha256(
-            {"case_id": self.case_id, "left_origin": self.left_origin}
-        ).removeprefix("sha256:")[:32]
-        if self.presentation_token != f"blind_{token}":
-            raise ValueError("institutional-style presentation token mismatch")
         return self
 
 
@@ -98,6 +93,7 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
     evaluation_id: str = Field(pattern=r"^imgstyleeval_[0-9a-f]{32}$")
     created_at: datetime
     selection_method: Literal["SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1"]
+    blinding_method: Literal["CSPRNG_128_BIT_TOKEN_V1"]
     style_track: InstitutionalStyleTrack
     presentation_policy: Literal["FOREGROUND_BBOX_FIT_800X500_V1"]
     provider_binding_sha256: Sha256
@@ -125,6 +121,9 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
         depiction_keys = {case.depiction_key for case in self.cases}
         if len(depiction_keys) != len(self.cases):
             raise ValueError("institutional-style plan repeats a depiction key")
+        presentation_tokens = {case.presentation_token for case in self.cases}
+        if len(presentation_tokens) != len(self.cases):
+            raise ValueError("institutional-style plan repeats a presentation token")
         if len({case.subject_family for case in self.cases}) < 4:
             raise ValueError("institutional-style plan requires at least four subject families")
         left_counts = {
@@ -136,6 +135,7 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
         identity = content_sha256(
             {
                 "selection_method": self.selection_method,
+                "blinding_method": self.blinding_method,
                 "style_track": self.style_track,
                 "presentation_policy": self.presentation_policy,
                 "provider_binding_sha256": self.provider_binding_sha256,
