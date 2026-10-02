@@ -48,6 +48,9 @@ orchestrator input and must never be used as the reviewer payload because each c
 `left_origin`.  A typed review-packet successor contains only content-addressed normalized left and
 right PNG members plus the case token and same-depiction metadata.  A separate typed answer-key
 artifact contains the token-to-origin mapping.  Both bind the exact evaluation and plan hash.
+Presentation tokens are independent CSPRNG 128-bit values.  They are never derived from the case ID
+or origin: because there are only two possible origins, a public deterministic hash would let a
+reviewer recover the answer by trying both inputs.
 
 The packet builder resolves each pinned source member once, applies the plan's deterministic
 presentation policy, and deduplicates normalized bytes by SHA-256 in a keyed map.  Dominant access

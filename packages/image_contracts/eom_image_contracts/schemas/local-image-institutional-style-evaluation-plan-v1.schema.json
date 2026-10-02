@@ -146,6 +146,7 @@
     "evaluation_id",
     "created_at",
     "selection_method",
+    "blinding_method",
     "style_track",
     "presentation_policy",
     "provider_binding_sha256",
@@ -169,6 +170,9 @@
     },
     "selection_method": {
       "const": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1"
+    },
+    "blinding_method": {
+      "const": "CSPRNG_128_BIT_TOKEN_V1"
     },
     "style_track": {
       "enum": [
