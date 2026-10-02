@@ -1329,20 +1329,20 @@ def _assessment_line_art_postprocess_v2_schema() -> dict[str, Any]:
     value["properties"]["contract"] = {"const": "local-image-assessment-line-art-postprocess/2.0"}
     value["properties"]["vertical_border_px"] = {"const": 24}
     additions = {
-        "microdetail_blur_radius": {"const": 0.7},
-        "final_median_filter_size": {"const": 3},
-        "cleanup_component_max_pixels": {"const": 16},
-        "final_dark_threshold": {"const": 192},
+        "microdetail_blur_radius": {"const": 0.85},
+        "final_median_filter_size": {"const": 5},
+        "cleanup_component_max_pixels": {"const": 48},
+        "final_dark_threshold": {"const": 80},
         "final_mid_threshold": {"const": 235},
         "final_output_tones": {
             "type": "array",
-            "prefixItems": [{"const": 32}, {"const": 128}, {"const": 255}],
+            "prefixItems": [{"const": 32}, {"const": 96}, {"const": 255}],
             "minItems": 3,
             "maxItems": 3,
         },
-        "fine_detail_fraction_max": {"const": 0.4},
+        "fine_detail_fraction_max": {"const": 0.1},
         "tiny_component_fraction_max": {"const": 0.05},
-        "component_count_max": {"const": 2000},
+        "component_count_max": {"const": 256},
     }
     value["required"].extend(additions)
     value["properties"].update(additions)

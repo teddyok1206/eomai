@@ -426,16 +426,16 @@
           "const": 0.3
         },
         "microdetail_blur_radius": {
-          "const": 0.7
+          "const": 0.85
         },
         "final_median_filter_size": {
-          "const": 3
+          "const": 5
         },
         "cleanup_component_max_pixels": {
-          "const": 16
+          "const": 48
         },
         "final_dark_threshold": {
-          "const": 192
+          "const": 80
         },
         "final_mid_threshold": {
           "const": 235
@@ -447,7 +447,7 @@
               "const": 32
             },
             {
-              "const": 128
+              "const": 96
             },
             {
               "const": 255
@@ -457,13 +457,13 @@
           "maxItems": 3
         },
         "fine_detail_fraction_max": {
-          "const": 0.4
+          "const": 0.1
         },
         "tiny_component_fraction_max": {
           "const": 0.05
         },
         "component_count_max": {
-          "const": 2000
+          "const": 256
         }
       }
     },
