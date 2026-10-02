@@ -104,6 +104,7 @@ the required successor file-set and Content Pack do not yet exist.
 ## Verification status
 
 - full image-runtime non-live suite: 142 PASS;
+- final source-first candidate/Catalog/deployment focused suite at commit `9ad2672b`: 152 PASS;
 - repository API/non-image suite: 3,803 PASS, 40 opt-in/environment skips;
 - JSON Schema mirrors and canonical hashes: PASS;
 - strict type checking in the explicit image test environment: PASS;
@@ -117,6 +118,14 @@ the required successor file-set and Content Pack do not yet exist.
 - canonical NAS publication of the temporary sheet: NOT PERFORMED;
 - independent blinded human review: PENDING;
 - fresh GPU inference using V7 runtime: PENDING a reviewed release/deployment boundary.
+
+Clean archive builds from final commit `9ad2672bc9b1b05b933a6f136c6e5b9ca5d051a1` also
+verified that both release builders package all five institutional-evaluation contracts.  The two
+independent builds produced the same contract wheel SHA-256
+`2822d44083b65dd3d524ebd257791a3888b35ae5f8eceb0f969aba914d373656` and provider wheel SHA-256
+`f71d6bd54fe5ae82f7dcb1bfc75fc5e3a7411209462d21d9a3036d57323d72aa`; the trainer wheel SHA-256
+was `011fea66bb2aa25fc70392a5fea7bb054d759b978d7a198a9d59fb433ad3a50f`.  These are local build
+evidence only, not a deployment or activation receipt.
 
 The retired comparison reused immutable raw model outputs and did not create canonical evidence.
 A production-canary decision requires a new 12–32 case plan whose two sides share the exact
