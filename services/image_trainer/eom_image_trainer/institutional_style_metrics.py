@@ -20,10 +20,72 @@ DARK_THRESHOLD = 96
 EDGE_THRESHOLD = 25
 BORDER_WIDTH = 24
 TINY_COMPONENT_MAX_PIXELS = 16
+PRESENTATION_WIDTH = 800
+PRESENTATION_HEIGHT = 500
+PRESENTATION_INNER_WIDTH = 720
+PRESENTATION_INNER_HEIGHT = 420
 
 
 class InstitutionalStyleMetricsError(ValueError):
     """Stable invalid-image failure at the evaluation boundary."""
+
+
+def normalize_institutional_style_presentation(payload: bytes) -> bytes:
+    """Fit foreground to one pinned canvas so crop whitespace cannot reveal origin."""
+
+    if not payload or len(payload) > MAX_IMAGE_BYTES:
+        raise InstitutionalStyleMetricsError("INSTITUTIONAL_STYLE_IMAGE_INVALID")
+    try:
+        with Image.open(io.BytesIO(payload)) as source:
+            source.load()
+            if (
+                source.format != "PNG"
+                or source.width < 32
+                or source.height < 32
+                or source.width * source.height > MAX_PIXELS
+            ):
+                raise InstitutionalStyleMetricsError("INSTITUTIONAL_STYLE_IMAGE_INVALID")
+            grayscale = ImageOps.grayscale(source)
+    except InstitutionalStyleMetricsError:
+        raise
+    except (OSError, UnidentifiedImageError) as exc:
+        raise InstitutionalStyleMetricsError("INSTITUTIONAL_STYLE_IMAGE_INVALID") from exc
+
+    foreground_mask = grayscale.point(
+        tuple(255 if value < FOREGROUND_THRESHOLD else 0 for value in range(256))
+    )
+    bounding_box = foreground_mask.getbbox()
+    if bounding_box is None:
+        raise InstitutionalStyleMetricsError("INSTITUTIONAL_STYLE_FOREGROUND_MISSING")
+    foreground = grayscale.crop(bounding_box)
+    scale = min(
+        PRESENTATION_INNER_WIDTH / foreground.width,
+        PRESENTATION_INNER_HEIGHT / foreground.height,
+    )
+    foreground = foreground.resize(
+        (
+            max(1, round(foreground.width * scale)),
+            max(1, round(foreground.height * scale)),
+        ),
+        Image.Resampling.LANCZOS,
+    )
+    canvas = Image.new("L", (PRESENTATION_WIDTH, PRESENTATION_HEIGHT), 255)
+    canvas.paste(
+        foreground,
+        (
+            (PRESENTATION_WIDTH - foreground.width) // 2,
+            (PRESENTATION_HEIGHT - foreground.height) // 2,
+        ),
+    )
+    target = io.BytesIO()
+    canvas.save(target, format="PNG", optimize=False, compress_level=9)
+    return target.getvalue()
+
+
+def institutional_style_presentation_metrics(payload: bytes) -> InstitutionalStyleImageMetrics:
+    """Measure the exact canvas used by the blinded reviewer."""
+
+    return institutional_style_metrics(normalize_institutional_style_presentation(payload))
 
 
 def _milli(count: int, total: int) -> int:

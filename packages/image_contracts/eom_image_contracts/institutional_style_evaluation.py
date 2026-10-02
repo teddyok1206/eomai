@@ -35,6 +35,7 @@ InstitutionalStyleSubjectFamily = Literal[
     "REAL_WORLD_SCENE",
 ]
 InstitutionalStyleOrigin = Literal["GENERATED", "INSTITUTIONAL"]
+InstitutionalStyleTrack = Literal["OBJECT_LINE_ART", "RASTER_TEXTURE_SCENE"]
 
 
 def _utc(value: datetime) -> datetime:
@@ -51,6 +52,7 @@ def _require_image(pointer: ImageEvaluationArtifactMember, *, schema_ref: str) -
 class InstitutionalStyleEvaluationCase(FrozenModel):
     case_id: str = Field(pattern=r"^imgstylecase_[0-9a-f]{32}$")
     subject_family: InstitutionalStyleSubjectFamily
+    depiction_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     institutional_image: ImageEvaluationArtifactMember
     generated_image: ImageEvaluationArtifactMember
     generated_request_sha256: Sha256
@@ -65,6 +67,7 @@ class InstitutionalStyleEvaluationCase(FrozenModel):
         identity = content_sha256(
             {
                 "subject_family": self.subject_family,
+                "depiction_key": self.depiction_key,
                 "institutional_image": self.institutional_image.model_dump(mode="json"),
                 "generated_image": self.generated_image.model_dump(mode="json"),
                 "generated_request_sha256": self.generated_request_sha256,
@@ -85,7 +88,9 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
     schema_version: Literal["local-image-institutional-style-evaluation-plan/1.0"]
     evaluation_id: str = Field(pattern=r"^imgstyleeval_[0-9a-f]{32}$")
     created_at: datetime
-    selection_method: Literal["STRATIFIED_ORIGIN_BLIND_V1"]
+    selection_method: Literal["SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1"]
+    style_track: InstitutionalStyleTrack
+    presentation_policy: Literal["FOREGROUND_BBOX_FIT_800X500_V1"]
     provider_binding_sha256: Sha256
     maximum_generated_origin_identification_rate: float = Field(ge=0.5, le=0.75)
     minimum_mean_institutional_style_score: float = Field(ge=3, le=5)
@@ -108,6 +113,9 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
             raise ValueError("institutional-style plan repeats an image")
         if institutional & generated:
             raise ValueError("institutional-style origins share an image hash")
+        depiction_keys = {case.depiction_key for case in self.cases}
+        if len(depiction_keys) != len(self.cases):
+            raise ValueError("institutional-style plan repeats a depiction key")
         if len({case.subject_family for case in self.cases}) < 4:
             raise ValueError("institutional-style plan requires at least four subject families")
         left_counts = {
@@ -119,6 +127,8 @@ class LocalImageInstitutionalStyleEvaluationPlan(FrozenModel):
         identity = content_sha256(
             {
                 "selection_method": self.selection_method,
+                "style_track": self.style_track,
+                "presentation_policy": self.presentation_policy,
                 "provider_binding_sha256": self.provider_binding_sha256,
                 "maximum_generated_origin_identification_rate": (
                     self.maximum_generated_origin_identification_rate
@@ -310,7 +320,12 @@ def validate_institutional_style_review(
         generated = entry.left if generated_side == "LEFT" else entry.right
         generated_reviews.append(generated)
         style_total += generated.institutional_style_score
-        if set(generated.defects) & {"COMPOSITION_DRIFT", "EXTRA_OBJECT", "SEMANTIC_DEFECT"}:
+        if set(generated.defects) & {
+            "COMPOSITION_DRIFT",
+            "EXTRA_OBJECT",
+            "PSEUDOTEXT",
+            "SEMANTIC_DEFECT",
+        }:
             critical += 1
     rate = round(correct / len(review.reviews), 8)
     mean_style = round(style_total / len(review.reviews), 8)
@@ -325,7 +340,9 @@ def validate_institutional_style_review(
         and mean_style >= plan.minimum_mean_institutional_style_score
         and critical == 0
         and all(
-            entry.semantic_suitability_score >= 3 and entry.composition_score >= 3
+            entry.semantic_suitability_score >= 3
+            and entry.composition_score >= 3
+            and entry.usability != "REJECT"
             for entry in generated_reviews
         )
     )

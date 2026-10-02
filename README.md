@@ -248,7 +248,9 @@ version과 policy hash는 새 결과의 request/Artifact provenance에 고정됩
 기관 기출 선화와 생성 결과를 같은 캔버스에 섞어 식별 가능성·과학적 적합성·구도·선 굵기·세부
 밀도를 독립 평가하는 V7 후보도 마련되어 있습니다. 이 후보는 작은 고립 잡음과 과도한 미세선을
 결정론적으로 줄이지만, 의사문자나 의미 오류를 자동으로 숨기지 않습니다. 현재 상태는
-`CANDIDATE_BLIND_REVIEW_PENDING`이며 생산 V6 활성화는 그대로 유지됩니다. 설계와 자동 측정 결과는
+`CANDIDATE_SUBJECT_MATCHED_BLIND_REVIEW_PENDING`이며 생산 V6 활성화는 그대로 유지됩니다. 블라인드
+쌍은 같은 정확한 피사체여야 하고, 선화와 사진·질감은 서로 다른 style track으로 평가합니다.
+설계와 자동 측정 결과는
 [기관 시험 선화 후보 상태](docs/status/INSTITUTIONAL_IMAGE_STYLE_CANDIDATE_2026-10-02.md) 및
 [ADR 0173](docs/adr/0173-institutional-science-illustration-blind-quality-loop.md)에 기록되어 있습니다.
 

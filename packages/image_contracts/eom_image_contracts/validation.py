@@ -314,7 +314,7 @@ SCHEMA_SHA256 = {
         "sha256:d2440059f71246c9e6de2dfa41648a4baa91027c072f1d1107ab255c9e26362a"
     ),
     "provider-binding-v7": (
-        "sha256:0b8d9c961a96d6d46ed9252539a4ab74fe505f6a161777c51178fa2616f175ab"
+        "sha256:fd06c76f12de9228e9e4a77e7daf3bf873eeea44e33a6e09be1a57b7a774175a"
     ),
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
@@ -379,10 +379,10 @@ SCHEMA_SHA256 = {
         "sha256:1499a4019e8a50d6ba9987ef223a30a0df33c196d5d0f66692f118e1c5c8f33d"
     ),
     "reference-conditioned-composite-request-v7": (
-        "sha256:7e7afc65b93057a19082e6473987e0de8312b130b08eb07fd8cd0627492a810a"
+        "sha256:7e176e1f1044970b44b565c50480d42f492d17850e45c219458b65087b6d27fc"
     ),
     "reference-conditioned-composite-receipt-v7": (
-        "sha256:5e6a51c7ab4b4e92ec81ebe0e0d042ccf615ab6fe8b3233b9216c6dec3c86309"
+        "sha256:81a1edef162ee1234147971faac98928f0dd513447bde98cc24cb15a49ec57c1"
     ),
     "reference-composition-evaluation": (
         "sha256:2bf2747b6d2458880c7fa26409b96377756a022bc13f4a75ee1de19340ef1120"
@@ -397,7 +397,7 @@ SCHEMA_SHA256 = {
         "sha256:58ec74c1d1485fdaa5847bdfa8adb8603743d68db7f6c612ac36cf2f524a3335"
     ),
     "institutional-style-evaluation-plan": (
-        "sha256:0ad479678d62cdc50ae209350c26daa2c05cc47259df34f1d017eb15e5bc3630"
+        "sha256:4ca932114e649dccbb8ccb2637b56577bf7d9ae745aa1e942f6e1e7aa5e38c69"
     ),
     "institutional-style-evaluation-result": (
         "sha256:5a4fde9509b3c8a63952b1d886467aaaf5fb82eaf24b2fe01909fb2e6316b761"

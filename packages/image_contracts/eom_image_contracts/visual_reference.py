@@ -973,15 +973,15 @@ class LocalImageAssessmentLineArtPostprocessV2(FrozenModel):
     border_foreground_ratio_max: float = Field(default=0.01, ge=0.01, le=0.01)
     edge_density_min: float = Field(default=0.01, ge=0.01, le=0.01)
     edge_density_max: float = Field(default=0.3, ge=0.3, le=0.3)
-    microdetail_blur_radius: float = Field(default=0.7, ge=0.7, le=0.7)
-    final_median_filter_size: Literal[3] = 3
-    cleanup_component_max_pixels: Literal[16] = 16
-    final_dark_threshold: Literal[192] = 192
+    microdetail_blur_radius: float = Field(default=0.85, ge=0.85, le=0.85)
+    final_median_filter_size: Literal[5] = 5
+    cleanup_component_max_pixels: Literal[48] = 48
+    final_dark_threshold: Literal[80] = 80
     final_mid_threshold: Literal[235] = 235
-    final_output_tones: tuple[Literal[32], Literal[128], Literal[255]] = (32, 128, 255)
-    fine_detail_fraction_max: float = Field(default=0.4, ge=0.4, le=0.4)
+    final_output_tones: tuple[Literal[32], Literal[96], Literal[255]] = (32, 96, 255)
+    fine_detail_fraction_max: float = Field(default=0.1, ge=0.1, le=0.1)
     tiny_component_fraction_max: float = Field(default=0.05, ge=0.05, le=0.05)
-    component_count_max: Literal[2000] = 2000
+    component_count_max: Literal[256] = 256
 
 
 class LocalImageProviderBindingV2(FrozenModel):

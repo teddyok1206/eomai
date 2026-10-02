@@ -17,7 +17,7 @@ from eom_image_contracts import (
 
 from eom_image_trainer.institutional_style_metrics import (
     InstitutionalStyleMetricsError,
-    institutional_style_metrics,
+    institutional_style_presentation_metrics,
 )
 
 MemberResolver = Callable[[ImageEvaluationArtifactMember], bytes]
@@ -57,10 +57,10 @@ def evaluate_institutional_style(
     case_results: list[InstitutionalStyleCaseResult] = []
     try:
         for case in plan.cases:
-            institutional = institutional_style_metrics(
+            institutional = institutional_style_presentation_metrics(
                 _resolve_exact(case.institutional_image, resolve_member=resolve_member)
             )
-            generated = institutional_style_metrics(
+            generated = institutional_style_presentation_metrics(
                 _resolve_exact(case.generated_image, resolve_member=resolve_member)
             )
             metric_fields = (

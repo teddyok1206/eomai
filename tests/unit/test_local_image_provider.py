@@ -548,15 +548,15 @@ def _conditioned_request_v7(
         "postprocess": {
             **predecessor.postprocess.model_dump(mode="json", exclude={"contract"}),
             "contract": "local-image-assessment-line-art-postprocess/2.0",
-            "microdetail_blur_radius": 0.7,
-            "final_median_filter_size": 3,
-            "cleanup_component_max_pixels": 16,
-            "final_dark_threshold": 192,
+            "microdetail_blur_radius": 0.85,
+            "final_median_filter_size": 5,
+            "cleanup_component_max_pixels": 48,
+            "final_dark_threshold": 80,
             "final_mid_threshold": 235,
-            "final_output_tones": [32, 128, 255],
-            "fine_detail_fraction_max": 0.4,
+            "final_output_tones": [32, 96, 255],
+            "fine_detail_fraction_max": 0.1,
             "tiny_component_fraction_max": 0.05,
-            "component_count_max": 2000,
+            "component_count_max": 256,
             "vertical_border_px": 24,
         },
     }
@@ -1528,10 +1528,10 @@ def test_microdetail_bounded_v7_generates_and_reuses_exact_receipt(
 
     assert first == second
     assert calls == 1
-    assert first.postprocess_metrics.output_fine_detail_ratio <= 0.4
+    assert first.postprocess_metrics.output_fine_detail_ratio <= 0.1
     assert first.postprocess_metrics.output_tiny_component_ratio <= 0.05
-    assert first.postprocess_metrics.output_component_count <= 2000
-    assert set(first.postprocess.final_output_tones) == {32, 128, 255}
+    assert first.postprocess_metrics.output_component_count <= 256
+    assert set(first.postprocess.final_output_tones) == {32, 96, 255}
     validate_contract("reference-conditioned-composite-receipt-v7", first.model_dump(mode="json"))
     assert (
         reuse_reference_conditioned_composite_handoff_v7(

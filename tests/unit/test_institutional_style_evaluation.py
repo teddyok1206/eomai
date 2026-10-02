@@ -26,7 +26,11 @@ from eom_image_trainer.institutional_style_evaluator import (
     InstitutionalStyleEvaluationError,
     evaluate_institutional_style,
 )
-from eom_image_trainer.institutional_style_metrics import institutional_style_metrics
+from eom_image_trainer.institutional_style_metrics import (
+    institutional_style_metrics,
+    institutional_style_presentation_metrics,
+    normalize_institutional_style_presentation,
+)
 from PIL import Image, ImageDraw
 
 
@@ -58,6 +62,7 @@ def _case(index: int) -> InstitutionalStyleEvaluationCase:
     )
     body = {
         "subject_family": families[index % len(families)],
+        "depiction_key": f"SUBJECT_{index:02d}",
         "institutional_image": _member(index, institutional=True).model_dump(mode="json"),
         "generated_image": _member(index, institutional=False).model_dump(mode="json"),
         "generated_request_sha256": _sha(f"request-{index}"),
@@ -82,7 +87,9 @@ def _case(index: int) -> InstitutionalStyleEvaluationCase:
 def _plan() -> LocalImageInstitutionalStyleEvaluationPlan:
     cases = tuple(sorted((_case(index) for index in range(12)), key=lambda value: value.case_id))
     identity_body = {
-        "selection_method": "STRATIFIED_ORIGIN_BLIND_V1",
+        "selection_method": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1",
+        "style_track": "OBJECT_LINE_ART",
+        "presentation_policy": "FOREGROUND_BBOX_FIT_800X500_V1",
         "provider_binding_sha256": _sha("binding"),
         "maximum_generated_origin_identification_rate": 0.6,
         "minimum_mean_institutional_style_score": 4.0,
@@ -190,6 +197,37 @@ def test_institutional_style_plan_rejects_duplicate_source() -> None:
         LocalImageInstitutionalStyleEvaluationPlan.model_validate(plan)
 
 
+def test_institutional_style_plan_rejects_repeated_depiction_key() -> None:
+    plan = _plan().model_dump(mode="json", exclude={"plan_sha256"})
+    changed = plan["cases"][1]
+    changed["depiction_key"] = plan["cases"][0]["depiction_key"]
+    identity_body = {
+        key: changed[key]
+        for key in (
+            "subject_family",
+            "depiction_key",
+            "institutional_image",
+            "generated_image",
+            "generated_request_sha256",
+            "generated_receipt_sha256",
+        )
+    }
+    changed["case_id"] = (
+        "imgstylecase_" + content_sha256(identity_body).removeprefix("sha256:")[:32]
+    )
+    changed["presentation_token"] = (
+        "blind_"
+        + content_sha256(
+            {"case_id": changed["case_id"], "left_origin": changed["left_origin"]}
+        ).removeprefix("sha256:")[:32]
+    )
+    plan["cases"] = sorted(plan["cases"], key=lambda value: value["case_id"])
+    plan["plan_sha256"] = content_sha256(plan)
+
+    with pytest.raises(ValueError, match="repeats a depiction key"):
+        LocalImageInstitutionalStyleEvaluationPlan.model_validate(plan)
+
+
 def test_institutional_style_plan_rejects_unstratified_population() -> None:
     plan = _plan().model_dump(mode="json", exclude={"plan_sha256"})
     for case in plan["cases"]:
@@ -198,6 +236,7 @@ def test_institutional_style_plan_rejects_unstratified_population() -> None:
             key: case[key]
             for key in (
                 "subject_family",
+                "depiction_key",
                 "institutional_image",
                 "generated_image",
                 "generated_request_sha256",
@@ -237,6 +276,115 @@ def test_institutional_style_metrics_detect_tiny_detail() -> None:
     assert noisy.component_count > clean.component_count
     assert noisy.tiny_component_fraction_milli > clean.tiny_component_fraction_milli
     assert noisy.fine_detail_fraction_milli > clean.fine_detail_fraction_milli
+
+
+def test_institutional_style_presentation_normalizes_crop_whitespace() -> None:
+    subject = Image.new("L", (96, 64), 255)
+    drawing = ImageDraw.Draw(subject)
+    drawing.ellipse((20, 12, 76, 52), outline=48, width=3)
+    tight = io.BytesIO()
+    subject.save(tight, format="PNG")
+
+    padded = Image.new("L", (320, 240), 255)
+    padded.paste(subject, (111, 83))
+    padded_payload = io.BytesIO()
+    padded.save(padded_payload, format="PNG")
+
+    tight_normalized = normalize_institutional_style_presentation(tight.getvalue())
+    padded_normalized = normalize_institutional_style_presentation(padded_payload.getvalue())
+    assert tight_normalized == padded_normalized
+    tight_metrics = institutional_style_presentation_metrics(tight.getvalue())
+    assert tight_metrics == institutional_style_presentation_metrics(padded_payload.getvalue())
+    assert tight_metrics.foreground_fraction_milli > 100
+
+
+def _review_with_generated_side(
+    plan: LocalImageInstitutionalStyleEvaluationPlan,
+    result: LocalImageInstitutionalStyleEvaluationResult,
+    *,
+    generated_override: InstitutionalStyleSideReview,
+    claimed_critical_count: int,
+    claimed_verdict: str,
+) -> LocalImageInstitutionalStyleEvaluationReview:
+    clean = InstitutionalStyleSideReview(
+        institutional_style_score=4,
+        semantic_suitability_score=4,
+        composition_score=4,
+        usability="USABLE_AS_IS",
+        defects=(),
+    )
+    reviews: list[InstitutionalStyleCaseReview] = []
+    for index, case in enumerate(plan.cases):
+        generated = generated_override if index == 0 else clean
+        reviews.append(
+            InstitutionalStyleCaseReview(
+                case_id=case.case_id,
+                guessed_generated_side="UNSURE",
+                confidence=1,
+                left=generated if case.left_origin == "GENERATED" else clean,
+                right=generated if case.left_origin == "INSTITUTIONAL" else clean,
+            )
+        )
+    body = {
+        "schema_version": "local-image-institutional-style-evaluation-review/1.0",
+        "evaluation_id": plan.evaluation_id,
+        "plan_sha256": plan.plan_sha256,
+        "result_sha256": result.result_sha256,
+        "reviewer_id": "operator_negative_test",
+        "reviews": [review.model_dump(mode="json") for review in reviews],
+        "generated_origin_identification_rate": 0.0,
+        "generated_mean_institutional_style_score": 4.0,
+        "critical_generated_defect_count": claimed_critical_count,
+        "verdict": claimed_verdict,
+        "reviewed_at": "2026-10-02T18:20:00Z",
+    }
+    return LocalImageInstitutionalStyleEvaluationReview.model_validate(
+        {**body, "review_sha256": content_sha256(body)}
+    )
+
+
+def test_institutional_style_review_treats_pseudotext_as_critical() -> None:
+    plan = _plan()
+    result = _result(plan)
+    pseudotext = InstitutionalStyleSideReview(
+        institutional_style_score=4,
+        semantic_suitability_score=4,
+        composition_score=4,
+        usability="REJECT",
+        defects=("PSEUDOTEXT",),
+    )
+    review = _review_with_generated_side(
+        plan,
+        result,
+        generated_override=pseudotext,
+        claimed_critical_count=0,
+        claimed_verdict="CANDIDATE_CANARY_ELIGIBLE",
+    )
+
+    with pytest.raises(ValueError, match="review aggregates mismatch"):
+        validate_institutional_style_review(plan, result, review)
+
+
+def test_institutional_style_review_rejects_rejected_generated_side() -> None:
+    plan = _plan()
+    result = _result(plan)
+    rejected = InstitutionalStyleSideReview(
+        institutional_style_score=4,
+        semantic_suitability_score=4,
+        composition_score=4,
+        usability="REJECT",
+        defects=(),
+    )
+    review = _review_with_generated_side(
+        plan,
+        result,
+        generated_override=rejected,
+        claimed_critical_count=0,
+        claimed_verdict="CANDIDATE_CANARY_ELIGIBLE",
+    )
+
+    with pytest.raises(ValueError, match="verdict mismatch"):
+        validate_institutional_style_review(plan, result, review)
 
 
 def _evaluation_payload(index: int, *, generated: bool) -> bytes:
@@ -286,6 +434,7 @@ def _material_plan() -> tuple[
         )
         body = {
             "subject_family": families[index % len(families)],
+            "depiction_key": f"MATERIAL_{index:02d}",
             "institutional_image": institutional.model_dump(mode="json"),
             "generated_image": generated.model_dump(mode="json"),
             "generated_request_sha256": _sha(f"material-request-{index}"),
@@ -308,7 +457,9 @@ def _material_plan() -> tuple[
         )
     cases.sort(key=lambda value: value.case_id)
     identity_body = {
-        "selection_method": "STRATIFIED_ORIGIN_BLIND_V1",
+        "selection_method": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1",
+        "style_track": "OBJECT_LINE_ART",
+        "presentation_policy": "FOREGROUND_BBOX_FIT_800X500_V1",
         "provider_binding_sha256": _sha("material-binding"),
         "maximum_generated_origin_identification_rate": 0.6,
         "minimum_mean_institutional_style_score": 4.0,

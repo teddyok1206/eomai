@@ -969,9 +969,9 @@ def test_institutional_line_art_v7_binding_is_exact_and_schema_valid() -> None:
     binding = LocalImageProviderBindingV7.model_validate(value)
 
     validate_contract("provider-binding-v7", binding.model_dump(mode="json"))
-    assert binding.postprocess.final_dark_threshold == 192
-    assert binding.postprocess.final_output_tones == (32, 128, 255)
-    assert binding.postprocess.cleanup_component_max_pixels == 16
+    assert binding.postprocess.final_dark_threshold == 80
+    assert binding.postprocess.final_output_tones == (32, 96, 255)
+    assert binding.postprocess.cleanup_component_max_pixels == 48
 
 
 def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:
