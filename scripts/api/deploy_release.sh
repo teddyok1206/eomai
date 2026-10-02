@@ -1908,6 +1908,8 @@ image_resources = {
     "local-image-institutional-style-evaluation-plan-v1.schema.json": "schemas/image-provider/local-image-institutional-style-evaluation-plan-v1.schema.json",
     "local-image-institutional-style-evaluation-result-v1.schema.json": "schemas/image-provider/local-image-institutional-style-evaluation-result-v1.schema.json",
     "local-image-institutional-style-evaluation-review-v1.schema.json": "schemas/image-provider/local-image-institutional-style-evaluation-review-v1.schema.json",
+    "local-image-institutional-style-review-packet-v1.schema.json": "schemas/image-provider/local-image-institutional-style-review-packet-v1.schema.json",
+    "local-image-institutional-style-answer-key-v1.schema.json": "schemas/image-provider/local-image-institutional-style-answer-key-v1.schema.json",
     "local-image-reference-conditioned-composite-receipt-v1.schema.json": "schemas/image-provider/local-image-reference-conditioned-composite-receipt-v1.schema.json",
     "local-image-reference-conditioned-composite-receipt-v2.schema.json": "schemas/image-provider/local-image-reference-conditioned-composite-receipt-v2.schema.json",
     "local-image-reference-conditioned-composite-receipt-v3.schema.json": "schemas/image-provider/local-image-reference-conditioned-composite-receipt-v3.schema.json",

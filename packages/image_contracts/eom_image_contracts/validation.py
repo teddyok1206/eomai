@@ -99,6 +99,10 @@ SCHEMA_FILES = {
     "institutional-style-evaluation-review": (
         "local-image-institutional-style-evaluation-review-v1.schema.json"
     ),
+    "institutional-style-review-packet": (
+        "local-image-institutional-style-review-packet-v1.schema.json"
+    ),
+    "institutional-style-answer-key": ("local-image-institutional-style-answer-key-v1.schema.json"),
     "training-authorization": "local-image-training-authorization-v1.schema.json",
     "crop-locator-command": "local-image-crop-locator-command-v1.schema.json",
     "crop-locator-result": "local-image-crop-locator-result-v1.schema.json",
@@ -404,6 +408,12 @@ SCHEMA_SHA256 = {
     ),
     "institutional-style-evaluation-review": (
         "sha256:74770bfe0ab30461cfa9fec4e8b13aeafe0645cb799179558cad7279e2ef439e"
+    ),
+    "institutional-style-review-packet": (
+        "sha256:6a1f0ce9ec28b19ed4e289d412be362b4253b3cb7050e0c5950b19fc5d76c850"
+    ),
+    "institutional-style-answer-key": (
+        "sha256:8791e791d949af9e129bc1d67e90de7acefbef2d68b069d0e6258c83d00d3894"
     ),
     "training-authorization": (
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"

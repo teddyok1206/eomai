@@ -80,6 +80,8 @@ New additive JSON Schema 2020-12 families and matching frozen Pydantic models co
 
 - provider binding, request and receipt V7;
 - institutional-style evaluation plan, automated result and independent human review;
+- a reviewer-safe packet containing only content-addressed normalized left/right PNGs and a
+  separately hashed answer key; the evaluator plan itself is never a reviewer payload;
 - immutable input/output members, balanced blinded order, at least four subject families, one
   explicit style track, unique exact depiction keys, exact content-derived identities, full case
   coverage and canonical hashes;
@@ -107,6 +109,8 @@ the required successor file-set and Content Pack do not yet exist.
 - 18-subject offline candidate replay: 17 PASS, 1 expected fail-closed rejection;
 - temporary 12-case normalized A/B diagnostic: retired because broad subject-family matching still
   paired different depictions and therefore cannot support an acceptance verdict;
+- blinded packet/answer-key schema-model parity, deterministic build, origin-field separation,
+  exact member resolution and tamper negatives: PASS;
 - production activation: NOT PERFORMED;
 - canonical NAS publication of the temporary sheet: NOT PERFORMED;
 - independent blinded human review: PENDING;

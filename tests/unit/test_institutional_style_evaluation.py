@@ -17,13 +17,16 @@ from eom_image_contracts import (
     LocalImageInstitutionalStyleEvaluationPlan,
     LocalImageInstitutionalStyleEvaluationResult,
     LocalImageInstitutionalStyleEvaluationReview,
+    LocalImageInstitutionalStyleReviewPacket,
     content_sha256,
     validate_contract,
     validate_institutional_style_result,
     validate_institutional_style_review,
+    validate_institutional_style_review_packet,
 )
 from eom_image_trainer.institutional_style_evaluator import (
     InstitutionalStyleEvaluationError,
+    build_institutional_style_review_packet,
     evaluate_institutional_style,
 )
 from eom_image_trainer.institutional_style_metrics import (
@@ -31,6 +34,7 @@ from eom_image_trainer.institutional_style_metrics import (
     institutional_style_presentation_metrics,
     normalize_institutional_style_presentation,
 )
+from jsonschema import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageDraw
 
 
@@ -517,3 +521,98 @@ def test_institutional_style_evaluator_rejects_member_hash_drift() -> None:
             ],
             completed_at=datetime(2026, 10, 2, 18, 30, tzinfo=UTC),
         )
+
+
+def test_blind_review_packet_separates_origin_key_and_normalizes_members() -> None:
+    plan, members = _material_plan()
+    calls: list[tuple[str, str, str]] = []
+
+    def resolve(member: ImageEvaluationArtifactMember) -> bytes:
+        key = (member.artifact_id, member.artifact_revision_id, member.member_path)
+        calls.append(key)
+        return members[key]
+
+    built = build_institutional_style_review_packet(plan, resolve_member=resolve)
+
+    validate_contract("institutional-style-review-packet", built.packet.model_dump(mode="json"))
+    validate_contract("institutional-style-answer-key", built.answer_key.model_dump(mode="json"))
+    validate_institutional_style_review_packet(plan, built.packet, built.answer_key)
+    assert len(calls) == 24
+    assert len(set(calls)) == 24
+    packet_value = built.packet.model_dump(mode="json")
+    assert "left_origin" not in repr(packet_value)
+    assert set(path for path, _payload in built.members) == {
+        case.left_image.member_path for case in built.packet.cases
+    } | {case.right_image.member_path for case in built.packet.cases}
+    assert all(
+        member.member_path == f"presentation/{member.sha256.removeprefix('sha256:')}.png"
+        for case in built.packet.cases
+        for member in (case.left_image, case.right_image)
+    )
+
+    first_plan = plan.cases[0]
+    first_packet = built.packet.cases[0]
+    first_source = (
+        first_plan.generated_image
+        if first_plan.left_origin == "GENERATED"
+        else first_plan.institutional_image
+    )
+    expected_left = normalize_institutional_style_presentation(
+        members[
+            (
+                first_source.artifact_id,
+                first_source.artifact_revision_id,
+                first_source.member_path,
+            )
+        ]
+    )
+    output_by_path = dict(built.members)
+    assert output_by_path[first_packet.left_image.member_path] == expected_left
+
+
+def test_blind_review_packet_rejects_answer_key_drift() -> None:
+    plan, members = _material_plan()
+    built = build_institutional_style_review_packet(
+        plan,
+        resolve_member=lambda member: members[
+            (member.artifact_id, member.artifact_revision_id, member.member_path)
+        ],
+    )
+    value = built.answer_key.model_dump(mode="json", exclude={"answer_key_sha256"})
+    value["entries"][0]["left_origin"] = (
+        "INSTITUTIONAL" if value["entries"][0]["left_origin"] == "GENERATED" else "GENERATED"
+    )
+    changed = built.answer_key.model_validate({**value, "answer_key_sha256": content_sha256(value)})
+
+    with pytest.raises(ValueError, match="review packet case mismatch"):
+        validate_institutional_style_review_packet(plan, built.packet, changed)
+
+
+def test_blind_review_packet_schema_rejects_origin_leak() -> None:
+    plan, members = _material_plan()
+    built = build_institutional_style_review_packet(
+        plan,
+        resolve_member=lambda member: members[
+            (member.artifact_id, member.artifact_revision_id, member.member_path)
+        ],
+    )
+    leaked = built.packet.model_dump(mode="json")
+    leaked["cases"][0]["left_origin"] = "GENERATED"
+
+    with pytest.raises(JsonSchemaValidationError):
+        validate_contract("institutional-style-review-packet", leaked)
+
+
+def test_blind_review_packet_rejects_packet_hash_drift() -> None:
+    plan, members = _material_plan()
+    built = build_institutional_style_review_packet(
+        plan,
+        resolve_member=lambda member: members[
+            (member.artifact_id, member.artifact_revision_id, member.member_path)
+        ],
+    )
+    value = built.packet.model_dump(mode="json")
+    value["packet_sha256"] = _sha("wrong-packet")
+
+    with pytest.raises(ValueError, match="packet hash mismatch"):
+        LocalImageInstitutionalStyleReviewPacket.model_validate(value)

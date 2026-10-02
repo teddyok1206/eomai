@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -22,6 +22,15 @@ INSTITUTIONAL_STYLE_RESULT_SCHEMA_REF = (
 )
 INSTITUTIONAL_STYLE_REVIEW_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-institutional-style-evaluation-review/1.0"
+)
+INSTITUTIONAL_STYLE_REVIEW_PACKET_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-institutional-style-review-packet/1.0"
+)
+INSTITUTIONAL_STYLE_ANSWER_KEY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-institutional-style-answer-key/1.0"
+)
+INSTITUTIONAL_STYLE_BLIND_PNG_SCHEMA_REF: Final = (
+    "eom://schemas/image-provider/local-image-institutional-style-blind-presentation-png/1.0"
 )
 INSTITUTIONAL_CROP_SCHEMA_REF = "eom://schemas/image-provider/local-image-science-visual-crop/1.0"
 GENERATED_RASTER_SCHEMA_REF = "eom://schemas/generated-item/semantic-raster-png/1.0"
@@ -211,6 +220,83 @@ class LocalImageInstitutionalStyleEvaluationResult(FrozenModel):
         return self
 
 
+class InstitutionalStyleBlindPresentationMember(FrozenModel):
+    member_path: str = Field(pattern=r"^presentation/[0-9a-f]{64}\.png$")
+    schema_ref: Literal[
+        "eom://schemas/image-provider/local-image-institutional-style-blind-presentation-png/1.0"
+    ] = INSTITUTIONAL_STYLE_BLIND_PNG_SCHEMA_REF
+    media_type: Literal["image/png"] = "image/png"
+    width_px: Literal[800] = 800
+    height_px: Literal[500] = 500
+    size_bytes: int = Field(ge=64, le=8 * 1024 * 1024)
+    sha256: Sha256
+
+    @model_validator(mode="after")
+    def content_addressed_path(self) -> Self:
+        expected = f"presentation/{self.sha256.removeprefix('sha256:')}.png"
+        if self.member_path != expected:
+            raise ValueError("institutional-style blind member path mismatch")
+        return self
+
+
+class InstitutionalStyleReviewPacketCase(FrozenModel):
+    case_id: str = Field(pattern=r"^imgstylecase_[0-9a-f]{32}$")
+    subject_family: InstitutionalStyleSubjectFamily
+    depiction_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    presentation_token: str = Field(pattern=r"^blind_[0-9a-f]{32}$")
+    left_image: InstitutionalStyleBlindPresentationMember
+    right_image: InstitutionalStyleBlindPresentationMember
+
+
+class LocalImageInstitutionalStyleReviewPacket(FrozenModel):
+    schema_version: Literal["local-image-institutional-style-review-packet/1.0"]
+    evaluation_id: str = Field(pattern=r"^imgstyleeval_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    presentation_policy: Literal["FOREGROUND_BBOX_FIT_800X500_V1"]
+    cases: tuple[InstitutionalStyleReviewPacketCase, ...] = Field(min_length=12, max_length=32)
+    packet_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_packet(self) -> Self:
+        case_ids = tuple(case.case_id for case in self.cases)
+        tokens = tuple(case.presentation_token for case in self.cases)
+        if case_ids != tuple(sorted(set(case_ids))):
+            raise ValueError("institutional-style packet cases must be uniquely sorted")
+        if len(set(tokens)) != len(tokens):
+            raise ValueError("institutional-style packet repeats a presentation token")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"packet_sha256"}))
+        if self.packet_sha256 != expected:
+            raise ValueError("institutional-style packet hash mismatch")
+        return self
+
+
+class InstitutionalStyleAnswerKeyEntry(FrozenModel):
+    case_id: str = Field(pattern=r"^imgstylecase_[0-9a-f]{32}$")
+    presentation_token: str = Field(pattern=r"^blind_[0-9a-f]{32}$")
+    left_origin: InstitutionalStyleOrigin
+
+
+class LocalImageInstitutionalStyleAnswerKey(FrozenModel):
+    schema_version: Literal["local-image-institutional-style-answer-key/1.0"]
+    evaluation_id: str = Field(pattern=r"^imgstyleeval_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    entries: tuple[InstitutionalStyleAnswerKeyEntry, ...] = Field(min_length=12, max_length=32)
+    answer_key_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_answer_key(self) -> Self:
+        case_ids = tuple(entry.case_id for entry in self.entries)
+        tokens = tuple(entry.presentation_token for entry in self.entries)
+        if case_ids != tuple(sorted(set(case_ids))):
+            raise ValueError("institutional-style answer entries must be uniquely sorted")
+        if len(set(tokens)) != len(tokens):
+            raise ValueError("institutional-style answer key repeats a presentation token")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"answer_key_sha256"}))
+        if self.answer_key_sha256 != expected:
+            raise ValueError("institutional-style answer key hash mismatch")
+        return self
+
+
 InstitutionalStyleDefect = Literal[
     "BORDER_CLUTTER",
     "COMPOSITION_DRIFT",
@@ -289,6 +375,37 @@ def validate_institutional_style_result(
         case.case_id for case in result.case_results
     ):
         raise ValueError("institutional-style result coverage mismatch")
+
+
+def validate_institutional_style_review_packet(
+    plan: LocalImageInstitutionalStyleEvaluationPlan,
+    packet: LocalImageInstitutionalStyleReviewPacket,
+    answer_key: LocalImageInstitutionalStyleAnswerKey,
+) -> None:
+    if (
+        packet.evaluation_id != plan.evaluation_id
+        or packet.plan_sha256 != plan.plan_sha256
+        or packet.presentation_policy != plan.presentation_policy
+        or answer_key.evaluation_id != plan.evaluation_id
+        or answer_key.plan_sha256 != plan.plan_sha256
+    ):
+        raise ValueError("institutional-style review packet pointer chain mismatch")
+    packet_by_id = {case.case_id: case for case in packet.cases}
+    answer_by_id = {entry.case_id: entry for entry in answer_key.entries}
+    plan_ids = tuple(case.case_id for case in plan.cases)
+    if tuple(packet_by_id) != plan_ids or tuple(answer_by_id) != plan_ids:
+        raise ValueError("institutional-style review packet coverage mismatch")
+    for case in plan.cases:
+        presented = packet_by_id[case.case_id]
+        answer = answer_by_id[case.case_id]
+        if (
+            presented.subject_family != case.subject_family
+            or presented.depiction_key != case.depiction_key
+            or presented.presentation_token != case.presentation_token
+            or answer.presentation_token != case.presentation_token
+            or answer.left_origin != case.left_origin
+        ):
+            raise ValueError("institutional-style review packet case mismatch")
 
 
 def validate_institutional_style_review(

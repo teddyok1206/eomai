@@ -118,6 +118,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-institutional-style-evaluation-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-institutional-style-evaluation-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-institutional-style-evaluation-review-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-institutional-style-review-packet-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-institutional-style-answer-key-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")

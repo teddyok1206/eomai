@@ -367,6 +367,8 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
         "local-image-institutional-style-evaluation-plan-v1.schema.json",
         "local-image-institutional-style-evaluation-result-v1.schema.json",
         "local-image-institutional-style-evaluation-review-v1.schema.json",
+        "local-image-institutional-style-review-packet-v1.schema.json",
+        "local-image-institutional-style-answer-key-v1.schema.json",
         "local-image-composite-request-v1.schema.json",
         "local-image-composite-receipt-v1.schema.json",
         "local-image-science-visual-campaign-crop-set-v1.schema.json",
