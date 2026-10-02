@@ -32,6 +32,7 @@ from eom_web_gui.contracts import (
     ExecutionPresetLifecycleCommand,
     ExplorerQuery,
     HwpxBuildRequest,
+    HwpxBuildView,
     ItemPreview,
     ItemRevisionApprovalSubmission,
     MockExamAssemblySubmission,
@@ -42,7 +43,14 @@ from eom_web_gui.contracts import (
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
+    StudioOperatorCreate,
+    StudioOperatorReasonCommand,
+    StudioOperatorRoleAssignment,
+    StudioOperatorRoleRevocation,
+    StudioOperatorVersionCommand,
     StudioProblem,
+    StudioSelfCredentialUpdate,
+    StudioWorkbenchOverview,
     WorkflowApproval,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
@@ -179,6 +187,22 @@ def create_app(
             raise GatewayError(status=403, code="CSRF_TOKEN_INVALID")
         return session
 
+    def require_admin_session(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> WebSession:
+        roles = session.operator.get("roles")
+        if not isinstance(roles, list) or "ADMIN" not in roles:
+            raise GatewayError(status=403, code="OPERATOR_ADMIN_REQUIRED")
+        return session
+
+    def require_admin_csrf(
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> WebSession:
+        roles = session.operator.get("roles")
+        if not isinstance(roles, list) or "ADMIN" not in roles:
+            raise GatewayError(status=403, code="OPERATOR_ADMIN_REQUIRED")
+        return session
+
     @app.get("/studio", include_in_schema=False)
     async def studio_redirect() -> RedirectResponse:
         return RedirectResponse("/studio/", status_code=308)
@@ -238,6 +262,67 @@ def create_app(
             httponly=True,
             samesite="strict",
         )
+
+    @app.post(f"{API_PREFIX}/account/credentials")
+    async def update_own_credentials(
+        value: StudioSelfCredentialUpdate,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        updated = await actual.update_own_credentials(session, value)
+        return _session_view(updated)
+
+    @app.get(f"{API_PREFIX}/admin/operators")
+    async def list_operators(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+    ) -> list[dict[str, Any]]:
+        return [value.model_dump(mode="json") for value in await actual.operators(session)]
+
+    @app.post(f"{API_PREFIX}/admin/operators", status_code=201)
+    async def create_operator(
+        value: StudioOperatorCreate,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.create_operator(session, value)
+
+    @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/roles")
+    async def assign_operator_role(
+        operator_id: str,
+        value: StudioOperatorRoleAssignment,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.assign_operator_role(session, operator_id, value)
+
+    @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/role-revocations")
+    async def revoke_operator_role(
+        operator_id: str,
+        value: StudioOperatorRoleRevocation,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.revoke_operator_role(session, operator_id, value)
+
+    @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/disable")
+    async def disable_operator(
+        operator_id: str,
+        value: StudioOperatorReasonCommand,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.disable_operator(session, operator_id, value)
+
+    @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/enable")
+    async def enable_operator(
+        operator_id: str,
+        value: StudioOperatorVersionCommand,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.enable_operator(session, operator_id, value)
+
+    @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/revoke-sessions")
+    async def revoke_operator_sessions(
+        operator_id: str,
+        value: StudioOperatorVersionCommand,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.revoke_operator_sessions(session, operator_id, value)
 
     @app.post(f"{API_PREFIX}/request-drafts", status_code=201)
     async def create_draft(
@@ -597,6 +682,25 @@ def create_app(
         ] = None,
     ) -> dict[str, Any]:
         return await actual.gateway.educational_quality_workbench(session, plan_id)
+
+    @app.get(
+        f"{API_PREFIX}/workbench/overview",
+        response_model=StudioWorkbenchOverview,
+    )
+    async def studio_workbench_overview(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> StudioWorkbenchOverview:
+        return await actual.gateway.studio_workbench_overview(session)
+
+    @app.get(
+        f"{API_PREFIX}/items/revisions/{{item_revision_id}}/latest-hwpx-build",
+        response_model=HwpxBuildView | None,
+    )
+    async def latest_valid_hwpx_build(
+        item_revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> HwpxBuildView | None:
+        return await actual.gateway.latest_valid_hwpx_build(session, item_revision_id)
 
     @app.post(f"{API_PREFIX}/educational-quality-reviews/commands")
     async def educational_quality_command(

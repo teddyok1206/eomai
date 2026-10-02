@@ -1,12 +1,15 @@
 """Operator management DTOs."""
 
-from typing import Annotated
+from __future__ import annotations
 
-from pydantic import Field, SecretStr
+from typing import Annotated, Literal
+
+from pydantic import Field, SecretStr, field_validator
 
 from eom_api_contracts.common import ApiModel, UtcDatetime
 
 OperatorId = Annotated[str, Field(pattern=r"^operator_[0-9a-f]{32}$")]
+OperatorRoleKey = Literal["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]
 
 
 class OperatorView(ApiModel):
@@ -26,10 +29,27 @@ class OperatorView(ApiModel):
 
 
 class CreateOperatorRequest(ApiModel):
-    username: str = Field(min_length=3, max_length=64)
-    display_name: str = Field(min_length=1, max_length=128)
+    username: str = Field(
+        min_length=3,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+    )
+    display_name: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[^\x00-\x1f\x7f]+$",
+    )
     temporary_password: SecretStr = Field(min_length=15, max_length=128)
-    initial_roles: tuple[str, ...] = Field(min_length=1, max_length=5)
+    initial_roles: tuple[OperatorRoleKey, ...] = Field(min_length=1, max_length=5)
+
+    @field_validator("initial_roles")
+    @classmethod
+    def roles_must_be_unique(
+        cls, value: tuple[OperatorRoleKey, ...]
+    ) -> tuple[OperatorRoleKey, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("initial roles must be unique")
+        return value
 
 
 class ReasonRequest(ApiModel):

@@ -110,12 +110,17 @@ warning, and failure retain their independent semantic colors.
 The map presents the stable user-level flow:
 
 ```text
-requirements -> item composition -> quality review -> human approval -> pinned revision -> HWPX
+current: requirements -> item composition -> quality review -> pinned revision -> HWPX -> human approval
+legacy: requirements -> item composition -> quality review -> workflow approval -> pinned revision
 ```
 
 It is a presentation of existing workflow state, not a second state machine. JavaScript derives
 `complete` and `current` only from the same workflow and step values already used by the detailed
 stage rail. Unknown states remain unknown and do not infer progress.
+
+The server-authored workbench declares which approval mode and next action apply. The browser must
+not infer the legacy approval path from a current Item, or move a current Item approval in front of
+the validated HWPX review boundary.
 
 ### Evidence strip
 

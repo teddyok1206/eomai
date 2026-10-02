@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -39,42 +40,64 @@ class SessionStore:
         self._maximum_sessions = maximum_sessions
         self._maximum_drafts = maximum_drafts
         self._sessions: OrderedDict[str, WebSession] = OrderedDict()
+        # FastAPI sync dependencies may access this in-memory adapter from
+        # different worker threads. Keep the map/LRU operations atomic; the
+        # per-session async refresh lock still owns token refresh sequencing.
+        self._lock = threading.RLock()
 
     def create(self, *, operator: dict[str, Any], tokens: ApiTokens, now: datetime) -> WebSession:
-        self._prune(now)
-        while len(self._sessions) >= self._maximum_sessions:
-            self._sessions.popitem(last=False)
-        session = WebSession(
-            session_id=f"websession_{secrets.token_hex(32)}",
-            csrf_token=secrets.token_urlsafe(32),
-            operator=operator,
-            tokens=tokens,
-            created_at=now,
-            expires_at=min(now + self._ttl, tokens.refresh_expires_at),
-        )
-        self._sessions[session.session_id] = session
-        return session
+        with self._lock:
+            self._prune(now)
+            while len(self._sessions) >= self._maximum_sessions:
+                self._sessions.popitem(last=False)
+            session = WebSession(
+                session_id=f"websession_{secrets.token_hex(32)}",
+                csrf_token=secrets.token_urlsafe(32),
+                operator=operator,
+                tokens=tokens,
+                created_at=now,
+                expires_at=min(now + self._ttl, tokens.refresh_expires_at),
+            )
+            self._sessions[session.session_id] = session
+            return session
 
     def get(self, session_id: str | None, *, now: datetime) -> WebSession | None:
         if not session_id:
             return None
-        self._prune(now)
-        session = self._sessions.get(session_id)
-        if session is not None:
-            self._sessions.move_to_end(session_id)
-        return session
+        with self._lock:
+            self._prune(now)
+            session = self._sessions.get(session_id)
+            if session is not None:
+                self._sessions.move_to_end(session_id)
+            return session
 
     def delete(self, session_id: str) -> WebSession | None:
-        return self._sessions.pop(session_id, None)
+        with self._lock:
+            return self._sessions.pop(session_id, None)
+
+    def delete_other_operator_sessions(self, operator_id: str, *, except_session_id: str) -> int:
+        """Remove cached Studio sessions invalidated by a credential change."""
+
+        with self._lock:
+            session_ids = tuple(
+                session_id
+                for session_id, session in self._sessions.items()
+                if session_id != except_session_id
+                and session.operator.get("operator_id") == operator_id
+            )
+            for session_id in session_ids:
+                self._sessions.pop(session_id, None)
+            return len(session_ids)
 
     def save_draft(self, session: WebSession, draft: RequestDraft) -> None:
-        session.drafts[draft.request_draft_id] = draft
-        session.drafts.move_to_end(draft.request_draft_id)
-        while len(session.drafts) > self._maximum_drafts:
-            removed_id, _ = session.drafts.popitem(last=False)
-            for key in tuple(session.replay_results):
-                if key[0] == removed_id:
-                    session.replay_results.pop(key)
+        with self._lock:
+            session.drafts[draft.request_draft_id] = draft
+            session.drafts.move_to_end(draft.request_draft_id)
+            while len(session.drafts) > self._maximum_drafts:
+                removed_id, _ = session.drafts.popitem(last=False)
+                for key in tuple(session.replay_results):
+                    if key[0] == removed_id:
+                        session.replay_results.pop(key)
 
     def _prune(self, now: datetime) -> None:
         for key, session in tuple(self._sessions.items()):

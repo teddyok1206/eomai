@@ -47,7 +47,7 @@ def _cleanup(engine: object) -> None:
         operator_ids = list(
             session.scalars(
                 select(OperatorRecord.operator_id).where(
-                    OperatorRecord.username.in_(("admin", "viewer01"))
+                    OperatorRecord.username.in_(("admin", "viewer01", "viewer02"))
                 )
             )
         )
@@ -190,15 +190,40 @@ def test_http_auth_rbac_rotation_reuse_and_revocation() -> None:
                     "client_name": "api-integration",
                 },
             ).json()["data"]
-            viewer_pair = client.post(
-                "/api/v1/auth/change-password",
+            viewer_detail = client.get(
+                "/api/v1/auth/account",
+                headers=_authorization(viewer_restricted["access_token"]),
+            ).json()["data"]
+            viewer_credentials = client.post(
+                "/api/v1/auth/credentials",
                 headers=_authorization(viewer_restricted["access_token"]),
                 json={
                     "current_password": VIEWER_PASSWORD,
+                    "new_username": "viewer02",
                     "new_password": "TEST_ONLY API viewer replacement 73",
+                    "expected_resource_version": viewer_detail["resource_version"],
                 },
-            ).json()["data"]
+            )
+            assert viewer_credentials.status_code == 200
+            viewer_update = viewer_credentials.json()["data"]
+            assert viewer_update["operator"]["username"] == "viewer02"
+            viewer_pair = viewer_update["tokens"]
             viewer_headers = _authorization(viewer_pair["access_token"])
+            assert (
+                client.get("/api/v1/auth/me", headers=viewer_headers).json()["data"]["username"]
+                == "viewer02"
+            )
+            assert (
+                client.post(
+                    "/api/v1/auth/login",
+                    json={
+                        "username": "viewer01",
+                        "password": "TEST_ONLY API viewer replacement 73",
+                        "client_name": "api-integration-old-username",
+                    },
+                ).status_code
+                == 401
+            )
             workflow_body = {
                 "definition_key": "missing-definition",
                 "definition_version": "1.0.0",

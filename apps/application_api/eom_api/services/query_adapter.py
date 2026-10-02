@@ -1567,6 +1567,25 @@ class QueryAdapter:
                 more,
             )
 
+    def latest_valid_hwpx_build(self, item_revision_id: str) -> HwpxBuildView | None:
+        """Resolve the newest validated build through the revision-history index."""
+
+        with self.sessions() as session:
+            record = session.scalar(
+                select(HwpxApplicationBuildRecord)
+                .where(
+                    HwpxApplicationBuildRecord.item_revision_id == item_revision_id,
+                    HwpxApplicationBuildRecord.state == "SUCCEEDED",
+                    HwpxApplicationBuildRecord.validation_state == "PASS",
+                )
+                .order_by(
+                    HwpxApplicationBuildRecord.created_at.desc(),
+                    HwpxApplicationBuildRecord.build_id.desc(),
+                )
+                .limit(1)
+            )
+            return project_hwpx_build(record) if record is not None else None
+
     def list_knowledge_analyses(
         self, *, limit: int, cursor: str | None, state: str | None = None
     ) -> PageResult[KnowledgeAnalysisRunView]:

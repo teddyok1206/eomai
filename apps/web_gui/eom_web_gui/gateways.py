@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -60,6 +61,16 @@ from eom_web_gui.contracts import (
     PlannedMockExamAssemblySubmission,
     RecentItemOption,
     StructuredItemImportRequest,
+    StudioOperatorCreate,
+    StudioOperatorReasonCommand,
+    StudioOperatorRoleAssignment,
+    StudioOperatorRoleRevocation,
+    StudioOperatorVersionCommand,
+    StudioOperatorView,
+    StudioSelfCredentialUpdate,
+    StudioWorkbenchCounts,
+    StudioWorkbenchItem,
+    StudioWorkbenchOverview,
 )
 from eom_web_gui.item_preview_projection import (
     project_item_content,
@@ -330,6 +341,36 @@ class ApplicationGateway(Protocol):
 
     async def logout(self, session: WebSession) -> None: ...
 
+    async def update_own_credentials(
+        self, session: WebSession, value: StudioSelfCredentialUpdate
+    ) -> LoginResult: ...
+
+    async def operators(self, session: WebSession) -> tuple[StudioOperatorView, ...]: ...
+
+    async def create_operator(
+        self, session: WebSession, value: StudioOperatorCreate
+    ) -> dict[str, Any]: ...
+
+    async def assign_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleAssignment
+    ) -> dict[str, Any]: ...
+
+    async def revoke_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleRevocation
+    ) -> dict[str, Any]: ...
+
+    async def disable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]: ...
+
+    async def enable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]: ...
+
+    async def revoke_operator_sessions(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]: ...
+
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]: ...
 
     async def intake_sources(
@@ -511,6 +552,12 @@ class ApplicationGateway(Protocol):
     ) -> ItemMedia: ...
 
     async def recent_items(self, session: WebSession) -> tuple[RecentItemOption, ...]: ...
+
+    async def studio_workbench_overview(self, session: WebSession) -> StudioWorkbenchOverview: ...
+
+    async def latest_valid_hwpx_build(
+        self, session: WebSession, item_revision_id: str
+    ) -> HwpxBuildView | None: ...
 
     async def item_bank_entries(
         self,
@@ -826,7 +873,7 @@ class HttpApplicationGateway:
         tokens = _tokens(data)
         me = await self._application_request(
             "GET",
-            "/api/v1/auth/me",
+            "/api/v1/auth/account",
             headers={
                 "Authorization": f"Bearer {tokens.access_token}",
                 "Accept": "application/json",
@@ -842,6 +889,122 @@ class HttpApplicationGateway:
             await self._authorized(session, "POST", "/api/v1/auth/logout", json={})
         except GatewayError:
             return
+
+    async def update_own_credentials(
+        self, session: WebSession, value: StudioSelfCredentialUpdate
+    ) -> LoginResult:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/auth/credentials",
+            json=payload,
+        )
+        data = self._data(response)
+        tokens = data.get("tokens")
+        operator = data.get("operator")
+        if not isinstance(tokens, dict) or not isinstance(operator, dict):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return LoginResult(operator=_operator_view(operator), tokens=_tokens(tokens))
+
+    async def operators(self, session: WebSession) -> tuple[StudioOperatorView, ...]:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/operators",
+            params={"limit": 200},
+        )
+        try:
+            return tuple(
+                StudioOperatorView.model_validate(value) for value in self._list_data(response)
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def create_operator(
+        self, session: WebSession, value: StudioOperatorCreate
+    ) -> dict[str, Any]:
+        payload = value.model_dump(mode="json")
+        idempotency_key = str(payload.pop("idempotency_key"))
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/operators",
+            json=payload,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def assign_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleAssignment
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/operators/{operator_id}/roles/{value.role_key}",
+            json={},
+            headers={
+                "Idempotency-Key": value.idempotency_key,
+                "If-Match": f'"v{value.expected_resource_version}"',
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def revoke_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleRevocation
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/operators/{operator_id}/role-revocations",
+            json={"role_key": value.role_key, "reason": value.reason},
+            headers={
+                "Idempotency-Key": value.idempotency_key,
+                "If-Match": f'"v{value.expected_resource_version}"',
+            },
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def disable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/operators/{operator_id}/disable",
+            json={"reason": value.reason},
+            headers=_operator_command_headers(value),
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def enable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/operators/{operator_id}/enable",
+            json={},
+            headers=_operator_command_headers(value),
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def revoke_operator_sessions(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/operators/{operator_id}/revoke-sessions",
+            json={},
+            headers=_operator_command_headers(value),
+        )
+        return sanitize_mapping(self._data(response))
 
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
         response = await self._authorized(
@@ -2119,6 +2282,173 @@ class HttpApplicationGateway:
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
+    async def studio_workbench_overview(self, session: WebSession) -> StudioWorkbenchOverview:
+        """Compose a bounded task projection without persisting derived state."""
+
+        workflow_response, item_response = await asyncio.gather(
+            self._authorized(
+                session,
+                "GET",
+                "/api/v1/workflows",
+                params={"limit": 50},
+            ),
+            self._authorized(
+                session,
+                "GET",
+                "/api/v1/items",
+                params={"state": "ACTIVE", "limit": 50},
+            ),
+        )
+
+        def bounded_page(response: httpx.Response) -> tuple[list[dict[str, Any]], bool]:
+            document = self._document(response)
+            data = document.get("data")
+            page = document.get("page")
+            if (
+                not isinstance(data, list)
+                or not all(isinstance(value, dict) for value in data)
+                or not isinstance(page, dict)
+                or not isinstance(page.get("has_more"), bool)
+            ):
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            return data, page["has_more"]
+
+        workflows, workflows_truncated = bounded_page(workflow_response)
+        items, items_truncated = bounded_page(item_response)
+        projected: list[StudioWorkbenchItem] = []
+        in_progress = 0
+        approval_waiting = 0
+        hwpx_attention = 0
+        recent_completed = 0
+        terminal_workflow_states = frozenset({"COMPLETED", "FAILED", "CANCELLED"})
+
+        try:
+            for value in workflows:
+                workflow_id = value["workflow_id"]
+                workflow_state = value["state"]
+                if workflow_state in terminal_workflow_states:
+                    continue
+                legacy_approval = workflow_state == "AWAITING_HUMAN_APPROVAL"
+                if legacy_approval:
+                    approval_waiting += 1
+                else:
+                    in_progress += 1
+                projected.append(
+                    StudioWorkbenchItem(
+                        kind="WORKFLOW",
+                        title="이전 방식 문항 승인" if legacy_approval else "진행 중인 문항 제작",
+                        state=workflow_state,
+                        next_action=(
+                            "REVIEW_LEGACY_WORKFLOW" if legacy_approval else "OPEN_WORKFLOW"
+                        ),
+                        approval_mode="LEGACY_WORKFLOW" if legacy_approval else "NONE",
+                        workflow_id=workflow_id,
+                        item_id=None,
+                        item_revision_id=None,
+                        hwpx_build_id=None,
+                        human_reference_code=None,
+                        created_at=value["created_at"],
+                    )
+                )
+
+            for value in items:
+                revision_id = value.get("current_revision_id")
+                approval = value.get("approval")
+                if not isinstance(revision_id, str) or not isinstance(approval, dict):
+                    continue
+                status = approval.get("status")
+                reference = value.get("human_reference_code")
+                if status == "PENDING":
+                    approval_waiting += 1
+                    hwpx_attention += 1
+                    projected.append(
+                        StudioWorkbenchItem(
+                            kind="ITEM_APPROVAL",
+                            title=(
+                                f"문항 {reference} 확인·승인"
+                                if reference
+                                else "완성 문항 확인·승인"
+                            ),
+                            state="PENDING",
+                            next_action="BUILD_REVIEW_HWPX",
+                            approval_mode="POST_REGISTRATION_HWPX",
+                            workflow_id=None,
+                            item_id=value["item_id"],
+                            item_revision_id=revision_id,
+                            hwpx_build_id=None,
+                            human_reference_code=reference,
+                            created_at=value["created_at"],
+                        )
+                    )
+                elif status == "APPROVED":
+                    recent_completed += 1
+                    build_id = approval.get("hwpx_build_id")
+                    projected.append(
+                        StudioWorkbenchItem(
+                            kind="HWPX_BUILD" if build_id is not None else "ITEM_APPROVAL",
+                            title=(f"문항 {reference}" if reference else "승인된 문항"),
+                            state="APPROVED",
+                            next_action="OPEN_HWPX" if build_id is not None else "OPEN_ITEM",
+                            approval_mode=(
+                                "POST_REGISTRATION_HWPX"
+                                if approval.get("human_review_required") is True
+                                else "NONE"
+                            ),
+                            workflow_id=None,
+                            item_id=value["item_id"],
+                            item_revision_id=revision_id,
+                            hwpx_build_id=build_id,
+                            human_reference_code=reference,
+                            created_at=value["created_at"],
+                        )
+                    )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+        projected.sort(key=lambda value: value.created_at, reverse=True)
+        action_priority = {
+            "REVIEW_LEGACY_WORKFLOW": 0,
+            "BUILD_REVIEW_HWPX": 0,
+            "REVIEW_AND_APPROVE_ITEM": 0,
+            "OPEN_WORKFLOW": 1,
+            "OPEN_HWPX": 2,
+            "OPEN_ITEM": 2,
+        }
+        projected.sort(key=lambda value: action_priority[value.next_action])
+        return StudioWorkbenchOverview(
+            generated_at=datetime.now(UTC),
+            source_truncated=workflows_truncated or items_truncated,
+            counts=StudioWorkbenchCounts(
+                in_progress=in_progress,
+                approval_waiting=approval_waiting,
+                hwpx_attention=hwpx_attention,
+                recent_completed=recent_completed,
+            ),
+            items=tuple(projected[:100]),
+        )
+
+    async def latest_valid_hwpx_build(
+        self, session: WebSession, item_revision_id: str
+    ) -> HwpxBuildView | None:
+        _require_id(item_revision_id, "itemrev_")
+        try:
+            response = await self._authorized(
+                session,
+                "GET",
+                f"/api/v1/item-revisions/{item_revision_id}/hwpx-builds/latest",
+            )
+        except GatewayError as exc:
+            if exc.status == 404 and exc.code == "HWPX_BUILD_NOT_FOUND":
+                return None
+            raise
+        try:
+            value = HwpxBuildView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        if value.item_revision_id != item_revision_id:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return value
+
     async def item_bank_entries(
         self,
         session: WebSession,
@@ -3100,6 +3430,8 @@ def _gateway_error(response: httpx.Response) -> GatewayError:
 
 
 def _operator_view(value: dict[str, Any]) -> dict[str, Any]:
+    if value.get("schema_version") != "auth-current-account/1.0":
+        raise GatewayError(status=502, code="APPLICATION_API_OPERATOR_INVALID")
     roles = value.get("roles", [])
     permissions = value.get("effective_permissions", [])
     if not isinstance(roles, list) or not all(isinstance(item, str) for item in roles):
@@ -3111,9 +3443,26 @@ def _operator_view(value: dict[str, Any]) -> dict[str, Any]:
         item = value.get(key)
         if isinstance(item, (str, bool)):
             result[key] = item
+    resource_version = value.get("resource_version")
+    if (
+        not isinstance(resource_version, int)
+        or isinstance(resource_version, bool)
+        or resource_version < 1
+    ):
+        raise GatewayError(status=502, code="APPLICATION_API_OPERATOR_INVALID")
+    result["resource_version"] = resource_version
     result["roles"] = roles
     result["effective_permissions"] = permissions
     return result
+
+
+def _operator_command_headers(
+    value: StudioOperatorReasonCommand | StudioOperatorVersionCommand,
+) -> dict[str, str]:
+    return {
+        "Idempotency-Key": value.idempotency_key,
+        "If-Match": f'"v{value.expected_resource_version}"',
+    }
 
 
 def _codex_account(value: dict[str, Any]) -> dict[str, Any]:

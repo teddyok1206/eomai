@@ -15,7 +15,14 @@ from eom_api.dependencies import PermissionDependency
 
 PUBLIC_OPERATIONS = frozenset({"health_live", "health_ready", "auth_login", "auth_refresh"})
 AUTH_CONTROL_OPERATIONS = frozenset(
-    {"auth_logout", "auth_logout_all", "auth_me", "auth_change_password"}
+    {
+        "auth_logout",
+        "auth_logout_all",
+        "auth_me",
+        "auth_account",
+        "auth_change_password",
+        "auth_update_credentials",
+    }
 )
 
 

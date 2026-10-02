@@ -28,6 +28,26 @@
         "new_password": {"type": "string", "minLength": 15, "maxLength": 128}
       }
     },
+    "update_credentials_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_password", "expected_resource_version"],
+      "properties": {
+        "current_password": {"type": "string", "minLength": 1, "maxLength": 128},
+        "new_username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+        },
+        "new_password": {"type": "string", "minLength": 15, "maxLength": 128},
+        "expected_resource_version": {"type": "integer", "minimum": 1}
+      },
+      "anyOf": [
+        {"required": ["new_username"]},
+        {"required": ["new_password"]}
+      ]
+    },
     "token_pair": {
       "type": "object",
       "additionalProperties": false,
@@ -40,6 +60,33 @@
         "refresh_expires_at": {"type": "string", "format": "date-time"},
         "session_id": {"type": "string", "pattern": "^apisession_"},
         "password_change_required": {"type": "boolean"}
+      }
+    },
+    "current_account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operator_id", "username", "display_name", "roles", "effective_permissions", "session_id", "authenticated_at", "access_expires_at", "password_change_required", "resource_version"],
+      "properties": {
+        "schema_version": {"const": "auth-current-account/1.0"},
+        "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "username": {"type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "roles": {"type": "array", "uniqueItems": true, "items": {"enum": ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]}},
+        "effective_permissions": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "session_id": {"type": "string", "pattern": "^apisession_[0-9a-f]{32}$"},
+        "authenticated_at": {"type": "string", "format": "date-time"},
+        "access_expires_at": {"type": "string", "format": "date-time"},
+        "password_change_required": {"type": "boolean"},
+        "resource_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "credential_update_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens", "operator"],
+      "properties": {
+        "tokens": {"$ref": "#/$defs/token_pair"},
+        "operator": {"$ref": "#/$defs/current_account"}
       }
     }
   }

@@ -12,6 +12,9 @@ from pydantic import ValidationError
 ROOT = Path(__file__).resolve().parents[2]
 HTML = (ROOT / "apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
 JAVASCRIPT = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+PERMISSIONS = (ROOT / "apps/web_gui/eom_web_gui/static/studio-permissions.js").read_text(
+    encoding="utf-8"
+)
 
 
 def test_quality_plan_submission_pins_revision_hash_and_ordered_sample() -> None:
@@ -77,7 +80,8 @@ def test_quality_workbench_exposes_human_rubric_and_derived_scorecard() -> None:
 
 
 def test_quality_workbench_uses_permission_and_indexed_item_lookup() -> None:
-    assert 'permissions.includes("workflow:approve")' in JAVASCRIPT
+    assert 'hasPermission(state.operator, "workflow:approve")' in JAVASCRIPT
+    assert "effective_permissions" in PERMISSIONS
     assert "const items = new Map(plan.items.map" in JAVASCRIPT
     render_start = JAVASCRIPT.index("function renderEducationalQualityItemList()")
     render_end = JAVASCRIPT.index("function renderEducationalQualityPlan()")

@@ -7,9 +7,14 @@ const PREVIEW_BLOCK_TYPES = new Set([
   "equation",
   "statement_set",
 ]);
+const ITEM_PREVIEW_SCHEMA_VERSION = "4.0";
 
 export function orderedItemPreviewBlocks(preview) {
-  if (!preview || !new Set(["2.0", "3.0"]).has(preview.schema_version) || !Array.isArray(preview.blocks)) {
+  if (
+    !preview
+    || preview.schema_version !== ITEM_PREVIEW_SCHEMA_VERSION
+    || !Array.isArray(preview.blocks)
+  ) {
     throw new Error("ITEM_PREVIEW_CONTRACT_INVALID");
   }
   const identifiers = new Set();

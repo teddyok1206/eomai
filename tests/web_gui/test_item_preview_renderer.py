@@ -18,7 +18,7 @@ def test_item_preview_renderer_preserves_order_and_formats_equations(tmp_path: P
     module.write_bytes((ROOT / "apps/web_gui/eom_web_gui/static/item-preview.js").read_bytes())
     script = f"""
 import {{formatEquationSource, orderedItemPreviewBlocks}} from {json.dumps(module.as_uri())};
-const preview = {{schema_version: "3.0", blocks: [
+const preview = {{schema_version: "4.0", blocks: [
   {{block_id: "block_stem", type: "paragraph"}},
   {{block_id: "block_material", type: "labeled_text"}},
   {{block_id: "block_data", type: "table"}},
@@ -47,6 +47,10 @@ try {{
 }}
 catch (error) {{ unsupportedFailed = error.message === "ITEM_PREVIEW_BLOCK_INVALID"; }}
 if (!unsupportedFailed) throw new Error("ITEM_PREVIEW_UNKNOWN_BLOCK_NOT_REJECTED");
+let historicalFailed = false;
+try {{ orderedItemPreviewBlocks({{...preview, schema_version: "3.0"}}); }}
+catch (error) {{ historicalFailed = error.message === "ITEM_PREVIEW_CONTRACT_INVALID"; }}
+if (!historicalFailed) throw new Error("ITEM_PREVIEW_OLD_CONTRACT_NOT_REJECTED");
 """
     completed = subprocess.run(
         [node, "--input-type=module", "--eval", script],

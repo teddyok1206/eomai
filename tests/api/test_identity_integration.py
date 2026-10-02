@@ -91,7 +91,9 @@ def _cleanup(engine: object) -> None:
         operator_ids = list(
             session.scalars(
                 select(OperatorRecord.operator_id).where(
-                    OperatorRecord.username.in_(("admin", "review01", "viewer01"))
+                    OperatorRecord.username.in_(
+                        ("admin", "review01", "review02", "review03", "viewer01")
+                    )
                 )
             )
         )
@@ -258,6 +260,58 @@ def test_identity_rbac_session_and_refresh_concurrency() -> None:
         with pytest.raises(IdentityError) as family_revoked:
             auth.authenticate_access(rotated_pair.access_token)
         assert family_revoked.value.code is IdentityErrorCode.AUTH_SESSION_REVOKED
+
+        first_reviewer_session = auth.login(
+            username="review01",
+            password=REVIEWER_PASSWORD,
+            client_name="identity-credential-update-first",
+        )
+        second_reviewer_session = auth.login(
+            username="review01",
+            password=REVIEWER_PASSWORD,
+            client_name="identity-credential-update-second",
+        )
+        credential_barrier = Barrier(2)
+
+        def rename(authentication_token: str, new_username: str) -> object:
+            authentication = auth.authenticate_access(authentication_token)
+            credential_barrier.wait(timeout=5)
+            try:
+                return auth.update_credentials(
+                    authentication,
+                    current_password=REVIEWER_PASSWORD,
+                    new_username=new_username,
+                    new_password=None,
+                    expected_resource_version=reviewer.resource_version,
+                    request_id=f"req_rename_{new_username}",
+                )
+            except IdentityError as exc:
+                return exc
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rename_results = list(
+                executor.map(
+                    lambda pair: rename(*pair),
+                    (
+                        (first_reviewer_session.pair.access_token, "review02"),
+                        (second_reviewer_session.pair.access_token, "review03"),
+                    ),
+                )
+            )
+        renamed = [value for value in rename_results if isinstance(value, IssuedTokenPair)]
+        conflicts = [value for value in rename_results if isinstance(value, IdentityError)]
+        assert len(renamed) == 1
+        assert len(conflicts) == 1
+        assert conflicts[0].code is IdentityErrorCode.OPERATOR_VERSION_CONFLICT
+        renamed_authentication = auth.authenticate_access(renamed[0].access_token)
+        assert renamed_authentication.operator.username in {"review02", "review03"}
+        with pytest.raises(AuthenticationFailure):
+            auth.login(
+                username="review01",
+                password=REVIEWER_PASSWORD,
+                client_name="identity-old-username",
+            )
+        assert auth.authenticate_access(normal_pair.access_token).operator.username == "admin"
 
         operators.assign_role(reviewer.operator_id, RoleKey.ADMIN, admin_actor)
         operators.disable(

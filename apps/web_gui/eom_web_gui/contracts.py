@@ -47,6 +47,92 @@ class StudioProblem(WebModel):
     request_id: str = Field(pattern=r"^webreq_[0-9a-f]{24}$")
 
 
+StudioRoleKey = Literal["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]
+StudioUsername = Annotated[
+    str,
+    Field(
+        min_length=3,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+    ),
+]
+StudioIdempotencyKey = Annotated[
+    str,
+    Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$"),
+]
+
+
+class StudioSelfCredentialUpdate(WebModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_username: StudioUsername | None = None
+    new_password: str | None = Field(default=None, min_length=15, max_length=128)
+    expected_resource_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_a_change(self) -> StudioSelfCredentialUpdate:
+        if self.new_username is None and self.new_password is None:
+            raise ValueError("new_username or new_password is required")
+        if "new_username" in self.model_fields_set and self.new_username is None:
+            raise ValueError("new_username must be omitted instead of null")
+        if "new_password" in self.model_fields_set and self.new_password is None:
+            raise ValueError("new_password must be omitted instead of null")
+        return self
+
+
+class StudioOperatorView(WebModel):
+    operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    username: StudioUsername
+    display_name: str = Field(min_length=1, max_length=128)
+    status: Literal["ACTIVE", "DISABLED"]
+    must_change_password: bool
+    roles: tuple[StudioRoleKey, ...]
+    effective_permissions: tuple[str, ...]
+    resource_version: int = Field(ge=1)
+    created_at: UtcDatetime
+    updated_at: UtcDatetime
+    disabled_at: UtcDatetime | None = None
+    disable_reason: str | None = Field(default=None, max_length=1000)
+    last_login_at: UtcDatetime | None = None
+
+
+class StudioOperatorCreate(WebModel):
+    username: StudioUsername
+    display_name: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[^\x00-\x1f\x7f]+$",
+    )
+    temporary_password: str = Field(min_length=15, max_length=128)
+    initial_roles: tuple[StudioRoleKey, ...] = Field(min_length=1, max_length=5)
+    idempotency_key: StudioIdempotencyKey
+
+    @field_validator("initial_roles")
+    @classmethod
+    def unique_roles(cls, value: tuple[StudioRoleKey, ...]) -> tuple[StudioRoleKey, ...]:
+        if len(value) != len(set(value)):
+            raise ValueError("initial roles must be unique")
+        return value
+
+
+class StudioOperatorReasonCommand(WebModel):
+    reason: str = Field(min_length=1, max_length=1000)
+    expected_resource_version: int = Field(ge=1)
+    idempotency_key: StudioIdempotencyKey
+
+
+class StudioOperatorVersionCommand(WebModel):
+    expected_resource_version: int = Field(ge=1)
+    idempotency_key: StudioIdempotencyKey
+
+
+class StudioOperatorRoleAssignment(StudioOperatorVersionCommand):
+    role_key: StudioRoleKey
+
+
+class StudioOperatorRoleRevocation(StudioOperatorReasonCommand):
+    role_key: StudioRoleKey
+
+
 class CustomerSupportSubmission(WebModel):
     category: Literal["HOW_TO", "TECHNICAL_ERROR", "CONTENT_QUALITY", "FEATURE_REQUEST"]
     subject: str = Field(
@@ -2531,6 +2617,76 @@ class RecentItemOption(WebModel):
     approval: ItemPreviewApproval = Field(default_factory=ItemPreviewApproval)
     human_reference_code: str | None = Field(default=None, max_length=128)
     created_at: UtcDatetime
+
+
+class StudioWorkbenchCounts(WebModel):
+    in_progress: int = Field(ge=0, le=100)
+    approval_waiting: int = Field(ge=0, le=100)
+    hwpx_attention: int = Field(ge=0, le=100)
+    recent_completed: int = Field(ge=0, le=100)
+
+
+class StudioWorkbenchItem(WebModel):
+    kind: Literal["WORKFLOW", "ITEM_APPROVAL", "HWPX_BUILD"]
+    title: str = Field(min_length=1, max_length=160)
+    state: str = Field(pattern=r"^[A-Z][A-Z0-9_]{1,39}$")
+    next_action: Literal[
+        "OPEN_WORKFLOW",
+        "REVIEW_LEGACY_WORKFLOW",
+        "BUILD_REVIEW_HWPX",
+        "REVIEW_AND_APPROVE_ITEM",
+        "OPEN_ITEM",
+        "OPEN_HWPX",
+    ]
+    approval_mode: Literal["NONE", "LEGACY_WORKFLOW", "POST_REGISTRATION_HWPX"]
+    workflow_id: str | None = Field(default=None, pattern=r"^workflow_[0-9a-f]{32}$")
+    item_id: str | None = Field(default=None, pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str | None = Field(default=None, pattern=r"^itemrev_[0-9a-f]{32}$")
+    hwpx_build_id: str | None = Field(default=None, pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    human_reference_code: str | None = Field(default=None, min_length=1, max_length=128)
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def action_has_exact_pointer(self) -> StudioWorkbenchItem:
+        if self.next_action in {"OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"}:
+            if self.workflow_id is None:
+                raise ValueError("workflow action requires a pinned Workflow ID")
+        elif self.next_action in {"OPEN_ITEM", "BUILD_REVIEW_HWPX"}:
+            if self.item_id is None or self.item_revision_id is None:
+                raise ValueError("Item action requires pinned logical and revision IDs")
+        elif (
+            self.next_action in {"OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"}
+            and self.hwpx_build_id is None
+        ):
+            raise ValueError("HWPX action requires a pinned build ID")
+        if self.approval_mode == "LEGACY_WORKFLOW" and self.next_action != "REVIEW_LEGACY_WORKFLOW":
+            raise ValueError("legacy approval mode must use the legacy Workflow action")
+        if self.next_action == "REVIEW_LEGACY_WORKFLOW" and self.approval_mode != "LEGACY_WORKFLOW":
+            raise ValueError("legacy Workflow action must use legacy approval mode")
+        if self.approval_mode == "POST_REGISTRATION_HWPX" and self.item_revision_id is None:
+            raise ValueError("post-registration approval must pin an Item Revision")
+        actions_by_kind = {
+            "WORKFLOW": {"OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"},
+            "ITEM_APPROVAL": {"BUILD_REVIEW_HWPX", "REVIEW_AND_APPROVE_ITEM", "OPEN_ITEM"},
+            "HWPX_BUILD": {"OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"},
+        }
+        if self.next_action not in actions_by_kind[self.kind]:
+            raise ValueError("workbench resource kind and action do not match")
+        if self.kind == "WORKFLOW" and any(
+            value is not None for value in (self.item_id, self.item_revision_id, self.hwpx_build_id)
+        ):
+            raise ValueError("Workflow work item cannot carry Item or HWPX pointers")
+        if self.kind == "ITEM_APPROVAL" and (self.item_id is None or self.item_revision_id is None):
+            raise ValueError("Item approval work item must pin the logical Item and revision")
+        return self
+
+
+class StudioWorkbenchOverview(WebModel):
+    schema_version: Literal["studio-workbench-overview/1.0"] = "studio-workbench-overview/1.0"
+    generated_at: UtcDatetime
+    source_truncated: bool
+    counts: StudioWorkbenchCounts
+    items: tuple[StudioWorkbenchItem, ...] = Field(max_length=100)
 
 
 class StructuredItemImportRequest(WebModel):

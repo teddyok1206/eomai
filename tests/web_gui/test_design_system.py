@@ -31,6 +31,7 @@ def test_surface_mode_is_route_derived_and_not_a_user_theme() -> None:
         'control: "engine"',
         '"admin-settings": "engine"',
         'explorer: "engine"',
+        'account: "human"',
         'dashboard: "human"',
     }
     assert all(entry in JAVASCRIPT for entry in expected_modes)
@@ -198,6 +199,27 @@ def test_execution_settings_have_a_separate_admin_view() -> None:
     assert 'id="execution-preset-list"' in settings_view
     assert 'id="advanced-preset-policy"' in settings_view
     assert 'if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();' in JAVASCRIPT
+
+
+def test_account_management_separates_self_service_from_admin_controls() -> None:
+    assert 'data-view-target="account"' in HTML
+    assert 'data-view="account"' in HTML
+    assert 'id="account-credentials-form"' in HTML
+    assert 'id="account-current-password"' in HTML
+    assert 'id="operator-create-form"' in HTML
+    assert 'id="operator-list"' in HTML
+    assert 'data-required-permission="operator:create"' in HTML
+    assert "expected_resource_version: state.operator.resource_version" in JAVASCRIPT
+    assert "if (newUsername) body.new_username = newUsername;" in JAVASCRIPT
+    assert "if (newPassword) body.new_password = newPassword;" in JAVASCRIPT
+    assert 'state.operator?.password_change_required && name !== "account"' in JAVASCRIPT
+    assert (
+        "const isCurrentOperator = account.operator_id === state.operator.operator_id;"
+        in JAVASCRIPT
+    )
+    assert 'failure.code === "API_PRECONDITION_FAILED"' in JAVASCRIPT
+    assert '"모든 로그인 세션 종료"' in JAVASCRIPT
+    assert 'technicalDisclosure("계정 기술 정보"' in JAVASCRIPT
 
 
 def test_codex_slots_show_live_activity_and_disclose_details_on_demand() -> None:

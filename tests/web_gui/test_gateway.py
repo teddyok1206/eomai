@@ -26,6 +26,11 @@ from eom_web_gui.contracts import (
     MockExamHwpxBuildRequest,
     PdfDocumentReviewSubmission,
     PlannedMockExamAssemblySubmission,
+    StudioOperatorCreate,
+    StudioOperatorReasonCommand,
+    StudioOperatorRoleAssignment,
+    StudioOperatorVersionCommand,
+    StudioSelfCredentialUpdate,
 )
 from eom_web_gui.gateways import (
     GatewayError,
@@ -198,6 +203,120 @@ def _session(access: str = "eom_at_TEST_ONLY_ACCESS") -> WebSession:
         created_at=NOW,
         expires_at=NOW + timedelta(hours=1),
     )
+
+
+@pytest.mark.anyio
+async def test_account_gateway_rotates_self_session_and_sends_versioned_admin_commands() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/api/v1/auth/credentials":
+            assert request.headers["authorization"] == "Bearer eom_at_TEST_ONLY_ACCESS"
+            assert json.loads(request.content) == {
+                "current_password": "TEST_ONLY current password",
+                "new_username": "science.admin",
+                "expected_resource_version": 1,
+            }
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "tokens": _token_data("eom_at_ROTATED_ACCESS"),
+                        "operator": {
+                            "schema_version": "auth-current-account/1.0",
+                            "operator_id": "operator_" + "1" * 32,
+                            "username": "science.admin",
+                            "display_name": "과학 관리자",
+                            "roles": ["ADMIN"],
+                            "effective_permissions": ["operator:create"],
+                            "session_id": "apisession_" + "2" * 32,
+                            "authenticated_at": NOW.isoformat(),
+                            "access_expires_at": (NOW + timedelta(hours=1)).isoformat(),
+                            "password_change_required": False,
+                            "resource_version": 2,
+                        },
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/operators":
+            if request.method == "GET":
+                return httpx.Response(200, json=_list([]))
+            assert request.headers["idempotency-key"] == "studio:operator:create:test-001"
+            return httpx.Response(
+                201,
+                json=_single({"resource_id": "operator_" + "3" * 32, "status": "COMPLETED"}),
+            )
+        if request.url.path.endswith("/roles/AUTHOR"):
+            assert request.headers["if-match"] == '"v2"'
+            return httpx.Response(200, json=_single({"status": "COMPLETED"}))
+        if request.url.path.endswith("/disable"):
+            assert request.headers["if-match"] == '"v2"'
+            return httpx.Response(200, json=_single({"status": "COMPLETED"}))
+        if request.url.path.endswith("/enable") or request.url.path.endswith("/revoke-sessions"):
+            assert request.headers["if-match"] == '"v2"'
+            return httpx.Response(200, json=_single({"status": "COMPLETED"}))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://app.test",
+        observability_url="http://observe.test",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+        observability_transport=httpx.MockTransport(handler),
+    )
+    session = _session()
+    updated = await gateway.update_own_credentials(
+        session,
+        StudioSelfCredentialUpdate(
+            current_password="TEST_ONLY current password",
+            new_username="science.admin",
+            expected_resource_version=1,
+        ),
+    )
+    assert updated.operator["username"] == "science.admin"
+    assert updated.operator["resource_version"] == 2
+    assert updated.tokens.access_token == "eom_at_ROTATED_ACCESS"
+
+    await gateway.operators(session)
+    await gateway.create_operator(
+        session,
+        StudioOperatorCreate(
+            username="science.author",
+            display_name="과학 출제자",
+            temporary_password="TEST_ONLY temporary password 42",
+            initial_roles=("AUTHOR",),
+            idempotency_key="studio:operator:create:test-001",
+        ),
+    )
+    operator_id = "operator_" + "3" * 32
+    await gateway.assign_operator_role(
+        session,
+        operator_id,
+        StudioOperatorRoleAssignment(
+            role_key="AUTHOR",
+            expected_resource_version=2,
+            idempotency_key="studio:operator:role:test-001",
+        ),
+    )
+    await gateway.disable_operator(
+        session,
+        operator_id,
+        StudioOperatorReasonCommand(
+            reason="테스트 계정 정지",
+            expected_resource_version=2,
+            idempotency_key="studio:operator:disable:test-001",
+        ),
+    )
+    version_command = StudioOperatorVersionCommand(
+        expected_resource_version=2,
+        idempotency_key="studio:operator:version:test-001",
+    )
+    await gateway.enable_operator(session, operator_id, version_command)
+    await gateway.revoke_operator_sessions(session, operator_id, version_command)
+    assert len(requests) == 7
+    await gateway.close()
 
 
 @pytest.mark.anyio
@@ -504,18 +623,20 @@ async def test_http_gateway_login_and_operator_projection() -> None:
         requests.append(request)
         if request.url.path == "/api/v1/auth/login":
             return httpx.Response(200, json=_single(_token_data()))
-        if request.url.path == "/api/v1/auth/me":
+        if request.url.path == "/api/v1/auth/account":
             assert request.headers["authorization"].startswith("Bearer ")
             return httpx.Response(
                 200,
                 json=_single(
                     {
+                        "schema_version": "auth-current-account/1.0",
                         "operator_id": "operator_test",
                         "username": "admin",
                         "display_name": "관리자",
                         "roles": ["ADMIN"],
                         "effective_permissions": ["WORKFLOW_READ"],
                         "session_id": "api_session_private",
+                        "resource_version": 1,
                     }
                 ),
             )

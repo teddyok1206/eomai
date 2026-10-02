@@ -297,6 +297,12 @@ def test_existing_hwpx_partial_index_remains_in_composed_metadata() -> None:
     requested = indexes["ix_hwpx_application_builds_requested_fifo"]
     assert not requested.unique
     assert str(requested.dialect_options["postgresql"]["where"]) == "state = 'REQUESTED'"
+    revision_history = indexes["ix_hwpx_application_builds_item_revision_history"]
+    assert tuple(column.name for column in revision_history.columns) == (
+        "item_revision_id",
+        "created_at",
+        "build_id",
+    )
 
 
 def test_assessment_hwpx_build_migration_is_pointer_only_and_fifo_indexed() -> None:

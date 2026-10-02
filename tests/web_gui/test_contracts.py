@@ -19,7 +19,9 @@ from eom_web_gui.contracts import (
     PreviewTableBlockV3,
     RequestDraftInput,
     RequestDraftUpdate,
+    StudioOperatorCreate,
     StudioProblem,
+    StudioSelfCredentialUpdate,
     WorkflowApproval,
 )
 from eom_web_gui.request_drafts import DEMO_REQUEST, normalize_request, update_draft
@@ -33,11 +35,44 @@ SCHEMA_ROOT = Path(__file__).resolve().parents[2] / "schemas" / "web-gui"
 
 def test_web_gui_schemas_are_valid_draft_2020_12() -> None:
     schemas = sorted(SCHEMA_ROOT.glob("*.schema.json"))
-    assert len(schemas) == 18
+    assert len(schemas) == 20
     for path in schemas:
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(schema)
+
+
+def test_account_management_schema_matches_typed_requests() -> None:
+    schema = json.loads(
+        (SCHEMA_ROOT / "studio-account-management-v1.schema.json").read_text(encoding="utf-8")
+    )
+    credential = StudioSelfCredentialUpdate(
+        current_password="TEST_ONLY current password",
+        new_username="science.editor",
+        expected_resource_version=3,
+    ).model_dump(mode="json", exclude_none=True)
+    created = StudioOperatorCreate(
+        username="science.author",
+        display_name="과학 출제자",
+        temporary_password="TEST_ONLY temporary password 42",
+        initial_roles=("AUTHOR", "VIEWER"),
+        idempotency_key="studio:operator:create:test-001",
+    ).model_dump(mode="json")
+    Draft202012Validator(schema["$defs"]["self_credential_update"]).validate(credential)
+    Draft202012Validator(schema["$defs"]["operator_create"]).validate(created)
+    with pytest.raises(ValueError, match="omitted instead of null"):
+        StudioSelfCredentialUpdate.model_validate(
+            {
+                "current_password": "TEST_ONLY current password",
+                "new_username": None,
+                "new_password": "TEST_ONLY replacement password 42",
+                "expected_resource_version": 3,
+            }
+        )
+    with pytest.raises(ValidationError):
+        Draft202012Validator(schema["$defs"]["operator_create"]).validate(
+            created | {"initial_roles": ["AUTHOR", "AUTHOR"]}
+        )
 
 
 def test_studio_problem_matches_web_schema_and_rejects_extra_data() -> None:

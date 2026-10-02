@@ -236,6 +236,16 @@ class FakeQueries:
 
         return PageResult((project_hwpx_build(_record(state="SUCCEEDED")),), None, False)
 
+    @staticmethod
+    def latest_valid_hwpx_build(item_revision_id: str) -> HwpxBuildView | None:
+        from eom_api.services.hwpx_projection import project_hwpx_build
+
+        return (
+            project_hwpx_build(_record(state="SUCCEEDED"))
+            if item_revision_id == REVISION_ID
+            else None
+        )
+
 
 def _client(tmp_path: Path, *, ready: bool = True, admin: bool = True) -> tuple[TestClient, Any]:
     output = tmp_path / "fixture.hwpx"
@@ -465,5 +475,23 @@ def test_hwpx_admin_explorer_is_backend_enforced(tmp_path: Path) -> None:
             denied = client.get("/api/v1/hwpx-builds")
             assert denied.status_code == 403
             assert denied.json()["error_code"] == "PERMISSION_DENIED"
+    finally:
+        services.engine.dispose()
+
+
+def test_latest_valid_hwpx_build_uses_exact_revision_for_non_admin_reader(
+    tmp_path: Path,
+) -> None:
+    client, services = _client(tmp_path, admin=False)
+    try:
+        with client:
+            response = client.get(f"/api/v1/item-revisions/{REVISION_ID}/hwpx-builds/latest")
+            assert response.status_code == 200
+            assert response.json()["data"]["build_id"] == BUILD_ID
+            missing = client.get(f"/api/v1/item-revisions/itemrev_{'f' * 32}/hwpx-builds/latest")
+            assert missing.status_code == 404
+            assert missing.json()["error_code"] == "HWPX_BUILD_NOT_FOUND"
+            invalid = client.get("/api/v1/item-revisions/not-a-revision/hwpx-builds/latest")
+            assert invalid.status_code == 422
     finally:
         services.engine.dispose()

@@ -21,6 +21,7 @@ from eom_api.dependencies import (
     etag,
     require_permission,
 )
+from eom_api.errors import ApiError
 from eom_api.routers.common import many, one, run_command
 
 router = APIRouter(prefix="/operators", tags=["operators"])
@@ -29,6 +30,18 @@ ADMIN_READ = require_permission(PermissionKey.OPERATOR_READ, fresh=True, admin_o
 
 def _view(projection) -> OperatorView:  # type: ignore[no-untyped-def]
     return OperatorView.model_validate(projection.model_dump(mode="python"))
+
+
+def _require_operator_version(current_version: int, expected_version: int) -> None:
+    """Keep the Operator HTTP precondition at the presentation boundary."""
+
+    if current_version != expected_version:
+        raise ApiError(
+            412,
+            "API_PRECONDITION_FAILED",
+            "Precondition failed",
+            "The resource has changed since it was read.",
+        )
 
 
 @router.get(
@@ -142,10 +155,7 @@ def assign_role(
 
     def assign() -> CommandResult:
         current = request.app.state.services.operators.inspect_operator(operator_id)
-        if current.resource_version != expected_version:
-            from eom_api.services.command_adapter import CommandAdapter
-
-            CommandAdapter._version_mismatch()
+        _require_operator_version(current.resource_version, expected_version)
         projection = request.app.state.services.operators.assign_role(
             operator_id, role_key, request.state.request_context.actor()
         )
@@ -161,7 +171,7 @@ def assign_role(
     result = run_command(
         request,
         raw_key=idempotency_key,
-        body={"role_key": role_key.value},
+        body={"role_key": role_key.value, "expected_resource_version": expected_version},
         resource_type="operator",
         callback=assign,
     )
@@ -188,10 +198,7 @@ def revoke_role(
 
     def revoke() -> CommandResult:
         current = request.app.state.services.operators.inspect_operator(operator_id)
-        if current.resource_version != expected_version:
-            from eom_api.services.command_adapter import CommandAdapter
-
-            CommandAdapter._version_mismatch()
+        _require_operator_version(current.resource_version, expected_version)
         projection = request.app.state.services.operators.revoke_role(
             operator_id,
             RoleKey(body.role_key),
@@ -212,7 +219,10 @@ def revoke_role(
         run_command(
             request,
             raw_key=idempotency_key,
-            body=body.model_dump(mode="json"),
+            body={
+                **body.model_dump(mode="json"),
+                "expected_resource_version": expected_version,
+            },
             resource_type="operator",
             callback=revoke,
         ),
@@ -229,10 +239,7 @@ def _state_command(
 ) -> CommandResult:
     def execute() -> CommandResult:
         current = request.app.state.services.operators.inspect_operator(operator_id)
-        if current.resource_version != expected_version:
-            from eom_api.services.command_adapter import CommandAdapter
-
-            CommandAdapter._version_mismatch()
+        _require_operator_version(current.resource_version, expected_version)
         service = request.app.state.services.operators
         actor = request.state.request_context.actor()
         projection = (
@@ -252,7 +259,11 @@ def _state_command(
     return run_command(
         request,
         raw_key=raw_key,
-        body={"action": action, "reason": reason},
+        body={
+            "action": action,
+            "reason": reason,
+            "expected_resource_version": expected_version,
+        },
         resource_type="operator",
         callback=execute,
     )
@@ -322,10 +333,13 @@ def revoke_sessions(
     body: EmptyRequest,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
 ) -> SingleResponse[CommandResult]:
     del body, authentication
 
     def execute() -> CommandResult:
+        current = request.app.state.services.operators.inspect_operator(operator_id)
+        _require_operator_version(current.resource_version, expected_version)
         count = request.app.state.services.operators.revoke_sessions(
             operator_id, request.state.request_context.actor()
         )
@@ -343,7 +357,10 @@ def revoke_sessions(
         run_command(
             request,
             raw_key=idempotency_key,
-            body={"action": "revoke_sessions"},
+            body={
+                "action": "revoke_sessions",
+                "expected_resource_version": expected_version,
+            },
             resource_type="operator_sessions",
             callback=execute,
         ),

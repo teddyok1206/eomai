@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from eom_operator_identity.contracts import normalize_username
+from eom_operator_identity.contracts import normalize_username, validate_username
 from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from eom_operator_identity.passwords import PasswordService
 from eom_orchestrator.database import build_session_factory, transaction
@@ -14,6 +14,7 @@ from sqlalchemy import Engine, select
 from eom_identity_service.models import ApiSessionRecord, OperatorCredentialRecord, OperatorRecord
 from eom_identity_service.repository import (
     add_operator_event,
+    lock_identity_invariants,
     operator_by_username,
     require_credential,
     revoke_operator_sessions,
@@ -227,6 +228,111 @@ class AuthService:
             raise AuthenticationFailure("CURRENT_PASSWORD_MISMATCH")
         if pair is None:
             raise RuntimeError("password change completed without a token pair")
+        return pair
+
+    def update_credentials(
+        self,
+        authentication: AccessAuthentication,
+        *,
+        current_password: str,
+        new_username: str | None,
+        new_password: str | None,
+        expected_resource_version: int,
+        request_id: str,
+    ) -> IssuedTokenPair:
+        """Atomically update this authenticated Operator's login credentials."""
+
+        requested_username = validate_username(new_username) if new_username is not None else None
+        timestamp = datetime.now(UTC)
+        failure = False
+        pair: IssuedTokenPair | None = None
+        with transaction(self.sessions) as session:
+            if requested_username is not None:
+                lock_identity_invariants(session)
+            operator = session.scalar(
+                select(OperatorRecord)
+                .where(OperatorRecord.operator_id == authentication.operator.operator_id)
+                .with_for_update()
+            )
+            if operator is None or operator.status != "ACTIVE":
+                raise IdentityError(IdentityErrorCode.AUTH_SESSION_REVOKED, "session is revoked")
+            credential = require_credential(session, operator.operator_id, for_update=True)
+            if not self.passwords.verify(current_password, credential.password_hash):
+                failure = True
+            elif operator.lock_version != expected_resource_version:
+                raise IdentityError(
+                    IdentityErrorCode.OPERATOR_VERSION_CONFLICT,
+                    "operator resource version differs",
+                )
+            else:
+                username_changed = (
+                    requested_username is not None and requested_username != operator.username
+                )
+                password_changed = new_password is not None
+                if not username_changed and not password_changed:
+                    raise IdentityError(
+                        IdentityErrorCode.OPERATOR_CREDENTIALS_UNCHANGED,
+                        "credential update does not change the account",
+                    )
+                if requested_username is not None:
+                    normalized = normalize_username(requested_username)
+                    existing = operator_by_username(session, normalized)
+                    if existing is not None and existing.operator_id != operator.operator_id:
+                        raise IdentityError(
+                            IdentityErrorCode.OPERATOR_USERNAME_CONFLICT,
+                            "username already exists",
+                        )
+                    operator.username = requested_username
+                    operator.normalized_username = normalized
+                if new_password is not None:
+                    credential.password_hash = self.passwords.hash_password(
+                        new_password,
+                        username=operator.username,
+                        display_name=operator.display_name,
+                    )
+                    credential.password_algorithm = "argon2id"
+                    credential.password_version += 1
+                    credential.must_change_password = False
+                    credential.password_changed_at = timestamp
+                    credential.failed_login_count = 0
+                    credential.first_failed_at = None
+                    credential.last_failed_at = None
+                    credential.locked_until = None
+                    operator.must_change_password = False
+                operator.lock_version += 1
+                revoke_operator_sessions(
+                    session,
+                    operator.operator_id,
+                    actor_id=operator.operator_id,
+                    reason="CREDENTIALS_CHANGED",
+                    except_session_id=authentication.session_id,
+                    now=timestamp,
+                )
+                pair = self.tokens.rotate_current_session(
+                    session,
+                    authentication.session_id,
+                    password_change_required=credential.must_change_password,
+                    now=timestamp,
+                )
+                add_operator_event(
+                    session,
+                    operator,
+                    event_type="CREDENTIALS_CHANGED",
+                    actor_id=operator.operator_id,
+                    request_id=request_id,
+                    payload={
+                        "actor_type": "OPERATOR",
+                        "source": "APPLICATION_API",
+                        "username_changed": username_changed,
+                        "password_changed": password_changed,
+                        "resource_version": operator.lock_version,
+                    },
+                    now=timestamp,
+                )
+        if failure:
+            raise AuthenticationFailure("CURRENT_PASSWORD_MISMATCH")
+        if pair is None:
+            raise RuntimeError("credential update completed without a token pair")
         return pair
 
     def _register_failure(self, credential: OperatorCredentialRecord, timestamp: datetime) -> None:

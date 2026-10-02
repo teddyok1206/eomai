@@ -17,12 +17,25 @@ import {
   hwpxTargetFromWorkflow,
 } from "./hwpx-delivery-target.js";
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
+import {
+  applyPermissionVisibility,
+  hasPermission,
+  installPermissionRequirements,
+} from "./studio-permissions.js";
+import {
+  studioRouteFromLocation,
+  supportContextFromHistory,
+  supportContextRoute,
+  updateStudioHistory,
+} from "./studio-route.js";
+import {renderStudioWorkbench} from "./studio-workbench.js";
 
 const API = "/studio/api/v1";
 const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const ITEM_REVISION_PATTERN = /^itemrev_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
 const WEB_REQUEST_ID_PATTERN = /^webreq_[a-f0-9]{24}$/;
+const ADMIN_VIEW_NAMES = new Set(["control", "admin-settings", "learning", "knowledge", "explorer"]);
 const state = {
   csrf: "",
   operator: null,
@@ -44,6 +57,7 @@ const state = {
   hwpxBuildId: null,
   hwpxBuild: null,
   hwpxPollTimer: null,
+  hwpxBuildRequestSequence: 0,
   hwpxRecentBuilds: [],
   recentItems: [],
   itemPreviewRequestSequence: 0,
@@ -106,6 +120,9 @@ const state = {
   educationalQualitySelectedPlanId: null,
   educationalQualitySessionId: null,
   educationalQualityPosition: null,
+  operatorAccounts: [],
+  currentView: "dashboard",
+  lastNonSupportRoute: "/studio/",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -125,6 +142,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   support: "human",
   "pdf-review": "human",
   "quality-review": "human",
+  account: "human",
   dashboard: "human",
 });
 
@@ -271,6 +289,7 @@ function roleLabel(value) {
     ADMIN: termLabel("admin_role", "관리자"),
     EDITOR: termLabel("editor_role", "문항 편집자"),
     REVIEWER: termLabel("reviewer_role", "검토자"),
+    AUTHOR: termLabel("author_role", "출제자"),
     VIEWER: termLabel("viewer_role", "조회 사용자"),
   }[value] || "사용자";
 }
@@ -304,18 +323,47 @@ function toast(value) {
   window.setTimeout(() => { element.hidden = true; }, 3200);
 }
 
-function showView(name) {
+function closeMobileNavigation({restoreFocus = false} = {}) {
+  const sidebar = $(".sidebar");
+  const menu = $("#mobile-menu");
+  const wasOpen = sidebar.classList.contains("open");
+  sidebar.classList.remove("open");
+  menu.setAttribute("aria-expanded", "false");
+  menu.setAttribute("aria-label", "메뉴 열기");
+  $("#sidebar-scrim").hidden = true;
+  if (restoreFocus && wasOpen) menu.focus();
+}
+
+function showView(name, {history = true, replace = false, route = null} = {}) {
+  if (!UI_MODE_BY_VIEW[name]) name = "dashboard";
+  if (state.operator?.password_change_required && name !== "account") name = "account";
+  if (ADMIN_VIEW_NAMES.has(name) && state.operator && !hasAdminRole()) name = "dashboard";
+  let historyRoute = route || {view: name};
+  if (state.currentView !== "support" && name === "support") {
+    state.lastNonSupportRoute = history
+      ? supportContextRoute(studioRouteFromLocation(window.location))
+      : supportContextFromHistory(window.history.state);
+    historyRoute = {...historyRoute, support_origin_route: state.lastNonSupportRoute};
+  }
+  state.currentView = name;
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
-  $(".sidebar").classList.remove("open");
+  closeMobileNavigation({restoreFocus: $(".sidebar").classList.contains("open")});
+  if (history) updateStudioHistory(window, historyRoute, {replace});
   if (name === "hwpx") loadHwpx();
+  else stopHwpxBuildObservation();
+  if (!["workflow", "approval"].includes(name)) {
+    stopWorkflowUpdates();
+    state.workflowRequestSequence += 1;
+  }
   if (name !== "control") {
     window.clearTimeout(state.codexAccountPollTimer);
     window.clearTimeout(state.analysisBatchPollTimer);
   }
   if (name === "control" && hasAdminRole()) loadCodexControlPlane();
   if (name === "admin-settings" && hasAdminRole()) loadAdminSettings();
+  if (name === "account") renderOwnAccount();
   if (name === "learning" && hasAdminRole()) loadAssessmentLearning();
   if (name === "support") loadCustomerSupportCases();
   if (name !== "support") {
@@ -328,16 +376,33 @@ function showView(name) {
     state.pdfDocumentReviewRequestSequence += 1;
   }
   if (name === "quality-review") loadEducationalQualityWorkbench();
-  if (name === "dashboard" && state.health) renderDashboard(state.health);
+  if (name === "dashboard") {
+    if (state.health) renderDashboard(state.health);
+    loadStudioWorkbench();
+  }
   const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
   window.scrollTo({top: 0, behavior});
 }
 
 function installNavigation() {
   $$('[data-view-target]').forEach((button) => button.addEventListener("click", () => showView(button.dataset.viewTarget)));
-  $("#mobile-menu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
+  $("#mobile-menu").addEventListener("click", () => {
+    const open = !$(".sidebar").classList.contains("open");
+    $(".sidebar").classList.toggle("open", open);
+    $("#mobile-menu").setAttribute("aria-expanded", String(open));
+    $("#mobile-menu").setAttribute("aria-label", open ? "메뉴 닫기" : "메뉴 열기");
+    $("#sidebar-scrim").hidden = !open;
+    if (open) $(".sidebar [data-view-target]:not([hidden])")?.focus();
+  });
+  $("#sidebar-scrim").addEventListener("click", () => closeMobileNavigation({restoreFocus: true}));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $(".sidebar").classList.contains("open")) {
+      closeMobileNavigation({restoreFocus: true});
+    }
+  });
   $("#global-load").addEventListener("click", loadGlobalId);
   $("#global-id").addEventListener("keydown", (event) => { if (event.key === "Enter") loadGlobalId(); });
+  window.addEventListener("popstate", () => restoreStudioRoute(studioRouteFromLocation(window.location)));
 }
 
 function loadGlobalId() {
@@ -375,6 +440,81 @@ async function initializeSession() {
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
   $$(".admin-only").forEach((element) => { element.hidden = !roles.includes("ADMIN"); });
+  applyPermissionVisibility(document, state.operator);
+  renderOwnAccount();
+}
+
+async function openStudioWorkbenchItem(item) {
+  if (["OPEN_WORKFLOW", "REVIEW_LEGACY_WORKFLOW"].includes(item.next_action)) {
+    $("#workflow-id").value = item.workflow_id;
+    $("#approval-workflow-id").value = item.workflow_id;
+    const view = item.next_action === "REVIEW_LEGACY_WORKFLOW" ? "approval" : "workflow";
+    showView(view, {route: {view, workflow_id: item.workflow_id}});
+    await loadWorkflow();
+    return;
+  }
+  if (item.next_action === "OPEN_ITEM") {
+    $("#item-id").value = item.item_id;
+    $("#revision-id").value = item.item_revision_id;
+    showView("item", {
+      route: {view: "item", item_id: item.item_id, item_revision_id: item.item_revision_id},
+    });
+    await loadItemPreview();
+    return;
+  }
+  if (item.next_action === "BUILD_REVIEW_HWPX") {
+    return openLatestOrTargetHwpx(item.item_id, item.item_revision_id);
+  }
+  if (["OPEN_HWPX", "REVIEW_AND_APPROVE_ITEM"].includes(item.next_action)) {
+    selectHwpxBuild(item.hwpx_build_id);
+    showView("hwpx", {route: {view: "hwpx", hwpx_build_id: item.hwpx_build_id}});
+    await loadHwpxBuild();
+  }
+}
+
+async function loadStudioWorkbench() {
+  const message = $("#workbench-message");
+  try {
+    const overview = await api("/workbench/overview");
+    renderStudioWorkbench({
+      overview,
+      root: $("#work-inbox"),
+      counts: {
+        inProgress: $("#metric-in-progress"),
+        approvalWaiting: $("#metric-approval-waiting"),
+        hwpxAttention: $("#metric-hwpx-attention"),
+        recentCompleted: $("#metric-recent-completed"),
+      },
+      onOpen: openStudioWorkbenchItem,
+    });
+    showMessage(message, overview.source_truncated ? "최근 작업 100건 범위입니다." : "");
+  } catch (failure) {
+    showMessage(message, `작업함 조회 실패: ${failure.message}`, "error");
+    $("#work-inbox").replaceChildren();
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "작업함을 불러오지 못했습니다. 새로고침해 주세요.";
+    $("#work-inbox").append(empty);
+  }
+}
+
+async function restoreStudioRoute(route) {
+  const view = UI_MODE_BY_VIEW[route.view] ? route.view : "dashboard";
+  if (route.workflow_id) {
+    $("#workflow-id").value = route.workflow_id;
+    $("#approval-workflow-id").value = route.workflow_id;
+  }
+  if (route.item_id) $("#item-id").value = route.item_id;
+  if (route.item_revision_id) $("#revision-id").value = route.item_revision_id;
+  if (route.quality_plan_id) state.educationalQualitySelectedPlanId = route.quality_plan_id;
+  if (route.hwpx_build_id) selectHwpxBuild(route.hwpx_build_id);
+  else if (view === "hwpx" && route.item_revision_id) {
+    selectHwpxDeliveryTarget(hwpxTargetFromAdminRevision(route.item_revision_id));
+  }
+  showView(view, {history: false});
+  if (["workflow", "approval"].includes(view) && route.workflow_id) await loadWorkflow();
+  if (view === "item" && route.item_id && route.item_revision_id) await loadItemPreview();
+  if (view === "hwpx" && route.hwpx_build_id) await loadHwpxBuild();
 }
 
 async function loadHealth() {
@@ -786,6 +926,7 @@ async function loadWorkflow() {
     state.workflow = value;
     renderWorkflow(value);
     $("#approval-workflow-id").value = workflowId;
+    updateStudioHistory(window, {view: state.currentView, workflow_id: workflowId}, {replace: true});
     startWorkflowUpdates(workflowId, requestSequence);
   } catch (failure) {
     if (requestSequence !== state.workflowRequestSequence) return;
@@ -931,20 +1072,53 @@ function technicalDisclosure(label, values, extraClass = "") {
 }
 
 function renderStages(workflow, steps) {
-  const keys = ["request", "authoring", "review", "approval", "registration", "hwpx"];
-  const current = String(workflow.current_step_key || "request").replace("item_management", "registration");
-  const completed = new Set(steps.filter((step) => step.state === "SUCCEEDED").map((step) => String(step.step_key).replace("item_management", "registration")));
-  if (workflow.state === "COMPLETED") keys.slice(0, 5).forEach((key) => completed.add(key));
+  const legacyApproval = workflow.state === "AWAITING_HUMAN_APPROVAL"
+    || steps.some((step) => ["approval", "human_approval"].includes(step.step_key));
+  const keys = legacyApproval
+    ? ["request", "authoring", "review", "approval", "registration", "hwpx"]
+    : ["request", "authoring", "review", "registration", "hwpx", "approval"];
+  const labels = Object.freeze({
+    request: "요청 접수",
+    authoring: "문항 작성",
+    review: "품질 검토",
+    approval: legacyApproval ? "검토 승인" : "최종 승인",
+    registration: "완성 문항 등록",
+    hwpx: "HWPX 제작",
+  });
+  const current = String(workflow.current_step_key || "request")
+    .replace("item_management", "registration")
+    .replace("human_approval", "approval");
+  const completed = new Set(steps.filter((step) => step.state === "SUCCEEDED").map((step) => String(step.step_key).replace("item_management", "registration").replace("human_approval", "approval")));
+  if (workflow.state === "COMPLETED" && workflow.item_registration) completed.add("registration");
   $$("#stage-list li").forEach((element, index) => {
     const key = keys[index];
+    element.querySelector("strong").textContent = labels[key];
     element.classList.toggle("complete", completed.has(key));
     element.classList.toggle("current", key === current && !completed.has(key));
     const detail = element.querySelector(".stage-state");
     const hwpxState = state.hwpxCapability
       ? statePresentation("hwpx_capability", state.hwpxCapability.state).label
       : "제작 가능 여부 확인 필요";
-    detail.textContent = completed.has(key) ? "완료" : key === current ? "현재 단계" : key === "hwpx" ? hwpxState : "대기";
+    detail.textContent = completed.has(key)
+      ? "완료"
+      : key === current
+        ? "현재 단계"
+        : key === "hwpx"
+          ? hwpxState
+          : key === "approval" && !legacyApproval
+            ? "HWPX 확인 후"
+            : "대기";
     element.querySelector("span").textContent = completed.has(key) ? "✓" : String(index + 1);
+  });
+  const flowRoot = $("#production-map");
+  const flowByKey = new Map(
+    $$("#production-map li").map((element) => [element.dataset.flowStage, element]),
+  );
+  keys.forEach((key, index) => {
+    const element = flowByKey.get(key);
+    element.querySelector("span").textContent = String(index + 1).padStart(2, "0");
+    element.querySelector("strong").textContent = labels[key];
+    flowRoot.append(element);
   });
   $$("#production-map li").forEach((element) => {
     const key = element.dataset.flowStage;
@@ -1104,7 +1278,6 @@ function installApproval() {
   $("#approval-load").addEventListener("click", async () => {
     $("#workflow-id").value = $("#approval-workflow-id").value.trim();
     await loadWorkflow();
-    showView("approval");
   });
   $("#approval-submit").addEventListener("click", approveWorkflow);
 }
@@ -1520,6 +1693,13 @@ function resetItemPreviewSelection(title, detail) {
 }
 
 function renderItemPreview(preview) {
+  if (state.currentView === "item") {
+    updateStudioHistory(window, {
+      view: "item",
+      item_id: preview.item_id,
+      item_revision_id: preview.item_revision_id,
+    }, {replace: true});
+  }
   setStateStatus($("#revision-state"), "item_revision", preview.revision_state);
   renderDefinitionList($("#item-inspector"), {"문항 ID": preview.item_id, "문항 버전 ID": preview.item_revision_id, "문항 제작 진행 ID": preview.workflow_id, "제작 기준 버전": preview.content_pack_release_id, "승인 상태": preview.approval?.status === "PENDING" ? "승인 대기" : "승인 완료", "EOM 문항 템플릿": preview.template_delivery_available ? "사용 가능" : "구조화 문항 필요"});
   $("#structured-base-revision").value = preview.item_revision_id;
@@ -1869,27 +2049,29 @@ function installHwpx() {
 }
 
 function selectHwpxBuild(buildId) {
+  window.clearTimeout(state.hwpxPollTimer);
+  state.hwpxPollTimer = null;
+  state.hwpxBuildRequestSequence += 1;
   state.hwpxBuildId = buildId;
   $("#hwpx-existing-build-id").value = buildId;
   $("#hwpx-build-id").textContent = buildId;
   $("#hwpx-build-refresh").disabled = false;
-  const url = new URL(window.location.href);
-  url.searchParams.set("hwpx_build_id", buildId);
-  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function stopHwpxBuildObservation() {
+  window.clearTimeout(state.hwpxPollTimer);
+  state.hwpxPollTimer = null;
+  state.hwpxBuildRequestSequence += 1;
 }
 
 function resetHwpxBuildResult(clearSelection = false) {
   window.clearTimeout(state.hwpxPollTimer);
   state.hwpxBuild = null;
   if (clearSelection) {
+    state.hwpxBuildRequestSequence += 1;
     state.hwpxBuildId = null;
     $("#hwpx-existing-build-id").value = "";
     $("#hwpx-build-id").textContent = "-";
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("hwpx_build_id")) {
-      url.searchParams.delete("hwpx_build_id");
-      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    }
   }
   setStatus($("#hwpx-job-badge"), "neutral", "■", "조회 중");
   $("#hwpx-resource-state").textContent = "-";
@@ -1912,13 +2094,6 @@ function loadSelectedHwpxBuild() {
   selectHwpxBuild(buildId);
   resetHwpxBuildResult();
   return loadHwpxBuild();
-}
-
-function restoreHwpxBuild() {
-  const buildId = new URL(window.location.href).searchParams.get("hwpx_build_id");
-  if (!buildId || !HWPX_BUILD_PATTERN.test(buildId)) return false;
-  selectHwpxBuild(buildId);
-  return true;
 }
 
 async function createHwpxBuild() {
@@ -1980,9 +2155,17 @@ async function createHwpxBuild() {
 
 async function loadHwpxBuild() {
   if (!state.hwpxBuildId) return;
+  const buildId = state.hwpxBuildId;
+  const requestSequence = state.hwpxBuildRequestSequence;
   try {
-    const value = await api(`/hwpx/builds/${encodeURIComponent(state.hwpxBuildId)}`);
+    const value = await api(`/hwpx/builds/${encodeURIComponent(buildId)}`);
+    if (
+      requestSequence !== state.hwpxBuildRequestSequence
+      || buildId !== state.hwpxBuildId
+      || state.currentView !== "hwpx"
+    ) return;
     state.hwpxBuild = value;
+    updateStudioHistory(window, {view: "hwpx", hwpx_build_id: value.build_id}, {replace: true});
     setStateStatus($("#hwpx-job-badge"), "hwpx_build", value.state);
     $("#hwpx-resource-state").textContent = `${statePresentation("hwpx_build", value.state).label} / ${statePresentation("generic", value.validation_state).label}`;
     $("#hwpx-resource-state").dataset.rawState = `${value.state}/${value.validation_state}`;
@@ -1997,7 +2180,12 @@ async function loadHwpxBuild() {
     download.hidden = !value.download_available;
     download.href = value.download_available ? `${API}/hwpx/builds/${encodeURIComponent(value.build_id)}/download` : "#";
     $("#hwpx-download").textContent = value.download_available ? "다운로드 가능" : "아직 이용 불가";
-    await syncHwpxApprovalPanel(value);
+    await syncHwpxApprovalPanel(value, requestSequence);
+    if (
+      requestSequence !== state.hwpxBuildRequestSequence
+      || buildId !== state.hwpxBuildId
+      || state.currentView !== "hwpx"
+    ) return;
     updateHwpxDeliveryGuide(value);
     window.clearTimeout(state.hwpxPollTimer);
     if (["REQUESTED", "RUNNING", "VALIDATING"].includes(value.state)) {
@@ -2012,19 +2200,35 @@ async function loadHwpxBuild() {
     }
     rememberRecentHwpxBuild(value);
   } catch (failure) {
+    if (
+      requestSequence !== state.hwpxBuildRequestSequence
+      || buildId !== state.hwpxBuildId
+      || state.currentView !== "hwpx"
+    ) return;
     resetHwpxBuildResult();
     setStatus($("#hwpx-job-badge"), "danger", "!", "조회 실패");
     showMessage($("#hwpx-build-message"), `상태 조회 실패: ${failure.message}`, "error");
   }
 }
 
-async function syncHwpxApprovalPanel(build) {
+async function syncHwpxApprovalPanel(build, requestSequence) {
   const panel = $("#hwpx-approval-panel");
   panel.hidden = true;
+  panel.dataset.approvalState = "UNKNOWN";
   if (!build || build.state !== "SUCCEEDED" || build.validation_state !== "PASS") return;
   try {
     const preview = await api(`/items/${encodeURIComponent(build.item_id)}/revisions/${encodeURIComponent(build.item_revision_id)}/preview`);
-    panel.hidden = !(preview.approval?.status === "PENDING" && preview.approval?.human_review_required === true);
+    if (
+      requestSequence !== state.hwpxBuildRequestSequence
+      || build.build_id !== state.hwpxBuildId
+      || state.currentView !== "hwpx"
+    ) return;
+    panel.dataset.approvalState = preview.approval?.status || "UNKNOWN";
+    panel.hidden = !(
+      preview.approval?.status === "PENDING"
+      && preview.approval?.human_review_required === true
+      && hasPermission(state.operator, "workflow:approve")
+    );
   } catch (_failure) {
     panel.hidden = true;
   }
@@ -2049,13 +2253,304 @@ async function approveHwpxItemRevision() {
         idempotency_key: `studio:item-approval:${build.item_revision_id}:${crypto.randomUUID()}`,
       },
     });
+    if (state.hwpxBuild?.build_id !== build.build_id || state.currentView !== "hwpx") {
+      toast("이전에 선택한 문항의 승인이 완료되었습니다. 현재 선택은 유지합니다.");
+      return;
+    }
     $("#hwpx-approval-panel").hidden = true;
+    $("#hwpx-approval-panel").dataset.approvalState = "APPROVED";
+    updateHwpxDeliveryGuide(build);
     showMessage($("#hwpx-build-message"), "문항 승인이 완료되었습니다.", "success");
   } catch (failure) {
     showMessage($("#hwpx-approval-message"), `문항 승인 실패: ${failure.message}`, "error");
   } finally {
     $("#hwpx-approval-submit").disabled = false;
   }
+}
+
+function renderOwnAccount() {
+  if (!state.operator || !$("#account-display-name")) return;
+  $("#account-display-name").textContent = state.operator.display_name || "-";
+  $("#account-current-username").textContent = state.operator.username || "-";
+  const roles = Array.isArray(state.operator.roles) ? state.operator.roles : [];
+  setStatus(
+    $("#account-role-badge"),
+    roles.includes("ADMIN") ? "primary" : "neutral",
+    roles.includes("ADMIN") ? "◆" : "●",
+    roles.map(roleLabel).join(" · ") || "사용자",
+  );
+}
+
+async function updateOwnCredentials(event) {
+  event.preventDefault();
+  const currentPassword = $("#account-current-password").value;
+  const requestedUsername = $("#account-new-username").value.trim();
+  const newUsername = requestedUsername && requestedUsername !== state.operator.username
+    ? requestedUsername
+    : null;
+  const newPassword = $("#account-new-password").value;
+  const confirmation = $("#account-new-password-confirm").value;
+  const message = $("#account-message");
+  if (!newUsername && !newPassword) {
+    return showMessage(message, "변경할 로그인 ID 또는 새 비밀번호를 입력하세요.", "error");
+  }
+  if (newPassword !== confirmation) {
+    return showMessage(message, "새 비밀번호 확인이 일치하지 않습니다.", "error");
+  }
+  const button = $("#account-credentials-submit");
+  button.disabled = true;
+  try {
+    const body = {
+      current_password: currentPassword,
+      expected_resource_version: state.operator.resource_version,
+    };
+    if (newUsername) body.new_username = newUsername;
+    if (newPassword) body.new_password = newPassword;
+    const updated = await api("/account/credentials", {
+      method: "POST",
+      mutation: true,
+      body,
+    });
+    state.csrf = updated.csrf_token;
+    state.operator = updated.operator;
+    $("#current-user").textContent = updated.operator.display_name || updated.operator.username;
+    $("#current-role").textContent = updated.operator.roles.map(roleLabel).join(" · ");
+    $("#account-credentials-form").reset();
+    renderOwnAccount();
+    showMessage(message, "로그인 정보를 변경했습니다. 다른 로그인 세션은 안전하게 종료되었습니다.", "success");
+  } catch (failure) {
+    showMessage(message, `로그인 정보 변경 실패: ${failure.message}`, "error");
+  } finally {
+    $("#account-current-password").value = "";
+    $("#account-new-password").value = "";
+    $("#account-new-password-confirm").value = "";
+    button.disabled = false;
+  }
+}
+
+function operatorRoleChoices(excluded = []) {
+  const select = document.createElement("select");
+  const excludedRoles = new Set(excluded);
+  for (const role of ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]) {
+    if (!excludedRoles.has(role)) select.append(new Option(roleLabel(role), role));
+  }
+  return select;
+}
+
+function operatorActionButton(label, permission, handler, danger = false) {
+  const button = actionButton(label, handler, !danger);
+  if (danger) button.classList.add("danger");
+  button.disabled = !hasPermission(state.operator, permission);
+  return button;
+}
+
+function renderOperatorAccounts(accounts) {
+  const root = $("#operator-list");
+  root.replaceChildren();
+  setStatus($("#operator-count"), "primary", "●", `${accounts.length}명`);
+  if (!accounts.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "등록된 사용자 계정이 없습니다.";
+    root.append(empty);
+    return;
+  }
+  for (const account of accounts) {
+    const isCurrentOperator = account.operator_id === state.operator.operator_id;
+    const {card, details} = controlCard(account.display_name, account.status, "generic");
+    addControlDetail(details, "로그인 ID", account.username);
+    addControlDetail(details, "역할", account.roles.map(roleLabel).join(" · ") || "없음");
+    addControlDetail(details, "비밀번호 변경", account.must_change_password ? "첫 로그인 후 필요" : "완료");
+    addControlDetail(details, "마지막 로그인", account.last_login_at || "기록 없음");
+    if (isCurrentOperator) addControlDetail(details, "현재 로그인", "본인 계정");
+
+    const reason = document.createElement("input");
+    reason.placeholder = "정지·역할 해제 사유";
+    reason.maxLength = 1000;
+    reason.className = "operator-reason";
+
+    if (!isCurrentOperator) {
+      const roleActions = document.createElement("div");
+      roleActions.className = "operator-role-actions";
+      const roleSelect = operatorRoleChoices(account.roles);
+      const assign = operatorActionButton("역할 추가", "operator:assign_role", async () => {
+        if (!roleSelect.value) return;
+        await assignOperatorRole(
+          account,
+          roleSelect.value,
+        );
+      });
+      assign.disabled = assign.disabled || roleSelect.options.length === 0;
+      roleActions.append(roleSelect, assign);
+      for (const role of account.roles) {
+        roleActions.append(operatorActionButton(`${roleLabel(role)} 해제`, "operator:revoke_role", async () => {
+          if (!reason.value.trim()) {
+            return showMessage($("#operator-message"), "역할 해제 사유를 입력하세요.", "error");
+          }
+          await revokeOperatorRole(
+            account,
+            role,
+            reason.value.trim(),
+          );
+        }, true));
+      }
+
+      const accountActions = document.createElement("div");
+      accountActions.className = "form-actions";
+      if (account.status === "ACTIVE") {
+        accountActions.append(operatorActionButton("계정 정지", "operator:disable", async () => {
+          if (!reason.value.trim()) {
+            return showMessage($("#operator-message"), "계정 정지 사유를 입력하세요.", "error");
+          }
+          await disableOperatorAccount(
+            account,
+            reason.value.trim(),
+          );
+        }, true));
+      } else {
+        accountActions.append(operatorActionButton(
+          "계정 다시 사용",
+          "operator:enable",
+          () => enableOperatorAccount(account),
+        ));
+      }
+      accountActions.append(operatorActionButton(
+        "모든 로그인 세션 종료",
+        "operator:revoke_sessions",
+        () => revokeOperatorSessions(account),
+        true,
+      ));
+      card.append(reason, roleActions, accountActions);
+    }
+    card.append(technicalDisclosure("계정 기술 정보", {
+      "사용자 ID": account.operator_id,
+      "동시 편집 확인값": account.resource_version,
+    }));
+    root.append(card);
+  }
+}
+
+function operatorMutationBody(account, extra = {}) {
+  return {
+    ...extra,
+    expected_resource_version: account.resource_version,
+    idempotency_key: `studio:operator:${account.operator_id}:${crypto.randomUUID()}`,
+  };
+}
+
+async function completeOperatorMutation(request, successMessage) {
+  try {
+    await request;
+    showMessage($("#operator-message"), successMessage, "success");
+    await loadOperatorAccounts();
+  } catch (failure) {
+    showMessage($("#operator-message"), `계정 변경 실패: ${failure.message}`, "error");
+    if (
+      failure.code === "COMMAND_RESOURCE_VERSION_MISMATCH"
+      || failure.code === "API_PRECONDITION_FAILED"
+    ) await loadOperatorAccounts();
+  }
+}
+
+async function assignOperatorRole(account, roleKey) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}/roles`, {
+      method: "POST",
+      mutation: true,
+      body: operatorMutationBody(account, {role_key: roleKey}),
+    }),
+    "역할을 추가했습니다.",
+  );
+}
+
+async function revokeOperatorRole(account, roleKey, reason) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}/role-revocations`, {
+      method: "POST",
+      mutation: true,
+      body: operatorMutationBody(account, {role_key: roleKey, reason}),
+    }),
+    "역할을 해제했습니다.",
+  );
+}
+
+async function disableOperatorAccount(account, reason) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}/disable`, {
+      method: "POST",
+      mutation: true,
+      body: operatorMutationBody(account, {reason}),
+    }),
+    "계정을 정지했습니다.",
+  );
+}
+
+async function enableOperatorAccount(account) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}/enable`, {
+      method: "POST",
+      mutation: true,
+      body: operatorMutationBody(account),
+    }),
+    "계정을 다시 사용할 수 있습니다.",
+  );
+}
+
+async function revokeOperatorSessions(account) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}/revoke-sessions`, {
+      method: "POST",
+      mutation: true,
+      body: operatorMutationBody(account),
+    }),
+    "해당 사용자의 로그인 세션을 종료했습니다.",
+  );
+}
+
+async function createOperatorAccount(event) {
+  event.preventDefault();
+  const roles = $$('[name="operator-create-role"]:checked').map((input) => input.value);
+  const message = $("#operator-message");
+  if (!roles.length) return showMessage(message, "초기 역할을 하나 이상 선택하세요.", "error");
+  const submit = $("#operator-create-form button[type=submit]");
+  submit.disabled = true;
+  try {
+    await api("/admin/operators", {
+      method: "POST",
+      mutation: true,
+      body: {
+        username: $("#operator-create-username").value.trim(),
+        display_name: $("#operator-create-display-name").value.trim(),
+        temporary_password: $("#operator-create-password").value,
+        initial_roles: roles,
+        idempotency_key: `studio:operator:create:${crypto.randomUUID()}`,
+      },
+    });
+    $("#operator-create-form").reset();
+    $('[name="operator-create-role"][value="VIEWER"]').checked = true;
+    showMessage(message, "새 계정을 만들었습니다. 임시 비밀번호는 안전한 방법으로 전달하세요.", "success");
+    await loadOperatorAccounts();
+  } catch (failure) {
+    showMessage(message, `계정 생성 실패: ${failure.message}`, "error");
+  } finally {
+    $("#operator-create-password").value = "";
+    submit.disabled = false;
+  }
+}
+
+async function loadOperatorAccounts() {
+  if (!hasAdminRole()) return;
+  try {
+    state.operatorAccounts = await api("/admin/operators");
+    renderOperatorAccounts(state.operatorAccounts);
+  } catch (failure) {
+    showMessage($("#operator-message"), `계정 목록 조회 실패: ${failure.message}`, "error");
+  }
+}
+
+function installAccountManagement() {
+  $("#account-credentials-form").addEventListener("submit", updateOwnCredentials);
+  $("#operator-create-form").addEventListener("submit", createOperatorAccount);
 }
 
 function hasAdminRole() {
@@ -2337,7 +2832,10 @@ async function loadCodexControlPlane() {
 async function loadAdminSettings() {
   if (!hasAdminRole() || !$('[data-view="admin-settings"].active')) return;
   try {
-    const presets = await api("/admin/execution-presets");
+    const [presets] = await Promise.all([
+      api("/admin/execution-presets"),
+      loadOperatorAccounts(),
+    ]);
     state.executionPresets = presets;
     renderExecutionPresets(presets);
     renderPresetEditorChoices(presets);
@@ -2588,7 +3086,13 @@ function updateHwpxDeliveryGuide(build = null) {
     return;
   }
   stages.build.classList.add("complete");
-  stages.download.classList.add(build.download_available ? "complete" : "current");
+  if (!build.download_available) {
+    stages.download.classList.add("current");
+    return;
+  }
+  stages.download.classList.add("complete");
+  const approvalState = $("#hwpx-approval-panel").dataset.approvalState;
+  stages.approval.classList.add(approvalState === "APPROVED" ? "complete" : "current");
 }
 
 function controlCard(title, stateValue, domain = "generic") {
@@ -3707,7 +4211,7 @@ async function submitCustomerSupportCase(event) {
     category: form.elements.category.value,
     subject: form.elements.subject.value.trim(),
     question: form.elements.question.value.trim(),
-    browser_route: window.location.pathname.slice(0, 512),
+    browser_route: state.lastNonSupportRoute,
     stable_error_code: errorCode || null,
   };
   const fingerprint = JSON.stringify(businessInput);
@@ -3753,10 +4257,7 @@ function educationalQualityCommandKey(operation) {
 }
 
 function canWriteEducationalQualityReview() {
-  const permissions = state.operator && Array.isArray(state.operator.effective_permissions)
-    ? state.operator.effective_permissions
-    : [];
-  return permissions.includes("workflow:approve");
+  return hasPermission(state.operator, "workflow:approve");
 }
 
 function selectedEducationalQualityPlan() {
@@ -3900,8 +4401,20 @@ function renderEducationalQualityScorecard(plan) {
   $("#quality-scorecard-edit-time").textContent = ready
     ? `${metrics.total_edit_minutes}분`
     : "-";
+  $("#quality-scorecard-mean-edit-time").textContent = ready
+    ? `${(metrics.mean_edit_minutes_milli / 1000).toFixed(1)}분`
+    : "-";
   $("#quality-scorecard-science").textContent = ready
     ? `${educationalQualityMilliScore(metrics.science_score_milli)} / 5`
+    : "-";
+  $("#quality-scorecard-evidence").textContent = ready
+    ? `${educationalQualityMilliScore(metrics.evidence_score_milli)} / 5`
+    : "-";
+  $("#quality-scorecard-authoring").textContent = ready
+    ? `${educationalQualityMilliScore(metrics.authoring_value_score_milli)} / 5`
+    : "-";
+  $("#quality-scorecard-explanation").textContent = ready
+    ? `${educationalQualityMilliScore(metrics.explanation_quality_score_milli)} / 5`
     : "-";
   $("#quality-scorecard-visual").textContent = ready
     ? `${educationalQualityMilliScore(metrics.visual_score_milli)} / 5`
@@ -4138,6 +4651,12 @@ async function loadEducationalQualityWorkbench(planId = state.educationalQuality
     const workbench = await api(path);
     state.educationalQualityWorkbench = workbench;
     state.educationalQualitySelectedPlanId = workbench.selected_plan?.summary?.plan_id || null;
+    if (state.educationalQualitySelectedPlanId) {
+      updateStudioHistory(window, {
+        view: "quality-review",
+        quality_plan_id: state.educationalQualitySelectedPlanId,
+      }, {replace: true});
+    }
     const plan = workbench.selected_plan;
     if (plan && !plan.sessions.some((session) => session.session_id === state.educationalQualitySessionId)) {
       state.educationalQualitySessionId = null;
@@ -4314,6 +4833,53 @@ async function openEducationalQualityItem() {
   await loadItemPreview();
 }
 
+async function openLatestOrTargetHwpx(itemId, itemRevisionId) {
+  let existing;
+  try {
+    existing = await api(
+      `/items/revisions/${encodeURIComponent(itemRevisionId)}/latest-hwpx-build`,
+    );
+  } catch (failure) {
+    toast(`HWPX 확인 실패: ${failure.message}`);
+    return;
+  }
+  if (existing) {
+    selectHwpxBuild(existing.build_id);
+    showView("hwpx", {route: {view: "hwpx", hwpx_build_id: existing.build_id}});
+    await loadHwpxBuild();
+    return;
+  }
+  if (!hasPermission(state.operator, "hwpx:build_create")) {
+    toast("이 문항에는 검증된 HWPX가 아직 없습니다. HWPX 제작 권한이 있는 사용자에게 요청하세요.");
+    return;
+  }
+  selectHwpxDeliveryTarget(hwpxTargetFromAdminRevision(itemRevisionId));
+  showView("hwpx", {
+    route: {view: "hwpx", item_id: itemId, item_revision_id: itemRevisionId},
+  });
+}
+
+async function openEducationalQualityHwpx() {
+  const plan = selectedEducationalQualityPlan();
+  const item = plan?.items.find((candidate) => candidate.position === state.educationalQualityPosition);
+  if (!item) return;
+  await openLatestOrTargetHwpx(item.item_id, item.item_revision_id);
+}
+
+async function openEducationalQualityEvidence() {
+  const plan = selectedEducationalQualityPlan();
+  const item = plan?.items.find((candidate) => candidate.position === state.educationalQualityPosition);
+  if (!item) return;
+  try {
+    const preview = await api(`/items/${encodeURIComponent(item.item_id)}/revisions/${encodeURIComponent(item.item_revision_id)}/preview`);
+    $("#workflow-id").value = preview.workflow_id;
+    showView("workflow", {route: {view: "workflow", workflow_id: preview.workflow_id}});
+    await loadWorkflow();
+  } catch (failure) {
+    showMessage($("#quality-observation-message"), `제작 근거 조회 실패: ${failure.message}`, "error");
+  }
+}
+
 function installEducationalQualityReview() {
   $("#quality-review-refresh").addEventListener("click", () => loadEducationalQualityWorkbench());
   $("#quality-plan-form").addEventListener("submit", createEducationalQualityPlan);
@@ -4327,6 +4893,8 @@ function installEducationalQualityReview() {
   $("#quality-observation-form").addEventListener("submit", saveEducationalQualityObservation);
   $("#quality-observation-form").elements.visual_score.addEventListener("change", syncEducationalQualityVisualReason);
   $("#quality-open-item").addEventListener("click", openEducationalQualityItem);
+  $("#quality-open-hwpx").addEventListener("click", openEducationalQualityHwpx);
+  $("#quality-open-evidence").addEventListener("click", openEducationalQualityEvidence);
 }
 
 function pdfReviewState(value) {
@@ -5108,9 +5676,11 @@ async function logout() {
 }
 
 async function boot() {
+  const initialRoute = studioRouteFromLocation(window.location);
   await loadPresentationVocabulary();
-  syncUiMode("workflow");
+  syncUiMode("dashboard");
   installNavigation();
+  installPermissionRequirements(document);
   installRequestDraft();
   installWorkflow();
   installApproval();
@@ -5119,6 +5689,7 @@ async function boot() {
   installStructuredImport();
   installHwpx();
   installControlPlane();
+  installAccountManagement();
   installAssessmentLearning();
   installKnowledgeQuality();
   installExplorer();
@@ -5126,12 +5697,17 @@ async function boot() {
   installEducationalQualityReview();
   installPdfDocumentReview();
   $("#logout").addEventListener("click", logout);
+  $("#mobile-logout").addEventListener("click", logout);
+  $("#workbench-refresh").addEventListener("click", loadStudioWorkbench);
   await initializeSession();
+  if (state.operator.password_change_required) {
+    showView("account", {replace: true});
+    showMessage($("#account-message"), "계속하려면 임시 비밀번호를 새 비밀번호로 변경하세요.");
+    return;
+  }
   await loadCurriculumOutline();
-  const restoredHwpx = restoreHwpxBuild();
-  if (restoredHwpx) showView("hwpx");
   await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds(), loadRecentItems()]);
-  if (restoredHwpx) await loadHwpxBuild();
+  await restoreStudioRoute(initialRoute);
 }
 
 boot().catch(() => window.location.replace("/studio/login"));

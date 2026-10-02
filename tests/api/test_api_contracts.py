@@ -20,7 +20,7 @@ from eom_api_contracts.assessment_learning import (
     AssessmentLearningPageViewV2,
     AssessmentLearningWorkUnitCounts,
 )
-from eom_api_contracts.auth import LoginRequest
+from eom_api_contracts.auth import CredentialUpdateResult, LoginRequest, UpdateCredentialsRequest
 from eom_api_contracts.common import ArtifactPointer
 from eom_api_contracts.control_plane import CreateExecutionPresetDraftRequest
 from eom_api_contracts.curriculum import (
@@ -59,6 +59,56 @@ def test_api_json_schemas_are_draft_2020_12() -> None:
         document = json.loads(path.read_text(encoding="utf-8"))
         assert document["$schema"] == "https://json-schema.org/draft/2020-12/schema"
         Draft202012Validator.check_schema(document)
+
+
+def test_update_credentials_schema_matches_pydantic_and_rejects_null_changes() -> None:
+    schema = json.loads((SCHEMA_ROOT / "auth.schema.json").read_text(encoding="utf-8"))
+    value = UpdateCredentialsRequest(
+        current_password="TEST_ONLY current password",
+        new_username="science.editor",
+        expected_resource_version=4,
+    ).model_dump(mode="json", exclude_none=True)
+    Draft202012Validator(schema["$defs"]["update_credentials_request"]).validate(value)
+    with pytest.raises(ValidationError, match="omitted instead of null"):
+        UpdateCredentialsRequest.model_validate(
+            {
+                "current_password": "TEST_ONLY current password",
+                "new_username": None,
+                "new_password": "TEST_ONLY replacement password 42",
+                "expected_resource_version": 4,
+            }
+        )
+    updated = {
+        "tokens": {
+            "access_token": "eom_at_TEST_ONLY_ACCESS",
+            "refresh_token": "eom_rt_TEST_ONLY_REFRESH",
+            "token_type": "bearer",
+            "access_expires_at": "2026-10-02T01:00:00Z",
+            "refresh_expires_at": "2026-11-02T00:00:00Z",
+            "session_id": "apisession_" + "1" * 32,
+            "password_change_required": False,
+        },
+        "operator": {
+            "schema_version": "auth-current-account/1.0",
+            "operator_id": "operator_" + "2" * 32,
+            "username": "science.editor",
+            "display_name": "과학 편집자",
+            "roles": ["EDITOR"],
+            "effective_permissions": ["item:read"],
+            "session_id": "apisession_" + "1" * 32,
+            "authenticated_at": "2026-10-02T00:00:00Z",
+            "access_expires_at": "2026-10-02T01:00:00Z",
+            "password_change_required": False,
+            "resource_version": 5,
+        },
+    }
+    Draft202012Validator(
+        {
+            "$ref": "#/$defs/credential_update_result",
+            "$defs": schema["$defs"],
+        }
+    ).validate(updated)
+    assert CredentialUpdateResult.model_validate(updated).operator.resource_version == 5
 
 
 def test_mock_exam_plan_api_schema_delegates_to_the_canonical_protocol() -> None:
@@ -580,6 +630,20 @@ def test_operator_contract_never_serializes_temporary_password() -> None:
         initial_roles=("REVIEWER",),
     )
     assert "TEST_ONLY temporary password 42" not in request.model_dump_json()
+    with pytest.raises(ValidationError, match="initial roles must be unique"):
+        CreateOperatorRequest(
+            username="review02",
+            display_name="검토자 2",
+            temporary_password="TEST_ONLY temporary password 43",
+            initial_roles=("REVIEWER", "REVIEWER"),
+        )
+    with pytest.raises(ValidationError):
+        CreateOperatorRequest(
+            username="review03",
+            display_name="검토자 3",
+            temporary_password="TEST_ONLY temporary password 44",
+            initial_roles=("UNKNOWN",),
+        )
 
 
 def test_pack_pinned_workflow_requires_valid_source_intake_pointer() -> None:

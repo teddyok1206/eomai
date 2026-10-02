@@ -57,6 +57,13 @@ from eom_web_gui.contracts import (
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
+    StudioOperatorCreate,
+    StudioOperatorReasonCommand,
+    StudioOperatorRoleAssignment,
+    StudioOperatorRoleRevocation,
+    StudioOperatorVersionCommand,
+    StudioOperatorView,
+    StudioSelfCredentialUpdate,
     WorkflowApproval,
 )
 from eom_web_gui.gateways import (
@@ -89,6 +96,55 @@ class WebServices:
     async def logout(self, session: WebSession) -> None:
         self.sessions.delete(session.session_id)
         await self.gateway.logout(session)
+
+    async def update_own_credentials(
+        self, session: WebSession, value: StudioSelfCredentialUpdate
+    ) -> WebSession:
+        result = await self.gateway.update_own_credentials(session, value)
+        operator_id = session.operator.get("operator_id")
+        if isinstance(operator_id, str):
+            self.sessions.delete_other_operator_sessions(
+                operator_id,
+                except_session_id=session.session_id,
+            )
+        # Replace both projections together only after the API returned its
+        # versioned account projection and rotated token pair.
+        session.operator = result.operator
+        session.tokens = result.tokens
+        return session
+
+    async def operators(self, session: WebSession) -> tuple[StudioOperatorView, ...]:
+        return await self.gateway.operators(session)
+
+    async def create_operator(
+        self, session: WebSession, value: StudioOperatorCreate
+    ) -> dict[str, Any]:
+        return await self.gateway.create_operator(session, value)
+
+    async def assign_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleAssignment
+    ) -> dict[str, Any]:
+        return await self.gateway.assign_operator_role(session, operator_id, value)
+
+    async def revoke_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleRevocation
+    ) -> dict[str, Any]:
+        return await self.gateway.revoke_operator_role(session, operator_id, value)
+
+    async def disable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        return await self.gateway.disable_operator(session, operator_id, value)
+
+    async def enable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        return await self.gateway.enable_operator(session, operator_id, value)
+
+    async def revoke_operator_sessions(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        return await self.gateway.revoke_operator_sessions(session, operator_id, value)
 
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
         return await self.gateway.accepted_intakes(session)

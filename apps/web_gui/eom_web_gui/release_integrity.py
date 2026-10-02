@@ -41,6 +41,9 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/login.html",
         "static/login.js",
         "static/presentation-vocabulary.ko-KR.json",
+        "static/studio-permissions.js",
+        "static/studio-route.js",
+        "static/studio-workbench.js",
         "static/styles.css",
         "timeline.py",
     }

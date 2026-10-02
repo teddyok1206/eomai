@@ -5,12 +5,15 @@ from __future__ import annotations
 from eom_api_contracts import SingleResponse
 from eom_api_contracts.auth import (
     ChangePasswordRequest,
+    CredentialUpdateResult,
+    CurrentAccount,
     CurrentOperator,
     LoginRequest,
     LogoutAllResult,
     LogoutResult,
     RefreshRequest,
     TokenPair,
+    UpdateCredentialsRequest,
 )
 from eom_identity_service.auth_service import AuthenticationFailure
 from eom_identity_service.tokens import TokenType
@@ -35,6 +38,29 @@ def _token_pair(pair) -> TokenPair:  # type: ignore[no-untyped-def]
         session_id=pair.session_id,
         password_change_required=pair.password_change_required,
     )
+
+
+def _current_operator(authentication) -> CurrentOperator:  # type: ignore[no-untyped-def]
+    operator = authentication.operator
+    return CurrentOperator(
+        operator_id=operator.operator_id,
+        username=operator.username,
+        display_name=operator.display_name,
+        roles=tuple(role.value for role in operator.roles),
+        effective_permissions=tuple(
+            permission.value for permission in operator.effective_permissions
+        ),
+        session_id=authentication.session_id,
+        authenticated_at=authentication.authenticated_at,
+        access_expires_at=authentication.access_expires_at,
+        password_change_required=authentication.password_change_required,
+    )
+
+
+def _current_account(authentication) -> CurrentAccount:  # type: ignore[no-untyped-def]
+    value = _current_operator(authentication).model_dump(mode="python")
+    value["resource_version"] = authentication.operator.resource_version
+    return CurrentAccount.model_validate(value)
 
 
 @router.post(
@@ -177,23 +203,16 @@ def logout_all(request: Request, authentication: Auth) -> SingleResponse[LogoutA
 
 @router.get("/me", operation_id="auth_me", response_model=SingleResponse[CurrentOperator])
 def me(request: Request, authentication: Auth) -> SingleResponse[CurrentOperator]:
-    operator = authentication.operator
-    return one(
-        request,
-        CurrentOperator(
-            operator_id=operator.operator_id,
-            username=operator.username,
-            display_name=operator.display_name,
-            roles=tuple(role.value for role in operator.roles),
-            effective_permissions=tuple(
-                permission.value for permission in operator.effective_permissions
-            ),
-            session_id=authentication.session_id,
-            authenticated_at=authentication.authenticated_at,
-            access_expires_at=authentication.access_expires_at,
-            password_change_required=authentication.password_change_required,
-        ),
-    )
+    return one(request, _current_operator(authentication))
+
+
+@router.get(
+    "/account",
+    operation_id="auth_account",
+    response_model=SingleResponse[CurrentAccount],
+)
+def account(request: Request, authentication: Auth) -> SingleResponse[CurrentAccount]:
+    return one(request, _current_account(authentication))
 
 
 @router.post(
@@ -219,3 +238,40 @@ def change_password(
         http_status=200,
     )
     return one(request, _token_pair(pair))
+
+
+@router.post(
+    "/credentials",
+    operation_id="auth_update_credentials",
+    response_model=SingleResponse[CredentialUpdateResult],
+)
+def update_credentials(
+    request: Request,
+    body: UpdateCredentialsRequest,
+    authentication: Auth,
+) -> SingleResponse[CredentialUpdateResult]:
+    pair = request.app.state.services.auth.update_credentials(
+        authentication,
+        current_password=body.current_password.get_secret_value(),
+        new_username=body.new_username,
+        new_password=(body.new_password.get_secret_value() if body.new_password else None),
+        expected_resource_version=body.expected_resource_version,
+        request_id=context(request).request_id,
+    )
+    request_context = context(request)
+    updated_authentication = request.app.state.services.auth.authenticate_access(pair.access_token)
+    request_context.authentication = updated_authentication
+    request.app.state.services.audit.append(
+        request_context,
+        event_type="CREDENTIALS_CHANGED",
+        operation_id="auth_update_credentials",
+        outcome="SUCCEEDED",
+        http_status=200,
+    )
+    return one(
+        request,
+        CredentialUpdateResult(
+            tokens=_token_pair(pair),
+            operator=_current_account(updated_authentication),
+        ),
+    )

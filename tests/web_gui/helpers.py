@@ -51,6 +51,16 @@ from eom_web_gui.contracts import (
     PreviewTableBlockV3,
     RecentItemOption,
     StructuredItemImportRequest,
+    StudioOperatorCreate,
+    StudioOperatorReasonCommand,
+    StudioOperatorRoleAssignment,
+    StudioOperatorRoleRevocation,
+    StudioOperatorVersionCommand,
+    StudioOperatorView,
+    StudioSelfCredentialUpdate,
+    StudioWorkbenchCounts,
+    StudioWorkbenchItem,
+    StudioWorkbenchOverview,
 )
 from eom_web_gui.gateways import (
     GatewayError,
@@ -234,6 +244,21 @@ class FakeGateway:
         self.pdf_review_create_calls = 0
         self.pdf_review_uploaded_bytes = b""
         self.last_start_payload: dict[str, object] | None = None
+        self.operator_mutation_calls: list[str] = []
+        self.operator_values = [
+            StudioOperatorView(
+                operator_id="operator_" + "1" * 32,
+                username="admin",
+                display_name="테스트 관리자",
+                status="ACTIVE",
+                must_change_password=False,
+                roles=("ADMIN",),
+                effective_permissions=("operator:read", "operator:create"),
+                resource_version=1,
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        ]
 
     async def health(self) -> dict[str, str]:
         return {
@@ -254,6 +279,7 @@ class FakeGateway:
                 "display_name": "테스트 관리자",
                 "roles": self.roles,
                 "effective_permissions": ["WORKFLOW_READ", "WORKFLOW_APPROVE"],
+                "resource_version": 1,
             },
             tokens=ApiTokens(
                 "TEST_ONLY_ACCESS",
@@ -265,6 +291,70 @@ class FakeGateway:
 
     async def logout(self, session: WebSession) -> None:
         del session
+
+    async def update_own_credentials(
+        self, session: WebSession, value: StudioSelfCredentialUpdate
+    ) -> LoginResult:
+        self.operator_mutation_calls.append("SELF_CREDENTIALS")
+        operator = dict(session.operator)
+        if value.new_username is not None:
+            operator["username"] = value.new_username
+        operator["resource_version"] = value.expected_resource_version + 1
+        return LoginResult(
+            operator=operator,
+            tokens=ApiTokens(
+                "TEST_ONLY_ACCESS_ROTATED",
+                "TEST_ONLY_REFRESH_ROTATED",
+                TOKEN_EXPIRY_BASE,
+                TOKEN_EXPIRY_BASE + timedelta(days=1),
+            ),
+        )
+
+    async def operators(self, session: WebSession) -> tuple[StudioOperatorView, ...]:
+        del session
+        return tuple(self.operator_values)
+
+    async def create_operator(
+        self, session: WebSession, value: StudioOperatorCreate
+    ) -> dict[str, Any]:
+        del session
+        self.operator_mutation_calls.append("CREATE")
+        return {"resource_id": "operator_" + "2" * 32, "status": "COMPLETED"}
+
+    async def assign_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleAssignment
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("ASSIGN_ROLE")
+        return {"status": "COMPLETED"}
+
+    async def revoke_operator_role(
+        self, session: WebSession, operator_id: str, value: StudioOperatorRoleRevocation
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("REVOKE_ROLE")
+        return {"status": "COMPLETED"}
+
+    async def disable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("DISABLE")
+        return {"status": "COMPLETED"}
+
+    async def enable_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("ENABLE")
+        return {"status": "COMPLETED"}
+
+    async def revoke_operator_sessions(
+        self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("REVOKE_SESSIONS")
+        return {"status": "COMPLETED"}
 
     async def accepted_intakes(self, session: WebSession) -> tuple[ContentIntakeOption, ...]:
         del session
@@ -817,6 +907,37 @@ class FakeGateway:
                 created_at=NOW,
             ),
         )
+
+    async def studio_workbench_overview(self, session: WebSession) -> StudioWorkbenchOverview:
+        del session
+        return StudioWorkbenchOverview(
+            generated_at=NOW,
+            source_truncated=False,
+            counts=StudioWorkbenchCounts(
+                in_progress=1,
+                approval_waiting=1,
+                hwpx_attention=1,
+                recent_completed=0,
+            ),
+            items=(
+                StudioWorkbenchItem(
+                    kind="ITEM_APPROVAL",
+                    title="완성 문항 확인·승인",
+                    state="PENDING",
+                    next_action="BUILD_REVIEW_HWPX",
+                    approval_mode="POST_REGISTRATION_HWPX",
+                    item_id="item_" + "1" * 32,
+                    item_revision_id="itemrev_" + "2" * 32,
+                    created_at=NOW,
+                ),
+            ),
+        )
+
+    async def latest_valid_hwpx_build(
+        self, session: WebSession, item_revision_id: str
+    ) -> HwpxBuildView | None:
+        del session, item_revision_id
+        return None
 
     async def import_structured_item(
         self, session: WebSession, value: StructuredItemImportRequest

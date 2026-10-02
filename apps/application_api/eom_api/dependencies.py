@@ -48,7 +48,9 @@ def get_authentication(
     operation_id = getattr(request.scope.get("route"), "operation_id", "")
     if authentication.password_change_required and operation_id not in {
         "auth_me",
+        "auth_account",
         "auth_change_password",
+        "auth_update_credentials",
         "auth_logout",
     }:
         raise ApiError(

@@ -20,6 +20,7 @@ AUTH_MUTATIONS = {
     "auth_logout",
     "auth_logout_all",
     "auth_change_password",
+    "auth_update_credentials",
     # A device challenge is deliberately non-replayable secret material. A
     # lost response must not be reconstructed by an idempotency replay.
     "codex_auth_challenge_reveal",

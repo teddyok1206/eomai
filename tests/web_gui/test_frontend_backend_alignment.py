@@ -326,6 +326,12 @@ def test_preview_schema_discriminators_match_browser_acceptance_and_renderer() -
         for reference in schema["properties"]["blocks"]["items"]["oneOf"]
     }
     helper = (STATIC_ROOT / "item-preview.js").read_text(encoding="utf-8")
+    preview_schema_version = schema["properties"]["schema_version"]["const"]
+    helper_schema_version = re.search(
+        r'const ITEM_PREVIEW_SCHEMA_VERSION = "(?P<version>[0-9]+\.[0-9]+)";', helper
+    )
+    assert helper_schema_version is not None
+    assert helper_schema_version.group("version") == preview_schema_version
     accepted_match = re.search(
         r"const PREVIEW_BLOCK_TYPES = new Set\(\[(?P<values>.*?)\]\);",
         helper,

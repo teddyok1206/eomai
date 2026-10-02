@@ -15,7 +15,7 @@ from eom_api_contracts.hwpx import (
     HwpxSupports,
 )
 from eom_operator_identity import PermissionKey
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from starlette.responses import StreamingResponse
 
 from eom_api.dependencies import Auth, IdempotencyKey, require_permission
@@ -236,6 +236,27 @@ def download_assessment(request: Request, build_id: str) -> StreamingResponse:
 )
 def get_build(request: Request, build_id: str) -> SingleResponse[HwpxBuildView]:
     return one(request, project_hwpx_build(request.app.state.services.hwpx.get_build(build_id)))
+
+
+@router.get(
+    "/item-revisions/{item_revision_id}/hwpx-builds/latest",
+    operation_id="hwpx_build_latest_for_item_revision_get",
+    response_model=SingleResponse[HwpxBuildView],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def latest_build_for_item_revision(
+    request: Request,
+    item_revision_id: str = Path(pattern=r"^itemrev_[a-z0-9]{8,55}$"),
+) -> SingleResponse[HwpxBuildView]:
+    value = request.app.state.services.queries.latest_valid_hwpx_build(item_revision_id)
+    if value is None:
+        raise ApiError(
+            404,
+            "HWPX_BUILD_NOT_FOUND",
+            "Validated HWPX build not found",
+            "The pinned Item Revision has no validated HWPX build.",
+        )
+    return one(request, value)
 
 
 @router.get(

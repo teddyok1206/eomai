@@ -229,6 +229,76 @@ def test_login_requires_same_origin_and_never_echoes_password() -> None:
         assert "TEST_ONLY_PASSWORD" not in response.text
 
 
+def test_self_credentials_and_admin_account_management_use_session_boundaries() -> None:
+    client, gateway = make_client()
+    with client:
+        session = login(client)
+        updated = client.post(
+            "/studio/api/v1/account/credentials",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "current_password": "TEST_ONLY_PASSWORD",
+                "new_username": "science.admin",
+                "new_password": "TEST_ONLY replacement password 42",
+                "expected_resource_version": 1,
+            },
+        )
+        assert updated.status_code == 200
+        assert updated.json()["operator"]["username"] == "science.admin"
+        assert updated.json()["operator"]["resource_version"] == 2
+        assert gateway.operator_mutation_calls == ["SELF_CREDENTIALS"]
+
+        csrf = updated.json()["csrf_token"]
+        listing = client.get("/studio/api/v1/admin/operators")
+        assert listing.status_code == 200
+        assert listing.json()[0]["operator_id"] == "operator_" + "1" * 32
+
+        created = client.post(
+            "/studio/api/v1/admin/operators",
+            headers={"X-CSRF-Token": csrf},
+            json={
+                "username": "science.author",
+                "display_name": "과학 출제자",
+                "temporary_password": "TEST_ONLY temporary password 42",
+                "initial_roles": ["AUTHOR"],
+                "idempotency_key": "studio:operator:create:test-001",
+            },
+        )
+        assert created.status_code == 201
+        assert gateway.operator_mutation_calls[-1] == "CREATE"
+
+        assigned = client.post(
+            f"/studio/api/v1/admin/operators/{'operator_' + '1' * 32}/roles",
+            headers={"X-CSRF-Token": csrf},
+            json={
+                "role_key": "AUTHOR",
+                "expected_resource_version": 1,
+                "idempotency_key": "studio:operator:assign:test-001",
+            },
+        )
+        assert assigned.status_code == 200
+        assert gateway.operator_mutation_calls[-1] == "ASSIGN_ROLE"
+
+
+def test_non_admin_cannot_use_account_administration_bff() -> None:
+    client, _ = make_client(gateway=FakeGateway(roles=["VIEWER"]))
+    with client:
+        session = login(client)
+        assert client.get("/studio/api/v1/admin/operators").status_code == 403
+        denied = client.post(
+            "/studio/api/v1/admin/operators",
+            headers={"X-CSRF-Token": session["csrf_token"]},
+            json={
+                "username": "science.author",
+                "display_name": "과학 출제자",
+                "temporary_password": "TEST_ONLY temporary password 42",
+                "initial_roles": ["AUTHOR"],
+                "idempotency_key": "studio:operator:create:test-002",
+            },
+        )
+        assert denied.status_code == 403
+
+
 def test_problem_request_id_matches_header_log_and_typed_contract(caplog) -> None:
     client, _ = make_client()
     with client, caplog.at_level(logging.INFO, logger="eom_web_gui"):

@@ -107,6 +107,9 @@ class OperatorService:
     ) -> OperatorProjection:
         with transaction(self.sessions) as session:
             self._require_admin(session, actor)
+            # Serialize the indexed pre-check so concurrent admin requests
+            # return the stable domain conflict instead of a raw DB error.
+            lock_identity_invariants(session)
             operator = self._create(session, command, actor)
             return operator_projection(session, operator)
 

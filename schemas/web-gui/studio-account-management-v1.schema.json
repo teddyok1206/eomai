@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eom.local/schemas/web-gui/studio-account-management-v1.schema.json",
+  "title": "Scientific Studio account management contracts",
+  "$defs": {
+    "self_credential_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_password", "expected_resource_version"],
+      "properties": {
+        "current_password": {"type": "string", "minLength": 1, "maxLength": 128},
+        "new_username": {"type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "new_password": {"type": "string", "minLength": 15, "maxLength": 128},
+        "expected_resource_version": {"type": "integer", "minimum": 1}
+      },
+      "anyOf": [
+        {"required": ["new_username"]},
+        {"required": ["new_password"]}
+      ]
+    },
+    "operator_create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["username", "display_name", "temporary_password", "initial_roles", "idempotency_key"],
+      "properties": {
+        "username": {"type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+        "temporary_password": {"type": "string", "minLength": 15, "maxLength": 128},
+        "initial_roles": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": {"enum": ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]}},
+        "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"}
+      }
+    },
+    "operator_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "expected_resource_version", "idempotency_key"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"}
+      }
+    },
+    "operator_version_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_resource_version", "idempotency_key"],
+      "properties": {
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"}
+      }
+    },
+    "operator_role_assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_key", "expected_resource_version", "idempotency_key"],
+      "properties": {
+        "role_key": {"enum": ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"}
+      }
+    },
+    "operator_role_revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_key", "reason", "expected_resource_version", "idempotency_key"],
+      "properties": {
+        "role_key": {"enum": ["VIEWER", "AUTHOR", "REVIEWER", "EDITOR", "ADMIN"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "idempotency_key": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"}
+      }
+    }
+  }
+}
