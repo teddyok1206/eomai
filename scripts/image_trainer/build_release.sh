@@ -115,6 +115,9 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-science-visual-subject-multiseed-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-subject-multiseed-review-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-visual-subject-refinement-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-institutional-style-evaluation-plan-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-institutional-style-evaluation-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-institutional-style-evaluation-review-v1.schema.json",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
@@ -142,6 +145,8 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/science_corpus_visual_runner.py",
         "eom_image_trainer/science_subject_benchmark_runner.py",
         "eom_image_trainer/science_subject_multiseed_runner.py",
+        "eom_image_trainer/institutional_style_metrics.py",
+        "eom_image_trainer/institutional_style_evaluator.py",
     }
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_WHEEL_INVALID")

@@ -245,6 +245,13 @@ version과 policy hash는 새 결과의 request/Artifact provenance에 고정됩
 [Past-exam-grounded local image quality benchmark](docs/adr/0112-past-exam-grounded-local-image-quality-benchmark.md)에
 기록되어 있습니다.
 
+기관 기출 선화와 생성 결과를 같은 캔버스에 섞어 식별 가능성·과학적 적합성·구도·선 굵기·세부
+밀도를 독립 평가하는 V7 후보도 마련되어 있습니다. 이 후보는 작은 고립 잡음과 과도한 미세선을
+결정론적으로 줄이지만, 의사문자나 의미 오류를 자동으로 숨기지 않습니다. 현재 상태는
+`CANDIDATE_BLIND_REVIEW_PENDING`이며 생산 V6 활성화는 그대로 유지됩니다. 설계와 자동 측정 결과는
+[기관 시험 선화 후보 상태](docs/status/INSTITUTIONAL_IMAGE_STYLE_CANDIDATE_2026-10-02.md) 및
+[ADR 0173](docs/adr/0173-institutional-science-illustration-blind-quality-loop.md)에 기록되어 있습니다.
+
 서로 다른 자료 형식을 한 시험지로 합칠 때 per-Item HWPX header가 완전히 같은 bytes가 아닐 수
 있습니다. Whole-exam renderer는 기존 정의가 정확한 prefix인 append-only header superset만
 선택하고, 같은 ID의 의미가 바뀌거나 두 header가 비교 불가능하면 실패합니다. 일반적인 XML 합성이나

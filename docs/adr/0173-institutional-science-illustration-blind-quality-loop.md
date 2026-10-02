@@ -1,0 +1,133 @@
+# ADR 0173: Institutional science-illustration blind quality loop
+
+Status: accepted for bounded implementation
+
+Date: 2026-10-02 UTC
+
+## Responsibility and boundary
+
+EOM needs a repeatable way to improve generated science illustrations until a reviewer cannot
+reliably identify the generated member when it is mixed with approved past-exam artwork.  This is
+an evaluation objective for rendering conventions, not permission to reproduce a source drawing.
+Exact labels, numerical values, axes, arrows, apparatus geometry and panel labels remain owned by
+the deterministic SVG/HWPX path.  The local raster model may supply only the bounded morphology and
+unlabelled visual material selected by the image worker.
+
+The quality loop is a development use case.  It does not publish generated benchmark images as Item
+components, activate a LoRA adapter, change a production provider binding, or mutate an accepted
+past-exam analysis.  External image or language APIs are prohibited.  Only the pinned local model,
+approved internal past-exam visual artifacts and existing deterministic renderers are in scope.
+
+## Canonical sources and immutable identity
+
+Every comparison case pins the institutional reference by logical Artifact ID, immutable Artifact
+Revision ID, member path, media type, schema reference, member SHA-256 and an optional normalized
+crop.  Every generated candidate pins its request, receipt, provider binding, model revision,
+prompt-policy revision, seed and output Artifact member.  A filesystem path is only a temporary
+materialization and is never identity.
+
+The initial population is stratified across natural objects, manufactured objects, living
+organisms, Earth/space scenes and laboratory subjects.  Deterministic diagrams are retained as
+route controls; they are not sent through the raster model merely to increase the sample count.
+The accepted 520-item corpus, three visual-pilot crop sets, the reviewed 24-member object-line-art
+set and existing immutable V6 outputs are reused.  Source images and generated PNGs are not copied
+into Git or PostgreSQL.
+
+## Blind evaluation protocol
+
+An immutable evaluation plan contains between 12 and 32 comparison cases.  Each case has one
+institutional member and one or more generated candidates that depict the same subject family but
+must not reproduce the exact source artwork.  A canonical SHA-256-derived ordering token assigns
+opaque labels and presentation order.  The answer key is stored separately from the reviewer form.
+The reviewer records, without seeing origin:
+
+- guessed origin and confidence;
+- institutional-style suitability;
+- semantic/scientific suitability;
+- composition preservation;
+- line-weight, detail-density, whitespace and tonal defects;
+- whether the image is usable as-is, usable after deterministic overlay, or rejected.
+
+Automated measurements complement but never replace review.  They include foreground fraction,
+edge density, dark/mid-tone fractions, border clutter, small connected-component fraction and
+fine-detail fraction.  Metrics are computed in one bounded raster pass plus an adjacency-list/
+deque connected-component traversal.  For an 800 x 500 image this is O(W*H) time and O(W*H) worst-
+case memory.  Results use keyed maps for case lookup and sets for duplicate member/hash detection,
+so plan/result validation is O(C + O).
+
+The primary style target is not a perfect zero-percent identification rate from a tiny sample.  A
+candidate is eligible for a production canary only when, on a balanced blinded set, it improves
+institutional-style suitability without worsening semantic suitability or composition retention,
+has no critical scientific defect, and generated-origin identification is no better than the
+predeclared bounded threshold.  The exact threshold and sample size are fixed in the plan before
+review.  Activation remains a separate successor-binding decision.
+
+## Successor rendering strategy
+
+Production V6 remains immutable and is the rollback.  Candidate work is additive:
+
+1. retain the image worker's exact bounded English subject and the team-lead/KICE provenance pins;
+2. preserve a clean reference's global composition through the existing adaptive simplifier;
+3. use a deterministic assessment-line-art postprocessor successor to reduce isolated speckles and
+   microtexture while retaining connected subject contours: Gaussian radius `0.7`, median kernel
+   `3`, removal of disconnected foreground components of at most `16` pixels, and a final
+   `40 x 24` pixel clean border;
+4. measure fine-detail and tiny-component ratios explicitly rather than inferring quality from a
+   broad edge-density interval;
+5. keep text, exact geometry and editorial panel labels outside the diffusion output;
+6. use LoRA only when a blinded, subject-stratified comparison beats the base candidate.  Existing
+   mixed LoRA evidence does not authorize global activation.
+
+The postprocessor successor must use fixed integer kernels and thresholds recorded in the request.
+It may remove only bounded small components and soften microtexture.  It must not invent or delete a
+large connected subject part.  Composition retention, foreground bounds and the new detail metrics
+fail closed before an Artifact commit.
+
+The first bounded calibration reused 24 approved institutional crops and all 18 raster BASE outputs
+from the immutable 89-subject benchmark.  The predecessor contour gate rejected one overly dense
+galaxy output.  Of the remaining 17, the successor accepted all 17 after bounded cleanup; an earlier
+cleanup without component removal and final border clearing accepted only 3 of 18.  A parameter
+sweep selected a final dark threshold of `192` and tones `(32, 128, 255)`: it preserved the 17/17
+structural pass rate and moved the generated median dark-pixel rate to 28 per mille, compared with
+29.5 per mille for the institutional sample.  These measurements justify a candidate, not runtime
+activation.  Pseudotext, wrong subjects and scientific defects remain review failures even if their
+pixel metrics pass.
+
+## Transaction, concurrency, retry and storage
+
+The orchestrator resolves all input pointers, stages local read-only inputs and owns the only NAS
+commit.  The isolated evaluator/provider writes only to a unique mode-0700 workspace.  Same-plan
+replay requires byte-identical input and is idempotent; a changed candidate policy or seed receives
+a new identity.  The GPU lease serializes provider use.  A failed output remains failed evidence
+and is never overwritten.  Review and answer-key Artifacts are committed separately so the review
+surface cannot reveal origin before submission.
+
+Generated PNGs, contact sheets and long metric output live in NAS file-set Artifacts with manifests;
+PostgreSQL retains only typed pointers, hashes and lifecycle metadata.  Temporary workspace copies
+are removed only after a successful orchestrator commit and receipt verification.
+
+## Dependency direction
+
+JSON Schema 2020-12 and frozen Pydantic contracts live in `image_contracts`.  Evaluation domain
+logic consumes decoded bounded rasters and has no SQLAlchemy, filesystem, systemd or HTTP imports.
+The application service resolves pointers and coordinates the evaluator.  NAS, PostgreSQL, local
+GPU and filesystem behavior remain infrastructure adapters.  Neither the image worker nor the
+provider may communicate directly with another worker or write to NAS.
+
+## Failure and rollback
+
+Missing/stale pointers, schema/media/hash mismatch, duplicate source/output members, answer-key
+leakage, unbalanced origin ordering, invalid PNGs, changed provider/model pins, incomplete coverage,
+out-of-range detail metrics or critical review defects fail explicitly.  Failure never falls back
+to an implicit latest revision or an external model.  Candidate code/config can be removed without
+affecting V6.  Runtime rollback is selection of the unchanged V6 binding; immutable benchmark and
+review evidence remains available.
+
+## Simpler alternative and why it is insufficient
+
+Looking at hand-picked generated PNGs can find obvious defects but cannot measure recognizability,
+separate subject accuracy from style, or prevent reviewer bias.  Pixel similarity to the source
+would reward copying and punish legitimate new compositions.  A global LoRA activation based on the
+existing 24-sample mixed result would ignore subject-specific regressions.  A small typed blind
+comparison plus deterministic metrics is the smallest design that directly tests the stated goal
+without changing production or weakening provenance.

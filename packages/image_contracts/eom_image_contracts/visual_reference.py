@@ -950,6 +950,40 @@ class LocalImageAssessmentLineArtPostprocess(FrozenModel):
     edge_density_max: float = Field(default=0.3, ge=0.3, le=0.3)
 
 
+class LocalImageAssessmentLineArtPostprocessV2(FrozenModel):
+    """Successor cleanup with a pinned final microdetail-suppression pass."""
+
+    contract: Literal["local-image-assessment-line-art-postprocess/2.0"] = (
+        "local-image-assessment-line-art-postprocess/2.0"
+    )
+    raw_member: Literal["generated-background-raw.png"] = "generated-background-raw.png"
+    median_filter_size: Literal[3] = 3
+    mask_blur_radius: Literal[12] = 12
+    mask_luma_threshold: Literal[224] = 224
+    mask_expand_size: Literal[25] = 25
+    mask_contract_size: Literal[17] = 17
+    edge_mid_threshold: Literal[48] = 48
+    edge_dark_threshold: Literal[92] = 92
+    output_tones: tuple[Literal[48], Literal[160], Literal[255]] = (48, 160, 255)
+    horizontal_border_px: Literal[40] = 40
+    vertical_border_px: Literal[24] = 24
+    foreground_luma_threshold: Literal[245] = 245
+    foreground_ratio_min: float = Field(default=0.01, ge=0.01, le=0.01)
+    foreground_ratio_max: float = Field(default=0.25, ge=0.25, le=0.25)
+    border_foreground_ratio_max: float = Field(default=0.01, ge=0.01, le=0.01)
+    edge_density_min: float = Field(default=0.01, ge=0.01, le=0.01)
+    edge_density_max: float = Field(default=0.3, ge=0.3, le=0.3)
+    microdetail_blur_radius: float = Field(default=0.7, ge=0.7, le=0.7)
+    final_median_filter_size: Literal[3] = 3
+    cleanup_component_max_pixels: Literal[16] = 16
+    final_dark_threshold: Literal[192] = 192
+    final_mid_threshold: Literal[235] = 235
+    final_output_tones: tuple[Literal[32], Literal[128], Literal[255]] = (32, 128, 255)
+    fine_detail_fraction_max: float = Field(default=0.4, ge=0.4, le=0.4)
+    tiny_component_fraction_max: float = Field(default=0.05, ge=0.05, le=0.05)
+    component_count_max: Literal[2000] = 2000
+
+
 class LocalImageProviderBindingV2(FrozenModel):
     schema_version: Literal["local-image-provider-binding/2.0"] = "local-image-provider-binding/2.0"
     state: Literal["ENABLED"] = "ENABLED"
@@ -1066,6 +1100,32 @@ class LocalImageProviderBindingV6(FrozenModel):
         expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
         if self.binding_sha256 != expected:
             raise ValueError("local image provider V6 binding hash mismatch")
+        return self
+
+
+class LocalImageProviderBindingV7(FrozenModel):
+    """Candidate binding with explicit microdetail and tiny-component bounds."""
+
+    schema_version: Literal["local-image-provider-binding/7.0"] = "local-image-provider-binding/7.0"
+    route_contract: Literal["eom-local-morphology-conditioned-base-line-art/7.0"] = (
+        "eom-local-morphology-conditioned-base-line-art/7.0"
+    )
+    state: Literal["ENABLED"] = "ENABLED"
+    model: LocalImageModelPointer
+    reference_policy: LocalImageVisualReferencePolicyV3
+    postprocess: LocalImageAssessmentLineArtPostprocessV2 = Field(
+        default_factory=LocalImageAssessmentLineArtPostprocessV2
+    )
+    morphology_retention_ratio_min: float = Field(default=0.25, ge=0.25, le=0.25)
+    sampler: SamplerContract
+    timeout_seconds: int = Field(ge=30, le=900)
+    binding_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> LocalImageProviderBindingV7:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
+        if self.binding_sha256 != expected:
+            raise ValueError("local image provider V7 binding hash mismatch")
         return self
 
 
@@ -1203,9 +1263,22 @@ class LocalImageAssessmentLineArtMetrics(FrozenModel):
     output_edge_density: float = Field(ge=0, le=1)
 
 
+class LocalImageAssessmentLineArtMetricsV2(LocalImageAssessmentLineArtMetrics):
+    output_fine_detail_ratio: float = Field(ge=0, le=1)
+    output_tiny_component_ratio: float = Field(ge=0, le=1)
+    output_component_count: int = Field(ge=0, le=400_000)
+
+
 class LocalImageAssessmentLineArtRuntime(FrozenModel):
     contract: Literal["local-image-assessment-line-art-postprocessor/1.0"] = (
         "local-image-assessment-line-art-postprocessor/1.0"
+    )
+    pillow_version: str = Field(min_length=1, max_length=64)
+
+
+class LocalImageAssessmentLineArtRuntimeV2(FrozenModel):
+    contract: Literal["local-image-assessment-line-art-postprocessor/2.0"] = (
+        "local-image-assessment-line-art-postprocessor/2.0"
     )
     pillow_version: str = Field(min_length=1, max_length=64)
 
@@ -1501,6 +1574,99 @@ class LocalImageReferenceConditionedCompositeReceiptV6(FrozenModel):
         return self
 
 
+class LocalImageReferenceConditionedCompositeRequestV7(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-request/7.0"] = (
+        "local-image-reference-conditioned-composite-request/7.0"
+    )
+    postprocess: LocalImageAssessmentLineArtPostprocessV2 = Field(
+        default_factory=LocalImageAssessmentLineArtPostprocessV2
+    )
+    composite_request: LocalImageCompositeRequest
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioningV2
+    morphology_retention_ratio_min: float = Field(ge=0.25, le=0.25)
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> LocalImageReferenceConditionedCompositeRequestV7:
+        expected = content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
+        if self.request_sha256 != expected:
+            raise ValueError("reference-conditioned V7 request hash mismatch")
+        return self
+
+
+class LocalImageReferenceConditionedCompositeReceiptV7(FrozenModel):
+    schema_version: Literal["local-image-reference-conditioned-composite-receipt/7.0"] = (
+        "local-image-reference-conditioned-composite-receipt/7.0"
+    )
+    postprocess: LocalImageAssessmentLineArtPostprocessV2
+    postprocess_metrics: LocalImageAssessmentLineArtMetricsV2
+    postprocessor_runtime: LocalImageAssessmentLineArtRuntimeV2
+    request_sha256: Sha256
+    composite_receipt: LocalImageCompositeReceipt
+    visual_reference: LocalImageVisualReferencePointer
+    conditioning: LocalImageMorphologyConditioningV2
+    conditioning_output: LocalImageReferenceConditioningOutput
+    simplification_metrics: LocalImageReferenceSimplificationMetricsV2
+    simplifier_runtime: LocalImageReferenceSimplifierRuntime
+    morphology_retention_ratio_min: float = Field(ge=0.25, le=0.25)
+    output_palette: Literal["ASSESSMENT_LINE_ART"] = "ASSESSMENT_LINE_ART"
+    completed_at: datetime
+    receipt_sha256: Sha256
+
+    @field_validator("completed_at")
+    @classmethod
+    def utc_completion(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+            raise ValueError("reference-conditioned completion must be UTC")
+        return value
+
+    @model_validator(mode="after")
+    def exact_metrics_hash_and_order(self) -> LocalImageReferenceConditionedCompositeReceiptV7:
+        if self.completed_at < self.composite_receipt.completed_at:
+            raise ValueError("reference-conditioned V7 completion precedes image composition")
+        simplification = self.conditioning.simplification
+        simplified = self.simplification_metrics
+        if simplified.source_foreground_ratio < simplification.foreground_ratio_min:
+            raise ValueError("reference source foreground ratio is below policy minimum")
+        if not (
+            simplification.foreground_ratio_min
+            <= simplified.conditioning_foreground_ratio
+            <= simplification.foreground_ratio_max
+        ):
+            raise ValueError("reference conditioning foreground ratio is outside policy")
+        if simplified.border_foreground_ratio > simplification.border_foreground_ratio_max:
+            raise ValueError("reference simplification border ratio is outside policy")
+        metrics = self.postprocess_metrics
+        if not (
+            self.postprocess.foreground_ratio_min
+            <= metrics.output_foreground_ratio
+            <= self.postprocess.foreground_ratio_max
+        ):
+            raise ValueError("assessment line-art foreground ratio is outside policy")
+        if metrics.output_border_foreground_ratio > self.postprocess.border_foreground_ratio_max:
+            raise ValueError("assessment line-art border ratio is outside policy")
+        if not (
+            self.postprocess.edge_density_min
+            <= metrics.output_edge_density
+            <= self.postprocess.edge_density_max
+        ):
+            raise ValueError("assessment line-art edge density is outside policy")
+        retention = metrics.output_foreground_ratio / simplified.conditioning_foreground_ratio
+        if retention < self.morphology_retention_ratio_min:
+            raise ValueError("assessment line-art morphology retention is below policy")
+        if metrics.output_fine_detail_ratio > self.postprocess.fine_detail_fraction_max:
+            raise ValueError("assessment line-art fine detail exceeds policy")
+        if metrics.output_tiny_component_ratio > self.postprocess.tiny_component_fraction_max:
+            raise ValueError("assessment line-art tiny-component ratio exceeds policy")
+        if metrics.output_component_count > self.postprocess.component_count_max:
+            raise ValueError("assessment line-art component count exceeds policy")
+        expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+        if self.receipt_sha256 != expected:
+            raise ValueError("reference-conditioned V7 receipt hash mismatch")
+        return self
+
+
 def validate_reference_conditioned_receipt(
     request: LocalImageReferenceConditionedCompositeRequest,
     receipt: LocalImageReferenceConditionedCompositeReceipt,
@@ -1608,6 +1774,26 @@ def validate_reference_conditioned_receipt_v6(
         or receipt.morphology_retention_ratio_min != request.morphology_retention_ratio_min
     ):
         raise ValueError("reference-conditioned V6 receipt differs from its request")
+
+
+def validate_reference_conditioned_receipt_v7(
+    request: LocalImageReferenceConditionedCompositeRequestV7,
+    receipt: LocalImageReferenceConditionedCompositeReceiptV7,
+) -> None:
+    """Bind a microdetail-bounded receipt to its exact source and policies."""
+
+    if (
+        receipt.request_sha256 != request.request_sha256
+        or receipt.composite_receipt.composite_request_sha256
+        != request.composite_request.composite_request_sha256
+        or receipt.visual_reference != request.visual_reference
+        or receipt.conditioning != request.conditioning
+        or receipt.conditioning_output.member_path
+        != request.conditioning.simplification.output_member
+        or receipt.postprocess != request.postprocess
+        or receipt.morphology_retention_ratio_min != request.morphology_retention_ratio_min
+    ):
+        raise ValueError("reference-conditioned V7 receipt differs from its request")
 
 
 def safe_visual_reference_member_path(value: str) -> str:

@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-institutional-style-evaluation-plan/1.0",
+  "title": "EOM local image institutional style evaluation plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "institutionalMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)[A-Za-z0-9._/-]+$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/local-image-science-visual-crop/1.0"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "generatedMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)[A-Za-z0-9._/-]+$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/generated-item/semantic-raster-png/1.0"
+        },
+        "media_type": {
+          "const": "image/png"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "subject_family",
+        "institutional_image",
+        "generated_image",
+        "generated_request_sha256",
+        "generated_receipt_sha256",
+        "left_origin",
+        "presentation_token"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^imgstylecase_[0-9a-f]{32}$"
+        },
+        "subject_family": {
+          "enum": [
+            "EARTH_SPACE",
+            "LAB_APPARATUS",
+            "LIVING_ORGANISM",
+            "NATURAL_OBJECT",
+            "PHYSICAL_OBJECT",
+            "REAL_WORLD_SCENE"
+          ]
+        },
+        "institutional_image": {
+          "$ref": "#/$defs/institutionalMember"
+        },
+        "generated_image": {
+          "$ref": "#/$defs/generatedMember"
+        },
+        "generated_request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "generated_receipt_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "left_origin": {
+          "enum": [
+            "GENERATED",
+            "INSTITUTIONAL"
+          ]
+        },
+        "presentation_token": {
+          "type": "string",
+          "pattern": "^blind_[0-9a-f]{32}$"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "created_at",
+    "selection_method",
+    "provider_binding_sha256",
+    "maximum_generated_origin_identification_rate",
+    "minimum_mean_institutional_style_score",
+    "cases",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-institutional-style-evaluation-plan/1.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^imgstyleeval_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "selection_method": {
+      "const": "STRATIFIED_ORIGIN_BLIND_V1"
+    },
+    "provider_binding_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "maximum_generated_origin_identification_rate": {
+      "type": "number",
+      "minimum": 0.5,
+      "maximum": 0.75
+    },
+    "minimum_mean_institutional_style_score": {
+      "type": "number",
+      "minimum": 3,
+      "maximum": 5
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

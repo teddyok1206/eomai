@@ -3,10 +3,16 @@ from __future__ import annotations
 import io
 
 import pytest
-from eom_image_contracts import LocalImageAssessmentLineArtPostprocess
+from eom_image_contracts import (
+    LocalImageAssessmentLineArtMetricsV2,
+    LocalImageAssessmentLineArtPostprocess,
+    LocalImageAssessmentLineArtPostprocessV2,
+    LocalImageAssessmentLineArtRuntimeV2,
+)
 from eom_image_provider.assessment_line_art import (
     AssessmentLineArtError,
     assessment_line_art,
+    assessment_line_art_v2,
 )
 from PIL import Image, ImageDraw  # type: ignore[import-not-found]
 
@@ -19,6 +25,17 @@ def _textured_subject_png() -> bytes:
         drawing.line((x, 115, x - 40, 385), fill=(96, 89, 82), width=4)
     for y in range(145, 370, 28):
         drawing.arc((215, y - 38, 585, y + 38), 8, 172, fill=(56, 56, 56), width=4)
+    target = io.BytesIO()
+    image.save(target, format="PNG", compress_level=9)
+    return target.getvalue()
+
+
+def _textured_subject_with_speckles_png() -> bytes:
+    with Image.open(io.BytesIO(_textured_subject_png())) as source:
+        image = source.copy()
+    drawing = ImageDraw.Draw(image)
+    for x, y in ((105, 85), (680, 95), (120, 420), (690, 405)):
+        drawing.rectangle((x, y, x + 3, y + 3), fill=(32, 32, 32))
     target = io.BytesIO()
     image.save(target, format="PNG", compress_level=9)
     return target.getvalue()
@@ -59,4 +76,38 @@ def test_assessment_line_art_rejects_blank_output() -> None:
         assessment_line_art(
             target.getvalue(),
             policy=LocalImageAssessmentLineArtPostprocess(),
+        )
+
+
+def test_assessment_line_art_v2_is_deterministic_and_detail_bounded() -> None:
+    policy = LocalImageAssessmentLineArtPostprocessV2()
+    first = assessment_line_art_v2(_textured_subject_png(), policy=policy)
+    second = assessment_line_art_v2(_textured_subject_png(), policy=policy)
+
+    assert first == second
+    assert isinstance(first.metrics, LocalImageAssessmentLineArtMetricsV2)
+    assert isinstance(first.runtime, LocalImageAssessmentLineArtRuntimeV2)
+    assert first.metrics.output_fine_detail_ratio <= policy.fine_detail_fraction_max
+    assert first.metrics.output_tiny_component_ratio <= policy.tiny_component_fraction_max
+    assert first.metrics.output_component_count <= policy.component_count_max
+    with Image.open(io.BytesIO(first.png_bytes)) as output:
+        output.load()
+        red, green, blue = output.split()
+        assert red.tobytes() == green.tobytes() == blue.tobytes()
+        assert {value for value, count in enumerate(red.histogram()) if count} <= set(
+            policy.final_output_tones
+        )
+
+
+def test_assessment_line_art_v2_removes_detached_speckles_and_clears_full_border() -> None:
+    policy = LocalImageAssessmentLineArtPostprocessV2()
+    result = assessment_line_art_v2(_textured_subject_with_speckles_png(), policy=policy)
+
+    assert result.metrics.output_tiny_component_ratio == 0
+    with Image.open(io.BytesIO(result.png_bytes)) as output:
+        output.load()
+        assert output.crop((0, 0, 800, policy.vertical_border_px)).getextrema() == (
+            (255, 255),
+            (255, 255),
+            (255, 255),
         )

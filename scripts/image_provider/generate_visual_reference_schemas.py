@@ -1324,6 +1324,80 @@ def conditioned_receipt_v6_schema() -> dict[str, Any]:
     return value
 
 
+def _assessment_line_art_postprocess_v2_schema() -> dict[str, Any]:
+    value = copy.deepcopy(_assessment_line_art_postprocess_schema())
+    value["properties"]["contract"] = {"const": "local-image-assessment-line-art-postprocess/2.0"}
+    value["properties"]["vertical_border_px"] = {"const": 24}
+    additions = {
+        "microdetail_blur_radius": {"const": 0.7},
+        "final_median_filter_size": {"const": 3},
+        "cleanup_component_max_pixels": {"const": 16},
+        "final_dark_threshold": {"const": 192},
+        "final_mid_threshold": {"const": 235},
+        "final_output_tones": {
+            "type": "array",
+            "prefixItems": [{"const": 32}, {"const": 128}, {"const": 255}],
+            "minItems": 3,
+            "maxItems": 3,
+        },
+        "fine_detail_fraction_max": {"const": 0.4},
+        "tiny_component_fraction_max": {"const": 0.05},
+        "component_count_max": {"const": 2000},
+    }
+    value["required"].extend(additions)
+    value["properties"].update(additions)
+    return value
+
+
+def provider_binding_v7_schema() -> dict[str, Any]:
+    value = copy.deepcopy(provider_binding_v6_schema())
+    value["$id"] = "eom://schemas/image-provider/local-image-provider-binding/7.0"
+    value["title"] = "EOM microdetail-bounded assessment-line-art provider binding v7"
+    value["properties"]["schema_version"] = {"const": "local-image-provider-binding/7.0"}
+    value["properties"]["route_contract"] = {
+        "const": "eom-local-morphology-conditioned-base-line-art/7.0"
+    }
+    value["properties"]["postprocess"] = _assessment_line_art_postprocess_v2_schema()
+    return value
+
+
+def conditioned_request_v7_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_request_v6_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-request/7.0"
+    )
+    value["title"] = "EOM microdetail-bounded assessment-line-art request v7"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-request/7.0"
+    }
+    value["properties"]["postprocess"] = _assessment_line_art_postprocess_v2_schema()
+    return value
+
+
+def conditioned_receipt_v7_schema() -> dict[str, Any]:
+    value = copy.deepcopy(conditioned_receipt_v6_schema())
+    value["$id"] = (
+        "eom://schemas/image-provider/local-image-reference-conditioned-composite-receipt/7.0"
+    )
+    value["title"] = "EOM microdetail-bounded assessment-line-art receipt v7"
+    value["properties"]["schema_version"] = {
+        "const": "local-image-reference-conditioned-composite-receipt/7.0"
+    }
+    value["$defs"]["postprocess"] = _assessment_line_art_postprocess_v2_schema()
+    metrics = value["$defs"]["postprocess_metrics"]
+    additions = {
+        "output_fine_detail_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "output_tiny_component_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "output_component_count": {"type": "integer", "minimum": 0, "maximum": 400000},
+    }
+    metrics["required"].extend(additions)
+    metrics["properties"].update(additions)
+    value["$defs"]["postprocessor_runtime"]["properties"]["contract"] = {
+        "const": "local-image-assessment-line-art-postprocessor/2.0"
+    }
+    return value
+
+
 def reference_composition_evaluation_schema() -> dict[str, Any]:
     value = _header(
         "eom://schemas/image-provider/local-image-reference-composition-evaluation/1.0",
@@ -1488,6 +1562,315 @@ def reference_composition_evaluation_schema() -> dict[str, Any]:
     return value
 
 
+def _institutional_style_member(*, schema_ref: str) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "schema_ref",
+            "media_type",
+            "sha256",
+        ],
+        "properties": {
+            "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+            "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+            "member_path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)[A-Za-z0-9._/-]+$",
+            },
+            "schema_ref": {"const": schema_ref},
+            "media_type": {"const": "image/png"},
+            "sha256": SHA256,
+        },
+    }
+
+
+def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-institutional-style-evaluation-plan/1.0",
+        "EOM local image institutional style evaluation plan v1",
+    )
+    value["$defs"] = {
+        "institutionalMember": _institutional_style_member(
+            schema_ref="eom://schemas/image-provider/local-image-science-visual-crop/1.0"
+        ),
+        "generatedMember": _institutional_style_member(
+            schema_ref="eom://schemas/generated-item/semantic-raster-png/1.0"
+        ),
+        "case": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "case_id",
+                "subject_family",
+                "institutional_image",
+                "generated_image",
+                "generated_request_sha256",
+                "generated_receipt_sha256",
+                "left_origin",
+                "presentation_token",
+            ],
+            "properties": {
+                "case_id": {
+                    "type": "string",
+                    "pattern": "^imgstylecase_[0-9a-f]{32}$",
+                },
+                "subject_family": {
+                    "enum": [
+                        "EARTH_SPACE",
+                        "LAB_APPARATUS",
+                        "LIVING_ORGANISM",
+                        "NATURAL_OBJECT",
+                        "PHYSICAL_OBJECT",
+                        "REAL_WORLD_SCENE",
+                    ]
+                },
+                "institutional_image": {"$ref": "#/$defs/institutionalMember"},
+                "generated_image": {"$ref": "#/$defs/generatedMember"},
+                "generated_request_sha256": SHA256,
+                "generated_receipt_sha256": SHA256,
+                "left_origin": {"enum": ["GENERATED", "INSTITUTIONAL"]},
+                "presentation_token": {
+                    "type": "string",
+                    "pattern": "^blind_[0-9a-f]{32}$",
+                },
+            },
+        },
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "created_at",
+        "selection_method",
+        "provider_binding_sha256",
+        "maximum_generated_origin_identification_rate",
+        "minimum_mean_institutional_style_score",
+        "cases",
+        "plan_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-institutional-style-evaluation-plan/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
+        "created_at": UTC,
+        "selection_method": {"const": "STRATIFIED_ORIGIN_BLIND_V1"},
+        "provider_binding_sha256": SHA256,
+        "maximum_generated_origin_identification_rate": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 0.75,
+        },
+        "minimum_mean_institutional_style_score": {
+            "type": "number",
+            "minimum": 3,
+            "maximum": 5,
+        },
+        "cases": {
+            "type": "array",
+            "minItems": 12,
+            "maxItems": 32,
+            "items": {"$ref": "#/$defs/case"},
+        },
+        "plan_sha256": SHA256,
+    }
+    return value
+
+
+def institutional_style_evaluation_result_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-institutional-style-evaluation-result/1.0",
+        "EOM local image institutional style evaluation result v1",
+    )
+    value["$defs"] = {
+        "metrics": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "foreground_fraction_milli",
+                "dark_fraction_milli",
+                "mid_tone_fraction_milli",
+                "edge_fraction_milli",
+                "border_foreground_fraction_milli",
+                "fine_detail_fraction_milli",
+                "tiny_component_fraction_milli",
+                "component_count",
+            ],
+            "properties": {
+                key: {"type": "integer", "minimum": 0, "maximum": 1000}
+                for key in (
+                    "foreground_fraction_milli",
+                    "dark_fraction_milli",
+                    "mid_tone_fraction_milli",
+                    "edge_fraction_milli",
+                    "border_foreground_fraction_milli",
+                    "fine_detail_fraction_milli",
+                    "tiny_component_fraction_milli",
+                )
+            }
+            | {"component_count": {"type": "integer", "minimum": 0, "maximum": 400000}},
+        },
+        "caseResult": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "case_id",
+                "institutional_metrics",
+                "generated_metrics",
+                "metric_distance_milli",
+            ],
+            "properties": {
+                "case_id": {
+                    "type": "string",
+                    "pattern": "^imgstylecase_[0-9a-f]{32}$",
+                },
+                "institutional_metrics": {"$ref": "#/$defs/metrics"},
+                "generated_metrics": {"$ref": "#/$defs/metrics"},
+                "metric_distance_milli": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 7000,
+                },
+            },
+        },
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "plan_sha256",
+        "status",
+        "case_results",
+        "completed_at",
+        "result_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-institutional-style-evaluation-result/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
+        "plan_sha256": SHA256,
+        "status": {"enum": ["SUCCEEDED", "FAILED"]},
+        "case_results": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {"$ref": "#/$defs/caseResult"},
+        },
+        "completed_at": UTC,
+        "result_sha256": SHA256,
+    }
+    return value
+
+
+def institutional_style_evaluation_review_schema() -> dict[str, Any]:
+    value = _header(
+        "eom://schemas/image-provider/local-image-institutional-style-evaluation-review/1.0",
+        "EOM local image institutional style evaluation review v1",
+    )
+    value["$defs"] = {
+        "sideReview": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "institutional_style_score",
+                "semantic_suitability_score",
+                "composition_score",
+                "usability",
+                "defects",
+            ],
+            "properties": {
+                "institutional_style_score": {"type": "integer", "minimum": 1, "maximum": 5},
+                "semantic_suitability_score": {"type": "integer", "minimum": 1, "maximum": 5},
+                "composition_score": {"type": "integer", "minimum": 1, "maximum": 5},
+                "usability": {
+                    "enum": ["REJECT", "USABLE_AFTER_DETERMINISTIC_OVERLAY", "USABLE_AS_IS"]
+                },
+                "defects": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "uniqueItems": True,
+                    "items": {
+                        "enum": [
+                            "BORDER_CLUTTER",
+                            "COMPOSITION_DRIFT",
+                            "EXCESSIVE_DETAIL",
+                            "EXTRA_OBJECT",
+                            "INSUFFICIENT_DETAIL",
+                            "LINE_WEIGHT_MISMATCH",
+                            "PSEUDOTEXT",
+                            "SEMANTIC_DEFECT",
+                            "TONE_MISMATCH",
+                            "TOO_PHOTOGRAPHIC",
+                            "TOO_STYLIZED",
+                            "WHITESPACE_MISMATCH",
+                        ]
+                    },
+                },
+            },
+        },
+        "caseReview": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "case_id",
+                "guessed_generated_side",
+                "confidence",
+                "left",
+                "right",
+            ],
+            "properties": {
+                "case_id": {
+                    "type": "string",
+                    "pattern": "^imgstylecase_[0-9a-f]{32}$",
+                },
+                "guessed_generated_side": {"enum": ["LEFT", "RIGHT", "UNSURE"]},
+                "confidence": {"type": "integer", "minimum": 1, "maximum": 5},
+                "left": {"$ref": "#/$defs/sideReview"},
+                "right": {"$ref": "#/$defs/sideReview"},
+            },
+        },
+    }
+    value["required"] = [
+        "schema_version",
+        "evaluation_id",
+        "plan_sha256",
+        "result_sha256",
+        "reviewer_id",
+        "reviews",
+        "generated_origin_identification_rate",
+        "generated_mean_institutional_style_score",
+        "critical_generated_defect_count",
+        "verdict",
+        "reviewed_at",
+        "review_sha256",
+    ]
+    value["properties"] = {
+        "schema_version": {"const": "local-image-institutional-style-evaluation-review/1.0"},
+        "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
+        "plan_sha256": SHA256,
+        "result_sha256": SHA256,
+        "reviewer_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._:@-]+$",
+        },
+        "reviews": {
+            "type": "array",
+            "minItems": 12,
+            "maxItems": 32,
+            "items": {"$ref": "#/$defs/caseReview"},
+        },
+        "generated_origin_identification_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "generated_mean_institutional_style_score": {"type": "number", "minimum": 1, "maximum": 5},
+        "critical_generated_defect_count": {"type": "integer", "minimum": 0, "maximum": 32},
+        "verdict": {"enum": ["CANDIDATE_CANARY_ELIGIBLE", "REJECTED"]},
+        "reviewed_at": UTC,
+        "review_sha256": SHA256,
+    }
+    return value
+
+
 SCHEMAS = {
     "local-image-visual-reference-intent-v1.schema.json": intent_schema(),
     "local-image-visual-reference-bundle-v1.schema.json": bundle_schema(),
@@ -1542,6 +1925,22 @@ SCHEMAS = {
     ),
     "local-image-reference-conditioned-composite-receipt-v6.schema.json": (
         conditioned_receipt_v6_schema()
+    ),
+    "local-image-provider-binding-v7.schema.json": provider_binding_v7_schema(),
+    "local-image-reference-conditioned-composite-request-v7.schema.json": (
+        conditioned_request_v7_schema()
+    ),
+    "local-image-reference-conditioned-composite-receipt-v7.schema.json": (
+        conditioned_receipt_v7_schema()
+    ),
+    "local-image-institutional-style-evaluation-plan-v1.schema.json": (
+        institutional_style_evaluation_plan_schema()
+    ),
+    "local-image-institutional-style-evaluation-result-v1.schema.json": (
+        institutional_style_evaluation_result_schema()
+    ),
+    "local-image-institutional-style-evaluation-review-v1.schema.json": (
+        institutional_style_evaluation_review_schema()
     ),
 }
 

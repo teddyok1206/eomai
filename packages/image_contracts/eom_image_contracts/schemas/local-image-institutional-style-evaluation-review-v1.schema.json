@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-institutional-style-evaluation-review/1.0",
+  "title": "EOM local image institutional style evaluation review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "sideReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "institutional_style_score",
+        "semantic_suitability_score",
+        "composition_score",
+        "usability",
+        "defects"
+      ],
+      "properties": {
+        "institutional_style_score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "semantic_suitability_score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "composition_score": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "usability": {
+          "enum": [
+            "REJECT",
+            "USABLE_AFTER_DETERMINISTIC_OVERLAY",
+            "USABLE_AS_IS"
+          ]
+        },
+        "defects": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "BORDER_CLUTTER",
+              "COMPOSITION_DRIFT",
+              "EXCESSIVE_DETAIL",
+              "EXTRA_OBJECT",
+              "INSUFFICIENT_DETAIL",
+              "LINE_WEIGHT_MISMATCH",
+              "PSEUDOTEXT",
+              "SEMANTIC_DEFECT",
+              "TONE_MISMATCH",
+              "TOO_PHOTOGRAPHIC",
+              "TOO_STYLIZED",
+              "WHITESPACE_MISMATCH"
+            ]
+          }
+        }
+      }
+    },
+    "caseReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "guessed_generated_side",
+        "confidence",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^imgstylecase_[0-9a-f]{32}$"
+        },
+        "guessed_generated_side": {
+          "enum": [
+            "LEFT",
+            "RIGHT",
+            "UNSURE"
+          ]
+        },
+        "confidence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "left": {
+          "$ref": "#/$defs/sideReview"
+        },
+        "right": {
+          "$ref": "#/$defs/sideReview"
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "plan_sha256",
+    "result_sha256",
+    "reviewer_id",
+    "reviews",
+    "generated_origin_identification_rate",
+    "generated_mean_institutional_style_score",
+    "critical_generated_defect_count",
+    "verdict",
+    "reviewed_at",
+    "review_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-institutional-style-evaluation-review/1.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^imgstyleeval_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reviewer_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "reviews": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/caseReview"
+      }
+    },
+    "generated_origin_identification_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "generated_mean_institutional_style_score": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "critical_generated_defect_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 32
+    },
+    "verdict": {
+      "enum": [
+        "CANDIDATE_CANARY_ELIGIBLE",
+        "REJECTED"
+      ]
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "review_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

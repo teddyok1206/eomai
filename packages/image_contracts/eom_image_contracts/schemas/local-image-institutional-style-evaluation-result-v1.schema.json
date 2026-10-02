@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-institutional-style-evaluation-result/1.0",
+  "title": "EOM local image institutional style evaluation result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "$defs": {
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "foreground_fraction_milli",
+        "dark_fraction_milli",
+        "mid_tone_fraction_milli",
+        "edge_fraction_milli",
+        "border_foreground_fraction_milli",
+        "fine_detail_fraction_milli",
+        "tiny_component_fraction_milli",
+        "component_count"
+      ],
+      "properties": {
+        "foreground_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "dark_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "mid_tone_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "edge_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "border_foreground_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "fine_detail_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "tiny_component_fraction_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "component_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 400000
+        }
+      }
+    },
+    "caseResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "institutional_metrics",
+        "generated_metrics",
+        "metric_distance_milli"
+      ],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^imgstylecase_[0-9a-f]{32}$"
+        },
+        "institutional_metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "generated_metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "metric_distance_milli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7000
+        }
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "evaluation_id",
+    "plan_sha256",
+    "status",
+    "case_results",
+    "completed_at",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-institutional-style-evaluation-result/1.0"
+    },
+    "evaluation_id": {
+      "type": "string",
+      "pattern": "^imgstyleeval_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "case_results": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/caseResult"
+      }
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

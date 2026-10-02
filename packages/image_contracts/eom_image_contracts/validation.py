@@ -21,6 +21,7 @@ SCHEMA_FILES = {
     "provider-binding-v4": "local-image-provider-binding-v4.schema.json",
     "provider-binding-v5": "local-image-provider-binding-v5.schema.json",
     "provider-binding-v6": "local-image-provider-binding-v6.schema.json",
+    "provider-binding-v7": "local-image-provider-binding-v7.schema.json",
     "generation-request": "local-image-generation-request-v1.schema.json",
     "generation-receipt": "local-image-generation-receipt-v1.schema.json",
     "visual-reference-intent": "local-image-visual-reference-intent-v1.schema.json",
@@ -75,6 +76,12 @@ SCHEMA_FILES = {
     "reference-conditioned-composite-receipt-v6": (
         "local-image-reference-conditioned-composite-receipt-v6.schema.json"
     ),
+    "reference-conditioned-composite-request-v7": (
+        "local-image-reference-conditioned-composite-request-v7.schema.json"
+    ),
+    "reference-conditioned-composite-receipt-v7": (
+        "local-image-reference-conditioned-composite-receipt-v7.schema.json"
+    ),
     "reference-composition-evaluation": (
         "local-image-reference-composition-evaluation-v1.schema.json"
     ),
@@ -83,6 +90,15 @@ SCHEMA_FILES = {
     ),
     "quality-evaluation-plan": "local-image-quality-evaluation-plan-v1.schema.json",
     "quality-evaluation-result": "local-image-quality-evaluation-result-v1.schema.json",
+    "institutional-style-evaluation-plan": (
+        "local-image-institutional-style-evaluation-plan-v1.schema.json"
+    ),
+    "institutional-style-evaluation-result": (
+        "local-image-institutional-style-evaluation-result-v1.schema.json"
+    ),
+    "institutional-style-evaluation-review": (
+        "local-image-institutional-style-evaluation-review-v1.schema.json"
+    ),
     "training-authorization": "local-image-training-authorization-v1.schema.json",
     "crop-locator-command": "local-image-crop-locator-command-v1.schema.json",
     "crop-locator-result": "local-image-crop-locator-result-v1.schema.json",
@@ -297,6 +313,9 @@ SCHEMA_SHA256 = {
     "provider-binding-v6": (
         "sha256:d2440059f71246c9e6de2dfa41648a4baa91027c072f1d1107ab255c9e26362a"
     ),
+    "provider-binding-v7": (
+        "sha256:0b8d9c961a96d6d46ed9252539a4ab74fe505f6a161777c51178fa2616f175ab"
+    ),
     "generation-request": "sha256:8107b01c9f088bbf0b9d3c63e58c29252a5125acf5f5fb157be74f02cdb3839e",
     "generation-receipt": "sha256:eccd1c2b335ee6709c3962e3649784f16db120cc68eed7faf2e491db6efc3982",
     "visual-reference-intent": (
@@ -359,6 +378,12 @@ SCHEMA_SHA256 = {
     "reference-conditioned-composite-receipt-v6": (
         "sha256:1499a4019e8a50d6ba9987ef223a30a0df33c196d5d0f66692f118e1c5c8f33d"
     ),
+    "reference-conditioned-composite-request-v7": (
+        "sha256:7e7afc65b93057a19082e6473987e0de8312b130b08eb07fd8cd0627492a810a"
+    ),
+    "reference-conditioned-composite-receipt-v7": (
+        "sha256:5e6a51c7ab4b4e92ec81ebe0e0d042ccf615ab6fe8b3233b9216c6dec3c86309"
+    ),
     "reference-composition-evaluation": (
         "sha256:2bf2747b6d2458880c7fa26409b96377756a022bc13f4a75ee1de19340ef1120"
     ),
@@ -370,6 +395,15 @@ SCHEMA_SHA256 = {
     ),
     "quality-evaluation-result": (
         "sha256:58ec74c1d1485fdaa5847bdfa8adb8603743d68db7f6c612ac36cf2f524a3335"
+    ),
+    "institutional-style-evaluation-plan": (
+        "sha256:0ad479678d62cdc50ae209350c26daa2c05cc47259df34f1d017eb15e5bc3630"
+    ),
+    "institutional-style-evaluation-result": (
+        "sha256:5a4fde9509b3c8a63952b1d886467aaaf5fb82eaf24b2fe01909fb2e6316b761"
+    ),
+    "institutional-style-evaluation-review": (
+        "sha256:74770bfe0ab30461cfa9fec4e8b13aeafe0645cb799179558cad7279e2ef439e"
     ),
     "training-authorization": (
         "sha256:766c4f1facc36e59b0a12a3d1403bc98b6c00cf8a0206e894c5f42877c361c88"

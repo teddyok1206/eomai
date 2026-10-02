@@ -10,12 +10,17 @@ from pathlib import Path
 from eom_image_contracts import (
     LocalImageCompositeRequest,
     LocalImageGenerationRequest,
+    LocalImageReferenceConditionedCompositeReceiptV4,
+    LocalImageReferenceConditionedCompositeReceiptV5,
+    LocalImageReferenceConditionedCompositeReceiptV6,
+    LocalImageReferenceConditionedCompositeReceiptV7,
     LocalImageReferenceConditionedCompositeRequest,
     LocalImageReferenceConditionedCompositeRequestV2,
     LocalImageReferenceConditionedCompositeRequestV3,
     LocalImageReferenceConditionedCompositeRequestV4,
     LocalImageReferenceConditionedCompositeRequestV5,
     LocalImageReferenceConditionedCompositeRequestV6,
+    LocalImageReferenceConditionedCompositeRequestV7,
     validate_contract,
 )
 
@@ -32,6 +37,7 @@ from eom_image_provider.provider import (
     generate_reference_conditioned_composite_handoff_v4,
     generate_reference_conditioned_composite_handoff_v5,
     generate_reference_conditioned_composite_handoff_v6,
+    generate_reference_conditioned_composite_handoff_v7,
     load_json_object,
     reuse_composite_handoff,
     reuse_reference_conditioned_composite_handoff,
@@ -40,6 +46,7 @@ from eom_image_provider.provider import (
     reuse_reference_conditioned_composite_handoff_v4,
     reuse_reference_conditioned_composite_handoff_v5,
     reuse_reference_conditioned_composite_handoff_v6,
+    reuse_reference_conditioned_composite_handoff_v7,
 )
 from eom_image_provider.reference_acquisition import (
     VisualReferenceAcquisitionError,
@@ -234,82 +241,89 @@ def main() -> None:
             result = styled_receipt.model_dump(mode="json")
         elif args.operation == "generate-reference-base-composite":
             value = load_json_object(args.request, maximum_bytes=512 * 1024)
-            is_v6 = value.get("schema_version") == (
-                "local-image-reference-conditioned-composite-request/6.0"
+            base_request: (
+                LocalImageReferenceConditionedCompositeRequestV4
+                | LocalImageReferenceConditionedCompositeRequestV5
+                | LocalImageReferenceConditionedCompositeRequestV6
+                | LocalImageReferenceConditionedCompositeRequestV7
             )
-            is_v5 = value.get("schema_version") == (
-                "local-image-reference-conditioned-composite-request/5.0"
-            )
-            validate_contract(
-                (
-                    "reference-conditioned-composite-request-v6"
-                    if is_v6
-                    else (
-                        "reference-conditioned-composite-request-v5"
-                        if is_v5
-                        else "reference-conditioned-composite-request-v4"
-                    )
-                ),
-                value,
-            )
-            base_request = (
-                LocalImageReferenceConditionedCompositeRequestV6.model_validate(value)
-                if is_v6
-                else (
-                    LocalImageReferenceConditionedCompositeRequestV5.model_validate(value)
-                    if is_v5
-                    else LocalImageReferenceConditionedCompositeRequestV4.model_validate(value)
+            schema_version = value.get("schema_version")
+            if schema_version == "local-image-reference-conditioned-composite-request/7.0":
+                validate_contract("reference-conditioned-composite-request-v7", value)
+                base_request = LocalImageReferenceConditionedCompositeRequestV7.model_validate(
+                    value
                 )
+            elif schema_version == "local-image-reference-conditioned-composite-request/6.0":
+                validate_contract("reference-conditioned-composite-request-v6", value)
+                base_request = LocalImageReferenceConditionedCompositeRequestV6.model_validate(
+                    value
+                )
+            elif schema_version == "local-image-reference-conditioned-composite-request/5.0":
+                validate_contract("reference-conditioned-composite-request-v5", value)
+                base_request = LocalImageReferenceConditionedCompositeRequestV5.model_validate(
+                    value
+                )
+            elif schema_version == "local-image-reference-conditioned-composite-request/4.0":
+                validate_contract("reference-conditioned-composite-request-v4", value)
+                base_request = LocalImageReferenceConditionedCompositeRequestV4.model_validate(
+                    value
+                )
+            else:
+                raise ValueError("unsupported base reference request version")
+            base_receipt: (
+                LocalImageReferenceConditionedCompositeReceiptV4
+                | LocalImageReferenceConditionedCompositeReceiptV5
+                | LocalImageReferenceConditionedCompositeReceiptV6
+                | LocalImageReferenceConditionedCompositeReceiptV7
+                | None
             )
-            base_receipt = (
-                reuse_reference_conditioned_composite_handoff_v6(
+            if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV7):
+                base_receipt = reuse_reference_conditioned_composite_handoff_v7(
                     workspace=args.workspace,
                     request=base_request,
                 )
-                if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV6)
-                else (
-                    reuse_reference_conditioned_composite_handoff_v5(
-                        workspace=args.workspace,
-                        request=base_request,
-                    )
-                    if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV5)
-                    else reuse_reference_conditioned_composite_handoff_v4(
-                        workspace=args.workspace,
-                        request=base_request,
-                    )
+            elif isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV6):
+                base_receipt = reuse_reference_conditioned_composite_handoff_v6(
+                    workspace=args.workspace, request=base_request
                 )
-            )
+            elif isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV5):
+                base_receipt = reuse_reference_conditioned_composite_handoff_v5(
+                    workspace=args.workspace, request=base_request
+                )
+            else:
+                base_receipt = reuse_reference_conditioned_composite_handoff_v4(
+                    workspace=args.workspace, request=base_request
+                )
             if base_receipt is None:
                 with acquire_gpu_lease(args.gpu_lock):
-                    base_receipt = (
-                        generate_reference_conditioned_composite_handoff_v6(
+                    if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV7):
+                        base_receipt = generate_reference_conditioned_composite_handoff_v7(
                             model_store_root=args.model_store_root,
                             workspace=args.workspace,
                             request=base_request,
                             backend=Ssd1bDiffusersBackend(),
                         )
-                        if isinstance(
-                            base_request, LocalImageReferenceConditionedCompositeRequestV6
+                    elif isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV6):
+                        base_receipt = generate_reference_conditioned_composite_handoff_v6(
+                            model_store_root=args.model_store_root,
+                            workspace=args.workspace,
+                            request=base_request,
+                            backend=Ssd1bDiffusersBackend(),
                         )
-                        else (
-                            generate_reference_conditioned_composite_handoff_v5(
-                                model_store_root=args.model_store_root,
-                                workspace=args.workspace,
-                                request=base_request,
-                                backend=Ssd1bDiffusersBackend(),
-                            )
-                            if isinstance(
-                                base_request,
-                                LocalImageReferenceConditionedCompositeRequestV5,
-                            )
-                            else generate_reference_conditioned_composite_handoff_v4(
-                                model_store_root=args.model_store_root,
-                                workspace=args.workspace,
-                                request=base_request,
-                                backend=Ssd1bDiffusersBackend(),
-                            )
+                    elif isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV5):
+                        base_receipt = generate_reference_conditioned_composite_handoff_v5(
+                            model_store_root=args.model_store_root,
+                            workspace=args.workspace,
+                            request=base_request,
+                            backend=Ssd1bDiffusersBackend(),
                         )
-                    )
+                    else:
+                        base_receipt = generate_reference_conditioned_composite_handoff_v4(
+                            model_store_root=args.model_store_root,
+                            workspace=args.workspace,
+                            request=base_request,
+                            backend=Ssd1bDiffusersBackend(),
+                        )
             result = base_receipt.model_dump(mode="json")
         elif args.operation == "acquire-reference":
             command, intent = load_acquisition_inputs(

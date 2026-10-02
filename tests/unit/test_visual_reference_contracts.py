@@ -25,6 +25,7 @@ from eom_image_contracts import (
     LocalImageProviderBindingV4,
     LocalImageProviderBindingV5,
     LocalImageProviderBindingV6,
+    LocalImageProviderBindingV7,
     LocalImageReferenceConditionedCompositeReceipt,
     LocalImageReferenceConditionedCompositeReceiptV2,
     LocalImageReferenceConditionedCompositeReceiptV3,
@@ -959,6 +960,18 @@ def test_adaptive_reference_v6_contracts_preserve_mode_and_retention() -> None:
         LocalImageReferenceConditionedCompositeReceiptV6.model_validate(
             {**invalid, "receipt_sha256": content_sha256(invalid)}
         )
+
+
+def test_institutional_line_art_v7_binding_is_exact_and_schema_valid() -> None:
+    value = json.loads(
+        (REPOSITORY_ROOT / "config/local-image-provider.ssd1b.v7.json").read_text(encoding="utf-8")
+    )
+    binding = LocalImageProviderBindingV7.model_validate(value)
+
+    validate_contract("provider-binding-v7", binding.model_dump(mode="json"))
+    assert binding.postprocess.final_dark_threshold == 192
+    assert binding.postprocess.final_output_tones == (32, 128, 255)
+    assert binding.postprocess.cleanup_component_max_pixels == 16
 
 
 def test_style_reference_v2_rejects_adapter_for_another_base_model() -> None:
