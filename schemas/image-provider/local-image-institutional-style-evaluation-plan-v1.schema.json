@@ -147,6 +147,7 @@
     "created_at",
     "selection_method",
     "style_track",
+    "presentation_policy",
     "provider_binding_sha256",
     "maximum_generated_origin_identification_rate",
     "minimum_mean_institutional_style_score",
@@ -174,6 +175,9 @@
         "OBJECT_LINE_ART",
         "RASTER_TEXTURE_SCENE"
       ]
+    },
+    "presentation_policy": {
+      "const": "FOREGROUND_BBOX_FIT_800X500_V1"
     },
     "provider_binding_sha256": {
       "type": "string",

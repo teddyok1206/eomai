@@ -1653,6 +1653,7 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
         "created_at",
         "selection_method",
         "style_track",
+        "presentation_policy",
         "provider_binding_sha256",
         "maximum_generated_origin_identification_rate",
         "minimum_mean_institutional_style_score",
@@ -1665,6 +1666,7 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
         "created_at": UTC,
         "selection_method": {"const": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1"},
         "style_track": {"enum": ["OBJECT_LINE_ART", "RASTER_TEXTURE_SCENE"]},
+        "presentation_policy": {"const": "FOREGROUND_BBOX_FIT_800X500_V1"},
         "provider_binding_sha256": SHA256,
         "maximum_generated_origin_identification_rate": {
             "type": "number",
