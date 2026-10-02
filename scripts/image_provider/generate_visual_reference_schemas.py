@@ -1608,6 +1608,7 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
             "required": [
                 "case_id",
                 "subject_family",
+                "depiction_key",
                 "institutional_image",
                 "generated_image",
                 "generated_request_sha256",
@@ -1630,6 +1631,10 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
                         "REAL_WORLD_SCENE",
                     ]
                 },
+                "depiction_key": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                },
                 "institutional_image": {"$ref": "#/$defs/institutionalMember"},
                 "generated_image": {"$ref": "#/$defs/generatedMember"},
                 "generated_request_sha256": SHA256,
@@ -1647,6 +1652,7 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
         "evaluation_id",
         "created_at",
         "selection_method",
+        "style_track",
         "provider_binding_sha256",
         "maximum_generated_origin_identification_rate",
         "minimum_mean_institutional_style_score",
@@ -1657,7 +1663,8 @@ def institutional_style_evaluation_plan_schema() -> dict[str, Any]:
         "schema_version": {"const": "local-image-institutional-style-evaluation-plan/1.0"},
         "evaluation_id": {"type": "string", "pattern": "^imgstyleeval_[0-9a-f]{32}$"},
         "created_at": UTC,
-        "selection_method": {"const": "STRATIFIED_ORIGIN_BLIND_V1"},
+        "selection_method": {"const": "SUBJECT_MATCHED_SINGLE_TRACK_ORIGIN_BLIND_V1"},
+        "style_track": {"enum": ["OBJECT_LINE_ART", "RASTER_TEXTURE_SCENE"]},
         "provider_binding_sha256": SHA256,
         "maximum_generated_origin_identification_rate": {
             "type": "number",
