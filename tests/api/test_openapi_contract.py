@@ -95,6 +95,15 @@ def test_committed_openapi_matches_current_application_contract() -> None:
     assert generated == json.loads(CONTRACT.read_text(encoding="utf-8"))
 
 
+def test_operator_deletion_is_a_fresh_admin_only_permission_boundary() -> None:
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    operation = contract["paths"]["/api/v1/operators/{operator_id}"]["delete"]
+    assert operation["operationId"] == "operator_delete"
+    assert operation["x-eom-permission"] == "operator:delete"
+    assert operation["x-eom-admin-only"] is True
+    assert operation["x-eom-fresh-auth"] is True
+
+
 def test_breaking_change_detector() -> None:
     module_path = ROOT / "scripts" / "api" / "check_openapi_breaking.py"
     spec = importlib.util.spec_from_file_location("check_openapi_breaking", module_path)

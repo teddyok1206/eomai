@@ -40,6 +40,7 @@ from eom_identity_service.repository import (
     lock_identity_invariants,
     operator_by_username,
     operator_projection,
+    require_credential,
     require_operator,
     require_role,
     revoke_operator_sessions,
@@ -60,6 +61,14 @@ class CreateOperatorCommand:
     display_name: str
     temporary_password: str
     initial_roles: tuple[RoleKey, ...]
+
+
+@dataclass(frozen=True)
+class DeletedOperatorResult:
+    operator_id: str
+    resource_version: int
+    revoked_sessions: int
+    revoked_roles: int
 
 
 class OperatorService:
@@ -118,6 +127,7 @@ class OperatorService:
             records = list(
                 session.scalars(
                     select(OperatorRecord)
+                    .where(OperatorRecord.deleted_at.is_(None))
                     .order_by(OperatorRecord.created_at, OperatorRecord.operator_id)
                     .limit(limit)
                 )
@@ -126,7 +136,9 @@ class OperatorService:
 
     def inspect_operator(self, operator_id: str) -> OperatorProjection:
         with self.sessions() as session:
-            return operator_projection(session, require_operator(session, operator_id))
+            operator = require_operator(session, operator_id)
+            self._require_not_deleted(operator)
+            return operator_projection(session, operator)
 
     def assign_role(
         self, operator_id: str, role_key: RoleKey, actor: ActorContext
@@ -134,6 +146,7 @@ class OperatorService:
         with transaction(self.sessions) as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
             role = require_role(session, role_key)
             if any(
                 record.role_id == role.role_id
@@ -175,6 +188,7 @@ class OperatorService:
             lock_identity_invariants(session)
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
             role = require_role(session, role_key)
             assignment = next(
                 (
@@ -212,6 +226,7 @@ class OperatorService:
             lock_identity_invariants(session)
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
             if operator.status == OperatorStatus.DISABLED.value:
                 return operator_projection(session, operator)
             has_admin = any(
@@ -241,6 +256,7 @@ class OperatorService:
         with transaction(self.sessions) as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
             if operator.status == OperatorStatus.ACTIVE.value:
                 return operator_projection(session, operator)
             now = utc_now()
@@ -257,6 +273,7 @@ class OperatorService:
         with transaction(self.sessions) as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
             count = revoke_operator_sessions(
                 session,
                 operator_id,
@@ -265,6 +282,90 @@ class OperatorService:
             )
             self._event(session, operator, "SESSIONS_REVOKED", actor, {"count": count}, utc_now())
             return count
+
+    def delete(
+        self,
+        operator_id: str,
+        actor: ActorContext,
+        *,
+        reason: str,
+    ) -> DeletedOperatorResult:
+        if not reason or len(reason) > 1000:
+            raise ValueError("delete reason is required")
+        if actor.operator_id == operator_id:
+            raise IdentityError(
+                IdentityErrorCode.OPERATOR_SELF_DELETE_FORBIDDEN,
+                "an Operator cannot delete their own account",
+            )
+        with transaction(self.sessions) as session:
+            lock_identity_invariants(session)
+            self._require_admin(session, actor)
+            operator = require_operator(session, operator_id, for_update=True)
+            self._require_not_deleted(operator)
+            assignments = active_role_assignments(session, operator_id)
+            has_admin = any(role.role_key == RoleKey.ADMIN.value for _, role in assignments)
+            if (
+                operator.status == OperatorStatus.ACTIVE.value
+                and has_admin
+                and active_admin_count(session) <= 1
+            ):
+                raise IdentityError(IdentityErrorCode.OPERATOR_LAST_ADMIN, "last admin is required")
+
+            now = utc_now()
+            revoked_sessions = revoke_operator_sessions(
+                session,
+                operator_id,
+                actor_id=actor.actor_id,
+                reason="OPERATOR_DELETED",
+                now=now,
+            )
+            for assignment, _ in assignments:
+                assignment.revoked_by = actor.actor_id
+                assignment.revoked_at = now
+                assignment.revoke_reason = reason
+
+            credential = require_credential(session, operator_id, for_update=True)
+            credential.password_hash = "DELETED"
+            credential.password_algorithm = "deleted"
+            credential.password_version += 1
+            credential.must_change_password = False
+            credential.password_changed_at = now
+            credential.failed_login_count = 0
+            credential.first_failed_at = None
+            credential.last_failed_at = None
+            credential.locked_until = None
+            operator.username = self._deleted_username(operator_id)
+            operator.normalized_username = operator.username
+            operator.display_name = "삭제된 계정"
+            operator.status = OperatorStatus.DISABLED.value
+            operator.must_change_password = False
+            operator.disabled_at = operator.disabled_at or now
+            operator.disabled_by = operator.disabled_by or actor.actor_id
+            operator.disable_reason = operator.disable_reason or "OPERATOR_DELETED"
+            operator.deleted_at = now
+            operator.deleted_by = actor.actor_id
+            operator.delete_reason = reason
+            operator.role_version += 1
+            operator.lock_version += 1
+            self._event(
+                session,
+                operator,
+                "OPERATOR_DELETED",
+                actor,
+                {
+                    "reason": reason,
+                    "revoked_roles": len(assignments),
+                    "revoked_sessions": revoked_sessions,
+                },
+                now,
+            )
+            session.flush()
+            return DeletedOperatorResult(
+                operator_id=operator_id,
+                resource_version=operator.lock_version,
+                revoked_sessions=revoked_sessions,
+                revoked_roles=len(assignments),
+            )
 
     def _create(
         self, session: object, command: CreateOperatorCommand, actor: ActorContext
@@ -373,3 +474,12 @@ class OperatorService:
             raise IdentityError(IdentityErrorCode.OPERATOR_DISABLED, "operator is disabled")
         if PermissionKey.OPERATOR_CREATE not in effective_permissions(session, actor.operator_id):
             raise IdentityError(IdentityErrorCode.OPERATOR_DISABLED, "admin role is required")
+
+    @staticmethod
+    def _require_not_deleted(operator: OperatorRecord) -> None:
+        if operator.deleted_at is not None:
+            raise IdentityError(IdentityErrorCode.OPERATOR_NOT_FOUND, "operator not found")
+
+    @staticmethod
+    def _deleted_username(operator_id: str) -> str:
+        return f"deleted-{operator_id.removeprefix('operator_')}"

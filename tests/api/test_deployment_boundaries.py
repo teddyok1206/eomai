@@ -845,7 +845,7 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "CreateEducationalQualityPlanCommand.__module__" in deployment
     assert "EducationalQualityReviewWorkbenchView.__module__" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert 'CURRENT_MIGRATION_REVISION != "20261002_0045"' in deployment
+    assert 'CURRENT_MIGRATION_REVISION != "20261003_0046"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v1.schema.json"' in deployment
     assert '"eom_api_contracts/schemas/document-review-annotation-v2.schema.json"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment

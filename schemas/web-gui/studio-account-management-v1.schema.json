@@ -18,6 +18,21 @@
         {"required": ["new_password"]}
       ]
     },
+    "operator_delete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "expected_resource_version", "idempotency_key"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "expected_resource_version": {"type": "integer", "minimum": 1},
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        }
+      }
+    },
     "operator_create": {
       "type": "object",
       "additionalProperties": false,

@@ -35,6 +35,7 @@ class PermissionKey(StrEnum):
     OPERATOR_REVOKE_ROLE = "operator:revoke_role"
     OPERATOR_DISABLE = "operator:disable"
     OPERATOR_ENABLE = "operator:enable"
+    OPERATOR_DELETE = "operator:delete"
     OPERATOR_REVOKE_SESSIONS = "operator:revoke_sessions"
     CONTENT_INTAKE_READ = "content_intake:read"
     CONTENT_INTAKE_CREATE = "content_intake:create"

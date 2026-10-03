@@ -267,6 +267,19 @@ def test_self_credentials_and_admin_account_management_use_session_boundaries() 
         assert created.status_code == 201
         assert gateway.operator_mutation_calls[-1] == "CREATE"
 
+        deleted = client.request(
+            "DELETE",
+            f"/studio/api/v1/admin/operators/{'operator_' + '1' * 32}",
+            headers={"X-CSRF-Token": csrf},
+            json={
+                "reason": "TEST_ONLY obsolete account",
+                "expected_resource_version": 1,
+                "idempotency_key": "studio:operator:delete:test-001",
+            },
+        )
+        assert deleted.status_code == 200
+        assert gateway.operator_mutation_calls[-1] == "DELETE"
+
         assigned = client.post(
             f"/studio/api/v1/admin/operators/{'operator_' + '1' * 32}/roles",
             headers={"X-CSRF-Token": csrf},

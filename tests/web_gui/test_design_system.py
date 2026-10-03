@@ -223,6 +223,8 @@ def test_account_management_separates_self_service_from_admin_controls() -> None
     )
     assert 'failure.code === "API_PRECONDITION_FAILED"' in JAVASCRIPT
     assert '"모든 로그인 세션 종료"' in JAVASCRIPT
+    assert '"계정 영구 삭제"' in JAVASCRIPT
+    assert '"operator:delete"' in JAVASCRIPT
     assert 'technicalDisclosure("계정 기술 정보"' in JAVASCRIPT
 
 

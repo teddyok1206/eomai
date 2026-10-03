@@ -365,3 +365,54 @@ def revoke_sessions(
             callback=execute,
         ),
     )
+
+
+@router.delete(
+    "/{operator_id}",
+    operation_id="operator_delete",
+    response_model=SingleResponse[CommandResult],
+    dependencies=[
+        Depends(require_permission(PermissionKey.OPERATOR_DELETE, fresh=True, admin_only=True))
+    ],
+)
+def delete_operator(
+    request: Request,
+    operator_id: str,
+    body: ReasonRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    expected_version: ExpectedVersion,
+) -> SingleResponse[CommandResult]:
+    del authentication
+
+    def execute() -> CommandResult:
+        current = request.app.state.services.operators.inspect_operator(operator_id)
+        _require_operator_version(current.resource_version, expected_version)
+        deleted = request.app.state.services.operators.delete(
+            operator_id,
+            request.state.request_context.actor(),
+            reason=body.reason,
+        )
+        return CommandResult(
+            command_id=f"operator-delete-{operator_id}-{deleted.resource_version}",
+            resource_type="operator",
+            resource_id=operator_id,
+            status="COMPLETED",
+            resource_version=deleted.resource_version,
+            status_url="/api/v1/operators",
+        )
+
+    return one(
+        request,
+        run_command(
+            request,
+            raw_key=idempotency_key,
+            body={
+                "action": "delete",
+                "reason": body.reason,
+                "expected_resource_version": expected_version,
+            },
+            resource_type="operator",
+            callback=execute,
+        ),
+    )

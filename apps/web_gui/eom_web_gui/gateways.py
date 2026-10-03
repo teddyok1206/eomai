@@ -363,6 +363,10 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
     ) -> dict[str, Any]: ...
 
+    async def delete_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]: ...
+
     async def enable_operator(
         self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
     ) -> dict[str, Any]: ...
@@ -965,6 +969,19 @@ class HttpApplicationGateway:
             session,
             "POST",
             f"/api/v1/operators/{operator_id}/disable",
+            json={"reason": value.reason},
+            headers=_operator_command_headers(value),
+        )
+        return sanitize_mapping(self._data(response))
+
+    async def delete_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        _require_id(operator_id, "operator_")
+        response = await self._authorized(
+            session,
+            "DELETE",
+            f"/api/v1/operators/{operator_id}",
             json={"reason": value.reason},
             headers=_operator_command_headers(value),
         )

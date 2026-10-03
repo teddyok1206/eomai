@@ -20,6 +20,7 @@ from eom_web_gui.contracts import (
     RequestDraftInput,
     RequestDraftUpdate,
     StudioOperatorCreate,
+    StudioOperatorReasonCommand,
     StudioProblem,
     StudioSelfCredentialUpdate,
 )
@@ -66,6 +67,12 @@ def test_account_management_schema_matches_typed_requests() -> None:
     ).model_dump(mode="json")
     Draft202012Validator(schema["$defs"]["self_credential_update"]).validate(credential)
     Draft202012Validator(schema["$defs"]["operator_create"]).validate(created)
+    deleted = StudioOperatorReasonCommand(
+        reason="TEST_ONLY obsolete account",
+        expected_resource_version=3,
+        idempotency_key="studio:operator:delete:test-001",
+    ).model_dump(mode="json")
+    Draft202012Validator(schema["$defs"]["operator_delete"]).validate(deleted)
     Draft202012Validator(schema["$defs"]["self_credential_update"]).validate(
         StudioSelfCredentialUpdate(
             current_password="current",

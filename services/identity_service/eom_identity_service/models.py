@@ -28,6 +28,7 @@ class OperatorRecord(Base):
     __table_args__ = (
         CheckConstraint("status IN ('ACTIVE','DISABLED')", name="ck_operators_status"),
         Index("ix_operators_status", "status"),
+        Index("ix_operators_deleted", "deleted_at"),
         Index("ix_operators_keyset", "created_at", "operator_id"),
     )
 
@@ -48,6 +49,9 @@ class OperatorRecord(Base):
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     disabled_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     disable_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    delete_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 

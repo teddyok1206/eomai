@@ -307,6 +307,14 @@ def create_app(
     ) -> dict[str, Any]:
         return await actual.disable_operator(session, operator_id, value)
 
+    @app.delete(f"{API_PREFIX}/admin/operators/{{operator_id}}")
+    async def delete_operator(
+        operator_id: str,
+        value: StudioOperatorReasonCommand,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return await actual.delete_operator(session, operator_id, value)
+
     @app.post(f"{API_PREFIX}/admin/operators/{{operator_id}}/enable")
     async def enable_operator(
         operator_id: str,

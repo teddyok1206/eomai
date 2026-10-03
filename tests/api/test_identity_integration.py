@@ -31,7 +31,11 @@ from eom_identity_service.models import (
     RolePermissionRecord,
     RoleRecord,
 )
-from eom_identity_service.repository import effective_permissions, seed_builtin_rbac
+from eom_identity_service.repository import (
+    active_role_assignments,
+    effective_permissions,
+    seed_builtin_rbac,
+)
 from eom_identity_service.service import CreateOperatorCommand, OperatorService
 from eom_identity_service.tokens import IssuedTokenPair, SessionTokenService, TokenCodec
 from eom_operator_identity.contracts import (
@@ -44,7 +48,7 @@ from eom_operator_identity.contracts import (
 from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from eom_operator_identity.identifiers import new_api_audit_event_id
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -91,8 +95,11 @@ def _cleanup(engine: object) -> None:
         operator_ids = list(
             session.scalars(
                 select(OperatorRecord.operator_id).where(
-                    OperatorRecord.username.in_(
-                        ("admin", "review01", "review02", "review03", "viewer01")
+                    or_(
+                        OperatorRecord.username.in_(
+                            ("admin", "review01", "review02", "review03", "viewer01")
+                        ),
+                        OperatorRecord.normalized_username.like("deleted-%"),
                     )
                 )
             )
@@ -323,6 +330,61 @@ def test_identity_rbac_session_and_refresh_concurrency() -> None:
             assert PermissionKey.SYSTEM_DOCTOR in effective_permissions(
                 session, reviewer.operator_id
             )
+
+        reviewer_admin = auth.authenticate_access(renamed[0].access_token)
+        reviewer_admin_actor = _actor(reviewer_admin)
+        with pytest.raises(IdentityError) as self_delete:
+            operators.delete(
+                reviewer.operator_id,
+                reviewer_admin_actor,
+                reason="TEST_ONLY self deletion must fail",
+            )
+        assert self_delete.value.code is IdentityErrorCode.OPERATOR_SELF_DELETE_FORBIDDEN
+
+        deleted = operators.delete(
+            viewer.operator_id,
+            reviewer_admin_actor,
+            reason="TEST_ONLY obsolete viewer",
+        )
+        assert deleted.operator_id == viewer.operator_id
+        assert deleted.revoked_roles == 2
+        assert viewer.operator_id not in {value.operator_id for value in operators.list_operators()}
+        with pytest.raises(IdentityError) as missing:
+            operators.inspect_operator(viewer.operator_id)
+        assert missing.value.code is IdentityErrorCode.OPERATOR_NOT_FOUND
+        with pytest.raises(AuthenticationFailure):
+            auth.login(
+                username="viewer01",
+                password=VIEWER_PASSWORD,
+                client_name="identity-deleted-account",
+            )
+        with sessions() as session:
+            tombstone = session.get(OperatorRecord, viewer.operator_id)
+            assert tombstone is not None
+            assert tombstone.deleted_at is not None
+            assert tombstone.deleted_by == reviewer.operator_id
+            assert tombstone.username == f"deleted-{viewer.operator_id.removeprefix('operator_')}"
+            assert tombstone.display_name == "삭제된 계정"
+            credential = session.scalar(
+                select(OperatorCredentialRecord).where(
+                    OperatorCredentialRecord.operator_id == viewer.operator_id
+                )
+            )
+            assert credential is not None
+            assert credential.password_hash == "DELETED"
+            assert credential.password_algorithm == "deleted"
+            assert not active_role_assignments(session, viewer.operator_id)
+
+        replacement = operators.create_operator(
+            CreateOperatorCommand(
+                username="viewer01",
+                display_name="새 조회자",
+                temporary_password=VIEWER_PASSWORD,
+                initial_roles=(RoleKey.VIEWER,),
+            ),
+            reviewer_admin_actor,
+        )
+        assert replacement.operator_id != viewer.operator_id
     finally:
         _cleanup(engine)
         engine.dispose()

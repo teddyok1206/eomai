@@ -253,6 +253,11 @@ async def test_account_gateway_rotates_self_session_and_sends_versioned_admin_co
         if request.url.path.endswith("/disable"):
             assert request.headers["if-match"] == '"v2"'
             return httpx.Response(200, json=_single({"status": "COMPLETED"}))
+        if request.url.path == f"/api/v1/operators/{'operator_' + '3' * 32}":
+            assert request.method == "DELETE"
+            assert request.headers["if-match"] == '"v2"'
+            assert json.loads(request.content) == {"reason": "테스트 계정 삭제"}
+            return httpx.Response(200, json=_single({"status": "COMPLETED"}))
         if request.url.path.endswith("/enable") or request.url.path.endswith("/revoke-sessions"):
             assert request.headers["if-match"] == '"v2"'
             return httpx.Response(200, json=_single({"status": "COMPLETED"}))
@@ -309,13 +314,22 @@ async def test_account_gateway_rotates_self_session_and_sends_versioned_admin_co
             idempotency_key="studio:operator:disable:test-001",
         ),
     )
+    await gateway.delete_operator(
+        session,
+        operator_id,
+        StudioOperatorReasonCommand(
+            reason="테스트 계정 삭제",
+            expected_resource_version=2,
+            idempotency_key="studio:operator:delete:test-001",
+        ),
+    )
     version_command = StudioOperatorVersionCommand(
         expected_resource_version=2,
         idempotency_key="studio:operator:version:test-001",
     )
     await gateway.enable_operator(session, operator_id, version_command)
     await gateway.revoke_operator_sessions(session, operator_id, version_command)
-    assert len(requests) == 7
+    assert len(requests) == 8
     await gateway.close()
 
 

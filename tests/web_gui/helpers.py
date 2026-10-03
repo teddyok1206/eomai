@@ -341,6 +341,13 @@ class FakeGateway:
         self.operator_mutation_calls.append("DISABLE")
         return {"status": "COMPLETED"}
 
+    async def delete_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        del session, operator_id, value
+        self.operator_mutation_calls.append("DELETE")
+        return {"status": "COMPLETED"}
+
     async def enable_operator(
         self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
     ) -> dict[str, Any]:

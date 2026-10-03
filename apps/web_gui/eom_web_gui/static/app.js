@@ -2315,7 +2315,7 @@ function renderOperatorAccounts(accounts) {
     if (isCurrentOperator) addControlDetail(details, "현재 로그인", "본인 계정");
 
     const reason = document.createElement("input");
-    reason.placeholder = "정지·역할 해제 사유";
+    reason.placeholder = "정지·역할 해제·삭제 사유";
     reason.maxLength = 1000;
     reason.className = "operator-reason";
 
@@ -2368,6 +2368,20 @@ function renderOperatorAccounts(accounts) {
         "모든 로그인 세션 종료",
         "operator:revoke_sessions",
         () => revokeOperatorSessions(account),
+        true,
+      ));
+      accountActions.append(operatorActionButton(
+        "계정 영구 삭제",
+        "operator:delete",
+        async () => {
+          if (!reason.value.trim()) {
+            return showMessage($("#operator-message"), "계정 삭제 사유를 입력하세요.", "error");
+          }
+          if (!window.confirm(
+            `${account.display_name} 계정을 영구 삭제합니다. 로그인 정보는 복구할 수 없습니다.`,
+          )) return;
+          await deleteOperatorAccount(account, reason.value.trim());
+        },
         true,
       ));
       card.append(reason, roleActions, accountActions);
@@ -2432,6 +2446,17 @@ async function disableOperatorAccount(account, reason) {
       body: operatorMutationBody(account, {reason}),
     }),
     "계정을 정지했습니다.",
+  );
+}
+
+async function deleteOperatorAccount(account, reason) {
+  return completeOperatorMutation(
+    api(`/admin/operators/${encodeURIComponent(account.operator_id)}`, {
+      method: "DELETE",
+      mutation: true,
+      body: operatorMutationBody(account, {reason}),
+    }),
+    "계정을 영구 삭제했습니다. 과거 작업 이력의 사용자 ID만 보존됩니다.",
   );
 }
 

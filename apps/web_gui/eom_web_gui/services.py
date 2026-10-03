@@ -135,6 +135,11 @@ class WebServices:
     ) -> dict[str, Any]:
         return await self.gateway.disable_operator(session, operator_id, value)
 
+    async def delete_operator(
+        self, session: WebSession, operator_id: str, value: StudioOperatorReasonCommand
+    ) -> dict[str, Any]:
+        return await self.gateway.delete_operator(session, operator_id, value)
+
     async def enable_operator(
         self, session: WebSession, operator_id: str, value: StudioOperatorVersionCommand
     ) -> dict[str, Any]:
