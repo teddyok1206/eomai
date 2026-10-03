@@ -30,7 +30,8 @@ result schema를 기준으로 정리한다.
 | 단일 문항 | `generic-item-development@1.16.0` | `workflow-role/1.24.0` | authoring/image/review/registration `@12.0` | Pack `generated-knowledge-item@1.20.14`; Graph plan `19.0`; ungrounded plan `20.0` |
 | 풀이보고서 | `knowledge-analysis@10.0.0` | `workflow-role/1.21.0` | proposal `@10.0` | accepted knowledge analysis `10.0` |
 | 고객지원 | `customer-support@1.0.0` | `workflow-role/1.22.0` | customer support `@1.0` | customer-support preset |
-| 문서 검토 V3 | `pdf-document-review@1.2.0` | `workflow-role/1.27.0` | PDF document review `@3.0` | plan `15.0`, control bootstrap `5.0` |
+| 문제지·해설지 검토 V3 | `pdf-document-review@1.2.0` | `workflow-role/1.27.0` | PDF document review `@3.0` | plan `15.0`, control bootstrap `6.0` (5.0 historical) |
+| 단일 문서 검토 V4 | `pdf-document-review@1.3.0` | `workflow-role/1.28.0` | PDF document review `@4.0` | 기존 plan `13.0`, control bootstrap `6.0` |
 | Legacy extraction | `legacy-item-extraction@1.0.0` | `workflow-role/1.14.0` | extraction `@1.0` | historical intake compatibility |
 | Legacy editorial | `legacy-item-editorial-compatibility@1.0.0` | `workflow-role/1.16.0` | compatibility `@1.0` | historical editorial compatibility |
 
@@ -65,7 +66,7 @@ UTC의 사람이 읽는 요약이며 `tests/unit/test_runtime_version_admission.
 | generic-item-development | 1.8, 1.9, 1.10, 1.11–1.12, 1.13–1.16 | 1.17, 1.19, 1.20, 1.23, 1.24 |
 | knowledge-analysis | 1, 4, 8, 9, 10 | 1.4, 1.7, 1.11, 1.18, 1.21 |
 | customer-support | 1 | 1.22 |
-| pdf-document-review | 1, 1.1, 1.2 | 1.25, 1.26, 1.27 |
+| pdf-document-review | 1, 1.1, 1.2, 1.3 | 1.25, 1.26, 1.27, 1.28 |
 | legacy-item-extraction | 1 | 1.14 |
 | legacy-item-editorial-compatibility | 1 | 1.16 |
 

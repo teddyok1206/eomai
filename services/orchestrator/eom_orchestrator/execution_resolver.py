@@ -62,6 +62,9 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
 )
 from eom_workflow.models import CustomerSupportCase
+from eom_workflow.single_document_review_contract import (
+    single_document_review_contract_for_definition,
+)
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -882,6 +885,18 @@ def resolve_pdf_document_review_plan(
 ) -> ResolvedExecutionPlanV13:
     """Resolve one immutable PDF review onto the serial slot-06 support capacity."""
 
+    try:
+        review_contract = single_document_review_contract_for_definition(
+            workflow_definition_version
+        )
+    except ValueError as exc:
+        raise ControlPlaneError("CONTROL_WORKFLOW_PROTOCOL_INVALID", str(exc)) from exc
+    if workflow_role_schema_version != review_contract.protocol_version:
+        raise ControlPlaneError(
+            "CONTROL_WORKFLOW_PROTOCOL_INVALID",
+            "single document review protocol differs from its pinned definition",
+        )
+
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == workflow_id
@@ -908,12 +923,6 @@ def resolve_pdf_document_review_plan(
                 "stored PDF document review plan differs from its Workflow",
             )
         return existing_plan
-
-    if workflow_role_schema_version != "workflow-role/1.25.0":
-        raise ControlPlaneError(
-            "CONTROL_WORKFLOW_PROTOCOL_INVALID",
-            "PDF document review requires workflow-role/1.25.0",
-        )
 
     logical = session.scalar(
         select(ExecutionPresetRecord).where(

@@ -1378,10 +1378,20 @@ def test_knowledge_materializer_rejects_manifest_hash_drift_before_context_copy(
     assert not (workspace / "references/evidence/context.md").exists()
 
 
+@pytest.mark.parametrize("definition_version", ["1.0.0", "1.3.0"])
 def test_pdf_review_materializer_stages_exact_pages_and_image_manifest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    definition_version: str,
 ) -> None:
     fixture = _pdf_review_fixture(tmp_path, monkeypatch)
+    if definition_version != "1.0.0":
+        record = fixture["session"].records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+        record.canonical_document["workflow_definition_version"] = definition_version
+        record.canonical_document["plan_sha256"] = compute_control_document_hash(
+            record.canonical_document, "plan_sha256"
+        )
+        record.plan_sha256 = record.canonical_document["plan_sha256"]
     authorized = authorized_execution_artifact_revisions(
         fixture["session"],
         plan_id=str(fixture["plan_id"]),
@@ -1411,7 +1421,11 @@ def test_pdf_review_materializer_stages_exact_pages_and_image_manifest(
     assert result.materialized_member_count == 5
     instructions = (workspace / "AGENTS.md").read_text()
     assert "SINGLE-DOCUMENT review" in instructions
-    assert "pdf-document-review-result@1.0" in instructions
+    assert (
+        "pdf-document-review-result@4.0"
+        if definition_version == "1.3.0"
+        else "pdf-document-review-result@1.0"
+    ) in instructions
     assert "No Graph evidence files are staged or authorized" in instructions
     assert "sort verification_targets by target_id" in instructions
     assert "candidate_findings by candidate_id" in instructions

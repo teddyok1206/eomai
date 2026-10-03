@@ -115,6 +115,7 @@ from eom_workflow.models import (
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
+    PdfDocumentReviewRoleResultV4,
     RegistrationRoleResult,
     ReviewRoleResult,
     RoleResult,
@@ -220,6 +221,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "pdf-document-review-result@1.0",
             "pdf-document-review-result@2.0",
             "pdf-document-review-result@3.0",
+            "pdf-document-review-result@4.0",
         }
     ),
 }
@@ -291,6 +293,7 @@ RESULT_SCHEMA_FILES = {
     "pdf-document-review-result@1.0": "pdf-document-review-result-v1.schema.json",
     "pdf-document-review-result@2.0": "paired-document-review-result-v2.schema.json",
     "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
+    "pdf-document-review-result@4.0": "pdf-document-review-result-v4.schema.json",
 }
 INPUT_SCHEMA_FILES = {
     "authoring": "authoring-input.schema.json",
@@ -325,6 +328,7 @@ INPUT_SCHEMA_FILES_V1_24 = INPUT_SCHEMA_FILES_V1_17
 INPUT_SCHEMA_FILES_V1_25 = {"support": "pdf-document-review-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_26 = {"support": "paired-document-review-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_27 = {"support": "paired-document-review-input-v3.schema.json"}
+INPUT_SCHEMA_FILES_V1_28 = {"support": "pdf-document-review-input-v4.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -356,6 +360,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "pdf-document-review-result@1.0": "workflow-role/1.25.0",
     "pdf-document-review-result@2.0": "workflow-role/1.26.0",
     "pdf-document-review-result@3.0": "workflow-role/1.27.0",
+    "pdf-document-review-result@4.0": "workflow-role/1.28.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
     "image-result@5.0": "workflow-role/1.12.0",
     "review-result@5.0": "workflow-role/1.12.0",
@@ -419,6 +424,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.25.0": INPUT_SCHEMA_FILES_V1_25,
     "workflow-role/1.26.0": INPUT_SCHEMA_FILES_V1_26,
     "workflow-role/1.27.0": INPUT_SCHEMA_FILES_V1_27,
+    "workflow-role/1.28.0": INPUT_SCHEMA_FILES_V1_28,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -449,6 +455,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.25.0",
     "workflow-role/1.26.0",
     "workflow-role/1.27.0",
+    "workflow-role/1.28.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -477,6 +484,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_25.values(),
             *INPUT_SCHEMA_FILES_V1_26.values(),
             *INPUT_SCHEMA_FILES_V1_27.values(),
+            *INPUT_SCHEMA_FILES_V1_28.values(),
         }
     )
 )
@@ -918,6 +926,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             "pdf-document-review-result@1.0",
             "pdf-document-review-result@2.0",
             "pdf-document-review-result@3.0",
+            "pdf-document-review-result@4.0",
         }
         and role == "support"
     ):
@@ -1058,6 +1067,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return CustomerSupportRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@1.0" and role == "support":
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
+        if schema_id == "pdf-document-review-result@4.0" and role == "support":
+            return PdfDocumentReviewRoleResultV4.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@2.0" and role == "support":
             return PairedDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@3.0" and role == "support":
@@ -1979,7 +1990,7 @@ def constrained_result_schema(
             "in this item, and add mappings for every other grounded content element."
         )
         _prune_unreferenced_definitions(schema)
-    if schema_id == "pdf-document-review-result@1.0":
+    if schema_id in {"pdf-document-review-result@1.0", "pdf-document-review-result@4.0"}:
         if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
             raise WorkflowSchemaError("PDF document review result requires its typed request")
         pdf_request = worker_input.request.review_request
@@ -1990,6 +2001,12 @@ def constrained_result_schema(
             "anchor must refer to one of these pages."
         )
         output_properties = _mapping(_mapping(definitions, "output"), "properties")
+        if schema_id == "pdf-document-review-result@4.0":
+            output_properties["review_status"]["description"] = (
+                "Return NEEDS_HUMAN_DECISION if any of the ten verification targets is FAILED "
+                "or INSUFFICIENT, or any candidate is UNCERTAIN. Otherwise return COMPLETE. "
+                "Do not relabel failed or insufficient checks as VERIFIED."
+            )
         for field_name, value in (
             ("review_request_sha256", pdf_request.request_sha256),
             ("document_id", pdf_request.document.document_id),
@@ -3014,6 +3031,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "pdf-document-review-result@1.0",
         "pdf-document-review-result@2.0",
         "pdf-document-review-result@3.0",
+        "pdf-document-review-result@4.0",
     }:
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
@@ -3025,6 +3043,8 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             raise WorkflowSchemaError("PDF document review quote hash requirement is invalid")
         anchor_required.remove("quote_sha256")
         _project_pdf_review_recommendation_codex_contract(schema)
+        if schema_id == "pdf-document-review-result@4.0":
+            _mapping(_mapping(schema, "$defs"), "output").pop("allOf", None)
         if schema_id == "pdf-document-review-result@3.0":
             _project_paired_document_review_v3_codex_contract(schema)
     _normalize_codex_schema(schema)

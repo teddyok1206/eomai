@@ -266,8 +266,21 @@ def _v2_preset_document() -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("preset_version", (1, 2))
-def test_single_document_review_resolves_exact_current_preset_schema(preset_version: int) -> None:
+@pytest.mark.parametrize("definition_version", ("1.0.0", "1.3.0"))
+def test_single_document_review_resolves_exact_current_preset_schema(
+    preset_version: int,
+    definition_version: str,
+) -> None:
     document = _preset_document() if preset_version == 1 else _v2_preset_document()
+    protocol = "workflow-role/1.28.0" if definition_version == "1.3.0" else "workflow-role/1.25.0"
+    if definition_version == "1.3.0":
+        document["compatible_workflow_protocols"] = [
+            *document["compatible_workflow_protocols"],
+            protocol,
+        ]
+        document["content_sha256"] = content_sha256(
+            {key: value for key, value in document.items() if key != "content_sha256"}
+        )
     session = FakeSession(preset_document=document)
     request = build_pdf_document_review_request(
         document=_document(), preset_key="MOCK_EXAM", additional_guidance=None
@@ -275,9 +288,9 @@ def test_single_document_review_resolves_exact_current_preset_schema(preset_vers
     plan = resolve_pdf_document_review_plan(
         cast(Any, session),
         workflow_id="workflow_" + "1" * 32,
-        workflow_definition_version="1.0.0",
+        workflow_definition_version=definition_version,
         workflow_definition_sha256="sha256:" + "2" * 64,
-        workflow_role_schema_version="workflow-role/1.25.0",
+        workflow_role_schema_version=protocol,
         review_request=request,
         resolved_at=NOW,
     )
@@ -293,9 +306,9 @@ def test_single_document_review_resolves_exact_current_preset_schema(preset_vers
         resolve_pdf_document_review_plan(
             cast(Any, session),
             workflow_id=plan.workflow_id,
-            workflow_definition_version="1.0.0",
+            workflow_definition_version=definition_version,
             workflow_definition_sha256="sha256:" + "2" * 64,
-            workflow_role_schema_version="workflow-role/1.25.0",
+            workflow_role_schema_version=protocol,
             review_request=request,
         )
         == plan

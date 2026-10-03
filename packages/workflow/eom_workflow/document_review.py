@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from eom_catalog_contracts import (
     DocumentReviewEvidencePlan,
@@ -156,6 +156,7 @@ PdfReviewAxis = Literal[
     "DOCUMENT_STRUCTURE",
     "ASSESSMENT_BALANCE",
 ]
+_REQUIRED_VERIFICATION_AXES = frozenset(get_args(PdfReviewAxis))
 PdfReviewCategory = Literal[
     "SCIENTIFIC_ACCURACY",
     "ANSWER_CORRECTNESS",
@@ -272,6 +273,15 @@ class PdfDocumentReviewOutput(FrozenModel):
 
     @model_validator(mode="after")
     def validate_review_relations(self) -> PdfDocumentReviewOutput:
+        has_uncertain = self._validate_candidate_relations()
+        expected_status = "NEEDS_HUMAN_DECISION" if has_uncertain else "COMPLETE"
+        if self.review_status != expected_status:
+            raise ValueError("PDF review status differs from candidate dispositions")
+        return self
+
+    def _validate_candidate_relations(self) -> bool:
+        """Shared identity and attestation checks; status policy belongs to each revision."""
+
         target_ids = tuple(target.target_id for target in self.verification_targets)
         if target_ids != tuple(sorted(set(target_ids))):
             raise ValueError("PDF review targets must be sorted and unique")
@@ -302,12 +312,27 @@ class PdfDocumentReviewOutput(FrozenModel):
                 or finding.anchors != candidate.anchors
             ):
                 raise ValueError("PDF review finding differs from its confirmed candidate")
-        has_uncertain = any(
-            candidate.disposition == "UNCERTAIN" for candidate in self.candidate_findings
+        return any(candidate.disposition == "UNCERTAIN" for candidate in self.candidate_findings)
+
+
+class PdfDocumentReviewOutputV4(PdfDocumentReviewOutput):
+    """Target-aware single-document successor; V1 completion semantics remain intact."""
+
+    @model_validator(mode="after")
+    def validate_review_relations(self) -> PdfDocumentReviewOutputV4:
+        has_uncertain = self._validate_candidate_relations()
+        axes = tuple(target.axis for target in self.verification_targets)
+        if (
+            len(axes) != len(_REQUIRED_VERIFICATION_AXES)
+            or set(axes) != _REQUIRED_VERIFICATION_AXES
+        ):
+            raise ValueError("single review requires each verification axis exactly once")
+        needs_human = has_uncertain or any(
+            target.status != "VERIFIED" for target in self.verification_targets
         )
-        expected_status = "NEEDS_HUMAN_DECISION" if has_uncertain else "COMPLETE"
+        expected_status = "NEEDS_HUMAN_DECISION" if needs_human else "COMPLETE"
         if self.review_status != expected_status:
-            raise ValueError("PDF review status differs from candidate dispositions")
+            raise ValueError("single review status differs from targets and candidate dispositions")
         return self
 
 
@@ -830,24 +855,12 @@ class PairedDocumentReviewOutputV3(PairedDocumentReviewOutput):
     def validate_review_relations(self) -> PairedDocumentReviewOutputV3:
         if tuple(value.role for value in self.documents) != ("QUESTION", "SOLUTION"):
             raise ValueError("paired review output requires QUESTION then SOLUTION")
-        expected_axes = {
-            "SCIENTIFIC_ACCURACY",
-            "ANSWER_UNIQUENESS",
-            "SOLUTION_CONSISTENCY",
-            "CURRICULUM_SCOPE",
-            "ORIGINALITY",
-            "VISUAL_CONTENT",
-            "EDITORIAL_CLARITY",
-            "TYPOGRAPHY",
-            "DOCUMENT_STRUCTURE",
-            "ASSESSMENT_BALANCE",
-        }
         target_ids = tuple(value.target_id for value in self.verification_targets)
         target_axes = tuple(value.axis for value in self.verification_targets)
         if (
             target_ids != tuple(sorted(set(target_ids)))
-            or len(target_axes) != len(expected_axes)
-            or set(target_axes) != expected_axes
+            or len(target_axes) != len(_REQUIRED_VERIFICATION_AXES)
+            or set(target_axes) != _REQUIRED_VERIFICATION_AXES
         ):
             raise ValueError(
                 "exhaustive paired review requires each verification axis exactly once"

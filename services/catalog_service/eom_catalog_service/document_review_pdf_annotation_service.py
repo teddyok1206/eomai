@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewAnnotatedPdfsV4,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewPdfAnnotationManifest,
@@ -39,6 +40,7 @@ from eom_workflow import (
     PairedReviewFinding,
     PdfDocumentReviewRoleResult,
     PdfReviewFinding,
+    single_document_review_contract_for_schema_ref,
 )
 from eom_workflow.schemas import validate_role_result
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -83,6 +85,20 @@ DOCUMENT_REVIEW_PDF_ANNOTATION_V3_SCHEMA_HASH = content_sha256(
         "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V3_PROTOCOL_VERSION,
         "contracts": [
             "document-review-pdf-annotation-request/3.0",
+            "document-review-pdf-annotation-manifest/2.0",
+            "document-review-pdf-annotation-result/2.0",
+            "document-review-pdf-annotation-response/2.0",
+        ],
+    }
+)
+
+
+DOCUMENT_REVIEW_PDF_ANNOTATION_V4_PROTOCOL_VERSION = "catalog/1.23"
+DOCUMENT_REVIEW_PDF_ANNOTATION_V4_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V4_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-pdf-annotation-request/4.0",
             "document-review-pdf-annotation-manifest/2.0",
             "document-review-pdf-annotation-result/2.0",
             "document-review-pdf-annotation-response/2.0",
@@ -414,7 +430,10 @@ class DocumentReviewPdfAnnotationService:
                         "eom://schemas/document-review/document-review-pdf-annotation-result/2.0"
                     )
                     manifest_version = "document-review-pdf-annotation-file-set/2.0"
-                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV3):
+                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV4):
+                        protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V4_PROTOCOL_VERSION
+                        protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V4_SCHEMA_HASH
+                    elif isinstance(command, CreateDocumentReviewAnnotatedPdfsV3):
                         protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V3_PROTOCOL_VERSION
                         protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V3_SCHEMA_HASH
                     else:
@@ -599,7 +618,9 @@ class DocumentReviewPdfAnnotationService:
             ):
                 result_schema = "pdf-document-review-result@2.0"
             else:
-                result_schema = "pdf-document-review-result@1.0"
+                result_schema = single_document_review_contract_for_schema_ref(
+                    command.review_result.schema_ref
+                ).result_schema
             parsed = validate_role_result(raw, "support", result_schema)
         except (JsonSchemaValidationError, ValueError) as exc:
             raise DocumentReviewPdfAnnotationServiceError(

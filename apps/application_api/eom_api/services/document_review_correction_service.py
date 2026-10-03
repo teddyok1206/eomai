@@ -10,6 +10,7 @@ from eom_api_contracts.document_review import (
 )
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
+    ApplyDocumentReviewHwpxCorrectionsV2,
     DocumentReviewHwpxCorrectionMediaQuery,
     OfficeDocumentReviewMemberPointer,
 )
@@ -141,13 +142,20 @@ class DocumentReviewCorrectionApplicationService:
             media_type="application/vnd.hancom.hwpx",
             schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
         )
-        command = ApplyDocumentReviewHwpxCorrections(
-            actor_id=actor_id,
-            idempotency_key=idempotency_key,
-            workflow_id=workflow_id,
-            review_result=review_result,
-            base_hwpx=base_hwpx,
-            finding_ids=finding_ids,
+        command_model = (
+            ApplyDocumentReviewHwpxCorrectionsV2
+            if review_result.schema_ref.endswith("/pdf-document-review-result-v4.schema.json")
+            else ApplyDocumentReviewHwpxCorrections
+        )
+        command = command_model.model_validate(
+            {
+                "actor_id": actor_id,
+                "idempotency_key": idempotency_key,
+                "workflow_id": workflow_id,
+                "review_result": review_result,
+                "base_hwpx": base_hwpx,
+                "finding_ids": finding_ids,
+            }
         )
         try:
             response = self.catalog.apply_document_review_hwpx_corrections(command)

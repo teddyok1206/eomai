@@ -13,6 +13,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewAnnotatedPdfsV4,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -26,6 +27,7 @@ from eom_workflow import (
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
+    PdfDocumentReviewRoleResultV4,
 )
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
@@ -142,9 +144,15 @@ class DocumentReviewAnnotationApplicationService:
                 "A completed review needs at least one located finding before annotation.",
             )
         annotations = tuple(marks)
+        # New single-document reviews use the product's native comment-panel profile.
+        # Keep legacy box-only delivery unchanged for historical results.
+        if isinstance(parsed, PdfDocumentReviewRoleResultV4):
+            annotation_profile = "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
         payload: dict[str, object] = {
             "schema_version": (
-                "document-review-pdf-annotation-request/3.0"
+                "document-review-pdf-annotation-request/4.0"
+                if isinstance(parsed, PdfDocumentReviewRoleResultV4)
+                else "document-review-pdf-annotation-request/3.0"
                 if annotation_profile is not None
                 and isinstance(parsed, PairedDocumentReviewRoleResultV3)
                 else "document-review-pdf-annotation-request/2.0"
@@ -175,8 +183,11 @@ class DocumentReviewAnnotationApplicationService:
             CreateDocumentReviewAnnotatedPdfs
             | CreateDocumentReviewAnnotatedPdfsV2
             | CreateDocumentReviewAnnotatedPdfsV3
+            | CreateDocumentReviewAnnotatedPdfsV4
         )
-        if annotation_profile is None:
+        if isinstance(parsed, PdfDocumentReviewRoleResultV4):
+            command = CreateDocumentReviewAnnotatedPdfsV4.model_validate(payload)
+        elif annotation_profile is None:
             command = CreateDocumentReviewAnnotatedPdfs.model_validate(payload)
         elif isinstance(parsed, PairedDocumentReviewRoleResultV3):
             command = CreateDocumentReviewAnnotatedPdfsV3.model_validate(payload)

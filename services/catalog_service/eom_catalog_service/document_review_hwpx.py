@@ -15,6 +15,7 @@ from xml.etree import ElementTree
 
 from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionPlan,
+    DocumentReviewHwpxCorrectionPlanV2,
     DocumentReviewHwpxCorrectionResult,
     DocumentReviewHwpxEdit,
     OfficeDocumentReviewMemberPointer,
@@ -22,6 +23,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_identifiers import content_sha256, sha256_file
+from eom_workflow import single_document_review_contract_for_schema_ref
 
 MAX_HWPX_BYTES: Final = 256 * 1024 * 1024
 MAX_HWPX_MEMBERS: Final = 4096
@@ -438,8 +440,15 @@ def build_document_review_hwpx_correction_plan(
             int(value["address"]["start_offset"]),  # type: ignore[index]
         )
     )
+    target_aware = (
+        single_document_review_contract_for_schema_ref(review_result.schema_ref).result_schema
+        == "pdf-document-review-result@4.0"
+    )
+    plan_model = (
+        DocumentReviewHwpxCorrectionPlanV2 if target_aware else DocumentReviewHwpxCorrectionPlan
+    )
     value: dict[str, object] = {
-        "schema_version": "document-review-hwpx-correction-plan/1.0",
+        "schema_version": plan_model.model_fields["schema_version"].default,
         "correction_id": correction_id,
         "workflow_id": workflow_id,
         "review_result": review_result.model_dump(mode="json"),
@@ -448,8 +457,13 @@ def build_document_review_hwpx_correction_plan(
         "edits": edits,
     }
     value["plan_sha256"] = content_sha256(value)
-    validate_contract("document-review-hwpx-correction-plan", value)
-    return DocumentReviewHwpxCorrectionPlan.model_validate(value)
+    validate_contract(
+        "document-review-hwpx-correction-plan-v2"
+        if target_aware
+        else "document-review-hwpx-correction-plan",
+        value,
+    )
+    return plan_model.model_validate(value)
 
 
 def _clone_red_character_properties(

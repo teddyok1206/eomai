@@ -2119,6 +2119,12 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/pdf-document-review.v1.2.yaml"
         ).read_bytes()
     )
+    (workflow_root / "pdf-document-review.v1.3.yaml").write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/pdf-document-review.v1.3.yaml"
+        ).read_bytes()
+    )
     worker_config = root / "worker-slots.yaml"
     worker_config.write_bytes(
         (Path(os.environ["REPOSITORY_ROOT"]) / "config/worker-slots.example.yaml").read_bytes()
@@ -2387,6 +2393,7 @@ load_role_input_schema("support", "workflow-role/1.22.0")
 load_role_input_schema("support", "workflow-role/1.25.0")
 load_role_input_schema("support", "workflow-role/1.26.0")
 load_role_input_schema("support", "workflow-role/1.27.0")
+load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("authoring", "workflow-role/1.19.0")
 load_role_input_schema("image", "workflow-role/1.19.0")
 load_role_input_schema("review", "workflow-role/1.19.0")
@@ -2430,6 +2437,7 @@ if not {
     "pdf-document-review-control-bootstrap-v3",
     "pdf-document-review-control-bootstrap-v4",
     "pdf-document-review-control-bootstrap-v5",
+    "pdf-document-review-control-bootstrap-v6",
     "resolved-execution-plan-v14",
     "resolved-execution-plan-v15",
     "resolved-execution-plan-v16",

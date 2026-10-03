@@ -117,6 +117,7 @@ def test_correction_service_commits_one_new_hwpx_and_streams_exact_output(
     expected_plan_sha256 = "sha256:" + "7" * 64
 
     class FakePlan:
+        schema_version = "document-review-hwpx-correction-plan/1.0"
         plan_sha256 = expected_plan_sha256
 
         def model_dump(self, *, mode: str) -> dict[str, object]:

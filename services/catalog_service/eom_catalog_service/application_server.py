@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_MODE,
     CATALOG_APPLICATION_SOCKET_PATH,
     ApplyDocumentReviewHwpxCorrections,
+    ApplyDocumentReviewHwpxCorrectionsV2,
     ApproveItemRevisionCommandV1,
     AssessmentPageListQuery,
     AssessmentPageMediaQuery,
@@ -34,6 +35,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -186,8 +188,19 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 return
             if raw_operation == "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS":
                 try:
-                    validate_contract("document-review-hwpx-correction-request", value)
-                    correction_request = ApplyDocumentReviewHwpxCorrections.model_validate(value)
+                    correction_request: (
+                        ApplyDocumentReviewHwpxCorrections | ApplyDocumentReviewHwpxCorrectionsV2
+                    )
+                    if value.get("schema_version") == "document-review-hwpx-correction-request/2.0":
+                        validate_contract("document-review-hwpx-correction-request-v2", value)
+                        correction_request = ApplyDocumentReviewHwpxCorrectionsV2.model_validate(
+                            value
+                        )
+                    else:
+                        validate_contract("document-review-hwpx-correction-request", value)
+                        correction_request = ApplyDocumentReviewHwpxCorrections.model_validate(
+                            value
+                        )
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_document_review_hwpx_correction_error(
                         self.wfile,
@@ -211,9 +224,16 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if raw_operation == "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2":
                 try:
                     annotation_request_v2: (
-                        CreateDocumentReviewAnnotatedPdfsV3 | CreateDocumentReviewAnnotatedPdfsV2
+                        CreateDocumentReviewAnnotatedPdfsV4
+                        | CreateDocumentReviewAnnotatedPdfsV3
+                        | CreateDocumentReviewAnnotatedPdfsV2
                     )
-                    if value.get("schema_version") == (
+                    if value.get("schema_version") == "document-review-pdf-annotation-request/4.0":
+                        validate_contract("document-review-pdf-annotation-request-v4", value)
+                        annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV4.model_validate(
+                            value
+                        )
+                    elif value.get("schema_version") == (
                         "document-review-pdf-annotation-request/3.0"
                     ):
                         validate_contract("document-review-pdf-annotation-request-v3", value)

@@ -16,11 +16,13 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewPdfAnnotationResult,
     DocumentReviewPdfAnnotationResultV2,
     DocumentReviewResultMemberPointer,
+    DocumentReviewResultMemberPointerV2,
     GraphGroundedDocumentReviewResultMemberPointer,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
     OfficeDocumentReviewMemberPointerV2,
     PdfDocumentReviewResultMemberPointer,
+    PdfDocumentReviewResultMemberPointerV2,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
 )
@@ -735,6 +737,20 @@ class CreateDocumentReviewAnnotatedPdfsV2(FrozenModel):
         ):
             raise ValueError("annotation request self-hash differs")
         return self
+
+
+class ApplyDocumentReviewHwpxCorrectionsV2(ApplyDocumentReviewHwpxCorrections):
+    schema_version: Literal["document-review-hwpx-correction-request/2.0"] = (
+        "document-review-hwpx-correction-request/2.0"  # type: ignore[assignment]
+    )
+    review_result: PdfDocumentReviewResultMemberPointerV2
+
+
+class CreateDocumentReviewAnnotatedPdfsV4(CreateDocumentReviewAnnotatedPdfsV2):
+    schema_version: Literal["document-review-pdf-annotation-request/4.0"] = (
+        "document-review-pdf-annotation-request/4.0"  # type: ignore[assignment]
+    )
+    review_result: DocumentReviewResultMemberPointerV2
 
 
 class CreateDocumentReviewAnnotatedPdfsV3(CreateDocumentReviewAnnotatedPdfsV2):

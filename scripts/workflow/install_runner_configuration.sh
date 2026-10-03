@@ -22,6 +22,7 @@ declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/knowledge-analysis.v10.yaml"]="${WORKFLOW_ROOT}/knowledge-analysis.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/customer-support.v1.yaml"]="${WORKFLOW_ROOT}/customer-support.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/pdf-document-review.v1.2.yaml"]="${WORKFLOW_ROOT}/pdf-document-review.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/pdf-document-review.v1.3.yaml"]="${WORKFLOW_ROOT}/pdf-document-review-single.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-extraction.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-extraction.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-editorial-compatibility.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-editorial-compatibility.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"

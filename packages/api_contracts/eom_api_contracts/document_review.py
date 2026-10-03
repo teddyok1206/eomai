@@ -8,6 +8,7 @@ from eom_workflow import (
     PairedDocumentReviewOutput,
     PairedDocumentReviewOutputV3,
     PdfDocumentReviewOutput,
+    PdfDocumentReviewOutputV4,
 )
 from pydantic import Field, model_validator
 
@@ -645,7 +646,7 @@ class PdfDocumentReviewView(ApiModel):
         pattern=r"^sha256:[0-9a-f]{64}$",
     )
     result_artifact: PdfDocumentReviewResultArtifactView | None = None
-    result: PdfDocumentReviewOutput | None = None
+    result: PdfDocumentReviewOutputV4 | PdfDocumentReviewOutput | None = None
     failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     created_at: UtcDatetime
     updated_at: UtcDatetime

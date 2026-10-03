@@ -167,6 +167,7 @@ def test_pdf_review_projection_resolves_exact_worker_request_and_artifact() -> N
     step, pointer, job, artifact, revision, event = _records()
     result = QueryAdapter._validated_pdf_document_review_result(
         workflow_id=WORKFLOW_ID,
+        definition_version="1.0.0",
         review_request=_request(),
         step=step,
         pointer=pointer,
@@ -254,6 +255,7 @@ def test_pdf_review_projection_rejects_stale_or_cross_workflow_data(
     with pytest.raises(ApiError) as captured:
         QueryAdapter._validated_pdf_document_review_result(
             workflow_id=WORKFLOW_ID,
+            definition_version="1.0.0",
             review_request=_request(),
             step=step,
             pointer=pointer,

@@ -22,6 +22,7 @@ from eom_catalog_contracts import (
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
+    ApplyDocumentReviewHwpxCorrectionsV2,
     ApprovedItemGraphPublicationResult,
     ApproveItemRevisionCommandV1,
     AssessmentItemContentContract,
@@ -38,6 +39,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -451,7 +453,12 @@ class CatalogApplicationClient:
         command: ApplyDocumentReviewHwpxCorrections,
     ) -> DocumentReviewHwpxCorrectionResponse:
         payload = command.model_dump(mode="json")
-        validate_contract("document-review-hwpx-correction-request", payload)
+        validate_contract(
+            "document-review-hwpx-correction-request-v2"
+            if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
+            else "document-review-hwpx-correction-request",
+            payload,
+        )
         value = self._raw_request(
             payload, timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS
         )
@@ -528,7 +535,9 @@ class CatalogApplicationClient:
             (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
         )
         request_contract = (
-            "document-review-pdf-annotation-request-v3"
+            "document-review-pdf-annotation-request-v4"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV4)
+            else "document-review-pdf-annotation-request-v3"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV3)
             else (
                 "document-review-pdf-annotation-request-v2"

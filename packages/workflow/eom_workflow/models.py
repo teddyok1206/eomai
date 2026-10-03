@@ -73,6 +73,7 @@ from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewOutput,
+    PdfDocumentReviewOutputV4,
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
 )
@@ -1019,6 +1020,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.25.0",
         "workflow-role/1.26.0",
         "workflow-role/1.27.0",
+        "workflow-role/1.28.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1151,6 +1153,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.25.0",
         "workflow-role/1.26.0",
         "workflow-role/1.27.0",
+        "workflow-role/1.28.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2807,6 +2810,11 @@ class PdfDocumentReviewRoleResult(RoleResultBase):
     output: PdfDocumentReviewOutput
 
 
+class PdfDocumentReviewRoleResultV4(PdfDocumentReviewRoleResult):
+    protocol_version: Literal["workflow-role/1.28.0"] = "workflow-role/1.28.0"  # type: ignore[assignment]
+    output: PdfDocumentReviewOutputV4
+
+
 class PairedDocumentReviewRoleResult(RoleResultBase):
     protocol_version: Literal["workflow-role/1.26.0"] = "workflow-role/1.26.0"
     role: Literal["support"] = "support"
@@ -2881,6 +2889,7 @@ RoleResult = (
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | PdfDocumentReviewRoleResult
+    | PdfDocumentReviewRoleResultV4
     | PairedDocumentReviewRoleResult
     | PairedDocumentReviewRoleResultV3
 )

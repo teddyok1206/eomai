@@ -339,6 +339,7 @@ ROLE_BY_RESULT_SCHEMA = {
     "knowledge-analysis-proposal-result@10.0": "support",
     "customer-support-result@1.0": "support",
     "pdf-document-review-result@1.0": "support",
+    "pdf-document-review-result@4.0": "support",
     "pdf-document-review-result@2.0": "support",
     "pdf-document-review-result@3.0": "support",
     "legacy-item-editorial-compatibility-result@1.0": "support",

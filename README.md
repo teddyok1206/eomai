@@ -51,7 +51,9 @@ readiness가 정본입니다.
 | 25문항 생산 | `mock-exam-production-plan/5.0`, execution `5.0` |
 | 제품 내 고객지원 | `customer-support@1.0.0`, role `workflow-role/1.22.0` |
 | 교육 문서 검토 | `pdf-document-review@1.2.0`, role `workflow-role/1.27.0`, result `@3.0`, plan `15.0` |
+| 단일 문서 정밀 검토 | `pdf-document-review@1.3.0`, role `workflow-role/1.28.0`, result `@4.0`, 기존 plan `13.0` |
 | PDF 검토 주석 | request `document-review-pdf-annotation/3.0`, Catalog protocol `catalog/1.22` |
+| 단일 문서 후속 출력 | annotation request `4.0` / `catalog/1.23`, correction request·plan `2.0` / `catalog/1.24` |
 
 버전 숫자는 경계마다 독립적이며 가장 큰 값을 서로 조합하지 않습니다. 새 작업 selector, 코드
 admission, 운영 activation, 25문항의 의도적인 이전 버전 pin과 historical replay의 구분은
@@ -109,6 +111,10 @@ HWPX 교정본을 만들며, 바뀐 글자만 빨간색으로 표시합니다. �
 구조·평가 균형의 정확히 10개 target을 각각 요구합니다. 문항마다 독립 풀이 요약과 순서화된 풀이
 단계, 검산 답, 조건 충분성, 단위 검사, 모든 선지 판정, 해설 단계 검증과 문제지·해설지 anchor를
 구조적으로 남깁니다.
+단일 문서 V4도 같은 10개 검토 축을 정확히 한 번씩 검사하고 실패·근거 부족·불확실한 후보가
+있으면 `NEEDS_HUMAN_DECISION`으로 남깁니다. 결과 조회·native 주석·HWPX 교정은 고정된 결과 계약을
+함께 사용합니다. 별도 해설지나 Graph 근거가 없는 단일 문서에 이를 요구하거나 근거를 만들어내지
+않습니다. 구형 결과의 `COMPLETE`와 실패 이력은 재해석하지 않습니다.
 결과는 검증 target → 후보 재확인 → 확정 finding 순서로 남고, 확정 finding만 화면과 파생 산출물에
 표시됩니다.
 

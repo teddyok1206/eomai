@@ -99,10 +99,12 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_SHA256,
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     DocumentReviewResultMemberPointer,
+    DocumentReviewResultMemberPointerV2,
     GraphGroundedDocumentReviewResultMemberPointer,
     InspectMockExamAssemblyQuery,
     ItemRevisionApprovalReceiptV1,
     PdfDocumentReviewResultMemberPointer,
+    PdfDocumentReviewResultMemberPointerV2,
     PreviewMockExamAssemblyPlanCommand,
     load_integrated_science_mock_exam_policy,
 )
@@ -187,6 +189,7 @@ from eom_workflow import (
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewRequest,
     PdfDocumentReviewRoleResult,
+    PdfDocumentReviewRoleResultV4,
     PdfDocumentReviewWorkerRequest,
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
@@ -197,10 +200,12 @@ from eom_workflow import (
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV19,
     RoleWorkerInput,
+    single_document_review_contract_for_definition,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
     validate_pdf_document_review_output_against_request,
 )
+from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
@@ -2968,7 +2973,12 @@ class QueryAdapter:
                     "Document review result pointer is invalid",
                     "The committed review result differs from its immutable Artifact revision.",
                 )
-            return PdfDocumentReviewResultMemberPointer(
+            pointer_model = (
+                PdfDocumentReviewResultMemberPointerV2
+                if isinstance(result, PdfDocumentReviewRoleResultV4)
+                else PdfDocumentReviewResultMemberPointer
+            )
+            return pointer_model(
                 artifact_id=result.artifact.logical_artifact_id,
                 artifact_revision_id=result.artifact.revision_id,
                 sha256=expected_sha256,
@@ -3005,6 +3015,7 @@ class QueryAdapter:
             sources: tuple[tuple[str, PdfReviewDocumentPointer], ...]
             schema_ref: Literal[
                 "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
                 "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
                 "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json",
             ]
@@ -3021,10 +3032,9 @@ class QueryAdapter:
                 result = self._pdf_document_review_results(session, [workflow]).get(workflow_id)
                 request_v1 = self._pdf_document_review_request(workflow)
                 sources = (("DOCUMENT", request_v1.document),)
-                schema_ref = (
-                    "https://eom.local/schemas/workflow/roles/"
-                    "pdf-document-review-result-v1.schema.json"
-                )
+                schema_ref = single_document_review_contract_for_definition(
+                    workflow.definition_version
+                ).schema_ref
             if workflow.state != "COMPLETED" or result is None:
                 raise ApiError(
                     409,
@@ -3055,6 +3065,14 @@ class QueryAdapter:
                     content_length=revision.content_bytes,
                 )
                 if isinstance(result, PairedDocumentReviewRoleResultV3)
+                else DocumentReviewResultMemberPointerV2(
+                    artifact_id=result.artifact.logical_artifact_id,
+                    artifact_revision_id=result.artifact.revision_id,
+                    sha256=expected_sha256,
+                    content_length=revision.content_bytes,
+                    schema_ref="https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+                )
+                if isinstance(result, PdfDocumentReviewRoleResultV4)
                 else DocumentReviewResultMemberPointer(
                     artifact_id=result.artifact.logical_artifact_id,
                     artifact_revision_id=result.artifact.revision_id,
@@ -3225,11 +3243,15 @@ class QueryAdapter:
                     "PDF document review result invalid",
                     "The stored PDF review result pointer is invalid.",
                 ) from exc
+            contract = single_document_review_contract_for_definition(
+                workflow_by_id[workflow_id].definition_version
+            )
             if (
                 pointer.step_key != "review_document"
                 or pointer.attempt != step.attempt
                 or pointer.job_id != step.platform_job_id
-                or pointer.result_schema != "pdf-document-review-result@1.0"
+                or pointer.result_schema != contract.result_schema
+                or step.result_schema != contract.result_schema
             ):
                 raise ApiError(
                     500,
@@ -3291,6 +3313,7 @@ class QueryAdapter:
             review_request = QueryAdapter._pdf_document_review_request(workflow_by_id[workflow_id])
             results[workflow_id] = QueryAdapter._validated_pdf_document_review_result(
                 workflow_id=workflow_id,
+                definition_version=workflow_by_id[workflow_id].definition_version,
                 review_request=review_request,
                 step=step,
                 pointer=pointer,
@@ -3313,6 +3336,7 @@ class QueryAdapter:
     def _validated_pdf_document_review_result(
         *,
         workflow_id: str,
+        definition_version: str,
         review_request: PdfDocumentReviewRequest,
         step: WorkflowStepRunRecord,
         pointer: WorkflowArtifactPointer,
@@ -3322,16 +3346,19 @@ class QueryAdapter:
         event: JobEventRecord | None,
     ) -> PdfDocumentReviewRoleResult:
         try:
+            contract = single_document_review_contract_for_definition(definition_version)
             manifest = (
                 ArtifactManifest.model_validate(revision.manifest) if revision is not None else None
             )
             result = (
-                PdfDocumentReviewRoleResult.model_validate(revision.result)
+                validate_role_result(revision.result, "support", contract.result_schema)
                 if revision is not None
                 else None
             )
             worker_input = RoleWorkerInput.model_validate(job.request) if job is not None else None
             if result is not None:
+                if not isinstance(result, PdfDocumentReviewRoleResult):
+                    raise ValueError("single document review result type differs")
                 validate_pdf_document_review_output_against_request(
                     result.output,
                     review_request,
@@ -3373,16 +3400,16 @@ class QueryAdapter:
             or step.workflow_id != workflow_id
             or step.step_key != "review_document"
             or step.worker_role != "support"
-            or step.result_schema != "pdf-document-review-result@1.0"
+            or step.result_schema != contract.result_schema
             or step.state != "SUCCEEDED"
             or step.platform_job_id != pointer.job_id
             or pointer.step_key != "review_document"
             or pointer.attempt != step.attempt
-            or pointer.result_schema != "pdf-document-review-result@1.0"
+            or pointer.result_schema != contract.result_schema
             or job.job_id != pointer.job_id
             or job.status != "SUCCEEDED"
             or job.completed_at is None
-            or job.protocol_version != "workflow-role/1.25.0"
+            or job.protocol_version != contract.protocol_version
             or job.task_type != "workflow_support"
             or job.request_hash != expected_request_hash
             or job.logical_artifact_id != pointer.logical_artifact_id

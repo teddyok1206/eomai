@@ -11,12 +11,14 @@ from eom_catalog_contracts import (
     DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER,
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV4,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfPanelComment,
     DocumentReviewResultMemberPointer,
+    DocumentReviewResultMemberPointerV2,
     PdfReviewArtifactMemberPointer,
 )
 from eom_catalog_service.artifacts import CatalogArtifact
@@ -31,7 +33,7 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.artifacts import stage_file_set_artifact
-from eom_workflow import PdfDocumentReviewRoleResult
+from eom_workflow import PdfDocumentReviewRoleResult, PdfDocumentReviewRoleResultV4
 
 
 def _source_pdf(tmp_path: Path) -> Path:
@@ -229,6 +231,10 @@ class _StructuredResultArtifacts:
             "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
             "pdf-document-review-result@2.0",
         ),
+        (
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+            "pdf-document-review-result@4.0",
+        ),
     ],
 )
 def test_annotation_resolves_orchestrator_role_result_as_structured_artifact(
@@ -238,7 +244,7 @@ def test_annotation_resolves_orchestrator_role_result_as_structured_artifact(
 ) -> None:
     raw: dict[str, object] = {"schema_version": "test/1.0", "status": "ok"}
     digest = content_sha256(raw)
-    pointer = DocumentReviewResultMemberPointer(
+    pointer = DocumentReviewResultMemberPointerV2(
         artifact_id="artifact_" + "c" * 32,
         artifact_revision_id="rev_" + "d" * 32,
         sha256=digest,
@@ -491,9 +497,11 @@ def test_catalog_annotation_service_commits_byte_and_semantic_hashes_separately(
     assert all("idempotency_key" not in value["request"] for value in artifacts.commit_calls)
 
 
+@pytest.mark.parametrize("target_aware", [False, True])
 def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     tmp_path: Path,
     monkeypatch: Any,
+    target_aware: bool,
 ) -> None:
     pymupdf = import_module("pymupdf")
     pymupdf_native = import_module("pymupdf._extra")
@@ -509,19 +517,25 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     source = _annotation_source(source_path)
     annotation = (_marks()[0],)
     payload: dict[str, Any] = {
-        "schema_version": "document-review-pdf-annotation-request/2.0",
+        "schema_version": (
+            "document-review-pdf-annotation-request/4.0"
+            if target_aware
+            else "document-review-pdf-annotation-request/2.0"
+        ),
         "operation": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2",
         "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
         "actor_id": "operator_test",
         "idempotency_key": "native-annotation-service-test",
         "workflow_id": "workflow_" + "9" * 32,
-        "review_result": DocumentReviewResultMemberPointer(
+        "review_result": DocumentReviewResultMemberPointerV2(
             artifact_id="artifact_" + "c" * 32,
             artifact_revision_id="rev_" + "d" * 32,
             sha256="sha256:" + "e" * 64,
             content_length=100,
             schema_ref=(
-                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json"
+                if target_aware
+                else "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
             ),
         ),
         "sources": (source,),
@@ -533,7 +547,10 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     payload["request_sha256"] = content_sha256(
         {key: value for key, value in payload.items() if key != "idempotency_key"}
     )
-    command = CreateDocumentReviewAnnotatedPdfsV2.model_validate(payload)
+    command_model = (
+        CreateDocumentReviewAnnotatedPdfsV4 if target_aware else CreateDocumentReviewAnnotatedPdfsV2
+    )
+    command = command_model.model_validate(payload)
     mark = annotation[0]
     finding = SimpleNamespace(
         finding_id=mark.finding_id,
@@ -557,7 +574,8 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
             ),
         ),
     )
-    parsed = PdfDocumentReviewRoleResult.model_construct(
+    result_model = PdfDocumentReviewRoleResultV4 if target_aware else PdfDocumentReviewRoleResult
+    parsed = result_model.model_construct(
         workflow_id=command.workflow_id,
         output=SimpleNamespace(
             document_id=source.document_id,
@@ -582,7 +600,7 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     assert response.manifest is not None
     assert response.manifest.schema_ref.endswith("annotation-manifest/2.0")
     commit = artifacts.commit_calls[0]
-    assert commit["protocol_version"] == "catalog/1.21"
+    assert commit["protocol_version"] == ("catalog/1.23" if target_aware else "catalog/1.21")
     assert commit["manifest_version"] == "document-review-pdf-annotation-file-set/2.0"
     document = pymupdf.open(stream=artifacts.committed["annotated/document.pdf"], filetype="pdf")
     try:

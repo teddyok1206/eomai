@@ -1,0 +1,43 @@
+schema_version: pdf-document-review-control-bootstrap/6.0
+preset_key: pdf-document-review
+display_name: EOM 계약 일치 단일·문제지·해설지 정밀 검토
+description: 모든 검토 축과 문항별 풀이·단위·선지·해설을 고정 Graph 근거에 결속하는 문서 검토 정책입니다.
+created_at: 2026-10-03T08:58:00Z
+model: gpt-5.6-terra
+reasoning_effort: xhigh
+general_knowledge_policy: ALLOW_WITH_PROVENANCE
+compatible_workflow_protocols:
+  - workflow-role/1.25.0
+  - workflow-role/1.26.0
+  - workflow-role/1.27.0
+  - workflow-role/1.28.0
+platform_instruction_path: instructions/platform.md
+role_instruction_path: instructions/pdf-document-review.md
+slot_key: slot06
+worker_pool_key: customer-support
+timeout_seconds: 3600
+instruction_revision_number: 6
+evidence_access: EVIDENCE_CONTEXT
+retrieval_policy:
+  access_policy_revision_id: accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9
+  access_policy_sha256: sha256:bf35bc53cd756efdff81fe4154a639968083b5d91932bdc09deaa439b32fcbc0
+  allowed_corpus_keys:
+    - integrated-science-textbooks
+  allowed_query_kinds:
+    - ITEM_PREPARATION
+  allowed_source_classes:
+    - APPROVED_ITEM
+    - PAST_EXAM
+    - TEXTBOOK
+  maximum_budget:
+    max_documents: 16
+    max_item_revisions: 32
+    max_graph_nodes: 128
+    max_claims: 64
+    max_context_tokens: 16000
+predecessor:
+  preset_revision_id: execpresetrev_b478cf2d7ae647e0917de9a3cbadede0
+  preset_policy_sha256: sha256:2f24cd38b76ecdd62034f10f8bfd30df20afe3e79daa1d318922585b48698208
+  instruction_bundle_revision_id: instrrev_c6a97fc4831a807893742c1e40db7539
+  instruction_manifest_sha256: sha256:ad26084e328c3521df77c2ed8983b7f913d91b4a6caac865dca43c93c71f8baa
+  instruction_content_sha256: sha256:d6ca72cf730dd3b2764054d5dd48ae2d24681904b899dd98a4eb11c3b82c57b4

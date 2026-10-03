@@ -60,6 +60,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV20,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
+    single_document_review_contract_for_definition,
     validate_control_contract,
 )
 from eom_workflow.control_plane import (
@@ -484,7 +485,7 @@ def materialize_execution_step(
 
     agents_bytes = _agents_document(instruction_docs)
     if isinstance(plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14)):
-        agents_bytes += _predecessor_document_review_contract(plan)
+        agents_bytes += _admitted_document_review_contract(plan)
     total_bytes += len(agents_bytes)
     _require_total_size(total_bytes, analysis=is_analysis)
     agents_path = workspace / "AGENTS.md"
@@ -2233,15 +2234,16 @@ def _write_exclusive(path: Path, payload: bytes, *, group_id: int) -> None:
         ) from exc
 
 
-def _predecessor_document_review_contract(
+def _admitted_document_review_contract(
     plan: ResolvedExecutionPlanV13 | ResolvedExecutionPlanV14,
 ) -> bytes:
     """Bind shared role instructions to the exact admitted predecessor contract."""
 
     if isinstance(plan, ResolvedExecutionPlanV13):
+        admitted = single_document_review_contract_for_definition(plan.workflow_definition_version)
         contract = (
             "This is SINGLE-DOCUMENT review: PDF_DOCUMENT_REVIEW_REQUEST, "
-            "workflow-role/1.25.0, pdf-document-review-result@1.0. "
+            f"{admitted.protocol_version}, {admitted.result_schema}. "
             "Read every page of source/document and the exact preset and additional guidance "
             "in worker-input.json. Do not require a separate QUESTION/SOLUTION pair, "
             "document_role, cross_document_checks, item_reviews, or evidence_usage fields. "
@@ -2255,6 +2257,21 @@ def _predecessor_document_review_contract(
             "ordinals starting at 1 and unique finding IDs. Each finding must preserve its "
             "candidate's exact ordered anchors, finding_code, category, severity and title. "
         )
+        if admitted.result_schema == "pdf-document-review-result@4.0":
+            contract += (
+                "Include each of the ten verification axes exactly once. Set review_status "
+                "to NEEDS_HUMAN_DECISION if any target is FAILED or INSUFFICIENT, or any "
+                "candidate is UNCERTAIN; otherwise set it to COMPLETE. Confirmed findings "
+                "remain findings and must not be demoted to force a status. Do not mark "
+                "unverified targets VERIFIED just to complete the review. "
+            )
+        else:
+            contract += (
+                "For this legacy V1 contract only, review_status is NEEDS_HUMAN_DECISION if "
+                "any candidate is UNCERTAIN; otherwise it is COMPLETE. COMPLETE here records "
+                "review execution, not scientific correctness or publication approval. "
+                "Preserve each target's actual FAILED/INSUFFICIENT status and confirmed findings. "
+            )
     else:
         contract = (
             "This is predecessor PAIRED review: workflow-role/1.26.0, "

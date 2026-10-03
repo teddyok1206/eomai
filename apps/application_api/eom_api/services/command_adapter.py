@@ -793,7 +793,7 @@ class CommandAdapter:
             actor=actor,
             idempotency_key=idempotency_key,
             definition_key="pdf-document-review",
-            definition_version="1.0.0",
+            definition_version=("1.0.0", "1.3.0"),
         )
         if replay is not None:
             return replay
@@ -801,7 +801,7 @@ class CommandAdapter:
             definition = admitted_workflow_definition(
                 session,
                 definition_key="pdf-document-review",
-                definition_version="1.0.0",
+                definition_version="1.3.0",
             )
             if definition is None:
                 raise ApiError(
@@ -820,7 +820,7 @@ class CommandAdapter:
                 for step in compiled.definition.steps
                 if isinstance(step, AgentStep)
             }
-            if protocols != {"workflow-role/1.25.0"}:
+            if protocols != {"workflow-role/1.28.0"}:
                 raise ApiError(
                     503,
                     "PDF_DOCUMENT_REVIEW_CONTRACT_INVALID",
@@ -1216,7 +1216,7 @@ class CommandAdapter:
         actor: ActorContext,
         idempotency_key: str,
         definition_key: str,
-        definition_version: str,
+        definition_version: str | tuple[str, ...],
     ) -> tuple[str, str, int] | None:
         """Return an exact prior receipt before consulting any mutable current pointer."""
 
@@ -1233,7 +1233,12 @@ class CommandAdapter:
                 workflow.created_actor_type != "human"
                 or workflow.created_actor_id != actor.actor_id
                 or workflow.definition_key != definition_key
-                or workflow.definition_version != definition_version
+                or workflow.definition_version
+                not in (
+                    (definition_version,)
+                    if isinstance(definition_version, str)
+                    else definition_version
+                )
                 or workflow.initial_request != expected_document
             ):
                 raise WorkflowError(

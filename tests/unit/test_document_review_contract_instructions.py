@@ -1,12 +1,12 @@
 """Contract-specific instructions do not require unavailable paired/Graph inputs."""
 
-from eom_orchestrator.execution_materializer import _predecessor_document_review_contract
+from eom_orchestrator.execution_materializer import _admitted_document_review_contract
 from eom_workflow import ResolvedExecutionPlanV13, ResolvedExecutionPlanV14
 
 
 def test_single_document_contract_does_not_invent_a_solution_or_graph_evidence() -> None:
-    instructions = _predecessor_document_review_contract(
-        ResolvedExecutionPlanV13.model_construct()
+    instructions = _admitted_document_review_contract(
+        ResolvedExecutionPlanV13.model_construct(workflow_definition_version="1.0.0")
     ).decode("utf-8")
     assert "PDF_DOCUMENT_REVIEW_REQUEST" in instructions
     assert "workflow-role/1.25.0, pdf-document-review-result@1.0" in instructions
@@ -17,7 +17,7 @@ def test_single_document_contract_does_not_invent_a_solution_or_graph_evidence()
 
 
 def test_paired_predecessor_keeps_cross_document_checks_without_claiming_graph() -> None:
-    instructions = _predecessor_document_review_contract(
+    instructions = _admitted_document_review_contract(
         ResolvedExecutionPlanV14.model_construct()
     ).decode("utf-8")
     assert "workflow-role/1.26.0, pdf-document-review-result@2.0" in instructions

@@ -12,13 +12,14 @@ from typing import BinaryIO, Protocol, cast
 
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
+    ApplyDocumentReviewHwpxCorrectionsV2,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionResponse,
     OfficeDocumentReviewMemberPointer,
     validate_contract,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
-from eom_workflow import PdfDocumentReviewRoleResult
+from eom_workflow import PdfDocumentReviewRoleResult, single_document_review_contract_for_schema_ref
 from eom_workflow.schemas import validate_role_result
 from sqlalchemy import Engine
 
@@ -44,6 +45,20 @@ DOCUMENT_REVIEW_HWPX_CORRECTION_SCHEMA_HASH = content_sha256(
     }
 )
 MAX_REVIEW_RESULT_BYTES = 16 * 1024 * 1024
+
+
+DOCUMENT_REVIEW_HWPX_CORRECTION_V2_PROTOCOL_VERSION = "catalog/1.24"
+DOCUMENT_REVIEW_HWPX_CORRECTION_V2_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_HWPX_CORRECTION_V2_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-hwpx-correction-request/2.0",
+            "document-review-hwpx-correction-plan/2.0",
+            "document-review-hwpx-correction-result/1.0",
+            "document-review-hwpx-correction-response/1.0",
+        ],
+    }
+)
 
 
 class DocumentReviewHwpxCorrectionServiceError(RuntimeError):
@@ -134,7 +149,9 @@ class DocumentReviewHwpxCorrectionService:
             parsed = validate_role_result(
                 raw_result,
                 "support",
-                "pdf-document-review-result@1.0",
+                single_document_review_contract_for_schema_ref(
+                    command.review_result.schema_ref
+                ).result_schema,
             )
         except (UnicodeError, ValueError) as exc:
             raise DocumentReviewHwpxCorrectionServiceError(
@@ -250,10 +267,7 @@ class DocumentReviewHwpxCorrectionService:
                         },
                         "plan.json": {
                             "media_type": "application/json",
-                            "schema_ref": (
-                                "eom://schemas/document-review/"
-                                "document-review-hwpx-correction-plan/1.0"
-                            ),
+                            "schema_ref": (f"eom://schemas/document-review/{plan.schema_version}"),
                         },
                         "corrected/document-review-redline.hwpx": {
                             "media_type": "application/vnd.hancom.hwpx",
@@ -261,8 +275,16 @@ class DocumentReviewHwpxCorrectionService:
                         },
                     },
                     manifest_version="document-review-hwpx-correction-file-set/1.0",
-                    protocol_version=DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION,
-                    protocol_schema_hash=DOCUMENT_REVIEW_HWPX_CORRECTION_SCHEMA_HASH,
+                    protocol_version=(
+                        DOCUMENT_REVIEW_HWPX_CORRECTION_V2_PROTOCOL_VERSION
+                        if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
+                        else DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION
+                    ),
+                    protocol_schema_hash=(
+                        DOCUMENT_REVIEW_HWPX_CORRECTION_V2_SCHEMA_HASH
+                        if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
+                        else DOCUMENT_REVIEW_HWPX_CORRECTION_SCHEMA_HASH
+                    ),
                     expected_file_sha256=expected,
                 )
         except DocumentReviewHwpxError as exc:

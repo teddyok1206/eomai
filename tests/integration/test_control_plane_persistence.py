@@ -3854,6 +3854,8 @@ def test_pdf_document_review_v2_bootstrap_advances_exact_v1_predecessor(
         for definition_path in (
             Path("config/workflows/pdf-document-review.v1.yaml"),
             Path("config/workflows/pdf-document-review.v1.1.yaml"),
+            Path("config/workflows/pdf-document-review.v1.2.yaml"),
+            Path("config/workflows/pdf-document-review.v1.3.yaml"),
         ):
             import_workflow_definition(
                 session,
@@ -4105,6 +4107,84 @@ def test_pdf_document_review_v2_bootstrap_advances_exact_v1_predecessor(
         assert bundle_logical.current_revision_id == fourth.instruction_bundle_revision_id
         assert fourth_bundle is not None
         assert fourth_bundle.revision_number == 4
+
+    previous = fourth
+    for version, commit in ((5, "e" * 40), (6, "f" * 40)):
+        with sessions() as session:
+            old_preset = session.get(ExecutionPresetRevisionRecord, previous.preset_revision_id)
+            old_bundle = session.get(
+                ExecutionBundleRevisionRecord, previous.instruction_bundle_revision_id
+            )
+            assert old_preset is not None and old_bundle is not None
+            old_document = dict(old_preset.canonical_document)
+            predecessor = {
+                "preset_revision_id": old_preset.preset_revision_id,
+                "preset_policy_sha256": execution_preset_policy_sha256(old_document),
+                "instruction_bundle_revision_id": old_bundle.bundle_revision_id,
+                "instruction_manifest_sha256": old_bundle.manifest_sha256,
+                "instruction_content_sha256": old_bundle.content_sha256,
+            }
+        successor_root = tmp_path / f"pdf-document-review-v{version}"
+        shutil.copytree(
+            Path(f"config/control-plane/pdf-document-review-v{version}"), successor_root
+        )
+        manifest_path = successor_root / "bootstrap.yaml"
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        manifest["predecessor"] = dict(predecessor, instruction_content_sha256="sha256:" + "0" * 64)
+        manifest_path.write_text(
+            yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+        with pytest.raises(ControlPlaneError) as captured:
+            bootstrap_pdf_document_review_control_plane(
+                integration_engine,
+                config_directory=successor_root,
+                source_commit=commit,
+                actor_id="pdf-review-integration",
+                settings=settings,
+            )
+        assert captured.value.code == "CONTROL_BOOTSTRAP_PREDECESSOR_MISMATCH"
+        manifest["predecessor"] = predecessor
+        manifest_path.write_text(
+            yaml.safe_dump(manifest, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+        successor = bootstrap_pdf_document_review_control_plane(
+            integration_engine,
+            config_directory=successor_root,
+            source_commit=commit,
+            actor_id="pdf-review-integration",
+            settings=settings,
+        )
+        assert (
+            bootstrap_pdf_document_review_control_plane(
+                integration_engine,
+                config_directory=successor_root,
+                source_commit=commit,
+                actor_id="pdf-review-integration",
+                settings=settings,
+            )
+            == successor
+        )
+        with sessions() as session:
+            preset_logical = session.get(ExecutionPresetRecord, successor.preset_id)
+            preset = session.get(ExecutionPresetRevisionRecord, successor.preset_revision_id)
+            bundle = session.get(
+                ExecutionBundleRevisionRecord, successor.instruction_bundle_revision_id
+            )
+            preserved = session.get(ExecutionPresetRevisionRecord, previous.preset_revision_id)
+            assert preset_logical is not None and preset is not None and bundle is not None
+            assert preserved is not None and preserved.canonical_document == old_document
+            assert preset_logical.current_revision_id == successor.preset_revision_id
+            assert bundle.revision_number == version
+            assert preset.canonical_document["schema_version"] == "execution-preset-revision/2.0"
+            assert tuple(preset.compatible_workflow_protocols) == (
+                ("workflow-role/1.25.0", "workflow-role/1.26.0", "workflow-role/1.27.0")
+                + (("workflow-role/1.28.0",) if version == 6 else ())
+            )
+            assert (
+                preset.canonical_document["role_policies"][0]["evidence_access"]
+                == "EVIDENCE_CONTEXT"
+            )
+        previous = successor
 
 
 def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: Engine) -> None:

@@ -310,6 +310,13 @@ class PdfDocumentReviewResultMemberPointer(FrozenModel):
     ] = "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json"
 
 
+class PdfDocumentReviewResultMemberPointerV2(PdfDocumentReviewResultMemberPointer):
+    schema_ref: Literal[
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+    ] = "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json"  # type: ignore[assignment]
+
+
 class OfficeDocumentReviewConversionIdentity(FrozenModel):
     conversion_kind: Literal["IDENTITY_PDF", "LIBREOFFICE_H2ORESTART_PDF"]
     review_pdf_sha256: Sha256
@@ -662,6 +669,13 @@ class DocumentReviewHwpxOutputMember(FrozenModel):
     media_type: Literal["application/vnd.hancom.hwpx"] = "application/vnd.hancom.hwpx"
 
 
+class DocumentReviewHwpxCorrectionPlanV2(DocumentReviewHwpxCorrectionPlan):
+    schema_version: Literal["document-review-hwpx-correction-plan/2.0"] = (
+        "document-review-hwpx-correction-plan/2.0"  # type: ignore[assignment]
+    )
+    review_result: PdfDocumentReviewResultMemberPointerV2
+
+
 class DocumentReviewHwpxCorrectionResult(FrozenModel):
     schema_version: Literal["document-review-hwpx-correction-result/1.0"] = (
         "document-review-hwpx-correction-result/1.0"
@@ -704,6 +718,14 @@ class DocumentReviewResultMemberPointer(FrozenModel):
     schema_ref: Literal[
         "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
         "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+    ]
+
+
+class DocumentReviewResultMemberPointerV2(DocumentReviewResultMemberPointer):
+    schema_ref: Literal[  # type: ignore[assignment]
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
     ]
 
 
