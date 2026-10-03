@@ -4,6 +4,7 @@ import copy
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from eom_identifiers import content_sha256
@@ -577,6 +578,124 @@ def test_paired_document_review_constrained_schema_explains_canonical_order() ->
     assert "anchor_id" in target["anchors"]["description"]
     assert "anchor_id" in cross_check["question_anchors"]["description"]
     assert "anchor_id" in cross_check["solution_anchors"]["description"]
+
+
+def test_single_document_review_constrained_schema_explains_canonical_order() -> None:
+    canonical_before = load_role_result_schema("pdf-document-review-result@1.0")
+    schema = constrained_result_schema(
+        "pdf-document-review-result@1.0",
+        RoleWorkerInput.model_validate(_input()),
+    )
+    definitions = schema["$defs"]
+    output = definitions["output"]["properties"]
+
+    assert "target_id" in output["verification_targets"]["description"]
+    assert "candidate_id" in output["candidate_findings"]["description"]
+    assert "CONFIRMED" in output["findings"]["description"]
+    assert "starting at 1" in output["findings"]["description"]
+    assert "numeric order" in definitions["target"]["properties"]["page_numbers"]["description"]
+    for definition in ("target", "candidate", "finding"):
+        description = definitions[definition]["properties"]["anchors"]["description"]
+        assert "anchor_id" in description
+        assert "lexicographic" in description
+        assert "no duplicates" in description
+        assert "not page or region order" in description
+    assert "exact content" in definitions["finding"]["properties"]["anchors"]["description"]
+    assert load_role_result_schema("pdf-document-review-result@1.0") == canonical_before
+
+
+def _single_result_with_two_anchors() -> dict[str, object]:
+    value = _worker_result_without_quote_hashes()
+    output = cast(dict[str, Any], value["output"])
+    second_anchor = copy.deepcopy(output["verification_targets"][0]["anchors"][0])
+    second_anchor["anchor_id"] = "reviewanchor_" + "2" * 32
+    # ID order is independent of visual reading order.
+    second_anchor["region"]["y_ppm"] = 50000
+    for collection in ("verification_targets", "candidate_findings", "findings"):
+        output[collection][0]["anchors"].append(copy.deepcopy(second_anchor))
+    return value
+
+
+@pytest.mark.parametrize("collection", ("verification_targets", "candidate_findings", "findings"))
+@pytest.mark.parametrize("invalid_order", ("descending", "duplicate"))
+def test_single_document_review_rejects_invalid_anchor_order_without_repair(
+    collection: str, invalid_order: str
+) -> None:
+    value = _single_result_with_two_anchors()
+    output = cast(dict[str, Any], value["output"])
+    anchors = output[collection][0]["anchors"]
+    if invalid_order == "descending":
+        anchors.reverse()
+    else:
+        anchors[1] = copy.deepcopy(anchors[0])
+    before = copy.deepcopy(value)
+    schema = constrained_result_schema(
+        "pdf-document-review-result@1.0", RoleWorkerInput.model_validate(_input())
+    )
+    # Structured Outputs describes ordering; the typed contract enforces it.
+    Draft202012Validator(schema).validate(value)
+    with pytest.raises(ValueError, match="anchors must be sorted and unique"):
+        validate_role_result(value, "support", "pdf-document-review-result@1.0")
+    assert value == before
+
+
+def test_single_document_review_accepts_id_sorted_anchors_without_reordering_regions() -> None:
+    value = _single_result_with_two_anchors()
+    before = copy.deepcopy(value)
+    parsed = validate_role_result(value, "support", "pdf-document-review-result@1.0")
+    assert isinstance(parsed, PdfDocumentReviewRoleResult)
+    validate_pdf_document_review_output_against_request(parsed.output, _request())
+    assert tuple(anchor.anchor_id for anchor in parsed.output.verification_targets[0].anchors) == (
+        "reviewanchor_" + "1" * 32,
+        "reviewanchor_" + "2" * 32,
+    )
+    assert parsed.output.verification_targets[0].anchors[1].region.y_ppm == 50000
+    assert value == before
+
+
+@pytest.mark.parametrize("page_numbers", ([2, 1], [1, 1]))
+def test_single_document_review_rejects_invalid_target_page_order(page_numbers: list[int]) -> None:
+    value = _result()
+    output = cast(dict[str, Any], value["output"])
+    output["verification_targets"][0]["page_numbers"] = page_numbers
+    with pytest.raises(ValueError, match="page numbers must be sorted and unique"):
+        validate_role_result(value, "support", "pdf-document-review-result@1.0")
+
+
+@pytest.mark.parametrize(
+    ("collection", "id_field", "error"),
+    (
+        ("verification_targets", "target_id", "targets must be sorted and unique"),
+        ("candidate_findings", "candidate_id", "candidates must be sorted and unique"),
+    ),
+)
+@pytest.mark.parametrize("invalid_order", ("descending", "duplicate"))
+def test_single_document_review_rejects_invalid_top_level_identity_order(
+    collection: str, id_field: str, error: str, invalid_order: str
+) -> None:
+    value = _result()
+    output = cast(dict[str, Any], value["output"])
+    entries = output[collection]
+    second = copy.deepcopy(entries[0])
+    if invalid_order == "descending":
+        prefix = second[id_field].split("_", 1)[0]
+        second[id_field] = prefix + "_" + "1" * 32
+    entries.append(second)
+    with pytest.raises(ValueError, match=error):
+        validate_role_result(value, "support", "pdf-document-review-result@1.0")
+
+
+def test_single_document_review_preserves_finding_ordinal_and_candidate_correspondence() -> None:
+    value = _result()
+    output = cast(dict[str, Any], value["output"])
+    output["findings"][0]["ordinal"] = 2
+    with pytest.raises(ValueError, match="ordinals must be contiguous from one"):
+        validate_role_result(value, "support", "pdf-document-review-result@1.0")
+    output["findings"][0]["ordinal"] = 1
+    output["findings"][0]["anchors"] = copy.deepcopy(output["findings"][0]["anchors"])
+    output["findings"][0]["anchors"][0]["region"]["y_ppm"] = 50000
+    with pytest.raises(ValueError, match="finding differs from its confirmed candidate"):
+        validate_role_result(value, "support", "pdf-document-review-result@1.0")
 
 
 def test_document_review_codex_projection_enforces_recommendation_payloads() -> None:

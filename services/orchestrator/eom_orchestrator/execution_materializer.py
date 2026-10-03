@@ -2245,6 +2245,15 @@ def _predecessor_document_review_contract(
             "Read every page of source/document and the exact preset and additional guidance "
             "in worker-input.json. Do not require a separate QUESTION/SOLUTION pair, "
             "document_role, cross_document_checks, item_reviews, or evidence_usage fields. "
+            "Before submitting JSON, sort verification_targets by target_id and "
+            "candidate_findings by candidate_id, with no duplicate IDs. Sort every target's "
+            "page_numbers in ascending numeric order with no duplicates. In every target, "
+            "candidate and finding, sort anchors by anchor_id in lexicographic ascending "
+            "order, not page or region order, with no duplicate anchor IDs. Keep each "
+            "anchor's location and content attached to its ID. Emit findings only for "
+            "CONFIRMED candidates, exactly once each in candidate_id order, with contiguous "
+            "ordinals starting at 1 and unique finding IDs. Each finding must preserve its "
+            "candidate's exact ordered anchors, finding_code, category, severity and title. "
         )
     else:
         contract = (

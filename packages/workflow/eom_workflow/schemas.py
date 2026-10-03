@@ -1741,6 +1741,28 @@ def _bind_solution_reference_index(
     )
 
 
+def _describe_document_review_result_order(definitions: dict[str, Any]) -> None:
+    """Expose existing typed ordering rules without repairing worker attestations."""
+
+    output = _mapping(_mapping(definitions, "output"), "properties")
+    output["verification_targets"]["description"] = "Sort by target_id with no duplicates."
+    output["candidate_findings"]["description"] = "Sort by candidate_id with no duplicates."
+    output["findings"]["description"] = (
+        "Match only CONFIRMED candidates in candidate_id order, exactly once each, and assign "
+        "contiguous ordinals starting at 1. Keep finding IDs unique."
+    )
+    for definition in ("target", "candidate", "finding"):
+        properties = _mapping(_mapping(definitions, definition), "properties")
+        properties["anchors"]["description"] = (
+            "Sort by anchor_id with no duplicates, using lexicographic ID order, not page or "
+            "region order. Keep each anchor's location and content attached to its ID."
+        )
+    finding = _mapping(_mapping(definitions, "finding"), "properties")
+    finding["anchors"]["description"] += (
+        " Use the exact content and anchor_id order of the corresponding CONFIRMED candidate."
+    )
+
+
 def constrained_result_schema(
     schema_id: str,
     worker_input: RoleWorkerInput,
@@ -1961,6 +1983,12 @@ def constrained_result_schema(
         if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
             raise WorkflowSchemaError("PDF document review result requires its typed request")
         pdf_request = worker_input.request.review_request
+        _describe_document_review_result_order(definitions)
+        target_properties = _mapping(_mapping(definitions, "target"), "properties")
+        target_properties["page_numbers"]["description"] = (
+            "Sort page numbers in ascending numeric order with no duplicates. Every target "
+            "anchor must refer to one of these pages."
+        )
         output_properties = _mapping(_mapping(definitions, "output"), "properties")
         for field_name, value in (
             ("review_request_sha256", pdf_request.request_sha256),
@@ -2058,28 +2086,13 @@ def constrained_result_schema(
                 ),
             }
         )
-        output_properties["verification_targets"]["description"] = (
-            "Sort by target_id with no duplicates."
-        )
-        output_properties["candidate_findings"]["description"] = (
-            "Sort by candidate_id with no duplicates."
-        )
-        output_properties["findings"]["description"] = (
-            "Match CONFIRMED candidates in candidate_id order and assign contiguous ordinals."
-        )
+        _describe_document_review_result_order(definitions)
         output_properties["cross_document_checks"]["description"] = (
             "Sort by check_id with no duplicates."
         )
         target_properties = _mapping(_mapping(definitions, "target"), "properties")
         target_properties["page_refs"]["description"] = (
             "Sort unique entries by document_role and then page_number."
-        )
-        target_properties["anchors"]["description"] = "Sort by anchor_id with no duplicates."
-        candidate_properties = _mapping(_mapping(definitions, "candidate"), "properties")
-        candidate_properties["anchors"]["description"] = "Sort by anchor_id with no duplicates."
-        finding_properties = _mapping(_mapping(definitions, "finding"), "properties")
-        finding_properties["anchors"]["description"] = (
-            "Use the exact content and anchor_id order of the corresponding candidate."
         )
         cross_check_properties = _mapping(
             _mapping(definitions, "cross_document_check"),

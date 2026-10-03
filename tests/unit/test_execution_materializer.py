@@ -1413,6 +1413,13 @@ def test_pdf_review_materializer_stages_exact_pages_and_image_manifest(
     assert "SINGLE-DOCUMENT review" in instructions
     assert "pdf-document-review-result@1.0" in instructions
     assert "No Graph evidence files are staged or authorized" in instructions
+    assert "sort verification_targets by target_id" in instructions
+    assert "candidate_findings by candidate_id" in instructions
+    assert "page_numbers in ascending numeric order" in instructions
+    assert "sort anchors by anchor_id in lexicographic ascending" in instructions
+    assert "not page or region order" in instructions
+    assert "ordinals starting at 1" in instructions
+    assert "candidate's exact ordered anchors" in instructions
 
 
 def test_pdf_review_materializer_rejects_page_hash_drift_before_worker_input(
