@@ -112,3 +112,36 @@ The technical candidates and upstream sources are recorded in
 [the research document](../references/SCIENCE_ASSESSMENT_IMAGE_MODEL_RESEARCH_2026-10-03.md).
 Existing institutional comparison evidence remains in
 [the candidate status](../status/INSTITUTIONAL_IMAGE_STYLE_CANDIDATE_2026-10-02.md).
+
+### 2026-10-03 isolated diagnostic checkpoint
+
+The bounded base-only command/result and compiled-prompt provenance schemas now have an offline
+provider implementation. Staged reference/command/policy hashes, dimensions, exact model membership,
+architecture, prompt capacity, finite numeric outputs, measured duration/VRAM, terminal partial
+failure and zero-inference replay are checked. The shared prompt-capacity rule is reused by the old
+SSD-1B backend, not reimplemented as a version-specific repair. Scientific labels and geometry
+remain outside the model. The optional systemd oneshot keeps the existing private identity,
+GPU lock, offline network and NAS/secret/repository restrictions. No new queue or daemon exists.
+
+The evaluation-only stack was installed into the existing protected model store with 24 pinned
+members (7,266,590,927 bytes). Identity is `imgmodel_88a4de9207f4da7ab4e77de2478cd64e`,
+revision `imgmodelrev_f0cf22164fb6a9171ddbcd13c88270da`, manifest
+`sha256:abde5fe212767a675bf91b9d3a2e5c85a96950e186bd2b950607c8387d148280`.
+These are installed hashes, not merely upstream candidates. Production binding remains V6.
+This checkpoint does not mean the candidate runtime was installed or GPU inference/training ran.
+
+Six proposed TRAIN-only diagnostic subjects are a microscope, burner/vessel, protective glove,
+radio, deciduous tree and trilobite. Existing Catalog prompt policies 1.7 and 1.8.1 both fit the
+two real 77-token encoders (positive 36–54, negative 63–67 tokens for these subjects). No prompt
+truncation was needed, and no production prompt was changed. References still require visual
+inspection before final selection, and HOLDOUT/VALIDATION stay unused for tuning.
+
+Focused source checks at this checkpoint: 125 tests PASS (including split regression), Ruff and
+targeted strict mypy PASS; shell syntax and systemd template verification PASS.
+The first broader image suite overlapped a schema/fixture edit and recorded 4 failures / 179 PASS;
+the final-source rerun passed all 191 tests after aligning the command's 1,800-second cap with the
+1,830-second isolated timeout. This is not a GPU or operating incident.
+The original corpus permission explicitly allows internal SSD-1B LoRA only. The user has been
+asked to extend it to internal SDXL comparison/training. Until that reply is recorded, no approved
+exam crop is submitted to SDXL and the prior permission is not reinterpreted. Sudo authentication
+permits protected installation, not an implicit expansion of the corpus-use scope.

@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lineart-prompt-policy": "local-image-sdxl-lineart-prompt-policy-v1.schema.json",
+    "sdxl-lineart-probe-command": "local-image-sdxl-lineart-probe-command-v1.schema.json",
+    "sdxl-lineart-probe-result": "local-image-sdxl-lineart-probe-result-v1.schema.json",
     "sdxl-lineart-stack": "local-image-sdxl-lineart-stack-v1.schema.json",
     "style-dataset-split": "local-image-style-dataset-split-v1.schema.json",
     "composite-receipt": "local-image-composite-receipt-v1.schema.json",
@@ -300,6 +303,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lineart-prompt-policy": (
+        "sha256:2b76c2514ab0cc7abd1825addb8862d6912577607baae8f4da775302cd5549d6"
+    ),
+    "sdxl-lineart-probe-command": (
+        "sha256:28824320aff23b0b5a4d0d6ae3c77873b6396072f2e03539c62cccbf66d89fb3"
+    ),
+    "sdxl-lineart-probe-result": (
+        "sha256:d20269821bf581faed82ba3f080424ced103c9f84bfa81d97260fe9dad43cde7"
+    ),
     "sdxl-lineart-stack": (
         "sha256:744096d29bb40f60c4c111093359e155822fea652a218be362eab2084ee21a0b"
     ),

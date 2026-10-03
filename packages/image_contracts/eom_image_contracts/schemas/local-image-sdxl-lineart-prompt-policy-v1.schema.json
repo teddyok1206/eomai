@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "SdxlExperimentAuthorization": {
+      "additionalProperties": false,
+      "description": "Pinned operator approval; original SSD-1B permission is not silently widened.",
+      "properties": {
+        "approval_message_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Message Sha256",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "approved_by": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._:@-]+$",
+          "title": "Approved By",
+          "type": "string"
+        },
+        "automatic_activation": {
+          "const": "FORBIDDEN",
+          "title": "Automatic Activation",
+          "type": "string"
+        },
+        "external_export": {
+          "const": "FORBIDDEN",
+          "title": "External Export",
+          "type": "string"
+        },
+        "permitted_uses": {
+          "items": {
+            "enum": [
+              "INTERNAL_SDXL_COMPARISON",
+              "INTERNAL_SDXL_LORA_TRAINING"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Permitted Uses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "approved_at",
+        "approved_by",
+        "approval_message_sha256",
+        "permitted_uses",
+        "external_export",
+        "automatic_activation"
+      ],
+      "title": "SdxlExperimentAuthorization",
+      "type": "object"
+    },
+    "SdxlLineartProbeCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "depiction_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "title": "Depiction Key",
+          "type": "string"
+        },
+        "negative_prompt_en": {
+          "maxLength": 1200,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Negative Prompt En",
+          "type": "string"
+        },
+        "negative_prompt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Negative Prompt Sha256",
+          "type": "string"
+        },
+        "prompt_en": {
+          "maxLength": 1200,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Prompt En",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "reference_height_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Reference Height Px",
+          "type": "integer"
+        },
+        "reference_image": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "reference_width_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Reference Width Px",
+          "type": "integer"
+        },
+        "seeds": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Seeds",
+          "type": "array"
+        },
+        "staged_member_path": {
+          "pattern": "^inputs/imgsdxlcase_[0-9a-f]{32}\\.png$",
+          "title": "Staged Member Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "depiction_key",
+        "reference_image",
+        "reference_width_px",
+        "reference_height_px",
+        "staged_member_path",
+        "prompt_en",
+        "prompt_sha256",
+        "negative_prompt_en",
+        "negative_prompt_sha256",
+        "seeds"
+      ],
+      "title": "SdxlLineartProbeCase",
+      "type": "object"
+    },
+    "SdxlPromptSourcePin": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "AUTHORING_GUIDANCE",
+            "EDITOR_HANDOFF",
+            "ILLUSTRATION_GUIDANCE"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source_name": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "title": "Source Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "source_name",
+        "sha256"
+      ],
+      "title": "SdxlPromptSourcePin",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lineart-prompt-policy/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Small compiled provenance, not a new production prompt or mutable registry.",
+  "properties": {
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/SdxlLineartProbeCase"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    },
+    "catalog_policy_revision": {
+      "enum": [
+        "local-gpu-image-prompt-policy/1.7",
+        "local-gpu-image-prompt-policy/1.8.1",
+        "local-gpu-image-prompt-policy/1.9.1"
+      ],
+      "title": "Catalog Policy Revision",
+      "type": "string"
+    },
+    "crop_set": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "experiment_authorization": {
+      "$ref": "#/$defs/SdxlExperimentAuthorization"
+    },
+    "experiment_partition": {
+      "const": "TRAIN",
+      "title": "Experiment Partition",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-lineart-prompt-policy/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SdxlPromptSourcePin"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Sources",
+      "type": "array"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "crop_set",
+    "training_authorization",
+    "experiment_authorization",
+    "experiment_partition",
+    "catalog_policy_revision",
+    "sources",
+    "cases"
+  ],
+  "title": "LocalImageSdxlLineartPromptPolicy",
+  "type": "object"
+}

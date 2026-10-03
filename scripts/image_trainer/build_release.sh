@@ -49,6 +49,9 @@ contract, provider, trainer = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-prompt-policy-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-probe-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-probe-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lineart-stack-v1.schema.json",
         "eom_image_contracts/schemas/local-image-style-dataset-split-v1.schema.json",
         "eom_image_contracts/schemas/local-image-crop-locator-command-v1.schema.json",

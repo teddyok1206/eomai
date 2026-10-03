@@ -55,11 +55,18 @@ from eom_image_provider.reference_acquisition import (
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
 )
+from eom_image_provider.sdxl_lineart_backend import SdxlLineartDiffusersBackend
+from eom_image_provider.sdxl_lineart_probe import load_sdxl_probe_command, run_sdxl_lineart_probe
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eom-local-image")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    lineart = subparsers.add_parser("sdxl-lineart-probe")
+    lineart.add_argument("--command", type=Path, required=True)
+    lineart.add_argument("--model-store-root", type=Path, required=True)
+    lineart.add_argument("--workspace", type=Path, required=True)
+    lineart.add_argument("--gpu-lock", type=Path, required=True)
     generate = subparsers.add_parser("generate")
     generate.add_argument("--request", type=Path, required=True)
     generate.add_argument("--model-store-root", type=Path, required=True)
@@ -102,7 +109,17 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        if args.operation == "create-manifest":
+        if args.operation == "sdxl-lineart-probe":
+            lineart_command = load_sdxl_probe_command(args.workspace, args.command)
+            with acquire_gpu_lease(args.gpu_lock):
+                lineart_result = run_sdxl_lineart_probe(
+                    command=lineart_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    backend=SdxlLineartDiffusersBackend(),
+                )
+            result = lineart_result.model_dump(mode="json")
+        elif args.operation == "create-manifest":
             manifest = create_model_manifest(
                 args.revision_directory,
                 model_id=args.model_id,
@@ -355,3 +372,5 @@ def main() -> None:
         print(code, file=sys.stderr)
         raise SystemExit(1) from None
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    if args.operation == "sdxl-lineart-probe" and result["status"] == "FAILED":
+        raise SystemExit(1)

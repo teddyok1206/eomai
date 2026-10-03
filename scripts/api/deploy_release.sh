@@ -1887,6 +1887,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {
+    "local-image-sdxl-lineart-prompt-policy-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-prompt-policy-v1.schema.json",
+    "local-image-sdxl-lineart-probe-command-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-probe-command-v1.schema.json",
+    "local-image-sdxl-lineart-probe-result-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-probe-result-v1.schema.json",
     "local-image-sdxl-lineart-stack-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-stack-v1.schema.json",
     "local-image-style-dataset-split-v1.schema.json": "schemas/image-provider/local-image-style-dataset-split-v1.schema.json",
     "local-image-flux2-reference-probe-command-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-command-v1.schema.json",

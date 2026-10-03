@@ -25,5 +25,8 @@ tests/unit/test_science_micro_evaluation_runner.py
 tests/unit/test_science_micro_probe_runner.py
 tests/unit/test_science_subject_benchmark_runner.py
 tests/unit/test_science_subject_multiseed_runner.py
+tests/unit/test_sdxl_lineart_backend.py
+tests/unit/test_sdxl_lineart_probe.py
+tests/unit/test_sdxl_model_resolution.py
 tests/unit/test_visual_reference_acquisition.py
 tests/unit/test_visual_reference_coordinator.py

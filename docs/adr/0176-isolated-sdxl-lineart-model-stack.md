@@ -25,6 +25,14 @@ Generated PNGs and long receipts are committed only by the Orchestrator. A later
 command pins reference/conditioning, prompt provenance, stack and optional SDXL LoRA separately.
 LoRA must bind the SDXL base revision; the old SSD-1B adapter cannot be renamed as compatible.
 
+Compiled prompt provenance is a small immutable control Artifact: it pins both original team-lead
+documents, illustration guidance, the existing Catalog policy revision and the exact case prompts.
+The worker schema-checks it and compares all cases with the command before model loading. It does
+not compile prompts from repository files at runtime. Original corpus permission currently names
+SSD-1B and remains unchanged. An explicit operator approval value for internal SDXL comparison
+(and optionally SDXL LoRA training) is required in the new provenance; it does not authorize source
+export or automatic activation. A sudo authentication acknowledgement is not that data-use approval.
+
 ## Access patterns and concurrency
 
 Lookup by component role uses a three-entry map. File uniqueness and membership use a set/map;
@@ -58,6 +66,35 @@ closed before inference. Publication and staging use existing Orchestrator adapt
 import no filesystem/process/DB adapter. Extending the old SSD-1B manifest is simpler but would
 reinterpret a released architecture contract and allow incompatible adapters. A generic model
 plugin system is unnecessary for this one fixed three-component candidate.
+
+## Bounded reference diagnostic
+
+The first command/result family is a base-only, evaluation-only lineart diagnostic, not a substitute
+for the later SDXL LoRA and photograph arms. Commands pin the stack and compiled-prompt provenance,
+one to six exact PNG members and one or two unique seeds per depiction (at most twelve model
+calls). Case/command hashes bind all inputs and settings; stage member names are derived from case
+IDs, never arbitrary filesystem paths. Permission, lifecycle and provenance resolution happens
+in the Orchestrator before staging. Workers verify staged hashes and image dimensions.
+
+Generation uses a fixed 832x512 canvas (compatible with adapter/UNet downsampling), a centered
+800x500 publication crop and explicit fit/grayscale/inversion of reviewed lineart. The conditioning
+PNG is retained independently so polarity and source geometry can be inspected. Each model call
+retains raw RGB and grayscale publication PNGs; conversion removes color only and does not claim
+to remove pseudotext, correct science or improve stroke quality. No source pixels are pasted back
+into a generated image. Human/semantic review and the later morphology gates remain required.
+
+The application owns bounded metadata input/output and replay; the backend owns Diffusers/CUDA.
+Role-keyed lookup verifies each model file once per command, using streaming hashes rather than
+materializing gigabyte weights. Runtime/case duration and peak VRAM are measured and checked against
+the frozen budget. The existing GPU lease is acquired by the CLI; the isolated process has an outer
+timeout because a post-call duration check alone cannot interrupt a hung CUDA call.
+The evaluation template has a 1,830-second hard timeout, including a 30-second cleanup margin.
+The command schema and frozen model cap the diagnostic budget at 1,800 seconds; a larger budget
+cannot bypass the installed runtime ceiling. A killed process has no successful terminal receipt.
+Result/member paths are unique and ordered by (case ID, seed). A terminal result replays only after
+its command hash and all recorded file hashes resolve. Failed or partial runs remain failed; an
+existing unreceipted output is not silently treated as success or overwritten. New experiment
+identities represent intentional successor experiments, never timeout-driven duplicate submission.
 
 Primary references:
 

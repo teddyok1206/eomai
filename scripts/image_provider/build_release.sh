@@ -44,6 +44,9 @@ contract, provider = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-prompt-policy-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-probe-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lineart-probe-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lineart-stack-v1.schema.json",
         "eom_image_contracts/schemas/local-image-style-dataset-split-v1.schema.json",
         "eom_image_contracts/schemas/local-image-crop-locator-command-v1.schema.json",
@@ -109,6 +112,11 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/diffusers_backend.py",
         "eom_image_provider/reference_acquisition.py",
         "eom_image_provider/reference_simplification.py",
+        "eom_image_provider/sdxl_lineart_backend.py",
+        "eom_image_provider/sdxl_lineart_probe.py",
+        "eom_image_provider/sdxl_model_resolution.py",
+        "eom_image_provider/staged_file_io.py",
+        "eom_image_provider/prompt_capacity.py",
     }.issubset(names):
         raise SystemExit("LOCAL_IMAGE_PROVIDER_WHEEL_INVALID")
 PY
