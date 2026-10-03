@@ -595,8 +595,9 @@ The isolated unit's journal records SUCCEEDED at `2026-10-03T22:14:32.888597Z`, 
 15,658 ms and peak 8,328,740,352 bytes; semantic result SHA
 `sha256:1f55170e1e6dd08023b2dcfe86b2e42cc5c3fa5a762567edec326fdc5c6e9144`.
 This is terminal runtime evidence, not yet canonical result publication or visual acceptance.
-At the 22:37 UTC checkpoint, sudo authentication had expired; protected result-byte validation,
-canonical commit, sample materialization and own inspection are pending. The prepared publication
+At the 22:37 UTC checkpoint, the direct non-interactive sudo route required authentication;
+protected result-byte validation, canonical commit, sample materialization and own inspection were
+pending. This did not establish that the tmux authentication route was unavailable. The publication
 operator is `/tmp/eom-sdxl-lora-control0-publish-20261003.py`; it pins the existing baseline revision
 and validates the full result and all seven members before Orchestrator publication. It submits
 no model work. Do not regenerate these two outputs simply because observation/publication waits.
@@ -627,3 +628,64 @@ Next: finish the pending control's protected publication/inspection after authen
 implement restricted weight conversion/tensor checks and a separately pinned learned-extraction
 command/result before dispatch. Preserve original TRAIN crop/provenance admission and original
 SDXL receipt semantics; do not use derived PNGs as though they were original approved crop members.
+
+### 2026-10-03 control publication/own review and extractor source build closed
+
+The approved `EOM:3.0` operator route completed protected publication without any inference rerun.
+Control result: `artifact_6501e0cf9d6340d1a60a2170b59413a2` /
+`rev_b466e4fee4994c478cb9359d06de5ef7`, member
+`manifests/sdxl-lora-evaluation-result.json`, raw SHA
+`sha256:61e36ec90d3fc81337a055705776fb0b927d0cdb27e085da86143817607c44f3`, semantic SHA
+`sha256:1f55170e1e6dd08023b2dcfe86b2e42cc5c3fa5a762567edec326fdc5c6e9144`.
+All seven result/conditioning/raw/final members, original baseline conditioning hashes and original
+runtime fields passed validation. Baseline pinned raw result SHA was resolved/verified as
+`sha256:84d31ae4ad6c3e54e21c07665e085bf1c81dea9811b38dc9d38c4c9bdcb9fead`; its known semantic
+identity and exact Artifact/Revision were preserved.
+
+Both actual final images and both matching original baseline images were opened at original
+resolution. Own visual outcome is **REJECTED for both**, not independent blind-review acceptance:
+
+| TRAIN subject | Main observed defects | Native foreground / midtone, milli |
+|---|---|---|
+| MICROSCOPE | Gray background, glossy beam/shading, implausible cropped microscope structure | LoRA 785/687; base 800/596 |
+| RADIO | Extra microphone, gray panels, dense speaker texture, pseudo text/numbers, shading | LoRA 742/583; base 597/246 |
+
+Removing T2I does not remove all style defects; this LoRA alone does not satisfy the fixed-prompt
+exam-style requirement. This two-TRAIN-case control does not establish each causal contribution,
+generalization, a future model's failure, or independent reviewer judgment. The training style
+prefix remains absent from both matched arms; its effect was not tested here. Gray inversion,
+training style distribution and prompt/trigger selection remain distinct hypotheses.
+
+Inspectable temporary copies: `/tmp/eom-sdxl-lora-control0-samples-20261003/microscope.png` and
+`/tmp/eom-sdxl-lora-control0-samples-20261003/radio.png`. They are local viewing materialization,
+not canonical replacements or accepted product illustrations. All 30 actual SDXL outputs now have
+own REJECTED verdicts; follow-up control use remains 6/12. No extra generation occurred during
+publication, review, documentation or evidence repair.
+
+Extractor source checkpoint `39e15a3c2412cffefc651bdf6213d977e64c5c8f` passed both provider and
+trainer release builds. Common contract wheel SHA:
+`1d80a26a19d5a3da1161220f9802fdfb97bcc3769218d436ca7dcd4ff770a9ef`; provider wheel SHA:
+`9da47fa82c1ff4dfe36ecf4cc3e2de662aba36d285b6e8ec74fbe87ec0f87b13`; trainer wheel SHA:
+`501cb4a2db8ac1f38cead020ddab3e0e28154aa5fa38b823339ba9604570979b`.
+Build archives are `/tmp/eom-image-trainer-build/39e15a3c2412cffefc651bdf6213d977e64c5c8f.q7hjGu`
+and `/tmp/eom-image-provider-build/39e15a3c2412cffefc651bdf6213d977e64c5c8f.H8RBJT`.
+A wheel-only import/resource check used the API interpreter with the contract wheel ZIP as its
+import source, verified the 2020-12 schema and confirmed Torch/Pillow and runtime source imports
+were absent. None of these candidate wheels or extractor weights was installed. Existing trainer
+runtime remains `cc2f32e7`, inference runtime/binding remains the previous V6.
+
+Slack milestone deliveries were SENT/HTTP 200:
+`devreport_4a62121077a54468a86c27283c770419` (source prerequisite) and
+`devreport_6db4137330c74b43a65edc1de2286010` (control publication/own review).
+Nine explicit sanitized evidence logs are canonically archived at
+`artifact_fc82a812903349ac938449b9392cfc4b` /
+`rev_db1745a05a044e5da5ea0c678dcb790f`, primary `logs/lora-no-t2i-own-review.log`.
+The first evidence publication correctly rejected group-writable generated log inputs before
+DB/NAS publication. Only these validated local evidence files were restricted to mode 0600; the
+original failure log was preserved and included in the successful archive. No validator/source
+policy was weakened, and no worker/model operation was retried to repair this operator error.
+
+Next remains restricted extractor conversion/tensor validation and additive learned-conditioning
+command/result implementation. Full-data expansion, remaining comparison arms, independent blind
+review and a passing Item Preview/HWPX canary remain open. The whole image-quality goal is ACTIVE,
+not complete; rejected model outputs never authorize activation.
