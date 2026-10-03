@@ -4,7 +4,6 @@ import os
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from eom_orchestrator.capability_observer import (
@@ -113,7 +112,7 @@ def test_worker_auth_observation_fails_closed_when_cli_is_unavailable() -> None:
 
 
 def test_expired_ready_health_projects_stale_without_mutation() -> None:
-    binding = SimpleNamespace(
+    binding = CodexAuthBindingRecord(
         binding_id="authbinding_" + "4" * 32,
         worker_slot_id="01",
         account_label="slot01-account",
@@ -126,7 +125,7 @@ def test_expired_ready_health_projects_stale_without_mutation() -> None:
 
     projected = project_worker_auth_health(
         binding,
-        as_of=NOW + timedelta(minutes=16),  # type: ignore[arg-type]
+        as_of=NOW + timedelta(minutes=16),
     )
 
     assert projected.state == "STALE"
@@ -226,11 +225,14 @@ def test_fixed_identity_probe_maps_timeout_without_retry(
     assert capsys.readouterr().out == "CODEX_AUTH_PROBE_TIMEOUT\n"
 
 
-def test_reviewed_capability_policy_is_bounded_and_protected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cli_version", ("0.147.0", "0.160.0"))
+def test_reviewed_capability_policy_is_bounded_and_protected(
+    tmp_path: Path, cli_version: str
+) -> None:
     path = tmp_path / "capabilities.yaml"
     path.write_text(
         "version: 1\n"
-        "expected_codex_cli_version: 0.147.0\n"
+        f"expected_codex_cli_version: {cli_version}\n"
         "models:\n"
         "  - model: gpt-5.6-terra\n"
         "    reasoning_efforts: [medium, high, xhigh]\n",
@@ -241,7 +243,7 @@ def test_reviewed_capability_policy_is_bounded_and_protected(tmp_path: Path) -> 
     policy = load_reviewed_capability_policy(path, require_root_owned=False)
 
     assert isinstance(policy, ReviewedCapabilityPolicy)
-    assert policy.expected_codex_cli_version == "0.147.0"
+    assert policy.expected_codex_cli_version == cli_version
     assert policy.models[0].model == "gpt-5.6-terra"
     assert tuple(policy.models[0].reasoning_efforts) == ("medium", "high", "xhigh")
 
@@ -251,13 +253,14 @@ def test_reviewed_capability_policy_is_bounded_and_protected(tmp_path: Path) -> 
     assert captured.value.code == "CONTROL_CAPABILITY_POLICY_INVALID"
 
 
+@pytest.mark.parametrize("cli_version", ("0.147.0", "0.160.0"))
 def test_cli_surface_observation_returns_only_allowlisted_membership(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, cli_version: str
 ) -> None:
     raw_help = " ".join(sorted(REQUIRED_EXEC_HELP_FLAGS)) + " device-code secret-value"
     monkeypatch.setattr(
         "eom_orchestrator.capability_observer.observe_codex_cli_version",
-        lambda: "0.147.0",
+        lambda: cli_version,
     )
     monkeypatch.setattr(
         "eom_orchestrator.capability_observer.subprocess.run",
@@ -266,7 +269,7 @@ def test_cli_surface_observation_returns_only_allowlisted_membership(
 
     version, flags = observe_codex_cli_surface()
 
-    assert version == "0.147.0"
+    assert version == cli_version
     assert flags == REQUIRED_EXEC_HELP_FLAGS
     assert "device-code" not in repr((version, flags))
     assert "secret-value" not in repr((version, flags))

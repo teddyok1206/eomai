@@ -178,6 +178,35 @@ installed CLI version/capability surface matches the root-owned reviewed policy.
 binding remains `STALE`, `AUTH_REQUIRED`, `DEGRADED`, `DRAINING`, or `DISABLED`; operators must not
 edit it to READY.
 
+### Reviewed CLI version alignment
+
+The current reviewed capability policy pins Codex CLI `0.160.0` (2026-10-03). Older acceptance
+records below retain their original `0.147.0` observation; they are not evidence for the new CLI.
+The model/effort allowlist is unchanged. A global CLI update alone does not update this protected
+policy: an exact-version mismatch intentionally prevents new worker claims.
+
+Before installing a version-only successor to `/etc/eom/codex-capabilities.yaml`:
+
+- Validate the reviewed source with `ReviewedCapabilityPolicy`, required CLI option membership,
+  and the installed worker's exact command shape using `--help` (no model generation).
+- Verify the installed Bubblewrap executable remains root-owned, non-writable by workers, and
+  without file capabilities; run the non-generating sandbox smoke as a fixed worker identity.
+- Keep the model/effort allowlist, worker templates, protocol, lease rules, and permissions intact.
+- Preserve the previous small configuration in the existing worker-runtime deployment records;
+  install the hash-checked candidate atomically as `root:root:0644`.
+- Let the existing control processor perform authenticated observations and capability snapshot
+  creation. Never directly set a binding to `READY` or rewrite an existing job's state.
+- Confirm a previously queued request is claimed using the same workflow/job identity. A new
+  upload or duplicate workflow submission is not needed for this recovery.
+
+This is a configuration-only rollout: no database migration, worker package replacement, or
+workflow-runner restart is necessary. If further compatibility checks fail, keep new claims
+fail-closed and inspect actual execution before restoring the previous configuration.
+
+The CLI option semantics are documented in the official
+[non-interactive mode guide](https://learn.chatgpt.com/docs/non-interactive-mode) and
+[CLI command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli).
+
 The non-live acceptance must prove:
 
 - one new standard-item request pins one immutable released preset revision and exact instruction
