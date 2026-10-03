@@ -16,6 +16,16 @@ owner-authenticated upload replay; it does not rewrite failed history or create 
 Activation and completed review are separate evidence; a passing source test alone is not live
 activation evidence.
 
+Live recovery: V5 was published through `bootstrap_pdf_document_review_control_plane` with source
+`8fb76dba8251ee3d2820fcdf3107bb7bd95cb4a7`. Current released preset
+`execpresetrev_b478cf2d7ae647e0917de9a3cbadede0` pins instruction revision 5
+`instrrev_c6a97fc4831a807893742c1e40db7539`. The installed resolver accepted protocol 1.27 and its V2
+Graph retrieval policy (`LIVE_POLICY_PREFLIGHT=PASS`). Focused protocol tests: 28 PASS; Ruff lint and
+format checks: PASS. The failed original owner-scoped review set remains `FAILED_RETRYABLE` until
+its authenticated upload replay. Activation did not regenerate the documents, create a duplicate
+review, or claim that review execution has completed. No service restart or new wheel is needed
+for this configuration-only publication; the installed API already owns the V3 request path.
+
 On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
 subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
 closes 537 observations as 514 covered plus 23 explicit omissions and identifies 87 subjects. The
