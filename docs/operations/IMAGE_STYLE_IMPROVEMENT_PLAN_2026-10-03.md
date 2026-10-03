@@ -578,3 +578,52 @@ compiled prompts, source/seed/base settings and the accepted adapter; do not sil
 the released conditioning policy or acquire unverified detector weights. A changed contour
 preprocessing policy needs its own successor/evidence. Full grouped-data expansion, unfinished
 V7/Informative Drawings arms, blind review and passing Item Preview/HWPX canary remain open.
+
+### 2026-10-03 LoRA/no-T2I control and licensed extractor prerequisite
+
+The existing additive evaluation path dispatched one two-output control, without changing installed
+packages, the original compiled prompts, the adapter or operating V6. It pins the previously
+accepted microscope/radio strength-0 baseline at seed 104729 and uses the same LoRA strength 1.0.
+New run: `imgsdxlloraevalrun_2fad38bef1859690207ced1f7aee0210`.
+Command Artifact / Revision: `artifact_9fc72f19b4e14061b808bfd36c9ef637` /
+`rev_ebca0e0eedd246808cbaae8e8a678477`, member
+`manifests/sdxl-lora-evaluation-command.json`, raw SHA
+`sha256:fefc1b97791c013a5456a3995aafcc5353fd192ce18cfba46dd71d4831b5262c`, semantic command SHA
+`sha256:b4fd4e810bb35d5e56dfa6d65c15b756bb3281d1731c466487d51b034e48ed14`.
+
+The isolated unit's journal records SUCCEEDED at `2026-10-03T22:14:32.888597Z`, two outputs,
+15,658 ms and peak 8,328,740,352 bytes; semantic result SHA
+`sha256:1f55170e1e6dd08023b2dcfe86b2e42cc5c3fa5a762567edec326fdc5c6e9144`.
+This is terminal runtime evidence, not yet canonical result publication or visual acceptance.
+At the 22:37 UTC checkpoint, sudo authentication had expired; protected result-byte validation,
+canonical commit, sample materialization and own inspection are pending. The prepared publication
+operator is `/tmp/eom-sdxl-lora-control0-publish-20261003.py`; it pins the existing baseline revision
+and validates the full result and all seven members before Orchestrator publication. It submits
+no model work. Do not regenerate these two outputs simply because observation/publication waits.
+
+There have now been 30 actual SDXL model outputs: base 12, original strength controls 4, matched
+LoRA 12 and this control 2. The last two lack own visual verdict; previous rejected images remain
+rejected. Follow-up controls consume 6/12 outputs. The complete four-arm comparison, independent
+blind review and activation criteria have not passed.
+
+Primary-source research located the original author's MIT-labelled weight distribution and verified
+that fine/coarse model hashes equal the two weights used by the upstream lineart detector. See
+[the research addendum](../references/SCIENCE_ASSESSMENT_IMAGE_MODEL_RESEARCH_2026-10-03.md#2026-10-03-추가-확인-선화-추출-가중치의-원-배포처)
+and [ADR 0180](../adr/0180-pinned-informative-lineart-extractor.md). This resolves the narrow source
+provenance prerequisite through an actual author distribution; it does not imply installation,
+numerical correctness or improved images.
+
+An additive evaluation-only manifest contract now separates extractor logical/revision/manifest
+identity, pins fine/style-1 upstream/license/code/weight hashes, permits only four sorted runtime
+members, bounds weight/metadata sizes and forbids activation or runtime pickle/code files. JSON
+Schema 2020-12 and frozen Pydantic mirrors are aligned; 36 new pure contract tests pass inside the
+API environment without Torch/Pillow. The four focused contract suites total 110 PASS; the existing
+image suite remains 273 PASS; new contract plus dependency-boundary checks total 42 PASS. Ruff,
+targeted strict mypy, release-shell syntax and diff checks pass. These counts are separate suites,
+not additive independent coverage. No weights, migration, new dependency, worker protocol or
+service installation were introduced by this source gate.
+
+Next: finish the pending control's protected publication/inspection after authentication; then
+implement restricted weight conversion/tensor checks and a separately pinned learned-extraction
+command/result before dispatch. Preserve original TRAIN crop/provenance admission and original
+SDXL receipt semantics; do not use derived PNGs as though they were original approved crop members.

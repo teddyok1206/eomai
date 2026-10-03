@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "InformativeLineartUpstream": {
+      "additionalProperties": false,
+      "description": "Author's fine/style-1 distribution, not the ambiguously licensed mirror.",
+      "properties": {
+        "architecture_source_sha256": {
+          "const": "sha256:4e989aff7a9f4491e9bf463dff0b7c35f84b52b34a0bf4ca918b525fa7d593d0",
+          "title": "Architecture Source Sha256",
+          "type": "string"
+        },
+        "license_id": {
+          "const": "MIT",
+          "title": "License Id",
+          "type": "string"
+        },
+        "license_record_sha256": {
+          "const": "sha256:7cb79f3b0f9354c7f47a1ab56b09c0e3bd6c8d96243555be5e28ea79d6e6c8a7",
+          "title": "License Record Sha256",
+          "type": "string"
+        },
+        "repo_id": {
+          "const": "carolineec/informativedrawings",
+          "title": "Repo Id",
+          "type": "string"
+        },
+        "repo_type": {
+          "const": "space",
+          "title": "Repo Type",
+          "type": "string"
+        },
+        "revision": {
+          "const": "bd4b4299be505803e036203a39c02024b4cfee11",
+          "title": "Revision",
+          "type": "string"
+        },
+        "source_url": {
+          "const": "https://huggingface.co/spaces/carolineec/informativedrawings",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "weight_bytes": {
+          "const": 17173511,
+          "title": "Weight Bytes",
+          "type": "integer"
+        },
+        "weight_filename": {
+          "const": "model.pth",
+          "title": "Weight Filename",
+          "type": "string"
+        },
+        "weight_sha256": {
+          "const": "sha256:c686ced2a666b4850b4bb6ccf0748031c3eda9f822de73a34b8979970d90f0c6",
+          "title": "Weight Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "repo_type",
+        "revision",
+        "source_url",
+        "license_id",
+        "license_record_sha256",
+        "architecture_source_sha256",
+        "weight_filename",
+        "weight_bytes",
+        "weight_sha256"
+      ],
+      "title": "InformativeLineartUpstream",
+      "type": "object"
+    },
+    "ModelFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ModelFile",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-informative-lineart-manifest/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "architecture": {
+      "const": "RGB_INSTANCE_NORM_RESNET3_SIGMOID/1.0",
+      "title": "Architecture",
+      "type": "string"
+    },
+    "conversion_policy": {
+      "const": "TORCH_WEIGHTS_ONLY_CPU_TO_SAFETENSORS/1.0",
+      "title": "Conversion Policy",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "title": "Created By",
+      "type": "string"
+    },
+    "extractor_id": {
+      "pattern": "^imgextractor_[0-9a-f]{32}$",
+      "title": "Extractor Id",
+      "type": "string"
+    },
+    "extractor_revision_id": {
+      "pattern": "^imgextractorrev_[0-9a-f]{32}$",
+      "title": "Extractor Revision Id",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ModelFile"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Files",
+      "type": "array"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "provider_family": {
+      "const": "informative-drawings-style1",
+      "title": "Provider Family",
+      "type": "string"
+    },
+    "runtime_contract_version": {
+      "const": "eom-informative-lineart-extractor/1.0",
+      "title": "Runtime Contract Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-informative-lineart-manifest/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "const": "EVALUATION_ONLY",
+      "title": "State",
+      "type": "string"
+    },
+    "upstream": {
+      "$ref": "#/$defs/InformativeLineartUpstream"
+    }
+  },
+  "required": [
+    "schema_version",
+    "extractor_id",
+    "extractor_revision_id",
+    "provider_family",
+    "runtime_contract_version",
+    "state",
+    "activation_policy",
+    "upstream",
+    "conversion_policy",
+    "architecture",
+    "files",
+    "created_at",
+    "created_by",
+    "manifest_sha256"
+  ],
+  "title": "LocalImageInformativeLineartManifest",
+  "type": "object"
+}

@@ -24,6 +24,13 @@ from eom_image_contracts.flux2_probe import (
     validate_flux2_probe_result,
     validate_flux2_probe_result_v2,
 )
+from eom_image_contracts.informative_lineart import (
+    INFORMATIVE_LINEART_MANIFEST_SCHEMA_REF,
+    InformativeLineartPointer,
+    InformativeLineartUpstream,
+    LocalImageInformativeLineartManifest,
+    validate_informative_lineart_pointer,
+)
 from eom_image_contracts.institutional_style_evaluation import (
     GENERATED_RASTER_SCHEMA_REF,
     INSTITUTIONAL_CROP_SCHEMA_REF,
@@ -449,6 +456,7 @@ from eom_image_contracts.visual_reference import (
 
 __all__ = [
     "GENERATED_RASTER_SCHEMA_REF",
+    "INFORMATIVE_LINEART_MANIFEST_SCHEMA_REF",
     "INSTITUTIONAL_CROP_SCHEMA_REF",
     "INSTITUTIONAL_STYLE_ANSWER_KEY_SCHEMA_REF",
     "INSTITUTIONAL_STYLE_BLIND_PNG_SCHEMA_REF",
@@ -492,6 +500,8 @@ __all__ = [
     "ImageEvaluationVariant",
     "ImageEvaluationVisualPattern",
     "ImageTrainingRightsPolicy",
+    "InformativeLineartPointer",
+    "InformativeLineartUpstream",
     "InstitutionalStyleAnswerKeyEntry",
     "InstitutionalStyleBlindPresentationMember",
     "InstitutionalStyleCaseResult",
@@ -522,6 +532,7 @@ __all__ = [
     "LocalImageFlux2ReferenceProbeResultV2",
     "LocalImageGenerationReceipt",
     "LocalImageGenerationRequest",
+    "LocalImageInformativeLineartManifest",
     "LocalImageInstitutionalStyleAnswerKey",
     "LocalImageInstitutionalStyleEvaluationPlan",
     "LocalImageInstitutionalStyleEvaluationResult",
@@ -789,6 +800,7 @@ __all__ = [
     "validate_flux2_probe_command_v2",
     "validate_flux2_probe_result",
     "validate_flux2_probe_result_v2",
+    "validate_informative_lineart_pointer",
     "validate_institutional_style_result",
     "validate_institutional_style_review",
     "validate_institutional_style_review_packet",

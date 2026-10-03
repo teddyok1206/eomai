@@ -99,6 +99,36 @@ VRAM·지연 비용이 더 크다.
 FLUX.1 Kontext dev는 12B 규모, 16GB 환경의 높은 offload 비용, 비상업 라이선스 때문에
 회사 운영 후보에서 제외한다. <https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev>
 
+## 2026-10-03 추가 확인: 선화 추출 가중치의 원 배포처
+
+기존 `lllyasviel/Annotators`의 `other` 표기와 빈 모델 카드만으로 가중치 사용 범위를
+판단하지 않았다. 원 저자의
+[Informative Drawings Space README](https://huggingface.co/spaces/carolineec/informativedrawings/blob/bd4b4299be505803e036203a39c02024b4cfee11/README.md)는
+MIT를 명시하고 실제 가중치도 같은 저장소에서 배포한다. 고정 revision은
+`bd4b4299be505803e036203a39c02024b4cfee11`이다. 공개 Hub 파일 메타데이터를 조회해 다음
+동일성을 확인했다. 이는 파일 출처 확인이며, 해당 모델의 실제 검수 결과는 아니다.
+
+| 원 저자 파일 | Annotators 대응 파일 | 바이트 수 | SHA-256 |
+|---|---|---:|---|
+| `model.pth` | `sk_model.pth` | 17,173,511 | `c686ced2a666b4850b4bb6ccf0748031c3eda9f822de73a34b8979970d90f0c6` |
+| `model2.pth` | `sk_model2.pth` | 17,173,511 | `30a534781061f34e83bb9406b4335da4ff2616c95d22a585c1245aa8363e74e0` |
+
+대조한 Annotators revision은 `982e7edaec38759d914a963c48c4726685de7d96`이다.
+첫 실험은 원 배포본의 style 1만 선택하며, style 2를 추가 비교한 것으로 간주하지 않는다.
+[원 저자 구현](https://huggingface.co/spaces/carolineec/informativedrawings/blob/bd4b4299be505803e036203a39c02024b4cfee11/app.py)과
+[고정 controlnet_aux 구현](https://github.com/huggingface/controlnet_aux/blob/v0.0.7/src/controlnet_aux/lineart/__init__.py)의
+3-residual-block 구조와 가중치 파일 동일성을 확인했지만, 원 구현의 무제한 `torch.load`는
+복제하지 않는다. 제한적 CPU `weights_only=True` 변환, 정확한 텐서 키·형상·유한값 검사,
+safetensors 런타임, MIT 고지 보존을 별도 검증한다. Gradio/torchvision/OpenCV나 외부 추론
+서비스는 도입하지 않는다. 새 의존성 없이 기존 Torch/Pillow/NumPy로 작은 추출 구조를
+격리 provider에 포팅할 계획이다.
+
+기존 grayscale inversion은 회색 면까지 조건에 포함하며 학습된 윤곽 추출과 같지 않다.
+다만 T2I 강도 0 실험도 품질이 낮았으므로 원인을 추출기 하나로 단정하지 않는다.
+후속 추출 실험은 [ADR 0180](../adr/0180-pinned-informative-lineart-extractor.md)의 별도
+계약·revision으로 기록한다. 기존 SDXL 1.0 정책, 팀장 프롬프트 원문, LoRA 가중치와 운영
+V6는 변경하지 않는다. 아직 가중치 다운로드·변환·설치나 추출 결과의 품질 PASS는 없다.
+
 ## 프레임워크 선택
 
 운영 프레임워크는 기존 Hugging Face Diffusers를 유지한다.
