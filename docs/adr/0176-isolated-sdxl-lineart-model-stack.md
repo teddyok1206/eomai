@@ -119,6 +119,15 @@ admission cannot create a replacement execution or silently resolve a latest rev
 alternative of trusting only the staged image SHA is insufficient: it would lose partition,
 approved-source and policy lineage even though the PNG bytes happen to match.
 
+The private workspace adapter verifies the complete admitted member set and hashes before creating
+an exclusive run directory. Root owns read-only inputs; the existing image identity receives the
+workspace only after input and directory fsync. Partial handoffs are retained and cannot be
+overwritten or silently dispatched. Dispatch addresses only the fixed offline systemd template
+and the same pinned run identity. An ambiguous start is queried, not retried with a new identity.
+The worker owns its output workspace, so result publication must validate against the separately
+committed command, not trust a mutable workspace command as the canonical source. Staging and
+systemd calls are infrastructure behavior; the existing admission use case owns provenance rules.
+
 ## SDXL-only micro LoRA
 
 The micro command is one small immutable experiment value, published through the existing

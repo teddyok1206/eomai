@@ -186,3 +186,10 @@ The selected protocol/admission/split/dependency regressions passed 132 tests; R
 targeted strict mypy, release-shell syntax and diff checks passed. These are synthetic source
 checks only: the SDXL-specific training backend, GPU micro-training and measured quality remain
 pending. No adapter or operating binding has been replaced by this checkpoint.
+
+The private Orchestrator staging/dispatch adapter now creates only exclusive pinned-run workspaces,
+checks every input against the command, preserves partial handoffs and addresses a fixed offline
+systemd unit. The presentation script delegates admission, staging and dispatch rather than
+reimplementing crop rules. Focused handoff/admission/micro/dependency checks passed 71 tests,
+including 14 new filesystem/dispatch tests; Ruff and targeted strict mypy passed. Initial test
+invocation/fixture-order issues were corrected before this final run. No GPU execution is implied.
