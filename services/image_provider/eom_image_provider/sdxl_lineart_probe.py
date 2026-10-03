@@ -8,11 +8,13 @@ import json
 import os
 import time
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, cast, get_args
 
 from eom_image_contracts import (
+    LocalImageRuntime,
     LocalImageSdxlLineartProbeCommand,
     LocalImageSdxlLineartProbeResult,
     LocalImageSdxlLineartPromptPolicy,
@@ -28,6 +30,7 @@ from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageOps
 
 from eom_image_provider.provider import GeneratedBackground, ProviderError
+from eom_image_provider.sdxl_lora_material import SdxlLoraAdapterMaterial
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack, resolve_sdxl_stack
 from eom_image_provider.staged_file_io import (
     create_staged_directory,
@@ -53,7 +56,20 @@ class SdxlProbeSession(Protocol):
 
 
 class SdxlProbeBackend(Protocol):
-    def open(self, stack: ResolvedSdxlStack) -> AbstractContextManager[SdxlProbeSession]: ...
+    def open(
+        self, stack: ResolvedSdxlStack, *, style_adapter: SdxlLoraAdapterMaterial | None = None
+    ) -> AbstractContextManager[SdxlProbeSession]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlProbeEvidence:
+    conditionings: tuple[SdxlLineartProbeConditioning, ...]
+    outputs: tuple[SdxlLineartProbeOutput, ...]
+    runtime: LocalImageRuntime | None
+    error_code: SdxlProbeErrorCode | None
+    started_at: datetime
+    completed_at: datetime
+    duration_ms: int
 
 
 def _png(image: Image.Image) -> bytes:
@@ -148,20 +164,18 @@ def _replay(
     return result
 
 
-def run_sdxl_lineart_probe(
+def generate_sdxl_probe_evidence(
     *,
     command: LocalImageSdxlLineartProbeCommand,
     model_store_root: Path,
     workspace: Path,
     backend: SdxlProbeBackend,
     expected_model_owner_uid: int = 0,
-) -> LocalImageSdxlLineartProbeResult:
+    style_adapter: SdxlLoraAdapterMaterial | None = None,
+) -> SdxlProbeEvidence:
     started_at = datetime.now(UTC)
     start = time.monotonic()
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
-        replay = _replay(root, workspace, command)
-        if replay is not None:
-            return replay
         create_staged_directory(root, "outputs")
         with verified_directory(workspace / "outputs", expected_owner_uid=os.geteuid()) as outputs:
             for name in ("conditioning", "raw", "final"):
@@ -203,7 +217,12 @@ def run_sdxl_lineart_probe(
                 )
                 for case in command.cases
             }
-            with backend.open(stack) as inference:
+            session = (
+                backend.open(stack)
+                if style_adapter is None
+                else backend.open(stack, style_adapter=style_adapter)
+            )
+            with session as inference:
                 for case in command.cases:
                     conditioning = inputs[case.case_id]
                     member = f"outputs/conditioning/{case.case_id}.png"
@@ -268,19 +287,52 @@ def run_sdxl_lineart_probe(
             )
         except Exception:
             error = "SDXL_PROBE_EXEC_FAILED"
+        return SdxlProbeEvidence(
+            tuple(conditionings),
+            tuple(produced),
+            runtime,
+            error,
+            started_at,
+            datetime.now(UTC),
+            max(1, int((time.monotonic() - start) * 1000)),
+        )
+
+
+def run_sdxl_lineart_probe(
+    *,
+    command: LocalImageSdxlLineartProbeCommand,
+    model_store_root: Path,
+    workspace: Path,
+    backend: SdxlProbeBackend,
+    expected_model_owner_uid: int = 0,
+) -> LocalImageSdxlLineartProbeResult:
+    with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
+        replay = _replay(root, workspace, command)
+        if replay is not None:
+            return replay
+    evidence = generate_sdxl_probe_evidence(
+        command=command,
+        model_store_root=model_store_root,
+        workspace=workspace,
+        backend=backend,
+        expected_model_owner_uid=expected_model_owner_uid,
+    )
+    with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         value = {
             "schema_version": "local-image-sdxl-lineart-probe-result/1.0",
             "run_id": command.run_id,
             "command_sha256": command.command_sha256,
             "model": command.model.model_dump(mode="json"),
-            "status": "SUCCEEDED" if error is None else "FAILED",
-            "error_code": error,
-            "runtime": None if runtime is None else runtime.model_dump(mode="json"),
-            "conditionings": [entry.model_dump(mode="json") for entry in conditionings],
-            "outputs": [entry.model_dump(mode="json") for entry in produced],
-            "started_at": started_at.isoformat().replace("+00:00", "Z"),
-            "completed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "duration_ms": max(1, int((time.monotonic() - start) * 1000)),
+            "status": "SUCCEEDED" if evidence.error_code is None else "FAILED",
+            "error_code": evidence.error_code,
+            "runtime": None
+            if evidence.runtime is None
+            else evidence.runtime.model_dump(mode="json"),
+            "conditionings": [entry.model_dump(mode="json") for entry in evidence.conditionings],
+            "outputs": [entry.model_dump(mode="json") for entry in evidence.outputs],
+            "started_at": evidence.started_at.isoformat().replace("+00:00", "Z"),
+            "completed_at": evidence.completed_at.isoformat().replace("+00:00", "Z"),
+            "duration_ms": evidence.duration_ms,
         }
         value["result_sha256"] = content_sha256(value)
         validate_contract("sdxl-lineart-probe-result", value)

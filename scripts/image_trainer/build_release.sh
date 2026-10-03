@@ -49,6 +49,8 @@ contract, provider, trainer = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lora-micro-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lora-micro-result-v1.schema.json",
@@ -132,7 +134,8 @@ with zipfile.ZipFile(contract) as archive:
     if not required.issubset(names):
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
 with zipfile.ZipFile(provider) as archive:
-    if "eom_image_provider/provider.py" not in set(archive.namelist()):
+    if not {"eom_image_provider/provider.py", "eom_image_provider/sdxl_lora_evaluation.py",
+            "eom_image_provider/sdxl_lora_material.py"}.issubset(archive.namelist()):
         raise SystemExit("LOCAL_IMAGE_TRAINER_PROVIDER_WHEEL_INVALID")
 with zipfile.ZipFile(trainer) as archive:
     names = set(archive.namelist())

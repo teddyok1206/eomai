@@ -14,6 +14,7 @@ from PIL import Image
 
 from eom_image_provider.prompt_capacity import require_prompt_capacity
 from eom_image_provider.provider import GeneratedBackground, ProviderError
+from eom_image_provider.sdxl_lora_material import SdxlLoraAdapterMaterial, apply_sdxl_lora
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 
 
@@ -91,7 +92,9 @@ class SdxlLineartSession:
 
 class SdxlLineartDiffusersBackend:
     @contextmanager
-    def open(self, stack: ResolvedSdxlStack) -> Iterator[SdxlLineartSession]:
+    def open(
+        self, stack: ResolvedSdxlStack, *, style_adapter: SdxlLoraAdapterMaterial | None = None
+    ) -> Iterator[SdxlLineartSession]:
         try:
             import torch  # type: ignore[import-not-found]
             from diffusers import (  # type: ignore[import-not-found]
@@ -147,6 +150,20 @@ class SdxlLineartDiffusersBackend:
                 or pipeline.unet.dtype != torch.float16
             ):
                 raise ProviderError("SDXL_PROBE_MODEL_INVALID")
+            if style_adapter is not None:
+                if any(
+                    getattr(style_adapter.manifest.base_model, name)
+                    != getattr(stack.manifest, name)
+                    for name in (
+                        "model_id",
+                        "model_revision_id",
+                        "manifest_sha256",
+                        "provider_family",
+                        "runtime_contract_version",
+                    )
+                ):
+                    raise ProviderError("SDXL_PROBE_MODEL_INVALID")
+                apply_sdxl_lora(pipeline.unet, style_adapter)
             pipeline.set_progress_bar_config(disable=True)
             pipeline.to("cuda")
             session = SdxlLineartSession(pipeline, torch)

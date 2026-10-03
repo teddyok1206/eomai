@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         LocalImageScienceVisualSubjectRefinementPlan,
         LocalImageSdxlLineartProbeCommand,
         LocalImageSdxlLineartPromptPolicy,
+        LocalImageSdxlLoraEvaluationCommand,
         LocalImageSdxlLoraMicroCommand,
     )
 
@@ -304,6 +305,20 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SDXL_MICRO_COMMAND_SCHEMA_REF,
             artifact_type=SDXL_MICRO_COMMAND_ARTIFACT_TYPE,
             idempotency_prefix="local-image-sdxl-lora-micro-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_lora_evaluation_command(
+        self, command: LocalImageSdxlLoraEvaluationCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-lora-evaluation-command",
+            member="manifests/sdxl-lora-evaluation-command.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.0",
+            artifact_type="control_local_image_sdxl_lora_evaluation_command",
+            idempotency_prefix="local-image-sdxl-lora-evaluation-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

@@ -17,6 +17,8 @@ from eom_image_contracts import (
     LocalImageScienceVisualCampaignPatternInventory,
     LocalImageSdxlLineartProbeCommand,
     LocalImageSdxlLineartPromptPolicy,
+    ScienceObjectLineArtCropMember,
+    SdxlLineartProbeCase,
     content_json_bytes,
     validate_contract,
     validate_science_object_line_art_crop_set,
@@ -59,6 +61,14 @@ class ResolvedSdxlTrainingSources:
     crop_set: LocalImageScienceObjectLineArtCropSet
     crop_set_payload: bytes
     authorization_payload: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlProbeSources:
+    policy: LocalImageSdxlLineartPromptPolicy
+    policy_payload: bytes
+    crop_set: LocalImageScienceObjectLineArtCropSet
+    selected: tuple[tuple[SdxlLineartProbeCase, ScienceObjectLineArtCropMember], ...]
 
 
 class _ResolvedDocuments:
@@ -170,9 +180,9 @@ def resolve_sdxl_training_sources(
     )
 
 
-def prepare_sdxl_probe_inputs(
+def resolve_sdxl_probe_sources(
     engine: Engine, command: LocalImageSdxlLineartProbeCommand
-) -> PreparedSdxlProbeInputs:
+) -> ResolvedSdxlProbeSources:
     """Resolve exact approved provenance and TRAIN inputs, without dispatch or DB writes."""
     validate_contract("sdxl-lineart-probe-command", command.model_dump(mode="json"))
     if command.style_track != "OBJECT_LINE_ART":
@@ -223,8 +233,16 @@ def prepare_sdxl_probe_inputs(
         references.add(pointer)
         depictions.add(case.depiction_key)
         selected.append((case, member))
+    return ResolvedSdxlProbeSources(
+        policy, documents.payloads[command.prompt_policy], crop_set, tuple(selected)
+    )
+
+
+def materialize_sdxl_probe_inputs(
+    engine: Engine, command: LocalImageSdxlLineartProbeCommand, sources: ResolvedSdxlProbeSources
+) -> PreparedSdxlProbeInputs:
     files = []
-    for case, member in selected:
+    for case, member in sources.selected:
         payload = resolve_control_artifact_member(
             engine, case.reference_image, maximum_bytes=member.size_bytes
         )
@@ -233,7 +251,7 @@ def prepare_sdxl_probe_inputs(
         files.append(SdxlProbeInputMember(case.staged_member_path, member.sha256, payload))
     for name, payload in (
         ("command.json", content_json_bytes(command.model_dump(mode="json"))),
-        ("inputs/prompt-policy.json", documents.payloads[command.prompt_policy]),
+        ("inputs/prompt-policy.json", sources.policy_payload),
     ):
         files.append(
             SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(payload).hexdigest(), payload)
@@ -241,3 +259,10 @@ def prepare_sdxl_probe_inputs(
     return PreparedSdxlProbeInputs(
         command, tuple(sorted(files, key=lambda member: member.member_path))
     )
+
+
+def prepare_sdxl_probe_inputs(
+    engine: Engine, command: LocalImageSdxlLineartProbeCommand
+) -> PreparedSdxlProbeInputs:
+    sources = resolve_sdxl_probe_sources(engine, command)
+    return materialize_sdxl_probe_inputs(engine, command, sources)

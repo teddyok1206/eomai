@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import content_json_bytes
 
+from eom_orchestrator.sdxl_lora_evaluation_inputs import PreparedSdxlLoraEvaluationInputs
 from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
 
@@ -87,6 +88,38 @@ def stage_sdxl_micro_inputs(
     )
 
 
+def stage_sdxl_lora_evaluation_inputs(
+    prepared: PreparedSdxlLoraEvaluationInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    command, baseline = prepared.command, prepared.baseline
+    pin = command.evaluation
+    payload = content_json_bytes(command.model_dump(mode="json"))
+    expected = {
+        "command.json": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "inputs/baseline-command.json": pin.baseline_command.sha256,
+        "inputs/training-command.json": pin.training_command.sha256,
+        "inputs/training-result.json": pin.training_result.sha256,
+        "inputs/adapter-manifest.json": pin.adapter_manifest.sha256,
+        "inputs/prompt-policy.json": baseline.prompt_policy.sha256,
+        **{case.staged_member_path: case.reference_image.sha256 for case in baseline.cases},
+        **{"inputs/adapter/" + file.relative_path: file.sha256 for file in prepared.manifest.files},
+    }
+    return _stage_inputs(
+        files=prepared.files,
+        expected=expected,
+        command_payload=payload,
+        run_id=command.run_id,
+        command_sha256=command.command_sha256,
+        unit_template="eom-image-sdxl-lora-evaluation",
+        workspace_parent=workspace_parent,
+        worker=worker,
+        maximum_member_bytes=64 * 1024**2,
+    )
+
+
 def _stage_inputs(
     *,
     files: tuple[SdxlProbeInputMember, ...],
@@ -97,8 +130,14 @@ def _stage_inputs(
     unit_template: str,
     workspace_parent: Path,
     worker: SdxlProbeWorkspaceOwner,
+    maximum_member_bytes: int = 16 * 1024**2,
 ) -> StagedSdxlProbe:
-    if re.fullmatch(r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_)[0-9a-f]{32}", run_id) is None:
+    if (
+        re.fullmatch(
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_)[0-9a-f]{32}", run_id
+        )
+        is None
+    ):
         raise SdxlProbeHandoffError("SDXL_PROBE_HANDOFF_IDENTITY_INVALID")
     if os.geteuid() != 0 or worker.uid <= 0 or worker.gid <= 0:
         raise SdxlProbeHandoffError("SDXL_PROBE_HANDOFF_IDENTITY_INVALID")
@@ -125,7 +164,7 @@ def _stage_inputs(
             relative_path.is_absolute()
             or any(part in {"", ".", ".."} for part in member.member_path.split("/"))
             or "\\" in member.member_path
-            or not 0 < len(member.payload) <= 16 * 1024**2
+            or not 0 < len(member.payload) <= maximum_member_bytes
             or member.sha256 != expected[member.member_path]
             or member.sha256 != "sha256:" + hashlib.sha256(member.payload).hexdigest()
             or (member.member_path == "command.json" and member.payload != command_payload)
@@ -204,6 +243,15 @@ def dispatch_sdxl_micro_probe(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-sdxl-lora-micro-probe",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imgsdxlmicrotrainrun_",
+    )
+
+
+def dispatch_sdxl_lora_evaluation(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-lora-evaluation",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxlloraevalrun_",
     )
 
 

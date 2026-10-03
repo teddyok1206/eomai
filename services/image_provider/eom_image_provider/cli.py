@@ -57,6 +57,10 @@ from eom_image_provider.reference_acquisition import (
 )
 from eom_image_provider.sdxl_lineart_backend import SdxlLineartDiffusersBackend
 from eom_image_provider.sdxl_lineart_probe import load_sdxl_probe_command, run_sdxl_lineart_probe
+from eom_image_provider.sdxl_lora_evaluation import (
+    load_sdxl_lora_evaluation_command,
+    run_sdxl_lora_evaluation,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -67,6 +71,11 @@ def _parser() -> argparse.ArgumentParser:
     lineart.add_argument("--model-store-root", type=Path, required=True)
     lineart.add_argument("--workspace", type=Path, required=True)
     lineart.add_argument("--gpu-lock", type=Path, required=True)
+    lora = subparsers.add_parser("sdxl-lora-evaluation")
+    lora.add_argument("--command", type=Path, required=True)
+    lora.add_argument("--model-store-root", type=Path, required=True)
+    lora.add_argument("--workspace", type=Path, required=True)
+    lora.add_argument("--gpu-lock", type=Path, required=True)
     generate = subparsers.add_parser("generate")
     generate.add_argument("--request", type=Path, required=True)
     generate.add_argument("--model-store-root", type=Path, required=True)
@@ -119,6 +128,16 @@ def main() -> None:
                     backend=SdxlLineartDiffusersBackend(),
                 )
             result = lineart_result.model_dump(mode="json")
+        elif args.operation == "sdxl-lora-evaluation":
+            lora_command = load_sdxl_lora_evaluation_command(args.workspace, args.command)
+            with acquire_gpu_lease(args.gpu_lock):
+                lora_result = run_sdxl_lora_evaluation(
+                    command=lora_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    backend=SdxlLineartDiffusersBackend(),
+                )
+            result = lora_result.model_dump(mode="json")
         elif args.operation == "create-manifest":
             manifest = create_model_manifest(
                 args.revision_directory,

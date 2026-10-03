@@ -457,3 +457,44 @@ LoRA strength and output budget. Do not call an unpinned local adapter path a re
 silently cast it to an SSD adapter, retrain this successful micro run, or activate it from loss alone.
 Expanded document/duplicate-group training data, remaining four-arm outputs, independent blind
 review and passing Item Preview/HWPX canary are still required before full-goal completion.
+
+### 2026-10-03 matched-input SDXL LoRA evaluation source gate
+
+The additive `local-image-sdxl-lora-evaluation-command/1.0` and result family now pin the
+baseline command, accepted micro command/result/adapter-manifest Artifacts, separate logical
+adapter/revision/semantic hash and explicit strength. Baseline prompts, source PNGs, seeds,
+conditioning, sampler and dimensions are reused unchanged. Shared pure evidence/coverage
+validation and the shared generation loop preserve the released base-only 1.0 schema bytes;
+no old receipt is relabelled as a LoRA run. Metadata admission now precedes materialization so
+training/source provenance can be checked without re-reading the corpus or staged PNGs.
+
+The fixed optional offline evaluation unit uses only `eom-image-trainer`, the existing GPU
+lease and root-owned read-only inputs. No new dependency, DB/index/migration, queue, inference
+environment update, production binding, permission/group change or automatic activation is
+included. Bounded safetensors loading verifies exact finite rank-8 UNet targets and alpha 8
+through the installed public Diffusers/PEFT API. Evaluation does not add the training caption
+trigger to only one arm: doing so would confound the matched prompt comparison.
+
+Source gates: **127 focused contract/admission/handoff/replay/dependency tests PASS**,
+**273 full non-live image tests PASS**, strict mypy of nine changed production modules PASS,
+Ruff formatting/lint PASS, release-shell syntax and diff whitespace PASS. The twelve pure
+evaluation contract tests also pass in the explicit API environment without Pillow/provider
+imports. Initial fixture time/publisher shape/expected resolver exception and test inventory
+invocation issues were corrected before these final gates; these are not model executions.
+A read-only operator lookup used the wrong column name; its failed log was preserved and the
+follow-up uses the existing typed resolver, not direct SQL. No DB row was changed.
+
+The accepted adapter manifest member's raw SHA is
+`sha256:42cb8c200f83e87a1e21155aee8742cf12f538e641e983a6f6f28572081144bb` (1,232 bytes),
+distinct from its semantic SHA. Config SHA is
+`sha256:bca3e61a9357e06a5ee21c3c0855375786b9a54a8124eee20953f704738b921e` (202 bytes).
+Safetensors SHA is `sha256:0b4f6f511157af989fe6391c7b9ee5665d74314e5bb0138a23ff308f781300e6`
+(46,607,400 bytes, 1,120 F32 tensors). The successful read-only preflight is
+`/tmp/eom-sdxl-lora-eval-preflight-20261003.r2.log`; the first failed lookup log is retained.
+
+Next: build/install the exact tested trainer-only compatible wheel set with predecessor
+rollback inputs, run one bounded six-case/two-seed LoRA evaluation against the original
+baseline, publish validated PNGs/receipt, then measure and inspect all twelve outputs.
+This source gate is not CUDA evaluation or illustration-quality PASS. The full goal remains
+active; full grouped-data expansion, four-arm acceptance, blind review and Item/HWPX canary
+are not closed by this implementation.

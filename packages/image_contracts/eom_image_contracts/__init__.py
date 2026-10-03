@@ -288,6 +288,13 @@ from eom_image_contracts.sdxl_lineart_probe import (
     SdxlPromptSourcePin,
     validate_sdxl_lineart_probe_result,
 )
+from eom_image_contracts.sdxl_lora_evaluation import (
+    LocalImageSdxlLoraEvaluationCommand,
+    LocalImageSdxlLoraEvaluationResult,
+    SdxlLoraEvaluationPin,
+    validate_sdxl_lora_evaluation_result,
+    validate_sdxl_lora_evaluation_sources,
+)
 from eom_image_contracts.sdxl_lora_micro import (
     SDXL_LORA_MICRO_COMMAND_SCHEMA_REF,
     SDXL_LORA_MICRO_STYLE_TRIGGER,
@@ -655,6 +662,8 @@ __all__ = [
     "LocalImageSdxlLineartProbeResult",
     "LocalImageSdxlLineartPromptPolicy",
     "LocalImageSdxlLineartStack",
+    "LocalImageSdxlLoraEvaluationCommand",
+    "LocalImageSdxlLoraEvaluationResult",
     "LocalImageSdxlLoraMicroAdapterManifest",
     "LocalImageSdxlLoraMicroCommand",
     "LocalImageSdxlLoraMicroResult",
@@ -738,6 +747,7 @@ __all__ = [
     "SdxlLineartProbeOutput",
     "SdxlLineartStackPointer",
     "SdxlLineartUpstream",
+    "SdxlLoraEvaluationPin",
     "SdxlLoraMicroBudget",
     "SdxlLoraMicroRealizedSample",
     "SdxlLoraMicroSample",
@@ -838,6 +848,8 @@ __all__ = [
     "validate_science_visual_subject_multiseed_review",
     "validate_science_visual_subject_refinement_plan",
     "validate_sdxl_lineart_probe_result",
+    "validate_sdxl_lora_evaluation_result",
+    "validate_sdxl_lora_evaluation_sources",
     "validate_sdxl_lora_micro_result",
     "validate_sdxl_lora_micro_sources",
     "validate_svg_label_layout",

@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lora-evaluation-command": "local-image-sdxl-lora-evaluation-command-v1.schema.json",
+    "sdxl-lora-evaluation-result": "local-image-sdxl-lora-evaluation-result-v1.schema.json",
     "sdxl-lora-micro-command": "local-image-sdxl-lora-micro-command-v1.schema.json",
     "sdxl-lora-micro-adapter-manifest": (
         "local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json"
@@ -308,6 +310,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lora-evaluation-command": (
+        "sha256:b56392e5e8d92c01311d454ba92c79f4b107e61723abc69667fed6298c279dd2"
+    ),
+    "sdxl-lora-evaluation-result": (
+        "sha256:d72b98f3723758ea492c98c0b8014e66c987958016a32b8b59ed902f0f6664ca"
+    ),
     "sdxl-lora-micro-command": (
         "sha256:8f3344e874ae1f553fe87c0710e335cd3afcc047bef1afad212ec0963b9b7d61"
     ),

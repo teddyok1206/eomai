@@ -228,3 +228,34 @@ Primary references:
 - [fp16-fixed VAE](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)
 - [Pinned lineart implementation](https://github.com/huggingface/controlnet_aux/blob/v0.0.7/src/controlnet_aux/lineart/__init__.py)
 - [Original lineart attribution](https://github.com/lllyasviel/ControlNet-v1-1-nightly/blob/main/annotator/lineart/__init__.py)
+# Additive matched-input LoRA evaluation (2026-10-03)
+
+The evaluation owner is the existing Orchestrator; the provider remains an offline,
+local-input/local-result worker. A new `local-image-sdxl-lora-evaluation/1.0` command/result
+family pins the original baseline command and the accepted micro command, result and adapter
+manifest. It does not amend the released base-only probe receipt or production binding.
+The canonical sources are those immutable Artifact Revisions; the adapter's logical ID,
+revision and semantic manifest hash are separate from the Artifact member byte hashes.
+
+Admission resolves bounded metadata first, verifies schema, permission, lifecycle, byte and
+semantic hashes, successful training, exact base stack, TRAIN membership and chronology, then
+stages only the original PNGs and two adapter files. A per-call map caches metadata; sorted
+tuples preserve case/seed/member order. Scale is at most six cases, twelve outputs and two
+bounded adapter members: O(cases + metadata + streamed bytes), no DB/index/migration required.
+Existing exclusive workspace creation, GPU lease, immutable command publication and fixed
+systemd dispatch are the concurrency/transaction boundaries. Replay validates the terminal
+receipt and every recorded PNG without running the model again; an ambiguous dispatch or
+unreceipted output is not an automatic retry.
+
+The numerical generation loop is shared with the baseline. Prompts, negative prompts,
+conditioning, model, dimensions, scheduler, steps and seeds remain unchanged; only the pinned
+LoRA and explicit strength differ. PEFT safetensors are read through the bounded no-link
+staging boundary, checked against the UNet's exact target tensor shapes, and loaded with the
+installed public Diffusers/PEFT API (no pickle or download). The optional evaluation unit
+uses the trainer environment, not the operating inference environment. Existing Torch,
+Diffusers, PEFT and safetensors suffice; no dependency is added.
+
+A second inference implementation would drift; mutating the old probe contract would hide
+the intervention. The additive receipt and shared loop are the smaller reproducible choice.
+CPU contract/fake-backend PASS, actual CUDA execution and illustration quality are three
+different gates. Evaluation is never production activation.

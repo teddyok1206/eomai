@@ -249,31 +249,52 @@ class LocalImageSdxlLineartProbeResult(FrozenModel):
 
     @model_validator(mode="after")
     def exact_result(self) -> Self:
-        if self.completed_at < self.started_at:
-            raise ValueError("SDXL probe completion precedes start")
-        if (self.status == "SUCCEEDED") != (self.error_code is None):
-            raise ValueError("SDXL probe status/error mismatch")
-        if self.status == "SUCCEEDED" and (self.runtime is None or not self.outputs):
-            raise ValueError("SDXL probe success lacks runtime/outputs")
-        keys = tuple((output.case_id, output.seed) for output in self.outputs)
-        if keys != tuple(sorted(set(keys))):
-            raise ValueError("SDXL probe output keys must be uniquely sorted")
-        conditioning_ids = tuple(value.case_id for value in self.conditionings)
-        if conditioning_ids != tuple(sorted(set(conditioning_ids))):
-            raise ValueError("SDXL probe conditioning cases must be uniquely sorted")
-        if not {key[0] for key in keys} <= set(conditioning_ids):
-            raise ValueError("SDXL probe output lacks conditioning")
-        if self.outputs and (
-            self.runtime is None
-            or self.runtime.peak_gpu_memory_bytes
-            != max(output.peak_gpu_memory_bytes for output in self.outputs)
-        ):
-            raise ValueError("SDXL probe runtime peak differs from measured outputs")
+        validate_sdxl_probe_evidence(
+            status=self.status,
+            error_code=self.error_code,
+            runtime=self.runtime,
+            conditionings=self.conditionings,
+            outputs=self.outputs,
+            started_at=self.started_at,
+            completed_at=self.completed_at,
+        )
         if self.result_sha256 != content_sha256(
             self.model_dump(mode="json", exclude={"result_sha256"})
         ):
             raise ValueError("SDXL probe result hash mismatch")
         return self
+
+
+def validate_sdxl_probe_evidence(
+    *,
+    status: str,
+    error_code: str | None,
+    runtime: LocalImageRuntime | None,
+    conditionings: tuple[SdxlLineartProbeConditioning, ...],
+    outputs: tuple[SdxlLineartProbeOutput, ...],
+    started_at: datetime,
+    completed_at: datetime,
+) -> None:
+    """Shared evidence invariant; no command identity is reinterpreted across families."""
+    if completed_at < started_at:
+        raise ValueError("SDXL probe completion precedes start")
+    if (status == "SUCCEEDED") != (error_code is None):
+        raise ValueError("SDXL probe status/error mismatch")
+    if status == "SUCCEEDED" and (runtime is None or not outputs):
+        raise ValueError("SDXL probe success lacks runtime/outputs")
+    keys = tuple((output.case_id, output.seed) for output in outputs)
+    if keys != tuple(sorted(set(keys))):
+        raise ValueError("SDXL probe output keys must be uniquely sorted")
+    conditioning_ids = tuple(value.case_id for value in conditionings)
+    if conditioning_ids != tuple(sorted(set(conditioning_ids))):
+        raise ValueError("SDXL probe conditioning cases must be uniquely sorted")
+    if not {key[0] for key in keys} <= set(conditioning_ids):
+        raise ValueError("SDXL probe output lacks conditioning")
+    if outputs and (
+        runtime is None
+        or runtime.peak_gpu_memory_bytes != max(output.peak_gpu_memory_bytes for output in outputs)
+    ):
+        raise ValueError("SDXL probe runtime peak differs from measured outputs")
 
 
 def validate_sdxl_lineart_probe_result(
@@ -286,16 +307,33 @@ def validate_sdxl_lineart_probe_result(
         or result.model != command.model
     ):
         raise ValueError("SDXL probe result differs from pinned command")
+    validate_sdxl_probe_coverage(
+        command,
+        status=result.status,
+        conditionings=result.conditionings,
+        outputs=result.outputs,
+        duration_ms=result.duration_ms,
+    )
+
+
+def validate_sdxl_probe_coverage(
+    command: LocalImageSdxlLineartProbeCommand,
+    *,
+    status: str,
+    conditionings: tuple[SdxlLineartProbeConditioning, ...],
+    outputs: tuple[SdxlLineartProbeOutput, ...],
+    duration_ms: int,
+) -> None:
     expected = tuple((case.case_id, seed) for case in command.cases for seed in case.seeds)
-    observed = tuple((output.case_id, output.seed) for output in result.outputs)
+    observed = tuple((output.case_id, output.seed) for output in outputs)
     expected_cases = tuple(case.case_id for case in command.cases)
-    observed_cases = tuple(value.case_id for value in result.conditionings)
-    if result.status == "SUCCEEDED":
+    observed_cases = tuple(value.case_id for value in conditionings)
+    if status == "SUCCEEDED":
         if observed != expected or observed_cases != expected_cases:
             raise ValueError("SDXL probe success coverage differs from command")
-        if result.duration_ms > command.budget.maximum_duration_ms or any(
+        if duration_ms > command.budget.maximum_duration_ms or any(
             output.peak_gpu_memory_bytes > command.budget.maximum_peak_gpu_memory_bytes
-            for output in result.outputs
+            for output in outputs
         ):
             raise ValueError("SDXL probe success exceeded frozen budget")
     elif (
