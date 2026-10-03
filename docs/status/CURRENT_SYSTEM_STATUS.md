@@ -25,6 +25,11 @@ format checks: PASS. The failed original owner-scoped review set remains `FAILED
 its authenticated upload replay. Activation did not regenerate the documents, create a duplicate
 review, or claim that review execution has completed. No service restart or new wheel is needed
 for this configuration-only publication; the installed API already owns the V3 request path.
+Additional execution/projection/evidence tests: 8 PASS (36 focused tests in total). The production
+bootstrap module passes mypy. An optional direct mypy invocation on the existing protocol test
+module reports 108 pre-existing broad-output-union/fixture typing errors outside the changed
+assertions; this is not a production-module type-check PASS and remains test-typing maintenance
+debt. Ruff checks passed on the changed test module. Slack recovery milestone was delivered.
 
 On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
 subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
