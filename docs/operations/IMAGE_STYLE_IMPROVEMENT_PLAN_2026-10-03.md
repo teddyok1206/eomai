@@ -498,3 +498,83 @@ baseline, publish validated PNGs/receipt, then measure and inspect all twelve ou
 This source gate is not CUDA evaluation or illustration-quality PASS. The full goal remains
 active; full grouped-data expansion, four-arm acceptance, blind review and Item/HWPX canary
 are not closed by this implementation.
+
+### 2026-10-03 actual matched-input LoRA evaluation — technical PASS, own quality REJECTED
+
+Tested source `cc2f32e76ad872147f954580a1bdca00855bc65b` built from a clean archive at
+`/tmp/eom-image-trainer-build/cc2f32e76ad872147f954580a1bdca00855bc65b.q1pQyU/dist`:
+
+- contracts wheel SHA `dea935ffe52521ab990e5fda1df9fe07b83a2db3f7be8629f73b1512b23da085`;
+- provider wheel SHA `e705316d2c27c10bc95e061c3e5766523cb57274d6cfea8e08dd04e9167b40fb`;
+- trainer wheel SHA `ab54190eef0585460db4cb964bd5c05fdb2781f8e5e1a342640ac280381975b2`.
+
+Only the trainer environment and optional `eom-image-sdxl-lora-evaluation@.service` were
+installed. All wheel RECORD/installed bytes, worker identity imports/CUDA, `pip check` and
+unit validation passed. The predecessor three wheels at `da1fde0e...PIFUQb/dist` were checked
+against their exact hashes and installed bytes and remain rollback inputs. No inference
+environment, production V6 binding, groups/polkit, migration or operating service was changed.
+
+The Orchestrator submitted **one** command for six original TRAIN depictions and seeds
+104729/130363, 30 steps, guidance 7.0, T2I conditioning 0.8 and LoRA strength 1.0. Run:
+`imgsdxlloraevalrun_754ffbe1373f65ec96875ad71cf6b36d`.
+Command Artifact / Revision: `artifact_bfd265c836974054b8d06ab67ab9fc5c` /
+`rev_716fc2b516b744c2b8915c574e72395e`, member `manifests/sdxl-lora-evaluation-command.json`.
+Raw command SHA: `sha256:1f0a699dae6c38ef5a7131192ec0b30704d5f212aab0a89e564cd935f7b2ac1d`;
+semantic SHA: `sha256:9a907e5beae0b1b9e7a0db89b0568d90cf2ebcfacb9e7eeabec5713e9bc03b6f`.
+All 14 staged members passed admission. Neither held-out pixels nor new prompts were used.
+
+The actual isolated GPU run returned **SUCCEEDED**, **12 outputs**, **58,428 ms**, peak Torch
+allocation **8,328,740,352 bytes**, RTX 5080 / CUDA 12.8 / compute 12.0 / Python 3.11.15 /
+Torch 2.7.1+cu128 / Diffusers 0.35.2 / Transformers 4.56.2. Systemd also terminalized successfully.
+This is actual numerical evidence, not a CPU fake or an assertion that illustrations are good.
+All six conditioning records (including byte SHA) are exactly equal to the original baseline.
+The baseline result remains `artifact_0b6df6892e134d0e8839395c691dfb4d` /
+`rev_c7a262df52c04925b9af8dbde00b7f5b`; no historical output was replaced.
+
+After command/result/adapter/baseline and PNG dimension/hash checks, the Orchestrator committed
+the new result plus 30 PNG members to `artifact_b8fd18412d9d44638d0ce2828ef77c2e` /
+`rev_b940a28d33f04cbaa9ba6a0202034445`. Primary member:
+`manifests/sdxl-lora-evaluation-result.json`.
+Raw SHA: `sha256:809b5b56f50263a828329b24d5f69f8c92ac16c0f064171c6203bcc686f20cfd`;
+semantic SHA: `sha256:1f6b201f0fef87cab5374f46f4dd1146f839cd0b2ed029f5bdb79abde546a0de`.
+The two early publication invocations failed before writes: incomplete operator import paths,
+then a transcribed wrong baseline logical ID. The typed resolver refused it. The original
+publication record supplied the exact logical ID for the same pinned revision/hash; there was
+no fallback to latest, data repair or extra GPU execution. Failed logs remain preserved.
+
+Own inspection viewed **all twelve PNGs**, not a selected best seed:
+
+| Subject (two seeds each) | Concrete own observations | Own adoption decision |
+|---|---|---|
+| Microscope | gray background, dark fill, extraneous vertical borders/frame-like lines | REJECTED |
+| Heated vessel | gray background and shaded liquid; second seed breaks the upper vessel outline | REJECTED |
+| Protective glove | grid, shading, redaction-like panels and pseudo-symbols | REJECTED |
+| Radio | shadow, dense speaker textures and fabricated brand/text-like marks | REJECTED |
+| Deciduous tree | gray trunk/background, bottom panel and stray vertical marks | REJECTED |
+| Trilobite | gray grid and highly textured solid rendering rather than restrained exam strokes | REJECTED |
+
+Descriptive native-canvas foreground range is 946–1000 per mille (baseline 922–1000);
+mid-tone range is 836–988 (baseline 742–876); border foreground is 854–1000. These
+same-resolution measurements corroborate the gray-background/tonal problem, not science
+accuracy or a statistical quality score. Presentation-normalized borders are white by
+construction and must not be cited as successful original-background generation.
+No accepted illustration, independent blind review, educational correctness or generalization
+PASS is claimed. This is TRAIN-only diagnosis with a 16-sample micro adapter, not held-out testing.
+
+Inspection copies (explicit temporary materialization, not canonical sources) are in
+`/tmp/eom-sdxl-lora-evaluation-samples-20261003`, both seeds for all six subjects. No PNG was
+retouched to make the sample look successful. Ten sanitized build/read/install/handoff/journal/
+publication/Slack logs are canonically archived as `artifact_646ffd5a0a8243d58dcf55ab5a91a154` /
+`rev_45754e9a259e43419964823b7530c306`. Slack milestone
+`devreport_f0711e634c0b4ffc88003ab674530e66` was SENT (HTTP 200), reporting technical PASS,
+own quality REJECTED, no activation and whole-goal still active. Operating services remained
+active and GPU returned to idle (2 MiB). Neither rejected predecessor nor new result is deleted.
+
+**Next:** before any larger training run, separate the learned style effect from T2I gray-surface
+conditioning using the existing bounded-control budget and already-pinned microscope/radio
+control inputs. The baseline-strength-only controls used 4/12 follow-up outputs; the new twelve
+LoRA images are the planned LoRA arm, not twelve additional controls. Reuse their original
+compiled prompts, source/seed/base settings and the accepted adapter; do not silently redefine
+the released conditioning policy or acquire unverified detector weights. A changed contour
+preprocessing policy needs its own successor/evidence. Full grouped-data expansion, unfinished
+V7/Informative Drawings arms, blind review and passing Item Preview/HWPX canary remain open.
