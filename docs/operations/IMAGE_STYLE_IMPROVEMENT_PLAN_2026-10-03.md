@@ -75,8 +75,35 @@ synthetic grouping case. Ruff format/lint, targeted mypy and release-shell synta
 An initial broader test collection used the API environment, which has no Pillow; it was rerun in
 the explicit image-test Conda environment without changing the production API dependencies.
 
-Next is the additive SDXL model-stack and experiment command contract, then bounded weight staging
-and six-subject comparison. GPU training, the 42-output pilot, blind-review decisions and live
+The additive SDXL stack contract in ADR 0176 now pins base/lineart adapter/fp16-fixed VAE roles,
+upstream revisions/licenses, required sorted local members and component/stack hashes. It rejects
+SSD-1B substitution, pickle/executable files and incomplete component sets, and permits evaluation
+only (`activation_policy=FORBIDDEN`). Thirty additional protocol tests PASS; the five related suites
+now total 113 PASS. Runtime implementation and architecture/tensor verification are still pending.
+The first split checkpoint `80c65cdc` also passed the normal provider/contract wheel build; no
+operating environment was installed by that build.
+
+Public upstream metadata was read on 2026-10-03, without downloading weights:
+
+- SDXL base: `462165984030d82259a11f4367a4eed129e94a7b`;
+- TencentARC lineart adapter: `5f1f33b049b96fa599f0aa3d77b31dbef5095e97`;
+- fp16-fixed VAE: `207b116dae70ace3637169f1ddd2434b91b3a8cd`.
+
+These are acquisition candidates, not installed component/weight hashes. The first bounded
+diagnostic can use already-approved lineart PNGs and explicit polarity conversion. Photo-detector
+weights remain subject to provenance/license verification: the hub's aggregate `other` license
+does not establish the individual weight permission merely because the implementation is MIT or
+Apache-2.0. This narrow prerequisite does not stop the preprocessed-lineart comparison.
+
+Direct inspection of the approved vehicle, plant and animal members shows different rendering
+grammars (gray gradients, thin botanical contours, dense hatching). The animal crop still has an
+original choice marker. Approval/identity validity is not a promise of text-free, homogeneous
+training pixels. Keep these originals and historical partitions immutable; record text masking or
+derived crop decisions and separate expression types before training. Do not count a recrop as a
+new independent source document or move an old holdout into train.
+
+Next is the bounded experiment command/result contract and safe isolated weight staging, then
+six-subject comparison. GPU training, the 42-output pilot, blind-review decisions and live
 activation are pending. No dataset split Artifact has been published by this source checkpoint;
 the pure split function does not resolve permissions or publish bytes itself. Important
 completion/blocker milestones go to Slack; routine progress is kept here.

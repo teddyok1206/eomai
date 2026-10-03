@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lineart-stack/1.0",
+  "title": "Evaluation-only SDXL lineart model stack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_id",
+    "model_revision_id",
+    "provider_family",
+    "runtime_contract_version",
+    "state",
+    "activation_policy",
+    "created_at",
+    "created_by",
+    "components",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-lineart-stack/1.0"
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^imgmodel_[0-9a-f]{32}$"
+    },
+    "model_revision_id": {
+      "type": "string",
+      "pattern": "^imgmodelrev_[0-9a-f]{32}$"
+    },
+    "provider_family": {
+      "const": "diffusers-sdxl-t2i-lineart"
+    },
+    "runtime_contract_version": {
+      "const": "eom-local-image-sdxl-lineart-runner/1.0"
+    },
+    "state": {
+      "const": "EVALUATION_ONLY"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/component"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "properties": {
+              "role": {
+                "const": "BASE"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "role": {
+                "const": "LINEART_ADAPTER"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "properties": {
+              "role": {
+                "const": "VAE"
+              }
+            }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^(?!/)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!.*/$)[A-Za-z0-9._/-]+$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component_id",
+        "component_revision_id",
+        "role",
+        "upstream",
+        "files",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "component_id": {
+          "type": "string",
+          "pattern": "^imgstackcomponent_[0-9a-f]{32}$"
+        },
+        "component_revision_id": {
+          "type": "string",
+          "pattern": "^imgstackcomponentrev_[0-9a-f]{32}$"
+        },
+        "role": {
+          "enum": [
+            "BASE",
+            "LINEART_ADAPTER",
+            "VAE"
+          ]
+        },
+        "upstream": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo_id",
+            "revision",
+            "source_url",
+            "license_id"
+          ],
+          "properties": {
+            "repo_id": {
+              "enum": [
+                "stabilityai/stable-diffusion-xl-base-1.0",
+                "TencentARC/t2i-adapter-lineart-sdxl-1.0",
+                "madebyollin/sdxl-vae-fp16-fix"
+              ]
+            },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "source_url": {
+              "enum": [
+                "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+                "https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0",
+                "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix"
+              ]
+            },
+            "license_id": {
+              "enum": [
+                "CreativeML-Open-RAIL++-M",
+                "Apache-2.0",
+                "MIT"
+              ]
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/file"
+          }
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "role": {
+              "const": "BASE"
+            },
+            "upstream": {
+              "properties": {
+                "repo_id": {
+                  "const": "stabilityai/stable-diffusion-xl-base-1.0"
+                },
+                "source_url": {
+                  "const": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0"
+                },
+                "license_id": {
+                  "const": "CreativeML-Open-RAIL++-M"
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "LINEART_ADAPTER"
+            },
+            "upstream": {
+              "properties": {
+                "repo_id": {
+                  "const": "TencentARC/t2i-adapter-lineart-sdxl-1.0"
+                },
+                "source_url": {
+                  "const": "https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0"
+                },
+                "license_id": {
+                  "const": "Apache-2.0"
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "VAE"
+            },
+            "upstream": {
+              "properties": {
+                "repo_id": {
+                  "const": "madebyollin/sdxl-vae-fp16-fix"
+                },
+                "source_url": {
+                  "const": "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix"
+                },
+                "license_id": {
+                  "const": "MIT"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

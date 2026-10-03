@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lineart-stack": "local-image-sdxl-lineart-stack-v1.schema.json",
     "style-dataset-split": "local-image-style-dataset-split-v1.schema.json",
     "composite-receipt": "local-image-composite-receipt-v1.schema.json",
     "composite-request": "local-image-composite-request-v1.schema.json",
@@ -299,6 +300,9 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lineart-stack": (
+        "sha256:744096d29bb40f60c4c111093359e155822fea652a218be362eab2084ee21a0b"
+    ),
     "style-dataset-split": (
         "sha256:05bc983f3f9044bc82b2d73744f100d8af40fba2aab916dfdd7309a06c4024c2"
     ),

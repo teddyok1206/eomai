@@ -267,6 +267,13 @@ from eom_image_contracts.science_subject_refinement import (
     build_science_visual_subject_refinement_plan,
     validate_science_visual_subject_refinement_plan,
 )
+from eom_image_contracts.sdxl_lineart import (
+    SDXL_LINEART_STACK_SCHEMA_REF,
+    LocalImageSdxlLineartStack,
+    SdxlLineartComponentManifest,
+    SdxlLineartComponentRole,
+    SdxlLineartUpstream,
+)
 from eom_image_contracts.style_dataset_split import (
     STYLE_DATASET_SPLIT_SCHEMA_REF,
     LocalImageStyleDatasetSplit,
@@ -417,6 +424,7 @@ __all__ = [
     "INSTITUTIONAL_STYLE_REVIEW_PACKET_SCHEMA_REF",
     "INSTITUTIONAL_STYLE_REVIEW_SCHEMA_REF",
     "SCHEMA_SHA256",
+    "SDXL_LINEART_STACK_SCHEMA_REF",
     "STYLE_DATASET_SPLIT_SCHEMA_REF",
     "SVG_ALLOWED_FONT_FAMILIES",
     "SVG_LABEL_LAYOUT_CLEARANCE_PX",
@@ -615,6 +623,7 @@ __all__ = [
     "LocalImageScienceVisualSubjectMultiseedResult",
     "LocalImageScienceVisualSubjectMultiseedReview",
     "LocalImageScienceVisualSubjectRefinementPlan",
+    "LocalImageSdxlLineartStack",
     "LocalImageStyleDatasetSplit",
     "LocalImageTrainerDependencies",
     "LocalImageTrainingAuthorization",
@@ -686,6 +695,9 @@ __all__ = [
     "ScienceVisualSubjectSourceReference",
     "ScienceVisualToolIdentity",
     "ScienceVisualToolSet",
+    "SdxlLineartComponentManifest",
+    "SdxlLineartComponentRole",
+    "SdxlLineartUpstream",
     "StyleDatasetMinimumCounts",
     "StyleDatasetSample",
     "StyleDatasetSplitMember",
