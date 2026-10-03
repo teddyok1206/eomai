@@ -44,6 +44,17 @@ it is not manually changed to success or made retryable. After deployment its ow
 the browser and submit again, creating an explicit successor request while retaining failure
 history. The original PDF Artifacts remain intact.
 
+Runtime follow-up: API release `af88f0f9d994a48c00126c14a3b878bb2f04af12` was installed through the
+normal release script. Wheel RECORD, installed import, runtime isolation and readiness checks
+passed; the first-start and replay tests also pass against the installed package (2 PASS).
+Migration remains `20261003_0046`; V5 is still the current released document-review policy. This
+confirms the repaired request-building boundary, not an owner-authenticated completed review;
+the release's authenticated smoke was deferred because its credentials were not configured.
+Owner resubmission after browser refresh remains the next live execution check. The privileged
+deployment's Git status check temporarily rewrote `.git/index` as root mode 0600; only that exact
+index file's owner/mode was restored to the repository operator. Read-only privileged Git checks
+should use `GIT_OPTIONAL_LOCKS=0` in a subsequent maintenance patch.
+
 On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
 subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
 closes 537 observations as 514 covered plus 23 explicit omissions and identifies 87 subjects. The
