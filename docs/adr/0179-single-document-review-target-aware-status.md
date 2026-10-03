@@ -77,3 +77,29 @@ rejected: it would leave insufficient checks reported as COMPLETE under the old 
   worker completion. Model/GPU reruns: zero.
 - Deployment and control publication are separate supported operational steps; source PASS alone
   does not establish installed activation or a newly completed user review.
+
+## Installed verification (2026-10-03 09:27 UTC)
+
+- Compatible API/platform/contracts release installed from
+  `f81c55354dc5e65e97215e9430acd466b3829b72`; isolated wheel admission, RECORD and runtime
+  isolation gates PASS. Rollback record:
+  `/var/lib/eom-api/deployments/f81c55354dc5e65e97215e9430acd466b3829b72.json`.
+- Supported definition import and V6 control publication SUCCEEDED. Single definition 1.3.0 hash
+  `sha256:c3cce17eba54f57517724ea1e3f7ffce6fa80c0f6a39da234a8c63a5e6554634` is active;
+  current preset `execpresetrev_79817b3145cc460faeab3ea1106e6018` (revision 12) pins instruction
+  `instrrev_335715f24c9693ea855196cfd9fe7d53`. Paired definition 1.2 and its Graph policy are preserved.
+- Installed-package focused tests: 143 PASS. Release inventory/admission/argument-wiring and
+  privileged read-only Git checks: 4 PASS. API live/ready PASS; all six auth bindings READY;
+  active leases zero at this observation.
+- Read-only resolution from the existing incident document and published current preset passes
+  exact definition/hash, V13 plan and strict V4 worker-schema checks. Original failed result bytes
+  and failed intent remain unchanged. No model execution, upload, retry, new annotation render or
+  HWPX correction was performed. A newly completed user review remains NOT_EXECUTED.
+- The authenticated deployment smoke was deferred: no smoke-account credential file was supplied.
+  Health, installed tests and read-only preflight do not replace that browser/model acceptance.
+
+Release inspection initially rejected incomplete schema/admission wiring before installation.
+Canonical-inventory comparison and argument-wiring tests now protect those boundaries; the gate was
+not bypassed. Privileged Git inspection disables optional index writes to preserve repository
+ownership. No version-dependent CLI workaround, direct database repair, migration, queue, dependency
+or duplicate runtime path was introduced.

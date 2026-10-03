@@ -57,7 +57,7 @@ result schema를 기준으로 정리한다.
 
 ## 코드가 허용하는 새 Workflow 조합
 
-정본은 `packages/workflow/eom_workflow/admission.py`의 O(1) identity map이다. 이 표는 2026-10-01
+정본은 `packages/workflow/eom_workflow/admission.py`의 O(1) identity map이다. 이 표는 2026-10-03
 UTC의 사람이 읽는 요약이며 `tests/unit/test_runtime_version_admission.py`가 checked-in YAML과
 정확히 대조한다.
 
@@ -96,6 +96,18 @@ definition import, preset release/current selection과 authenticated canary를 �
 갱신한다. 운영 snapshot의 release ID와 SHA는 배포 증거에 남기되 이 문서를 mutable ID 저장소로
 사용하지 않는다.
 
+### 문서 검토 후속 운영 확인 — 2026-10-03 09:27 UTC
+
+위 2026-10-01 snapshot은 역사적 조회다. 문서 검토에 한해 compatible release
+`f81c55354dc5e65e97215e9430acd466b3829b72` 설치와 supported V6 bootstrap publication을 확인했다.
+새 단일 문서 요청은 definition 1.3 / role 1.28 / result 4.0 / plan 13.0을 선택한다.
+current preset revision 12는 1.25–1.28과 호환되며 paired V3의 Graph policy를 유지한다.
+단일·paired predecessor는 원래 계약으로 조회/replay한다. 설치 테스트와 incident-source
+read-only plan/schema preflight는 PASS이나, 이번 release의 신규 모델 실행·인증 browser canary는
+미실행이다. 전체 제품 경로를 새로 acceptance했다고 해석하지 않는다.
+정확한 pins와 rollback은 [ADR 0179](../adr/0179-single-document-review-target-aware-status.md)에
+기록했다.
+
 ## 주요 독립 계약 namespace
 
 | 책임 | 현재 저장소의 latest/additive 계약 | 주의사항 |
@@ -106,7 +118,8 @@ definition import, preset release/current selection과 authenticated canary를 �
 | Evidence usage | Graph plan `19.0`, ungrounded plan `20.0` | boolean이 아닌 pointer/hash/receipt로 검증; predecessor `17.0`/`18.0` replay 보존 |
 | GPU prompt policy | `local-gpu-image-prompt-policy/1.6` | predecessor `1.4` replay 보존 |
 | 자료 형식 | material requirement `1.0`, Item Brief `4.0` | TABLE과 IMAGE를 같은 것으로 취급하지 않음 |
-| PDF annotation | request `3.0`, Catalog `catalog/1.22` | 원본 보존, 파생 Artifact만 생성 |
+| PDF annotation | paired request `3.0` / `catalog/1.22`; single V4 request `4.0` / `catalog/1.23` | 원본 보존, 기존 native-panel output 재사용 |
+| HWPX correction | single V4 request·plan `2.0` / `catalog/1.24` | 기존 correction output 재사용; predecessor 의미 보존 |
 | Human quality workbench | command/workbench `1.0` | released Assembly와 immutable Item Revision pointer만 평가; runtime migration/activation 별도 |
 | Recovery evidence | Artifact snapshot/receipt `1.0` | full metadata inventory는 항상 비교; sampled/full byte verification 구분 |
 
