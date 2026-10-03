@@ -28,6 +28,7 @@ from eom_image_contracts import (
     LocalImageTrainingCropProposalSet,
     LocalImageTrainingCropReview,
     content_json_bytes,
+    content_sha256,
     validate_contract,
 )
 from pydantic import BaseModel
@@ -46,6 +47,8 @@ if TYPE_CHECKING:
         LocalImageScienceVisualSubjectInventory,
         LocalImageScienceVisualSubjectMultiseedPlan,
         LocalImageScienceVisualSubjectRefinementPlan,
+        LocalImageSdxlLineartProbeCommand,
+        LocalImageSdxlLineartPromptPolicy,
     )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
@@ -226,6 +229,16 @@ SCIENCE_VISUAL_SUBJECT_REFINEMENT_PLAN_ARTIFACT_TYPE = (
     "control_local_image_science_visual_subject_refinement_plan"
 )
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
+SDXL_PROMPT_POLICY_MEMBER = "manifests/sdxl-lineart-prompt-policy.json"
+SDXL_PROMPT_POLICY_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-sdxl-lineart-prompt-policy/1.0"
+)
+SDXL_PROMPT_POLICY_ARTIFACT_TYPE = "control_local_image_sdxl_lineart_prompt_policy"
+SDXL_PROBE_COMMAND_MEMBER = "manifests/sdxl-lineart-probe-command.json"
+SDXL_PROBE_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0"
+)
+SDXL_PROBE_COMMAND_ARTIFACT_TYPE = "control_local_image_sdxl_lineart_probe_command"
 
 
 class LocalImageTrainingControlArtifactPublisher:
@@ -236,6 +249,43 @@ class LocalImageTrainingControlArtifactPublisher:
             raise ValueError("local-image training source commit is invalid")
         self.publisher = publisher
         self.source_commit = source_commit
+
+    def commit_sdxl_prompt_policy(
+        self,
+        policy: LocalImageSdxlLineartPromptPolicy,
+        *,
+        created_at: datetime,
+    ) -> ImageEvaluationArtifactMember:
+        """Pin compiled guidance and explicit experiment scope without rewriting old approval."""
+        if created_at.utcoffset() is None:
+            raise ValueError("SDXL prompt policy publication timestamp must be timezone-aware")
+        if created_at < policy.experiment_authorization.approved_at:
+            raise ValueError("SDXL prompt policy publication precedes approval")
+        return self._commit_document(
+            value=policy,
+            contract_name="sdxl-lineart-prompt-policy",
+            member=SDXL_PROMPT_POLICY_MEMBER,
+            schema_ref=SDXL_PROMPT_POLICY_SCHEMA_REF,
+            artifact_type=SDXL_PROMPT_POLICY_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-sdxl-lineart-prompt-policy",
+            identity_sha256=content_sha256(policy.model_dump(mode="json")),
+            created_at=created_at,
+        )
+
+    def commit_sdxl_probe_command(
+        self, command: LocalImageSdxlLineartProbeCommand
+    ) -> ImageEvaluationArtifactMember:
+        """Publish the bounded command through the same resumable Orchestrator owner."""
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-lineart-probe-command",
+            member=SDXL_PROBE_COMMAND_MEMBER,
+            schema_ref=SDXL_PROBE_COMMAND_SCHEMA_REF,
+            artifact_type=SDXL_PROBE_COMMAND_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-sdxl-lineart-probe-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
 
     def commit_authorization(
         self,

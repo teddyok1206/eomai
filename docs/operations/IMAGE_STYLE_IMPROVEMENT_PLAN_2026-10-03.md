@@ -145,3 +145,22 @@ The original corpus permission explicitly allows internal SSD-1B LoRA only. The 
 asked to extend it to internal SDXL comparison/training. Until that reply is recorded, no approved
 exam crop is submitted to SDXL and the prior permission is not reinterpreted. Sudo authentication
 permits protected installation, not an implicit expansion of the corpus-use scope.
+
+### 2026-10-03 Orchestrator admission checkpoint
+
+The new read-only input preparation use case resolves the exact approved crop/prompt-policy
+revisions through the existing Orchestrator resolver. It verifies original authorization,
+inventory/review, campaign plans/results and TRAIN-only membership before materializing any PNG.
+Wrong source revisions, hashes, dimensions, duplicate references/depictions and reserved partitions
+fail explicitly. It returns at most eight ordered staging members; it does not dispatch a worker,
+write DB rows or publish image bytes. Compiled policy/command metadata publication reuses the
+existing idempotent Orchestrator publisher, not a second NAS writer or queue.
+
+Admission and the existing resolver/publisher/corpus/split/stack/dependency/environment regressions
+passed 152 tests, including the final timestamp-edge test; Ruff and targeted strict mypy passed.
+This is synthetic source evidence, not a live corpus submission. The earlier diagnostic wheel also
+passed 74 tests using only extracted
+wheel packages, without source-path imports. The provider wheel and optional SDXL unit are not yet
+installed. GPU inference, micro LoRA, expanded data, blind review and production canary remain pending.
+The explicit SDXL corpus-use extension is still awaiting the user's reply; no historical approval
+or existing production binding has been changed.
