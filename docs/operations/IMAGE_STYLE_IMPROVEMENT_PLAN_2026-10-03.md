@@ -380,3 +380,80 @@ not yet been installed at this source checkpoint. Next is a bounded trainer-only
 exact rollback artifacts, followed by one independently pinned 16-TRAIN/200-step GPU micro run.
 The inference environment and production V6 binding are not part of that update. Full grouped
 dataset expansion, four-arm comparison, independent blind review and Item/HWPX canary remain open.
+
+### 2026-10-03 actual SDXL micro training acceptance
+
+The tested source `da1fde0ef5ccced19beb600396e9620258e8f1fc` was built from a clean immutable
+archive at `/tmp/eom-image-trainer-build/da1fde0ef5ccced19beb600396e9620258e8f1fc.PIFUQb/dist`.
+Wheel SHA-256 values are:
+
+- image contracts: `dc01129fdfe72de8681d2115bea90a6055a4e313b4ac856f05dda51a8c0e2330`;
+- provider: `7a92342344e6cb8ca562dabc260afc14fed6b991929fc4562a5247ab8a6aaa18`;
+- trainer: `67508e5c7a3fd5b5056e74bf0a0186be94009a8dc1bcd7528ca871f1d996a6e8`.
+
+Only the existing **trainer environment** and new optional offline micro unit were updated.
+All wheel RECORD entries, installed member bytes, actual `eom-image` imports/CUDA and `pip check`
+passed. No inference-environment install, production binding change, group/polkit change, service
+restart, DB migration or model activation occurred. Exact installed-predecessor wheels from
+`efa5e9bdfb253d98fb3966734a92645ed7d7f31e.oqaW1I/dist` were checked against both their archive hashes
+and installed bytes before replacement. Rollback inputs remain:
+
+- contracts: `ee4c22f1fb7015ed7a0028a6adfd6a008ca329fb31befad667ba86248f442977`;
+- provider: `cfeef996af9c34adb581aec0b46295028782dd599e1e510721414f801f73219f`;
+- trainer: `3d04c96b834e50b41a6cdd8f7dafcd64be284d7cff392306cc0995f4aae48294`.
+
+The Orchestrator admitted/published/staged one new command and dispatched only
+`eom-image-sdxl-lora-micro-probe@imgsdxlmicrotrainrun_2dd52d6f74119674e2fbccdd7fdef3ca.service`.
+Command Artifact / Revision: `artifact_16942489d5694ebe9fb571953444cb6b` /
+`rev_0f5da5f12a72485ea14e4d8b58067186`, member `manifests/sdxl-lora-micro-command.json`.
+Raw command SHA: `sha256:e68a6b46243357aac0782f42ffe84b61a1e1196b73560d333c3e2d61b8869e45`;
+semantic command SHA: `sha256:9f1558c83511460dabdaf3f46bd4b8a0612f675f8162dbc58de73c7db9e2c0d5`.
+Its explicit masks affect five TRAIN samples (13 normalized boxes): original letters/numbers,
+adjacent inset and layout-frame regions, not source PNG/caption identities. Only 16 TRAIN PNGs
+were staged; the four validation/four holdout IDs did not materialize as trainer input.
+
+The real GPU run completed **SUCCEEDED**, with all **200 optimizer updates**, **474,435 ms**
+application duration, **5,704,160,768 bytes** peak Torch GPU allocation (5.312 GiB) and final
+loss **0.013273741118609905**. The actual dependency/GPU fingerprint matches the command:
+Python 3.11.15, Torch 2.7.1+cu128, Diffusers 0.35.2, Transformers 4.56.2, Accelerate 1.10.1,
+PEFT 0.17.1, bitsandbytes 0.47.0, CUDA 12.8, RTX 5080, compute capability 12.0.
+Systemd separately records successful terminalization at **2026-10-03 21:02:37 UTC**.
+The pinned library's `torch_dtype` deprecation warning is not a training failure; no retry,
+unreceipted-output overwrite or fabricated runtime fingerprint was required.
+
+Before canonical publication the result was checked against its committed command, all 16
+derived RGB 768x512 PNG hashes/dimensions and the exact validated PEFT file set/manifest.
+Orchestrator result Artifact / Revision: `artifact_e4cca31093f1467f8742384ba404dcd4` /
+`rev_02b106d8920f479e8dc7aa453d304ef2` (20 members: result, 16 derived PNGs, adapter manifest,
+config and safetensors). Primary member: `manifests/sdxl-lora-micro-result.json`.
+Raw result SHA: `sha256:6220ae31e36a3c263c2785ea218a5c6c7d73ae0fb6bcaf72ed1531358fea7a15`;
+semantic result SHA: `sha256:86fb9d6d4824b839be897afeade1a1139fde33a1c2b5d0b4b05a204e1a8e643c`.
+Adapter identity: `imgadapter_b133f7fe8b93686687afbbc46937c116` /
+`imgadapterrev_87887be637f79587d932166c302e44f4`;
+manifest semantic SHA: `sha256:971cb7a7b14d1259f3239a762bdb7ce81803ebcb9f996bfd3695c1fbaefb156f`.
+The adapter remains **EVALUATION_ONLY / automatic activation FORBIDDEN**.
+
+Own inspection of all five mask-affected derived samples confirms removal of the selected
+letters/numbers and most frame lines, but still shows gray surfaces, existing redaction holes,
+a furniture-frame fragment and small objects on large white canvases. The watch's redaction also
+removes face detail. These are explicit dataset limitations, not a clean-full-dataset claim.
+Low training loss is **not** evidence of morphology, composition, generation quality or educational
+correctness. No post-LoRA image was generated in this training phase; the 16 earlier comparison
+outputs remain rejected by own inspection. Independent blind review remains NOT_PERFORMED.
+
+Nine sanitized build/preflight/install/handoff/journal/publication/Slack evidence attachments are
+durably archived as `artifact_1c2e2ecfc4de48f3be863ab5c71955ec` /
+`rev_240783417edd4306a923fe3a8b9b3519`. Slack start/completion receipts
+`devreport_1e99d22e85544edabba6640e03b576a8` and `devreport_311814b3eaf1433eaa0cf6b6b2128084`
+were SENT (HTTP 200); the completion report explicitly refers only to the micro training phase.
+API, Web GUI, Catalog/HWPX application runners and Workflow runner remained active. GPU returned
+to idle (2 MiB). The overall image-quality goal remains active.
+
+**Next authorized work:** add the smallest additive evaluation contract that pins this accepted
+SDXL adapter, its training result and exact base stack before provider loading. Keep released
+inference probe 1.0 and its original prompt/reference/result semantics intact. Compare the same
+compiled content-team prompts, source references, seeds and generation settings, with explicit
+LoRA strength and output budget. Do not call an unpinned local adapter path a reproducible model,
+silently cast it to an SSD adapter, retrain this successful micro run, or activate it from loss alone.
+Expanded document/duplicate-group training data, remaining four-arm outputs, independent blind
+review and passing Item Preview/HWPX canary are still required before full-goal completion.

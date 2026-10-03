@@ -18,10 +18,25 @@ gradients/adapter values and new SDXL resource bounds are checked. Focused sourc
 87 PASS at the numerical checkpoint. The subsequent micro application/CLI/Orchestrator handoff
 now passes 137 focused tests and 9 dependency/publication tests; full non-live image-runtime
 suite: 244 PASS; Ruff, targeted mypy and release-shell syntax PASS. These tests use CPU fakes
-for loop accounting, not real GPU training. Actual LoRA training remains pending; no installed
-trainer or operating model was replaced at this source checkpoint. The 12 sanitized operator logs are archived as
+for loop accounting, not real GPU training. No installed trainer or operating model was replaced
+at that source checkpoint. The 12 sanitized diagnostic operator logs are archived as
 `artifact_bb025e48f4d44032bcef8e13a2cbb503` /
 `rev_238a506019a24c678d335bce6c776bbc`, separate from canonical GPU result revisions.
+
+Subsequent live micro acceptance: tested source `da1fde0e` was installed only in the existing
+trainer environment plus one optional offline unit, with exact predecessor rollback wheels,
+wheel/installed RECORD checks, actual worker imports/CUDA and `pip check` PASS. One approved
+16-TRAIN/200-step SDXL run completed in 474,435 ms at 5,704,160,768 bytes peak Torch GPU allocation.
+The Orchestrator validated and committed 20 result/derived-PNG/PEFT members as
+`artifact_e4cca31093f1467f8742384ba404dcd4` /
+`rev_02b106d8920f479e8dc7aa453d304ef2`; the adapter remains EVALUATION_ONLY with automatic activation
+FORBIDDEN. Final loss 0.013273741118609905 is not a quality score. No post-LoRA generation or blind
+acceptance has occurred. Original source pixels/captions and reserved images remain unchanged.
+Own derived-data inspection still sees gray surfaces, existing redaction holes, one frame fragment
+and small objects on white canvases. Nine sanitized micro operator logs are archived as
+`artifact_1c2e2ecfc4de48f3be863ab5c71955ec` / `rev_240783417edd4306a923fe3a8b9b3519`.
+Production V6/inference environment are unchanged; operating services stayed active and GPU is
+idle after the run. Next is pinned adapter evaluation, not automatic operating activation.
 
 The [current image improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md)
 pins source/model/result hashes, distinguishes correct conditioning polarity from actual contour
