@@ -31,6 +31,19 @@ module reports 108 pre-existing broad-output-union/fixture typing errors outside
 assertions; this is not a production-module type-check PASS and remains test-typing maintenance
 debt. Ruff checks passed on the changed test module. Slack recovery milestone was delivered.
 
+The subsequent real submission exposed a separate first-start bug: the API hashed a
+`CREATE_DOCUMENT_REVIEW_EVIDENCE` command without its default `schema_version`; the canonical
+contract includes that field and rejected the hash. Read-only reproduction using the pinned
+14-page question and 7-page solution succeeded for the base request, failed for the unversioned
+command and passed for the explicitly versioned command. The first-start adapter now hashes the
+complete versioned command. A regression test exercises the real adapter up to the private Catalog
+boundary, while the existing replay test still asserts that replay does not consult mutable policy.
+Focused source tests: 21 PASS, one disposable-PostgreSQL-only test skipped. Ruff and mypy pass on
+the changed adapter and regression test. The second failed review set is terminal `FAILED_FINAL`;
+it is not manually changed to success or made retryable. After deployment its owner must refresh
+the browser and submit again, creating an explicit successor request while retaining failure
+history. The original PDF Artifacts remain intact.
+
 On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
 subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
 closes 537 observations as 514 covered plus 23 explicit omissions and identifies 87 subjects. The

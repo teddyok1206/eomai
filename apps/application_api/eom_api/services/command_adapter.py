@@ -925,6 +925,7 @@ class CommandAdapter:
         requester_role = self._knowledge_requester_role(actor)
         requester_permissions = tuple(sorted(value.value for value in actor.permissions))
         evidence_value: dict[str, object] = {
+            "schema_version": "document-review-evidence-request/1.0",
             "operation": "CREATE_DOCUMENT_REVIEW_EVIDENCE",
             "documents": [
                 DocumentReviewEvidenceSource(
