@@ -223,3 +223,64 @@ The 51 probe/model/acquisition/backend tests passed, including an execute-only a
 Ruff format/lint passed; targeted strict mypy uses the image-test interpreter with silent checking
 of unchanged imports. Broader imported legacy Pillow annotations exposed existing errors and are
 not represented as a whole-package mypy PASS.
+
+### 2026-10-03 first measured SDXL diagnostic
+
+The corrected, deliberately new run `imgsdxlproberun_8b2b08110e6462366b1346dca1284a0a`
+completed all six TRAIN subjects at seeds 104729/130363: 12 model outputs, 49,799 ms overall,
+8,280,481,280 bytes peak GPU allocation. Actual worker runtime was Python 3.11.15,
+Torch 2.7.1+cu128, Diffusers 0.35.2, Transformers 4.56.2 and RTX 5080/CUDA 12.8.
+The fixed inputs used 30 steps, guidance 7.0 and adapter scale 0.8. Production binding and
+service availability were unchanged; no LoRA was loaded or trained.
+
+Canonical command: `artifact_fd83bbb76bca49fea6401bf06094560f` /
+`rev_b00fe42acc524532908bbfd6fd7f33ad`,
+`manifests/sdxl-lineart-probe-command.json`, raw member SHA
+`sha256:1fe831027f688dbc607535bf29e35e2c3f156024978c8955645d41936442a695`.
+Command semantic SHA is
+`sha256:22ad53f2868eacdbaf11c5ae844d2e99dae2ee1256202f65d5e29d03d3923f1a`.
+
+The Orchestrator validated the terminal result against that separately pinned canonical command,
+then committed the result and 30 PNG members (6 conditioning, 12 raw, 12 final) to
+`artifact_0b6df6892e134d0e8839395c691dfb4d` /
+`rev_c7a262df52c04925b9af8dbde00b7f5b`. Result member is
+`manifests/sdxl-lineart-probe-result.json`, raw SHA
+`sha256:cf1a9cd6dd45cb41a0f9ef215e41a5eedde2efeb27c8bc01d0928f5521114cd5`;
+its separate semantic result SHA is
+`sha256:98d4890292a7aa2d8445a7a6b7f49262bf671b000f996b494d40c06ff9e14fcc`.
+An inspection invocation initially used the semantic hash as the member hash and correctly failed
+closed; the corrected read-only invocation did not rewrite evidence or rerun inference.
+
+Technical receipt/PNG integrity passed. **Our own inspection rejects all 12 for exam style**:
+gray backgrounds, grid/banding, shadows, dark filled surfaces/white contours and inherited
+redaction marks are visible. This is not an independent blind review or a scientific-accuracy
+approval. Existing raw-canvas raster metrics measured foreground below 245 at 922–1000 milli,
+border foreground at 945–1000 milli and midtone at 742–876 milli. These are descriptive measurements,
+not newly invented acceptance thresholds; reference foreground was 199–333 milli and source
+resolution/whitespace differ. Temporary inspection copies are not canonical training data.
+
+The pinned [TencentARC model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0/blob/5f1f33b049b96fa599f0aa3d77b31dbef5095e97/README.md)
+and the [official conditioning example](https://huggingface.co/Adapter/t2iadapter/resolve/main/figs_SDXLV1.0/cond_lin.png)
+confirm white contours on black. The downloaded example's actual SHA is
+`d6fa8c2936da8e279e567375736a8f62c53ed48ae046f7d33e86a1b57f9e9b5f`;
+the example URL is mutable, not an immutable model revision. The
+[detector implementation](https://github.com/huggingface/controlnet_aux/blob/v0.0.7/src/controlnet_aux/lineart/__init__.py)
+extracts a learned contour map before inversion. Our declared
+`FIT_GRAYSCALE_INVERT_832X512/1.0` instead inverts the original gray surfaces. Correct polarity
+does not make those two preprocessing algorithms equivalent. No polarity bug is established;
+the source of the artifacts is still being isolated. Detector-weight authorization remains
+separate, and no detector weights were acquired by this inspection.
+
+Before spending training time, run only four strength controls: microscope/radio at seed 104729,
+the same stack/reference/prompt/steps/guidance, adapter scale 0.0 versus 0.35. Each has an exact
+new command and two outputs, using the existing schema, Orchestrator admission, exclusive
+workspace, fixed unit and GPU lock. These are intentional diagnostic experiments, not failure
+retries or a new acceptance cycle. The previous 0.8 evidence stays immutable and rejected.
+Do not silently change the released conditioning policy to an edge detector; changed preprocessing
+requires a successor contract if the evidence warrants it. The installed Diffusers adapter
+constructor has no `add_watermarker` argument; the ignored keyword was removed with a regression
+assertion (31 probe/backend tests, Ruff and targeted mypy passed), not a new configuration flag.
+
+SDXL training/backend implementation, clean training selection/expanded document split,
+the complete four-arm 42-output comparison, independent blind review and Item/HWPX activation
+remain pending. No technical success is relabeled as quality acceptance.

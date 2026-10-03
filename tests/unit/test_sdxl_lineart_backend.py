@@ -76,6 +76,7 @@ def test_offline_load_architecture_prompt_capacity_numerics_and_cleanup(
             return SimpleNamespace(images=array)
 
     def load(component: str, root: str, **kwargs: object) -> object:
+        assert "add_watermarker" not in kwargs
         assert Path(root).is_relative_to(tmp_path)
         assert kwargs["local_files_only"] is True
         if component != "scheduler":

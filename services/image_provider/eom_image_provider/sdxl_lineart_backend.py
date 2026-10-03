@@ -136,7 +136,6 @@ class SdxlLineartDiffusersBackend:
                 variant="fp16",
                 local_files_only=True,
                 use_safetensors=True,
-                add_watermarker=False,
             )
             if (
                 tuple(pipeline.unet.config.block_out_channels) != (320, 640, 1280)
