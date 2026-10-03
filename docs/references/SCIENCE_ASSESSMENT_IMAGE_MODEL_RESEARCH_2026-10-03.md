@@ -27,8 +27,9 @@ EOM의 목표는 한 모델이 내용·형태·스타일·문자까지 모두 �
 ## 현재 기준선
 
 - 운영 기준선은 SSD-1B 계열의 격리된 Diffusers provider이다.
-- `sdxl-morphology-img2img/2.2`, reference strength `0.35`, V7 후처리와 결정론적 overlay를
-  사용한다.
+- 현재 `/etc/eom/local-image-provider.json`에서 확인한 활성 설정은 V6이다.
+  `sdxl-morphology-img2img/2.2`, reference strength `0.35`, V6 후처리와 결정론적 overlay를
+  사용한다. V7은 기관 스타일 비교를 위한 후보이며 활성 운영 설정으로 간주하지 않는다.
 - SSD-1B는 빠른 기준선과 rollback 후보로 보존한다.
 - SSD-1B는 SDXL에서 일부 레이어를 제거한 증류 모델이므로 SDXL용 ControlNet이나
   T2I-Adapter의 drop-in 호환성을 가정하지 않는다.

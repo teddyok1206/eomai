@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "style-dataset-split": "local-image-style-dataset-split-v1.schema.json",
     "composite-receipt": "local-image-composite-receipt-v1.schema.json",
     "composite-request": "local-image-composite-request-v1.schema.json",
     "model-manifest": "local-image-model-manifest-v1.schema.json",
@@ -298,6 +299,9 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "style-dataset-split": (
+        "sha256:05bc983f3f9044bc82b2d73744f100d8af40fba2aab916dfdd7309a06c4024c2"
+    ),
     "composite-receipt": "sha256:5a2c87fac79464d4e0fcc8a0ed2bf5a2b1be309c5da867eaeb757e2c23784256",
     "composite-request": "sha256:a238142416462d0dd597d06973ebc180e57c57acf61dc089c79209f6f1a8f4d9",
     "model-manifest": "sha256:f3c0d55b27e16785c14f04a52be0c84cfc23cb7fe10f9e40654891f907804fd3",

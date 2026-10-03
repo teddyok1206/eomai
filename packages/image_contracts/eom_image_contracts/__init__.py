@@ -267,6 +267,14 @@ from eom_image_contracts.science_subject_refinement import (
     build_science_visual_subject_refinement_plan,
     validate_science_visual_subject_refinement_plan,
 )
+from eom_image_contracts.style_dataset_split import (
+    STYLE_DATASET_SPLIT_SCHEMA_REF,
+    LocalImageStyleDatasetSplit,
+    StyleDatasetMinimumCounts,
+    StyleDatasetSample,
+    StyleDatasetSplitMember,
+    build_style_dataset_split,
+)
 from eom_image_contracts.svg_label_layout import (
     SVG_LABEL_LAYOUT_CLEARANCE_PX,
     SVG_LABEL_LAYOUT_FONT_PROFILE,
@@ -409,6 +417,7 @@ __all__ = [
     "INSTITUTIONAL_STYLE_REVIEW_PACKET_SCHEMA_REF",
     "INSTITUTIONAL_STYLE_REVIEW_SCHEMA_REF",
     "SCHEMA_SHA256",
+    "STYLE_DATASET_SPLIT_SCHEMA_REF",
     "SVG_ALLOWED_FONT_FAMILIES",
     "SVG_LABEL_LAYOUT_CLEARANCE_PX",
     "SVG_LABEL_LAYOUT_FONT_PROFILE",
@@ -606,6 +615,7 @@ __all__ = [
     "LocalImageScienceVisualSubjectMultiseedResult",
     "LocalImageScienceVisualSubjectMultiseedReview",
     "LocalImageScienceVisualSubjectRefinementPlan",
+    "LocalImageStyleDatasetSplit",
     "LocalImageTrainerDependencies",
     "LocalImageTrainingAuthorization",
     "LocalImageTrainingCandidate",
@@ -676,6 +686,9 @@ __all__ = [
     "ScienceVisualSubjectSourceReference",
     "ScienceVisualToolIdentity",
     "ScienceVisualToolSet",
+    "StyleDatasetMinimumCounts",
+    "StyleDatasetSample",
+    "StyleDatasetSplitMember",
     "SvgLabelBounds",
     "SvgLabelLayoutValidationError",
     "SvgLabelLayoutValidationReceipt",
@@ -690,6 +703,7 @@ __all__ = [
     "VisualReferenceSource",
     "assemble_science_visual_campaign_pattern_inventory",
     "build_science_visual_subject_refinement_plan",
+    "build_style_dataset_split",
     "build_training_crop_review_draft",
     "composition_failure_reasons",
     "content_json_bytes",

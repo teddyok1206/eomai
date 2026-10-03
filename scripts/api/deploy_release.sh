@@ -1884,6 +1884,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {
+    "local-image-style-dataset-split-v1.schema.json": "schemas/image-provider/local-image-style-dataset-split-v1.schema.json",
     "local-image-flux2-reference-probe-command-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-command-v1.schema.json",
     "local-image-flux2-reference-probe-command-v2.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-command-v2.schema.json",
     "local-image-flux2-reference-probe-plan-v1.schema.json": "schemas/image-provider/local-image-flux2-reference-probe-plan-v1.schema.json",

@@ -1,0 +1,87 @@
+# Science examination illustration improvement plan
+
+This plan implements the user's approved local illustration-quality goal. Reference images supply
+object shape and composition; LoRA supplies examination-style strokes and restrained tones.
+Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
+Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
+
+## Verified baseline and limits
+
+On 2026-10-03 the readable operating binding is SSD-1B V6, hash
+`sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
+The checked-in V7 institutional-style configuration is a candidate, not the active baseline.
+The host exposes an RTX 5080 with 16,303 MiB. GPU/NAS were unavailable in the earlier restricted
+execution context and became accessible after the interruption; that earlier observation does not
+establish a service outage. Model directory listing requires the existing privileged adapter.
+The 06:05 UTC read-only audit resolved the approved object and raster crop sets through the existing
+Orchestrator control-Artifact resolver. Schema/Pydantic, approved revision, member hashes, PNG
+decode/dimensions and linked authorization/review hashes passed. Each contains 24 members
+(16 train / 4 validation / 4 holdout): object line art spans 20 PDFs / 19 exam groups, raster scenes
+19 PDFs / 19 exam groups. These are not hundreds of new training examples. Existing partitions stay
+unchanged. The 768-candidate review has 24 object-line-art eligible entries; its diagram/raster
+categories cannot simply be relabeled as object line art to reach the full-training target.
+The protected model-root inventory found the SSD-1B logical model directory, not an SDXL candidate
+stack. A full installed-weight audit and runtime throughput measurement remain pending.
+No quality gain or blind-review PASS has yet been measured.
+
+## Implementation order
+
+1. Record the current binding, model revisions and reviewed crop provenance. Reuse existing
+   Artifact pointers instead of copying images to Git. Keep V6 available for rollback.
+2. Implement the document/duplicate-group split contract in ADR 0175. Freeze source metadata,
+   internal authorization and independent holdout groups before training. Default full-experiment
+   targets are 100–200 train, 24–40 validation and 32 blind-test depictions; report shortages.
+3. Add additive SDXL model-stack and evaluation-command schemas before provider behavior.
+   Pin base, VAE, T2I-Adapter, line detector and LoRA revisions/hashes separately. Verify lineart
+   polarity from the pinned upstream implementation. Do not claim SDXL adapters work on SSD-1B.
+4. Extend the existing isolated candidate provider/trainer. Use fixed local weights, offline
+   inference, the current GPU lock and bounded staged inputs. No new queue or external LLM API.
+5. Begin with an evaluation-only micro LoRA: rank 8, alpha 8, 200 steps, batch 1, accumulation 4,
+   frozen text encoders/VAE and fp16 where supported. Validate numerics and GPU compatibility.
+   Only then compare up to three full-training candidates: rank 8 with low/current LR and rank 16
+   with low LR. Exact learning rates and memory bounds must be pinned before execution.
+6. Run six subjects through V7 at two seeds, Informative Drawings once, SDXL+T2I base at two seeds,
+   and SDXL+T2I+LoRA at two seeds: 42 proposed outputs, not outputs already produced. If structural
+   fidelity fails, add a bounded ControlNet/IP-Adapter comparison of at most 12 outputs.
+7. Expand to 12 diagnostic and 32 independent same-depiction blind comparisons. Use the existing
+   separate presentation-packet/answer-key contracts. Record prompt/reference/model/seed hashes,
+   morphology/semantic judgments, pseudotext, latency, peak VRAM and output hash.
+8. Only a passing candidate proceeds to a successor single Item Preview and HWPX canary. Verify
+   package-internal PNG relationships, download SHA, labels and rollback. Do not activate a model
+   merely because training or rendering succeeded.
+
+## Proposed decision criteria
+
+Require zero unresolved critical scientific contradictions and pseudotext in accepted images.
+Pilot adoption targets are at least 90% usable, mean semantic/composition score at least 4/5 and
+generated-origin identification no more than 65% across 32 depictions with three independent
+reviewers. These are proposed operational gates, not a statistical proof of indistinguishability.
+Each rejected image remains rejected regardless of the aggregate average. Independent reviewer
+availability is a human gate; automated metrics and our own inspection cannot substitute for it.
+
+Measure resource limits against fixed-input V6/V7 runs before choosing an operational ceiling.
+Training data, validation selection and blind comparison populations must not overlap by source
+PDF or reviewed duplicate group. Reference-conditioned composition preservation is evaluated
+separately from free generation. Follow the existing internal-use authorization scope.
+
+## Progress and evidence
+
+Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
+union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
+cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000
+samples; shortages remain `INSUFFICIENT`. Canonical/packaged resources and release inclusion maps
+are aligned. Focused regression suites: 83 PASS, including 30 split tests and a 10,000-member
+synthetic grouping case. Ruff format/lint, targeted mypy and release-shell syntax checks PASS.
+An initial broader test collection used the API environment, which has no Pillow; it was rerun in
+the explicit image-test Conda environment without changing the production API dependencies.
+
+Next is the additive SDXL model-stack and experiment command contract, then bounded weight staging
+and six-subject comparison. GPU training, the 42-output pilot, blind-review decisions and live
+activation are pending. No dataset split Artifact has been published by this source checkpoint;
+the pure split function does not resolve permissions or publish bytes itself. Important
+completion/blocker milestones go to Slack; routine progress is kept here.
+
+The technical candidates and upstream sources are recorded in
+[the research document](../references/SCIENCE_ASSESSMENT_IMAGE_MODEL_RESEARCH_2026-10-03.md).
+Existing institutional comparison evidence remains in
+[the candidate status](../status/INSTITUTIONAL_IMAGE_STYLE_CANDIDATE_2026-10-02.md).
