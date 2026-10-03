@@ -35,6 +35,28 @@ class InformativeLineartUpstream(FrozenModel):
         "sha256:c686ced2a666b4850b4bb6ccf0748031c3eda9f822de73a34b8979970d90f0c6"
     ]
 
+    @classmethod
+    def pinned(cls) -> Self:
+        """Construct the supported immutable distribution, never a mutable Hub branch."""
+        return cls(
+            repo_id="carolineec/informativedrawings",
+            repo_type="space",
+            revision="bd4b4299be505803e036203a39c02024b4cfee11",
+            source_url="https://huggingface.co/spaces/carolineec/informativedrawings",
+            license_id="MIT",
+            license_record_sha256=(
+                "sha256:7cb79f3b0f9354c7f47a1ab56b09c0e3bd6c8d96243555be5e28ea79d6e6c8a7"
+            ),
+            architecture_source_sha256=(
+                "sha256:4e989aff7a9f4491e9bf463dff0b7c35f84b52b34a0bf4ca918b525fa7d593d0"
+            ),
+            weight_filename="model.pth",
+            weight_bytes=17173511,
+            weight_sha256=(
+                "sha256:c686ced2a666b4850b4bb6ccf0748031c3eda9f822de73a34b8979970d90f0c6"
+            ),
+        )
+
 
 class InformativeLineartPointer(FrozenModel):
     extractor_id: str = Field(pattern=r"^imgextractor_[0-9a-f]{32}$")
@@ -60,6 +82,26 @@ class LocalImageInformativeLineartManifest(FrozenModel):
     created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
     manifest_sha256: Sha256
 
+    @classmethod
+    def create(cls, *, files: tuple[ModelFile, ...], created_at: datetime, created_by: str) -> Self:
+        """Seal one derived revision using the same identity rule as its validator."""
+        upstream = InformativeLineartUpstream.pinned()
+        value: dict[str, object] = {
+            "schema_version": "local-image-informative-lineart-manifest/1.0",
+            "provider_family": "informative-drawings-style1",
+            "runtime_contract_version": "eom-informative-lineart-extractor/1.0",
+            "state": "EVALUATION_ONLY",
+            "activation_policy": "FORBIDDEN",
+            "upstream": upstream.model_dump(mode="json"),
+            "conversion_policy": "TORCH_WEIGHTS_ONLY_CPU_TO_SAFETENSORS/1.0",
+            "architecture": "RGB_INSTANCE_NORM_RESNET3_SIGMOID/1.0",
+            "files": [file.model_dump(mode="json") for file in files],
+            "created_at": created_at.isoformat().replace("+00:00", "Z"),
+            "created_by": created_by,
+        }
+        value.update(_identity_values(value))
+        return cls.model_validate({**value, "manifest_sha256": content_sha256(value)})
+
     @field_validator("created_at")
     @classmethod
     def utc_created(cls, value: datetime) -> datetime:
@@ -77,31 +119,42 @@ class LocalImageInformativeLineartManifest(FrozenModel):
             ceiling = 32 * 1024**2 if file.relative_path == "model.safetensors" else 64 * 1024
             if file.size_bytes > ceiling:
                 raise ValueError("learned lineart model or metadata exceeds its byte limit")
-        logical = content_sha256(
-            {
-                "provider_family": self.provider_family,
-                "repo_id": self.upstream.repo_id,
-                "weight_filename": self.upstream.weight_filename,
-            }
-        )[7:39]
-        revision = content_sha256(
-            {
-                "upstream": self.upstream.model_dump(mode="json"),
-                "conversion_policy": self.conversion_policy,
-                "architecture": self.architecture,
-                "runtime_contract_version": self.runtime_contract_version,
-                "files": [file.model_dump(mode="json") for file in self.files],
-            }
-        )[7:39]
-        if self.extractor_id != "imgextractor_" + logical:
+        value = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        identities = _identity_values(value)
+        if self.extractor_id != identities["extractor_id"]:
             raise ValueError("learned lineart logical identity mismatch")
-        if self.extractor_revision_id != "imgextractorrev_" + revision:
+        if self.extractor_revision_id != identities["extractor_revision_id"]:
             raise ValueError("learned lineart immutable revision mismatch")
-        if self.manifest_sha256 != content_sha256(
-            self.model_dump(mode="json", exclude={"manifest_sha256"})
-        ):
+        if self.manifest_sha256 != content_sha256(value):
             raise ValueError("learned lineart manifest hash mismatch")
         return self
+
+
+def _identity_values(value: dict[str, object]) -> dict[str, str]:
+    upstream = InformativeLineartUpstream.model_validate(value["upstream"])
+    return {
+        "extractor_id": "imgextractor_"
+        + content_sha256(
+            {
+                "provider_family": value["provider_family"],
+                "repo_id": upstream.repo_id,
+                "weight_filename": upstream.weight_filename,
+            }
+        )[7:39],
+        "extractor_revision_id": "imgextractorrev_"
+        + content_sha256(
+            {
+                field: value[field]
+                for field in (
+                    "upstream",
+                    "conversion_policy",
+                    "architecture",
+                    "runtime_contract_version",
+                    "files",
+                )
+            }
+        )[7:39],
+    }
 
 
 def validate_informative_lineart_pointer(

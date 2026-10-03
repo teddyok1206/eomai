@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import pytest
 from eom_image_contracts import (
     InformativeLineartPointer,
+    InformativeLineartUpstream,
     LocalImageInformativeLineartManifest,
     content_json_bytes,
     content_sha256,
@@ -110,6 +112,35 @@ def test_schema_model_canonical_identity_and_pinned_pointer() -> None:
     assert manifest.manifest_sha256 not in {file.sha256 for file in manifest.files}
     with pytest.raises(ValidationError):
         manifest.state = "APPROVED"  # type: ignore[misc]
+
+
+def test_manifest_factory_preserves_existing_identity_hash_and_canonical_utc() -> None:
+    existing = LocalImageInformativeLineartManifest.model_validate(_manifest())
+    assert InformativeLineartUpstream.pinned() == existing.upstream
+    created = LocalImageInformativeLineartManifest.create(
+        files=existing.files,
+        created_at=datetime(2026, 10, 3, 22, tzinfo=UTC),
+        created_by=existing.created_by,
+    )
+    assert created == existing
+    assert created.model_dump(mode="json")["created_at"] == "2026-10-03T22:00:00Z"
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        datetime(2026, 10, 3, 22),
+        datetime(2026, 10, 3, 22, tzinfo=timezone(timedelta(hours=9))),
+    ],
+)
+def test_manifest_factory_rejects_non_utc_before_sealing(created_at: datetime) -> None:
+    existing = LocalImageInformativeLineartManifest.model_validate(_manifest())
+    with pytest.raises(ValidationError, match="UTC"):
+        LocalImageInformativeLineartManifest.create(
+            files=existing.files,
+            created_at=created_at,
+            created_by=existing.created_by,
+        )
 
 
 @pytest.mark.parametrize("field", ["extractor_id", "extractor_revision_id", "manifest_sha256"])

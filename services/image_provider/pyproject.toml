@@ -27,3 +27,6 @@ eom-local-image = "eom_image_provider.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["eom_image_provider*"]
+
+[tool.setuptools.package-data]
+eom_image_provider = ["notices/*.txt"]

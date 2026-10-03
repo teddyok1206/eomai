@@ -689,3 +689,45 @@ Next remains restricted extractor conversion/tensor validation and additive lear
 command/result implementation. Full-data expansion, remaining comparison arms, independent blind
 review and a passing Item Preview/HWPX canary remain open. The whole image-quality goal is ACTIVE,
 not complete; rejected model outputs never authorize activation.
+
+### 2026-10-03 learned extractor acquisition and actual CPU acceptance
+
+The source implementation now has separate restricted acquisition, public pinned HTTP and
+offline exact-revision resolution responsibilities. The CLI delegates these rules; there is no
+new queue, database schema, daemon or dependency. The existing manifest schema bytes and old
+gray-inversion policy are unchanged. See ADR 0180 for the boundary and packaged MIT notice.
+
+An actual acquisition in the explicit `eom-image-trainer` environment fetched and verified the
+author's pinned README, architecture source and 17,173,511-byte weight. Restricted CPU loading
+converted 24 F32 tensors / 4,290,945 parameters to 17,165,948-byte safetensors. Every tensor and
+the synthetic before/after CPU forward were bit-identical. Seven real numerical acceptance tests
+passed; a separate one-test CPU-construction gate also passed under a non-CPU default-device
+context. Wrong shape/key/dtype/device/layout/non-finite tensors and corrupt inputs were rejected.
+CUDA initialization was guarded against; no actual exam-image extraction, GPU generation,
+training, HWPX render or production configuration change occurred in this phase.
+
+Source gates: final focused contract/runtime/dependency/old-SDXL regression **166 PASS**, complete
+isolated image unit gate **318 PASS**, strict type checker six production/CLI files PASS,
+formatter/linter/shell syntax/diff checks PASS. These suites overlap and must not be added as one
+unique-test total. Normal API-side collection skips the eight real numerical tests without the
+explicit opt-in; it does not import Torch/Pillow or fetch public model files.
+
+Acquisition materialization: `/tmp/eom-informative-lineart-acquisition.an987FIa/model`.
+Extractor logical ID `imgextractor_1de9b4ea4cbdd167a6ba88f0b45f91d3`; immutable revision
+`imgextractorrev_93c4e6202a52e2d5a76f33f517b05e62`; semantic manifest SHA
+`sha256:aa2ad3750048e0ab118fad3353b98d6811dc2b26db01379bd5b85cf63fa6b62d`; derived weight SHA
+`sha256:597e257afa95df3e989460590d62a7c6ba487c2b7afd63cf10145712a043963c`.
+This is staging, not a protected installed model or an inference receipt. The original `.pth` was
+not written into the model directory; remote executable source was not executed or retained there.
+
+The focused source gate initially exposed a new factory's UTC string/hash normalization error;
+it was fixed at canonical construction, not by weakening the manifest validator. Later, a broader
+regression invocation omitted the identifiers package source path and failed collection. Its log
+is retained separately; the corrected full-source invocation passed. Developer test failures do
+not reinterpret historical runtime failures, and neither issue required service changes.
+
+Next: build and verify this immutable candidate, archive exact model/evidence through the existing
+Orchestrator publisher, then add the extraction command/result and original TRAIN admission before
+dispatching six learned-contour inputs. Do not make derived PNGs impersonate original approved
+crops. The previous 30 rejected SDXL images remain rejected; independent blind review, full-data
+expansion, remaining comparisons and quality-passing Item Preview/HWPX remain open. Goal ACTIVE.

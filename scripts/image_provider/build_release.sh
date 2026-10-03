@@ -123,6 +123,11 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/sdxl_lineart_probe.py",
         "eom_image_provider/sdxl_model_resolution.py",
         "eom_image_provider/staged_file_io.py",
+        "eom_image_provider/informative_lineart_acquisition.py",
+        "eom_image_provider/informative_lineart_download.py",
+        "eom_image_provider/informative_lineart_model.py",
+        "eom_image_provider/informative_lineart_resolution.py",
+        "eom_image_provider/notices/informative-drawings-MIT.txt",
         "eom_image_provider/prompt_capacity.py",
     }.issubset(names):
         raise SystemExit("LOCAL_IMAGE_PROVIDER_WHEEL_INVALID")

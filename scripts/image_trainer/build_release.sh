@@ -137,7 +137,13 @@ with zipfile.ZipFile(contract) as archive:
         raise SystemExit("LOCAL_IMAGE_TRAINER_CONTRACT_WHEEL_INVALID")
 with zipfile.ZipFile(provider) as archive:
     if not {"eom_image_provider/provider.py", "eom_image_provider/sdxl_lora_evaluation.py",
-            "eom_image_provider/sdxl_lora_material.py"}.issubset(archive.namelist()):
+            "eom_image_provider/sdxl_lora_material.py",
+            "eom_image_provider/informative_lineart_acquisition.py",
+            "eom_image_provider/informative_lineart_download.py",
+            "eom_image_provider/informative_lineart_model.py",
+            "eom_image_provider/informative_lineart_resolution.py",
+            "eom_image_provider/notices/informative-drawings-MIT.txt",
+            }.issubset(archive.namelist()):
         raise SystemExit("LOCAL_IMAGE_TRAINER_PROVIDER_WHEEL_INVALID")
 with zipfile.ZipFile(trainer) as archive:
     names = set(archive.namelist())

@@ -1,6 +1,7 @@
 # ADR 0180: Pinned learned lineart extraction for the SDXL diagnostic
 
-Status: accepted design; initial manifest contract only, not an installed extractor.
+Status: accepted; restricted acquisition/CPU conversion and exact resolver implemented. No installed
+extractor, corpus extraction command or operating activation is implied by this status.
 Date: 2026-10-03 UTC.
 
 ## Evidence and decision
@@ -92,3 +93,34 @@ would weaken isolation/reproducibility and add unnecessary dependencies.
 4. Inspect six raw lineart outputs, then compare bounded matched SDXL inputs; retain rejected images.
 5. Separate own inspection from independent blind review and scientific correctness. A passing
    sample, low loss or successful extractor run does not permit operating activation.
+
+## Restricted conversion implementation and acceptance
+
+The acquisition use case and public HTTP adapter are separate from the thin operator CLI. The
+adapter accepts only the three pinned public source members, bounds each response and supplies
+no authentication or cookies. Before conversion or local writes, the use case verifies README,
+architecture-source and original-weight hashes. Only the small attributed generator is ported;
+upstream Python, Gradio, torchvision and download-on-inference code are not executed. The MIT
+notice is packaged with the provider wheel. No new dependency is added.
+
+The CPU converter verifies original length/hash before `torch.load(weights_only=True)` and
+requires exact key/shape membership, F32 CPU strided tensors and finite values. It serializes
+sorted contiguous safetensors and verifies bit-identical tensor recovery. Model construction
+explicitly selects CPU even if Torch's ambient default device changes. Acquisition leaves an
+exclusive owner-only `model` staging child containing the four files plus a final manifest; a
+partial or existing child cannot be overwritten. It does not install, activate, publish to NAS or
+execute a corpus-image worker. The resolver reads each bounded member once through no-link file
+descriptors, retaining already-hashed weight bytes only at the tensor-validation boundary.
+
+Opt-in real numerical tests use the explicit trainer environment and stdlib `unittest`; developer
+pytest is not installed into the protected numerical runtime. The public original weight was
+actually acquired and converted. All 24 tensors (4,290,945 parameters) and synthetic CPU forward
+outputs matched bit-for-bit. Wrong keys/shapes/dtype/device/layout/non-finite values and corrupt
+payloads were rejected. A separate real CPU test covers a non-CPU default-device context without
+GPU initialization. Source acceptance is not an installed-wheel or scientific-quality verdict.
+
+The raw source remains acquisition-only in memory, not a worker-readable `.pth`. Derived weights
+are 17,165,948 bytes, SHA `597e257afa95df3e989460590d62a7c6ba487c2b7afd63cf10145712a043963c`.
+The exact schema bytes stay at SHA
+`4ec36b23d8716fd6d853ec380b0b4d298d366dbc8ac68d0e219dcb33f73be684`. Gates 3–5 remain open;
+neither CPU success nor these safetensors permits reinterpretation of the old SDXL input policy.
