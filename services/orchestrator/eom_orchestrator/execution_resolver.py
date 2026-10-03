@@ -823,6 +823,53 @@ def resolve_customer_support_plan(
     return model
 
 
+def _document_review_preset(
+    revision: ExecutionPresetRevisionRecord,
+    *,
+    workflow_role_schema_version: str,
+) -> ExecutionPresetRevision | ExecutionPresetRevisionV2:
+    """Decode the exact compatible revision; never substitute another preset."""
+
+    document = revision.canonical_document
+    version = document.get("schema_version")
+    try:
+        if version == "execution-preset-revision/1.0":
+            validate_control_contract("execution-preset-revision", document)
+            preset: ExecutionPresetRevision | ExecutionPresetRevisionV2 = (
+                ExecutionPresetRevision.model_validate(document)
+            )
+        elif version == "execution-preset-revision/2.0":
+            validate_control_contract("execution-preset-revision-v2", document)
+            preset = ExecutionPresetRevisionV2.model_validate(document)
+        else:
+            raise ControlPlaneError(
+                "CONTROL_PRESET_POLICY_INVALID", "document review preset schema is unsupported"
+            )
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID", "document review preset document is invalid"
+        ) from exc
+    if (
+        preset.preset_id != revision.preset_id
+        or preset.preset_revision_id != revision.preset_revision_id
+        or preset.state != revision.state
+        or tuple(preset.compatible_workflow_protocols)
+        != tuple(revision.compatible_workflow_protocols)
+        or workflow_role_schema_version not in preset.compatible_workflow_protocols
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "document review preset record differs"
+        )
+    if (
+        preset.content_sha256 != revision.content_sha256
+        or compute_control_document_hash(document, "content_sha256") != preset.content_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_HASH_MISMATCH", "document review preset content is stale"
+        )
+    return preset
+
+
 def resolve_pdf_document_review_plan(
     session: Session,
     *,
@@ -890,16 +937,9 @@ def resolve_pdf_document_review_plan(
             "CONTROL_PRESET_NOT_PUBLISHED",
             "PDF document review preset is not published",
         )
-    preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
-    if (
-        preset.content_sha256 != revision.content_sha256
-        or compute_control_document_hash(revision.canonical_document, "content_sha256")
-        != preset.content_sha256
-    ):
-        raise ControlPlaneError(
-            "CONTROL_PRESET_HASH_MISMATCH",
-            "PDF document review preset content is stale",
-        )
+    preset = _document_review_preset(
+        revision, workflow_role_schema_version=workflow_role_schema_version
+    )
     support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
     if len(support_policies) != 1 or len(preset.role_policies) != 1:
         raise ControlPlaneError(
@@ -1097,16 +1137,9 @@ def _resolve_paired_document_review_plan_v14(
             "CONTROL_PRESET_NOT_PUBLISHED",
             "paired document review preset is not published",
         )
-    preset = ExecutionPresetRevision.model_validate(revision.canonical_document)
-    if (
-        preset.content_sha256 != revision.content_sha256
-        or compute_control_document_hash(revision.canonical_document, "content_sha256")
-        != preset.content_sha256
-    ):
-        raise ControlPlaneError(
-            "CONTROL_PRESET_HASH_MISMATCH",
-            "paired document review preset content is stale",
-        )
+    preset = _document_review_preset(
+        revision, workflow_role_schema_version=workflow_role_schema_version
+    )
     support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
     if len(support_policies) != 1 or len(preset.role_policies) != 1:
         raise ControlPlaneError(

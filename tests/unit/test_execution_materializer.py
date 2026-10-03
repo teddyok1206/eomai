@@ -1125,6 +1125,7 @@ def test_knowledge_materializer_stages_exact_manifest_and_context_and_records_pr
     assert result.evidence_manifest_sha256 == fixture["manifest"]["manifest_sha256"]
     assert result.evidence_context_sha256 == sha256_bytes(fixture["context_payload"])
     assert result.materialized_member_count == 5
+    assert "Actual admitted document-review contract" not in (workspace / "AGENTS.md").read_text()
     assert all("path" not in key for key in result.event_data())
 
 
@@ -1408,6 +1409,10 @@ def test_pdf_review_materializer_stages_exact_pages_and_image_manifest(
     assert result.source_artifact_revision_id == fixture["document_revision_id"]
     assert result.image_input_manifest_sha256 == image_manifest["manifest_sha256"]
     assert result.materialized_member_count == 5
+    instructions = (workspace / "AGENTS.md").read_text()
+    assert "SINGLE-DOCUMENT review" in instructions
+    assert "pdf-document-review-result@1.0" in instructions
+    assert "No Graph evidence files are staged or authorized" in instructions
 
 
 def test_pdf_review_materializer_rejects_page_hash_drift_before_worker_input(

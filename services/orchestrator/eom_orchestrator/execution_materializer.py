@@ -483,6 +483,8 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
+    if isinstance(plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14)):
+        agents_bytes += _predecessor_document_review_contract(plan)
     total_bytes += len(agents_bytes)
     _require_total_size(total_bytes, analysis=is_analysis)
     agents_path = workspace / "AGENTS.md"
@@ -2229,6 +2231,39 @@ def _write_exclusive(path: Path, payload: bytes, *, group_id: int) -> None:
         raise ControlPlaneError(
             "CONTROL_MATERIALIZATION_FAILED", "job-local materialization failed"
         ) from exc
+
+
+def _predecessor_document_review_contract(
+    plan: ResolvedExecutionPlanV13 | ResolvedExecutionPlanV14,
+) -> bytes:
+    """Bind shared role instructions to the exact admitted predecessor contract."""
+
+    if isinstance(plan, ResolvedExecutionPlanV13):
+        contract = (
+            "This is SINGLE-DOCUMENT review: PDF_DOCUMENT_REVIEW_REQUEST, "
+            "workflow-role/1.25.0, pdf-document-review-result@1.0. "
+            "Read every page of source/document and the exact preset and additional guidance "
+            "in worker-input.json. Do not require a separate QUESTION/SOLUTION pair, "
+            "document_role, cross_document_checks, item_reviews, or evidence_usage fields. "
+        )
+    else:
+        contract = (
+            "This is predecessor PAIRED review: workflow-role/1.26.0, "
+            "pdf-document-review-result@2.0. Read every supplied QUESTION and SOLUTION page "
+            "and perform the required cross-document checks. Do not require V3 item_reviews "
+            "or evidence_usage fields. "
+        )
+    return (
+        "\n## Actual admitted document-review contract\n\n"
+        + contract
+        + "worker-input.json and worker-result.schema.json define the exact input and output "
+        "for this job and take precedence over incompatible newer role requirements. "
+        "No Graph evidence files are staged or authorized by this plan. Do not look for "
+        "references/evidence, invent citations, or claim a Graph-grounded validation receipt. "
+        "Apply all applicable scientific, editorial, typography, and preset checks to the "
+        "supplied document(s); mark unverifiable conclusions as insufficient. Preserve all "
+        "platform safety rules. Return only the JSON allowed by worker-result.schema.json.\n"
+    ).encode("utf-8")
 
 
 def _agents_document(instruction_docs: list[tuple[str, str, bytes]]) -> bytes:

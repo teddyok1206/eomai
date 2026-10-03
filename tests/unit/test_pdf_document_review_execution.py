@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from eom_identifiers import content_sha256
@@ -13,11 +13,16 @@ from eom_orchestrator.control_models import (
     ResolvedExecutionPlanStepRecord,
 )
 from eom_orchestrator.control_service import ControlPlaneError
-from eom_orchestrator.execution_resolver import resolve_pdf_document_review_plan
+from eom_orchestrator.execution_resolver import (
+    resolve_paired_document_review_plan,
+    resolve_pdf_document_review_plan,
+)
 from eom_workflow import (
     ExecutionPresetRevision,
+    ExecutionPresetRevisionV2,
     PdfReviewDocumentPointer,
     ResolvedExecutionPlanV13,
+    build_paired_document_review_request,
     build_pdf_document_review_request,
 )
 
@@ -123,8 +128,11 @@ class FakeSession:
         )
         self.preset_revision = SimpleNamespace(
             preset_id=preset_document["preset_id"],
+            preset_revision_id=preset_document["preset_revision_id"],
             state="RELEASED",
-            compatible_workflow_protocols=("workflow-role/1.25.0",),
+            compatible_workflow_protocols=tuple(
+                cast(list[str], preset_document["compatible_workflow_protocols"])
+            ),
             content_sha256=preset_document["content_sha256"],
             canonical_document=preset_document,
         )
@@ -225,3 +233,129 @@ def test_pdf_review_plan_replay_rejects_changed_request_binding() -> None:
         )
 
     assert captured.value.code == "CONTROL_PLAN_BINDING_MISMATCH"
+
+
+def _v2_preset_document() -> dict[str, Any]:
+    document = _preset_document()
+    document["schema_version"] = "execution-preset-revision/2.0"
+    document["compatible_workflow_protocols"] = [
+        "workflow-role/1.25.0",
+        "workflow-role/1.26.0",
+        "workflow-role/1.27.0",
+    ]
+    policy = cast(list[dict[str, object]], document["role_policies"])[0]
+    policy["evidence_access"] = "EVIDENCE_CONTEXT"
+    document["retrieval_policy"] = {
+        "access_policy_revision_id": "accessrev_" + "1" * 32,
+        "access_policy_sha256": "sha256:" + "2" * 64,
+        "allowed_corpus_keys": ["integrated-science"],
+        "allowed_query_kinds": ["ITEM_PREPARATION"],
+        "allowed_source_classes": ["PAST_EXAM"],
+        "maximum_budget": {
+            "max_documents": 16,
+            "max_item_revisions": 32,
+            "max_graph_nodes": 128,
+            "max_claims": 64,
+            "max_context_tokens": 16000,
+        },
+    }
+    document["content_sha256"] = content_sha256(
+        {key: value for key, value in document.items() if key != "content_sha256"}
+    )
+    return ExecutionPresetRevisionV2.model_validate(document).model_dump(mode="json")
+
+
+@pytest.mark.parametrize("preset_version", (1, 2))
+def test_single_document_review_resolves_exact_current_preset_schema(preset_version: int) -> None:
+    document = _preset_document() if preset_version == 1 else _v2_preset_document()
+    session = FakeSession(preset_document=document)
+    request = build_pdf_document_review_request(
+        document=_document(), preset_key="MOCK_EXAM", additional_guidance=None
+    )
+    plan = resolve_pdf_document_review_plan(
+        cast(Any, session),
+        workflow_id="workflow_" + "1" * 32,
+        workflow_definition_version="1.0.0",
+        workflow_definition_sha256="sha256:" + "2" * 64,
+        workflow_role_schema_version="workflow-role/1.25.0",
+        review_request=request,
+        resolved_at=NOW,
+    )
+    assert plan.preset_revision_id == document["preset_revision_id"]
+    assert plan.preset_sha256 == document["content_sha256"]
+    assert (
+        plan.steps[0].instruction_bundle.model_dump(mode="json")
+        == cast(list[dict[str, object]], document["role_policies"])[0]["instruction_bundle"]
+    )
+    assert plan.schema_version == "resolved-execution-plan/13.0"
+    session.preset_logical = None  # type: ignore[assignment]
+    assert (
+        resolve_pdf_document_review_plan(
+            cast(Any, session),
+            workflow_id=plan.workflow_id,
+            workflow_definition_version="1.0.0",
+            workflow_definition_sha256="sha256:" + "2" * 64,
+            workflow_role_schema_version="workflow-role/1.25.0",
+            review_request=request,
+        )
+        == plan
+    )
+
+
+def test_predecessor_paired_review_accepts_current_v2_preset_without_graph_upgrade() -> None:
+    session = FakeSession(preset_document=_v2_preset_document())
+    solution = _document().model_copy(update={"document_revision_id": "documentrev_" + "a" * 32})
+    request = build_paired_document_review_request(
+        question_document=_document(),
+        solution_document=solution,
+        preset_key="MOCK_EXAM",
+        additional_guidance=None,
+    )
+    plan = resolve_paired_document_review_plan(
+        cast(Any, session),
+        workflow_id="workflow_" + "1" * 32,
+        workflow_definition_version="1.1.0",
+        workflow_definition_sha256="sha256:" + "2" * 64,
+        workflow_role_schema_version="workflow-role/1.26.0",
+        review_request=request,
+        resolved_at=NOW,
+    )
+    assert plan.schema_version == "resolved-execution-plan/14.0"
+    assert plan.preset_revision_id == session.preset_logical.current_revision_id
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "code"),
+    (
+        ("schema_version", "execution-preset-revision/999.0", "CONTROL_PRESET_POLICY_INVALID"),
+        ("role_policies", [], "CONTROL_PRESET_POLICY_INVALID"),
+        ("display_name", "changed without rehash", "CONTROL_PRESET_HASH_MISMATCH"),
+        ("preset_revision_id", "execpresetrev_" + "1" * 32, "CONTROL_PRESET_POINTER_INVALID"),
+        (
+            "compatible_workflow_protocols",
+            ["workflow-role/1.27.0"],
+            "CONTROL_PRESET_POINTER_INVALID",
+        ),
+    ),
+)
+def test_current_preset_corruption_is_not_reported_as_unsupported_document(
+    field: str, value: object, code: str
+) -> None:
+    session = FakeSession(preset_document=_v2_preset_document())
+    session.preset_revision.canonical_document[field] = value
+    request = build_pdf_document_review_request(
+        document=_document(), preset_key="MOCK_EXAM", additional_guidance=None
+    )
+    with pytest.raises(ControlPlaneError) as captured:
+        resolve_pdf_document_review_plan(
+            cast(Any, session),
+            workflow_id="workflow_" + "1" * 32,
+            workflow_definition_version="1.0.0",
+            workflow_definition_sha256="sha256:" + "2" * 64,
+            workflow_role_schema_version="workflow-role/1.25.0",
+            review_request=request,
+            resolved_at=NOW,
+        )
+    assert captured.value.code == code
+    assert session.plan is None
+    assert session.steps == []
