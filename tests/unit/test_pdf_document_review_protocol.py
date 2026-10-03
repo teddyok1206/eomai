@@ -399,6 +399,23 @@ def test_pdf_document_review_bootstrap_pins_reviewed_slot06_policy() -> None:
     )
     assert grounded.evidence_access == "EVIDENCE_CONTEXT"
     assert grounded.retrieval_policy is not None
+    assert grounded.predecessor is not None
+    # V5 follows the released V4, not the V3 predecessor copied into V4's manifest.
+    assert grounded.predecessor.preset_revision_id == (
+        "execpresetrev_be1a496d99a94e2ab24bb98e85c755c4"
+    )
+    assert grounded.predecessor.preset_policy_sha256 == (
+        "sha256:f5cb3016dd209957c2fbc26978540777e1e1e546f4ef4cef9aba7d8977a3ebb6"
+    )
+    assert grounded.predecessor.instruction_bundle_revision_id == (
+        "instrrev_98b8fe230561f30af511d1164d5e31f3"
+    )
+    assert grounded.predecessor.instruction_manifest_sha256 == (
+        "sha256:dbfeb56060f5e46b5b07ce63163f212679185829a091674fd3e6412bda25de87"
+    )
+    assert grounded.predecessor.instruction_content_sha256 == (
+        "sha256:a6b9542d9addd34897be716aaca0e82572dda9b1c73509d2b4dd73b8e85fd5dd"
+    )
     grounded_role = (
         ROOT / "config/control-plane/pdf-document-review-v5/instructions/pdf-document-review.md"
     ).read_text(encoding="utf-8")

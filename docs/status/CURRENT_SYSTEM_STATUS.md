@@ -2,6 +2,20 @@
 
 Status date: 2026-09-27 (UTC)
 
+## Document-review activation incident — 2026-10-03 (UTC)
+
+An owner-scoped paired-document upload failed with `CONTROL_PRESET_NOT_PUBLISHED`: the installed
+API requires `workflow-role/1.27.0`, while the published document-review preset was still the V4
+policy supporting only 1.25/1.26. Workflow 1.2 was already active. No account permission change is
+required. The unpublished V5 bootstrap also incorrectly pinned V3 as its predecessor although
+instruction revision 5 must follow released revision 4. Its candidate predecessor pins now match
+the exact released V4 preset, instruction revision, and hashes. V1–V4 and source PDF artifacts are
+unchanged. The protocol tests assert all five predecessor pins to prevent this copied-config
+regression. Operational recovery uses the existing evaluated bootstrap, followed by the existing
+owner-authenticated upload replay; it does not rewrite failed history or create duplicate reviews.
+Activation and completed review are separate evidence; a passing source test alone is not live
+activation evidence.
+
 On 2026-09-27 the repository and isolated local-image runtime completed a corpus-grounded visual
 subject benchmark over the occurrence-backed 520-item science baseline. The immutable inventory
 closes 537 observations as 514 covered plus 23 explicit omissions and identifies 87 subjects. The
