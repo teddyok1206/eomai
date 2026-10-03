@@ -30,7 +30,8 @@ EXPECTED_COMMIT="$2"
   fail "repository root mismatch"
 [[ "$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)" == "${EXPECTED_COMMIT}" ]] || \
   fail "source commit mismatch"
-[[ -z "$(git -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
+# A root-owned preflight must not refresh/replace the developer-owned Git index.
+[[ -z "$(git --no-optional-locks -C "${REPOSITORY_ROOT}" status --porcelain)" ]] || \
   fail "working tree must be clean"
 
 branch_allowed=false
