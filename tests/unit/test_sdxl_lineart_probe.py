@@ -23,11 +23,31 @@ from eom_image_contracts import (
 from eom_image_provider import sdxl_lineart_probe as probe
 from eom_image_provider.provider import GeneratedBackground, ProviderError
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
+from eom_image_provider.staged_file_io import read_staged_member, verified_directory
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageDraw
 from pydantic import ValidationError
 
 from tests.unit.test_sdxl_lineart_stack_contract import _stack
+
+
+def test_verified_directory_preserves_execute_only_ancestor_permissions(tmp_path):
+    import os
+
+    ancestor = tmp_path / "traversal-only"
+    ancestor.mkdir(mode=0o700)
+    workspace = ancestor / "workspace"
+    workspace.mkdir(mode=0o700)
+    (workspace / "input.json").write_bytes(b"{}")
+    (workspace / "input.json").chmod(0o600)
+    ancestor.chmod(0o111)
+    try:
+        with verified_directory(workspace, expected_owner_uid=os.geteuid()) as descriptor:
+            assert read_staged_member(descriptor, "input.json", maximum_bytes=10) == b"{}"
+            os.fsync(descriptor)
+        assert ancestor.stat().st_mode & 0o777 == 0o111
+    finally:
+        ancestor.chmod(0o700)
 
 
 def _png(*, size: tuple[int, int] = (40, 20), mode: str = "RGB") -> bytes:

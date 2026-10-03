@@ -212,3 +212,14 @@ SDXL provenance remains strict canonical JSON. Extra whitespace/double-newline s
 The 84-test final handoff/admission/resolver/publication/micro/dependency regression passed,
 with Ruff and targeted strict mypy. This preflight discovery caused zero model calls; the already
 committed compiled prompt policy is retained and replayed through its same publication identity.
+
+The first fixed-systemd dispatch failed at command-file admission, before output-directory/model
+creation (19:12:51 UTC; zero generated outputs and no worker result). The new descriptor walker
+incorrectly required read/list permission on traversal-only `/srv/eom` (0711). It now uses Linux
+`O_PATH` for no-link ancestor traversal and opens only the actual target for bounded I/O. Ancestor
+permissions, worker privilege and production binding are not expanded. The failed unit/workspace
+is retained; the corrected runtime is tested before a deliberately pinned successor experiment.
+The 51 probe/model/acquisition/backend tests passed, including an execute-only ancestor regression.
+Ruff format/lint passed; targeted strict mypy uses the image-test interpreter with silent checking
+of unchanged imports. Broader imported legacy Pillow annotations exposed existing errors and are
+not represented as a whole-package mypy PASS.

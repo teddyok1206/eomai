@@ -18,15 +18,20 @@ def verified_directory(path: Path, *, expected_owner_uid: int) -> Iterator[int]:
         raise ProviderError("SDXL_PROBE_INPUT_INVALID")
     descriptors = []
     try:
-        current = os.open(path.root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        # Protected ancestors may deliberately grant traversal but not listing (for example
+        # /srv/eom is 0711). O_PATH preserves descriptor-relative no-link traversal without
+        # requiring broader directory privileges. The actual target is opened for bounded I/O.
+        current = os.open(path.root, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
         descriptors.append(current)
         for part in path.parts[1:]:
             if part in {"", ".", ".."}:
                 raise ProviderError("SDXL_PROBE_INPUT_INVALID")
             current = os.open(
-                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=current
+                part, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=current
             )
             descriptors.append(current)
+        current = os.open(".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=current)
+        descriptors.append(current)
         metadata = os.fstat(current)
         if metadata.st_uid != expected_owner_uid or stat.S_IMODE(metadata.st_mode) & 0o022:
             raise ProviderError("SDXL_PROBE_INPUT_INVALID")
