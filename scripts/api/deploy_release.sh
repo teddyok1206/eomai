@@ -2122,7 +2122,8 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/pdf-document-review.v1.2.yaml"
         ).read_bytes()
     )
-    (root / "pdf-document-review.v1.3.yaml").write_bytes(
+    pdf_document_review_definition_v1_3 = root / "pdf-document-review.v1.3.yaml"
+    pdf_document_review_definition_v1_3.write_bytes(
         (
             Path(os.environ["REPOSITORY_ROOT"])
             / "config/workflows/pdf-document-review.v1.3.yaml"
@@ -2177,7 +2178,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256 = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2510,6 +2511,7 @@ pdf_document_reviews = tuple(
         pdf_document_review_definition_v1,
         pdf_document_review_definition_v1_1,
         pdf_document_review_definition_v1_2,
+        pdf_document_review_definition_v1_3,
     )
 )
 if tuple(
@@ -2518,6 +2520,7 @@ if tuple(
     ("pdf-document-review", "1.0.0"),
     ("pdf-document-review", "1.1.0"),
     ("pdf-document-review", "1.2.0"),
+    ("pdf-document-review", "1.3.0"),
 ):
     raise SystemExit("PDF document review workflow definition mismatch")
 admitted_definitions = (
@@ -2541,6 +2544,7 @@ admitted_definitions = (
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_1), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_2), {"support"}),
+    compile_definition(Path(pdf_document_review_definition_v1_3), {"support"}),
 )
 if {
     (compiled.definition.definition_key, compiled.definition.definition_version): next(iter({
@@ -2591,6 +2595,7 @@ validate_contract(
             str(pdf_document_review_definition_v1),
             str(pdf_document_review_definition_v1_1),
             str(pdf_document_review_definition_v1_2),
+            str(pdf_document_review_definition_v1_3),
             str(worker_config),
             str(staging),
             str(workspace_root),
