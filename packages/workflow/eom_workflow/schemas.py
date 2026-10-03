@@ -2101,7 +2101,8 @@ def constrained_result_schema(
                 "check every condition, applicable unit, choice, and explanation step, and cite "
                 "the staged Graph evidence."
             )
-            output_properties["evidence_usage"]["description"] = (
+            # Keep the reference node pure; the strict worker schema rejects $ref siblings.
+            _mapping(definitions, "evidence_usage")["description"] = (
                 "Use exact identities from references/evidence/manifest.json and cite only "
                 "manifest evidence and anchors. Every citation path must end at a non-null "
                 "primitive leaf under item_reviews."

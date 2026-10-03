@@ -207,6 +207,13 @@ The CLI option semantics are documented in the official
 [non-interactive mode guide](https://learn.chatgpt.com/docs/non-interactive-mode) and
 [CLI command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli).
 
+The same incident exposed a separate pre-worker failure in paired review V3: adding evidence
+instructions to a `$ref` node violated the strict worker-schema projection contract. Put this
+annotation on the referenced `evidence_usage` definition, not beside `$ref`. Preserve the released
+JSON Schema bytes, evidence requirements, pinned identities, and canonical result validation.
+The full request-constrained projection must be tested, not only the unconstrained result schema.
+This application-package fix is a separate rollout from the configuration-only CLI alignment.
+
 The non-live acceptance must prove:
 
 - one new standard-item request pins one immutable released preset revision and exact instruction
