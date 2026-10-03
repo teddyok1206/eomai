@@ -132,6 +132,13 @@ def test_known_user_errors_have_explanation_and_next_action() -> None:
         assert code not in errors[code]["label"]
 
 
+def test_fresh_authentication_requirement_is_not_reported_as_session_expiry() -> None:
+    presentation = _vocabulary()["errors"]["AUTH_REAUTHENTICATION_REQUIRED"]
+    assert "만료" not in presentation["label"]
+    assert "보안 확인" in presentation["label"]
+    assert "로그아웃 후 다시 로그인" in presentation["action"]
+
+
 def test_gui_uses_vocabulary_only_at_the_presentation_boundary() -> None:
     javascript = APP_PATH.read_text(encoding="utf-8")
     assert "await loadPresentationVocabulary();" in javascript

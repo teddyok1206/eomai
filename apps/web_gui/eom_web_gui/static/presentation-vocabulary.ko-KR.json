@@ -134,7 +134,7 @@
   "errors": {
     "HWPX_APPLICATION_REVISION_INELIGIBLE": {"label": "이 문항 버전은 아직 HWPX로 만들 수 없습니다.", "audience": "USER", "action": "완성 문항에서 현재 승인된 문항 버전을 다시 선택하세요."},
     "HWPX_RENDERER_NOT_READY": {"label": "HWPX 제작기가 아직 준비되지 않았습니다.", "audience": "USER", "action": "잠시 후 상태를 다시 확인하거나 관리자에게 문의하세요."},
-    "AUTH_REAUTHENTICATION_REQUIRED": {"label": "로그인이 만료되었습니다.", "audience": "USER", "action": "다시 로그인한 뒤 요청을 이어서 진행하세요."},
+    "AUTH_REAUTHENTICATION_REQUIRED": {"label": "보안 확인을 위해 다시 로그인이 필요합니다.", "audience": "USER", "action": "로그아웃 후 다시 로그인하세요. 진행 중인 서버 작업은 계속됩니다."},
     "AUTH_INVALID_CREDENTIALS": {"label": "현재 비밀번호가 일치하지 않습니다.", "audience": "USER", "action": "현재 비밀번호를 다시 확인하세요."},
     "AUTH_PASSWORD_POLICY_FAILED": {"label": "새 비밀번호를 사용할 수 없습니다.", "audience": "USER", "action": "비어 있지 않고 계정 ID·표시 이름과 다른 비밀번호를 사용하세요."},
     "OPERATOR_USERNAME_CONFLICT": {"label": "이미 사용 중인 로그인 ID입니다.", "audience": "USER", "action": "다른 로그인 ID를 입력하세요."},

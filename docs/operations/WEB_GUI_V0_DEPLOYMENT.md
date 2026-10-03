@@ -43,3 +43,16 @@ health, read-only Explorer behavior, and the Application API-backed HWPX capabil
 adding a reviewed reverse-proxy route. Rollback removes that route first, stops/disables only
 `eom-web-gui.service`, and reinstalls the prior recorded wheel and unit. It never changes
 Application API, Observability, EOMIS, workers, checkpoints, or canonical workflow data.
+
+## Slot management authentication
+
+Codex account reads and management actions require both ADMIN permission and recent password
+authentication. `AUTH_REAUTHENTICATION_REQUIRED` is a freshness requirement, not evidence that
+the Studio session expired or a background review stopped. The current API default freshness
+window is 900 seconds; the deployed API configuration owns its actual value.
+
+On a freshness/permission/password-change denial, the slot view stops its automatic polling,
+removes cached management actions, and offers explicit logout/login for freshness failures.
+Transient read failures remain retryable. A request sequence prevents a late older response from
+restoring actions after a newer denial. This does not change backend authorization, refresh token
+semantics, worker authentication, or running Workflow identities.

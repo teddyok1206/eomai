@@ -76,6 +76,7 @@ const state = {
   codexAuthEnrollmentId: null,
   codexAuthPollTimer: null,
   codexAccountPollTimer: null,
+  codexAccountRequestSequence: 0,
   executionPresets: [],
   presetEditorBases: [],
   presetDraftBase: null,
@@ -2787,15 +2788,29 @@ function scheduleCodexAccountRefresh() {
 async function loadCodexAccounts() {
   if (!hasAdminRole() || !$('[data-view="control"].active')) return;
   window.clearTimeout(state.codexAccountPollTimer);
+  const requestSequence = ++state.codexAccountRequestSequence;
+  let shouldRefresh = true;
   try {
     const accounts = await api("/admin/codex-accounts");
+    if (requestSequence !== state.codexAccountRequestSequence) return;
     state.codexAccounts = accounts;
     renderCodexAccounts(accounts);
     showMessage($("#codex-account-message"), "");
   } catch (failure) {
+    if (requestSequence !== state.codexAccountRequestSequence) return;
+    shouldRefresh = !["AUTH_REAUTHENTICATION_REQUIRED", "PERMISSION_DENIED", "AUTH_PASSWORD_CHANGE_REQUIRED"].includes(failure.code);
+    if (!shouldRefresh) {
+      // A denied management view must not keep polling or leave stale actions available.
+      state.codexAccounts = [];
+      $("#codex-account-list").replaceChildren();
+      setStatus($("#codex-slots-summary"), "warning", "◆", "보안 확인 필요");
+      if (failure.code === "AUTH_REAUTHENTICATION_REQUIRED") {
+        $("#codex-account-list").append(actionButton("로그아웃 후 다시 로그인", logout));
+      }
+    }
     showMessage($("#codex-account-message"), `작업 슬롯 조회 실패: ${failure.message}`, "error");
   } finally {
-    scheduleCodexAccountRefresh();
+    if (shouldRefresh && requestSequence === state.codexAccountRequestSequence) scheduleCodexAccountRefresh();
   }
 }
 
