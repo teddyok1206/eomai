@@ -69,6 +69,14 @@ admission, 운영 activation, 25문항의 의도적인 이전 버전 pin과 hist
 선행조건은 [확장 LoRA campaign 상태](docs/status/SCIENCE_LORA_EXPANDED_CAMPAIGN_2026-09-26.md)에
 기록합니다.
 
+2026-10-03에는 별도로 승인받은 내부 SDXL 비교 경로에서 6종×2 seed 및 강도 대조 4장,
+총 16장을 실제 생성했습니다. 실행·Artifact 검증은 통과했지만 회색 배경·격자·불필요한
+글자와 구성 변형 때문에 자체 품질 검수에서는 모두 채택하지 않았습니다. 운영 V6는
+그대로이며 SDXL LoRA 학습과 독립 blind review는 아직 실행하지 않았습니다. 공유 수치 학습
+백엔드와 SDXL 전용 모델·VAE 경계는 소스 검증을 마쳤습니다. 실제 결과 pointer·측정과
+남은 구현은 [그림 품질 개선 계획](docs/operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md)에
+구분해 기록합니다.
+
 2026-09-27에는 승인 기출 520문항의 537개 시각 관찰을 87개 과학 요소로 정리해 자동차·사람·비커를
 포함한 전 요소 실행 경로를 검사했습니다. 최초 18개 BASE/ADAPTER 비교에 두 개의 추가 고정 seed를
 더해 총 108개 raster 비교 출력을 판정한 결과, 식물과 화산만 3개 seed 모두 adapter 우세였고 은하와

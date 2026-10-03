@@ -2,6 +2,30 @@
 
 Status date: 2026-09-27 (UTC)
 
+## SDXL image-quality goal checkpoint — 2026-10-03 (UTC)
+
+User approval separately extends the immutable SSD-1B data authorization to internal SDXL
+comparison/training only. The optional offline SDXL model stack/reference probe was installed;
+the production V6 binding remains unchanged. Six TRAIN depictions at two seeds and four same-input
+conditioning-strength controls produced 16 actual model outputs. The Orchestrator validated and
+committed terminal results and 42 PNG members (including conditioning/raw variants). The PNG count
+is not the planned 42-output/four-arm pilot, which remains pending. Our own inspection rejects all
+16 for style/composition artifacts; independent blind-review acceptance has not occurred.
+
+The numerical UNet-LoRA loop is now shared behind real SSD and SDXL architecture wrappers, with
+distinct bundled/fixed VAE locations and unchanged SSD checkpoint identity. Nonfinite tensors,
+gradients/adapter values and new SDXL resource bounds are checked. Focused source regressions:
+87 PASS; complete non-live image-runtime suite: 213 PASS; Ruff, targeted mypy and release-shell
+syntax PASS. These tests use CPU fakes for loop accounting, not real GPU training. The SDXL micro
+workspace/CLI/handoff and actual LoRA training remain pending; no installed trainer or operating
+model was replaced. The 12 sanitized operator logs are archived as
+`artifact_bb025e48f4d44032bcef8e13a2cbb503` /
+`rev_238a506019a24c678d335bce6c776bbc`, separate from canonical GPU result revisions.
+
+The [current image improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md)
+pins source/model/result hashes, distinguishes correct conditioning polarity from actual contour
+extraction, records inspected dataset limitations and lists the remaining quality/activation gates.
+
 ## Document-review activation incident — 2026-10-03 (UTC)
 
 An owner-scoped paired-document upload failed with `CONTROL_PRESET_NOT_PUBLISHED`: the installed

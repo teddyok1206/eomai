@@ -164,6 +164,37 @@ validated outputs to NAS. A simpler SSD-1B command substitution would falsely cl
 adapter compatibility, so the architecture-specific contract is necessary. This micro family does
 not satisfy the full 100–200/24–40/32 data or independent blind-review targets.
 
+### Shared numerical training adapter
+
+The existing SSD-1B trainer and the new SDXL micro trainer need the same frozen-encoder,
+UNet-LoRA noise-prediction computation, but different immutable model/VAE and checkpoint ownership.
+Reuse one numerical backend with small frozen local inputs (ordered caption/image locations,
+the admitted base/VAE locations, hyperparameters, dependency pins and seed). These are temporary
+tensor-materialization values, not a new cross-service contract or persistent dataset.
+Architecture-specific wrappers retain their real commands and model resolvers: SDXL never casts
+its stack pointer/command to an SSD-1B value. The SSD wrapper retains its pinned checkpoint policy;
+the first SDXL micro has no checkpoint/implicit resume. Only an explicit adapter boundary exposes
+checkpoint load/save. No additional training framework, dependency or queue is introduced.
+
+The command/source Artifact remains canonical, not the numerical recipe. Preprocessing and source
+hash admission belong to the application/Orchestrator boundary; Diffusers/CUDA/frozen model loads,
+tensor caching, the deterministic ordered loop and local two-file PEFT output belong to the existing
+training adapter. Stable tuple iteration and keyed source validation are O(n); embeddings/latents
+are cached once per bounded 16-sample micro experiment, not recalculated per optimizer step.
+The old SSD model uses its admitted bundled VAE; SDXL uses the separately pinned fixed fp16 VAE.
+New SDXL resource limits are checked during numerical execution as well as on the terminal result,
+with the isolated outer timeout retained. Partial adapter/tensor outputs are not silently resumed.
+Failure, frozen-parameter behavior, exact optimizer-step/accumulation accounting and dependency
+pins must be tested before installing or launching training. Shared mathematical code is not
+proof of pretrained weight or adapter interchangeability.
+
+The 16 historical TRAIN crops were actually inspected on 2026-10-03: they include white-background
+linework, gray/hatch illustration, clipped subjects, original letters/numbers, layout borders and
+previous redaction holes. A 200-step trial is a bounded numerical/style-direction experiment,
+not a clean 100–200-sample full dataset or blind-review acceptance. Explicit redactions belong
+to the new command and do not alter original PNGs, captions or reserved partitions. Do not train
+reserved VALIDATION/HOLDOUT pixels or claim the cropped examples are uniformly annotation-free.
+
 Primary references:
 
 - [SDXL base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)

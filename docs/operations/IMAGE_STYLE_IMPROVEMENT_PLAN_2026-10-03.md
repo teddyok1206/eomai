@@ -284,3 +284,50 @@ assertion (31 probe/backend tests, Ruff and targeted mypy passed), not a new con
 SDXL training/backend implementation, clean training selection/expanded document split,
 the complete four-arm 42-output comparison, independent blind review and Item/HWPX activation
 remain pending. No technical success is relabeled as quality acceptance.
+
+### 2026-10-03 conditioning controls and numerical backend
+
+The two controlled runs completed, without a new operating release or input-policy substitution:
+
+| Adapter scale | Run | Result Artifact / Revision | Model outputs | Duration |
+|---|---|---|---:|---:|
+| 0.0 | `imgsdxlproberun_4a85f7f25f66fb0285cda3d4ab529004` | `artifact_638757f0fb5f468a883c092080594a50` / `rev_5503cac0209245399f355dce8c09d1cc` | 2 | 14,332 ms |
+| 0.35 | `imgsdxlproberun_d700a9df194bba18398d04759e4fa5d0` | `artifact_65bc46ef0cef4dbfb6e053618b5cd1df` / `rev_2764f9bb4dc2433191c37ec24c1bacb8` | 2 | 13,812 ms |
+
+Both used the same microscope/radio source, prompt, seed 104729, stack and generation settings.
+Each result was independently compared to its committed command and all six PNG members before
+Orchestrator publication. Own inspection rejects all four: the 0.0 images still have gray/dark
+surfaces, a wrong microscope structure and radio pseudotext; 0.35 still has grid/scene additions,
+heavy strokes and multiple unintended objects. Inference: the adapter's current gray-surface
+conditioning is not the only source of style defects, and strength tuning alone is insufficient.
+This does not prove the relative causal contribution or that LoRA will succeed. The 0.8 run's
+evidence and failed first handoff remain immutable. Follow-up comparison budget used is 4/12.
+Total SDXL model calls are 16; 42 stored PNG members include conditioning/raw/final variants and
+must not be confused with the planned four-arm **42 generated-output** comparison, still pending.
+
+All 16 original TRAIN source PNGs were inspected without modifying them or using reserved pixels.
+They include white/gray/hatch exam imagery but also original letters/numbers, cut-off objects,
+table-frame lines and existing redaction marks. The micro trial remains a bounded technical/style
+direction test, not evidence of a homogeneous or expanded independent training population.
+
+The existing numerical training backend was factored into one shared frozen-input UNet-LoRA
+implementation. The released SSD wrapper keeps its actual command, bundled VAE and pinned
+checkpoint load/save; the SDXL wrapper uses its actual stack, separately pinned fixed VAE,
+200-step recipe and no checkpoint/implicit resume. No SSD pointer cast, copied training loop,
+new framework, dependency, DB table or queue was added. Loss, gradient norm, latent and final
+adapter nonfiniteness plus resource bounds fail before accepted adapter publication.
+This is source implementation: the SDXL micro workspace application/CLI/handoff and actual GPU
+training are still pending, and the installed trainer has not been replaced.
+
+The final focused source run passed 87 tests, including CPU-fake accumulation/optimizer accounting,
+frozen parameters, resume and failure-before-save cases, plus old trainer/micro/checkpoint/contract
+and dependency regressions. The fakes are not CUDA numerical evidence. Two earlier invocations
+failed the explicit image-test inventory gate while the new files/ordering were being added;
+the final sorted manifest is complete. Ruff, targeted strict mypy and release-script syntax passed.
+The complete non-live image-runtime suite also passed all 213 tests. The 12 bounded, sanitized
+operator logs are durably archived through the Orchestrator as
+`artifact_bb025e48f4d44032bcef8e13a2cbb503` /
+`rev_238a506019a24c678d335bce6c776bbc`; raw log bytes are audit attachments, not new worker messages.
+An initial archive invocation correctly refused group-writable temporary logs before any DB write;
+only these completed task logs were made private (0600) before the successful archive. No record
+or Artifact was deleted. Slack milestone `devreport_136a750f49c846c5bff6e667b7b08ae8` was delivered.
