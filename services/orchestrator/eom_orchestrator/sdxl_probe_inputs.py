@@ -52,6 +52,15 @@ class PreparedSdxlProbeInputs:
     files: tuple[SdxlProbeInputMember, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlTrainingSources:
+    """One validated source lineage shared by diagnostic and micro-training admission."""
+
+    crop_set: LocalImageScienceObjectLineArtCropSet
+    crop_set_payload: bytes
+    authorization_payload: bytes
+
+
 class _ResolvedDocuments:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
@@ -91,37 +100,25 @@ class _ResolvedDocuments:
             raise SdxlProbeAdmissionError("SDXL_PROBE_SOURCE_DOCUMENT_INVALID") from exc
 
 
-def prepare_sdxl_probe_inputs(
-    engine: Engine, command: LocalImageSdxlLineartProbeCommand
-) -> PreparedSdxlProbeInputs:
-    """Resolve exact approved provenance and TRAIN inputs, without dispatch or DB writes."""
-
-    validate_contract("sdxl-lineart-probe-command", command.model_dump(mode="json"))
-    if command.style_track != "OBJECT_LINE_ART":
-        raise SdxlProbeAdmissionError("SDXL_PROBE_SOURCE_CONTRACT_INVALID")
+def resolve_sdxl_training_sources(
+    engine: Engine,
+    *,
+    crop_set_pointer: ImageEvaluationArtifactMember,
+    authorization_pointer: ImageEvaluationArtifactMember,
+) -> ResolvedSdxlTrainingSources:
+    """Check the complete historical provenance once, before any PNG materialization."""
     documents = _ResolvedDocuments(engine)
     prefix = "eom://schemas/image-provider/"
-    policy = documents.load(
-        command.prompt_policy,
-        "sdxl-lineart-prompt-policy",
-        prefix + "local-image-sdxl-lineart-prompt-policy/1.0",
-        LocalImageSdxlLineartPromptPolicy,
-    )
-    if (
-        policy.cases != command.cases
-        or policy.experiment_authorization.approved_at > command.created_at
-    ):
-        raise SdxlProbeAdmissionError("SDXL_PROBE_PROMPT_PROVENANCE_INVALID")
     crop_set = documents.load(
-        policy.crop_set,
+        crop_set_pointer,
         "science-object-line-art-crop-set",
         prefix + "local-image-science-object-line-art-crop-set/1.0",
         LocalImageScienceObjectLineArtCropSet,
     )
-    if crop_set.training_authorization != policy.training_authorization:
+    if crop_set.training_authorization != authorization_pointer:
         raise SdxlProbeAdmissionError("SDXL_PROBE_AUTHORIZATION_POINTER_INVALID")
     authorization = documents.load(
-        policy.training_authorization,
+        authorization_pointer,
         "science-corpus-training-authorization",
         prefix + "local-image-science-corpus-training-authorization/1.0",
         LocalImageScienceCorpusTrainingAuthorization,
@@ -168,6 +165,37 @@ def prepare_sdxl_probe_inputs(
         )
     except ValueError as exc:
         raise SdxlProbeAdmissionError("SDXL_PROBE_SOURCE_LINEAGE_INVALID") from exc
+    return ResolvedSdxlTrainingSources(
+        crop_set, documents.payloads[crop_set_pointer], documents.payloads[authorization_pointer]
+    )
+
+
+def prepare_sdxl_probe_inputs(
+    engine: Engine, command: LocalImageSdxlLineartProbeCommand
+) -> PreparedSdxlProbeInputs:
+    """Resolve exact approved provenance and TRAIN inputs, without dispatch or DB writes."""
+    validate_contract("sdxl-lineart-probe-command", command.model_dump(mode="json"))
+    if command.style_track != "OBJECT_LINE_ART":
+        raise SdxlProbeAdmissionError("SDXL_PROBE_SOURCE_CONTRACT_INVALID")
+    documents = _ResolvedDocuments(engine)
+    prefix = "eom://schemas/image-provider/"
+    policy = documents.load(
+        command.prompt_policy,
+        "sdxl-lineart-prompt-policy",
+        prefix + "local-image-sdxl-lineart-prompt-policy/1.0",
+        LocalImageSdxlLineartPromptPolicy,
+    )
+    if (
+        policy.cases != command.cases
+        or policy.experiment_authorization.approved_at > command.created_at
+    ):
+        raise SdxlProbeAdmissionError("SDXL_PROBE_PROMPT_PROVENANCE_INVALID")
+    sources = resolve_sdxl_training_sources(
+        engine,
+        crop_set_pointer=policy.crop_set,
+        authorization_pointer=policy.training_authorization,
+    )
+    crop_set = sources.crop_set
 
     members = {member.member_path: member for member in crop_set.members}
     references = set()

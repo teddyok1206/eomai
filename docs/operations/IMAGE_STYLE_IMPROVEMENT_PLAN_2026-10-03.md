@@ -345,3 +345,38 @@ GPU was idle (2 MiB allocated). No service restart, policy activation or operati
 is implied by the successful build. Next implementation is the SDXL micro application and fixed
 handoff/CLI, using the admitted original 16 TRAIN sources with explicit derived redactions; actual
 micro training, held-out evaluation and candidate canary remain subsequent gates.
+
+### 2026-10-03 SDXL micro application and handoff checkpoint
+
+The SDXL micro command now has an application-owned workspace runner, a fixed
+`sdxl-micro-probe` trainer entrypoint and offline `eom-image-sdxl-lora-micro-probe@.service`.
+The Orchestrator reuses one complete historical source-lineage validator for diagnostic and
+micro inputs, then checks all 16 original TRAIN declarations before PNG materialization. Only
+command, crop-set, authorization and 16 TRAIN PNGs are staged (19 members); the four validation
+and four holdout IDs remain metadata only. The same exclusive private handoff, readonly inputs,
+shared GPU lock, approved-artifact publisher and fixed systemd dispatch are reused. No new queue,
+DB schema, model dependency, worker privilege or activation path was introduced.
+
+The runner checks exact source hashes/dimensions/captions, realizes declared white redactions
+without modifying the originals, records separate derived pixel hashes, rejects duplicate/blank
+realizations and accepts only an exact validated two-file PEFT adapter. Success requires all
+200 optimizer updates, actual pinned dependencies and frozen duration/VRAM budgets. SIGTERM
+produces cancellation evidence; the previous handler and GPU lock are released. Terminal replay
+revalidates stored bytes and does not retrain; unreceipted intermediate outputs are not overwritten.
+The unit allows the 3,600-second maximum application budget plus 60 seconds for terminalization.
+
+Focused source/contract/old-checkpoint regressions: **137 PASS**; dependency and existing
+publication regressions: **9 PASS**; full non-live image-runtime suite: **244 PASS**. Ruff,
+targeted strict mypy (five changed production modules), diff whitespace and release-shell syntax
+passed. The first application tests exposed a JSON-array/tuple mismatch in adapter manifest
+construction; it was fixed at that boundary. Invalid synthetic identities, the test publisher
+stub shape and one incorrect test-file invocation were corrected before the final run. These
+failures are not GPU executions or historical result replacements. CPU stubs do not establish
+actual SDXL training or quality acceptance.
+
+Read-only installed trainer preflight reports Python 3.11.15, Torch 2.7.1+cu128, Diffusers 0.35.2,
+Transformers 4.56.2, Accelerate 1.10.1, PEFT 0.17.1 and bitsandbytes 0.47.0. New wheels/unit have
+not yet been installed at this source checkpoint. Next is a bounded trainer-only update with
+exact rollback artifacts, followed by one independently pinned 16-TRAIN/200-step GPU micro run.
+The inference environment and production V6 binding are not part of that update. Full grouped
+dataset expansion, four-arm comparison, independent blind review and Item/HWPX canary remain open.

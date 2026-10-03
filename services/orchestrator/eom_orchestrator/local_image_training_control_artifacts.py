@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         LocalImageScienceVisualSubjectRefinementPlan,
         LocalImageSdxlLineartProbeCommand,
         LocalImageSdxlLineartPromptPolicy,
+        LocalImageSdxlLoraMicroCommand,
     )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
@@ -239,6 +240,11 @@ SDXL_PROBE_COMMAND_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0"
 )
 SDXL_PROBE_COMMAND_ARTIFACT_TYPE = "control_local_image_sdxl_lineart_probe_command"
+SDXL_MICRO_COMMAND_MEMBER = "manifests/sdxl-lora-micro-command.json"
+SDXL_MICRO_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0"
+)
+SDXL_MICRO_COMMAND_ARTIFACT_TYPE = "control_local_image_sdxl_lora_micro_command"
 
 
 class LocalImageTrainingControlArtifactPublisher:
@@ -283,6 +289,21 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref=SDXL_PROBE_COMMAND_SCHEMA_REF,
             artifact_type=SDXL_PROBE_COMMAND_ARTIFACT_TYPE,
             idempotency_prefix="local-image-sdxl-lineart-probe-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_micro_command(
+        self, command: LocalImageSdxlLoraMicroCommand
+    ) -> ImageEvaluationArtifactMember:
+        """Publish an independently approved SDXL training identity, never an SSD alias."""
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-lora-micro-command",
+            member=SDXL_MICRO_COMMAND_MEMBER,
+            schema_ref=SDXL_MICRO_COMMAND_SCHEMA_REF,
+            artifact_type=SDXL_MICRO_COMMAND_ARTIFACT_TYPE,
+            idempotency_prefix="local-image-sdxl-lora-micro-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

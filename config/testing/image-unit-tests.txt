@@ -28,6 +28,7 @@ tests/unit/test_science_subject_multiseed_runner.py
 tests/unit/test_sdxl_lineart_backend.py
 tests/unit/test_sdxl_lineart_probe.py
 tests/unit/test_sdxl_lora_backend.py
+tests/unit/test_sdxl_micro_runner.py
 tests/unit/test_sdxl_model_resolution.py
 tests/unit/test_unet_lora_numerical_loop.py
 tests/unit/test_visual_reference_acquisition.py

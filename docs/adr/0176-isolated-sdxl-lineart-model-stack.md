@@ -195,6 +195,32 @@ not a clean 100–200-sample full dataset or blind-review acceptance. Explicit r
 to the new command and do not alter original PNGs, captions or reserved partitions. Do not train
 reserved VALIDATION/HOLDOUT pixels or claim the cropped examples are uniformly annotation-free.
 
+### Micro workspace application and isolated entrypoint
+
+Extend the existing trainer CLI with a fixed `sdxl-micro-probe` operation. Its application verifies
+the canonical command, crop/authorization hashes, exact 16/4/4 membership and source captions,
+then materializes only declared TRAIN pixels in the private local workspace. It reuses the current
+bounded descriptor I/O, deterministic white-redaction/grayscale/768x512 crop materializer, model
+resolver and two-file PEFT validator. The worker never reads the NAS or the repository. The
+Orchestrator remains responsible for accepted source-lineage admission and subsequent publication
+against the separately committed command; staged paths are not canonical identity.
+
+Ordered sample iteration, keyed partition lookup and a hash set for duplicate derived pixels are
+O(n) metadata operations; decode/materialization is O(n*W*H) with bounded PNG/image dimensions.
+Derived pixels/captions are realized once, not per optimizer step. Their new hashes remain separate
+from original crop hashes. No DB/schema/queue/dependency is added. Private output directories and
+files are exclusive: existing unreceipted dataset/adapter outputs refuse a new model call. A
+terminal result replays only after command/schema/hash and all realized/adapter files validate;
+a failed result stays failed and never retrains. Missing or corrupt evidence fails explicitly.
+
+The same GPU lock and cancellation handling wrap the dedicated offline oneshot. The outer timeout
+is 3,660 seconds for the declared 3,600-second maximum plus terminal-cleanup margin. Numeric
+budgets are also checked inside the backend and on the full application duration. Failed/cancelled
+outcomes cannot carry an accepted adapter. A runtime fingerprint that violates the pinned contract
+is not substituted with the expected values; it remains an explicit runtime-drift failure without
+a vetted runtime value. The simpler direct call to the numerical adapter would bypass source,
+derived-pixel, terminal-result and zero-inference replay invariants, so this application is needed.
+
 Primary references:
 
 - [SDXL base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)

@@ -15,10 +15,11 @@ is not the planned 42-output/four-arm pilot, which remains pending. Our own insp
 The numerical UNet-LoRA loop is now shared behind real SSD and SDXL architecture wrappers, with
 distinct bundled/fixed VAE locations and unchanged SSD checkpoint identity. Nonfinite tensors,
 gradients/adapter values and new SDXL resource bounds are checked. Focused source regressions:
-87 PASS; complete non-live image-runtime suite: 213 PASS; Ruff, targeted mypy and release-shell
-syntax PASS. These tests use CPU fakes for loop accounting, not real GPU training. The SDXL micro
-workspace/CLI/handoff and actual LoRA training remain pending; no installed trainer or operating
-model was replaced. The 12 sanitized operator logs are archived as
+87 PASS at the numerical checkpoint. The subsequent micro application/CLI/Orchestrator handoff
+now passes 137 focused tests and 9 dependency/publication tests; full non-live image-runtime
+suite: 244 PASS; Ruff, targeted mypy and release-shell syntax PASS. These tests use CPU fakes
+for loop accounting, not real GPU training. Actual LoRA training remains pending; no installed
+trainer or operating model was replaced at this source checkpoint. The 12 sanitized operator logs are archived as
 `artifact_bb025e48f4d44032bcef8e13a2cbb503` /
 `rev_238a506019a24c678d335bce6c776bbc`, separate from canonical GPU result revisions.
 
