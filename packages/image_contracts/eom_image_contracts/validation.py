@@ -12,6 +12,11 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lora-micro-command": "local-image-sdxl-lora-micro-command-v1.schema.json",
+    "sdxl-lora-micro-adapter-manifest": (
+        "local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json"
+    ),
+    "sdxl-lora-micro-result": "local-image-sdxl-lora-micro-result-v1.schema.json",
     "sdxl-lineart-prompt-policy": "local-image-sdxl-lineart-prompt-policy-v1.schema.json",
     "sdxl-lineart-probe-command": "local-image-sdxl-lineart-probe-command-v1.schema.json",
     "sdxl-lineart-probe-result": "local-image-sdxl-lineart-probe-result-v1.schema.json",
@@ -303,6 +308,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lora-micro-command": (
+        "sha256:8f3344e874ae1f553fe87c0710e335cd3afcc047bef1afad212ec0963b9b7d61"
+    ),
+    "sdxl-lora-micro-adapter-manifest": (
+        "sha256:6c62a8f893e702aff16bbd436dd4bcc893981d824de725cac54372e7e6dc878e"
+    ),
+    "sdxl-lora-micro-result": (
+        "sha256:f09dfd5bc25854364a40b6231bc5696b3dc4152434dbeca20585e1c59a9ce38a"
+    ),
     "sdxl-lineart-prompt-policy": (
         "sha256:2b76c2514ab0cc7abd1825addb8862d6912577607baae8f4da775302cd5549d6"
     ),

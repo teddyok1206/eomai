@@ -164,3 +164,25 @@ wheel packages, without source-path imports. The provider wheel and optional SDX
 installed. GPU inference, micro LoRA, expanded data, blind review and production canary remain pending.
 The explicit SDXL corpus-use extension is still awaiting the user's reply; no historical approval
 or existing production binding has been changed.
+
+### 2026-10-03 SDXL scope extension
+
+The user replied `승인할게` to the explicit internal SDXL comparison/LoRA question, recorded at
+2026-10-03 18:35:22 UTC. This approves `INTERNAL_SDXL_COMPARISON` and
+`INTERNAL_SDXL_LORA_TRAINING` for the same internally approved exam material. It does not authorize
+raw-source export, external processing or automatic operating-model activation. The original
+SSD-1B authorization stays immutable; the new scope/time/user-message hash is pinned separately in
+each SDXL provenance/command. The preceding pending statements describe earlier checkpoints, not
+the present approval status.
+
+### 2026-10-03 SDXL micro protocol checkpoint
+
+The additive micro command, adapter manifest and result families pin the SDXL stack, new corpus-use
+approval, original crop revision/captions, exact 16 TRAIN members and reserved 4/4 partitions.
+They record derived-pixel hashes separately and forbid operating activation. Existing object-line-art
+partition validation is reused without changing released schema bytes. The three JSON Schema
+2020-12 resources are mirrored in contract wheels and release verification maps.
+The selected protocol/admission/split/dependency regressions passed 132 tests; Ruff format/lint,
+targeted strict mypy, release-shell syntax and diff checks passed. These are synthetic source
+checks only: the SDXL-specific training backend, GPU micro-training and measured quality remain
+pending. No adapter or operating binding has been replaced by this checkpoint.

@@ -903,11 +903,27 @@ def validate_science_campaign_micro_probe_plan_sources_v3(
         or plan.crop_set.sha256 == plan.crop_set_sha256
     ):
         raise ValueError("object-line-art probe crop-set hash binding mismatch")
+    validate_object_line_art_member_partitions(
+        crop_set,
+        training_ids=plan.training_member_ids,
+        validation_ids=plan.validation_member_ids,
+        holdout_ids=plan.holdout_member_ids,
+    )
+
+
+def validate_object_line_art_member_partitions(
+    crop_set: LocalImageScienceObjectLineArtCropSet,
+    *,
+    training_ids: tuple[str, ...],
+    validation_ids: tuple[str, ...],
+    holdout_ids: tuple[str, ...],
+) -> None:
+    """Check exact immutable 16/4/4 membership for SSD-1B and SDXL micro commands."""
     members = {value.sample_id: value for value in crop_set.members}
     expected = {
-        "TRAIN": plan.training_member_ids,
-        "VALIDATION": plan.validation_member_ids,
-        "HOLDOUT": plan.holdout_member_ids,
+        "TRAIN": training_ids,
+        "VALIDATION": validation_ids,
+        "HOLDOUT": holdout_ids,
     }
     for partition, identities in expected.items():
         if any(

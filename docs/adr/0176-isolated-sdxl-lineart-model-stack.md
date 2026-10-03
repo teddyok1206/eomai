@@ -119,6 +119,42 @@ admission cannot create a replacement execution or silently resolve a latest rev
 alternative of trusting only the staged image SHA is insufficient: it would lose partition,
 approved-source and policy lineage even though the PNG bytes happen to match.
 
+## SDXL-only micro LoRA
+
+The micro command is one small immutable experiment value, published through the existing
+Orchestrator control-Artifact owner. It pins the SDXL stack, original crop authorization, explicit
+SDXL training approval, the object-line-art crop revision, all 16 TRAIN members and the four/four
+reserved member IDs. It is not a new dataset, registry or queue. Exact partition validation is
+shared with the existing object-line-art micro path; TRAIN metadata and PNGs are admitted before
+dispatch. Original captions are pinned, with an explicit fixed examination-style trigger. Optional
+normalized redaction boxes are recorded per sample; derived pixels/hashes are separate from source
+pixels. Approval alone must not be described as proof that source labels have been removed.
+
+The numerical recipe reuses the existing frozen 200-step/rank-8/alpha-8/batch-1/accumulation-4
+hyperparameters. Base UNet, both text encoders and fp16-fixed VAE are local-only exact stack
+members. Only UNet LoRA parameters train; T2I-Adapter is an inference dependency, not a training
+target. The 768x512 deterministic training canvas preserves the object aspect ratio. Labels, axes
+and exact scientific geometry remain outside the learned adapter. No new package dependency is
+introduced. Existing crop materialization and compatible UNet training computations are reused
+where their actual semantics match; the SSD-1B model contract and checkpoints are not relabeled.
+
+The adapter logical identity binds the experiment, its revision binds the exact two adapter files
+and base stack, and its manifest hash binds the complete immutable metadata. Command/result/adapter
+schemas are additive SDXL families with `EVALUATION_ONLY` and `activation_policy=FORBIDDEN`.
+Result validation ties realized TRAIN coverage, source/derived/caption hashes, steps, dependency
+versions, time and peak-memory budget to the exact command. A failed/cancelled result cannot carry
+an accepted adapter, and does not turn into success on replay. Unreceipted outputs are preserved
+and refused rather than retrained or overwritten. The first 200-step trial has no intermediate
+checkpoint or implicit continuation; resumable full-training policy is a later explicit successor.
+
+Access is bounded ordered iteration over 16 members with map/set lookup and duplicate detection,
+O(n) metadata/time and O(n) bounded cache space; large tensors and adapter bytes stay local until
+the explicit validation/commit boundary. No migration or binary DB value is required. The current
+shared GPU lease and fixed isolated trainer identity own execution; only Orchestrator publishes
+validated outputs to NAS. A simpler SSD-1B command substitution would falsely claim model/VAE and
+adapter compatibility, so the architecture-specific contract is necessary. This micro family does
+not satisfy the full 100–200/24–40/32 data or independent blind-review targets.
+
 Primary references:
 
 - [SDXL base](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)

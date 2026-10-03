@@ -1,0 +1,570 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "ImageEvaluationBoundingBox": {
+      "additionalProperties": false,
+      "properties": {
+        "bottom": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Bottom",
+          "type": "integer"
+        },
+        "left": {
+          "maximum": 9999,
+          "minimum": 0,
+          "title": "Left",
+          "type": "integer"
+        },
+        "right": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Right",
+          "type": "integer"
+        },
+        "top": {
+          "maximum": 9999,
+          "minimum": 0,
+          "title": "Top",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "title": "ImageEvaluationBoundingBox",
+      "type": "object"
+    },
+    "LocalImageLoraMicroHyperparameters": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_type": {
+          "const": "UNET_LORA",
+          "title": "Adapter Type",
+          "type": "string"
+        },
+        "alpha": {
+          "const": 8,
+          "title": "Alpha",
+          "type": "integer"
+        },
+        "checkpointing_steps": {
+          "const": 200,
+          "title": "Checkpointing Steps",
+          "type": "integer"
+        },
+        "gradient_accumulation_steps": {
+          "const": 4,
+          "title": "Gradient Accumulation Steps",
+          "type": "integer"
+        },
+        "gradient_checkpointing": {
+          "const": true,
+          "title": "Gradient Checkpointing",
+          "type": "boolean"
+        },
+        "learning_rate": {
+          "const": "1e-4",
+          "title": "Learning Rate",
+          "type": "string"
+        },
+        "max_train_steps": {
+          "const": 200,
+          "title": "Max Train Steps",
+          "type": "integer"
+        },
+        "mixed_precision": {
+          "const": "fp16",
+          "title": "Mixed Precision",
+          "type": "string"
+        },
+        "optimizer": {
+          "const": "adamw_8bit",
+          "title": "Optimizer",
+          "type": "string"
+        },
+        "random_flip": {
+          "const": false,
+          "title": "Random Flip",
+          "type": "boolean"
+        },
+        "rank": {
+          "const": 8,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "resolution_height": {
+          "const": 512,
+          "title": "Resolution Height",
+          "type": "integer"
+        },
+        "resolution_width": {
+          "const": 768,
+          "title": "Resolution Width",
+          "type": "integer"
+        },
+        "train_batch_size": {
+          "const": 1,
+          "title": "Train Batch Size",
+          "type": "integer"
+        },
+        "train_text_encoders": {
+          "const": false,
+          "title": "Train Text Encoders",
+          "type": "boolean"
+        },
+        "train_vae": {
+          "const": false,
+          "title": "Train Vae",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "adapter_type",
+        "rank",
+        "alpha",
+        "resolution_width",
+        "resolution_height",
+        "train_batch_size",
+        "gradient_accumulation_steps",
+        "gradient_checkpointing",
+        "mixed_precision",
+        "optimizer",
+        "learning_rate",
+        "max_train_steps",
+        "checkpointing_steps",
+        "random_flip",
+        "train_text_encoders",
+        "train_vae"
+      ],
+      "title": "LocalImageLoraMicroHyperparameters",
+      "type": "object"
+    },
+    "LocalImageTrainerDependencies": {
+      "additionalProperties": false,
+      "properties": {
+        "accelerate_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Accelerate Version",
+          "type": "string"
+        },
+        "bitsandbytes_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Bitsandbytes Version",
+          "type": "string"
+        },
+        "diffusers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Diffusers Version",
+          "type": "string"
+        },
+        "peft_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Peft Version",
+          "type": "string"
+        },
+        "python_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Python Version",
+          "type": "string"
+        },
+        "torch_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Torch Version",
+          "type": "string"
+        },
+        "transformers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Transformers Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "accelerate_version",
+        "peft_version",
+        "bitsandbytes_version"
+      ],
+      "title": "LocalImageTrainerDependencies",
+      "type": "object"
+    },
+    "SdxlExperimentAuthorization": {
+      "additionalProperties": false,
+      "description": "Pinned operator approval; original SSD-1B permission is not silently widened.",
+      "properties": {
+        "approval_message_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Approval Message Sha256",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "approved_by": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._:@-]+$",
+          "title": "Approved By",
+          "type": "string"
+        },
+        "automatic_activation": {
+          "const": "FORBIDDEN",
+          "title": "Automatic Activation",
+          "type": "string"
+        },
+        "external_export": {
+          "const": "FORBIDDEN",
+          "title": "External Export",
+          "type": "string"
+        },
+        "permitted_uses": {
+          "items": {
+            "enum": [
+              "INTERNAL_SDXL_COMPARISON",
+              "INTERNAL_SDXL_LORA_TRAINING"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Permitted Uses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "approved_at",
+        "approved_by",
+        "approval_message_sha256",
+        "permitted_uses",
+        "external_export",
+        "automatic_activation"
+      ],
+      "title": "SdxlExperimentAuthorization",
+      "type": "object"
+    },
+    "SdxlLineartStackPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-sdxl-t2i-lineart",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-sdxl-lineart-runner/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "title": "SdxlLineartStackPointer",
+      "type": "object"
+    },
+    "SdxlLoraMicroBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_duration_ms": {
+          "maximum": 3600000,
+          "minimum": 1,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Maximum Peak Gpu Memory Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "title": "SdxlLoraMicroBudget",
+      "type": "object"
+    },
+    "SdxlLoraMicroSample": {
+      "additionalProperties": false,
+      "properties": {
+        "redaction_boxes": {
+          "items": {
+            "$ref": "#/$defs/ImageEvaluationBoundingBox"
+          },
+          "maxItems": 32,
+          "title": "Redaction Boxes",
+          "type": "array"
+        },
+        "sample_id": {
+          "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+          "title": "Sample Id",
+          "type": "string"
+        },
+        "source_caption_en": {
+          "maxLength": 320,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Source Caption En",
+          "type": "string"
+        },
+        "source_caption_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Caption Sha256",
+          "type": "string"
+        },
+        "source_height_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Source Height Px",
+          "type": "integer"
+        },
+        "source_image": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "source_width_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Source Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_id",
+        "source_image",
+        "source_width_px",
+        "source_height_px",
+        "source_caption_en",
+        "source_caption_sha256",
+        "redaction_boxes"
+      ],
+      "title": "SdxlLoraMicroSample",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "base_model": {
+      "$ref": "#/$defs/SdxlLineartStackPointer"
+    },
+    "budget": {
+      "$ref": "#/$defs/SdxlLoraMicroBudget"
+    },
+    "caption_policy": {
+      "const": "SOURCE_CAPTION_WITH_EXAM_STYLE_TRIGGER/1.0",
+      "title": "Caption Policy",
+      "type": "string"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "title": "Created By",
+      "type": "string"
+    },
+    "crop_set": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "crop_set_semantic_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Crop Set Semantic Sha256",
+      "type": "string"
+    },
+    "dependencies": {
+      "$ref": "#/$defs/LocalImageTrainerDependencies"
+    },
+    "experiment_authorization": {
+      "$ref": "#/$defs/SdxlExperimentAuthorization"
+    },
+    "holdout_sample_ids": {
+      "items": {
+        "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Holdout Sample Ids",
+      "type": "array"
+    },
+    "hyperparameters": {
+      "$ref": "#/$defs/LocalImageLoraMicroHyperparameters"
+    },
+    "preprocessing_policy": {
+      "const": "GRAYSCALE_REDACT_FIT_768X512/1.0",
+      "title": "Preprocessing Policy",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_SDXL_OBJECT_LINE_ART_MICRO",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-lora-micro-command/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "training_authorization": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "training_run_id": {
+      "pattern": "^imgsdxlmicrotrainrun_[0-9a-f]{32}$",
+      "title": "Training Run Id",
+      "type": "string"
+    },
+    "training_samples": {
+      "items": {
+        "$ref": "#/$defs/SdxlLoraMicroSample"
+      },
+      "maxItems": 16,
+      "minItems": 16,
+      "title": "Training Samples",
+      "type": "array"
+    },
+    "validation_sample_ids": {
+      "items": {
+        "pattern": "^imgscivislineartcrop_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "title": "Validation Sample Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "base_model",
+    "crop_set",
+    "crop_set_semantic_sha256",
+    "training_authorization",
+    "experiment_authorization",
+    "training_samples",
+    "validation_sample_ids",
+    "holdout_sample_ids",
+    "caption_policy",
+    "preprocessing_policy",
+    "dependencies",
+    "hyperparameters",
+    "budget",
+    "seed",
+    "purpose",
+    "activation_policy",
+    "command_sha256"
+  ],
+  "title": "LocalImageSdxlLoraMicroCommand",
+  "type": "object"
+}

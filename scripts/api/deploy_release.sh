@@ -1887,6 +1887,9 @@ with zipfile.ZipFile(platform_wheel) as archive:
 
 image_prefix = "eom_image_contracts/schemas/"
 image_resources = {
+    "local-image-sdxl-lora-micro-command-v1.schema.json": "schemas/image-provider/local-image-sdxl-lora-micro-command-v1.schema.json",
+    "local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json": "schemas/image-provider/local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json",
+    "local-image-sdxl-lora-micro-result-v1.schema.json": "schemas/image-provider/local-image-sdxl-lora-micro-result-v1.schema.json",
     "local-image-sdxl-lineart-prompt-policy-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-prompt-policy-v1.schema.json",
     "local-image-sdxl-lineart-probe-command-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-probe-command-v1.schema.json",
     "local-image-sdxl-lineart-probe-result-v1.schema.json": "schemas/image-provider/local-image-sdxl-lineart-probe-result-v1.schema.json",
