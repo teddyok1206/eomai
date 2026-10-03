@@ -2122,7 +2122,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/pdf-document-review.v1.2.yaml"
         ).read_bytes()
     )
-    (workflow_root / "pdf-document-review.v1.3.yaml").write_bytes(
+    (root / "pdf-document-review.v1.3.yaml").write_bytes(
         (
             Path(os.environ["REPOSITORY_ROOT"])
             / "config/workflows/pdf-document-review.v1.3.yaml"

@@ -4,11 +4,37 @@ from __future__ import annotations
 
 import ast
 import subprocess
+import sys
 from pathlib import Path
 
 from eom_catalog_contracts import catalog_schema_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_embedded_release_inspector_has_no_undefined_names() -> None:
+    script = (ROOT / "scripts/api/deploy_release.sh").read_text()
+    start = script.index("inspect_release() {")
+    python_start = script.index("<<'PY'\n", start) + len("<<'PY'\n")
+    python_end = script.index("\nPY\n", python_start)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--select",
+            "F821",
+            "--stdin-filename",
+            "release-inspector.py",
+            "-",
+        ],
+        input=script[python_start:python_end],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_wheel_catalog_resource_inventory_matches_canonical_contracts() -> None:
