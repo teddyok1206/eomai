@@ -731,3 +731,45 @@ Orchestrator publisher, then add the extraction command/result and original TRAI
 dispatching six learned-contour inputs. Do not make derived PNGs impersonate original approved
 crops. The previous 30 rejected SDXL images remain rejected; independent blind review, full-data
 expansion, remaining comparisons and quality-passing Item Preview/HWPX remain open. Goal ACTIVE.
+
+### 2026-10-03 acquisition candidate build and canonical evidence closed
+
+Implementation source `9045b7e3ab290e09f689fe89ace7f474709b37ba` passed both immutable release
+builds. Common contract wheel SHA
+`2d8b050d84a0716da23b9994e5e1f48373192872be9b43d310cd97d63247b6cd`; provider wheel SHA
+`f0ec003b8f9f803f2dd56049a2a0287e39a68613cbf6d98440fa68f02b10989f`; trainer wheel SHA
+`60c9feed87dcb4106da5b2531ece579882a11ffd482a69f4a213c6de08aa287f`.
+Build roots: `/tmp/eom-image-provider-build/9045b7e3ab290e09f689fe89ace7f474709b37ba.ubb2DY`
+and `/tmp/eom-image-trainer-build/9045b7e3ab290e09f689fe89ace7f474709b37ba.JDXsCQ`.
+
+A wheel-only check outside the repository verified all three wheel hashes and every RECORD
+entry, imported the new model/contract code from the wheel ZIPs, resolved the packaged MIT
+notice and loaded actual converted weights for a finite bounded synthetic CPU forward. It did
+not install wheels, access corpus images, acquire CUDA, call network inference or change an
+operating binding. This additional synthetic check is not a generated exam-image sample.
+
+The existing Orchestrator `ControlFileSetPublisher` committed the primary typed extractor
+manifest, its four exact model members and ten sanitized logs (including the source-path
+collection failure) as **15 members** to:
+
+- Artifact `artifact_a588ec0385d148eea65bd37163fc6113`;
+- Revision `rev_f0946b1223654ac9bb321232462a67c6`;
+- Primary `manifests/informative-lineart-manifest.json`;
+- Primary raw SHA `sha256:0106db12c5ad95a520213c10eadbfcf92b6ae1c11f1da932850a48f5ad2953e9`;
+- Extractor semantic manifest SHA remains
+  `sha256:aa2ad3750048e0ab118fad3353b98d6811dc2b26db01379bd5b85cf63fa6b62d`.
+
+Opaque model-member format tags are governed by that primary manifest's exact `ModelFile`
+records and numerical acceptance, not presented as JSON worker-message schema validation.
+Canonical publication used the existing resumable application boundary; no worker wrote NAS,
+no binary entered PostgreSQL or Git, no direct row update, protocol rewrite or migration occurred.
+The approved `EOM:3.0` route was verified and succeeded without another password request.
+
+Slack checkpoint `devreport_70dc8d3659794d3b8268ed39fb89959e` was SENT / HTTP 200 at
+2026-10-03T23:44:43.867538Z. Read-only checks found the five real API/Web/Catalog/HWPX/Workflow
+services active. V6 production configuration raw SHA is still
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+Installed trainer remains `cc2f32e7`, inference provider remains `67fd3190`; this new candidate
+and extractor are **NOT INSTALLED**. Acquisition/CPU source gates are closed, but corpus
+extraction/admission, matched image quality, full-data/independent review and product canary
+remain open. The whole goal remains ACTIVE. Next: additive six-case extraction command/result.
