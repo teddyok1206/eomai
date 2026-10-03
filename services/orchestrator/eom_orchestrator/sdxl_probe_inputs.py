@@ -76,7 +76,15 @@ class _ResolvedDocuments:
             value = json.loads(raw)
             validate_contract(contract, value)
             document = model.model_validate(value)
-            if raw != content_json_bytes(document.model_dump(mode="json")):
+            canonical = content_json_bytes(document.model_dump(mode="json"))
+            # Published historical pilot receipts retain one terminal newline. Their exact
+            # pointer hash is already checked; never rewrite those bytes to admit a new run.
+            accepted = (
+                (canonical,)
+                if contract == "sdxl-lineart-prompt-policy"
+                else (canonical, canonical + b"\n")
+            )
+            if raw not in accepted:
                 raise ValueError("noncanonical control input")
             return document
         except (ValueError, TypeError, JsonSchemaValidationError) as exc:

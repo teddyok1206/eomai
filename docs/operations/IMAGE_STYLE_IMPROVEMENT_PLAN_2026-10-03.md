@@ -193,3 +193,22 @@ systemd unit. The presentation script delegates admission, staging and dispatch 
 reimplementing crop rules. Focused handoff/admission/micro/dependency checks passed 71 tests,
 including 14 new filesystem/dispatch tests; Ruff and targeted strict mypy passed. Initial test
 invocation/fixture-order issues were corrected before this final run. No GPU execution is implied.
+
+### 2026-10-03 isolated runtime and live input preflight
+
+Candidate provider/contract wheels from `6c90270a` were installed into the existing explicit image
+environment with the optional offline SDXL unit only. Wheel/installed RECORD byte verification,
+actual image-identity imports, CUDA availability and `pip check` passed. The protected V6 binding
+hash remained `f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+No group/polkit/operating-unit/control-policy change or restart was performed. The previous exact
+`fc0b78c5` provider/contract wheels remain hash-verified rollback inputs.
+
+All six proposed references were inspected: several retain gradients, photograph-like texture,
+clipped contours or original redaction marks. Approved provenance is not homogeneous line-art
+quality; these distinctions must be preserved in training selection and comparison records.
+Live admission found three historical pilot receipts with one canonical terminal newline. The
+new resolver now accepts that existing representation without rewriting bytes or hashes; compiled
+SDXL provenance remains strict canonical JSON. Extra whitespace/double-newline still fails.
+The 84-test final handoff/admission/resolver/publication/micro/dependency regression passed,
+with Ruff and targeted strict mypy. This preflight discovery caused zero model calls; the already
+committed compiled prompt policy is retained and replayed through its same publication identity.

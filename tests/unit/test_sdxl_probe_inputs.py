@@ -73,7 +73,7 @@ def _seal(value, identity, prefix, hash_field):
     )
 
 
-def _fixture(*, partition="TRAIN", fault=None):
+def _fixture(*, partition="TRAIN", fault=None, historical_suffix=b""):
     plans, results, plan_pointers, result_pointers, inventory, review, crops = copy.deepcopy(
         _object_line_art_values()
     )
@@ -82,6 +82,8 @@ def _fixture(*, partition="TRAIN", fault=None):
 
     def record(pointer, value):
         raw = content_json_bytes(value)
+        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-result/1.0":
+            raw += historical_suffix
         pointer["sha256"] = _sha(raw)
         records[ImageEvaluationArtifactMember.model_validate(pointer)] = raw
         return pointer
@@ -285,6 +287,21 @@ def test_exact_pinned_source_admission_is_read_only_bounded_and_deterministic(mo
     assert json.loads(result.files[0].payload) == command.model_dump(mode="json")
     again = admission.prepare_sdxl_probe_inputs(object(), command)
     assert again == result
+
+
+@pytest.mark.parametrize("suffix", [b"\n", b"\n\n", b" "])
+def test_historical_canonical_receipt_accepts_one_newline_without_rewriting(monkeypatch, suffix):
+    command, _policy, records = _fixture(historical_suffix=suffix)
+    reader = _Reader(records)
+    monkeypatch.setattr(admission, "resolve_control_artifact_member", reader)
+    if suffix == b"\n":
+        result = admission.prepare_sdxl_probe_inputs(object(), command)
+        assert result.command == command
+        assert len(result.files) == 4
+        assert admission.prepare_sdxl_probe_inputs(object(), command) == result
+    else:
+        with pytest.raises(admission.SdxlProbeAdmissionError, match="SOURCE_DOCUMENT_INVALID"):
+            admission.prepare_sdxl_probe_inputs(object(), command)
 
 
 @pytest.mark.parametrize("partition", ["VALIDATION", "HOLDOUT"])
