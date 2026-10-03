@@ -331,3 +331,17 @@ operator logs are durably archived through the Orchestrator as
 An initial archive invocation correctly refused group-writable temporary logs before any DB write;
 only these completed task logs were made private (0600) before the successful archive. No record
 or Artifact was deleted. Slack milestone `devreport_136a750f49c846c5bff6e667b7b08ae8` was delivered.
+
+The clean source checkpoint `e0f1eea9dbc42fb3135563f3f4eb56da6f9a7b2c` built and inspected all
+three release wheels from its immutable archive. This is build evidence only; none were installed:
+
+- contract wheel SHA-256: `c0ac893af9f5e37a9c975407b91b31cd4f9dc03c94b990d583899f02fa2a57d3`;
+- provider wheel SHA-256: `f40ea0d08d48d319ce31956a55b421ee3d4ab7c84ff8632192ca54cfd61e9d00`;
+- trainer wheel SHA-256: `6c390e2d75c5d3bb6ea4c39a3c616527752e40786f445ff20d7970e02d0b1c2e`.
+
+Archive location: `/tmp/eom-image-trainer-build/e0f1eea9dbc42fb3135563f3f4eb56da6f9a7b2c.TZQrmc`.
+At 20:18 UTC the API, Web, Catalog/HWPX application runners and Workflow runner remained active;
+GPU was idle (2 MiB allocated). No service restart, policy activation or operating trainer update
+is implied by the successful build. Next implementation is the SDXL micro application and fixed
+handoff/CLI, using the admitted original 16 TRAIN sources with explicit derived redactions; actual
+micro training, held-out evaluation and candidate canary remain subsequent gates.
