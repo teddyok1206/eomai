@@ -7,11 +7,13 @@ from dataclasses import dataclass
 
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
-    LocalImageScienceSourcePageCropReview,
     LocalImageScienceSourcePageCropReviewV2,
-    ScienceSourcePageCropSelection,
+    LocalImageScienceSourcePageCropReviewV3,
+    ScienceSourcePageCropRegion,
+    SourcePageCropReview,
     validate_contract,
     validate_source_page_crop_sources,
+    validate_source_page_region_sources,
 )
 from eom_image_contracts.source_page_crops import source_page_crop_protocol
 from sqlalchemy import Engine
@@ -21,7 +23,10 @@ from eom_orchestrator.control_artifact_resolution import (
     resolve_control_artifact_members,
 )
 from eom_orchestrator.sdxl_probe_inputs import resolve_sdxl_training_sources
-from eom_orchestrator.source_page_crop_expansion_inputs import resolve_source_page_crop_expansion
+from eom_orchestrator.source_page_crop_expansion_inputs import (
+    resolve_science_visual_expansion_lineage,
+    resolve_source_page_crop_expansion,
+)
 
 _MAX_BATCH_BYTES = 128 * 1024**2
 _MAX_BATCH_PAGES = 64
@@ -31,11 +36,11 @@ _MAX_BATCH_PAGES = 64
 class ScienceSourcePageCropRead:
     pointer: ImageEvaluationArtifactMember
     size_bytes: int
-    selections: tuple[ScienceSourcePageCropSelection, ...]
+    selections: tuple[ScienceSourcePageCropRegion, ...]
 
 
 def prepare_source_page_crop_reads(
-    engine: Engine, review: LocalImageScienceSourcePageCropReview
+    engine: Engine, review: SourcePageCropReview
 ) -> tuple[ScienceSourcePageCropRead, ...]:
     """Read-only provenance admission; rejected metadata consumes no page PNG bytes."""
     protocol = source_page_crop_protocol(review)
@@ -46,7 +51,28 @@ def prepare_source_page_crop_reads(
         crop_set_pointer=review.basis_crop_set,
         authorization_pointer=review.training_authorization,
     )
-    if isinstance(review, LocalImageScienceSourcePageCropReviewV2):
+    if isinstance(review, LocalImageScienceSourcePageCropReviewV3):
+        if review.training_authorization != lineage.crop_set.training_authorization or (
+            lineage.authorization.approved_at > review.created_at
+        ):
+            raise ValueError("SCIENCE_SOURCE_CROP_REGION_AUTHORIZATION_MISMATCH")
+        plans = lineage.plans
+        results = lineage.results
+        pointers = tuple(pilot.pilot_result for pilot in lineage.inventory.pilot_results)
+        if review.supplemental_pilots:
+            expansion = resolve_science_visual_expansion_lineage(
+                engine,
+                supplemental_pilots=review.supplemental_pilots,
+                basis=lineage,
+                observed_at=review.created_at,
+            )
+            plans = (*plans, *expansion.plans)
+            results = (*results, *expansion.results)
+            pointers = (*pointers, *(pilot.pilot_result for pilot in review.supplemental_pilots))
+        validate_source_page_region_sources(
+            review, plans=plans, results=results, result_pointers=pointers
+        )
+    elif isinstance(review, LocalImageScienceSourcePageCropReviewV2):
         results = resolve_source_page_crop_expansion(engine, review, lineage).results
     else:
         validate_source_page_crop_sources(
@@ -63,7 +89,7 @@ def prepare_source_page_crop_reads(
         for result in results
         for page in result.page_images
     }
-    by_page: dict[ImageEvaluationArtifactMember, list[ScienceSourcePageCropSelection]] = {}
+    by_page: dict[ImageEvaluationArtifactMember, list[ScienceSourcePageCropRegion]] = {}
     for selection in review.selections:
         by_page.setdefault(selection.source_page, []).append(selection)
     return tuple(

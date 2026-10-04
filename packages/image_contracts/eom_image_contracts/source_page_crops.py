@@ -26,6 +26,8 @@ from eom_image_contracts.science_corpus_visual import (
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceObjectLineArtCropSet,
     LocalImageScienceVisualCampaignPatternInventory,
+    ScienceVisualPageImage,
+    ScienceVisualPilotSource,
 )
 from eom_image_contracts.sdxl_training_targets import TargetExpression
 
@@ -34,6 +36,8 @@ SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/
 SOURCE_PAGE_CROP_SET_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.0"
 SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.1"
 SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.1"
+SOURCE_PAGE_CROP_REVIEW_V3_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.2"
+SOURCE_PAGE_CROP_SET_V3_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.2"
 SCIENCE_ORIGINAL_PAGE_SCHEMA_REF = _PREFIX + "science-corpus-visual-pilot-page-image/1.0"
 SourcePageCropPartition = Literal["TRAIN", "VALIDATION", "HOLDOUT"]
 
@@ -44,10 +48,10 @@ def _utc(value: datetime) -> datetime:
     return value
 
 
-class ScienceSourcePageCropSelection(FrozenModel):
+class ScienceSourcePageCropRegion(FrozenModel):
+    """Shared immutable frame; detection is not an original page's identity."""
+
     selection_id: str = Field(pattern=r"^imgsourcecrop_[0-9a-f]{32}$")
-    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
-    parent_candidate_sha256: Sha256
     document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
     physical_page: int = Field(ge=1, le=512)
     source_document: ImageEvaluationArtifactMember
@@ -89,6 +93,15 @@ class ScienceSourcePageCropSelection(FrozenModel):
         return self
 
 
+class ScienceSourcePageCropSelection(ScienceSourcePageCropRegion):
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    parent_candidate_sha256: Sha256
+
+
+class ScienceSourcePageRegionSelection(ScienceSourcePageCropRegion):
+    source_anchor: Literal["REVIEWED_ORIGINAL_PAGE"]
+
+
 def source_page_crop_selection_id(value: dict[str, object]) -> str:
     """A corrected caption is revision content, not another independent drawing."""
     return (
@@ -102,15 +115,15 @@ def source_page_crop_selection_id(value: dict[str, object]) -> str:
     )
 
 
-class LocalImageScienceSourcePageCropReview(FrozenModel):
-    schema_version: Literal["local-image-science-source-page-crop-review/1.0"]
+class _SourcePageCropReview(FrozenModel):
+    schema_version: str
     review_id: str = Field(pattern=r"^imgsourcecropreview_[0-9a-f]{32}$")
     created_at: datetime
     created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
     source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     basis_crop_set: ImageEvaluationArtifactMember
     training_authorization: ImageEvaluationArtifactMember
-    selections: tuple[ScienceSourcePageCropSelection, ...] = Field(min_length=1, max_length=512)
+    selections: tuple[ScienceSourcePageCropRegion, ...] = Field(min_length=1, max_length=512)
     policy: Literal["REVIEWED_LITERAL_ORIGINAL_PAGE_PIXELS/1.0"]
     pillow_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     activation_policy: Literal["FORBIDDEN"]
@@ -161,6 +174,11 @@ class LocalImageScienceSourcePageCropReview(FrozenModel):
         ):
             raise ValueError("source page crop review identity/hash mismatch")
         return self
+
+
+class LocalImageScienceSourcePageCropReview(_SourcePageCropReview):
+    schema_version: Literal["local-image-science-source-page-crop-review/1.0"]
+    selections: tuple[ScienceSourcePageCropSelection, ...] = Field(min_length=1, max_length=512)
 
 
 class ScienceSourcePageCropMember(FrozenModel):
@@ -260,22 +278,51 @@ class LocalImageScienceSourcePageCropReviewV2(LocalImageScienceSourcePageCropRev
 
     @model_validator(mode="after")
     def exact_supplemental_population(self) -> Self:
-        for pointers in (
-            tuple(pilot.pilot_plan for pilot in self.supplemental_pilots),
-            tuple(pilot.pilot_result for pilot in self.supplemental_pilots),
-        ):
-            identities = {
-                (pointer.artifact_id, pointer.artifact_revision_id, pointer.member_path)
-                for pointer in pointers
-            }
-            if len(identities) != len(pointers):
-                raise ValueError("source page crop repeats supplemental pilot identity")
+        _validate_supplemental_pilots(self.supplemental_pilots)
         return self
+
+
+def _validate_supplemental_pilots(
+    pilots: tuple[ScienceSourcePageCropSupplementalPilot, ...],
+) -> None:
+    for pointers in (
+        tuple(pilot.pilot_plan for pilot in pilots),
+        tuple(pilot.pilot_result for pilot in pilots),
+    ):
+        identities = {
+            (pointer.artifact_id, pointer.artifact_revision_id, pointer.member_path)
+            for pointer in pointers
+        }
+        if len(identities) != len(pointers):
+            raise ValueError("source page crop repeats supplemental pilot identity")
+
+
+class LocalImageScienceSourcePageCropReviewV3(_SourcePageCropReview):
+    schema_version: Literal["local-image-science-source-page-crop-review/1.2"]
+    selections: tuple[ScienceSourcePageRegionSelection, ...] = Field(min_length=1, max_length=512)
+    supplemental_pilots: tuple[ScienceSourcePageCropSupplementalPilot, ...] = Field(max_length=4)
+
+    @model_validator(mode="after")
+    def exact_supplemental_population(self) -> Self:
+        if len(self.supplemental_pilots) == 1:
+            raise ValueError("source page crop requires a complete supplemental campaign")
+        _validate_supplemental_pilots(self.supplemental_pilots)
+        return self
+
+
+SourcePageCropReview = (
+    LocalImageScienceSourcePageCropReview | LocalImageScienceSourcePageCropReviewV3
+)
 
 
 class LocalImageScienceSourcePageCropSetV2(LocalImageScienceSourcePageCropSet):
     schema_version: Literal["local-image-science-source-page-crop-set/1.1"]  # type: ignore[assignment]
     _review_schema_ref: ClassVar[str] = SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF
+
+
+class LocalImageScienceSourcePageCropSetV3(LocalImageScienceSourcePageCropSet):
+    schema_version: Literal["local-image-science-source-page-crop-set/1.2"]  # type: ignore[assignment]
+    _review_schema_ref: ClassVar[str] = SOURCE_PAGE_CROP_REVIEW_V3_SCHEMA_REF
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,13 +353,19 @@ _PROTOCOLS = MappingProxyType(
             "local-image-science-source-page-crop-set/1.1",
             LocalImageScienceSourcePageCropSetV2,
         ),
+        LocalImageScienceSourcePageCropReviewV3: SourcePageCropProtocol(
+            "science-source-page-crop-review-v3",
+            SOURCE_PAGE_CROP_REVIEW_V3_SCHEMA_REF,
+            "science-source-page-crop-set-v3",
+            SOURCE_PAGE_CROP_SET_V3_SCHEMA_REF,
+            "local-image-science-source-page-crop-set/1.2",
+            LocalImageScienceSourcePageCropSetV3,
+        ),
     }
 )
 
 
-def source_page_crop_protocol(
-    review: LocalImageScienceSourcePageCropReview,
-) -> SourcePageCropProtocol:
+def source_page_crop_protocol(review: SourcePageCropReview) -> SourcePageCropProtocol:
     """Closed released versions, not implicit subclass compatibility or a plugin registry."""
     protocol = _PROTOCOLS.get(type(review))
     if protocol is None:
@@ -377,14 +430,6 @@ def validate_source_page_crop_selection_sources(
         candidate, pages, result_pointer, plan = found
         source = sources[candidate.document_id]
         page = pages[(candidate.document_id, candidate.physical_page)]
-        expected_page = ImageEvaluationArtifactMember(
-            artifact_id=result_pointer.artifact_id,
-            artifact_revision_id=result_pointer.artifact_revision_id,
-            member_path=page.member_path,
-            schema_ref=SCIENCE_ORIGINAL_PAGE_SCHEMA_REF,
-            media_type="image/png",
-            sha256=page.sha256,
-        )
         box = candidate.bounding_box
         parent_box = (
             box.left * page.width_px // 10_000,
@@ -402,19 +447,87 @@ def validate_source_page_crop_selection_sources(
             or selection.physical_page != candidate.physical_page
             or selection.parent_candidate_sha256 != candidate.sha256
             or candidate.page_image_sha256 != page.sha256
-            or selection.source_page != expected_page
-            or selection.source_document != source.pdf
-            or selection.exam_group_sha256 != source.exam_group_sha256
-            or selection.partition != source.partition
-            or selection.page_width_px != page.width_px
-            or selection.page_height_px != page.height_px
-            or selection.page_render_dpi != plan.page_render_dpi
         ):
             raise ValueError("source page crop immutable source/partition mismatch")
+        _validate_region_source(selection, source, page, result_pointer, plan)
+
+
+def _validate_region_source(
+    selection: ScienceSourcePageCropRegion,
+    source: ScienceVisualPilotSource,
+    page: ScienceVisualPageImage,
+    result_pointer: ImageEvaluationArtifactMember,
+    plan: LocalImageScienceCorpusVisualPilotPlanV3,
+) -> None:
+    expected_page = ImageEvaluationArtifactMember(
+        artifact_id=result_pointer.artifact_id,
+        artifact_revision_id=result_pointer.artifact_revision_id,
+        member_path=page.member_path,
+        schema_ref=SCIENCE_ORIGINAL_PAGE_SCHEMA_REF,
+        media_type="image/png",
+        sha256=page.sha256,
+    )
+    if (
+        selection.document_id != source.document_id
+        or selection.document_id != page.document_id
+        or selection.physical_page != page.physical_page
+        or selection.source_page != expected_page
+        or selection.source_document != source.pdf
+        or selection.exam_group_sha256 != source.exam_group_sha256
+        or selection.partition != source.partition
+        or selection.page_width_px != page.width_px
+        or selection.page_height_px != page.height_px
+        or selection.page_render_dpi != plan.page_render_dpi
+    ):
+        raise ValueError("source page crop immutable source/partition mismatch")
+
+
+def validate_source_page_region_sources(
+    review: LocalImageScienceSourcePageCropReviewV3,
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+) -> None:
+    """Page-indexed admission, independent of detector recall, after full lineage admission."""
+    if (
+        not 2 <= len(plans) <= 8
+        or len(plans) != len(results)
+        or len(results) != len(result_pointers)
+    ):
+        raise ValueError("source page crop campaign coverage mismatch")
+    sources: dict[str, ScienceVisualPilotSource] = {}
+    hashes: set[str] = set()
+    partitions: dict[str, SourcePageCropPartition] = {}
+    pages = {}
+    for plan, result, pointer in zip(plans, results, result_pointers, strict=True):
+        if result.completed_at > review.created_at:
+            raise ValueError("source page crop source is newer than review")
+        local_sources = {source.document_id: source for source in plan.selected_sources}
+        for source in plan.selected_sources:
+            if source.document_id in sources or source.pdf.sha256 in hashes:
+                raise ValueError("source page crop campaign repeats sources")
+            sources[source.document_id] = source
+            hashes.add(source.pdf.sha256)
+            if (
+                partitions.setdefault(source.exam_group_sha256, source.partition)
+                != source.partition
+            ):
+                raise ValueError("source page crop source partition leakage")
+        for page in result.page_images:
+            key = (page.document_id, page.physical_page)
+            if key in pages or page.document_id not in local_sources:
+                raise ValueError("source page crop repeats or invents source pages")
+            pages[key] = (local_sources[page.document_id], page, pointer, plan)
+    for selection in review.selections:
+        matched = pages.get((selection.document_id, selection.physical_page))
+        if matched is None:
+            raise ValueError("source page crop original page missing")
+        _validate_region_source(selection, *matched)
 
 
 def validate_source_page_crop_set(
-    review: LocalImageScienceSourcePageCropReview, crop_set: LocalImageScienceSourcePageCropSet
+    review: SourcePageCropReview, crop_set: LocalImageScienceSourcePageCropSet
 ) -> None:
     protocol = source_page_crop_protocol(review)
     if (
@@ -445,7 +558,11 @@ def source_page_crop_pointer(
 ) -> ImageEvaluationArtifactMember:
     if (
         crop_set_pointer.schema_ref
-        not in {SOURCE_PAGE_CROP_SET_SCHEMA_REF, SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF}
+        not in {
+            SOURCE_PAGE_CROP_SET_SCHEMA_REF,
+            SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF,
+            SOURCE_PAGE_CROP_SET_V3_SCHEMA_REF,
+        }
         or crop_set_pointer.media_type != "application/json"
     ):
         raise ValueError("source page crop set pointer contract mismatch")

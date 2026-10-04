@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.2",
+  "title": "Reviewed literal original-page region crop set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "crop_set_id",
+    "crop_set_revision_id",
+    "created_at",
+    "pillow_version",
+    "members",
+    "state",
+    "activation_policy",
+    "crop_set_sha256",
+    "review"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-source-page-crop-set/1.2"
+    },
+    "crop_set_id": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/crop_set_id"
+    },
+    "crop_set_revision_id": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/crop_set_revision_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/created_at"
+    },
+    "pillow_version": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/pillow_version"
+    },
+    "members": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/members"
+    },
+    "state": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/state"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/activation_policy"
+    },
+    "crop_set_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/properties/crop_set_sha256"
+    },
+    "review": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.2"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "member_path": {
+              "const": "manifests/science-source-page-crop-review.json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

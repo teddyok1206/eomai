@@ -44,6 +44,9 @@ contract, provider = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/source_page_crops.py",
+        "eom_image_contracts/schemas/local-image-science-source-page-crop-review-v3.schema.json",
+        "eom_image_contracts/schemas/local-image-science-source-page-crop-set-v3.schema.json",
         "eom_image_contracts/informative_lineart.py",
         "eom_image_contracts/sdxl_learned_comparison.py",
         "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-command-v1.schema.json",

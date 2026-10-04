@@ -11,7 +11,7 @@ import zipfile
 import zlib
 from dataclasses import dataclass
 
-from eom_image_contracts import ScienceSourcePageCropSelection
+from eom_image_contracts import ScienceSourcePageCropRegion
 
 _TRAINER_PYTHON = "/srv/eom/conda/envs/eom-image-trainer/bin/python"
 _MAX_PNG_BYTES = 8 * 1024**2
@@ -75,7 +75,7 @@ class ScienceSourcePageCropPixels:
 
 def process_source_page_crops(
     payload: bytes,
-    selections: tuple[ScienceSourcePageCropSelection, ...],
+    selections: tuple[ScienceSourcePageCropRegion, ...],
     *,
     pillow_version: str,
 ) -> tuple[ScienceSourcePageCropPixels, ...]:

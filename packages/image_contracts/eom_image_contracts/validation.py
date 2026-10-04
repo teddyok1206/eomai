@@ -34,6 +34,10 @@ SCHEMA_FILES = {
         "local-image-science-source-page-crop-review-v2.schema.json"
     ),
     "science-source-page-crop-set-v2": "local-image-science-source-page-crop-set-v2.schema.json",
+    "science-source-page-crop-review-v3": (
+        "local-image-science-source-page-crop-review-v3.schema.json"
+    ),
+    "science-source-page-crop-set-v3": "local-image-science-source-page-crop-set-v3.schema.json",
     "sdxl-training-target-command": "local-image-sdxl-training-target-command-v1.schema.json",
     "sdxl-training-target-result": "local-image-sdxl-training-target-result-v1.schema.json",
     "sdxl-training-target-command-v2": "local-image-sdxl-training-target-command-v2.schema.json",
@@ -355,6 +359,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "science-source-page-crop-review-v3": (
+        "sha256:d2e3bd09d627efd917fc48607f1908e56ee0385ddefd935b8bb57e0293059322"
+    ),
+    "science-source-page-crop-set-v3": (
+        "sha256:dea89110189092b63440048a1e59ca3b478476b33b80e0077c9a986230d331b4"
+    ),
     "sdxl-canny-reference-command": (
         "sha256:7f9e33c0e91e614b781227bae3b086e5cf9f64e4987c1b8415f9d0dc4ce8cda4"
     ),

@@ -12,9 +12,9 @@ from pathlib import Path
 from eom_image_contracts import (
     INSTITUTIONAL_CROP_SCHEMA_REF,
     ImageEvaluationArtifactMember,
-    LocalImageScienceSourcePageCropReview,
     LocalImageScienceSourcePageCropSet,
     ScienceSourcePageCropMember,
+    SourcePageCropReview,
     content_json_bytes,
     content_sha256,
     validate_contract,
@@ -61,7 +61,7 @@ def _sha(raw: bytes) -> str:
 def materialize_and_publish_source_page_crops(
     engine: Engine,
     settings: Settings,
-    review: LocalImageScienceSourcePageCropReview,
+    review: SourcePageCropReview,
     *,
     workspace: Path,
     created_at: datetime,
