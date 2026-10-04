@@ -124,3 +124,20 @@ deselection, strict mypy for the changed boundaries and Ruff/diff checks. The in
 worker has already produced28 reserved outputs and passed a128-file read-only replay
 with zero model calls, GPU leases, transforms or writes. Publication is pending the
 fixed CPU adapter's lab-only installation; no numerical rerun is authorized here.
+
+## Actual diagnostic acceptance (not final quality)
+
+The single frozen batch produced28 outputs in56,790ms at10,763,590,656 peak GPU
+bytes. Fixed CPU transform verification and canonical admission/publication passed;
+all85 members of `artifact_ea415733085d4f01a1d8afa2e6d9edcd` /
+`rev_e0f257881d83416584965fba59c12b20` matched. Own review and27 evidence members
+are pinned in `artifact_b3f7c596cac0467196fa412946bfa6f2` /
+`rev_a1366262e5774effaaeb14a48b8ac2d2`. The unchanged provider regression passed25.
+No production binding change, TRAIN/HOLDOUT image read, retraining or numerical retry.
+
+Own overview finds preserved compositions but little BASE/LORA difference and
+continued source gradients. Wheat source has an overlooked triangular annotation
+remnant and is excluded from subsequent clean benchmarking pending a reviewed
+successor; history and this14-case result remain immutable. Three source families
+are still insufficient for the independent four-family gate. The diagnostic passed
+technically; LoRA superiority and institutional quality remain **not established**.

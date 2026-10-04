@@ -7,7 +7,73 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 21:48 UTC**: installed numerical source
+Latest checkpoint, **2026-10-04 21:59 UTC**: the frozen reserved comparison is now
+executed, validated, published and own-screened. Command bytes/source/cases/seed
+were unchanged. Numerical worker source `41b5fed146c192778ffc20d2c68978917064ea25`
+produced **28 BASE/LORA outputs /14 VALIDATION cases /7 groups**, in **56,790ms**
+with measured peak GPU memory **10,763,590,656 bytes** (~10.02GiB), RTX5080.
+Raw RGB and800×500 grayscale publication outputs are separately hashed. There
+were no TRAIN-reference/HOLDOUT binary reads, new training, sweeps, GPU retries,
+new model downloads, migrations, production activation or service restarts.
+
+Lab-only verifier source `8ad0f72b6bb1e30fc1246d99321c2b887d3d2c52` keeps the
+trainer DB-free and uses the fixed CPU-only installed `eom-image` adapter. Exact
+source-fit RGB/Canny/publication transforms passed under pinned numerical versions;
+Orchestrator readmitted canonical command/source/adapter lineage before publication.
+All **85 result members** resolved byte-for-byte. Result:
+
+- `artifact_ea415733085d4f01a1d8afa2e6d9edcd` /
+  `rev_e0f257881d83416584965fba59c12b20`.
+- Primary `manifests/sdxl-validation-comparison-result.json`, raw SHA
+  `3397f78030c107ccc9599f2fa182e78fed7db1a3fec4245f82a7d65dea198c31`;
+  semantic SHA `91099c68ae1ffbe11572a635fe792cca77fe04b1b728ac011104234b0a61e6a8`.
+- Actual installed-role terminal replay:128 files verified; model/GPU/transform/
+  write counts all0. No regeneration followed the publication-environment failure.
+
+Own inspection viewed all28 final outputs and14 source fits in three contact
+sheets, four full-resolution triplets and one native RGB output; all28 native
+rasters were measured. Broad pose/object arrangement and white canvas are preserved,
+but this is **not independent or scientific-detail certification**. Median native
+BASE/LORA mean absolute channel difference is1.0865 on the0–255 scale. Metallic
+and plastic gradients and raster-soft source contours remain. This demonstrates
+reference preservation, **not LoRA superiority, novel-photo conversion or institutional
+indistinguishability**. Do not promote this candidate to production or Item/HWPX.
+
+**Own source QA correction:** `WHEAT_SEEDLING_UPRIGHT` retains an isolated black
+triangular/arrow-like remnant left of the stem, copied by both arms. Earlier clean
+source QA missed it. Exclude this source from subsequent clean benchmarking until
+an explicitly reviewed successor frame exists; do not erase pixels, alter old
+review/Artifact bytes or rerun this batch to conceal the failure. The current batch
+still honestly contains14 cases/28 outputs; subsequent provisional clean eligibility
+is at most13 cases, and the source-family count is still3, not4.
+
+Source regression359 PASS; unchanged-provider regression25 PASS; dependency5 PASS
+with the same known predecessor test explicitly deselected. Strict mypy, Ruff,
+shell/diff and full wheel RECORD/non-editable imports passed. Both lab installations
+retained numerical dependencies and the trainer; rollback wheels and hashes are
+recorded. Production V6 binding remains
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`; all five primary
+services remain active. Git pushes0; production deployments0 in this checkpoint.
+
+Twenty-four text evidence records and three diagnostic contact sheets were committed
+and all27 resolved byte-for-byte as `artifact_b3f7c596cac0467196fa412946bfa6f2` /
+`rev_a1366262e5774effaaeb14a48b8ac2d2`. Primary `reports/own-reserved-review.json`,
+raw SHA `d06645ddcc305ab51e164e2c8c7d3f78d8a3fa43f2854d4e6f75263e4cf50dd9`.
+The binary contact-sheet value schema is
+`eom://schemas/operations/image-comparison-contact-sheet/1.0`: bounded single-frame
+RGB PNG, width1200, at most4million pixels, diagnostic labels only. These composed
+views are not Item visuals or another copy of canonical source/model binaries.
+Temporary user views are in `/tmp/eom-image-validation-execution-samples-20261004/`;
+their canonical counterparts are the evidence revision's `views/contact-01..03.png`.
+
+Next: use this evidence to freeze **TRAIN-only** target/style/resolution improvement
+and missing-fourth-family source work separately. No more generation on the frozen
+VALIDATION batch, no automatic parameter sweep, no validation-to-training leakage.
+Full training/four-arm study, independent blind review and accepted Item Preview/HWPX
+canary remain unfinished; **goal stays ACTIVE**. Human visual-review links are saved
+for the user's consolidated later review, not treated as already approved.
+
+Previous checkpoint, **2026-10-04 21:48 UTC**: installed numerical source
 `41b5fed146c192778ffc20d2c68978917064ea25` completed the frozen14-case reserved batch:
 **28 outputs**, result semantic SHA
 `91099c68ae1ffbe11572a635fe792cca77fe04b1b728ac011104234b0a61e6a8`.
