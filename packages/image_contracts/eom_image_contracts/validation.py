@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-canny-controller-manifest": "local-image-sdxl-canny-controller-manifest-v1.schema.json",
     "sdxl-canny-conditioning-command": "local-image-sdxl-canny-conditioning-command-v1.schema.json",
     "sdxl-canny-conditioning-result": "local-image-sdxl-canny-conditioning-result-v1.schema.json",
     "sdxl-publication-comparison-command": (
@@ -349,6 +350,9 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-canny-controller-manifest": (
+        "sha256:2fae73482351cb0156ff0c87a756f1498f6e21163d869e550273dfce475776a8"
+    ),
     "science-source-page-crop-review-v2": (
         "sha256:dbc8dab7f294024b62e73a48f3960137dc0721edfe8076e1c8b495ef92809de8"
     ),

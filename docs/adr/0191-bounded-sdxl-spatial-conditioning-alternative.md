@@ -4,8 +4,9 @@ Date: 2026-10-04 UTC
 
 Status: CPU input preparation implemented, installed and executed; canonical
 publication/reconstruction/transform-free replay PASS; own source-detail review
-3/3 PASS, not final illustration acceptance. ControlNet model/acquisition/comparison
-NOT_IMPLEMENTED; no controller weight acquired or GPU run submitted.
+3/3 PASS, not final illustration acceptance. Standalone controller manifest,
+acquisition/installation/resolution implemented and source-verified; actual
+weights/installation and numerical comparison pending. No GPU run submitted.
 
 ## Evidence and hypothesis
 
@@ -254,3 +255,58 @@ input maps are not new model outputs. No controller weight, training update,
 GPU dispatch, reserved-source read or production activation. GOAL ACTIVE.
 Next is controller license/model/comparison admission and one frozen six-output
 spatial diagnostic; no input threshold retuning or fresh T2I baseline.
+
+## Controller acquisition and comparison design refinement
+
+Read-only research on 2026-10-04 resolves the weight-license text link. The
+controller's pinned README declares `openrail++`. Official Hub documentation at
+revision `fd6cf1f56e1514af08c5a7262d9f79b3becb810d`, file
+`docs/hub/repositories-licenses.md`, 11,962 bytes, SHA
+`e4bd957c932364110c4f5a41c547f0541a3d08d9f76b63c223039ecb956dc444`,
+contains an explicit comment linking that identifier to the SDXL-base
+`LICENSE.md`. Pin the already verified base revision/text instead of mutable
+`main`. This is **Hub-declared license with Hub-linked standard text**, not a
+license file published inside the controller repository and not an assertion
+that licensing guarantees scientific suitability. Preserve all three evidence
+sources and use restrictions. The applicable text is no longer selected merely
+because the base happens to have a license with a similar name.
+
+Before any new worker/model behavior, define closed model manifest, input-detail
+review, comparison command/result schemas. A standalone controller model revision
+contains only exact config/card/fp16-safetensors and two license evidence files;
+the existing base/VAE/LoRA remain pointers and are not recopied. The acquisition
+adapter downloads only the pinned whitelist, verifies hashes/bounds and refuses
+partial-directory restart, remote code, pickle or any implicit Hub credential.
+The protected installer reuses existing verified-fd copying and private atomic
+revision publication. It never activates an operating provider or rewrites an
+old model revision. Indexed model identity lookup and exact member sets provide
+O(number of files + bytes hashed) resolution, constant-size metadata and no DB
+change. Acquisition failure preserves its private candidate, never invents a
+successful manifest; replay resolves the same immutable installed identity.
+
+The typed input-detail review pins the existing conditioning command/result and
+the own-review evidence; it attests three individually inspected case/source/map
+hashes. It is an own input gate, not independent/heldout/final-image acceptance.
+The comparison command pins this review, conditioning history, original T2I
+comparison result and the standalone controller. Full source admission precedes
+the three control PNGs and LoRA material; no baseline PNG, heldout or unrelated
+training source is staged for inference. Ordered BASE/LORA execution reuses the
+existing pair lifecycle with a distinct ControlNet backend and explicit result
+family, not a T2I model disguised under an old field. A fresh pipeline per arm
+prevents LoRA contamination. Controller strength **1.0**, guidance range **0–1**,
+all-GPU fp16/no-offload profile are frozen before dispatch; common caption,
+negative prompt, seed, scheduler, steps, guidance and LoRA strength are inherited
+from the pinned same-source comparison. One new factor, six outputs maximum,
+no automatic retry/OOM offload/strength sweep. Actual VRAM and duration must fit
+the command budget. Terminal replay validates metadata/output byte closure with
+no model load, GPU lease or transform. Old rejected histories remain rejected.
+
+Controller source validation: **184 PASS**, including 49 new exact manifest,
+license/architecture, bounded-download and pointer/member/permission cases.
+Strict mypy on all five new core files PASS; formatter/linter/shell/diff PASS.
+An incorrect regression filename invocation executed no tests and is preserved;
+the corrected existing-stack/provider/Canny suites all pass. Actual bounded
+metadata-only acquisition preflight verifies pinned configuration/card/identifier
+mapping/standard-license bytes and returns `PASS weights_acquired=0`. Unit weight
+stubs cover source invariants, not real tensor/installed-model acceptance. No
+new dependency, whole snapshot, base/VAE/LoRA copy, DB or operating change.
