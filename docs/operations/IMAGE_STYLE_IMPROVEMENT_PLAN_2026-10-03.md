@@ -1024,3 +1024,63 @@ they are not additional distinct tests. Installed execution and actual candidate
 pending at this implementation checkpoint. The exhausted diagnostic inference cohort remains
 12/12; this CPU path does not grant inference or training budget. Subsequent training must pin
 and explicitly admit new target revisions through a successor contract.
+
+### 2026-10-04 actual CPU preparation and individual candidate review
+
+Source implementation `ad1716d6297fa3587c81bf6881a826eb02876999` was built from clean immutable
+Git, with wheel contents and installed RECORD verified. Trainer contracts and trainer only were
+installed, plus optional `eom-image-sdxl-training-targets@.service`. Provider distribution and
+inference environment stayed unchanged; no production service restart or V6 activation occurred.
+Rollback wheel paths/hashes are preserved in the install evidence. Installed worker import
+loads no Torch; the actual CPU unit enforced private devices/network and blocked model/NAS access.
+
+One preparation dispatch `imgsdxltargetpreprun_2878f3dad9dbc99542603ac9050471c1` staged 13 files
+and completed in **387 ms**: eight prepared PNGs and eight declared deferred source IDs, exactly
+covering the original 16 TRAIN sample IDs. **Inference calls=0; new training updates=0**.
+Command Artifact `artifact_ba16f0bfde954e918b68a2b4f7c399e0`, revision
+`rev_1f464f5c5af3421899e0e49088ae0af2`, member `manifests/sdxl-training-target-command.json`,
+raw SHA `sha256:146737a5a887949c3dd1bf6bae6c7115f0fd45b2222622a756254abcd4df3abb`.
+Result Artifact `artifact_09fe569e204a4443975a5585e0c43b97`, revision
+`rev_df085910b56c425e85c2c07283d90735`, member `manifests/sdxl-training-target-result.json`,
+raw SHA `sha256:73a4389ecd535d8f4e563883017107c59f63545bb939d4969507b750df11fa80`, semantic
+SHA `sha256:649a7e216fbc0e4b4790a7441f9dcfd99f538cf236b055fffc929ec8325dd779`.
+This one canonical result contains the receipt and eight PNGs, not changed original source crops.
+
+Installed-role reconstruction reproduced every declared PNG in the pinned Pillow 11.3.0 runtime;
+terminal replay with transformations explicitly denied passed. Canonical persisted PNG bytes and
+local viewing copies were resolved and hash-checked. All eight original raw crops and prepared
+outputs were individually opened. Own assessment is **four promising candidates with notes and
+four rework-required**, not independent blind review or automatic data admission:
+
+| Outcome | Cases | Findings |
+| --- | --- | --- |
+| Promising with notes | heated vessel, prehistoric bird, radio, pigeon/fish | Larger targets; marker/panel cleanup on bird and pair. Vessel upper contour needs complete-page context; radio shading/soft shadow belongs only in a restrained-tone track. |
+| Rework required | microscope, flask apparatus, sofa/table, tree | Surviving inner panel rules, interrupted apparatus outlines, context patches or incomplete guide removal/ground-baseline damage. Do not train these as-is. |
+
+Foreground bounding-box area changed from 27–151/1000 to 212–651/1000; surviving panel rules
+inflate some measurements, so this is not an object-quality score. All outer 24-pixel borders
+remain white, proving that a white-canvas metric alone cannot detect undesirable inner framing.
+Upscaling preserves existing source detail; it does not recover missing source parts.
+Result state remains `UNREVIEWED_TRAIN_TARGET_CANDIDATES`, activation `FORBIDDEN`.
+
+The first local publication adapter used an incorrect metric property and failed before result
+commit. It was corrected and replayed under the same preparation identity; no second preparation
+was submitted. Failed invocation logs are preserved with successful source/build/install/publication
+evidence. CPU validation reconstruction checks=2 and receipt-only replays=4, distinct from the
+single preparation, zero inference calls and zero training updates. The complete source suite is
+182 PASS; earlier overlapping 96/43 results are not added as independent tests.
+
+Next is complete-source recovery/framing for the rework cases and document-group-safe approved
+TRAIN expansion with explicit reviewed target pointers and caption/expression policy. Do not count
+the source pair as two examples, manufacture counts by resizing, retrain on these eight candidates
+automatically, or run more inference in the exhausted 12/12 diagnostic cohort. The actual SDXL
+authored-output count remains 36, all own-REJECTED; no new model-quality claim. Full-data expansion,
+independent blind review and a passing Item/HWPX canary remain open. Whole goal remains ACTIVE.
+Viewing copies: `/tmp/eom-sdxl-reviewed-training-targets-20261004/{original-sample-id}.png`.
+
+Own review and fourteen bounded evidence members are archived independently as Artifact
+`artifact_fa43c49ee1e14320881d03a32120f77a`, revision
+`rev_b3fc0b04a9f84fa6b72d53d05167fdcc`, primary `reports/own-preparation-review.md`, SHA
+`sha256:94fe966600600999585404c8e98690d782c7ee0c9dd107dc90a2c1148cfadead`.
+No PNG was copied into this evidence archive. Five production services remained active,
+the V6 binding raw SHA remained unchanged, and persisted result/view hashes passed.
