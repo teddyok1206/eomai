@@ -386,17 +386,78 @@ New GPU calls=0, training updates=0, target-training admissions=0. Old 36 SDXL o
 own-REJECTED, old diagnostic allowance 12/12 consumed, independent blind review NOT_PERFORMED,
 full-data readiness INSUFFICIENT, activation FORBIDDEN. GOAL=ACTIVE.
 
-### Next corrected-data pilot boundary
+### 2026-10-04 actual literal-source CPU target preparation
 
-1. Add the minimal target-preparation successor for pinned literal source sets. The existing
-   target V1.0 covers only the original 16 masked micro inputs; do not change its released schema
-   or rename new source IDs to that old family. Reuse its CPU fit/mask/caption operations and
-   the existing Orchestrator/trainer adapters instead of a parallel processing framework.
-2. Pin exact source review/set/member revisions, whole-corpus authorization and frozen groups
-   before staged PNG reads. Prepare the 42 selected candidates with explicit mask/frame decisions
-   and expression captions; retain deferred data as reference. Resolve and inspect every exact
-   target output before any training admission. Include the prior 23 only after their own target
-   review, not automatically because they are registered sources.
+ADR 0187 / source `965022f307c95d9ad85a31a09e37d93b4614e5f3` adds target command/result **1.1**
+for one pinned literal crop-set revision. It preserves the old 16-input target **1.0** bytes/meaning
+and reuses its fit/mask/caption operations, Orchestrator staging and isolated CPU systemd unit.
+No new database, queue, service framework or dependency. Full original/supplemental corpus metadata
+is admitted before selected-only TRAIN PNG reads; worker receives no NAS/DB/model access.
+
+Focused source/legacy/admission/workspace/micro-run/control-publication gates **207 PASS**, formatter,
+linter and five core strict type checks PASS. These overlap earlier source counts; do not sum them.
+Two immutable contracts/trainer wheels were installed only into the lab trainer; installed RECORD,
+actual worker import/Pillow 11.3.0 and pip check PASS. Production provider/binding/units unchanged.
+Rollback is the preserved `d3a001ac…` contracts/trainer pair; no production service was restarted.
+
+The monkey's proposed mask interrupted its contour in own preview and was deferred, so the first
+actual command covered the exact 72-source population as **41 PREPARE / 31 DEFER**. It ran in
+**2,252ms**, staged 45 files and committed 41 PNGs + result manifest. Own viewing covered every
+target on seven hash-checked sheets. Six targets were flagged: small profile/footer residue (77),
+left outside-truck fragment (533), robot label/leader (646), speech-tip fragments (661, 859), and
+source-frame-clipped beaker (940). No target/source bytes were overwritten or discarded.
+
+A separate **3 PREPARE / 69 DEFER** command corrected only 533/661/859, ran in **234ms**, staged
+7 files, and committed 3 revised PNGs + manifest. Its 69 deferred selections are not 69 new failures;
+already usable targets remain referenced. All three actual revised PNGs were own-viewed; the truck
+remains a tone/scene-track candidate with a scene-edge note. 77/646/940 need original-context/native
+or frame recovery before selection, not an invented reconstruction.
+
+Both actual results passed installed worker/Pillow byte reconstruction, zero-transform receipt
+replay, output closure, bounded secure reads and committed/workspace PNG equality. Torch was not
+loaded. Initial result: `artifact_d50bd600731e4072aeb2237e6fa6730d` /
+`rev_222b8ae8c8fb48b197774439183ca585`, raw primary SHA
+`sha256:bd4c56b27735ce3f6238559c627a5f25b085670bba0036859bb7c16b95751ed3`.
+Refinement: `artifact_8f75cf7851b6470eaef0831b46e307ca` /
+`rev_b84fd533d5b84f7aa911b452ec1a1798`, raw primary SHA
+`sha256:b29a826455bfd370eac605282039f9fcd7ef26c9c48a3c724766c8b2b40a88e5`.
+Both primary members are `manifests/sdxl-training-target-result.json` with schema `/1.1`.
+
+Chosen **38 source candidates = 35 first targets + 3 revised targets**, **26 PDFs / 25 exam groups**.
+Do not count 44 realized PNGs as 44 independent drawings. Exact-hash duplicates=0, existing bounded
+average-hash/Hamming≤2 flags=0, maximum per PDF/group=3/3. This is not exhaustive semantic deduplication.
+Expressions: CLEAN_CONTOUR=10 / RESTRAINED_TONE=23 / FINE_HATCHING=5; do not train these as one
+undifferentiated style or let GPU pixels own scientific labels/geometry. Source pool remains 95;
+previous 23 source candidates are not automatically admitted by this target review.
+
+At **2026-10-04T09:37:52Z**, 26 metadata/log/operator evidence members were archived:
+`artifact_3bce4fee87f141febad135f790eaa3a2` / `rev_b4846e18f23f49c0952b4ea5e9e328ac`,
+primary `reports/own-target-review.md`, raw SHA
+`sha256:8f87b5bca79b77052eccd8c07f519fa6b2eb121aaf3ec6552f6436b795ddcc93`.
+Zero duplicate PNG/PDF members; primary committed bytes verified. The temporary refinement publisher
+initially asserted the first cohort's 41/31 counts and failed before publication; corrected caller
+expectations validated/published the same successful run/result. No worker rerun, DB repair or
+failure-as-success reinterpretation. The failed log/operator is preserved.
+
+Operating V6 unchanged, five production services ACTIVE. New GPU calls=0, training updates=0,
+training admissions=0, reserved-pixel views=0. Own review is not independent review. These target
+lists are operational evidence, not an implicit dataset protocol. Full-data readiness INSUFFICIENT,
+independent review NOT_PERFORMED, old 36 outputs own-REJECTED, old diagnostic 12/12 consumed,
+activation FORBIDDEN, GOAL=ACTIVE.
+
+Local own review: `/tmp/eom-sdxl-literal-source-target-own-review-20261004.md`; first target sheets
+`/tmp/eom-sdxl-literal-source-target-own-view-20261004/sheet-00.png` through `sheet-06.png`, actual
+revised PNGs `/tmp/eom-sdxl-literal-source-target-refinements-20261004/`. These are institutional
+source-derived input candidates, not newly generated AI samples.
+
+### Next corrected-data pilot boundary (updated after actual CPU targets)
+
+1. Target-preparation successor and actual 38-source own review are complete at this boundary.
+   Preserve the old 1.0 family and both committed 1.1 result revisions; use typed output pointers
+   rather than preparing/copying the same usable targets again.
+2. Recover remaining source-frame/annotation candidates only when needed without discarding
+   references. Include the prior 23 only after their own target review, not automatically because
+   they are registered sources. Keep source/target own review separate from training approval.
 3. Assemble a small corrected-data pilot using existing split/grouping invariants. Keep logical
    source identity, target revision, dataset revision and raw hash separate; review near duplicates
    and material-family/source concentration. Report the actual denominator; do not manufacture

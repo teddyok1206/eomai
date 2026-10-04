@@ -74,3 +74,34 @@ rectangle interrupted its shoulder contour. Its registered literal pixels and pr
 are preserved. The initial actual successor preparation will therefore use 41 PREPARE and
 31 DEFER decisions covering the exact 72-source snapshot, rather than pretending all 42 source
 candidates already passed target review. Eight retained mask recipes require actual target review.
+
+## Actual installed CPU verification (2026-10-04 UTC)
+
+Source `965022f307c95d9ad85a31a09e37d93b4614e5f3` was built and installed only in the experimental
+trainer (contracts/trainer wheels; provider distribution, production V6 binding and service units
+unchanged). Installed RECORD, actual worker import/Pillow 11.3.0 and pip check PASS. No service restart.
+
+Initial command produced 41 PNGs in 2,252ms; a separate 3-source correction command produced 3 PNGs
+in 234ms. Both used the existing isolated CPU unit and full Orchestrator source admission, then
+committed one result + its exact output members. Actual installed reconstruction was byte-identical;
+terminal replay had zero transforms and Torch remained unloaded. Committed bytes equal workspace bytes.
+
+Own viewing of all 41 initial and 3 corrected targets selected **38 sources = 35 initial + 3 corrected**,
+from **26 PDFs / 25 exam groups**. The 3 corrections are new target revisions, not independent drawings.
+The initial six flagged targets and all source/failed evidence remain immutable. Duplicate hash flags=0;
+existing bounded average-hash/Hamming≤2 index flags=0; PDF/group maximum=3/3. This is not exhaustive
+semantic duplicate proof or training admission. Expressions: contour 10 / restrained gray 23 / hatching 5.
+
+Canonical results are `artifact_d50bd600731e4072aeb2237e6fa6730d` /
+`rev_222b8ae8c8fb48b197774439183ca585` and `artifact_8f75cf7851b6470eaef0831b46e307ca` /
+`rev_b84fd533d5b84f7aa911b452ec1a1798`, primary `manifests/sdxl-training-target-result.json`.
+26-member metadata/log/operator evidence is `artifact_3bce4fee87f141febad135f790eaa3a2` /
+`rev_b4846e18f23f49c0952b4ea5e9e328ac`, primary `reports/own-target-review.md`, raw SHA
+`sha256:8f87b5bca79b77052eccd8c07f519fa6b2eb121aaf3ec6552f6436b795ddcc93`.
+It includes the temporary publisher's initial wrong-count assertion failure before publication;
+the same successful CPU run/result was validated and published after correcting the caller's
+expectation, without resubmitting worker work or changing DB rows. Evidence contains zero duplicate PNG/PDFs.
+
+New GPU calls=0, training updates=0, training admissions=0, reserved-pixel views=0, activation FORBIDDEN.
+The reviewed candidate list is operational evidence, not a new dataset wire contract. Formal corrected-data
+dataset/training/evaluation successors and bounded usage remain next; old exhausted diagnostics stay closed.
