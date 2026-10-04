@@ -25,6 +25,13 @@ from eom_image_contracts import (
     validate_sdxl_lora_micro_result,
     validate_sdxl_lora_micro_sources,
 )
+from eom_image_contracts.sdxl_reviewed_micro import (
+    LocalImageSdxlReviewedMicroCommand,
+    LocalImageSdxlReviewedMicroResult,
+    SdxlReviewedMicroRealizedSample,
+    parse_sdxl_reviewed_micro_sources,
+    sdxl_reviewed_micro_metadata_pointers,
+)
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack, resolve_sdxl_stack
 from eom_image_provider.staged_file_io import (
@@ -69,7 +76,7 @@ class SdxlMicroBackend(Protocol):
         *,
         stack: ResolvedSdxlStack,
         samples: tuple[LoraTensorSample, ...],
-        command: LocalImageSdxlLoraMicroCommand,
+        command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
         output_root: Path,
     ) -> TrainingBackendResult: ...
 
@@ -94,12 +101,22 @@ def _document(  # noqa: UP047
         raise SdxlMicroRunnerError("IMAGE_TRAINING_DOCUMENT_INVALID") from exc
 
 
-def load_sdxl_micro_command(workspace: Path, command_path: Path) -> LocalImageSdxlLoraMicroCommand:
+def load_sdxl_micro_command(
+    workspace: Path, command_path: Path
+) -> LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand:
     if command_path != workspace / "command.json":
         raise SdxlMicroRunnerError("IMAGE_TRAINING_COMMAND_PATH_INVALID")
     try:
         with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
             raw = read_staged_member(root, "command.json", maximum_bytes=MAX_METADATA_BYTES)
+        try:
+            reviewed = (
+                json.loads(raw).get("schema_version") == "local-image-sdxl-lora-micro-command/1.1"
+            )
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise SdxlMicroRunnerError("IMAGE_TRAINING_DOCUMENT_INVALID") from exc
+        if reviewed:
+            return _document(raw, "sdxl-lora-micro-command-v2", LocalImageSdxlReviewedMicroCommand)
         return _document(raw, "sdxl-lora-micro-command", LocalImageSdxlLoraMicroCommand)
     except ProviderError as exc:
         raise SdxlMicroRunnerError("IMAGE_TRAINING_COMMAND_INVALID") from exc
@@ -116,25 +133,34 @@ def _adapter_files(workspace: Path) -> tuple[dict[str, object], ...]:
 
 
 def _replay(
-    root: int, workspace: Path, command: LocalImageSdxlLoraMicroCommand
+    root: int,
+    workspace: Path,
+    command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
 ) -> LocalImageSdxlLoraMicroResult | None:
     if not os.path.lexists(workspace / "result.json"):
         if any(os.path.lexists(workspace / name) for name in ("runtime-dataset", "adapter")):
             raise SdxlMicroRunnerError("IMAGE_TRAINING_UNRECEIPTED_OUTPUT")
         return None
-    result = _document(
-        read_staged_member(
-            root, "result.json", maximum_bytes=MAX_METADATA_BYTES, expected_owner_uid=os.geteuid()
-        ),
-        "sdxl-lora-micro-result",
-        LocalImageSdxlLoraMicroResult,
+    raw = read_staged_member(
+        root, "result.json", maximum_bytes=MAX_METADATA_BYTES, expected_owner_uid=os.geteuid()
+    )
+    result = (
+        _document(raw, "sdxl-lora-micro-result-v2", LocalImageSdxlReviewedMicroResult)
+        if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+        else _document(raw, "sdxl-lora-micro-result", LocalImageSdxlLoraMicroResult)
     )
     try:
         validate_sdxl_lora_micro_result(command, result)
         for sample in result.realized_samples:
             read_staged_member(
                 root,
-                "runtime-dataset/" + sample.sample_id + ".png",
+                (
+                    "inputs/targets/"
+                    if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+                    else "runtime-dataset/"
+                )
+                + sample.sample_id
+                + ".png",
                 maximum_bytes=MAX_PNG_BYTES,
                 expected_sha256=sample.realized_crop_sha256,
                 expected_owner_uid=os.geteuid(),
@@ -158,7 +184,7 @@ def _replay(
 
 
 def _manifest(
-    command: LocalImageSdxlLoraMicroCommand,
+    command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
     realized: tuple[SdxlLoraMicroRealizedSample, ...],
     workspace: Path,
 ) -> LocalImageSdxlLoraMicroAdapterManifest:
@@ -196,14 +222,15 @@ def run_sdxl_micro_command(
     *,
     workspace: Path,
     model_store_root: Path,
-    command: LocalImageSdxlLoraMicroCommand,
+    command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
     backend: SdxlMicroBackend,
 ) -> LocalImageSdxlLoraMicroResult:
     """Materialize declared TRAIN pixels once; emit a verified local terminal result."""
-    command = _document(
-        content_json_bytes(command.model_dump(mode="json")),
-        "sdxl-lora-micro-command",
-        LocalImageSdxlLoraMicroCommand,
+    raw = content_json_bytes(command.model_dump(mode="json"))
+    command = (
+        _document(raw, "sdxl-lora-micro-command-v2", LocalImageSdxlReviewedMicroCommand)
+        if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+        else _document(raw, "sdxl-lora-micro-command", LocalImageSdxlLoraMicroCommand)
     )
     if workspace.name != command.training_run_id:
         raise SdxlMicroRunnerError("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")
@@ -220,67 +247,17 @@ def run_sdxl_micro_command(
             raw_command = read_staged_member(root, "command.json", maximum_bytes=MAX_METADATA_BYTES)
             if raw_command != content_json_bytes(command.model_dump(mode="json")):
                 raise SdxlMicroRunnerError("IMAGE_TRAINING_COMMAND_MISMATCH")
+            if isinstance(command, LocalImageSdxlReviewedMicroCommand):
+                _admit_reviewed_metadata(root, command)
             replay = _replay(root, workspace, command)
             if replay is not None:
                 return replay
             try:
-                crops = _document(
-                    read_staged_member(
-                        root,
-                        "inputs/crop-set.json",
-                        maximum_bytes=MAX_METADATA_BYTES,
-                        expected_sha256=command.crop_set.sha256,
-                    ),
-                    "science-object-line-art-crop-set",
-                    LocalImageScienceObjectLineArtCropSet,
-                    historical_newline=True,
+                samples = (
+                    _reviewed_tensor_samples(root, workspace, command, realized)
+                    if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+                    else _original_tensor_samples(root, workspace, command, realized)
                 )
-                _document(
-                    read_staged_member(
-                        root,
-                        "inputs/authorization.json",
-                        maximum_bytes=MAX_METADATA_BYTES,
-                        expected_sha256=command.training_authorization.sha256,
-                    ),
-                    "science-corpus-training-authorization",
-                    LocalImageScienceCorpusTrainingAuthorization,
-                    historical_newline=True,
-                )
-                validate_sdxl_lora_micro_sources(command, crops)
-                create_staged_directory(root, "runtime-dataset")
-                samples: list[LoraTensorSample] = []
-                seen: set[str] = set()
-                for sample in command.training_samples:
-                    source = decode_png(
-                        read_staged_member(
-                            root,
-                            sample.staged_member_path,
-                            maximum_bytes=MAX_PNG_BYTES,
-                            expected_sha256=sample.source_image.sha256,
-                        )
-                    )
-                    if source.size != (sample.source_width_px, sample.source_height_px):
-                        raise SdxlMicroRunnerError("IMAGE_TRAINING_SAMPLE_DIMENSIONS_INVALID")
-                    image = materialize_training_crop(
-                        source, crop_box=_FULL_CROP, redaction_boxes=sample.redaction_boxes
-                    )
-                    average_hash(image)  # Reject a redaction that erased the entire object.
-                    payload = png_bytes(image)
-                    sha = _sha(payload)
-                    if sha in seen:
-                        raise SdxlMicroRunnerError("IMAGE_TRAINING_DUPLICATE_REALIZED_PIXELS")
-                    seen.add(sha)
-                    member = "runtime-dataset/" + sample.sample_id + ".png"
-                    write_staged_member(root, member, payload)
-                    samples.append(LoraTensorSample(sample.training_caption_en, workspace / member))
-                    realized.append(
-                        SdxlLoraMicroRealizedSample(
-                            sample_id=sample.sample_id,
-                            source_crop_sha256=sample.source_image.sha256,
-                            realized_crop_sha256=sha,
-                            training_caption_sha256=text_sha256(sample.training_caption_en),
-                        )
-                    )
                 if (time.monotonic() - started) * 1000 > command.budget.maximum_duration_ms:
                     raise SdxlMicroRunnerError("IMAGE_TRAINING_RESOURCE_BUDGET_EXCEEDED")
                 stack = resolve_sdxl_stack(model_store_root, command.base_model)
@@ -339,7 +316,9 @@ def run_sdxl_micro_command(
                 status, error = "FAILED", "IMAGE_TRAINING_EXEC_FAILED"
             completed = datetime.now(UTC)
             body = {
-                "schema_version": "local-image-sdxl-lora-micro-result/1.0",
+                "schema_version": "local-image-sdxl-lora-micro-result/1.1"
+                if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+                else "local-image-sdxl-lora-micro-result/1.0",
                 "training_run_id": command.training_run_id,
                 "command_sha256": command.command_sha256,
                 "status": status,
@@ -359,8 +338,13 @@ def run_sdxl_micro_command(
                 "duration_ms": max(1, int((time.monotonic() - started) * 1000)),
             }
             value = {**body, "result_sha256": content_sha256(body)}
-            validate_contract("sdxl-lora-micro-result", value)
-            result = LocalImageSdxlLoraMicroResult.model_validate(value)
+            result: LocalImageSdxlLoraMicroResult
+            if isinstance(command, LocalImageSdxlReviewedMicroCommand):
+                validate_contract("sdxl-lora-micro-result-v2", value)
+                result = LocalImageSdxlReviewedMicroResult.model_validate(value)
+            else:
+                validate_contract("sdxl-lora-micro-result", value)
+                result = LocalImageSdxlLoraMicroResult.model_validate(value)
             validate_sdxl_lora_micro_result(command, result)
             if manifest is not None:
                 write_staged_member(
@@ -372,3 +356,125 @@ def run_sdxl_micro_command(
             return result
     except ProviderError as exc:
         raise SdxlMicroRunnerError("IMAGE_TRAINING_WORKSPACE_OR_RESULT_INVALID") from exc
+
+
+def _admit_reviewed_metadata(root: int, command: LocalImageSdxlReviewedMicroCommand) -> None:
+    crop_raw = read_staged_member(
+        root,
+        "inputs/source-crop-set.json",
+        maximum_bytes=MAX_METADATA_BYTES,
+        expected_sha256=command.source_crop_set.sha256,
+    )
+    try:
+        pointers = sdxl_reviewed_micro_metadata_pointers(command, crop_raw)
+        metadata = {
+            name: (
+                crop_raw
+                if name == "inputs/source-crop-set.json"
+                else read_staged_member(
+                    root, name, maximum_bytes=MAX_METADATA_BYTES, expected_sha256=pointer.sha256
+                )
+            )
+            for name, pointer in pointers.items()
+        }
+        parse_sdxl_reviewed_micro_sources(command, metadata)
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise SdxlMicroRunnerError("IMAGE_TRAINING_SOURCE_INVALID") from exc
+
+
+def _reviewed_tensor_samples(
+    root: int,
+    workspace: Path,
+    command: LocalImageSdxlReviewedMicroCommand,
+    realized: list[SdxlLoraMicroRealizedSample],
+) -> list[LoraTensorSample]:
+    samples = []
+    for sample in command.training_samples:
+        raw = read_staged_member(
+            root,
+            sample.staged_member_path,
+            maximum_bytes=MAX_PNG_BYTES,
+            expected_sha256=sample.source_image.sha256,
+        )
+        # Reviewed preparation emits single-frame 8-bit RGB PNGs. Reject other modes,
+        # rather than converting canonical targets or silently changing their pixels.
+        if raw[24:26] != bytes((8, 2)) or decode_png(raw).size != (768, 512):
+            raise SdxlMicroRunnerError("IMAGE_TRAINING_SAMPLE_DIMENSIONS_INVALID")
+        samples.append(
+            LoraTensorSample(sample.training_caption_en, workspace / sample.staged_member_path)
+        )
+        realized.append(
+            SdxlReviewedMicroRealizedSample(
+                sample_id=sample.sample_id,
+                source_crop_sha256=sample.source_image.sha256,
+                realized_crop_sha256=sample.source_image.sha256,
+                training_caption_sha256=sample.training_caption_sha256,
+            )
+        )
+    return samples
+
+
+def _original_tensor_samples(
+    root: int,
+    workspace: Path,
+    command: LocalImageSdxlLoraMicroCommand,
+    realized: list[SdxlLoraMicroRealizedSample],
+) -> list[LoraTensorSample]:
+    crops = _document(
+        read_staged_member(
+            root,
+            "inputs/crop-set.json",
+            maximum_bytes=MAX_METADATA_BYTES,
+            expected_sha256=command.crop_set.sha256,
+        ),
+        "science-object-line-art-crop-set",
+        LocalImageScienceObjectLineArtCropSet,
+        historical_newline=True,
+    )
+    _document(
+        read_staged_member(
+            root,
+            "inputs/authorization.json",
+            maximum_bytes=MAX_METADATA_BYTES,
+            expected_sha256=command.training_authorization.sha256,
+        ),
+        "science-corpus-training-authorization",
+        LocalImageScienceCorpusTrainingAuthorization,
+        historical_newline=True,
+    )
+    validate_sdxl_lora_micro_sources(command, crops)
+    create_staged_directory(root, "runtime-dataset")
+    samples: list[LoraTensorSample] = []
+    seen: set[str] = set()
+    for sample in command.training_samples:
+        source = decode_png(
+            read_staged_member(
+                root,
+                sample.staged_member_path,
+                maximum_bytes=MAX_PNG_BYTES,
+                expected_sha256=sample.source_image.sha256,
+            )
+        )
+        if source.size != (sample.source_width_px, sample.source_height_px):
+            raise SdxlMicroRunnerError("IMAGE_TRAINING_SAMPLE_DIMENSIONS_INVALID")
+        image = materialize_training_crop(
+            source, crop_box=_FULL_CROP, redaction_boxes=sample.redaction_boxes
+        )
+        average_hash(image)  # Reject a redaction that erased the entire object.
+        payload = png_bytes(image)
+        sha = _sha(payload)
+        if sha in seen:
+            raise SdxlMicroRunnerError("IMAGE_TRAINING_DUPLICATE_REALIZED_PIXELS")
+        seen.add(sha)
+        member = "runtime-dataset/" + sample.sample_id + ".png"
+        write_staged_member(root, member, payload)
+        samples.append(LoraTensorSample(sample.training_caption_en, workspace / member))
+        realized.append(
+            SdxlLoraMicroRealizedSample(
+                sample_id=sample.sample_id,
+                source_crop_sha256=sample.source_image.sha256,
+                realized_crop_sha256=sha,
+                training_caption_sha256=text_sha256(sample.training_caption_en),
+            )
+        )
+    return samples

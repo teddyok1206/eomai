@@ -11,13 +11,27 @@ from eom_image_contracts import (
     validate_contract,
     validate_sdxl_lora_micro_sources,
 )
+from eom_image_contracts.sdxl_reviewed_micro import (
+    LocalImageSdxlReviewedMicroCommand,
+    parse_sdxl_reviewed_micro_sources,
+    sdxl_reviewed_micro_metadata_pointers,
+)
+from eom_image_contracts.source_page_crops import (
+    LocalImageScienceSourcePageCropReview,
+    LocalImageScienceSourcePageCropReviewV2,
+)
 from sqlalchemy import Engine
 
-from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
+from eom_orchestrator.control_artifact_resolution import (
+    BoundedControlArtifactRead,
+    resolve_control_artifact_member,
+    resolve_control_artifact_members,
+)
 from eom_orchestrator.sdxl_probe_inputs import (
     SdxlProbeInputMember,
     resolve_sdxl_training_sources,
 )
+from eom_orchestrator.source_page_crop_inputs import prepare_source_page_crop_reads
 
 
 class SdxlMicroAdmissionError(ValueError):
@@ -26,13 +40,15 @@ class SdxlMicroAdmissionError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class PreparedSdxlMicroInputs:
-    command: LocalImageSdxlLoraMicroCommand
+    command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand
     files: tuple[SdxlProbeInputMember, ...]
 
 
 def prepare_sdxl_micro_inputs(
-    engine: Engine, command: LocalImageSdxlLoraMicroCommand
+    engine: Engine, command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand
 ) -> PreparedSdxlMicroInputs:
+    if isinstance(command, LocalImageSdxlReviewedMicroCommand):
+        return _prepare_reviewed_inputs(engine, command)
     validate_contract("sdxl-lora-micro-command", command.model_dump(mode="json"))
     command = LocalImageSdxlLoraMicroCommand.model_validate(command.model_dump(mode="json"))
     sources = resolve_sdxl_training_sources(
@@ -74,3 +90,84 @@ def prepare_sdxl_micro_inputs(
     return PreparedSdxlMicroInputs(
         command, tuple(sorted(files, key=lambda member: member.member_path))
     )
+
+
+def _prepare_reviewed_inputs(
+    engine: Engine,
+    command: LocalImageSdxlReviewedMicroCommand,
+) -> PreparedSdxlMicroInputs:
+    validate_contract("sdxl-lora-micro-command-v2", command.model_dump(mode="json"))
+    command = LocalImageSdxlReviewedMicroCommand.model_validate(command.model_dump(mode="json"))
+    crop_raw = resolve_control_artifact_member(
+        engine, command.source_crop_set, maximum_bytes=2 * 1024**2
+    )
+    pointers = sdxl_reviewed_micro_metadata_pointers(command, crop_raw)
+    others = tuple(
+        (name, pointer)
+        for name, pointer in pointers.items()
+        if name != "inputs/source-crop-set.json"
+    )
+    payloads = resolve_control_artifact_members(
+        engine, tuple(BoundedControlArtifactRead(pointer, 2 * 1024**2) for _, pointer in others)
+    )
+    metadata = {
+        "inputs/source-crop-set.json": crop_raw,
+        **{name: raw for (name, _), raw in zip(others, payloads, strict=True)},
+    }
+    selected = parse_sdxl_reviewed_micro_sources(command, metadata)
+    # Full approved PDF/discovery/partition lineage admission before any target PNG read.
+    review_model = (
+        LocalImageScienceSourcePageCropReviewV2
+        if pointers["inputs/source-review.json"].schema_ref.endswith("/1.1")
+        else LocalImageScienceSourcePageCropReview
+    )
+    prepare_source_page_crop_reads(
+        engine, review_model.model_validate_json(metadata["inputs/source-review.json"])
+    )
+    reads = tuple(
+        BoundedControlArtifactRead(sample.source_image, selected[sample.sample_id].size_bytes)
+        for sample in command.training_samples
+    )
+    if any(not 0 < read.maximum_bytes <= 16 * 1024**2 for read in reads):
+        raise SdxlMicroAdmissionError("SDXL_MICRO_REFERENCE_SIZE_INVALID")
+    pixels = resolve_control_artifact_members(engine, reads)
+    files = []
+    for sample, read, raw in zip(command.training_samples, reads, pixels, strict=True):
+        if len(raw) != read.maximum_bytes:
+            raise SdxlMicroAdmissionError("SDXL_MICRO_REFERENCE_SIZE_INVALID")
+        files.append(
+            SdxlProbeInputMember(sample.staged_member_path, sample.source_image.sha256, raw)
+        )
+    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
+    files.extend(
+        SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
+        for name, raw in metadata.items()
+    )
+    return PreparedSdxlMicroInputs(command, tuple(sorted(files, key=lambda file: file.member_path)))
+
+
+def sdxl_micro_input_hashes(prepared: PreparedSdxlMicroInputs) -> dict[str, str]:
+    """Derive exact handoff closure rather than trusting arbitrary caller-supplied members."""
+    command = prepared.command
+    payload = content_json_bytes(command.model_dump(mode="json"))
+    expected = {
+        "command.json": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "inputs/authorization.json": command.training_authorization.sha256,
+        **{
+            sample.staged_member_path: sample.source_image.sha256
+            for sample in command.training_samples
+        },
+    }
+    if isinstance(command, LocalImageSdxlReviewedMicroCommand):
+        files = {file.member_path: file.payload for file in prepared.files}
+        try:
+            pointers = sdxl_reviewed_micro_metadata_pointers(
+                command, files["inputs/source-crop-set.json"]
+            )
+            parse_sdxl_reviewed_micro_sources(command, files)
+        except (KeyError, ValueError) as exc:
+            raise SdxlMicroAdmissionError("SDXL_MICRO_SOURCE_LINEAGE_INVALID") from exc
+        expected.update({name: pointer.sha256 for name, pointer in pointers.items()})
+    else:
+        expected["inputs/crop-set.json"] = command.crop_set.sha256
+    return expected

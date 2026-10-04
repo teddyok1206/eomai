@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 
 from eom_image_contracts.micro_training import LocalImageLoraMicroHyperparameters
 from eom_image_contracts.models import (
@@ -263,6 +266,9 @@ class LocalImageSdxlLoraMicroResult(FrozenModel):
     duration_ms: int = Field(ge=1, le=3_660_000)
     result_sha256: Sha256
 
+    def complete_sample_count_valid(self) -> bool:
+        return len(self.realized_samples) == 16
+
     @field_validator("started_at", "completed_at")
     @classmethod
     def utc_result_time(cls, value: datetime) -> datetime:
@@ -293,7 +299,7 @@ class LocalImageSdxlLoraMicroResult(FrozenModel):
                 or self.runtime is None
                 or self.completed_steps != 200
                 or self.final_loss is None
-                or len(self.realized_samples) != 16
+                or not self.complete_sample_count_valid()
             ):
                 raise ValueError("SDXL micro success requires complete training evidence")
         elif self.error_code is None or self.adapter_manifest is not None:
@@ -314,13 +320,15 @@ class LocalImageSdxlLoraMicroResult(FrozenModel):
 
 
 def validate_sdxl_lora_micro_result(
-    command: LocalImageSdxlLoraMicroCommand, result: LocalImageSdxlLoraMicroResult
+    command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
+    result: LocalImageSdxlLoraMicroResult,
 ) -> None:
     """Compare terminal evidence with the exact pinned command; never accept by name alone."""
     if (
         result.training_run_id != command.training_run_id
         or result.command_sha256 != command.command_sha256
         or result.started_at < command.created_at
+        or result.schema_version.rsplit("/", 1)[1] != command.schema_version.rsplit("/", 1)[1]
     ):
         raise ValueError("SDXL micro result belongs to a different command")
     declared = {sample.sample_id: sample for sample in command.training_samples}
@@ -330,8 +338,16 @@ def validate_sdxl_lora_micro_result(
             source is None
             or realized.source_crop_sha256 != source.source_image.sha256
             or realized.training_caption_sha256 != text_sha256(source.training_caption_en)
+            or (
+                command.schema_version.endswith("/1.1")
+                and realized.realized_crop_sha256 != source.source_image.sha256
+            )
         ):
             raise ValueError("SDXL realized sample differs from pinned TRAIN input")
+    if result.status == "SUCCEEDED" and tuple(
+        sample.sample_id for sample in result.realized_samples
+    ) != tuple(declared):
+        raise ValueError("SDXL micro success does not cover the frozen dataset")
     if (
         result.adapter_manifest is not None
         and result.adapter_manifest.base_model != command.base_model

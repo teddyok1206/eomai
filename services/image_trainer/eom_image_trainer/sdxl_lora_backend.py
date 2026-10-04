@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from eom_image_contracts import LocalImageSdxlLoraMicroCommand
+from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 
 from eom_image_trainer.diffusers_backend import (
@@ -25,12 +26,12 @@ class SdxlMicroLoraBackend:
         *,
         stack: ResolvedSdxlStack,
         samples: tuple[LoraTensorSample, ...],
-        command: LocalImageSdxlLoraMicroCommand,
+        command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
         output_root: Path,
     ) -> TrainingBackendResult:
-        if len(samples) != 16 or tuple(sample.caption_en for sample in samples) != tuple(
-            source.training_caption_en for source in command.training_samples
-        ):
+        if len(samples) != len(command.training_samples) or tuple(
+            sample.caption_en for sample in samples
+        ) != tuple(source.training_caption_en for source in command.training_samples):
             raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
         if (
             stack.manifest.model_id != command.base_model.model_id

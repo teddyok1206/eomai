@@ -31,6 +31,7 @@ from eom_image_contracts import (
     content_sha256,
     validate_contract,
 )
+from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from pydantic import BaseModel
 
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
@@ -302,14 +303,18 @@ class LocalImageTrainingControlArtifactPublisher:
         )
 
     def commit_sdxl_micro_command(
-        self, command: LocalImageSdxlLoraMicroCommand
+        self, command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand
     ) -> ImageEvaluationArtifactMember:
         """Publish an independently approved SDXL training identity, never an SSD alias."""
         return self._commit_document(
             value=command,
-            contract_name="sdxl-lora-micro-command",
+            contract_name="sdxl-lora-micro-command-v2"
+            if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+            else "sdxl-lora-micro-command",
             member=SDXL_MICRO_COMMAND_MEMBER,
-            schema_ref=SDXL_MICRO_COMMAND_SCHEMA_REF,
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.1"
+            if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+            else SDXL_MICRO_COMMAND_SCHEMA_REF,
             artifact_type=SDXL_MICRO_COMMAND_ARTIFACT_TYPE,
             idempotency_prefix="local-image-sdxl-lora-micro-command",
             identity_sha256=command.command_sha256,

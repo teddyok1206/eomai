@@ -34,6 +34,8 @@ SCHEMA_FILES = {
     "sdxl-lora-evaluation-command": "local-image-sdxl-lora-evaluation-command-v1.schema.json",
     "sdxl-lora-evaluation-result": "local-image-sdxl-lora-evaluation-result-v1.schema.json",
     "sdxl-lora-micro-command": "local-image-sdxl-lora-micro-command-v1.schema.json",
+    "sdxl-lora-micro-command-v2": "local-image-sdxl-lora-micro-command-v2.schema.json",
+    "sdxl-lora-micro-result-v2": "local-image-sdxl-lora-micro-result-v2.schema.json",
     "sdxl-lora-micro-adapter-manifest": (
         "local-image-sdxl-lora-micro-adapter-manifest-v1.schema.json"
     ),
@@ -382,6 +384,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-lora-micro-command": (
         "sha256:8f3344e874ae1f553fe87c0710e335cd3afcc047bef1afad212ec0963b9b7d61"
+    ),
+    "sdxl-lora-micro-command-v2": (
+        "sha256:696f96189117fb66c2ad64196946c592da44b3831938367e62af386e535f67f9"
+    ),
+    "sdxl-lora-micro-result-v2": (
+        "sha256:4d05e87baf4a8cd4d6fa6fc0bee2ba980ecb5d7d9acaa44900dd781808a7fdd8"
     ),
     "sdxl-lora-micro-adapter-manifest": (
         "sha256:6c62a8f893e702aff16bbd436dd4bcc893981d824de725cac54372e7e6dc878e"

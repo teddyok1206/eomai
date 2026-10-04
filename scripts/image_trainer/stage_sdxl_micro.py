@@ -15,6 +15,7 @@ from eom_image_contracts import (
     content_json_bytes,
     validate_contract,
 )
+from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.sdxl_micro_inputs import prepare_sdxl_micro_inputs
@@ -32,6 +33,7 @@ def main() -> None:
     parser.add_argument("--sha256", required=True)
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--dispatch", action="store_true")
+    parser.add_argument("--schema-version", choices=("1.0", "1.1"), default="1.0")
     args = parser.parse_args()
     if os.geteuid() != 0 or (args.preflight_only and args.dispatch):
         raise SystemExit("SDXL_MICRO_OPERATOR_ARGUMENTS_INVALID")
@@ -39,7 +41,8 @@ def main() -> None:
         artifact_id=args.artifact_id,
         artifact_revision_id=args.artifact_revision_id,
         member_path="manifests/sdxl-lora-micro-command.json",
-        schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0",
+        schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-micro-command/"
+        + args.schema_version,
         media_type="application/json",
         sha256=args.sha256,
     )
@@ -47,8 +50,13 @@ def main() -> None:
     try:
         raw = resolve_control_artifact_member(engine, pointer, maximum_bytes=128 * 1024)
         value = json.loads(raw)
-        validate_contract("sdxl-lora-micro-command", value)
-        command = LocalImageSdxlLoraMicroCommand.model_validate(value)
+        command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand
+        if args.schema_version == "1.1":
+            validate_contract("sdxl-lora-micro-command-v2", value)
+            command = LocalImageSdxlReviewedMicroCommand.model_validate(value)
+        else:
+            validate_contract("sdxl-lora-micro-command", value)
+            command = LocalImageSdxlLoraMicroCommand.model_validate(value)
         if raw != content_json_bytes(command.model_dump(mode="json")):
             raise SystemExit("SDXL_MICRO_COMMAND_CANONICAL_INVALID")
         prepared = prepare_sdxl_micro_inputs(engine, command)

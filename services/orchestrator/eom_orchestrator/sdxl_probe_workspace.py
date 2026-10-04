@@ -20,7 +20,7 @@ from eom_orchestrator.sdxl_learned_comparison_inputs import (
     sdxl_learned_input_hashes,
 )
 from eom_orchestrator.sdxl_lora_evaluation_inputs import PreparedSdxlLoraEvaluationInputs
-from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs
+from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs, sdxl_micro_input_hashes
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
 from eom_orchestrator.sdxl_training_target_inputs import (
     PreparedSdxlTrainingTargetInputs,
@@ -142,17 +142,9 @@ def stage_sdxl_micro_inputs(
     workspace_parent: Path,
     worker: SdxlProbeWorkspaceOwner,
 ) -> StagedSdxlProbe:
-    """The same private handoff boundary, with only the micro command's 19 members."""
+    """The same private handoff boundary, with exact old or successor input closure."""
     payload = content_json_bytes(prepared.command.model_dump(mode="json"))
-    expected = {
-        "command.json": "sha256:" + hashlib.sha256(payload).hexdigest(),
-        "inputs/crop-set.json": prepared.command.crop_set.sha256,
-        "inputs/authorization.json": prepared.command.training_authorization.sha256,
-        **{
-            sample.staged_member_path: sample.source_image.sha256
-            for sample in prepared.command.training_samples
-        },
-    }
+    expected = sdxl_micro_input_hashes(prepared)
     return _stage_inputs(
         files=prepared.files,
         expected=expected,
