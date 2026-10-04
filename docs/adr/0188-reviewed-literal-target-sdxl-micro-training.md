@@ -91,3 +91,22 @@ workspace/publication regression: **290 PASS**, formatter/linter and strict type
 of six affected source files PASS. Shared read-only training-source admission
 returns typed metadata/targets; evaluation does not materialize training PNGs.
 These remain source/CPU gates, not independent image-quality acceptance.
+
+## Replay ownership correction
+
+Actual installed-worker replay exposed a boundary mismatch: prepared targets are
+Orchestrator-staged, root-owned 0440 inputs; the original runner's regenerated
+`runtime-dataset` crops are worker-owned outputs. Successor replay incorrectly
+required the worker UID for both. Match successor replay to the first-use staged
+input reader, retaining pinned hash, bounded regular-file read, no symlinks/hard
+links, non-group/world-writable modes and unchanged worker ownership checks on
+results/adapter outputs. Do not chown input files, regenerate targets, retrain or
+alter the committed terminal receipt to pass replay.
+
+The ownership regression reproduced before the fix; changed hash, writable target
+and symlink negatives remain mandatory. Focused successor/legacy runner/admission/
+contract/evaluation tests: **102 PASS**, formatter/linter and strict runner types
+PASS. Broader training/evaluation/target/workspace/publication regression: **298
+PASS**; overlapping suites are not added together. Actual installed replay after
+the corrected wheel is a separate live check,
+not inferred from same-owner developer fixtures.

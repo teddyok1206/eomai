@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import os
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -190,6 +191,49 @@ def test_success_reuses_exact_target_bytes_and_replay_never_trains_or_transforms
     validate_contract("sdxl-lora-micro-result-v2", result.model_dump(mode="json"))
     validate_sdxl_lora_micro_result(command, result)
     assert _run(monkeypatch, root, command, backend) == result
+    assert backend.calls == 1
+
+
+def test_reviewed_replay_accepts_orchestrator_owned_inputs_not_worker_outputs(
+    tmp_path, monkeypatch
+):
+    root, command, _, _ = _prepared_fixture(tmp_path, monkeypatch)
+    backend = _Backend()
+    result = _run(monkeypatch, root, command, backend)
+    reader = trainer.read_staged_member
+    target_paths = {sample.staged_member_path for sample in command.training_samples}
+    observed = []
+
+    def staged_input_reader(descriptor, relative, **kwargs):
+        if relative in target_paths:
+            # The real handoff makes inputs root-owned 0440, unlike worker-created output.
+            observed.append(kwargs.get("expected_owner_uid"))
+            if kwargs.get("expected_owner_uid") == os.geteuid():
+                raise trainer.ProviderError("SDXL_PROBE_INPUT_INVALID")
+        return reader(descriptor, relative, **kwargs)
+
+    monkeypatch.setattr(trainer, "read_staged_member", staged_input_reader)
+    assert _run(monkeypatch, root, command, backend) == result
+    assert observed == [None] * len(command.training_samples)
+    assert backend.calls == 1
+
+
+@pytest.mark.parametrize("fault", ["hash", "writable", "symlink"])
+def test_reviewed_replay_still_rejects_unsafe_or_changed_inputs(tmp_path, monkeypatch, fault):
+    root, command, _, _ = _prepared_fixture(tmp_path, monkeypatch)
+    backend = _Backend()
+    _run(monkeypatch, root, command, backend)
+    target = root / command.training_samples[0].staged_member_path
+    if fault == "hash":
+        target.write_bytes(b"changed target")
+    elif fault == "writable":
+        target.chmod(0o660)
+    else:
+        moved = target.with_suffix(".saved")
+        target.rename(moved)
+        target.symlink_to(moved.name)
+    with pytest.raises(trainer.SdxlMicroRunnerError, match="IMAGE_TRAINING_RESULT_INVALID"):
+        _run(monkeypatch, root, command, backend)
     assert backend.calls == 1
 
 

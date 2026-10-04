@@ -163,7 +163,12 @@ def _replay(
                 + ".png",
                 maximum_bytes=MAX_PNG_BYTES,
                 expected_sha256=sample.realized_crop_sha256,
-                expected_owner_uid=os.geteuid(),
+                # Literal targets are protected staged inputs, not worker-created crops.
+                expected_owner_uid=(
+                    None
+                    if isinstance(command, LocalImageSdxlReviewedMicroCommand)
+                    else os.geteuid()
+                ),
             )
         if result.adapter_manifest is not None:
             if tuple(
