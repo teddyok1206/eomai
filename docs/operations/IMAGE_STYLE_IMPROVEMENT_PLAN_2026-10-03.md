@@ -161,6 +161,63 @@ and execution budget before further training. Full-data readiness remains `INSUF
 Actual SDXL authored outputs stay 36, all own-REJECTED; independent blind review and a quality-
 passing Item Preview/HWPX canary remain open. Whole goal stays ACTIVE.
 
+### 2026-10-04 expanded source inspection and full-corpus inventory
+
+The complete existing TRAIN discovery pool was inspected in 21 contact sheets, then 31 shortlisted
+regions at original pixel resolution. Contact sheets are diagnostic views, not training examples.
+Three bounded read batches materialized 159 new original TRAIN pages (83,900,063 bytes); fifteen
+already verified local views were reused. No VALIDATION/HOLDOUT pixels or PDF bytes were read.
+The pool is dominated by graphs, tables and annotations; its 503 entries are not 503 eligible crops.
+
+Twenty-two literal CPU preflight crops from seventeen pages were individually inspected; two
+framing corrections excluded a speech-bubble tip and a power-plant table border/title. Twelve
+candidates were reproduced and committed in **5,493 ms**, with every canonical PNG equal to its
+inspected preflight. They span ten additional-set PDFs / nine exam groups. Across both sets the
+actual total is **23 candidates / 15 source PDFs / 14 exam groups**, not 23 independent documents.
+Subjects include a volumetric flask, comb/hair, bell-jar plant and mouse composites, mouse/syringe,
+trilobite, swimmer/pool wall, desk/book, portraits/gestures and a power plant. Captions describe
+literal source compositions. Small targets, restrained gray tones and fine hatching are explicit
+target-preparation concerns; these candidates are not yet a uniformly prepared training dataset.
+Ten annotated, clipped or repeated preflights are deferred rather than silently erased or relabeled.
+
+Additional reviewed intent: Artifact `artifact_ffff0226bc3b4936975399960957a277`, revision
+`rev_b581b40af0e7419fa453ba5308967dbf`, member `manifests/science-source-page-crop-review.json`,
+raw SHA `sha256:e039ce397b74bade0217cf5436008d890d16ba4538faf9a6d8448242e4f7ab0d`.
+Additional canonical set: Artifact `artifact_99ef287ab02b48a5822f7d980252bf90`, revision
+`rev_3e418a2af6a5494d9b18be10670ddab2`, member `manifests/science-source-page-crop-set.json`,
+raw SHA `sha256:5913745e41c31b9ef91ffa0083a44c764d41ffc70486320f28796da512adc413`,
+semantic SHA `sha256:3611d5e43c2485645b1645a5a55fcfbb5c11b60d1cf5c9ae7f31c654862c567a`.
+State remains `REVIEWED_SOURCE_DERIVATIVES`; activation is `FORBIDDEN`.
+
+Read-only resolution of the originally authorized full corpus established **1,251 PDFs / 5,218
+pages**, versus the 108 previously selected PDFs (TRAIN 72 / VALIDATION 18 / HOLDOUT 18). There are
+**1,143 unselected PDFs**; 769 have issuer/year/grade/session identity metadata not represented in
+that selection. These are metadata inventory counts, **not new TRAIN assignments, eligible images
+or visual-independent-source assertions**. Corpus pointer: Artifact
+`artifact_1b0d9eb8926c42dc865a5822c2e83c59`, revision
+`rev_bc9b3cd11b384b4f9f9ac6bbfc789495`, member `corpus-manifest.json`, schema
+`eom://schemas/legacy-assessment/science-assessment-web-corpus-manifest/2.0`, raw SHA
+`sha256:244393c86005b5ced0ce64970da3af3f8e07b0b2cfe8fee2c0d9e92f48bba02b`, semantic SHA
+`sha256:b2503fefb04aa9c0a0eb318e352bb797500a6c1e5dc8c2ed617bf6275b485c99`.
+
+Own source review, exact publication, discovery/detail indexes, provisional/final selections,
+whole-corpus metadata and bounded operator/log evidence are archived as twenty members at Artifact
+`artifact_cad0ee66d01646e99aa72890095c42e6`, revision
+`rev_2a11107a1a3e4301858306e64153ce90`, primary `reports/own-expansion-review.md`, raw SHA
+`sha256:8a968011c5a88d0b676845b0c7c03beb139db81e5293bc3144b61a1ed3bee3fc`.
+The evidence archive references PNG/PDF pointers instead of duplicating those bytes. Existing
+**176 PASS** core gates are reused because this phase changes no core source or runtime. It makes
+zero GPU calls, training updates, reserved-data reads or activations. Five services are active;
+the operating V6 binding remains unchanged. Full-data readiness is still `INSUFFICIENT`.
+
+Next: reuse the existing isolated PDF pilot for a bounded selection of previously unselected
+documents from the same approved corpus. Preserve every historical source/group partition and
+the common selection seed; quarantine duplicates before admitting new TRAIN pixels. New pilot
+lineage must be admitted through the supported contracts, not attached to an old inventory by
+inventing candidate IDs. Reuse existing schema/application paths where sufficient; add only the
+smallest tested successor boundary if the existing lineage cannot express a supplemental pilot.
+No new queue, database, external model API or production activation is needed for this expansion.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000
