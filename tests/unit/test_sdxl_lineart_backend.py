@@ -7,7 +7,11 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from eom_image_contracts import LocalImageSdxlLineartProbeCommand, LocalImageSdxlLineartStack
+from eom_image_contracts import (
+    LocalImageSdxlLineartProbeCommand,
+    LocalImageSdxlLineartStack,
+    content_sha256,
+)
 from eom_image_provider import sdxl_lineart_backend as backend
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
@@ -29,10 +33,12 @@ class _Tokenizer:
 
 
 @pytest.mark.parametrize("fault", [None, "tokens", "shape", "nan", "architecture", "gpu", "oom"])
+@pytest.mark.parametrize("conditioning_scale", [0.0, 0.8])
 def test_offline_load_architecture_prompt_capacity_numerics_and_cleanup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     fault: str | None,
+    conditioning_scale: float,
 ) -> None:
     calls = []
     array = np.ones((1, 512, 832, 3), dtype=np.float32)
@@ -71,7 +77,7 @@ def test_offline_load_architecture_prompt_capacity_numerics_and_cleanup(
             if fault == "oom":
                 raise Oom()
             assert kwargs["width"] == 832 and kwargs["height"] == 512
-            assert kwargs["adapter_conditioning_scale"] == 0.8
+            assert kwargs["adapter_conditioning_scale"] == conditioning_scale
             assert kwargs["output_type"] == "np"
             return SimpleNamespace(images=array)
 
@@ -125,13 +131,18 @@ def test_offline_load_architecture_prompt_capacity_numerics_and_cleanup(
     )
 
     def execute() -> None:
+        command_value = _command()
+        command_value["adapter_conditioning_scale"] = conditioning_scale
+        command_value["command_sha256"] = content_sha256(
+            {key: value for key, value in command_value.items() if key != "command_sha256"}
+        )
         with backend.SdxlLineartDiffusersBackend().open(stack) as session:
             result = session.generate(
                 conditioning=_png(size=(832, 512)),
                 prompt="scientific line art",
                 negative_prompt="text, color",
                 seed=1,
-                command=LocalImageSdxlLineartProbeCommand.model_validate(_command()),
+                command=LocalImageSdxlLineartProbeCommand.model_validate(command_value),
             )
             with Image.open(io.BytesIO(result.png_bytes)) as image:
                 assert image.size == (832, 512) and image.mode == "RGB"
