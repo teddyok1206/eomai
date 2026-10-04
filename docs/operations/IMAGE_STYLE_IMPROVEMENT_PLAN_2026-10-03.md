@@ -871,3 +871,67 @@ with declared base/LoRA arms inside the remaining bounded budget. Original 30 re
 outputs remain preserved; extraction adds **zero SDXL outputs and zero training updates**, so
 follow-up control use is still 6/12. Full-data expansion, independent blind review, remaining
 matched arms and a quality-passing Item Preview/HWPX canary are open. The whole goal stays ACTIVE.
+
+### 2026-10-04 learned-conditioning BASE/LORA: actual four-output comparison
+
+ADR 0182 and source `2e113a31cc6051fda55847fdef1a61969bda0b79` add a fixed two-arm comparison,
+not a generic experiment scheduler. It pins the original six-case baseline, successful extraction
+command/result and accepted LoRA training/evaluation provenance. Only two selected conditioning
+PNGs and the adapter are materialized after original TRAIN lineage admission; original PNGs are
+not copied into this worker. The existing indexed batch reader admits the 46.6 MB adapter with
+a 64 MiB member / 128 MiB aggregate ceiling, preserving safe hash/permission/size resolution.
+No DB, dependency, queue, privilege, worker-auth or production policy change is involved.
+
+Source gates: isolated image suite **363 PASS**; focused pure contracts/admission/handoff/
+compatibility **147 PASS**; dependency boundaries **6 PASS**; strict types eight changed modules
+PASS; formatter/linter/shell/diff PASS. These overlapping suites are not summed unique coverage.
+Initial fixture exception expectations, an adapter-strength field and explicit Pillow stub
+interpreter selection were corrected before final gates, installation and any GPU dispatch.
+
+Immutable build: `/tmp/eom-image-trainer-build/2e113a31cc6051fda55847fdef1a61969bda0b79.vDH1cV`.
+Contract wheel SHA `93267b436d8e50b23e09769e95d84be08a729e5d8a81e52dfc33b1fadf7a128b`;
+provider SHA `99b6ccda14000e50dd0d7c4e4cb20bd408346bd99db9a8117411e95f77ecdba0`.
+Only these two wheels were installed into `eom-image-trainer` under the existing physical GPU
+lock after quiescence and exact old-wheel RECORD/rollback checks. Trainer distribution still
+comes from `cc2f32e7`; the new trainer wheel was built but not installed. Worker-identity import,
+CUDA capability, offline fixed unit and pip checks PASS. Operating inference/V6/models unchanged.
+
+One dispatch `imgsdxllearnedrun_40b8f423c55d449d56005ae59ea7543f` staged 13 members and generated
+MICROSCOPE/RADIO x original seed 104729 x BASE/LORA = **four outputs**. Original prompt/negative,
+model pins, steps/CFG/T2I strength, geometry and accepted LoRA strength stayed unchanged. A fresh
+pipeline per arm avoided adapter leakage into BASE. Actual duration **24,213 ms**; peak allocated
+CUDA memory **8,328,740,352 bytes**; no additional training updates or generation retries.
+
+Command Artifact `artifact_0079711dda19493da91a0a5ce9ec4964` /
+`rev_1024317bbdfc4c8e92b98fd0a5605ec1`, member `manifests/sdxl-learned-comparison-command.json`,
+raw SHA `sha256:9bf333e3620e199349ea9e944fefa90dfcb39c5ea4bd6f3b18134abd130b95d4`.
+Result Artifact `artifact_d6de2fc680144395bc0205fb55208004` /
+`rev_129ad15be4734368a41ff2df452d5490`, member `manifests/sdxl-learned-comparison-result.json`,
+raw SHA `sha256:df7580d32b6d9b37b5428ea42f2b3f934a9f4d485cb27a7d11f71fe50ba4a9ef`,
+semantic SHA `sha256:2e434a403ad95782c982ce17d3f0a25aee83e223a28c7c9109cd37dc63ee0326`.
+All nine receipt/raw/final members passed source/hash/PNG/mode/dimension/publication-crop checks.
+Installed worker replay verified eight image members with model/GPU/adapter entry points denied,
+no Torch import and zero inference. The five long-lived services stayed active; GPU returned idle.
+
+Own inspection opened all four new finals, both original fitted references and all four old
+same-seed BASE/LORA images at original resolution. All new finals are **REJECTED**: black fill
+decreases and broad layout is retained better, but gray canvas/shadow, speaker/platform texture,
+embossed contours and inherited source frame remain. Native 800x500 paired metrics verify reduced
+dark fill but dominant midtones/border foreground. Old viewing hashes were checked against their
+canonical receipts. This two-TRAIN-case observation does not establish unseen-data generalization
+or independent blind-review acceptance. Actual images are not replaced with thresholded edits.
+
+Own review and eleven sanitized logs are archived at `artifact_aa350234fb4043dd836617ec6d03b52f` /
+`rev_6b24ba1ba7634f139e622bc1aa247170`, primary `reports/learned-comparison-own-review.md`,
+SHA `sha256:df365c07d0508751c0f48fb2b10bde8162a89ea790c9a703d88a5c2a02127430`.
+Viewing copies: `/tmp/eom-sdxl-learned-samples-20261004/{microscope,radio}-{base,lora}-104729.png`.
+Slack `devreport_437729c94ccb4e37b1f7429155019798` was SENT/HTTP 200 at 01:22:39 UTC.
+
+Upstream documents white contours on black for this lineart adapter, matching current conditioning;
+do not infer or "fix" polarity just from a gray final. [Pinned primary model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0/blob/5f1f33b049b96fa599f0aa3d77b31dbef5095e97/README.md).
+Next: inspect the 16 actual TRAIN targets/style distribution and caption-trigger consistency
+before increasing training or spending remaining outputs. Changed targets/crops/prompts require
+explicit successor lineage; original pixels/receipts remain intact. Actual SDXL own verdicts are
+now **34 REJECTED**; follow-up budget **10/12 consumed, 2 remaining**. Six learned-extractor outputs
+remain preprocessing, not additional authored SDXL images. Full-data expansion, remaining arms,
+independent blind review and a quality-passing Item Preview/HWPX canary remain open. GOAL=ACTIVE.

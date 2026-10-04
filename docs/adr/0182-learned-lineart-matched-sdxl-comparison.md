@@ -77,3 +77,11 @@ handoff/compatibility suite 147 PASS; dependency boundaries 6 PASS; strict type 
 changed runtime/contract modules PASS; formatter/linter and shell syntax PASS. These results do
 not imply installed execution or visual quality acceptance. The first actual comparison remains
 four planned outputs (MICROSCOPE/RADIO, original seed 104729), not a new training run.
+
+Installed/actual gate subsequently passed: one four-output dispatch, 24,213 ms, 8,328,740,352
+peak allocated CUDA bytes; nine validated committed members; installed no-model/no-GPU replay
+verified all eight PNGs. Own direct inspection rejected all four for gray background, shadows,
+texture and source-frame defects. Independent blind review is NOT_PERFORMED. Follow-up budget
+is now 10/12, not a fresh budget. Operating V6 stays unchanged. Canonical pointers, exact wheel
+identity, metrics and evidence archive are recorded in the
+[image-quality operation plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
