@@ -1,0 +1,318 @@
+{
+  "$defs": {
+    "InformativeLineartExtractionOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "conditioning_member_path": {
+          "pattern": "^outputs/conditioning/imgsdxlcase_[0-9a-f]{32}\\.png$",
+          "title": "Conditioning Member Path",
+          "type": "string"
+        },
+        "conditioning_mode": {
+          "const": "RGB",
+          "title": "Conditioning Mode",
+          "type": "string"
+        },
+        "conditioning_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Conditioning Sha256",
+          "type": "string"
+        },
+        "conditioning_size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Conditioning Size Bytes",
+          "type": "integer"
+        },
+        "duration_ms": {
+          "maximum": 600000,
+          "minimum": 1,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "lineart_member_path": {
+          "pattern": "^outputs/lineart/imgsdxlcase_[0-9a-f]{32}\\.png$",
+          "title": "Lineart Member Path",
+          "type": "string"
+        },
+        "lineart_mode": {
+          "const": "L",
+          "title": "Lineart Mode",
+          "type": "string"
+        },
+        "lineart_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Lineart Sha256",
+          "type": "string"
+        },
+        "lineart_size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Lineart Size Bytes",
+          "type": "integer"
+        },
+        "peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "reference_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Reference Sha256",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "reference_sha256",
+        "lineart_member_path",
+        "lineart_sha256",
+        "lineart_size_bytes",
+        "conditioning_member_path",
+        "conditioning_sha256",
+        "conditioning_size_bytes",
+        "width_px",
+        "height_px",
+        "lineart_mode",
+        "conditioning_mode",
+        "duration_ms",
+        "peak_gpu_memory_bytes"
+      ],
+      "title": "InformativeLineartExtractionOutput",
+      "type": "object"
+    },
+    "InformativeLineartExtractionRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "compute_capability": {
+          "const": "12.0",
+          "title": "Compute Capability",
+          "type": "string"
+        },
+        "cuda_version": {
+          "const": "12.8",
+          "title": "Cuda Version",
+          "type": "string"
+        },
+        "dtype": {
+          "const": "float32",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "gpu_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Gpu Name",
+          "type": "string"
+        },
+        "pillow_version": {
+          "const": "11.3.0",
+          "title": "Pillow Version",
+          "type": "string"
+        },
+        "provider_version": {
+          "const": "eom-informative-lineart-extractor/1.0",
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "safetensors_version": {
+          "const": "0.6.2",
+          "title": "Safetensors Version",
+          "type": "string"
+        },
+        "torch_version": {
+          "const": "2.7.1+cu128",
+          "title": "Torch Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_version",
+        "torch_version",
+        "safetensors_version",
+        "pillow_version",
+        "cuda_version",
+        "compute_capability",
+        "dtype",
+        "gpu_name"
+      ],
+      "title": "InformativeLineartExtractionRuntime",
+      "type": "object"
+    },
+    "InformativeLineartPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "extractor_id": {
+          "pattern": "^imgextractor_[0-9a-f]{32}$",
+          "title": "Extractor Id",
+          "type": "string"
+        },
+        "extractor_revision_id": {
+          "pattern": "^imgextractorrev_[0-9a-f]{32}$",
+          "title": "Extractor Revision Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "informative-drawings-style1",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-informative-lineart-extractor/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "extractor_id",
+        "extractor_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "title": "InformativeLineartPointer",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-informative-lineart-extraction-result/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "duration_ms": {
+      "maximum": 1200000,
+      "minimum": 1,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "LINEART_EXTRACTION_INPUT_INVALID",
+            "LINEART_EXTRACTION_MODEL_INVALID",
+            "LINEART_EXTRACTION_HASH_MISMATCH",
+            "LINEART_EXTRACTION_GPU_UNAVAILABLE",
+            "LINEART_EXTRACTION_OOM",
+            "LINEART_EXTRACTION_EXEC_FAILED",
+            "LINEART_EXTRACTION_OUTPUT_INVALID",
+            "LINEART_EXTRACTION_BUDGET_EXCEEDED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Code"
+    },
+    "extractor": {
+      "$ref": "#/$defs/InformativeLineartPointer"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/InformativeLineartExtractionOutput"
+      },
+      "maxItems": 6,
+      "title": "Outputs",
+      "type": "array"
+    },
+    "peak_gpu_memory_bytes": {
+      "maximum": 17179869184,
+      "minimum": 0,
+      "title": "Peak Gpu Memory Bytes",
+      "type": "integer"
+    },
+    "preprocessing_policy": {
+      "const": "FIT_RGB_EXTRACT_INVERT_832X512/1.0",
+      "title": "Preprocessing Policy",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Result Sha256",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imglineartextractrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InformativeLineartExtractionRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "local-image-informative-lineart-extraction-result/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "extractor",
+    "preprocessing_policy",
+    "status",
+    "error_code",
+    "runtime",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "peak_gpu_memory_bytes",
+    "result_sha256"
+  ],
+  "title": "LocalImageInformativeLineartExtractionResult",
+  "type": "object"
+}

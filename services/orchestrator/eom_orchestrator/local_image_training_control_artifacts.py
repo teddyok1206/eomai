@@ -37,6 +37,7 @@ from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 
 if TYPE_CHECKING:
     from eom_image_contracts import (
+        LocalImageInformativeLineartExtractionCommand,
         LocalImageScienceCampaignLoraMicroProbePlan,
         LocalImageScienceCampaignLoraMicroProbePlanV2,
         LocalImageScienceCampaignLoraMicroProbePlanV3,
@@ -319,6 +320,20 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.0",
             artifact_type="control_local_image_sdxl_lora_evaluation_command",
             idempotency_prefix="local-image-sdxl-lora-evaluation-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_informative_lineart_extraction_command(
+        self, command: LocalImageInformativeLineartExtractionCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="informative-lineart-extraction-command",
+            member="manifests/informative-lineart-extraction-command.json",
+            schema_ref="eom://schemas/image-provider/local-image-informative-lineart-extraction-command/1.0",
+            artifact_type="control_local_image_informative_lineart_extraction_command",
+            idempotency_prefix="local-image-informative-lineart-extraction-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

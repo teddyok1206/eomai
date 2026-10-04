@@ -31,6 +31,17 @@ from eom_image_contracts.informative_lineart import (
     LocalImageInformativeLineartManifest,
     validate_informative_lineart_pointer,
 )
+from eom_image_contracts.informative_lineart_extraction import (
+    INFORMATIVE_EXTRACTION_COMMAND_SCHEMA_REF,
+    INFORMATIVE_EXTRACTION_RESULT_SCHEMA_REF,
+    InformativeLineartExtractionBudget,
+    InformativeLineartExtractionOutput,
+    InformativeLineartExtractionRuntime,
+    LocalImageInformativeLineartExtractionCommand,
+    LocalImageInformativeLineartExtractionResult,
+    select_informative_lineart_cases,
+    validate_informative_lineart_extraction_result,
+)
 from eom_image_contracts.institutional_style_evaluation import (
     GENERATED_RASTER_SCHEMA_REF,
     INSTITUTIONAL_CROP_SCHEMA_REF,
@@ -456,6 +467,8 @@ from eom_image_contracts.visual_reference import (
 
 __all__ = [
     "GENERATED_RASTER_SCHEMA_REF",
+    "INFORMATIVE_EXTRACTION_COMMAND_SCHEMA_REF",
+    "INFORMATIVE_EXTRACTION_RESULT_SCHEMA_REF",
     "INFORMATIVE_LINEART_MANIFEST_SCHEMA_REF",
     "INSTITUTIONAL_CROP_SCHEMA_REF",
     "INSTITUTIONAL_STYLE_ANSWER_KEY_SCHEMA_REF",
@@ -500,6 +513,9 @@ __all__ = [
     "ImageEvaluationVariant",
     "ImageEvaluationVisualPattern",
     "ImageTrainingRightsPolicy",
+    "InformativeLineartExtractionBudget",
+    "InformativeLineartExtractionOutput",
+    "InformativeLineartExtractionRuntime",
     "InformativeLineartPointer",
     "InformativeLineartUpstream",
     "InstitutionalStyleAnswerKeyEntry",
@@ -532,6 +548,8 @@ __all__ = [
     "LocalImageFlux2ReferenceProbeResultV2",
     "LocalImageGenerationReceipt",
     "LocalImageGenerationRequest",
+    "LocalImageInformativeLineartExtractionCommand",
+    "LocalImageInformativeLineartExtractionResult",
     "LocalImageInformativeLineartManifest",
     "LocalImageInstitutionalStyleAnswerKey",
     "LocalImageInstitutionalStyleEvaluationPlan",
@@ -790,6 +808,7 @@ __all__ = [
     "safe_visual_reference_member_path",
     "sanitize_svg_overlay",
     "science_subject_multiseed_value",
+    "select_informative_lineart_cases",
     "svg_label_layout_font_manifest_sha256",
     "text_sha256",
     "training_crop_proposal_population_sha256",
@@ -800,6 +819,7 @@ __all__ = [
     "validate_flux2_probe_command_v2",
     "validate_flux2_probe_result",
     "validate_flux2_probe_result_v2",
+    "validate_informative_lineart_extraction_result",
     "validate_informative_lineart_pointer",
     "validate_institutional_style_result",
     "validate_institutional_style_review",

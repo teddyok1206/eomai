@@ -12,6 +12,9 @@ from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import content_json_bytes
 
+from eom_orchestrator.informative_lineart_extraction_inputs import (
+    PreparedInformativeLineartExtractionInputs,
+)
 from eom_orchestrator.sdxl_lora_evaluation_inputs import PreparedSdxlLoraEvaluationInputs
 from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
@@ -32,6 +35,35 @@ class StagedSdxlProbe:
     workspace: Path
     systemd_unit: str
     command_sha256: str
+
+
+def stage_informative_lineart_extraction_inputs(
+    prepared: PreparedInformativeLineartExtractionInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    payload = content_json_bytes(prepared.command.model_dump(mode="json"))
+    by_id = {case.case_id: case for case in prepared.baseline.cases}
+    expected = {
+        "command.json": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "inputs/baseline-command.json": prepared.command.baseline_command.sha256,
+        "inputs/extractor-manifest.json": prepared.command.extractor_manifest.sha256,
+        **{
+            by_id[case_id].staged_member_path: by_id[case_id].reference_image.sha256
+            for case_id in prepared.command.case_ids
+        },
+    }
+    return _stage_inputs(
+        files=prepared.files,
+        expected=expected,
+        command_payload=payload,
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-informative-lineart-extraction",
+        workspace_parent=workspace_parent,
+        worker=worker,
+    )
 
 
 def stage_sdxl_probe_inputs(
@@ -134,7 +166,8 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_)[0-9a-f]{32}", run_id
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_)[0-9a-f]{32}",
+            run_id,
         )
         is None
     ):
@@ -252,6 +285,15 @@ def dispatch_sdxl_lora_evaluation(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-sdxl-lora-evaluation",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imgsdxlloraevalrun_",
+    )
+
+
+def dispatch_informative_lineart_extraction(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-informative-lineart-extraction",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imglineartextractrun_",
     )
 
 

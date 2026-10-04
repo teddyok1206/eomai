@@ -12,6 +12,12 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "informative-lineart-extraction-command": (
+        "local-image-informative-lineart-extraction-command-v1.schema.json"
+    ),
+    "informative-lineart-extraction-result": (
+        "local-image-informative-lineart-extraction-result-v1.schema.json"
+    ),
     "informative-lineart-manifest": "local-image-informative-lineart-manifest-v1.schema.json",
     "sdxl-lora-evaluation-command": "local-image-sdxl-lora-evaluation-command-v1.schema.json",
     "sdxl-lora-evaluation-result": "local-image-sdxl-lora-evaluation-result-v1.schema.json",
@@ -311,6 +317,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "informative-lineart-extraction-command": (
+        "sha256:9e6e3144976690e36a293faa166dfe4427a4bae10a6644b420244065f506cdd5"
+    ),
+    "informative-lineart-extraction-result": (
+        "sha256:95bc351f4d821d67b9bb44451974ffb75776c67ecb98bbbadd08e1c6e54d95d7"
+    ),
     "informative-lineart-manifest": (
         "sha256:4ec36b23d8716fd6d853ec380b0b4d298d366dbc8ac68d0e219dcb33f73be684"
     ),

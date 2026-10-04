@@ -1,0 +1,198 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "InformativeLineartExtractionBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_duration_ms": {
+          "maximum": 600000,
+          "minimum": 1,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Maximum Peak Gpu Memory Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "title": "InformativeLineartExtractionBudget",
+      "type": "object"
+    },
+    "InformativeLineartPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "extractor_id": {
+          "pattern": "^imgextractor_[0-9a-f]{32}$",
+          "title": "Extractor Id",
+          "type": "string"
+        },
+        "extractor_revision_id": {
+          "pattern": "^imgextractorrev_[0-9a-f]{32}$",
+          "title": "Extractor Revision Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "informative-drawings-style1",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-informative-lineart-extractor/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "extractor_id",
+        "extractor_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "title": "InformativeLineartPointer",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-informative-lineart-extraction-command/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "baseline_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "budget": {
+      "$ref": "#/$defs/InformativeLineartExtractionBudget"
+    },
+    "case_ids": {
+      "items": {
+        "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+        "type": "string"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Case Ids",
+      "type": "array"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "extractor": {
+      "$ref": "#/$defs/InformativeLineartPointer"
+    },
+    "extractor_manifest": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "preprocessing_policy": {
+      "const": "FIT_RGB_EXTRACT_INVERT_832X512/1.0",
+      "title": "Preprocessing Policy",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_LEARNED_LINEART_PREPROCESSING",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imglineartextractrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-informative-lineart-extraction-command/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "extractor",
+    "extractor_manifest",
+    "baseline_command",
+    "case_ids",
+    "preprocessing_policy",
+    "budget",
+    "command_sha256"
+  ],
+  "title": "LocalImageInformativeLineartExtractionCommand",
+  "type": "object"
+}

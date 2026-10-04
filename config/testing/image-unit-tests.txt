@@ -5,6 +5,7 @@ tests/unit/test_crop_locator_v2.py
 tests/unit/test_flux2_reference_layout_lock.py
 tests/unit/test_flux2_reference_probe_runner.py
 tests/unit/test_image_diffusers_backend.py
+tests/unit/test_informative_lineart_extraction_runtime.py
 tests/unit/test_informative_lineart_runtime.py
 tests/unit/test_institutional_style_evaluation.py
 tests/unit/test_local_image_crop_locator.py

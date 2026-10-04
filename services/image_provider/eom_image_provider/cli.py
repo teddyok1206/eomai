@@ -25,6 +25,11 @@ from eom_image_contracts import (
 )
 
 from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
+from eom_image_provider.informative_lineart_backend import InformativeLineartTorchBackend
+from eom_image_provider.informative_lineart_extraction import (
+    load_informative_lineart_extraction_command,
+    run_informative_lineart_extraction,
+)
 from eom_image_provider.model_manifest import create_model_manifest
 from eom_image_provider.provider import (
     ProviderError,
@@ -66,6 +71,11 @@ from eom_image_provider.sdxl_lora_evaluation import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eom-local-image")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    extraction = subparsers.add_parser("informative-lineart-extraction")
+    extraction.add_argument("--command", type=Path, required=True)
+    extraction.add_argument("--model-store-root", type=Path, required=True)
+    extraction.add_argument("--workspace", type=Path, required=True)
+    extraction.add_argument("--gpu-lock", type=Path, required=True)
     lineart = subparsers.add_parser("sdxl-lineart-probe")
     lineart.add_argument("--command", type=Path, required=True)
     lineart.add_argument("--model-store-root", type=Path, required=True)
@@ -118,7 +128,19 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        if args.operation == "sdxl-lineart-probe":
+        if args.operation == "informative-lineart-extraction":
+            extraction_command = load_informative_lineart_extraction_command(
+                args.workspace, args.command
+            )
+            extraction_result = run_informative_lineart_extraction(
+                command=extraction_command,
+                model_store_root=args.model_store_root,
+                workspace=args.workspace,
+                gpu_lock=args.gpu_lock,
+                backend=InformativeLineartTorchBackend(),
+            )
+            result = extraction_result.model_dump(mode="json")
+        elif args.operation == "sdxl-lineart-probe":
             lineart_command = load_sdxl_probe_command(args.workspace, args.command)
             with acquire_gpu_lease(args.gpu_lock):
                 lineart_result = run_sdxl_lineart_probe(
