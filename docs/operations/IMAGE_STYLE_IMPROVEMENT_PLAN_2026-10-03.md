@@ -7,19 +7,21 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 14:36 UTC**: ADR 0190's closed CPU derivative
-boundary is implemented, installed in the isolated lab and executed once over
-the pinned original six native PNGs. Six derivatives in 3,276ms; technical 6/6
-PASS, canonical seven-member hash equality and installed reconstruction/replay
-PASS. Source regression 242 PASS plus one explicitly excluded existing import
-violation. Direct source/native/derivative review rejects all six: BASE background
-lines remain; LoRA whitening loses fine scientific contours and wheel-light
-marks. Original 72 SDXL outputs/own-REJECTED history unchanged and counted
-separately. New model/GPU outputs/training/reserved pixels = 0. Twenty-four
-non-binary execution/own-review evidence members archived. Stop cleanup/strength/
-prompt sweeps; next is a pinned structural-preservation alternative from step 6,
-not another rendering or quality PASS. Operating V6 unchanged; independent
-review NOT_PERFORMED and GOAL ACTIVE. Earlier checkpoints below are historical.
+Latest checkpoint, **2026-10-04 16:02 UTC**: ADR 0191's closed CPU Canny
+input preparation is implemented, installed lab-only and executed once over the
+same three reviewed TRAIN targets. Three binary 832×512 maps in **120ms**;
+canonical four-member byte equality, installed CPU reconstruction and transform-
+free replay PASS. Source regression278 PASS, strict mypy9 PASS; one explicitly
+excluded existing infrastructure import violation remains open. Direct source/map
+inspection: own input-detail **3/3 PASS**, not finished illustration quality.
+Optional OpenCV4.11.0.86 installed; other numerical versions/trainer unchanged.
+Twenty-six non-binary evidence members archived. Controller weights and numerical
+comparison pending; no new model/GPU output, training or reserved-source reads.
+Native72 and CPU publication derivatives6 remain own-REJECTED, counted separately
+from the three control inputs. Operating V6 unchanged; independent/heldout review
+NOT_PERFORMED and GOAL ACTIVE. Next: pinned license/model/comparison admission
+before one six-output spatial diagnostic, no threshold/prompt/seed sweep. Earlier
+checkpoints below are historical.
 
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
@@ -1067,7 +1069,8 @@ alternative with explicit license/model/file/source/resource pins before
 acquisition, using step 6's existing fallback scope. No new model was downloaded
 or dispatched by this checkpoint.
 
-The proposed next boundary is [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md):
+The initial **14:54 UTC read-only proposal**, retained as history, is
+[ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md):
 one SDXL Canny ControlNet factor, not ControlNet plus IP-Adapter plus retraining.
 Read-only preflight at 14:54 UTC records exact model revision/configuration/expected
 safetensors SHA and an optional headless OpenCV wheel in ADR 0191. It detects
@@ -1080,6 +1083,18 @@ any weight acquisition/GPU request. First pair is proposed at six new outputs
 within the existing fallback ceiling, not submitted. Current library metadata
 was checked without Torch import, weight reads or model calls; research/proposal
 does not grant a numerical PASS or a fresh retry quota.
+
+At the later **16:02 UTC checkpoint**, CPU preparation and optional-library
+compatibility are no longer pending: source `b1e4a36e`, three committed maps,
+own input-detail3/3 PASS and installed reconstruction/replay PASS. Evidence
+`artifact_605737dbd28c4c92a8ac1729b67fca52` /
+`rev_ed711467c73f4334bea6ab14532c8c10`, 26 members, primary
+`reports/own-input-review.json`, SHA
+`d6f6877ad2fa0542356455476da8a83d82552408dfe5764e9637652a93c8b478`.
+No duplicate binary members. Exact recipe, installation/version pins, source-
+detail findings and old preflight failures are in ADR 0191. The controller license,
+model/comparison contract and first six-output numerical run remain pending;
+this checkpoint is not a substitute for the full quality goal.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate

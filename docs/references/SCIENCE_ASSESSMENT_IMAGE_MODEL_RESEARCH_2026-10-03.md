@@ -147,9 +147,12 @@ fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않
 공간 조건과 LoRA를 같이 사용하는 경로를 확인했지만 우리 그림에서 개선된다는 뜻은 아니다.
 
 현재 실험 환경의 Diffusers 0.35.2/Torch 2.7.1+cu128/PEFT 0.17.1/Pillow 11.3.0은 유지한다.
-OpenCV는 없으므로 정식 Canny를 도입한다면 선택적 lab 전용 의존성의 이유·버전·해시를
-먼저 기록해야 한다. 비슷한 Pillow 필터를 Canny라고 부르지 않는다. 윤곽 입력 3장을 먼저
-육안 검수해 필수 세부 요소가 살아 있는지 확인하며, 아직 새 가중치/GPU 실행은 없다.
+초기 조회 당시 OpenCV는 없었고, 이후 이유·버전·해시·라이선스를 고정한
+`opencv-python-headless==4.11.0.86`만 lab에 선택적으로 설치했다. 실제 worker ABI/Canny,
+`pip check`와 설치 RECORD를 확인했고 다른 수치 라이브러리는 유지했다. 고정 CPU 변환으로
+윤곽 입력 3장을 120ms에 준비·등록했으며, 원본과 직접 비교한 필수 세부 보존은 3/3 PASS다.
+이는 전처리 입력 검수일 뿐 완성 그림의 품질 PASS가 아니다. 변환 없는 replay도 통과했고
+아직 controller 가중치·GPU 생성·재학습은 없다. 비슷한 Pillow 필터를 Canny라고 부르지 않는다.
 구현·예산·보존 경계는 [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md)에
 제안으로 기록했다. 기존 T2I·CPU 출력과 판단, 운영 V6는 보존한다.
 

@@ -2,9 +2,10 @@
 
 Date: 2026-10-04 UTC
 
-Status: CPU input-preparation source implemented and verified; actual lab execution
-pending. ControlNet model/acquisition/comparison NOT_IMPLEMENTED; no controller
-weight acquired or GPU run submitted.
+Status: CPU input preparation implemented, installed and executed; canonical
+publication/reconstruction/transform-free replay PASS; own source-detail review
+3/3 PASS, not final illustration acceptance. ControlNet model/acquisition/comparison
+NOT_IMPLEMENTED; no controller weight acquired or GPU run submitted.
 
 ## Evidence and hypothesis
 
@@ -63,8 +64,8 @@ without adding another encoder/conditioning factor. No claim of improvement or
 9. Dependency direction: pure contracts first; provider owns OpenCV/Diffusers/file
    adapters and Orchestrator owns application admission/publication. Existing
    Diffusers 0.35.2, Torch 2.7.1+cu128, PEFT 0.17.1 and Pillow 11.3.0 are retained.
-   OpenCV is currently absent. If Canny requires it, pin a lab-only optional
-   headless package and record license/hash/reason before install. Do not add it
+   OpenCV was absent at the initial proposal and is now pinned/installed lab-only
+   as documented below. Preserve its license/hash/reason. Do not add it
    to API/core or upgrade numerical dependencies implicitly. Do not substitute
    an unverified Pillow edge filter and still call it Canny.
 10. Failure/retry: schema/hash/media/runtime/resource/conditioning errors fail
@@ -154,8 +155,8 @@ the wheel notices and inspect them before installation.
 
 Actual lab NumPy is `2.4.6`. This wheel's Python 3.11 requirement is
 `numpy>=1.23.5`, so its declared requirement does not force a NumPy change.
-Metadata compatibility is not a tested ABI claim: actual import/Canny execution
-and `pip check` are still required. No automatic numerical upgrade/downgrade or
+Metadata compatibility alone was not a tested ABI claim: actual import/Canny
+execution and `pip check` subsequently PASS, as recorded below. No numerical upgrade/downgrade or
 installation of another `cv2` namespace package is permitted.
 
 Conditioning must keep the existing geometry: grayscale source, aspect-preserving
@@ -204,3 +205,52 @@ third-party notice SHA
 `4fc3c113d53e95da0f3c433655a67067b7310e53af31eb6d280e94cc6927a363`;
 OpenCV Apache-2.0 and bundled LGPL notices are preserved. This optional library
 download is not controller weight acquisition; no operating dependency changed.
+
+## Actual CPU input checkpoint, 2026-10-04 16:02 UTC
+
+Code source `b1e4a36ed00fb0e95c02db981a870a7e7add8af0`; only contracts/provider
+and optional OpenCV were installed in the isolated lab. Trainer remains pinned
+to `cf6746aefd45d890ea1fb0612e95fc673865ccdd`. Actual worker imports, 64×64
+synthetic ABI check, wheel RECORD and `pip check` PASS with no Torch import.
+Pillow 11.3.0, NumPy 2.4.6, Torch 2.7.1+cu128, Diffusers 0.35.2 and PEFT 0.17.1
+are unchanged. The first install stopped at a group-writable temporary-wheel
+preflight, before mutation; exact-file permission correction preceded installation.
+
+One fixed CPU run `imgsdxlcannyrun_bff6961962200604faf23bf1b0b6a80c` produced
+three 832×512 binary RGB maps in **120ms**, systemd inactive/success/exit0.
+Command: `artifact_31815b52d75a4819883e27c68f9410b3` /
+`rev_87bb6eb9a9a64be6898c8bd3dfcbfe02`, member
+`manifests/sdxl-canny-conditioning-command.json`, SHA
+`e28e203a20ce5d7bc466b98b8c93fb036accf1e4fed106c7ccd35e72189a6141`.
+Result: `artifact_ffb8da06f52249eba2b4149cb8f0022e` /
+`rev_bcca1e59d98046df8a09b235da174311`, member
+`manifests/sdxl-canny-conditioning-result.json`, SHA
+`30ca21b257e93ceb9a860d64da3fe5bb2ade796f3fde21be02ac1f6770bf0406`.
+All four committed members resolve to exact bytes. Three separate installed-role
+CPU reconstructions match; actual terminal replay verifies all three outputs with
+Canny/transform entry denied, zero writes/model/GPU calls and unchanged hashes/mtime.
+Counts stay separate: one synthetic ABI check, three preparation transforms,
+three verification reconstructions, replay zero transforms, model executions zero.
+
+Direct original-resolution source/map inspection gives **own input-detail 3/3 PASS**:
+fan hub/blades/grille/support, plant petals/leaves/veins/stem/roots and scooter
+wheels/spokes/light marks remain. Doubled/raster-rough contours are a control
+signal, not finished examination strokes. The worker receipt remains
+`UNREVIEWED_CANNY_INPUTS`; the separate own report does not rewrite it. Final
+illustration quality `NOT_EVALUATED`, independent review `NOT_PERFORMED`.
+
+Twenty-six non-binary evidence members, including earlier fixture/type/invocation,
+permission and archive-preflight failures, are committed under
+`artifact_605737dbd28c4c92a8ac1729b67fca52` /
+`rev_ed711467c73f4334bea6ab14532c8c10`. Primary member
+`reports/own-input-review.json`, SHA
+`d6f6877ad2fa0542356455476da8a83d82552408dfe5764e9637652a93c8b478`;
+all members verified, no duplicate PNG/weight/wheel bytes. Milestone Slack
+`devreport_a56d0b87ac7d4115a39b020f004a8227` SENT/HTTP200.
+
+Operating V6 binding and five production services unchanged. Native 72 and
+publication derivatives six retain their own-REJECTED judgments; these three
+input maps are not new model outputs. No controller weight, training update,
+GPU dispatch, reserved-source read or production activation. GOAL ACTIVE.
+Next is controller license/model/comparison admission and one frozen six-output
+spatial diagnostic; no input threshold retuning or fresh T2I baseline.
