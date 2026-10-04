@@ -15,19 +15,18 @@ from pathlib import Path, PurePosixPath
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
-    LocalImageScienceCorpusVisualPilotCommand,
-    LocalImageScienceCorpusVisualPilotCommandV2,
-    LocalImageScienceCorpusVisualPilotCommandV3,
-    LocalImageScienceCorpusVisualPilotPlan,
-    LocalImageScienceCorpusVisualPilotPlanV2,
-    LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
     ScienceVisualCandidate,
     ScienceVisualPageImage,
     content_json_bytes,
     validate_contract,
-    validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
+)
+from eom_image_contracts.science_visual_pilot_codec import (
+    ScienceVisualPilotCommand,
+    ScienceVisualPilotPlan,
+    parse_science_visual_pilot_command,
+    parse_science_visual_pilot_plan,
 )
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.file_set_control_artifacts import (
@@ -35,6 +34,7 @@ from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetPublisher,
 )
 from eom_orchestrator.settings import Settings
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
 
 WORKSPACE_PARENT = Path("/srv/eom/image-training-workspaces")
@@ -172,16 +172,8 @@ def _png_dimensions(payload: bytes) -> tuple[int, int]:
 def _load_workspace(
     workspace: Path,
 ) -> tuple[
-    (
-        LocalImageScienceCorpusVisualPilotCommand
-        | LocalImageScienceCorpusVisualPilotCommandV2
-        | LocalImageScienceCorpusVisualPilotCommandV3
-    ),
-    (
-        LocalImageScienceCorpusVisualPilotPlan
-        | LocalImageScienceCorpusVisualPilotPlanV2
-        | LocalImageScienceCorpusVisualPilotPlanV3
-    ),
+    ScienceVisualPilotCommand,
+    ScienceVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotResult,
     bytes,
     int,
@@ -190,32 +182,8 @@ def _load_workspace(
         _safe_read(workspace / "command.json", maximum_bytes=MAX_JSON_BYTES)
     )
     try:
-        command: (
-            LocalImageScienceCorpusVisualPilotCommand
-            | LocalImageScienceCorpusVisualPilotCommandV2
-            | LocalImageScienceCorpusVisualPilotCommandV3
-        )
-        if (
-            command_value.get("schema_version")
-            == "local-image-science-corpus-visual-pilot-command/1.2"
-        ):
-            validate_contract("science-corpus-visual-pilot-command-v3", command_value)
-            command = LocalImageScienceCorpusVisualPilotCommandV3.model_validate(command_value)
-        elif (
-            command_value.get("schema_version")
-            == "local-image-science-corpus-visual-pilot-command/1.1"
-        ):
-            validate_contract("science-corpus-visual-pilot-command-v2", command_value)
-            command = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(command_value)
-        elif (
-            command_value.get("schema_version")
-            == "local-image-science-corpus-visual-pilot-command/1.0"
-        ):
-            validate_contract("science-corpus-visual-pilot-command", command_value)
-            command = LocalImageScienceCorpusVisualPilotCommand.model_validate(command_value)
-        else:
-            raise ValueError("unsupported science visual pilot command version")
-    except (PydanticValidationError, TypeError, ValueError) as exc:
+        command = parse_science_visual_pilot_command(command_value)
+    except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_RESULT_INVALID") from exc
     plan_value = _json_object(
         _safe_read(
@@ -230,25 +198,11 @@ def _load_workspace(
     )
     result_value = _json_object(result_payload)
     try:
-        plan: (
-            LocalImageScienceCorpusVisualPilotPlan
-            | LocalImageScienceCorpusVisualPilotPlanV2
-            | LocalImageScienceCorpusVisualPilotPlanV3
-        )
-        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV3):
-            validate_contract("science-corpus-visual-pilot-plan-v3", plan_value)
-            plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(plan_value)
-        elif isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
-            validate_contract("science-corpus-visual-pilot-plan-v2", plan_value)
-            plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(plan_value)
-        else:
-            validate_contract("science-corpus-visual-pilot-plan", plan_value)
-            plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(plan_value)
+        plan = parse_science_visual_pilot_plan(plan_value, command)
         validate_contract("science-corpus-visual-pilot-result", result_value)
         result = LocalImageScienceCorpusVisualPilotResult.model_validate(result_value)
-        validate_science_visual_pilot_command(plan, command)
         validate_science_visual_pilot_result(plan, result)
-    except (PydanticValidationError, TypeError, ValueError) as exc:
+    except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_RESULT_INVALID") from exc
     if result.status != "SUCCEEDED" or command.attempt_id != workspace.name:
         raise ScienceVisualPilotPublicationError("SCIENCE_VISUAL_PILOT_RESULT_INVALID")

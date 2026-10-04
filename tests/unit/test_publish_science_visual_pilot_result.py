@@ -48,9 +48,34 @@ def _stage_complete_workspace(
     *,
     use_v2: bool = False,
     use_v3: bool = False,
+    plan_value: dict[str, object] | None = None,
 ) -> tuple[Path, int]:
     assert not (use_v2 and use_v3)
-    plan_value = _plan_v3_value() if use_v3 else _plan_v2_value() if use_v2 else _plan_value()
+    if plan_value is None:
+        plan_value = _plan_v3_value() if use_v3 else _plan_v2_value() if use_v2 else _plan_value()
+    command_version, plan_schema = {
+        "local-image-science-corpus-visual-pilot-plan/1.0": (
+            "local-image-science-corpus-visual-pilot-command/1.0",
+            "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0",
+        ),
+        "local-image-science-corpus-visual-pilot-plan/1.1": (
+            "local-image-science-corpus-visual-pilot-command/1.1",
+            "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1",
+        ),
+        "local-image-science-corpus-visual-pilot-plan/1.2": (
+            "local-image-science-corpus-visual-pilot-command/1.2",
+            "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2",
+        ),
+        "local-image-science-corpus-visual-pilot-plan/1.3": (
+            "local-image-science-corpus-visual-pilot-command/1.3",
+            "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.3",
+        ),
+    }[plan_value["schema_version"]]
+    requested_at = "2026-09-25T19:05:00Z"
+    completed_at = "2026-09-25T19:06:00Z"
+    if plan_value["schema_version"] == "local-image-science-corpus-visual-pilot-plan/1.3":
+        requested_at = str(plan_value["created_at"])
+        completed_at = requested_at
     plan_payload = content_json_bytes(plan_value)
     staged_sources = [
         {
@@ -63,24 +88,12 @@ def _stage_complete_workspace(
         for source in plan_value["selected_sources"]
     ]
     command_body: dict[str, object] = {
-        "schema_version": (
-            "local-image-science-corpus-visual-pilot-command/1.2"
-            if use_v3
-            else "local-image-science-corpus-visual-pilot-command/1.1"
-            if use_v2
-            else "local-image-science-corpus-visual-pilot-command/1.0"
-        ),
+        "schema_version": command_version,
         "plan": {
             "artifact_id": "artifact_" + "7" * 32,
             "artifact_revision_id": "rev_" + "7" * 32,
             "member_path": "manifests/visual-pilot-plan.json",
-            "schema_ref": (
-                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.2"
-                if use_v3
-                else "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.1"
-                if use_v2
-                else "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.0"
-            ),
+            "schema_ref": plan_schema,
             "media_type": "application/json",
             "sha256": sha256_bytes(plan_payload),
         },
@@ -88,7 +101,7 @@ def _stage_complete_workspace(
         "staged_plan_member": "input/visual-pilot-plan.json",
         "staged_sources": staged_sources,
         "result_member": "manifests/visual-pilot-result.json",
-        "requested_at": "2026-09-25T19:05:00Z",
+        "requested_at": requested_at,
         "requested_by": "operator_user",
     }
     command_identity = content_sha256(command_body).removeprefix("sha256:")
@@ -109,21 +122,22 @@ def _stage_complete_workspace(
     candidates: list[dict[str, object]] = []
     for index, source in enumerate(plan_value["selected_sources"]):
         document_id = str(source["document_id"])
-        page_payload = _png(index)
-        page_sha256 = sha256_bytes(page_payload)
-        page_member = f"pages/{document_id}/page-1.png"
-        _write(workspace / page_member, page_payload)
-        pages.append(
-            {
-                "document_id": document_id,
-                "physical_page": 1,
-                "member_path": page_member,
-                "sha256": page_sha256,
-                "size_bytes": len(page_payload),
-                "width_px": 100,
-                "height_px": 100,
-            }
-        )
+        for page_number in range(1, source["page_count"] + 1):
+            page_payload = _png(index + page_number - 1)
+            page_member = f"pages/{document_id}/page-{page_number}.png"
+            _write(workspace / page_member, page_payload)
+            pages.append(
+                {
+                    "document_id": document_id,
+                    "physical_page": page_number,
+                    "member_path": page_member,
+                    "sha256": sha256_bytes(page_payload),
+                    "size_bytes": len(page_payload),
+                    "width_px": 100,
+                    "height_px": 100,
+                }
+            )
+        page_sha256 = sha256_bytes(_png(index))
         candidate_body: dict[str, object] = {
             "document_id": document_id,
             "physical_page": 1,
@@ -167,8 +181,8 @@ def _stage_complete_workspace(
             "pdftoppm_version": "24.02",
         },
         "error_code": None,
-        "started_at": "2026-09-25T19:05:00Z",
-        "completed_at": "2026-09-25T19:06:00Z",
+        "started_at": requested_at,
+        "completed_at": completed_at,
     }
     result_value = {**result_body, "result_sha256": content_sha256(result_body)}
     _write(

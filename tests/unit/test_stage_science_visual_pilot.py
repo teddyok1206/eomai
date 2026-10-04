@@ -7,12 +7,17 @@ from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceCorpusVisualPilotCommandV2,
     LocalImageScienceCorpusVisualPilotCommandV3,
+    LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotPlanV3,
 )
 
 from scripts.image_trainer import stage_science_visual_pilot as stage
-from tests.unit.test_science_corpus_visual_contracts import _plan_v2_value, _plan_v3_value
+from tests.unit.test_science_corpus_visual_contracts import (
+    _plan_v2_value,
+    _plan_v3_value,
+    _plan_value,
+)
 
 
 def _pointer() -> ImageEvaluationArtifactMember:
@@ -29,16 +34,8 @@ def _pointer() -> ImageEvaluationArtifactMember:
 
 
 def test_command_binds_every_staged_pdf_to_the_published_plan() -> None:
-    sources = tuple(
-        SimpleNamespace(
-            document_id="sciencedoc_" + f"{index + 1:032x}",
-            pdf=SimpleNamespace(sha256="sha256:" + f"{index + 1:064x}"),
-            bytes=2048 + index,
-            page_count=index % 3 + 1,
-        )
-        for index in range(12)
-    )
-    plan = SimpleNamespace(plan_sha256="sha256:" + "4" * 64, selected_sources=sources)
+    plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(_plan_value())
+    sources = plan.selected_sources
 
     command = stage._build_command(  # type: ignore[arg-type]
         plan=plan,

@@ -536,7 +536,7 @@ class ScienceVisualStagedSource(FrozenModel):
         return self
 
 
-def _validate_visual_pilot_command(
+def validate_science_visual_pilot_command_identity(
     command: FrozenModel,
     *,
     plan: ImageEvaluationArtifactMember,
@@ -586,7 +586,7 @@ class LocalImageScienceCorpusVisualPilotCommand(_LocalImageScienceCorpusVisualPi
 
     @model_validator(mode="after")
     def immutable_command_is_coherent(self) -> LocalImageScienceCorpusVisualPilotCommand:
-        _validate_visual_pilot_command(
+        validate_science_visual_pilot_command_identity(
             self,
             plan=self.plan,
             plan_schema_ref=CORPUS_PILOT_PLAN_SCHEMA_REF,
@@ -602,7 +602,7 @@ class LocalImageScienceCorpusVisualPilotCommandV2(_LocalImageScienceCorpusVisual
 
     @model_validator(mode="after")
     def immutable_command_is_coherent(self) -> LocalImageScienceCorpusVisualPilotCommandV2:
-        _validate_visual_pilot_command(
+        validate_science_visual_pilot_command_identity(
             self,
             plan=self.plan,
             plan_schema_ref=CORPUS_PILOT_PLAN_V2_SCHEMA_REF,
@@ -618,7 +618,7 @@ class LocalImageScienceCorpusVisualPilotCommandV3(_LocalImageScienceCorpusVisual
 
     @model_validator(mode="after")
     def immutable_command_is_coherent(self) -> LocalImageScienceCorpusVisualPilotCommandV3:
-        _validate_visual_pilot_command(
+        validate_science_visual_pilot_command_identity(
             self,
             plan=self.plan,
             plan_schema_ref=CORPUS_PILOT_PLAN_V3_SCHEMA_REF,
@@ -825,6 +825,14 @@ def validate_science_visual_pilot_command(
     }[type(plan)]
     if type(command) is not expected_version:
         raise ValueError("science visual plan and command contract versions differ")
+    validate_science_visual_staged_population(plan, command)
+
+
+def validate_science_visual_staged_population(
+    plan: _LocalImageScienceCorpusVisualPilotPlanBase,
+    command: _LocalImageScienceCorpusVisualPilotCommandBase,
+) -> None:
+    """One exact source/hash invariant shared by released and supplemental commands."""
     if command.plan_sha256 != plan.plan_sha256:
         raise ValueError("science visual pilot command does not bind the plan")
     expected = tuple(

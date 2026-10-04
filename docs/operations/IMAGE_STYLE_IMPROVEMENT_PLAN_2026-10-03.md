@@ -218,6 +218,42 @@ inventing candidate IDs. Reuse existing schema/application paths where sufficien
 smallest tested successor boundary if the existing lineage cannot express a supplemental pilot.
 No new queue, database, external model API or production activation is needed for this expansion.
 
+### 2026-10-04 supplemental source protocol checkpoint
+
+ADR 0185 records why increasing old campaign limits or prefiltering the corpus is insufficient:
+the former repeats up to all 108 old PDFs; the latter can change the original group partition map.
+The additive pilot plan/command **V1.3** freezes complete predecessor plan Artifact pointers,
+validates every previous document/PDF/group/hash/partition against the full approved corpus, and
+excludes old document identities only after whole-corpus group assignment and shard ranking.
+The existing isolated CPU renderer, original page/candidate/result media contracts and Orchestrator
+commit owner are reused. There is no new queue, DB migration, model API or production binding.
+
+Staging, isolated worker and result admission now share a closed version codec instead of separate
+version-switch implementations. Exact V1.0–V1.2 command bytes are preserved in regression tests.
+The V1.3 publisher uses an optional type-only import so unrelated historical CLI imports remain
+compatible with their older installed contract set; this is not an import fallback or schema coercion.
+The new staged-pilot entry point has a metadata-only preflight before PDF reads/publication/dispatch.
+
+Final source gates: **140 PASS** in the explicit image-test environment (eight suites, including
+29 supplemental-source/codec cases) and **59 PASS** corpus-contract tests in the explicit API
+environment. These tests overlap earlier checkpoints; do not sum historical counts. Ruff format/
+lint, strict mypy on six core modules plus three operator modules, release-shell syntax and diff
+checks PASS. An initial source run exposed a tuple-versus-JSON-array validation bug in the new
+factory; it was fixed before release. Earlier isolated-import failures were a mixed source/installed
+test-environment invocation; the historical importer now remains independent of optional V1.3
+runtime imports, and its correct explicit-environment rerun passed. No operating dependency was
+installed to make a source test pass.
+
+Actual supplemental selection preflight, compatible lab-wheel installation and PDF extraction
+remain pending at this source checkpoint. Proposed bounded cohort: three disjoint workers, at
+most 54 previously unselected PDFs / 384 pages / 512 candidates each, run sequentially. Confirm
+actual selected source/page/partition counts and exact release identities before dispatch. New
+discovery regions are not approved training data; literal crop admission, target preparation and
+source/duplicate grouping remain separate. The old inventory is not rewritten to contain new IDs.
+Recovered source candidates remain 23; actual SDXL authored outputs remain 36 own-REJECTED.
+Full-data readiness is `INSUFFICIENT`, independent blind review is unperformed and V6 is unchanged.
+Whole goal remains ACTIVE.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

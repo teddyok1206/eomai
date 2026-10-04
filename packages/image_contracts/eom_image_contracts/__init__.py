@@ -285,6 +285,12 @@ from eom_image_contracts.science_subject_refinement import (
     build_science_visual_subject_refinement_plan,
     validate_science_visual_subject_refinement_plan,
 )
+from eom_image_contracts.science_visual_expansion import (
+    LocalImageScienceCorpusVisualPilotCommandV4,
+    LocalImageScienceCorpusVisualPilotPlanV4,
+    science_visual_expansion_campaign_id,
+    validate_science_visual_expansion_command,
+)
 from eom_image_contracts.sdxl_learned_comparison import (
     LEARNED_COMPARISON_ARMS,
     SDXL_LEARNED_COMMAND_SCHEMA_REF,
@@ -698,9 +704,11 @@ __all__ = [
     "LocalImageScienceCorpusVisualPilotCommand",
     "LocalImageScienceCorpusVisualPilotCommandV2",
     "LocalImageScienceCorpusVisualPilotCommandV3",
+    "LocalImageScienceCorpusVisualPilotCommandV4",
     "LocalImageScienceCorpusVisualPilotPlan",
     "LocalImageScienceCorpusVisualPilotPlanV2",
     "LocalImageScienceCorpusVisualPilotPlanV3",
+    "LocalImageScienceCorpusVisualPilotPlanV4",
     "LocalImageScienceCorpusVisualPilotResult",
     "LocalImageScienceLoraMicroAdapterManifest",
     "LocalImageScienceLoraMicroEvaluationCase",
@@ -877,6 +885,7 @@ __all__ = [
     "safe_visual_reference_member_path",
     "sanitize_svg_overlay",
     "science_subject_multiseed_value",
+    "science_visual_expansion_campaign_id",
     "sdxl_target_caption",
     "sdxl_target_id",
     "sdxl_target_placement",
@@ -941,6 +950,7 @@ __all__ = [
     "validate_science_visual_campaign_review_batch_command",
     "validate_science_visual_crop_set",
     "validate_science_visual_crop_set_v2",
+    "validate_science_visual_expansion_command",
     "validate_science_visual_pattern_inventory",
     "validate_science_visual_pattern_inventory_v2",
     "validate_science_visual_pilot_command",

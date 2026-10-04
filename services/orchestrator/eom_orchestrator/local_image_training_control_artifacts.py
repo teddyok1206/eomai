@@ -41,6 +41,7 @@ if TYPE_CHECKING:
         LocalImageScienceCampaignLoraMicroProbePlan,
         LocalImageScienceCampaignLoraMicroProbePlanV2,
         LocalImageScienceCampaignLoraMicroProbePlanV3,
+        LocalImageScienceCorpusVisualPilotPlanV4,
         LocalImageScienceObjectLineArtSuitabilityReview,
         LocalImageScienceVisualCampaignRasterRefinementPlan,
         LocalImageScienceVisualCampaignRasterSuitabilityReview,
@@ -576,6 +577,23 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-science-visual-pilot-result",
             identity_sha256=result.result_sha256,
             created_at=result.completed_at,
+        )
+
+    def commit_science_visual_pilot_plan_v4(
+        self,
+        plan: LocalImageScienceCorpusVisualPilotPlanV4,
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=plan,
+            contract_name="science-corpus-visual-pilot-plan-v4",
+            member=SCIENCE_VISUAL_PILOT_PLAN_MEMBER,
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.3"
+            ),
+            artifact_type="control_local_image_science_visual_pilot_plan_v4",
+            idempotency_prefix="local-image-science-visual-expansion-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
         )
 
     def commit_science_visual_pattern_inventory(

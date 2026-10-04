@@ -26,19 +26,18 @@ from eom_catalog_service.science_visual_pilot import (
 from eom_identifiers import sha256_bytes
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
-    LocalImageScienceCorpusVisualPilotCommand,
-    LocalImageScienceCorpusVisualPilotCommandV2,
-    LocalImageScienceCorpusVisualPilotCommandV3,
-    LocalImageScienceCorpusVisualPilotPlan,
-    LocalImageScienceCorpusVisualPilotPlanV2,
-    LocalImageScienceCorpusVisualPilotPlanV3,
     ScienceVisualGuidanceAuthority,
     ScienceVisualLocatorPolicyV2,
     ScienceVisualToolIdentity,
     ScienceVisualToolSet,
     content_json_bytes,
-    content_sha256,
-    validate_contract,
+)
+from eom_image_contracts.science_visual_pilot_codec import (
+    ScienceVisualPilotCommand,
+    ScienceVisualPilotPlan,
+)
+from eom_image_contracts.science_visual_pilot_codec import (
+    build_science_visual_pilot_command as _build_command,
 )
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
@@ -267,69 +266,6 @@ def _load_corpus(
         return ScienceAssessmentWebCorpusManifestV2.model_validate(value)
     except (CropLocatorStageError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceVisualPilotStageError("SCIENCE_VISUAL_PILOT_CORPUS_INVALID") from exc
-
-
-ScienceVisualPilotPlan = (
-    LocalImageScienceCorpusVisualPilotPlan
-    | LocalImageScienceCorpusVisualPilotPlanV2
-    | LocalImageScienceCorpusVisualPilotPlanV3
-)
-ScienceVisualPilotCommand = (
-    LocalImageScienceCorpusVisualPilotCommand
-    | LocalImageScienceCorpusVisualPilotCommandV2
-    | LocalImageScienceCorpusVisualPilotCommandV3
-)
-
-
-def _build_command(
-    *,
-    plan: ScienceVisualPilotPlan,
-    plan_pointer: ImageEvaluationArtifactMember,
-    requested_at: datetime,
-    requested_by: str,
-) -> ScienceVisualPilotCommand:
-    use_v3 = isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV3)
-    use_v2 = isinstance(plan, LocalImageScienceCorpusVisualPilotPlanV2)
-    body: dict[str, object] = {
-        "schema_version": (
-            "local-image-science-corpus-visual-pilot-command/1.2"
-            if use_v3
-            else "local-image-science-corpus-visual-pilot-command/1.1"
-            if use_v2
-            else "local-image-science-corpus-visual-pilot-command/1.0"
-        ),
-        "plan": plan_pointer.model_dump(mode="json"),
-        "plan_sha256": plan.plan_sha256,
-        "staged_plan_member": "input/visual-pilot-plan.json",
-        "staged_sources": tuple(
-            {
-                "document_id": source.document_id,
-                "staged_pdf_member": f"input/pdfs/{source.document_id}.pdf",
-                "sha256": source.pdf.sha256,
-                "bytes": source.bytes,
-                "page_count": source.page_count,
-            }
-            for source in plan.selected_sources
-        ),
-        "result_member": "manifests/visual-pilot-result.json",
-        "requested_at": requested_at.isoformat().replace("+00:00", "Z"),
-        "requested_by": requested_by,
-    }
-    identity = content_sha256(body).removeprefix("sha256:")
-    body["attempt_id"] = "imgscivisattempt_" + identity[:32]
-    body["command_sha256"] = content_sha256(body)
-    command: ScienceVisualPilotCommand
-    if use_v3:
-        command = LocalImageScienceCorpusVisualPilotCommandV3.model_validate(body)
-        contract_name = "science-corpus-visual-pilot-command-v3"
-    elif use_v2:
-        command = LocalImageScienceCorpusVisualPilotCommandV2.model_validate(body)
-        contract_name = "science-corpus-visual-pilot-command-v2"
-    else:
-        command = LocalImageScienceCorpusVisualPilotCommand.model_validate(body)
-        contract_name = "science-corpus-visual-pilot-command"
-    validate_contract(contract_name, command.model_dump(mode="json"))
-    return command
 
 
 def _chown_workspace(workspace: Path) -> None:

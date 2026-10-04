@@ -88,6 +88,7 @@ def _select_partition(
     pools: dict[tuple[str, str], tuple[ScienceAssessmentCorpusDocument, ...]],
     count: int,
     remaining_page_budget: int,
+    excluded_document_ids: frozenset[str] = frozenset(),
 ) -> tuple[tuple[ScienceAssessmentCorpusDocument, ...], int]:
     offsets = {key: 0 for key in pools}
     selected: list[ScienceAssessmentCorpusDocument] = []
@@ -96,7 +97,10 @@ def _select_partition(
         for key in sorted(pools):
             values = pools[key]
             index = offsets[key]
-            while index < len(values) and values[index].page_count > remaining_page_budget:
+            while index < len(values) and (
+                values[index].page_count > remaining_page_budget
+                or values[index].document_id in excluded_document_ids
+            ):
                 index += 1
             offsets[key] = index
             if index >= len(values):
@@ -223,6 +227,28 @@ def select_science_visual_campaign_shard_sources(
     two independently staged workers from receiving the same source PDF.
     """
 
+    return _select_campaign_sources(
+        documents,
+        selection_seed_sha256=selection_seed_sha256,
+        campaign_shard_index=campaign_shard_index,
+        campaign_shard_count=campaign_shard_count,
+        source_limit=source_limit,
+        page_limit=page_limit,
+        excluded_document_ids=frozenset(),
+    )
+
+
+def _select_campaign_sources(
+    documents: tuple[ScienceAssessmentCorpusDocument, ...],
+    *,
+    selection_seed_sha256: str,
+    campaign_shard_index: int,
+    campaign_shard_count: int,
+    source_limit: int,
+    page_limit: int,
+    excluded_document_ids: frozenset[str],
+) -> tuple[ScienceVisualPilotSource, ...]:
+    """Shared pools retain whole-corpus partitions/ranks before bounded exclusions."""
     if not 2 <= campaign_shard_count <= 64 or not 0 <= campaign_shard_index < campaign_shard_count:
         raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_CAMPAIGN_SHARD_INVALID")
     if not 12 <= source_limit <= 96 or not source_limit % 6 == 0:
@@ -275,6 +301,7 @@ def select_science_visual_campaign_shard_sources(
             pools=pools[partition],
             count=quotas[partition],
             remaining_page_budget=remaining_pages,
+            excluded_document_ids=excluded_document_ids,
         )
         chosen.extend((document, partition) for document in selected)
     sources = tuple(

@@ -24,10 +24,6 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import (
-    LocalImageScienceCorpusVisualPilotCommand,
-    LocalImageScienceCorpusVisualPilotCommandV2,
-    LocalImageScienceCorpusVisualPilotCommandV3,
-    LocalImageScienceCorpusVisualPilotPlan,
     LocalImageScienceCorpusVisualPilotPlanV2,
     LocalImageScienceCorpusVisualPilotPlanV3,
     LocalImageScienceCorpusVisualPilotResult,
@@ -37,8 +33,13 @@ from eom_image_contracts import (
     ScienceVisualPilotRuntime,
     content_sha256,
     validate_contract,
-    validate_science_visual_pilot_command,
     validate_science_visual_pilot_result,
+)
+from eom_image_contracts.science_visual_pilot_codec import (
+    ScienceVisualPilotCommand,
+    ScienceVisualPilotPlan,
+    parse_science_visual_pilot_command,
+    parse_science_visual_pilot_plan,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageDraw, UnidentifiedImageError  # type: ignore[import-not-found]
@@ -241,18 +242,6 @@ def _tool_version(executable: Path, *arguments: str) -> str:
     return first_line
 
 
-ScienceVisualPilotPlan = (
-    LocalImageScienceCorpusVisualPilotPlan
-    | LocalImageScienceCorpusVisualPilotPlanV2
-    | LocalImageScienceCorpusVisualPilotPlanV3
-)
-ScienceVisualPilotCommand = (
-    LocalImageScienceCorpusVisualPilotCommand
-    | LocalImageScienceCorpusVisualPilotCommandV2
-    | LocalImageScienceCorpusVisualPilotCommandV3
-)
-
-
 def _verify_tools(plan: ScienceVisualPilotPlan) -> tuple[str, str]:
     pdftoppm_version = _tool_version(PDFTOPPM, "-v")
     tesseract_version = _tool_version(TESSERACT, "--version")
@@ -269,16 +258,7 @@ def _verify_tools(plan: ScienceVisualPilotPlan) -> tuple[str, str]:
 def load_command(path: Path) -> ScienceVisualPilotCommand:
     value = _parse_json(_read_regular(path, maximum_bytes=MAX_JSON_BYTES, expected_sha256=None))
     try:
-        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.0":
-            validate_contract("science-corpus-visual-pilot-command", value)
-            return LocalImageScienceCorpusVisualPilotCommand.model_validate(value)
-        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.1":
-            validate_contract("science-corpus-visual-pilot-command-v2", value)
-            return LocalImageScienceCorpusVisualPilotCommandV2.model_validate(value)
-        if value.get("schema_version") == "local-image-science-corpus-visual-pilot-command/1.2":
-            validate_contract("science-corpus-visual-pilot-command-v3", value)
-            return LocalImageScienceCorpusVisualPilotCommandV3.model_validate(value)
-        raise ValueError("unsupported science visual pilot command version")
+        return parse_science_visual_pilot_command(value)
     except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_COMMAND_INVALID") from exc
 
@@ -295,18 +275,7 @@ def _load_plan(
         )
     )
     try:
-        plan: ScienceVisualPilotPlan
-        if isinstance(command, LocalImageScienceCorpusVisualPilotCommandV3):
-            validate_contract("science-corpus-visual-pilot-plan-v3", value)
-            plan = LocalImageScienceCorpusVisualPilotPlanV3.model_validate(value)
-        elif isinstance(command, LocalImageScienceCorpusVisualPilotCommandV2):
-            validate_contract("science-corpus-visual-pilot-plan-v2", value)
-            plan = LocalImageScienceCorpusVisualPilotPlanV2.model_validate(value)
-        else:
-            validate_contract("science-corpus-visual-pilot-plan", value)
-            plan = LocalImageScienceCorpusVisualPilotPlan.model_validate(value)
-        validate_science_visual_pilot_command(plan, command)
-        return plan
+        return parse_science_visual_pilot_plan(value, command)
     except (JsonSchemaValidationError, PydanticValidationError, TypeError, ValueError) as exc:
         raise ScienceCorpusVisualRunnerError("SCIENCE_VISUAL_PILOT_PLAN_INVALID") from exc
 
