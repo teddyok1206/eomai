@@ -7,7 +7,61 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 18:12 UTC**: the deliberate final source-
+Latest checkpoint, **2026-10-04 19:46 UTC**: authoritative metadata inventory and
+VALIDATION-only source curation are complete for this bounded window; full quality
+goal remains ACTIVE. Original plus supplemental frozen lineage contains **270
+distinct PDFs**: TRAIN180 / VALIDATION45 / HOLDOUT45, with 797/207/216 original
+page pointers and 1508/356/440 raw candidate rows respectively. These rows are
+not approved object crops. Original approved crop metadata remains16/4/4; latest
+TRAIN micro-LoRA used38 reviewed targets from26 PDFs/25 exam groups. Metadata
+inventory resolved36 unique pointers with94 guarded read/read-only-begin SQL
+statements and no PNG/PDF reads. This is the admitted visual subset, not the entire
+downloaded corpus or the 520-item GraphRAG denominator. Earlier108-source reports
+below remain historical, not overwritten by the combined270-source scope.
+
+Frozen discovery inspected **20 VALIDATION original pages**, 20 PDFs/exam groups,
+10,841,059 bytes; HOLDOUT binary reads0. Twenty diagnostic contact-page views and
+six native-resolution page views led to eight literal region proposals. Visible
+people/cars/scenes can be absent from detector candidates, so the first legacy
+parent-intersection preflight refused them before workspace creation/CPU cropping.
+[ADR 0192](../adr/0192-reviewed-page-regions-without-detector-parent.md) adds review/
+set `1.2` (V3) with an explicit `REVIEWED_ORIGINAL_PAGE` anchor, without fake parent
+IDs or weakening V1/V2. Exact PDF/page/frame/hash/partition admission, shared CPU
+crop adapter and Orchestrator publisher are reused. Source `fe6aa118`; regression
+**190 PASS / one explicitly deselected unchanged infrastructure-import test**,
+strict mypy5 source files PASS, Ruff/shell syntax/diff PASS. Three candidate wheels
+have exact RECORD verification, zip-import/schema/Pydantic/canonical roundtrip PASS;
+they were **not installed** into production or existing numerical worker runtimes.
+
+Actual fixed CPU processing produced eight proposed crops from four VALIDATION
+documents/groups. Own pixel inspection accepted four literal source derivatives
+(bottle-blowing portrait, collapsed bag, distillation apparatus, separating funnel),
+from **two documents/groups**, and rejected four contaminated/small frames. Exact
+functional apparatus geometry remains code-owned; these are style references,
+not generative scientific-topology approval. Accepted derivatives were published
+once through the existing owner: crop set `artifact_e2265d33d84c45c59cc9f7857e6137b2`
+/ `rev_d6049cf325e544f4be49725d2dbd8658`, primary raw SHA
+`c9c88aadb62410701c3b5bfed7c7ada7049398a2a7b98c41d749c92a11746a0a`;
+review `artifact_c2990ce6c7514da49afe2a7b75374f2c` /
+`rev_c29fa4ea4c0249a59d1a2b8fa18765cd`. All six canonical members verified and
+PNG bytes equal the inspected preflight. Rejected selections retain their evidence.
+
+Thirty-two nonbinary evidence members, including actual failure/guard-correction
+history, are in `artifact_5ba5b9d7c23f45b7aedb87ba44ed3ea4` /
+`rev_ce73fffcef5441e5b158c59c1164f29b`, primary `reports/own-source-review.json`,
+raw SHA `9a4378d2e0a82ccd994f467a4f0d0faf415a237200ea9f4996a08d25734638b2`.
+Four clean source derivatives do **not** constitute a12-case validation cohort or
+a32-case independent blind cohort. Blind V1's semantic-raster output schema remains
+different from actual probe-output PNGs; an explicit generation/evaluation successor
+is still needed. No output pointers were relabelled. New GPU/training/downloads0;
+HOLDOUT0; native generated total84 and TRAIN fallback remainder0 unchanged. V6 and
+all five services unchanged/active; no Preview/HWPX canary or activation opened.
+Next: audit existing VALIDATION crop eligibility and curate more independently
+sourced VALIDATION regions, then freeze the actual bounded evaluation successor.
+Novel photo/sketch conversion, LoRA learned-style benefit and independent acceptance
+remain unproved. Full-training/four-arm/32-case gates below are not removed.
+
+Previous checkpoint, **2026-10-04 18:12 UTC**: the deliberate final source-
 initialization diagnostic is installed lab-only and executed once. Same three
 TRAIN references, existing Canny maps/models/prompts/seed/controller and LoRA1;
 only original grayscale white-paper RGB initialization with fixed strength0.35

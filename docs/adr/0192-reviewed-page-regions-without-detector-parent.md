@@ -78,3 +78,30 @@ The new tests include source VAL/HOLD preservation, metadata-only admission, mis
 stale/hash refusal, direct CPU pixel equality without Torch, explicit anchor rejection,
 duplicate/page indexes, mixed complete lineage and the existing publication receiver.
 Wheel/runtime execution and own actual-crop visual disposition are separate evidence.
+
+## Actual bounded source execution
+
+On 2026-10-04 19:46 UTC, source `fe6aa118` executed one direct-region CPU preflight
+using the unchanged fixed image worker/Pillow11.3.0. Eight crops/four documents were
+inspected: four clean source crops retained, four small/contaminated crops refused.
+The retained four belong to two VALIDATION PDFs/exam groups, not four independent
+documents. A separately frozen four-selection intent was admitted and published via
+the existing owner; all six canonical members were resolved and hashes/PNG bytes
+matched the inspected preflight. No TRAIN reassignment, HOLDOUT pixels, model call,
+training step, runtime installation or production activation occurred.
+
+Crop set `artifact_e2265d33d84c45c59cc9f7857e6137b2` /
+`rev_d6049cf325e544f4be49725d2dbd8658`, primary raw SHA
+`c9c88aadb62410701c3b5bfed7c7ada7049398a2a7b98c41d749c92a11746a0a`.
+The four PNGs plus set manifest live there; intent is independently pinned to
+`artifact_c2990ce6c7514da49afe2a7b75374f2c` /
+`rev_c29fa4ea4c0249a59d1a2b8fa18765cd`. Thirty-two text-only QA/inventory/failure/
+wheel records are in `artifact_5ba5b9d7c23f45b7aedb87ba44ed3ea4` /
+`rev_ce73fffcef5441e5b158c59c1164f29b`. Generated artifacts are not in Git.
+
+Three built candidate wheels passed RECORD/zip import and all171 pinned-schema
+checks, including the actual eight-proposal V3 canonical roundtrip, without installing
+them or importing Torch/Diffusers. This is candidate packaging, not installed runtime
+release acceptance. These source-data checks cannot approve institution-quality output,
+novel photo conversion or LoRA style learning. Twelve-case validation and32-case
+independent evaluation remain incomplete; full experiment scope is unchanged.
