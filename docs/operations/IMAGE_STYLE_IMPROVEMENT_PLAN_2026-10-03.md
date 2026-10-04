@@ -7,7 +7,82 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 19:46 UTC**: authoritative metadata inventory and
+Latest checkpoint, **2026-10-04 20:27 UTC**: the four historical VALIDATION crops
+were audited against their four original pages from three PDFs. Exact canonical
+bytes were admitted and staged read-only (2,070,513 bytes;30 guarded read/read-only
+statements). All four are **not selected for the new clean-reference benchmark**:
+the plant has a stray remnant, the pulling person's head/upper torso was partly
+erased, and both apparatus crops retain label/leader residue. This finding is
+limited to those four crops, not a retrospective rejection of all TRAIN targets.
+Their historical approval, identities, partitions and artifact bytes are unchanged.
+
+Two explicitly frozen discovery windows added **five previously unseen eligible
+exam groups/pages** and **twenty previously unseen pages**; the latter are not
+twenty new independent groups. Additional original bytes were2,999,812 +10,743,675.
+Across the first discovery, historical-page audit and these two windows there are
+**49 unique original pages /34 PDFs /27 exam groups**. All are VALIDATION; no
+HOLDOUT pixels or new PDF downloads were read. Contact sheets are diagnostic
+views, not canonical source images or proof of full-resolution inspection of
+every page. Native pages needed for the selected frames were inspected directly.
+The first second-window metadata preflight incorrectly required twelve newly
+unseen groups and failed before creating a workspace or reading PNG bytes; the
+discovery-only minimum was corrected without lowering any quality acceptance.
+
+Thirteen literal V3 frames were processed by the existing fixed CPU adapter and
+viewed individually. **Ten clean source derivatives** from six PDFs/groups passed
+own source QA: a partial leafy stem, an intact rope-pulling person, two student
+portraits, a wheat seedling, mineral-filled cart, drill-bit/rod group, metal-ingot
+stack, boy holding a light cord and a hockey player. The first hockey frame retained
+`B`; a separately pinned frame removed that label without erasing pixels. Both
+goat frames were rejected: one retained a label/arrow and the tighter one clipped
+the head. The three rejected frames and failure history are preserved, not
+registered as eligible source targets. Some accepted native drawings are small;
+registration does not prove suitability for every high-resolution style metric.
+
+Supported Orchestrator publication committed the accepted10 once and verified
+all12 canonical members, including exact equality to inspected PNG bytes:
+
+- review `artifact_3be6832c1d0f4bb88d8e558dc75b7fb9` /
+  `rev_9608f737b5384d6583eef5d0bc8ef621`, raw SHA
+  `f3bc1e840213b0be6c4828cfd03c3b49cd7700c5d6452dd6f7219c946459acc3`;
+- crop set `artifact_e1ad9a7c3fa04685b6e8d7cd00294b94` /
+  `rev_a8c90dab545c4bba88fab0de3f5cd0c0`, raw SHA
+  `122aecdd716c3409420d08a89bf3065596f863b3594476bfa8c9259449e9431e`.
+
+Together with the previous four V3 source crops this gives **14 depictions /7
+PDFs /7 exam groups /8 original pages**, not eighteen clean crops including the
+four historical masked ones. Classification is honestly limited to
+`LAB_APPARATUS`, `LIVING_ORGANISM` and `PHYSICAL_OBJECT`. No rock-filled cart is
+relabelled a standalone natural specimen, and no isolated boy is relabelled a
+complete real-world scene to pad the family count. An average-hash screen found
+no pairs at distance<=6; that is not full visual duplicate clearance against
+TRAIN/HOLDOUT. The existing minimum-four-family blind gate remains **NOT_MET**;
+14 source crops alone do not constitute12 generated/grounded evaluation cases
+or32 independent blind cases.
+
+Thirty-three text-only QA/provenance/operator/failure records were committed and
+all hashes resolved: `artifact_b48a6d1ea75e477d926ad0715d69f4b2` /
+`rev_bfb719c20d5a4b9994dfd6482244894f`, primary `reports/own-source-review.json`,
+raw SHA `fb8733d6f24a9162c95b467ae49b77b369a6930ac16e5097a5adb122d634f0a0`.
+This references previous evidence and canonical PNGs rather than copying them.
+The evidence safe-reader rejected two group-writable local stdout logs before
+publication; their exact permissions were strengthened to600, and the failure
+was retained. No protocol/worker/runtime code changed in this checkpoint; the
+190-test source regression and candidate-wheel evidence below are historical
+references, not falsely reported as rerun. Private operators passed formatter/
+lint and real typed-admission/CPU/publication/hash checks.
+
+New GPU outputs/training/HOLDOUT reads0; native total84 and exhausted TRAIN
+fallback remain unchanged. Production V6 hash and all five active services were
+checked unchanged. Full goal remains ACTIVE. Next: obtain the missing genuinely
+appropriate source family and perform visual duplicate/cohort checks, then
+implement the explicit reserved-source generation/evaluation successor. Never
+relabel probe PNGs as Item semantic rasters, feed these VALIDATION crops into
+TRAIN-only commands, or spend further TRAIN fallback. Novel-reference conversion,
+LoRA advantage, full training/four-arm/32-case review and Item/Preview/HWPX
+activation remain unproved/unperformed.
+
+Previous checkpoint, **2026-10-04 19:46 UTC**: authoritative metadata inventory and
 VALIDATION-only source curation are complete for this bounded window; full quality
 goal remains ACTIVE. Original plus supplemental frozen lineage contains **270
 distinct PDFs**: TRAIN180 / VALIDATION45 / HOLDOUT45, with 797/207/216 original
