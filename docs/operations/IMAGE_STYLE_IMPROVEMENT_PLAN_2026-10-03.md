@@ -7,12 +7,13 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 11:00 UTC onward**: the own-screened 38-source pilot
-completed actual 200-step SDXL training and a separately frozen six-BASE/six-LoRA
-legacy-TRAIN comparison. Technical execution/publication/replay PASS; own inspection
-rejects all twelve new outputs. Operating V6 remains unchanged, independent review
-NOT_PERFORMED, reserved pixels unopened, GOAL ACTIVE. See the actual checkpoint below;
-earlier zero-training/pending statements describe their historical checkpoint only.
+Latest checkpoint, **2026-10-04 12:00 UTC onward**: after the 38-source/200-step
+training and twelve legacy-reference outputs, a separate fixed reviewed-target
+cohort generated three BASE/three LoRA images with the shared isolated pair owner.
+Technical execution/publication/installed replay PASS; all six native outputs own
+REJECTED. Total actual SDXL outputs: 54, all own-REJECTED. Operating V6 unchanged,
+independent review NOT_PERFORMED, reserved pixels unopened, GOAL ACTIVE. Earlier
+pending statements and 48-output summaries describe their historical checkpoint.
 
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
@@ -588,7 +589,7 @@ Local actual AI samples: `/tmp/eom-sdxl-reviewed-comparison-samples-20261004/`
 These are new generated outputs, unlike earlier source-derived candidate targets. Own review:
 `/tmp/eom-sdxl-reviewed-comparison-own-review-20261004.json`.
 
-### Next boundary after the measured 38-source pilot
+### Historical follow-up scope after the measured 38-source pilot
 
 1. Preserve this adapter/result/cohort and REJECTED outputs. Do not spend the exhausted
    diagnostic quotas again, change native bytes into apparent PASS results, or increase steps
@@ -607,6 +608,94 @@ These are new generated outputs, unlike earlier source-derived candidate targets
 5. Freeze a distinct bounded matched cohort before further inference; keep reserved partitions
    closed until their declared independent evaluation boundary. Full data readiness remains
    INSUFFICIENT, independent quality NOT_PERFORMED, activation FORBIDDEN, GOAL ACTIVE.
+
+### Actual reviewed-target matched comparison, 2026-10-04
+
+`7cda7e33` adds `local-image-sdxl-target-comparison-{command,result}/1.0`, pinning the
+actual reviewed evaluation command 1.1, its successful 38-target training result,
+adapter revision and selected prepared PNG revisions. These PNGs are reviewed
+institutional-source derivatives, not raw originals or new generated drawings.
+Source/target revision, recipe expression, schema/media/hash and full original PDF
+lineage are validated before pixels. Only the three selected PNGs and two adapter
+members are staged; the 38-image training set is not copied into this evaluation.
+Legacy learned-conditioning and new target-reference execution retain different
+source/result contracts and share one numerical pair loop, one GPU lease and
+fresh BASE/LORA pipelines. Existing isolated systemd template, NAS commit owner,
+queue/DB/schema, scientific overlays, team prompt files and production stay unchanged.
+
+Frozen input cohort: PEDESTAL_FAN, FLOWERING_PLANT_WITH_ROOTS and
+KICK_SCOOTER_WHEEL_LIGHTS from three different source documents/exam groups. All
+three exact target PNGs were viewed before selection. Both arms use each exact
+reviewed training caption, the same existing negative prompt, seed 104729 and the
+pinned 30-step/guidance-7/T2I-0.8 numerical settings. Both tokenizers: maximum
+67/77 tokens. This is `REVIEWED_TRAIN_TARGET_NOT_HOLDOUT`; zero reserved pixels.
+
+New quota: one pair, six outputs, no training. Run
+`imgsdxltargetcmprun_cc970021ebb2599641b46a761e3ea703` completed in **30,383ms**,
+peak allocated GPU **8,328,740,352 bytes**. The new cohort is exhausted **6/6**;
+the earlier two 12/12 cohorts remain exhausted, not reset or relabeled.
+Command: `artifact_8cb2359e63424f37bb1ed910510d83c3` /
+`rev_88a2a82d3a5f4ae9a9fe7ee5e15baf63`, raw SHA
+`sha256:4a3ce96bf9aa4af0f7ce6442aeb9ada1526174c294f58d86a558987c6c3eeb75`.
+Result: `artifact_566856b16d3f454a825b20aa37a40a8c` /
+`rev_f9f58bc9073d4d66b04fd71cb5b4640d`, primary
+`manifests/sdxl-target-comparison-result.json`, raw SHA
+`sha256:7e7a4868a5b5e3cf4a1a6d76c424216e62620505349a0d02b07510df9afd43d8`,
+semantic SHA `sha256:89594030277462276148c4972cc6447c84decd3ac2b80e6e291636c9f908e0e9`.
+All **16** declared members (receipt, three derived conditioning PNGs and twelve
+raw/final PNGs) matched canonical registered bytes. No training PNG/weight copy
+was committed. Raw RGB 832×512 and native grayscale 800×500 are separate outputs.
+
+Direct native inspection, without whitening/thresholding/cosmetic repair:
+
+| Case | LoRA observation | Remaining blocker / own decision |
+| --- | --- | --- |
+| Fan | background grid disappears; broad outline mostly retained | gray canvas, dark blades/base, edge noise, unverified mechanics; REJECTED |
+| Plant | bars disappear; four leaves and overall layout persist | gray/halo, dark leaves, altered root branching; REJECTED |
+| Scooter | background bars removed; side arrangement mostly retained | gray/rough doubled contours, altered handlebar/wheel/light marks; REJECTED |
+
+Both arms are rejected for all three cases. LoRA edge fractions decrease
+171→42, 149→46, 141→33 per mille, but mid-tone fractions increase
+832→922, 869→964, 950→977. Nonwhite backgrounds make canvas foreground
+990–1000 per mille for LoRA. These metrics do **not** prove useful object
+simplification or science accuracy. Cleaner TRAIN inputs alone did not remove
+the failure in this small cohort; this is an observation, not a causal proof.
+
+CPU regression: **386 PASS / one explicitly deselected pre-existing failure**.
+The unfiltered run's unchanged Orchestrator→Catalog import violation in
+`source_page_crop_expansion_inputs.py` is retained as separate maintenance work,
+not reported PASS. Nine changed source modules pass strict mypy; lint/format,
+shell syntax, diff, wheel resource/RECORD and actual worker CPU imports pass.
+Actual installed replay passes for new six outputs/three conditionings, old
+38-target training, old six BASE/six LoRA and four learned-comparison outputs:
+zero model calls, no Torch import, no files changed. Failed prefixes, changed
+hashes, duplicate targets, unreceipted outputs and time/memory ceilings are tested.
+
+Lab contracts/provider only: source `7cda7e33`, wheel SHAs
+`b002c75e04900f01436631f6acc449b647aeec7dc6dd4caa08d955c1d5bcec55` /
+`881afc0cca2893455d6af2b7afa2fb8d40a36613f256e7fc170f8e1a775df368`.
+The `cf6746ae` trainer and rollback wheels remain; operating V6 hash
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`
+and five services are unchanged. No restart, extra training or production activation.
+Own review and sample materializations:
+`/tmp/eom-sdxl-target-comparison-own-review-20261004.json`,
+`/tmp/eom-sdxl-target-comparison-samples-20261004/`
+`{pedestal_fan,flowering_plant_with_roots,kick_scooter_wheel_lights}-{base,lora}-104729.png`.
+Independent review NOT_PERFORMED; no Item/Preview/HWPX canary or quality activation.
+
+**Next:** first compare the pinned implementation/preprocessing/decoder assumptions
+with primary sources, preserving current native bytes and policy meaning. The
+[model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0)
+describes bright outlines on dark conditioning; its example uses
+[controlnet_aux 0.0.7's actual detector](https://raw.githubusercontent.com/huggingface/controlnet_aux/v0.0.7/src/controlnet_aux/lineart/__init__.py),
+which inverts the network output after resizing. That is not evidence by itself
+that EOM's final polarity is wrong. No new dependency/download or polarity change
+was made. If source parity admits it, freeze a **distinct T2I-zero matched control**
+using the existing numerical baseline/evaluation/target contracts, same selected
+targets/captions/seed, new pinned numerical-command identity and a separate quota.
+Do not fabricate historical use of the new setting or rerun an exhausted cohort.
+This control tests whether adapter conditioning contributes to the gray surface;
+it does not imply shape preservation/quality PASS and does not justify more training.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate

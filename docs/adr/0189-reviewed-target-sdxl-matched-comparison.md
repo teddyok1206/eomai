@@ -2,8 +2,8 @@
 
 Date: 2026-10-04 UTC
 
-Status: implemented with CPU contract/admission/worker regression coverage;
-actual GPU comparison and independent quality acceptance not yet recorded.
+Status: implemented and actual six-output GPU comparison/publication/replay verified;
+all six native outputs own-REJECTED; independent review NOT_PERFORMED.
 
 ## Boundary and decision
 
@@ -82,6 +82,14 @@ CPU evidence (2026-10-04): focused/new/legacy/provider/trainer/handoff plus six
 unaffected dependency-boundary cases: 386 PASS, one explicitly deselected
 pre-existing failing case. Strict mypy: nine changed source modules PASS.
 Formatting, lint, shell syntax and diff checks are separate release gates.
+
+Actual run: `imgsdxltargetcmprun_cc970021ebb2599641b46a761e3ea703`, 30,383ms,
+peak allocated GPU 8,328,740,352 bytes; six outputs/three conditionings. Registered
+result `artifact_566856b16d3f454a825b20aa37a40a8c` /
+`rev_f9f58bc9073d4d66b04fd71cb5b4640d`; all 16 members match workspace bytes.
+Grid artifacts decrease, but gray canvas/fills/rough contours remain, so the new
+6/6 quota is exhausted without quality PASS. Installed new/legacy replay is
+zero-model/zero-write/no-Torch. Operating V6 and all five services unchanged.
 
 Schema-first tests must cover old/new isolation, missing/stale/hash/schema/media
 pointers, duplicate identities/pixels, wrong source/target revision/expression,
