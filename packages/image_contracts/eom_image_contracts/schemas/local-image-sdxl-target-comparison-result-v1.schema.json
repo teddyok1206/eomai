@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-target-comparison-result/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "command_sha256", "baseline_command_sha256", "training_result_sha256", "model", "case_relation", "conditioning_policy", "status", "error_code", "runtime", "conditionings", "outputs", "started_at", "completed_at", "duration_ms", "result_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-sdxl-target-comparison-result/1.0"},
+    "run_id": {"type": "string", "pattern": "^imgsdxltargetcmprun_[0-9a-f]{32}$"},
+    "command_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "baseline_command_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "training_result_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "model": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-result/1.0#/properties/model"},
+    "case_relation": {"const": "REVIEWED_TRAIN_TARGET_NOT_HOLDOUT"},
+    "conditioning_policy": {"const": "FIT_GRAYSCALE_INVERT_832X512/1.0"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "error_code": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-result/1.0#/properties/error_code"},
+    "runtime": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-result/1.0#/properties/runtime"},
+    "conditionings": {"type": "array", "maxItems": 3, "items": {"$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-result/1.0#/$defs/conditioning"}},
+    "outputs": {"type": "array", "maxItems": 6, "items": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-result/1.0#/$defs/SdxlLearnedComparisonOutput"}},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
+    "result_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

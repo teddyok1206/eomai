@@ -1,0 +1,43 @@
+"""Closed command selection for the existing isolated paired-comparison entry point."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from eom_image_contracts.models import content_json_bytes
+from eom_image_contracts.sdxl_learned_comparison import LocalImageSdxlLearnedComparisonCommand
+from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
+from eom_image_contracts.validation import validate_contract
+from jsonschema import ValidationError as SchemaError
+
+from eom_image_provider.provider import ProviderError
+from eom_image_provider.staged_file_io import read_staged_member, verified_directory
+
+
+def load_sdxl_comparison_command(
+    workspace: Path,
+    command_path: Path,
+) -> LocalImageSdxlLearnedComparisonCommand | LocalImageSdxlTargetComparisonCommand:
+    if command_path != workspace / "command.json":
+        raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+    try:
+        with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
+            raw = read_staged_member(root, "command.json", maximum_bytes=128 * 1024)
+        value = json.loads(raw)
+        schema = value.get("schema_version") if isinstance(value, dict) else None
+        parsed: LocalImageSdxlLearnedComparisonCommand | LocalImageSdxlTargetComparisonCommand
+        if schema == "local-image-sdxl-learned-comparison-command/1.0":
+            validate_contract("sdxl-learned-comparison-command", value)
+            parsed = LocalImageSdxlLearnedComparisonCommand.model_validate(value)
+        elif schema == "local-image-sdxl-target-comparison-command/1.0":
+            validate_contract("sdxl-target-comparison-command", value)
+            parsed = LocalImageSdxlTargetComparisonCommand.model_validate(value)
+        else:
+            raise ValueError("unsupported paired comparison command family")
+        if raw != content_json_bytes(parsed.model_dump(mode="json")):
+            raise ValueError("noncanonical paired comparison command")
+        return parsed
+    except (ValueError, TypeError, SchemaError) as exc:
+        raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc

@@ -23,6 +23,7 @@ from eom_image_contracts import (
     LocalImageReferenceConditionedCompositeRequestV7,
     validate_contract,
 )
+from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 
 from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
 from eom_image_provider.informative_lineart_backend import InformativeLineartTorchBackend
@@ -60,8 +61,8 @@ from eom_image_provider.reference_acquisition import (
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
 )
+from eom_image_provider.sdxl_comparison_command import load_sdxl_comparison_command
 from eom_image_provider.sdxl_learned_comparison import (
-    load_sdxl_learned_comparison_command,
     run_sdxl_learned_comparison,
 )
 from eom_image_provider.sdxl_lineart_backend import SdxlLineartDiffusersBackend
@@ -70,6 +71,7 @@ from eom_image_provider.sdxl_lora_evaluation import (
     load_sdxl_lora_evaluation_command,
     run_sdxl_lora_evaluation,
 )
+from eom_image_provider.sdxl_target_comparison import run_sdxl_target_comparison
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -138,15 +140,25 @@ def main() -> None:
     args = _parser().parse_args()
     try:
         if args.operation == "sdxl-learned-comparison":
-            learned_command = load_sdxl_learned_comparison_command(args.workspace, args.command)
-            learned_result = run_sdxl_learned_comparison(
-                command=learned_command,
-                model_store_root=args.model_store_root,
-                workspace=args.workspace,
-                gpu_lock=args.gpu_lock,
-                backend=SdxlLineartDiffusersBackend(),
-            )
-            result = learned_result.model_dump(mode="json")
+            learned_command = load_sdxl_comparison_command(args.workspace, args.command)
+            if isinstance(learned_command, LocalImageSdxlTargetComparisonCommand):
+                target_result = run_sdxl_target_comparison(
+                    command=learned_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
+                    backend=SdxlLineartDiffusersBackend(),
+                )
+                result = target_result.model_dump(mode="json")
+            else:
+                learned_result = run_sdxl_learned_comparison(
+                    command=learned_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
+                    backend=SdxlLineartDiffusersBackend(),
+                )
+                result = learned_result.model_dump(mode="json")
         elif args.operation == "informative-lineart-extraction":
             extraction_command = load_informative_lineart_extraction_command(
                 args.workspace, args.command

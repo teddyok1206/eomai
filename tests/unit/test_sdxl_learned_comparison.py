@@ -17,6 +17,7 @@ from eom_image_contracts import (
 )
 from eom_image_provider import sdxl_learned_comparison as worker
 from eom_image_provider import sdxl_lora_material as material
+from eom_image_provider import sdxl_pair_inference as pair_inference
 from eom_image_provider.provider import ProviderError
 from eom_orchestrator import sdxl_learned_comparison_inputs as admission
 from eom_orchestrator import sdxl_probe_inputs as original
@@ -228,7 +229,7 @@ def _stage(monkeypatch, tmp_path):
         yield
         leases.append("EXIT")
 
-    monkeypatch.setattr(worker, "acquire_gpu_lease", lease)
+    monkeypatch.setattr(pair_inference, "acquire_gpu_lease", lease)
     return prepared, leases
 
 
@@ -267,7 +268,10 @@ def test_fresh_arms_original_settings_exact_conditioning_terminal_prefix_and_off
             == (tmp_path / f"inputs/conditioning/{case.case_id}.png").read_bytes()
         )
     calls = backend.calls
-    for name in ("resolve_sdxl_stack", "load_sdxl_lora_material", "acquire_gpu_lease"):
+    monkeypatch.setattr(
+        pair_inference, "acquire_gpu_lease", lambda *a, **k: pytest.fail("replay entered GPU")
+    )
+    for name in ("resolve_sdxl_stack", "load_sdxl_lora_material"):
         monkeypatch.setattr(worker, name, lambda *a, **k: pytest.fail("replay entered model/GPU"))
     assert _run(prepared, tmp_path, backend) == result and backend.calls == calls
 

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-target-comparison-command/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "source_commit", "created_at", "purpose", "activation_policy", "case_relation", "lora_evaluation_command", "conditioning_policy", "cases", "seed", "budget", "command_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-sdxl-target-comparison-command/1.0"},
+    "run_id": {"type": "string", "pattern": "^imgsdxltargetcmprun_[0-9a-f]{32}$"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "purpose": {"const": "EVALUATION_ONLY_MATCHED_REVIEWED_TARGET"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "case_relation": {"const": "REVIEWED_TRAIN_TARGET_NOT_HOLDOUT"},
+    "lora_evaluation_command": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-command/1.0#/$defs/ImageEvaluationArtifactMember"},
+    "conditioning_policy": {"const": "FIT_GRAYSCALE_INVERT_832X512/1.0"},
+    "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "budget": {"$ref": "eom://schemas/image-provider/local-image-sdxl-learned-comparison-command/1.0#/$defs/SdxlLearnedComparisonBudget"},
+    "command_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "cases": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/TargetCase"}}
+  },
+  "$defs": {
+    "TargetCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_id", "target_id", "target_revision_id", "expression", "case"],
+      "properties": {
+        "sample_id": {"type": "string", "pattern": "^imgsourcecrop_[0-9a-f]{32}$"},
+        "target_id": {"type": "string", "pattern": "^imgsdxltarget_[0-9a-f]{32}$"},
+        "target_revision_id": {"type": "string", "pattern": "^imgsdxltargetrev_[0-9a-f]{32}$"},
+        "expression": {"enum": ["CLEAN_CONTOUR", "RESTRAINED_TONE", "FINE_HATCHING"]},
+        "case": {"$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/case"}
+      }
+    }
+  }
+}

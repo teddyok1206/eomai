@@ -22,6 +22,10 @@ from eom_orchestrator.sdxl_learned_comparison_inputs import (
 from eom_orchestrator.sdxl_lora_evaluation_inputs import PreparedSdxlLoraEvaluationInputs
 from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs, sdxl_micro_input_hashes
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
+from eom_orchestrator.sdxl_target_comparison_inputs import (
+    PreparedSdxlTargetComparisonInputs,
+    sdxl_target_comparison_input_hashes,
+)
 from eom_orchestrator.sdxl_training_target_inputs import (
     PreparedSdxlTrainingTargetInputs,
     sdxl_training_target_input_hashes,
@@ -60,6 +64,25 @@ def stage_sdxl_training_target_inputs(
         unit_template="eom-image-sdxl-training-targets",
         workspace_parent=workspace_parent,
         worker=worker,
+    )
+
+
+def stage_sdxl_target_comparison_inputs(
+    prepared: PreparedSdxlTargetComparisonInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_target_comparison_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-learned-comparison",
+        workspace_parent=workspace_parent,
+        worker=worker,
+        maximum_member_bytes=64 * 1024**2,
     )
 
 
@@ -203,7 +226,7 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_)[0-9a-f]{32}",
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_)[0-9a-f]{32}",
             run_id,
         )
         is None
@@ -331,6 +354,15 @@ def dispatch_informative_lineart_extraction(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-informative-lineart-extraction",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imglineartextractrun_",
+    )
+
+
+def dispatch_sdxl_target_comparison(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-learned-comparison",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxltargetcmprun_",
     )
 
 
