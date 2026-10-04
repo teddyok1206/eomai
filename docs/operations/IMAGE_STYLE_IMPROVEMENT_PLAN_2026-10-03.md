@@ -935,3 +935,66 @@ explicit successor lineage; original pixels/receipts remain intact. Actual SDXL 
 now **34 REJECTED**; follow-up budget **10/12 consumed, 2 remaining**. Six learned-extractor outputs
 remain preprocessing, not additional authored SDXL images. Full-data expansion, remaining arms,
 independent blind review and a quality-passing Item Preview/HWPX canary remain open. GOAL=ACTIVE.
+
+### 2026-10-04 actual TRAIN target audit and two-output style-prefix control
+
+At source `01402845b65c07c50cf8543ec7c67e0d76f0b898`, the accepted command/result and
+16 realized TRAIN targets were resolved by the existing indexed bounded reader. Every viewing
+copy matched its canonical PNG hash; all 16 were opened at original resolution. They span
+14 TRAIN documents / 13 exam groups. No VAL/HOLDOUT pixels, new copies or training updates.
+
+White outer canvas has border foreground 0/1000, but foreground occupies only 5–35/1000 of pixels
+and threshold-245 ink bounding boxes 18–151/1000 of the 768x512 target. Old preparation downscales
+without enlarging small objects. Inspection also finds panel lines, annotation/white-mask residue,
+incomplete crops, scientific arrows and mixed heavy-tone/fine-texture versus restrained contours.
+These are preparation hypotheses, not proof of one generation root cause or rejection of every
+institutional source. Preserve original images, crop approvals, masks, partitions and receipt.
+A changed fit, crop, mask or caption needs explicit derivative/successor lineage.
+
+All 16 training captions contain the style prefix; none of the six original evaluation prompts
+does. A frozen control added it to BOTH BASE and LORA for the original RADIO TRAIN reference/seed
+104729. Negative prompt, base/VAE/T2I pins, steps 30, CFG 7, T2I 0.8, adapter 1.0 and geometry
+stay unchanged. New prompt/seed content received a new case ID, policy Artifact and baseline;
+LORA pins that baseline and the old adapter. Existing contracts/Orchestrator admission, staging,
+dispatch and publication suffice: no new core code, dependency, migration, queue, unit, privilege
+or operating installation. Source/provider installed revisions remain honestly distinct.
+
+Actual token counts: positive 57/57→63/63, negative 67/67 within 77/77; training captions max 21/21.
+Numerical versions and generation-session/conditioning ASTs match across the two installed
+environments. Focused applicable regression **108 PASS**; operator formatter/linter/compile PASS.
+Early private discovery/invocation/environment mistakes were fixed before model dispatch;
+they were not production incidents, authority changes or inference retries.
+
+One BASE dispatch `imgsdxlproberun_57bef754ab3bdb310829939abc626056`: **11,590 ms**,
+allocated CUDA peak 8,280,481,280 bytes. Result `artifact_aa80840456b942c5bda63cc633ac555c` /
+`rev_dcb24a1016b44cafa8f84c4a47707149`, `manifests/sdxl-lineart-probe-result.json`, raw SHA
+`sha256:f98ce43387c2ca47a3cea706c3ac7d81d35bc50e16ae59d2668103618f79b516`.
+Only after terminal BASE success, one LORA dispatch `imgsdxlloraevalrun_a02a13fa7e13df8a39dbe267ad3c6919`:
+**12,860 ms**, peak 8,328,740,352 bytes. Result `artifact_41da9770a4fa4e4cae2bdc5e158d9c93` /
+`rev_2cfdb8ebbcf5499d867aecb7cd2c79f9`, `manifests/sdxl-lora-evaluation-result.json`, raw SHA
+`sha256:427e4828d8f0073f5459261d550484001820ea682a6d7e0cb382f77da4c07b01`.
+Each established family committed four validated members; conditioning hashes and publication
+crop match. Actual worker-identity replay verified receipts/images with model entry points denied,
+no Torch import and zero inference. Five services remain active, GPU idle, V6 raw binding unchanged.
+
+Both new/old same-seed RADIO pairs were directly inspected. BASE adds an invented background grid;
+LORA is close to its old gray/shadowed/textured output. Both new images are **REJECTED**.
+Native BASE dark 176→258, midtone 787→707, border foreground 949→958; LORA 116→112,
+879→884, 1000→1000 (per 1000). Viewing hashes were verified. Prefix correction alone does not
+fix this one TRAIN case; this is not unseen-data or independent acceptance. All **36 actual SDXL
+own verdicts are REJECTED**; follow-up allowance **12/12 consumed, 0 remaining**. No new training,
+activation or canary. Six extractor outputs still count only as preprocessing.
+
+Own target-by-target review, eight bounded logs, four operator sources and frozen plan are archived
+as 14 evidence members at `artifact_7916bc4397d34f328389c43d02e008ae` /
+`rev_c3a32f91027249128c6cbd7b2f4d5447`, primary `reports/target-and-trigger-own-review.md`, SHA
+`sha256:1dbabc399b7b7dd2b3e35cbd59240832fb382d519a81444f7f90dd5506aac64b`.
+No PNGs were duplicated into this archive. Viewing copies:
+`/tmp/eom-sdxl-trigger-control-samples-20261004/radio-{base,lora}-104729.png`.
+
+Next authorized development is explicit target preparation/data admission: object framing/scale,
+source mark/crop repair with reviewed derivation, expression-type/caption consistency. Do not
+repeat inference under the exhausted control cohort, inflate eligible counts, silently change
+its meaning or replace rejected images with thresholded edits. Pin the next command/data/budget
+before training. Full-data expansion, remaining arms, independent blind review and a passing
+Item Preview/HWPX canary remain open. This diagnostic is PROGRESS; the whole goal stays ACTIVE.
