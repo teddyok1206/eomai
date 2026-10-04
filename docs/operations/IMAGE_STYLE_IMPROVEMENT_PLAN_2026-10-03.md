@@ -683,6 +683,18 @@ Own review and sample materializations:
 `{pedestal_fan,flowering_plant_with_roots,kick_scooter_wheel_lights}-{base,lora}-104729.png`.
 Independent review NOT_PERFORMED; no Item/Preview/HWPX canary or quality activation.
 
+Durable metadata/operator/log archive: **19** members, zero PNG/weight duplicates,
+all registered bytes checked; `artifact_c9a944fd889f496fb93161e4d66dcbbe` /
+`rev_c4236d934fdb4cd688b54b3d7a16a9bb`, primary
+`reports/own-comparison-review.json`, raw SHA
+`sha256:e21ea4b8440b60df16c3dc00a330f5f2a2b99ab91b5034ef4b7d4a3ee3ba7e7b`.
+Archive owner source `6dbf6085` and generation source `7cda7e33` are recorded
+separately. Initial archive preflight refused the archive guard script's own
+literal secret-marker strings before any publication; that failure is preserved.
+The guard script was excluded, not the guard weakened. No GPU/training replay or
+historical-result modification occurred. Slack checkpoint `devreport_365de099f0d841f7b46569406df9d93d`
+was SENT (HTTP 200), explicitly reporting quality REJECTED and full goal ACTIVE.
+
 **Next:** first compare the pinned implementation/preprocessing/decoder assumptions
 with primary sources, preserving current native bytes and policy meaning. The
 [model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0)
