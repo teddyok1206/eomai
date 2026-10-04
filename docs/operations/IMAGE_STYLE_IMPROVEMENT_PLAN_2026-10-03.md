@@ -7,6 +7,13 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Latest checkpoint, **2026-10-04 11:00 UTC onward**: the own-screened 38-source pilot
+completed actual 200-step SDXL training and a separately frozen six-BASE/six-LoRA
+legacy-TRAIN comparison. Technical execution/publication/replay PASS; own inspection
+rejects all twelve new outputs. Operating V6 remains unchanged, independent review
+NOT_PERFORMED, reserved pixels unopened, GOAL ACTIVE. See the actual checkpoint below;
+earlier zero-training/pending statements describe their historical checkpoint only.
+
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
 The checked-in V7 institutional-style configuration is a candidate, not the active baseline.
@@ -450,7 +457,7 @@ Local own review: `/tmp/eom-sdxl-literal-source-target-own-review-20261004.md`; 
 revised PNGs `/tmp/eom-sdxl-literal-source-target-refinements-20261004/`. These are institutional
 source-derived input candidates, not newly generated AI samples.
 
-### Next corrected-data pilot boundary (updated after actual CPU targets)
+### Historical next pilot boundary at the CPU-target checkpoint
 
 1. Target-preparation successor and actual 38-source own review are complete at this boundary.
    Preserve the old 1.0 family and both committed 1.1 result revisions; use typed output pointers
@@ -474,6 +481,132 @@ Local own-inspection files (not new AI outputs):
 `/tmp/eom-supplemental-source-crops-framed-20261004/*.png`; decisions in
 `own-source-screening.json`. Canonical PNGs reside only in the committed Artifact, and evidence
 archives reference them rather than introducing a second canonical payload.
+
+### 2026-10-04 actual 38-source SDXL pilot and matched diagnostic
+
+[ADR 0188](../adr/0188-reviewed-literal-target-sdxl-micro-training.md) adds closed
+training/evaluation command/result **1.1** successors while preserving released 1.0 bytes,
+the original sixteen-input meaning and adapter-manifest 1.0. No DB schema, dependency,
+queue, service or production binding was added. Source commits `17e0bc75` / `1ff36399`:
+training regression **189 PASS**, broader evaluation regression **290 PASS**, strict types,
+formatter/linter and immutable wheel/resource/RECORD checks PASS. Do not sum overlapping suites.
+
+The new command freezes **38 distinct source drawings, 26 PDFs / 25 exam groups**, selected as
+35 first targets plus 3 repaired revisions. TRAIN only; no artificial enlargement of the
+denominator, reserved-pixel reads=0, no second resize/mask/PNG rewrite. Training input hashes
+equal realized hashes. One authorized run, **200 steps**, seed 20261004, rank/alpha 8,
+maximum 3,600,000ms and 16GiB allocated GPU memory; production activation FORBIDDEN.
+
+Actual training run `imgsdxlmicrotrainrun_faebf4cffe0d29cb799f88ec3d95e785` completed successfully:
+**474,973ms**, loss **0.024936307221651077**, peak allocated GPU **5,704,160,768 bytes**.
+RTX 5080; Python 3.11.15 / Torch 2.7.1+cu128 / Diffusers 0.35.2 / Transformers 4.56.2.
+The low training loss is not an image-quality acceptance result.
+
+- Command: `artifact_0170495f310941039f264597bf6728b9` /
+  `rev_b93a8cb2ac5d4c10b9e7df2a2274d37f`, member
+  `manifests/sdxl-lora-micro-command.json`, schema `/1.1`, raw SHA
+  `sha256:5a1a9ad6c62f31cacc911bd18be7898b86638ac0d3266499abce974916cd7971`.
+- Result/adapter: `artifact_ca69f2ad44f84e35be396e9df246a1f7` /
+  `rev_3221c81d6d1b4c5c8229e4144398d92f`, primary
+  `manifests/sdxl-lora-micro-result.json`, schema `/1.1`, raw SHA
+  `sha256:ea43ce7370867867f839bcce56e4bb4ea11c1c152ed144e9048acc29f48557a3`;
+  semantic result SHA
+  `sha256:fc5c21c79a90eb7cc34a5b10755fa72323699b8877c2f5064e29f667c479fd6b`.
+  Four members only: result, adapter manifest, config and safetensors; zero duplicate target PNGs.
+- Adapter: `imgadapter_268d02fd5e1666b693d3e630e3880c95` /
+  `imgadapterrev_906b2b4d9c3b6d9f5d9c5220657e2200`; manifest raw SHA
+  `sha256:dfb6cdc8135c071b34a02bc705a71ba6fa7ac6cbde9ecbab24986bad11b4494f`,
+  semantic SHA `sha256:2ba6227e858b2d5c614530f22df532b4c4129a48dcdd0825a1e2cc8435cf2a8e`.
+
+The fresh comparison was frozen before inference: plan SHA
+`sha256:22120c35552aba5a87f9f257ed8687d79905281283e1efb46715cd4edfcbd388`,
+**6 BASE + 6 new LoRA outputs**, no training updates, no retries. Old 12/12 diagnostic allowance
+remains exhausted; this distinct new cohort is also 12/12 consumed. Both arms use the same
+six original TRAIN reference PNGs, style prefix on both prompts, seed 104729, 30 steps,
+guidance 7.0 and T2I strength 0.8; only style LoRA differs (absent versus strength 1.0).
+This is `LEGACY_TRAIN_REFERENCE_DIAGNOSTIC_NOT_HOLDOUT`, not clean-source or generalization proof.
+
+BASE runs in the existing `eom-image` environment, LoRA in `eom-image-trainer`. These wheels
+are not falsely reported as identical: generation/conditioning/encoding ASTs and active BASE
+loader branch were compared, along with identical numerical SDK versions. The old unused
+loader keyword and new unselected style branch were explicitly accounted for. Local checks
+in both text encoders found maximum **67 tokens**, no truncation. No operating package/unit
+was changed to make the comparison.
+
+| Result | Duration | Peak allocated GPU | Committed Artifact / Revision |
+| --- | ---: | ---: | --- |
+| BASE, six images | 28,418ms | 8,280,481,280 bytes | `artifact_6e4be4fa9cd24267861337125598f928` / `rev_2ad1244c864b460ead6d4d5b36be2694` |
+| LoRA, six images | 32,830ms | 8,328,740,352 bytes | `artifact_82fab6e945654f9998ca68d881bf8f54` / `rev_c7ba6d1f7ba24b57b9d01e9fa5268015` |
+
+Result raw SHAs respectively:
+`sha256:04d7eb9890ea941c5f7b7d29d7e66e8ffe845b8a2e9f96c2ebc0b423d8205f6f` /
+`sha256:cf0bb1e80617e57bbfad4e116919681649ad8bf39277149e8d21c40a501aed50`.
+Each result has 19 declared members; every committed member matched workspace bytes via
+the bounded batch resolver. Raw RGB and native 800×500 grayscale publication outputs remain
+separate derivations. No display whitening, thresholding or cropping conceals failed native output.
+
+All twelve images were inspected directly by the implementing agent:
+
+| Depiction | Observed LoRA change | Remaining blockers / own decision |
+| --- | --- | --- |
+| Radio | reduced grid contrast/reflections, aerial preserved | gray field, shadow, fine texture; REJECTED |
+| Trilobite | white halo reduced, segmented contours persist | gray grid, grain/dense fills; REJECTED |
+| Deciduous tree | some background lines reduced | left stray line, bottom frame, gray/hatching; REJECTED |
+| Heated vessel | grid largely disappears, contours simplify | gray field, heavy fills/halos, geometry unverified; REJECTED |
+| Protective glove | harsh reflections/grid soften | patch/mark, imperfect cuff, gray field; REJECTED |
+| Microscope | excessive shading/edge halos diminish | right vertical line, grid/gray, dense fill; REJECTED |
+
+All six LoRA mid-tone fractions increase; foreground occupies **976–1000 per mille** of
+the canvas. Background gray makes fine-detail/edge metrics misleading. A lower detail score
+is not a quality PASS. Total actual SDXL outputs are now **48**, all own-REJECTED; independent
+blind review remains NOT_PERFORMED. No Item/HWPX canary or production activation is justified.
+
+Actual installed training replay exposed an ownership defect missed by same-owner development
+fixtures: staged targets are root-owned 0440 inputs; old regenerated crops are worker-owned
+outputs. `cf6746ae` corrects only successor replay's input ownership assumption. Pinned SHA,
+bounded regular-file/no-link/non-group-world-writable checks and output ownership guards remain.
+The regression failed first; changed hash/writable/symlink negatives pass. Focused **102 PASS**,
+broader **298 PASS**, strict types and formatter/linter PASS. Actual worker replay then passed
+for training and both comparison arms: zero model calls/steps, no Torch import, no new copies.
+No input chown, target rewrite, retraining or terminal-receipt repair was used.
+
+Lab contracts/provider are source `1ff36399`; the replay-only trainer wheel is `cf6746ae`, SHA
+`48c846d3f61d8b4f09230e6403507f69a7eadc9f986fb348bd1a1ba9114930d8`. Its verified rollback
+trainer wheel is `1ff36399`, SHA `805ddb31bffc91195b8a84c1ad4ef6fd659ddc0c8069a442cfec3c0ef300fe9e`.
+Existing units/GPU lock unchanged; five production services ACTIVE; GPU idle; operating V6
+binding SHA `f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845` unchanged.
+
+Evidence: **44** operator/report/log members, no duplicate PNGs/weights, all registered bytes
+verified; `artifact_b3709263327546909055c89d3ab5f471` /
+`rev_f9eba51e9cf44497a076b914285b0dae`, primary `reports/own-comparison-review.json`, raw SHA
+`sha256:e7166dfc034374b4b698ebc02583eddab309239d7d2636127381529f6db9529d`.
+Caller schema mismatch, replay failures and a private-evidence permission preflight failure are
+preserved. Corrections did not re-run training/inference or reinterpret failed history as success.
+
+Local actual AI samples: `/tmp/eom-sdxl-reviewed-comparison-samples-20261004/`
+`{radio,trilobite,deciduous_tree,heated_vessel,protective_glove,microscope}-{base,lora}-104729.png`.
+These are new generated outputs, unlike earlier source-derived candidate targets. Own review:
+`/tmp/eom-sdxl-reviewed-comparison-own-review-20261004.json`.
+
+### Next boundary after the measured 38-source pilot
+
+1. Preserve this adapter/result/cohort and REJECTED outputs. Do not spend the exhausted
+   diagnostic quotas again, change native bytes into apparent PASS results, or increase steps
+   merely because training loss is low.
+2. Admit a small clean literal-source reference/conditioning cohort through the existing
+   Orchestrator owner. New training 1.1 is supported; legacy reference diagnostic support does
+   not silently grant clean target/reference or held-out evaluation support. Determine the
+   minimal typed reference successor needed before worker behavior; no parallel trainer.
+3. Keep input geometry, artifact lineage, expressions/captions and model settings explicit.
+   CLEAN_CONTOUR, RESTRAINED_TONE and FINE_HATCHING remain distinct rather than one vague style.
+   Investigate white-canvas/background behavior before purchasing more samples or training steps.
+4. [The official model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0)
+   describes bright outlines on a dark conditioning background and uses a learned detector.
+   This supports checking the detector/input distribution, not guessing an inversion bug from
+   gray output alone. Verify the exact pinned implementation before changing polarity/policy.
+5. Freeze a distinct bounded matched cohort before further inference; keep reserved partitions
+   closed until their declared independent evaluation boundary. Full data readiness remains
+   INSUFFICIENT, independent quality NOT_PERFORMED, activation FORBIDDEN, GOAL ACTIVE.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate

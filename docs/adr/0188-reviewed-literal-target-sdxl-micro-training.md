@@ -2,7 +2,7 @@
 
 Date: 2026-10-04 UTC
 
-Status: implementation; live training and quality acceptance not yet recorded.
+Status: implemented; actual training/comparison and replay verified; own output quality REJECTED.
 
 ## Boundary and decision
 
@@ -110,3 +110,27 @@ PASS. Broader training/evaluation/target/workspace/publication regression: **298
 PASS**; overlapping suites are not added together. Actual installed replay after
 the corrected wheel is a separate live check,
 not inferred from same-owner developer fixtures.
+
+## Actual checkpoint
+
+The reviewed cohort trained once for 200 steps over 38 exact admitted target PNGs
+in 474,973ms, final loss 0.024936307221651077, peak allocated GPU memory
+5,704,160,768 bytes. Orchestrator committed result/adapter Artifact
+`artifact_ca69f2ad44f84e35be396e9df246a1f7` / `rev_3221c81d6d1b4c5c8229e4144398d92f`:
+four result/manifest/config/weight members, no duplicate training PNGs.
+
+A separately frozen six-BASE/six-LoRA cohort retained legacy TRAIN reference bytes,
+prompts (style prefix on both arms), seed and numerical settings. Every output and
+registered member matched its workspace bytes. Implementer inspection of all
+twelve native outputs rejected them: reduced reflections/grid contrast did not
+remove gray fields, shadows and extraneous marks. This is diagnostic, not holdout
+or independent quality approval. It does not justify production activation.
+
+After the replay-only trainer wheel update, actual `eom-image` identity replay of
+training and both comparison arms passed with zero model/training calls and no
+Torch import. Contracts/provider wheels, all experimental units, operating V6 and
+five production services were unchanged. New inference/training is not implied
+by replay; previous failures remain recorded rather than rewritten as successes.
+
+Full evidence/metrics/pointers and clean-input follow-up are recorded in the
+[image-quality plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
