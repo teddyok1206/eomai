@@ -10,6 +10,7 @@ from eom_image_contracts import (
     LocalImageScienceSourcePageCropReviewV2,
     LocalImageScienceSourcePageCropReviewV3,
     ScienceSourcePageCropRegion,
+    ScienceVisualPilotSource,
     SourcePageCropReview,
     validate_contract,
     validate_source_page_crop_sources,
@@ -39,9 +40,23 @@ class ScienceSourcePageCropRead:
     selections: tuple[ScienceSourcePageCropRegion, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ScienceSourcePageCropProvenance:
+    """One admitted metadata snapshot for PNG cropping or native PDF preparation."""
+
+    page_reads: tuple[ScienceSourcePageCropRead, ...]
+    pdf_sources: tuple[ScienceVisualPilotSource, ...]
+
+
 def prepare_source_page_crop_reads(
     engine: Engine, review: SourcePageCropReview
 ) -> tuple[ScienceSourcePageCropRead, ...]:
+    return resolve_source_page_crop_provenance(engine, review).page_reads
+
+
+def resolve_source_page_crop_provenance(
+    engine: Engine, review: SourcePageCropReview
+) -> ScienceSourcePageCropProvenance:
     """Read-only provenance admission; rejected metadata consumes no page PNG bytes."""
     protocol = source_page_crop_protocol(review)
     validate_contract(protocol.review_contract, review.model_dump(mode="json"))
@@ -51,12 +66,12 @@ def prepare_source_page_crop_reads(
         crop_set_pointer=review.basis_crop_set,
         authorization_pointer=review.training_authorization,
     )
+    plans = lineage.plans
     if isinstance(review, LocalImageScienceSourcePageCropReviewV3):
         if review.training_authorization != lineage.crop_set.training_authorization or (
             lineage.authorization.approved_at > review.created_at
         ):
             raise ValueError("SCIENCE_SOURCE_CROP_REGION_AUTHORIZATION_MISMATCH")
-        plans = lineage.plans
         results = lineage.results
         pointers = tuple(pilot.pilot_result for pilot in lineage.inventory.pilot_results)
         if review.supplemental_pilots:
@@ -73,7 +88,9 @@ def prepare_source_page_crop_reads(
             review, plans=plans, results=results, result_pointers=pointers
         )
     elif isinstance(review, LocalImageScienceSourcePageCropReviewV2):
-        results = resolve_source_page_crop_expansion(engine, review, lineage).results
+        expansion = resolve_source_page_crop_expansion(engine, review, lineage)
+        plans = (*plans, *expansion.plans)
+        results = expansion.results
     else:
         validate_source_page_crop_sources(
             review,
@@ -92,7 +109,7 @@ def prepare_source_page_crop_reads(
     by_page: dict[ImageEvaluationArtifactMember, list[ScienceSourcePageCropRegion]] = {}
     for selection in review.selections:
         by_page.setdefault(selection.source_page, []).append(selection)
-    return tuple(
+    page_reads = tuple(
         ScienceSourcePageCropRead(
             pointer,
             page_sizes[(selections[0].document_id, selections[0].physical_page)],
@@ -107,6 +124,10 @@ def prepare_source_page_crop_reads(
             ),
         )
     )
+    by_document = {source.document_id: source for plan in plans for source in plan.selected_sources}
+    selected_documents = {selection.document_id for selection in review.selections}
+    pdf_sources = tuple(by_document[identifier] for identifier in sorted(selected_documents))
+    return ScienceSourcePageCropProvenance(page_reads, pdf_sources)
 
 
 def iter_source_page_crop_payloads(

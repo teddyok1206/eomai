@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-source-pdf-crop-set/1.0",
+  "title": "Native PDF source derivatives, not target or training approval",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "crop_set_id", "crop_set_revision_id", "created_at", "command", "command_sha256", "members", "state", "activation_policy", "crop_set_sha256"],
+  "properties": {
+    "schema_version": {"const": "local-image-science-source-pdf-crop-set/1.0"},
+    "crop_set_id": {"type": "string", "pattern": "^imgpdfcropset_[0-9a-f]{32}$"},
+    "crop_set_revision_id": {"type": "string", "pattern": "^imgpdfcropsetrev_[0-9a-f]{32}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "command": {"$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"},
+    "command_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "members": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0#/$defs/Member"}},
+    "state": {"const": "RENDERED_SOURCE_DERIVATIVES_PENDING_TARGET_REVIEW"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "crop_set_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

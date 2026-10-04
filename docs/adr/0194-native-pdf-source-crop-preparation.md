@@ -1,0 +1,105 @@
+# ADR 0194: Native PDF source crops before style-target preparation
+
+## Status and evidence
+
+Accepted for protocol-first, CPU-only data preparation on 2026-10-04 UTC.
+Execution/install and target/training approval remain separate gates.
+
+The latest seven-target SDXL adapter still produced six rejected illustrations;
+gray canvas and scientific/artifact issues remain. A separate read-only audit
+re-admitted the actual seven TRAIN regions from six PDFs/six pages. Twelve isolated
+Poppler renders at 144/288 dpi and six embedded-image inventories were completed.
+All 144 dpi page pixels exactly equal their canonical discovery-page pixels.
+Own native-size inspection shows materially clearer fan, plant and several person
+contours at 288 dpi, while a roughly 150-ppi embedded drawing remains soft. Some
+pages contain approximately 600-ppi or higher embedded illustrations. Higher dpi
+does not guarantee new detail in every source and is not proof of LoRA quality.
+
+## Responsibility and canonical source
+
+Add a native-PDF crop preparation command/set1.0. Reuse the approved original PDF,
+the pinned existing crop review1.0/1.1/1.2 and its literal144-dpi frame. Do not edit
+their schemas, pixels, captions, partitions or target revisions. Native rendering
+is a different operation from cropping an already-rendered144-dpi PNG, so it must
+not silently inherit that operation's identity or acceptance.
+
+The new command selects existing region logical IDs from one immutable review,
+pins Poppler identity/Pillow version and a closed576-dpi recipe. A frame's pixel
+coordinates are on the original144-dpi grid (half-point PDF units); native crop
+coordinates are exactly four times those values. Default MediaBox/orientation and
+Poppler antialiasing are preserved. Render only the selected rectangles, not huge
+576-dpi whole pages. No raster enlargement, OCR mask, thresholding, tracing,
+inpainting, repainting or invented detail is allowed in this source step.
+
+## Identities, pointers and resolution
+
+The command has its own content-derived logical ID/semantic hash and raw Artifact
+Revision pointer. The set has its own logical ID, immutable revision and semantic
+hash; its PNG members retain the original selection IDs. Different dpi does not
+create an additional independent drawing/document. Source review, source PDF,
+document/page, exam group, partition, caption and expression remain recoverable
+through the pinned command/review, not duplicated into DB binary columns.
+
+Metadata admission precedes any PDF read: exact schema/Pydantic/canonical bytes,
+raw hash, permissions, lifecycle and pinned revision, complete original/supplemental
+lineage, selected-ID membership, TRAIN inheritance, timestamp and concentration.
+Unknown/missing/stale/conflicting pointers reject; no implicit latest fallback.
+This first recipe is TRAIN-only, not permission to open reserved pixels for tuning.
+
+## Structures, scale and concurrency
+
+Use keyed selection/document/page/pointer maps and uniqueness sets; preserve a
+sorted immutable selection/output tuple. At most32 selections per command, each
+native dimension at most4096, aggregate output bounds explicit, PDFs resolved once
+per unique document with existing128MiB bounded indexed batches. Admission is
+O(D+P+S), spaceO(D+P+S); rendering is linear in selected raster pixels. Reuse the
+existing source-lineage owner, exposing selected PDF metadata alongside its page
+read model rather than repeating independent lineage logic or N+1 DB queries.
+
+## Ownership, transaction and failure
+
+Contracts own frozen values and domain invariants only. Orchestrator owns admission,
+local materialization, isolated CPU dispatch, result validation and canonical
+file-set publication. The existing image identity reads only staged local inputs;
+Poppler/Pillow operate offline without model/GPU/NAS/DB/auth access. Infrastructure
+owns process/filesystem behavior; workers never commit canonical files.
+
+Reuse current command/result Artifact registration and deterministic idempotency
+keys. A failed/uncertain render is not a successful set and must not be retried
+under a new identity to bypass history. Keep intent/diagnostic evidence; resolve
+an existing output before replay. No DB migration, queue, daemon/framework or new
+dependency is introduced. Poppler and Pillow already belong to the CPU renderer;
+their exact identities are pinned instead of acquiring a new toolkit.
+
+The set state is RENDERED_SOURCE_DERIVATIVES_PENDING_TARGET_REVIEW. It does not
+authorize model training, independent quality acceptance or production activation.
+Annotational remnants, low-resolution originals and caption uncertainty require
+their own target review; high dpi alone cannot upgrade them. Future full-resolution
+target/training input semantics must be explicitly supported, not coerced into
+the released768x512 micro contract. V6/previous LoRA/VALIDATION/HOLDOUT remain intact.
+
+## Simpler alternatives
+
+Upsampling existing144-dpi crops cannot recover the PDF's fine contours. Rendering
+all pages at576dpi wastes memory/I/O and duplicates canonical full-page rasters.
+Changing the old144-dpi crop policy retroactively breaks reproducibility. One
+bounded native-region preparation boundary reuses current provenance/publication,
+leaves previous evidence immutable and supplies better source pixels where the
+original actually contains them. It does not replace diverse corpus expansion,
+full training, four-arm/independent blind study or the Item/HWPX canary.
+
+## Implementation checkpoint
+
+Source preparation command/set schemas, frozen domain validation, canonical
+review parsing and metadata-first native-PDF admission are implemented. Legacy
+PNG and new PDF admission share one provenance resolver. Binary handoff rechecks
+TRAIN membership, exact selection/PDF closure and byte bounds before any read.
+The schemas are mirrored into the package and checked by both build inspectors.
+Focused regression 269 PASS; strict mypy 5 source files and Ruff PASS.
+
+The CPU audit actually ran at 144/288 dpi. The closed 576-dpi renderer, isolated
+worker handoff and source-set publication have not been implemented or installed
+at this checkpoint; no actual 576-dpi result or model-quality PASS is claimed.
+The next implementation must test clipped render coordinates, rotated/fractional
+pages, bounded output, renderer identity, exact result closure and replay before
+dispatch. Full-resolution target/training semantics remain a further boundary.

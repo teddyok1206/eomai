@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
@@ -30,6 +32,7 @@ from eom_image_contracts.science_corpus_visual import (
     ScienceVisualPilotSource,
 )
 from eom_image_contracts.sdxl_training_targets import TargetExpression
+from eom_image_contracts.validation import validate_contract
 
 _PREFIX = "eom://schemas/image-provider/local-image-"
 SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.0"
@@ -335,7 +338,7 @@ class SourcePageCropProtocol:
     set_model: type[LocalImageScienceSourcePageCropSet]
 
 
-_PROTOCOLS = MappingProxyType(
+_PROTOCOLS: Mapping[type[SourcePageCropReview], SourcePageCropProtocol] = MappingProxyType(
     {
         LocalImageScienceSourcePageCropReview: SourcePageCropProtocol(
             "science-source-page-crop-review",
@@ -371,6 +374,35 @@ def source_page_crop_protocol(review: SourcePageCropReview) -> SourcePageCropPro
     if protocol is None:
         raise ValueError("source page crop unsupported review protocol")
     return protocol
+
+
+def parse_source_page_crop_review(
+    pointer: ImageEvaluationArtifactMember, payload: bytes
+) -> SourcePageCropReview:
+    """Resolve only released review meanings, with exact canonical bytes and hash."""
+    parser = next(
+        (
+            (model, protocol)
+            for model, protocol in _PROTOCOLS.items()
+            if protocol.review_schema_ref == pointer.schema_ref
+        ),
+        None,
+    )
+    if (
+        parser is None
+        or pointer.media_type != "application/json"
+        or pointer.member_path != "manifests/science-source-page-crop-review.json"
+        or "sha256:" + hashlib.sha256(payload).hexdigest() != pointer.sha256
+    ):
+        raise ValueError("SCIENCE_SOURCE_CROP_REVIEW_POINTER_INVALID")
+    model, protocol = parser
+    value = json.loads(payload)
+    validate_contract(protocol.review_contract, value)
+    review = model.model_validate(value)
+    canonical = content_json_bytes(review.model_dump(mode="json"))
+    if payload not in (canonical, canonical + b"\n"):
+        raise ValueError("SCIENCE_SOURCE_CROP_REVIEW_NONCANONICAL")
+    return review
 
 
 def validate_source_page_crop_sources(

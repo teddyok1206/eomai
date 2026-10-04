@@ -7,6 +7,53 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Native-source/data-preparation checkpoint, **2026-10-04 UTC**: re-admitted the
+actual seven TRAIN regions from six original PDFs/six pages. Twelve isolated
+Poppler renders at 144/288 dpi plus six embedded-image inventories completed;
+all 144-dpi rasters exactly equal the canonical discovery pages. Own inspection
+finds materially clearer fan, plant and several person contours, while a roughly
+150-ppi drawing remains soft. Some pages carry approximately 600-ppi or higher
+embedded images; these inventories do not identify every object as vector/raster.
+Higher dpi is not invented detail, independent sample growth or LoRA quality.
+
+Evidence `artifact_3e2ec3701e6b4a6f9813ad3ebfb7e323` /
+`rev_40793e24d246487eac338fa67756e80d`, primary `reports/own-review.md`, raw SHA
+`c4fc5da5864f539ec93b118ae8396b904646207da1485471fa7d85a14487f936`.
+All17 members verified:16 text records/operators/logs and1 diagnostic1200x2660
+comparison sheet. Original PDFs/canonical source PNGs were not duplicated into
+this evidence. Model calls, training steps, reserved binary reads, new independent
+drawings and production changes all0. Audit source d2c9a1ca; Poppler24.02.0.
+The immutable audit result initially records own review PENDING; this subsequent
+separate report supplies the completed own review without rewriting that result.
+
+The first archive caller failed before publisher construction because two newly
+authored local files were group-writable. Only their local permissions were
+tightened; original executed bytes/failure log are preserved in the evidence.
+A separate revised caller verified/committed the same audit, with no repeated
+render/model call, raised safety bound, direct DB edit or failed-history override.
+The original audit preflight's two cosmetic lint warnings are also recorded,
+not relabeled as PASS; the revised renderer/archive callers passed their gates.
+
+[ADR0194](../adr/0194-native-pdf-source-crop-preparation.md) defines the additive,
+closed576-dpi native-region command/set. JSON Schema2020-12/Pydantic models,
+canonical review parser and metadata-first input admission are implemented;
+legacy PNG/new PDF inputs share one provenance owner. Exact PDF/selection/TRAIN
+closure and128MiB aggregate bounds are rechecked before binary reads. Mirrors
+and both wheel inspectors cover the new schemas. Focused regression269 PASS,
+Ruff/format and strict mypy5 source files PASS. These are source gates, not an
+installed576-dpi worker/renderer/publication PASS; those boundaries and actual
+native576 output are still pending. No new dependency, DB/queue/model/preset,
+production deployment, lab installation or training activation was introduced.
+
+User source comparison:
+`/tmp/eom-image-native-pdf-audit-20261004/views/contact.png`; canonical diagnostic
+member `views/native-source-comparison.png` in the evidence above. Seven TRAIN
+regions remain seven regions/six documents, not14 independent drawings.
+Next: implement/test the bounded native576 CPU renderer and result publication,
+then explicitly review higher-resolution targets and diverse corpus inputs before
+any further training. Full training, four-arm/four-family/independent blind study
+and accepted Item/HWPX canary remain open. **Goal stays ACTIVE**.
+
 Latest matched contour-adapter checkpoint, **2026-10-04 23:03 UTC**: the separately
 frozen seven-target follow-up generated exactly **6 new LORA7 outputs**, reusing
 the12 already canonical BASE/LORA38 outputs. Actual inference30,443ms; peak
