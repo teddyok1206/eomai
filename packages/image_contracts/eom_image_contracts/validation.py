@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-canny-reference-command": "local-image-sdxl-canny-reference-command-v1.schema.json",
+    "sdxl-canny-reference-result": "local-image-sdxl-canny-reference-result-v1.schema.json",
     "sdxl-canny-detail-review": "local-image-sdxl-canny-detail-review-v1.schema.json",
     "sdxl-canny-comparison-command": "local-image-sdxl-canny-comparison-command-v1.schema.json",
     "sdxl-canny-comparison-result": "local-image-sdxl-canny-comparison-result-v1.schema.json",
@@ -353,6 +355,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-canny-reference-command": (
+        "sha256:7f9e33c0e91e614b781227bae3b086e5cf9f64e4987c1b8415f9d0dc4ce8cda4"
+    ),
+    "sdxl-canny-reference-result": (
+        "sha256:7f66e5633422784dbd1f0d717713b3d12134405c263b2fcc5852ccec6cd82e5e"
+    ),
     "sdxl-canny-detail-review": (
         "sha256:13cfa653ce4fc931ff170a0781ab09514a8ec1ce53945108e330d96179db4412"
     ),

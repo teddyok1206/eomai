@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import time
@@ -28,7 +27,6 @@ from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonOut
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.validation import validate_contract
 from jsonschema import ValidationError as SchemaError
-from PIL import Image
 
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.sdxl_canny_backend import SdxlCannyDiffusersBackend
@@ -45,6 +43,7 @@ from eom_image_provider.sdxl_pair_inference import (
     create_sdxl_pair_directories,
     run_sdxl_pair_inference,
 )
+from eom_image_provider.sdxl_pair_output_validation import validate_sdxl_pair_output_members
 from eom_image_provider.sdxl_target_source_io import read_sdxl_target_comparison_metadata
 from eom_image_provider.staged_file_io import (
     read_staged_member,
@@ -95,34 +94,6 @@ def read_sdxl_canny_comparison_sources(
     return parse_sdxl_canny_comparison_sources(command, metadata)
 
 
-def _output_closure(workspace: Path, result: LocalImageSdxlCannyComparisonResult) -> None:
-    expected = {
-        path for output in result.outputs for path in (output.raw_member_path, output.member_path)
-    }
-    allowed_directories = {
-        "outputs",
-        *("outputs/" + arm.lower() for arm in ("BASE", "LORA")),
-        *(
-            "outputs/" + arm.lower() + "/" + kind
-            for arm in ("BASE", "LORA")
-            for kind in ("raw", "final")
-        ),
-    }
-    observed: set[str] = set()
-    observed_directories: set[str] = set()
-    for parent, dirs, files in os.walk(workspace / "outputs", followlinks=False):
-        relative = Path(parent).relative_to(workspace).as_posix()
-        observed_directories.add(relative)
-        if relative not in allowed_directories:
-            raise ValueError("spatial result has an unexpected output directory")
-        with verified_directory(Path(parent), expected_owner_uid=os.geteuid()):
-            if any((Path(parent) / name).is_symlink() for name in dirs):
-                raise ValueError("spatial result has a linked output directory")
-        observed.update((Path(parent) / name).relative_to(workspace).as_posix() for name in files)
-    if observed != expected or observed_directories != allowed_directories:
-        raise ValueError("spatial result output closure mismatch")
-
-
 def _replay(
     root: int,
     workspace: Path,
@@ -142,36 +113,7 @@ def _replay(
         validate_sdxl_canny_comparison_result(command, sources, result)
         if raw != content_json_bytes(result.model_dump(mode="json")):
             raise ValueError("noncanonical spatial result")
-        _output_closure(workspace, result)
-        for output in result.outputs:
-            for name, sha, size, dimensions, mode in (
-                (output.member_path, output.sha256, output.size_bytes, (800, 500), "L"),
-                (
-                    output.raw_member_path,
-                    output.raw_sha256,
-                    output.raw_size_bytes,
-                    (832, 512),
-                    "RGB",
-                ),
-            ):
-                pixels = read_staged_member(
-                    root,
-                    name,
-                    maximum_bytes=size,
-                    expected_sha256=sha,
-                    expected_owner_uid=os.geteuid(),
-                )
-                if len(pixels) != size:
-                    raise ValueError("spatial replay output size mismatch")
-                with Image.open(io.BytesIO(pixels)) as source:
-                    if (
-                        source.format != "PNG"
-                        or source.mode != mode
-                        or source.size != dimensions
-                        or getattr(source, "n_frames", 1) != 1
-                    ):
-                        raise ValueError("spatial replay output format mismatch")
-                    source.load()
+        validate_sdxl_pair_output_members(root, workspace, result.outputs)
         return result
     except (ProviderError, ValueError, TypeError, OSError, SchemaError) as exc:
         raise ProviderError("SDXL_PROBE_OUTPUT_INVALID") from exc

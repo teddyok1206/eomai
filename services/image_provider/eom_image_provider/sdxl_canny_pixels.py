@@ -70,13 +70,8 @@ def opencv_canny_pixels(gray: bytes, *, width: int, height: int, policy: SdxlCan
         raise ProviderError("SDXL_CANNY_EDGE_INVALID") from exc
 
 
-def canny_conditioning_png(
-    payload: bytes,
-    *,
-    policy: SdxlCannyPolicy,
-    extractor: CannyPixels = opencv_canny_pixels,
-) -> bytes:
-    """Declared source materialization; no prompt, morphology rewrite or model path."""
+def sdxl_canny_source_canvas(payload: bytes, *, policy: SdxlCannyPolicy) -> Image.Image:
+    """One shared placement for edge extraction and a separate white-paper initializer."""
     try:
         if not 0 < len(payload) <= 16 * 1024**2:
             raise ValueError("Canny input byte budget exceeded")
@@ -98,6 +93,20 @@ def canny_conditioning_png(
             fitted,
             ((policy.width_px - fitted.width) // 2, (policy.height_px - fitted.height) // 2),
         )
+        return canvas
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        raise ProviderError("SDXL_CANNY_INPUT_INVALID") from exc
+
+
+def canny_conditioning_png(
+    payload: bytes,
+    *,
+    policy: SdxlCannyPolicy,
+    extractor: CannyPixels = opencv_canny_pixels,
+) -> bytes:
+    """Declared source materialization; no prompt, morphology rewrite or model path."""
+    try:
+        canvas = sdxl_canny_source_canvas(payload, policy=policy)
         edges = extractor(
             canvas.tobytes(), width=policy.width_px, height=policy.height_px, policy=policy
         )

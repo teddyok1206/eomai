@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import sys
 from pathlib import Path
@@ -11,9 +12,14 @@ import numpy as np
 import pytest
 from eom_image_contracts import LocalImageSdxlLineartProbeCommand, LocalImageSdxlLineartStack
 from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
+from eom_image_contracts.sdxl_canny_reference import SdxlCannyReferenceInitialization
 from eom_image_provider import sdxl_canny_backend as backend
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.sdxl_canny_controller_io import ResolvedSdxlCannyController
+from eom_image_provider.sdxl_canny_reference_backend import (
+    SdxlCannyReferenceDiffusersBackend,
+    SdxlCannyReferencePixels,
+)
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 from PIL import Image
 
@@ -27,8 +33,9 @@ from tests.unit.test_sdxl_lineart_stack_contract import _stack
     "fault", [None, "tokens", "shape", "nan", "range", "architecture", "gpu", "oom", "unexpected"]
 )
 @pytest.mark.parametrize("use_lora", [False, True])
+@pytest.mark.parametrize("mode", ["EDGE_ONLY", "SOURCE_INITIALIZED"])
 def test_exact_control_offline_loading_no_t2i_offload_and_cleanup(
-    monkeypatch, tmp_path, fault, use_lora
+    monkeypatch, tmp_path, fault, use_lora, mode
 ):
     calls = []
     array = np.ones((1, 512, 832, 3), dtype=np.float32)
@@ -62,6 +69,7 @@ def test_exact_control_offline_loading_no_t2i_offload_and_cleanup(
             self.vae = SimpleNamespace(dtype="fp16")
             self.tokenizer = _Tokenizer(78 if fault == "tokens" else 25)
             self.tokenizer_2 = _Tokenizer(25)
+            self.num_timesteps = 7
 
         def set_progress_bar_config(self, **kwargs):
             pass
@@ -77,6 +85,12 @@ def test_exact_control_offline_loading_no_t2i_offload_and_cleanup(
             assert "adapter_conditioning_scale" not in kwargs and kwargs["output_type"] == "np"
             assert kwargs["num_inference_steps"] == command.inference_steps
             assert kwargs["guidance_scale"] == command.guidance_scale
+            if mode == "SOURCE_INITIALIZED":
+                assert kwargs["strength"] == 0.35
+                assert kwargs["image"].tobytes() == bytes([255]) * (832 * 512 * 3)
+                assert kwargs["control_image"].size == (832, 512)
+            else:
+                assert "strength" not in kwargs and "control_image" not in kwargs
             if fault == "oom":
                 raise Oom()
             if fault == "unexpected":
@@ -134,6 +148,9 @@ def test_exact_control_offline_loading_no_t2i_offload_and_cleanup(
             StableDiffusionXLControlNetPipeline=SimpleNamespace(
                 from_pretrained=lambda p, **k: load("pipeline", p, **k)
             ),
+            StableDiffusionXLControlNetImg2ImgPipeline=SimpleNamespace(
+                from_pretrained=lambda p, **k: load("pipeline", p, **k)
+            ),
         ),
     )
     monkeypatch.setattr(
@@ -151,13 +168,25 @@ def test_exact_control_offline_loading_no_t2i_offload_and_cleanup(
         SimpleNamespace(manifest=SimpleNamespace(base_model=stack.manifest)) if use_lora else None
     )
     command = LocalImageSdxlLineartProbeCommand.model_validate(_command())
+    pixels = _png(size=(768, 512)) if mode == "SOURCE_INITIALIZED" else _png(size=(832, 512))
 
     def execute():
-        with backend.SdxlCannyDiffusersBackend(resolved, SdxlCannyControlParameters()).open(
-            stack, style_adapter=style
-        ) as session:
+        if mode == "SOURCE_INITIALIZED":
+            selected = SdxlCannyReferenceDiffusersBackend(
+                resolved,
+                SdxlCannyControlParameters(),
+                SdxlCannyReferenceInitialization(scheduler_steps=20, effective_denoising_steps=7),
+                {
+                    "sha256:" + hashlib.sha256(pixels).hexdigest(): SdxlCannyReferencePixels(
+                        bytes([255]) * (832 * 512 * 3), _png(size=(832, 512))
+                    )
+                },
+            )
+        else:
+            selected = backend.SdxlCannyDiffusersBackend(resolved, SdxlCannyControlParameters())
+        with selected.open(stack, style_adapter=style) as session:
             result = session.generate(
-                conditioning=_png(size=(832, 512)),
+                conditioning=pixels,
                 prompt="scientific line art",
                 negative_prompt="text, color",
                 seed=1,

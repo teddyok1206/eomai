@@ -24,6 +24,7 @@ from eom_image_contracts import (
     validate_contract,
 )
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
+from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 
 from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
@@ -67,6 +68,7 @@ from eom_image_provider.sdxl_canny_conditioning import (
     load_sdxl_canny_command,
     run_sdxl_canny_conditioning,
 )
+from eom_image_provider.sdxl_canny_reference import run_sdxl_canny_reference
 from eom_image_provider.sdxl_comparison_command import load_sdxl_comparison_command
 from eom_image_provider.sdxl_learned_comparison import (
     run_sdxl_learned_comparison,
@@ -169,7 +171,15 @@ def main() -> None:
             result = publication_result.model_dump(mode="json")
         elif args.operation == "sdxl-learned-comparison":
             learned_command = load_sdxl_comparison_command(args.workspace, args.command)
-            if isinstance(learned_command, LocalImageSdxlCannyComparisonCommand):
+            if isinstance(learned_command, LocalImageSdxlCannyReferenceCommand):
+                reference_result = run_sdxl_canny_reference(
+                    command=learned_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
+                )
+                result = reference_result.model_dump(mode="json")
+            elif isinstance(learned_command, LocalImageSdxlCannyComparisonCommand):
                 spatial_result = run_sdxl_canny_comparison(
                     command=learned_command,
                     model_store_root=args.model_store_root,

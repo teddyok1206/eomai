@@ -40,8 +40,18 @@ class PreparedSdxlCannyComparisonInputs:
     files: tuple[SdxlProbeInputMember, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlCannyComparisonMetadata:
+    """Full admitted spatial history before image/adapter materialization."""
+
+    command: LocalImageSdxlCannyComparisonCommand
+    sources: SdxlCannyComparisonSources
+    source_metadata: ResolvedSdxlTargetComparisonMetadata
+    files: tuple[SdxlProbeInputMember, ...]
+
+
 def sdxl_canny_comparison_input_hashes(
-    prepared: PreparedSdxlCannyComparisonInputs,
+    prepared: PreparedSdxlCannyComparisonInputs | ResolvedSdxlCannyComparisonMetadata,
 ) -> dict[str, str]:
     command, sources = prepared.command, prepared.sources
     metadata = {file.member_path: file.payload for file in prepared.files}
@@ -74,10 +84,10 @@ def sdxl_canny_comparison_input_hashes(
     }
 
 
-def prepare_sdxl_canny_comparison_inputs(
+def resolve_sdxl_canny_comparison_metadata(
     engine: Engine,
     command: LocalImageSdxlCannyComparisonCommand,
-) -> PreparedSdxlCannyComparisonInputs:
+) -> ResolvedSdxlCannyComparisonMetadata:
     validate_contract("sdxl-canny-comparison-command", command.model_dump(mode="json"))
     command = LocalImageSdxlCannyComparisonCommand.model_validate_json(command.model_dump_json())
     metadata = {}
@@ -118,6 +128,23 @@ def prepare_sdxl_canny_comparison_inputs(
         maximum_bytes=256 * 1024,
     )
     sources = parse_sdxl_canny_comparison_sources(command, metadata)
+    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
+    return ResolvedSdxlCannyComparisonMetadata(
+        command,
+        sources,
+        admitted,
+        tuple(
+            SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
+            for name, raw in sorted(metadata.items())
+        ),
+    )
+
+
+def materialize_sdxl_canny_comparison_files(
+    engine: Engine,
+    admitted: ResolvedSdxlCannyComparisonMetadata,
+) -> tuple[SdxlProbeInputMember, ...]:
+    command, sources = admitted.command, admitted.sources
     # Only now may image and adapter bytes cross the explicit workspace boundary.
     reads = []
     paths = []
@@ -161,15 +188,22 @@ def prepare_sdxl_canny_comparison_inputs(
         )
         paths.append("inputs/adapter/" + file.relative_path)
     payloads = resolve_control_artifact_members(engine, tuple(reads))
-    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
-    files = [
-        SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
-        for name, raw in metadata.items()
-    ]
+    files = list(admitted.files)
     for path, read, raw in zip(paths, reads, payloads, strict=True):
         if len(raw) != read.maximum_bytes:
             raise ValueError("SDXL_CANNY_COMPARISON_INPUT_SIZE_INVALID")
         files.append(SdxlProbeInputMember(path, read.pointer.sha256, raw))
+    return tuple(sorted(files, key=lambda file: file.member_path))
+
+
+def prepare_sdxl_canny_comparison_inputs(
+    engine: Engine,
+    command: LocalImageSdxlCannyComparisonCommand,
+) -> PreparedSdxlCannyComparisonInputs:
+    admitted = resolve_sdxl_canny_comparison_metadata(engine, command)
     return PreparedSdxlCannyComparisonInputs(
-        command, sources, admitted, tuple(sorted(files, key=lambda file: file.member_path))
+        admitted.command,
+        admitted.sources,
+        admitted.source_metadata,
+        materialize_sdxl_canny_comparison_files(engine, admitted),
     )

@@ -403,3 +403,73 @@ roundtrip/model execution or a full root-cause conclusion. Gray backgrounds also
 occur in BASE without LoRA, so blaming only the adapter or increasing its strength
 is unsupported. Remaining input/photometric-distribution diagnosis is open;
 do not add a background-whitening workaround or silently repaint scientific marks.
+
+### Deliberate final six-output source-initialization diagnostic
+
+Read-only inspection of the three exact admitted TRAIN PNGs confirms 768×512 RGB,
+matching source hashes and entirely white 16px borders. Near-white pixels occupy
+90.43%, 95.31% and 95.38% for fan, plant and scooter respectively. The reviewed
+micro adapter used 38 TRAIN targets, 200 steps, no flips, unchanged VAE/text
+encoders and exact prepared RGB. This does not prove every training target's
+background distribution or identify a VAE defect. No reserved pixels were read.
+
+The pinned [Diffusers 0.35.2 ControlNet Img2Img implementation](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl_img2img.py)
+accepts **separate** `image` initialization and `control_image` edge inputs. Our
+hypothesis is that original white-paper appearance should also initialize the
+latent, instead of regenerating it from noise with edge-only conditioning. This
+is not a proven root cause or a retraining/whitening repair.
+
+Before dispatch, freeze one successor comparison to the preceding immutable
+spatial command/result pointers. Retain all three TRAIN sources, original
+captions/negatives, seed104729, SDXL/VAE/controller/LoRA, Euler scheduler grid30,
+CFG7, LoRA1.0, controller1.0/range0–1. Only initialization mode changes: exact
+source converted to grayscale, contained inside 800×500 using LANCZOS and centered
+on white 832×512 RGB, matching the Canny placement. Denoising strength is fixed
+0.35, the already supported reference-preservation starting point, not a search.
+Diffusers/Euler executes `int(30*0.35)=10` denoising steps; distinguish this from
+the 30-step scheduler grid and verify actual runtime timestep count.
+
+Boundary/design refinements:
+
+- Canonical source and responsibility remain unchanged. A new small command pins
+  the previous spatial command/result, rather than copying its complete history,
+  prompts or model configuration. Previous released messages stay byte-identical.
+- Orchestrator fully readmits existing authorization/split/target/detail history
+  before staging only the three original source PNGs, existing control maps and
+  adapter material. No new model download, dependency, schema migration or queue.
+- Pair inputs are keyed by source SHA; duplicate ambiguous source/control pairs
+  fail explicitly. Ordered frozen per-case traces distinguish source SHA, Canny
+  SHA and initialized RGB **pixel** SHA. Initialization is a temporary numerical
+  materialization, not another canonical PNG or a new source revision.
+- Reuse the existing private handoff, closed paired-comparison CLI, one GPU inode
+  lease, fresh BASE/LORA sessions and Artifact publisher. Shared numerical load
+  and output verification have two real consumers; no new execution framework.
+- Complexity is bounded O(source/control pixels), at most three small canvases
+  and one pipeline per arm. Existing indexed/batched reads and output manifests
+  remain; no DB binary/cache/derived-value persistence.
+- Explicitly consume the final six images of the **overall 12-output fallback
+  ceiling**, in one dispatch, at most600,000ms and15GiB, all-GPU fp16. This is a
+  reasoned new hypothesis, not automatic execution of remaining quota. No retry,
+  fresh baseline, seed/prompt/strength sweep, offload or retraining follows it.
+- Replay verifies staged inputs and terminal outputs before any canvas fitting,
+  model resolution/import, GPU lease or output writes. A different/missing/stale/
+  hash-mismatched source, unsupported runtime or budget breach fails closed.
+- Source initializer can preserve source defects or merely copy the reference.
+  Judge this diagnostic separately from novel-image quality/generalization.
+  Own inspection compares original, preceding edge-only output and new native
+  output; independent/heldout/Preview/HWPX/activation remain later gates.
+
+No GPU call, lab installation or production mutation was performed to obtain the
+read-only findings above. Numerical execution requires successor schema/tests,
+committed wheel/installed identity checks and frozen command first.
+
+Source pre-install gate:450 regression tests PASS, one explicitly deselected
+pre-existing Catalog infrastructure-import violation (unchanged
+`source_page_crop_expansion_inputs.py`). One additional actual-timestep rejection
+test PASS; focused initial suite156 PASS. Strict mypy12 source files PASS, Ruff
+format/lint, shell syntax, Python3.11 compilation and diff checks PASS. The first
+type-check invocation caught a now-removed redundant import-ignore; preserve that
+failed diagnostic alongside the passing rerun. No new numerical dependency.
+Source test fixtures reuse pinned20-step predecessors/7 effective steps; the live
+diagnostic is separately frozen to its actual30-step predecessor/10 effective
+steps. Steps cannot diverge from the immutable predecessor or strength formula.
