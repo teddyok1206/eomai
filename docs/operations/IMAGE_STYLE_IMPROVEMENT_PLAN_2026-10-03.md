@@ -773,3 +773,101 @@ Installed trainer remains `cc2f32e7`, inference provider remains `67fd3190`; thi
 and extractor are **NOT INSTALLED**. Acquisition/CPU source gates are closed, but corpus
 extraction/admission, matched image quality, full-data/independent review and product canary
 remain open. The whole goal remains ACTIVE. Next: additive six-case extraction command/result.
+
+### 2026-10-04 original-provenance learned extraction: actual six-case checkpoint
+
+Implementation `2e5ebffe2279f6ff126626d666f796c16c38e655` adds the pure 2020-12/Pydantic
+extraction command/result, original TRAIN source admission, a bounded indexed Artifact-member
+batch read, the existing exclusive workspace handoff and an offline fine-generator adapter.
+ADR 0181 defines the responsibilities, immutable pointers, concurrency and failure boundaries.
+No new DB schema, queue, daemon, dependency, worker privilege or implicit-latest resolution exists.
+The old original-crop/gray-inversion and SDXL/LoRA contracts keep their previous meaning.
+
+Final focused source/old-contract/dependency regression: **239 PASS**; complete isolated image
+unit gate: **346 PASS**; strict types for nine production/CLI files PASS; formatter/linter,
+shell syntax, systemd syntax and diff checks PASS. These overlapping suites are separate gates,
+not a summed unique-test count. Initial source fixtures were rejected for group-writable file
+permissions; fixtures now obey the same safe-I/O rules as the actual root-owned handoff. A wrong
+backend call signature was caught by strict types before installation/GPU use and fixed at the
+call site. A later regression invocation named a nonexistent test file; its failure log remains
+in the evidence archive and the corrected regression passed. Validators were not weakened.
+
+Immutable release build:
+`/tmp/eom-image-trainer-build/2e5ebffe2279f6ff126626d666f796c16c38e655.Fbyllb`.
+Contract wheel SHA `cae74d9807e29d59a55809b7c3e13cdc03c1d8d97b98f616d77774fc7f8b44d5`;
+provider SHA `0e6cda5e17f66c6c9a93940d7d0db6a6c9793d3344ca53e0bcd2d14698c8eaf7`;
+built trainer SHA `d52dd4147c8d98fc5bf6ca873787bacd1080e9df5f9056cc6ab199a43e8e958e`.
+Only the contract/provider wheels were installed into the numerical trainer environment. All
+wheel RECORD entries and worker-identity import/model-read/CUDA capability were checked. The
+trainer distribution itself remains the earlier `cc2f32e7` wheel; the operating inference
+environment remains `67fd3190`. The new trainer wheel was built, **not installed**.
+
+The converted exact extractor revision is now installed as EVALUATION_ONLY under the existing
+protected model store, with root ownership and image-group read permission. Its previously
+published manifest/weight hashes are unchanged. One optional, fixed oneshot template uses the
+existing image identity, offline/protected filesystem sandbox and physical GPU lease. The
+operator update held that same GPU inode while checking quiescence/installing; old contract and
+provider wheels from `cc2f32e7` were verified as rollback inputs. No operating services were
+restarted; no Polkit/group/secret/production binding was changed.
+
+Actual extraction command:
+
+- Run `imglineartextractrun_abb6468621e4f0b6c0b2276da6350633`;
+- Artifact `artifact_db82d6f97daa410f8f007c5952928072` /
+  `rev_c7514bf952eb444fbae02ee7a628e532`;
+- Primary `manifests/informative-lineart-extraction-command.json`;
+- Raw SHA `sha256:4e9594c6541e17b7faeec50c9c416cb9455032456d593ad7c0d3971c68552fca`;
+- Semantic command SHA
+  `sha256:9c0df3e32a76671c896dd279b5a22c1f390ef87eb5e2a9dad4cabe9fa9a190ae`.
+
+It pins the existing six-case baseline command, canonical converted extractor manifest and
+original case IDs. Nine bounded inputs were staged; there was one dispatch, no reconstructed
+crop registration or new SDXL/training request. At 2026-10-04T00:31:57.673420Z the installed
+provider completed all six cases: **2,553 ms**, **376,991,232 peak allocated GPU bytes**.
+The Orchestrator independently validated original hashes, coverage, canonical receipt,
+12 PNG sizes/media/modes and exact raw/inverted conditioning pixels before committing 13 members:
+
+- Artifact `artifact_d723b6accb4b414d9d26709806b2194f` /
+  `rev_7621e6945eb847aa823b47a47d2703a9`;
+- Primary `manifests/informative-lineart-extraction-result.json`;
+- Raw SHA `sha256:6785d874102293acf85d95e0a4fb3e6f89601a3df6c41de613143b44ce490a3c`;
+- Semantic result SHA
+  `sha256:6d9a1de1459ab3bf277c716a6dd3292840f6f4fbc8aacdec1b89c09f0c0b5152`.
+
+An actual image-worker-identity replay verified the same 12 members and unchanged receipt with
+model resolution and GPU acquisition entry points deliberately denied. Model/GPU/inference
+calls were zero, and Torch was not imported. This is actual installed replay evidence, not just
+a source fixture. The original inference was neither resubmitted nor concealed as replay.
+
+The primary agent inspected all six original fitted references and all six raw outputs at
+832x512 resolution. Broad gray fills/shadows were reduced while keeping the original geometry.
+However, **all six are REJECTED AS FINAL PUBLICATION IMAGES**: rough/broken/nonuniform contours,
+dense fossil/speaker/mesh texture and source crop artifacts remain. Microscope frame separator,
+tree annotations, glove label-erasure blocks and incomplete vessel contour are original-source
+issues, not proof that extraction invented or corrected them. Native paired metrics corroborate
+lower midtone but increased fragmented/fine detail; those metrics are not quality acceptance.
+Independent blind review remains NOT_PERFORMED.
+
+Explicit local viewing materializations are in
+`/tmp/eom-informative-lineart-extraction-samples-20261004/`, with `*-reference.png` and
+`*-lineart.png` for deciduous_tree, heated_vessel, microscope, protective_glove, radio and trilobite.
+These are derivatives for inspection, not newly authored final exam illustrations.
+
+The existing Orchestrator publisher archived the own-review report and eleven sanitized gate
+logs as 12 evidence members at `artifact_b28307af2303498f87c9360a8d9b548e` /
+`rev_bb6bce2140954114b3f57f14a6dfbca1`, primary
+`reports/lineart-extraction-own-review.md`, raw SHA
+`sha256:571451bd2f82281e751987bf07fdea7957a59987ef31c0c8c4d458377b6ce47e`.
+This evidence publication performed no inference and did not duplicate the canonical PNG set.
+
+Slack milestone `devreport_16ee33b9a86b4b0cbdf67399ee2c0fd6` was SENT/HTTP 200 at
+2026-10-04T00:38:26Z. The five real API/Web/Catalog/HWPX/Workflow services remain active; operating
+V6 raw configuration SHA is still
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+
+Next: an additive comparison that explicitly pins this extraction receipt/conditioning members
+and the unchanged baseline prompt/seed/model geometry. Compare learned versus old conditioning
+with declared base/LoRA arms inside the remaining bounded budget. Original 30 rejected SDXL
+outputs remain preserved; extraction adds **zero SDXL outputs and zero training updates**, so
+follow-up control use is still 6/12. Full-data expansion, independent blind review, remaining
+matched arms and a quality-passing Item Preview/HWPX canary are open. The whole goal stays ACTIVE.
