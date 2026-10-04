@@ -2,8 +2,9 @@
 
 Date: 2026-10-04 UTC
 
-Status: implemented and actual six-output GPU comparison/publication/replay verified;
-all six native outputs own-REJECTED; independent review NOT_PERFORMED.
+Status: implemented; initial six-output comparison and separate same-input six-output
+T2I-zero control/publication/replay verified. Both cohorts own-REJECTED;
+independent review NOT_PERFORMED.
 
 ## Boundary and decision
 
@@ -90,6 +91,23 @@ result `artifact_566856b16d3f454a825b20aa37a40a8c` /
 Grid artifacts decrease, but gray canvas/fills/rough contours remain, so the new
 6/6 quota is exhausted without quality PASS. Installed new/legacy replay is
 zero-model/zero-write/no-Torch. Operating V6 and all five services unchanged.
+
+A separate numerical zero-control uses these existing contracts without changing
+their bytes or the worker. New baseline/evaluation command pins describe scale
+0.0, not a new execution of their six legacy cases. Target command/reference
+cases/captions/seed remain matched; only numerical scale, identities and timestamps
+change. Test-only `fabe6288` adds zero/current-scale backend coverage: 75 focused
+tests PASS. Actual run `imgsdxltargetcmprun_58762fd0eecb14b520ceba5ef77b6ccc`
+completed six outputs in 28,964ms and published 16 verified members as
+`artifact_afd93f6fc56b44fba1ba8d468ad865d2` /
+`rev_8c0380d5c4cb48a79f5fe63625e5f638`. No extra training/reserved source reads.
+Some backgrounds lighten, but gray areas and scientifically wrong composition
+remain: all six rejected. The zero control is causal evidence, not an accepted
+reference-conditioned product. Exact installed zero/parent replay has no model,
+Torch or file changes. A separate 0.4-strength control is the bounded next proposal;
+old quotas remain exhausted and polarity is not changed from this observation.
+Detailed native judgments, source-example audit and immutable evidence pointers
+are recorded in the operations improvement plan.
 
 Schema-first tests must cover old/new isolation, missing/stale/hash/schema/media
 pointers, duplicate identities/pixels, wrong source/target revision/expression,

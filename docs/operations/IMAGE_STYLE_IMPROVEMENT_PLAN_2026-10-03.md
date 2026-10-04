@@ -7,13 +7,13 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 12:00 UTC onward**: after the 38-source/200-step
-training and twelve legacy-reference outputs, a separate fixed reviewed-target
-cohort generated three BASE/three LoRA images with the shared isolated pair owner.
-Technical execution/publication/installed replay PASS; all six native outputs own
-REJECTED. Total actual SDXL outputs: 54, all own-REJECTED. Operating V6 unchanged,
-independent review NOT_PERFORMED, reserved pixels unopened, GOAL ACTIVE. Earlier
-pending statements and 48-output summaries describe their historical checkpoint.
+Latest checkpoint, **2026-10-04 12:49 UTC**: a distinct same-input T2I-zero control
+generated three BASE/three LoRA images after the fixed T2I-0.8 target comparison.
+Execution/publication/installed replay PASS; all six native control outputs own
+REJECTED. Some backgrounds lighten, but gray areas remain and source object counts,
+required parts and arrangement change. Total actual SDXL outputs: 60, all own-REJECTED.
+No additional training, reserved pixels or operating changes. Independent review
+NOT_PERFORMED; GOAL ACTIVE. Earlier 54/48-output summaries remain historical evidence.
 
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
@@ -708,6 +708,100 @@ targets/captions/seed, new pinned numerical-command identity and a separate quot
 Do not fabricate historical use of the new setting or rerun an exhausted cohort.
 This control tests whether adapter conditioning contributes to the gray surface;
 it does not imply shape preservation/quality PASS and does not justify more training.
+
+### Actual same-input T2I-zero control, 2026-10-04
+
+Test-only source `fabe6288` verifies that both conditioning scales 0.0 and 0.8 reach
+the existing numerical pipeline, including prompt/shape/numerical/error/cleanup
+cases. Focused tests **75 PASS**, Ruff format/lint PASS and strict mypy on three
+unchanged numerical/contract source modules PASS. The first test invocation used
+a nonexistent filename and ran zero tests; its error is retained, not a source
+failure or a live attempt. The earlier unrelated dependency-boundary violation
+is unchanged and is not reclassified as PASS.
+
+No schema, dependency, worker behavior, package installation, queue, migration or
+production activation was added. The lab still uses contracts/provider source
+`7cda7e33` and the `cf6746ae` trainer; exact installed wheel/RECORD verification
+passed without mutation. A frozen intent precedes new command publication, and
+the final frozen plan precedes staging/dispatch. Original case/reference PNG
+revisions, captions, negative prompts, seed 104729, 30 steps, guidance 7.0,
+LoRA strength 1.0 and conditioning policy are identical to the preceding pair.
+Only numerical T2I conditioning scale changes 0.8→0.0; command identities and UTC
+timestamps change accordingly. Both tokenizers remain at maximum **67/77**.
+
+New baseline command 1.0 `artifact_f42ef1ec2beb41f4a1c31c6eb2db1cdd` /
+`rev_631253c04d714a7fbbfab314c8e314c2` and evaluation command 1.1
+`artifact_5a22ecff7769480da52bce1722cd114d` /
+`rev_54b66045670e4c17b342ba65c227ba6a` are numerical provenance pins only.
+Neither original six-case baseline nor six-case LoRA evaluation was dispatched;
+no historical result is claimed to use the new setting. The target-comparison
+command pins that new evaluation and uses the same three actual prepared targets.
+
+Run `imgsdxltargetcmprun_58762fd0eecb14b520ceba5ef77b6ccc` completed **6/6** in
+**28,964ms**, peak allocated GPU **8,328,740,352 bytes**. Its independent six-output
+quota is exhausted; all old quotas stay exhausted. Command
+`artifact_954b75a5ebf648289f510416b5f13130` /
+`rev_2f41969e3f9d448fb032de37b7d8bc7d`, raw SHA
+`sha256:8be43c8615f7861318fbaf3066f4436336202c0b70279254d7f86be20c3bc23f`.
+Result `artifact_afd93f6fc56b44fba1ba8d468ad865d2` /
+`rev_8c0380d5c4cb48a79f5fe63625e5f638`, primary
+`manifests/sdxl-target-comparison-result.json`, raw SHA
+`sha256:7094159a2b47d7076323fff7fe06fb4cdca53fb0e44d610e7476967f8c62d7da`,
+semantic SHA `sha256:cad3270062fd7191977807a1607f548edffec63a5429c67aaf3a8d52a90f3d65`.
+All 16 receipt/conditioning/raw/final members match canonical registered bytes.
+
+Native inspection of all six outputs, actual targets and preceding LoRA images:
+
+| Case | Zero-control observation | Own decision |
+| --- | --- | --- |
+| Fan | BASE makes three views; LoRA makes two fans with split gray/white canvas | REJECTED: one source object and arrangement lost |
+| Rooted plant | both arms make two enlarged flowers without the four leaves/root system | REJECTED: required scientific parts lost |
+| Scooter | BASE is malformed; LoRA recognizes a scooter but changes handlebar/light marks and adds ground/gray gradient | REJECTED: source semantics/layout and white canvas fail |
+
+LoRA mid-tone fractions change 922→523, 964→454 and 977→796 per mille.
+These are descriptive metrics, not quality acceptance. T2I conditioning contributes
+to the observed surface/layout behavior in this three-case/single-seed control,
+but is not demonstrated to be the sole cause. Removing it is not a usable repair:
+gray areas remain and composition is no longer conditioned. White decoded regions
+also do not, by themselves, establish or exclude a generic decoder defect.
+No whitening, thresholding or cosmetic edits were applied.
+
+The [pinned model card](https://huggingface.co/TencentARC/t2i-adapter-lineart-sdxl-1.0/raw/5f1f33b049b96fa599f0aa3d77b31dbef5095e97/README.md)
+and [actual upstream conditioning image](https://huggingface.co/Adapter/t2iadapter/resolve/3c291e0547a1b17bed93428858cdc9b0265c26c7/figs_SDXLV1.0/cond_lin.png)
+both support bright contours on a dark background. The example's downloaded and
+revision-pinned bytes match SHA
+`sha256:d6fa8c2936da8e279e567375736a8f62c53ed48ae046f7d33e86a1b57f9e9b5f`.
+It was viewed solely as a source audit: not a training/reference/model input.
+The [pinned detector implementation](https://raw.githubusercontent.com/huggingface/controlnet_aux/v0.0.7/src/controlnet_aux/lineart/__init__.py)
+inverts after resizing. This audit does not justify silently flipping current
+polarity or changing an old policy. Detector quantization/resolution and actual
+conditioning distributions remain separate possible factors, not proven defects.
+
+Actual installed replay validates new and parent six-output results without
+models, GPU acquisition, Torch import or file changes. Five production services
+stay active; operating V6 binding SHA remains `f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+GPU idle after completion. Independent review NOT_PERFORMED; Item/Preview/HWPX
+canary and activation NOT_PERFORMED. Total 60 own-REJECTED outputs is not a blind
+test denominator or a generalization score.
+
+Own review/sample copies: `/tmp/eom-sdxl-target-zero-own-review-20261004.json` and
+`/tmp/eom-sdxl-target-zero-samples-20261004/` with the same three depiction names
+and BASE/LORA arms. Durable metadata/log/operator archive: **16** verified members,
+no duplicate PNG/weights; `artifact_fc1dfc5ee75045a2a1bee32e480452ef` /
+`rev_a1cbc922468d4fdeb01a9908b657263b`, primary `reports/own-comparison-review.json`,
+SHA `sha256:1c5abcb670bbd676f8ebfcda0b6fcab0fd972f8e2d16d926fd7aae2df909b9de`.
+Archive/operator source `fabe6288` is separate from numerical source `7cda7e33`.
+Slack `devreport_f7ff7e6c418441a08568a34aa11b2fb7` SENT, HTTP 200; checkpoint
+completion explicitly leaves full GOAL ACTIVE and quality REJECTED.
+
+**Next:** freeze one distinct midpoint T2I-strength control **0.4**, at most six
+outputs with these same inputs/seed and no additional training. Judge one-object
+counts, the exact required leaves/roots/light marks, layout and native white
+canvas together against 0.8 and 0.0. This control is proposed, not submitted.
+If it fails, stop an open-ended strength sweep and audit the background prompt/
+conditioning distribution before selecting one further factor. Do not obtain a
+quality PASS by discarding required parts, repainting backgrounds or redefining
+historical contracts/results.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
