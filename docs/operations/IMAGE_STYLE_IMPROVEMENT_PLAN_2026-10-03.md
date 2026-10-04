@@ -66,6 +66,30 @@ separately from free generation. Follow the existing internal-use authorization 
 
 ## Progress and evidence
 
+### 2026-10-04 original-page recovery implementation
+
+All sixteen original TRAIN inputs were compared with fifteen canonical unredacted page PNGs.
+No VALIDATION/HOLDOUT pixels, model calls or registry writes were used in that read-only audit.
+The full pages reveal incorrect morphology captions as well as OCR-redaction damage: the alleged
+microscope is a telescope/solar projection apparatus; the alleged glove includes a cold pack;
+the alleged flask/delivery tube is an electrolysis crucible/power supply; the alleged balance is
+a heat-conduction experiment. These observations qualify the old small-data experiment; they do
+not change its immutable command, adapter or rejected outputs.
+
+ADR 0184 adds reviewed original-page literal crops with corrected captions and frozen source
+partitions. It reuses complete historical lineage admission, bounded unique-page resolution,
+the existing CPU trainer processing and Orchestrator file-set publication. The processor runs
+as the existing `eom-image` identity with a fixed script and no model/GPU/credential inputs.
+Literal pixels are not resized, masked, thresholded or reconstructed. New PNG pointers use the
+existing institutional crop media contract, allowing the original document-group split to be
+reused without a new queue, database or dependency.
+
+Final focused regression: **175 PASS**, including 34 new source-page cases. Ruff formatting/lint,
+strict mypy on five changed core modules, release-shell syntax and diff checks PASS. The earlier
+169-PASS run preceded six additional negative/duplicate/read-group tests; counts overlap.
+Actual source recovery publication/visual inspection is pending at this implementation checkpoint.
+Full-data training, independent blind review and production activation remain pending.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

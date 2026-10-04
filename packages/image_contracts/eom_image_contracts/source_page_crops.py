@@ -1,0 +1,323 @@
+"""Reviewed literal source-page crops; old masked candidates remain immutable."""
+
+from __future__ import annotations
+
+import hashlib
+from collections import Counter
+from datetime import UTC, datetime
+from typing import Literal, Self
+
+from pydantic import Field, field_validator, model_validator
+
+from eom_image_contracts.institutional_style_evaluation import INSTITUTIONAL_CROP_SCHEMA_REF
+from eom_image_contracts.models import (
+    FrozenModel,
+    ImageEvaluationArtifactMember,
+    Sha256,
+    content_json_bytes,
+    content_sha256,
+    text_sha256,
+)
+from eom_image_contracts.science_corpus_visual import (
+    LocalImageScienceCorpusTrainingAuthorization,
+    LocalImageScienceCorpusVisualPilotPlanV3,
+    LocalImageScienceCorpusVisualPilotResult,
+    LocalImageScienceObjectLineArtCropSet,
+    LocalImageScienceVisualCampaignPatternInventory,
+)
+from eom_image_contracts.sdxl_training_targets import TargetExpression
+
+_PREFIX = "eom://schemas/image-provider/local-image-"
+SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.0"
+SOURCE_PAGE_CROP_SET_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.0"
+SCIENCE_ORIGINAL_PAGE_SCHEMA_REF = _PREFIX + "science-corpus-visual-pilot-page-image/1.0"
+SourcePageCropPartition = Literal["TRAIN", "VALIDATION", "HOLDOUT"]
+
+
+def _utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+        raise ValueError("source page crop timestamp must be UTC")
+    return value
+
+
+class ScienceSourcePageCropSelection(FrozenModel):
+    selection_id: str = Field(pattern=r"^imgsourcecrop_[0-9a-f]{32}$")
+    candidate_id: str = Field(pattern=r"^imgsciviscandidate_[0-9a-f]{32}$")
+    parent_candidate_sha256: Sha256
+    document_id: str = Field(pattern=r"^sciencedoc_[0-9a-f]{32}$")
+    physical_page: int = Field(ge=1, le=512)
+    source_document: ImageEvaluationArtifactMember
+    source_page: ImageEvaluationArtifactMember
+    page_width_px: int = Field(ge=100, le=10_000)
+    page_height_px: int = Field(ge=100, le=10_000)
+    page_render_dpi: Literal[144]
+    pixel_box: tuple[int, int, int, int]
+    exam_group_sha256: Sha256
+    partition: SourcePageCropPartition
+    depiction_key: str = Field(pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
+    caption_en: str = Field(
+        min_length=3, max_length=180, pattern=r"^[A-Za-z0-9][A-Za-z0-9 ,.'()/_-]{2,179}$"
+    )
+    caption_sha256: Sha256
+    expression: TargetExpression
+
+    @model_validator(mode="after")
+    def exact_selection(self) -> Self:
+        if self.source_document.media_type != "application/pdf" or (
+            self.source_page.media_type != "image/png"
+            or self.source_page.schema_ref != SCIENCE_ORIGINAL_PAGE_SCHEMA_REF
+            or self.source_page.member_path
+            != f"pages/{self.document_id}/page-{self.physical_page}.png"
+        ):
+            raise ValueError("source page crop pointer contract mismatch")
+        left, top, right, bottom = self.pixel_box
+        if not (
+            0 <= left < right <= self.page_width_px
+            and 0 <= top < bottom <= self.page_height_px
+            and right - left >= 32
+            and bottom - top >= 32
+        ):
+            raise ValueError("source page crop pixel box invalid")
+        if self.caption_sha256 != text_sha256(self.caption_en):
+            raise ValueError("source page crop caption hash mismatch")
+        if self.selection_id != source_page_crop_selection_id(self.model_dump(mode="json")):
+            raise ValueError("source page crop logical identity mismatch")
+        return self
+
+
+def source_page_crop_selection_id(value: dict[str, object]) -> str:
+    """A corrected caption is revision content, not another independent drawing."""
+    return (
+        "imgsourcecrop_"
+        + content_sha256(
+            {
+                key: value[key]
+                for key in ("document_id", "physical_page", "source_page", "pixel_box")
+            }
+        )[7:39]
+    )
+
+
+class LocalImageScienceSourcePageCropReview(FrozenModel):
+    schema_version: Literal["local-image-science-source-page-crop-review/1.0"]
+    review_id: str = Field(pattern=r"^imgsourcecropreview_[0-9a-f]{32}$")
+    created_at: datetime
+    created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
+    source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    basis_crop_set: ImageEvaluationArtifactMember
+    training_authorization: ImageEvaluationArtifactMember
+    selections: tuple[ScienceSourcePageCropSelection, ...] = Field(min_length=1, max_length=512)
+    policy: Literal["REVIEWED_LITERAL_ORIGINAL_PAGE_PIXELS/1.0"]
+    pillow_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    activation_policy: Literal["FORBIDDEN"]
+    review_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_created(cls, value: datetime) -> datetime:
+        return _utc(value)
+
+    @model_validator(mode="after")
+    def exact_review(self) -> Self:
+        for pointer, family in (
+            (self.basis_crop_set, "science-object-line-art-crop-set"),
+            (self.training_authorization, "science-corpus-training-authorization"),
+        ):
+            if pointer.schema_ref != _PREFIX + family + "/1.0" or (
+                pointer.media_type != "application/json"
+            ):
+                raise ValueError("source page crop basis contract mismatch")
+        ids = tuple(selection.selection_id for selection in self.selections)
+        if ids != tuple(sorted(set(ids))):
+            raise ValueError("source page crop selections must be uniquely sorted")
+        documents = Counter(selection.document_id for selection in self.selections)
+        groups = Counter(selection.exam_group_sha256 for selection in self.selections)
+        if max(documents.values()) > 3 or max(groups.values()) > 4:
+            raise ValueError("source page crop source concentration exceeds bounds")
+        partitions: dict[str, SourcePageCropPartition] = {}
+        pointers: dict[tuple[str, str, str], ImageEvaluationArtifactMember] = {}
+        for selection in self.selections:
+            for key in (selection.document_id, selection.exam_group_sha256):
+                if partitions.setdefault(key, selection.partition) != selection.partition:
+                    raise ValueError("source page crop partition leakage")
+            for pointer in (selection.source_document, selection.source_page):
+                pointer_key = (
+                    pointer.artifact_id,
+                    pointer.artifact_revision_id,
+                    pointer.member_path,
+                )
+                if pointers.setdefault(pointer_key, pointer) != pointer:
+                    raise ValueError("source page crop conflicting immutable pointers")
+        identity = content_sha256(
+            self.model_dump(mode="json", exclude={"review_id", "review_sha256"})
+        )
+        if self.review_id != "imgsourcecropreview_" + identity[7:39] or (
+            self.review_sha256
+            != content_sha256(self.model_dump(mode="json", exclude={"review_sha256"}))
+        ):
+            raise ValueError("source page crop review identity/hash mismatch")
+        return self
+
+
+class ScienceSourcePageCropMember(FrozenModel):
+    selection_id: str = Field(pattern=r"^imgsourcecrop_[0-9a-f]{32}$")
+    member_path: str = Field(pattern=r"^crops/imgsourcecrop_[0-9a-f]{32}\.png$")
+    sha256: Sha256
+    size_bytes: int = Field(ge=64, le=8 * 1024**2)
+    width_px: int = Field(ge=32, le=10_000)
+    height_px: int = Field(ge=32, le=10_000)
+    perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+
+    @model_validator(mode="after")
+    def exact_member(self) -> Self:
+        if self.member_path != "crops/" + self.selection_id + ".png":
+            raise ValueError("source page crop member identity mismatch")
+        return self
+
+
+class LocalImageScienceSourcePageCropSet(FrozenModel):
+    schema_version: Literal["local-image-science-source-page-crop-set/1.0"]
+    crop_set_id: str = Field(pattern=r"^imgsourcecropset_[0-9a-f]{32}$")
+    crop_set_revision_id: str = Field(pattern=r"^imgsourcecropsetrev_[0-9a-f]{32}$")
+    created_at: datetime
+    review: ImageEvaluationArtifactMember
+    pillow_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    members: tuple[ScienceSourcePageCropMember, ...] = Field(min_length=1, max_length=512)
+    state: Literal["REVIEWED_SOURCE_DERIVATIVES"]
+    activation_policy: Literal["FORBIDDEN"]
+    crop_set_sha256: Sha256
+
+    @field_validator("created_at")
+    @classmethod
+    def utc_created(cls, value: datetime) -> datetime:
+        return _utc(value)
+
+    @model_validator(mode="after")
+    def exact_set(self) -> Self:
+        if (
+            self.review.schema_ref != SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF
+            or self.review.media_type != "application/json"
+        ):
+            raise ValueError("source page crop review pointer mismatch")
+        ids = tuple(member.selection_id for member in self.members)
+        if ids != tuple(sorted(set(ids))) or len({member.sha256 for member in self.members}) != len(
+            self.members
+        ):
+            raise ValueError("source page crop set repeats identities or exact pixels")
+        if self.crop_set_id != "imgsourcecropset_" + content_sha256({"selection_ids": ids})[7:39]:
+            raise ValueError("source page crop set logical identity mismatch")
+        revision = content_sha256(
+            self.model_dump(mode="json", exclude={"crop_set_revision_id", "crop_set_sha256"})
+        )
+        if self.crop_set_revision_id != "imgsourcecropsetrev_" + revision[7:39] or (
+            self.crop_set_sha256
+            != content_sha256(self.model_dump(mode="json", exclude={"crop_set_sha256"}))
+        ):
+            raise ValueError("source page crop set revision/hash mismatch")
+        return self
+
+
+def validate_source_page_crop_sources(
+    review: LocalImageScienceSourcePageCropReview,
+    *,
+    crop_set: LocalImageScienceObjectLineArtCropSet,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    inventory: LocalImageScienceVisualCampaignPatternInventory,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+) -> None:
+    """Called after existing full-lineage admission; match every new selection before pixels."""
+    if review.training_authorization != crop_set.training_authorization or (
+        authorization.approved_at > review.created_at
+    ):
+        raise ValueError("source page crop authorization mismatch")
+    if len(plans) != len(results) or len(results) != len(inventory.pilot_results):
+        raise ValueError("source page crop campaign coverage mismatch")
+    sources = {source.document_id: source for plan in plans for source in plan.selected_sources}
+    by_candidate = {}
+    for plan, result, pilot in zip(plans, results, inventory.pilot_results, strict=True):
+        if result.completed_at > review.created_at:
+            raise ValueError("source page crop source is newer than review")
+        pages = {(page.document_id, page.physical_page): page for page in result.page_images}
+        for candidate in result.visual_candidates:
+            by_candidate[candidate.candidate_id] = (candidate, pages, pilot.pilot_result, plan)
+    for selection in review.selections:
+        found = by_candidate.get(selection.candidate_id)
+        if found is None:
+            raise ValueError("source page crop parent missing")
+        candidate, pages, result_pointer, plan = found
+        source = sources[candidate.document_id]
+        page = pages[(candidate.document_id, candidate.physical_page)]
+        expected_page = ImageEvaluationArtifactMember(
+            artifact_id=result_pointer.artifact_id,
+            artifact_revision_id=result_pointer.artifact_revision_id,
+            member_path=page.member_path,
+            schema_ref=SCIENCE_ORIGINAL_PAGE_SCHEMA_REF,
+            media_type="image/png",
+            sha256=page.sha256,
+        )
+        box = candidate.bounding_box
+        parent_box = (
+            box.left * page.width_px // 10_000,
+            box.top * page.height_px // 10_000,
+            (box.right * page.width_px + 9_999) // 10_000,
+            (box.bottom * page.height_px + 9_999) // 10_000,
+        )
+        left, top, right, bottom = selection.pixel_box
+        if max(left, parent_box[0]) >= min(right, parent_box[2]) or max(top, parent_box[1]) >= min(
+            bottom, parent_box[3]
+        ):
+            raise ValueError("source page crop frame does not intersect its declared candidate")
+        if (
+            selection.document_id != candidate.document_id
+            or selection.physical_page != candidate.physical_page
+            or selection.parent_candidate_sha256 != candidate.sha256
+            or candidate.page_image_sha256 != page.sha256
+            or selection.source_page != expected_page
+            or selection.source_document != source.pdf
+            or selection.exam_group_sha256 != source.exam_group_sha256
+            or selection.partition != source.partition
+            or selection.page_width_px != page.width_px
+            or selection.page_height_px != page.height_px
+            or selection.page_render_dpi != plan.page_render_dpi
+        ):
+            raise ValueError("source page crop immutable source/partition mismatch")
+
+
+def validate_source_page_crop_set(
+    review: LocalImageScienceSourcePageCropReview, crop_set: LocalImageScienceSourcePageCropSet
+) -> None:
+    if (
+        crop_set.review.sha256
+        != "sha256:"
+        + hashlib.sha256(content_json_bytes(review.model_dump(mode="json"))).hexdigest()
+    ):
+        raise ValueError("source page crop reviewed recipe hash mismatch")
+    if crop_set.created_at < review.created_at or crop_set.pillow_version != review.pillow_version:
+        raise ValueError("source page crop execution provenance mismatch")
+    if tuple(member.selection_id for member in crop_set.members) != tuple(
+        selection.selection_id for selection in review.selections
+    ):
+        raise ValueError("source page crop output coverage mismatch")
+    for selection, member in zip(review.selections, crop_set.members, strict=True):
+        left, top, right, bottom = selection.pixel_box
+        if (member.width_px, member.height_px) != (right - left, bottom - top):
+            raise ValueError("source page crop output is not the reviewed literal rectangle")
+
+
+def source_page_crop_pointer(
+    crop_set_pointer: ImageEvaluationArtifactMember, member: ScienceSourcePageCropMember
+) -> ImageEvaluationArtifactMember:
+    if (
+        crop_set_pointer.schema_ref != SOURCE_PAGE_CROP_SET_SCHEMA_REF
+        or crop_set_pointer.media_type != "application/json"
+    ):
+        raise ValueError("source page crop set pointer contract mismatch")
+    return ImageEvaluationArtifactMember(
+        artifact_id=crop_set_pointer.artifact_id,
+        artifact_revision_id=crop_set_pointer.artifact_revision_id,
+        member_path=member.member_path,
+        schema_ref=INSTITUTIONAL_CROP_SCHEMA_REF,
+        media_type="image/png",
+        sha256=member.sha256,
+    )

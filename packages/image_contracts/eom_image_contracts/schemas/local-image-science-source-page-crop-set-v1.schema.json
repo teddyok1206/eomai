@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.0",
+  "title": "Immutable literal original-page illustration crop set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "crop_set_id",
+    "crop_set_revision_id",
+    "created_at",
+    "review",
+    "pillow_version",
+    "members",
+    "state",
+    "activation_policy",
+    "crop_set_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-source-page-crop-set/1.0"
+    },
+    "crop_set_id": {
+      "type": "string",
+      "pattern": "^imgsourcecropset_[0-9a-f]{32}$"
+    },
+    "crop_set_revision_id": {
+      "type": "string",
+      "pattern": "^imgsourcecropsetrev_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+    },
+    "pillow_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "$ref": "#/$defs/Member"
+      }
+    },
+    "state": {
+      "const": "REVIEWED_SOURCE_DERIVATIVES"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "crop_set_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "Member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_id",
+        "member_path",
+        "sha256",
+        "size_bytes",
+        "width_px",
+        "height_px",
+        "perceptual_hash"
+      ],
+      "properties": {
+        "selection_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^crops/imgsourcecrop_[0-9a-f]{32}\\.png$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 8388608
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 10000
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 10000
+        },
+        "perceptual_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        }
+      }
+    }
+  }
+}

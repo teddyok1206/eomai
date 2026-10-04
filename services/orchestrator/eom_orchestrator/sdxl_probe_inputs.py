@@ -61,6 +61,10 @@ class ResolvedSdxlTrainingSources:
     crop_set: LocalImageScienceObjectLineArtCropSet
     crop_set_payload: bytes
     authorization_payload: bytes
+    authorization: LocalImageScienceCorpusTrainingAuthorization
+    inventory: LocalImageScienceVisualCampaignPatternInventory
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...]
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,7 +180,13 @@ def resolve_sdxl_training_sources(
     except ValueError as exc:
         raise SdxlProbeAdmissionError("SDXL_PROBE_SOURCE_LINEAGE_INVALID") from exc
     return ResolvedSdxlTrainingSources(
-        crop_set, documents.payloads[crop_set_pointer], documents.payloads[authorization_pointer]
+        crop_set,
+        documents.payloads[crop_set_pointer],
+        documents.payloads[authorization_pointer],
+        authorization,
+        inventory,
+        tuple(plans),
+        tuple(results),
     )
 
 
