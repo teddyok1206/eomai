@@ -7,6 +7,25 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Matched seven-target adapter follow-up freeze, **2026-10-04 22:37 UTC**: use the
+existing reviewed evaluation command/result1.1 and fixed isolated evaluation unit.
+Freeze **one new LORA dispatch /6 outputs**, no fresh BASE inference, training,
+prompt/seed/strength sweep or automatic retry. Reuse the exact six-case historical
+BASE and38-target LORA outputs only after canonical command/result/output hashes,
+model stack, raw conditioning, prompts, seed104729,30 scheduler steps, CFG7,
+T2I-Adapter scale0.8 and numerical compatibility are revalidated. New style-adapter
+strength is1.0; the actual seven-target result/manifest/config/weight identities are
+pinned, not a latest adapter alias. Do not spend an old exhausted diagnostic allowance.
+
+This is explicitly **LEGACY_TRAIN_REFERENCE_DIAGNOSTIC_NOT_HOLDOUT**, including its
+recorded imperfect raster/gray/redaction source limitations. It measures whether
+the new contour-track adapter improves the same previously weak path; it is not a
+new clean/reference-preserving/VALIDATION experiment or the final four-arm/blind
+study. Inspect all6 native RGB and publication images, preserve failures, compare
+quantitative style indicators only as supporting evidence, and keep institution-
+indistinguishability, independent review and production/Item/HWPX activation unproven.
+No new schema, backend, DB, queue, dependency, service or lab installation is needed.
+
 Latest actual TRAIN checkpoint, **2026-10-04 22:27 UTC**: inspected all10 proposed
 contour-track targets before dispatch. Three legitimate institutional drawings
 (hair-dryer/flask, water-bath/flask, piggyback) contain broad gray ground gradients;
