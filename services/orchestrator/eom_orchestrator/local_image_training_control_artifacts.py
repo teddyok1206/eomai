@@ -53,6 +53,7 @@ if TYPE_CHECKING:
         LocalImageSdxlLineartPromptPolicy,
         LocalImageSdxlLoraEvaluationCommand,
         LocalImageSdxlLoraMicroCommand,
+        LocalImageSdxlTrainingTargetCommand,
     )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
@@ -335,6 +336,20 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref="eom://schemas/image-provider/local-image-sdxl-learned-comparison-command/1.0",
             artifact_type="control_local_image_sdxl_learned_comparison_command",
             idempotency_prefix="local-image-sdxl-learned-comparison-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_training_target_command(
+        self, command: LocalImageSdxlTrainingTargetCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-training-target-command",
+            member="manifests/sdxl-training-target-command.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-training-target-command/1.0",
+            artifact_type="control_local_image_sdxl_training_target_command",
+            idempotency_prefix="local-image-sdxl-training-target-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

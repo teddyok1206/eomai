@@ -51,6 +51,9 @@ with zipfile.ZipFile(contract) as archive:
     required = {
         "eom_image_contracts/informative_lineart.py",
         "eom_image_contracts/sdxl_learned_comparison.py",
+        "eom_image_contracts/sdxl_training_targets.py",
+        "eom_image_contracts/schemas/local-image-sdxl-training-target-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-training-target-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-result-v1.schema.json",
         "eom_image_contracts/informative_lineart_extraction.py",
@@ -169,6 +172,7 @@ with zipfile.ZipFile(trainer) as archive:
         "eom_image_trainer/diffusers_backend.py",
         "eom_image_trainer/sdxl_lora_backend.py",
         "eom_image_trainer/sdxl_micro_runner.py",
+        "eom_image_trainer/sdxl_training_target_runner.py",
         "eom_image_trainer/micro_probe_runner.py",
         "eom_image_trainer/science_micro_probe_runner.py",
         "eom_image_trainer/science_campaign_micro_probe_runner.py",

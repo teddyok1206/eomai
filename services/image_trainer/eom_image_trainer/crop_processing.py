@@ -6,7 +6,11 @@ import io
 import warnings
 from collections import defaultdict
 
-from eom_image_contracts import ImageEvaluationBoundingBox
+from eom_image_contracts import (
+    ImageEvaluationBoundingBox,
+    SdxlPrepareTargetDecision,
+    SdxlTargetPlacement,
+)
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 MAX_SOURCE_IMAGE_PIXELS = 50_000_000
@@ -125,6 +129,35 @@ def materialize_literal_crop(
     if right - left < 32 or bottom - top < 32:
         raise CropProcessingError("IMAGE_TRAINING_LITERAL_CROP_TOO_SMALL")
     return source.crop((left, top, right, bottom))
+
+
+def materialize_reviewed_sdxl_target(
+    source: Image.Image,
+    *,
+    decision: SdxlPrepareTargetDecision,
+    placement: SdxlTargetPlacement,
+) -> Image.Image:
+    """Apply only the explicit reviewed recipe; never infer missing shape or erase annotation."""
+    frame = _pixel_box(decision.framing_box, width=source.width, height=source.height)
+    if frame != placement.source_pixel_box:
+        raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+    left, top, right, bottom = frame
+    crop = source.crop(frame).convert("L")
+    drawing = ImageDraw.Draw(crop)
+    for mask in decision.redaction_boxes:
+        x0, y0, x1, y1 = _pixel_box(mask, width=source.width, height=source.height)
+        if not (left <= x0 < x1 <= right and top <= y0 < y1 <= bottom):
+            raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+        drawing.rectangle((x0 - left, y0 - top, x1 - left - 1, y1 - top - 1), fill=255)
+    # Empty masks must not silently turn an erased object into accepted training evidence.
+    if ImageOps.invert(crop).getbbox() is None:
+        raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+    resized = crop.resize(
+        (placement.resized_width_px, placement.resized_height_px), Image.Resampling.LANCZOS
+    )
+    canvas = Image.new("L", (OUTPUT_WIDTH, OUTPUT_HEIGHT), 255)
+    canvas.paste(resized, (placement.offset_x_px, placement.offset_y_px))
+    return canvas.convert("RGB")
 
 
 def png_bytes(image: Image.Image) -> bytes:

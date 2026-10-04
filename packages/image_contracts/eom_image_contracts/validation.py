@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-training-target-command": "local-image-sdxl-training-target-command-v1.schema.json",
+    "sdxl-training-target-result": "local-image-sdxl-training-target-result-v1.schema.json",
     "sdxl-learned-comparison-command": "local-image-sdxl-learned-comparison-command-v1.schema.json",
     "sdxl-learned-comparison-result": "local-image-sdxl-learned-comparison-result-v1.schema.json",
     "informative-lineart-extraction-command": (
@@ -319,6 +321,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-training-target-command": (
+        "sha256:539d9c100610a042c781c9277ab0346db19a9b98f43f42b668b5aaf2f6768f09"
+    ),
+    "sdxl-training-target-result": (
+        "sha256:7c87aa01ab47e58c4d2ad281add924bc34016d27cb4c5dfb951ca16b1267ee6b"
+    ),
     "sdxl-learned-comparison-command": (
         "sha256:16dbd91f7e99db36dcdf54cfd0b80530e10e49b4868aea9233fa93cdc5377595"
     ),

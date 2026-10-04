@@ -76,6 +76,11 @@ from eom_image_trainer.sdxl_micro_runner import (
     load_sdxl_micro_command,
     run_sdxl_micro_command,
 )
+from eom_image_trainer.sdxl_training_target_runner import (
+    SdxlTrainingTargetError,
+    load_sdxl_training_target_command,
+    run_sdxl_training_target_command,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -124,6 +129,9 @@ def _parser() -> argparse.ArgumentParser:
     locate = subcommands.add_parser("locate-crops")
     locate.add_argument("--command", required=True, type=Path)
     locate.add_argument("--workspace", required=True, type=Path)
+    targets = subcommands.add_parser("prepare-sdxl-targets")
+    targets.add_argument("--command", required=True, type=Path)
+    targets.add_argument("--workspace", required=True, type=Path)
     science_visual = subcommands.add_parser("science-corpus-visual-pilot")
     science_visual.add_argument("--command", required=True, type=Path)
     science_visual.add_argument("--workspace", required=True, type=Path)
@@ -272,6 +280,17 @@ def main() -> None:
             raise SystemExit(exc.code) from exc
         if result.status != "SUCCEEDED":
             raise SystemExit(result.error_code or "SCIENCE_VISUAL_PILOT_EXEC_FAILED")
+        return
+    if args.operation == "prepare-sdxl-targets":
+        try:
+            target_command = load_sdxl_training_target_command(args.workspace, args.command)
+            target_result = run_sdxl_training_target_command(
+                workspace=args.workspace, command=target_command
+            )
+        except SdxlTrainingTargetError as exc:
+            raise SystemExit(exc.code) from exc
+        if target_result.status != "SUCCEEDED":
+            raise SystemExit(target_result.error_code or "SDXL_TARGET_PREPARATION_FAILED")
         return
     if args.operation == "locate-crops":
         try:

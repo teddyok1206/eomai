@@ -998,3 +998,29 @@ repeat inference under the exhausted control cohort, inflate eligible counts, si
 its meaning or replace rejected images with thresholded edits. Pin the next command/data/budget
 before training. Full-data expansion, remaining arms, independent blind review and a passing
 Item Preview/HWPX canary remain open. This diagnostic is PROGRESS; the whole goal stays ACTIVE.
+
+### 2026-10-04 reviewed CPU target preparation implementation
+
+[ADR 0183](../adr/0183-reviewed-sdxl-training-target-preparation.md) introduces an additive
+CPU-only command/result and explicit PREPARE/DEFER decisions over the exact original 16 TRAIN
+sample IDs. Source crops, source captions, original targets, partitions and previous training
+receipts are unchanged. A reviewed frame, exact white masks, expression caption and bounded
+rational enlargement produce unreviewed candidate target revisions, not training approval.
+Eight raw sources are intended for preparation; the other eight have missing parts, existing
+mask damage, dense damaged texture or scientific geometry better owned by native drawing.
+The entire raw 16-image snapshot was directly inspected, rather than using only contact sheets.
+
+Orchestrator admits original successful training provenance and all existing corpus lineage
+before one bounded batch of only selected TRAIN PNGs. The isolated trainer reads staged local
+files; it cannot read models, GPU devices, network, repository, protected configuration or NAS.
+Only Orchestrator publishes command/output Artifacts. New command identity, target logical ID,
+target revision and raw/semantic hashes are separate. Terminal replay verifies receipt, coverage
+and every output file without transforming pixels or loading a model; unreceipted output fails.
+There is no new dependency, DB schema, queue, production activation or implicit old-policy change.
+
+Source checks: formatter/linter, strict focused types (six modules), dependency boundaries and
+a final combined 182-test suite PASS. Earlier 96- and 43-test runs overlap with this final suite;
+they are not additional distinct tests. Installed execution and actual candidate inspection are
+pending at this implementation checkpoint. The exhausted diagnostic inference cohort remains
+12/12; this CPU path does not grant inference or training budget. Subsequent training must pin
+and explicitly admit new target revisions through a successor contract.
