@@ -15,6 +15,10 @@ from eom_image_contracts import content_json_bytes
 from eom_orchestrator.informative_lineart_extraction_inputs import (
     PreparedInformativeLineartExtractionInputs,
 )
+from eom_orchestrator.sdxl_canny_comparison_inputs import (
+    PreparedSdxlCannyComparisonInputs,
+    sdxl_canny_comparison_input_hashes,
+)
 from eom_orchestrator.sdxl_canny_inputs import PreparedSdxlCannyInputs, sdxl_canny_input_hashes
 from eom_orchestrator.sdxl_learned_comparison_inputs import (
     PreparedSdxlLearnedComparisonInputs,
@@ -52,6 +56,25 @@ class StagedSdxlProbe:
     workspace: Path
     systemd_unit: str
     command_sha256: str
+
+
+def stage_sdxl_canny_comparison_inputs(
+    prepared: PreparedSdxlCannyComparisonInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_canny_comparison_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-learned-comparison",
+        workspace_parent=workspace_parent,
+        worker=worker,
+        maximum_member_bytes=64 * 1024**2,
+    )
 
 
 def stage_sdxl_training_target_inputs(
@@ -267,7 +290,7 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_)[0-9a-f]{32}",
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_|imgsdxlcannycmprun_)[0-9a-f]{32}",
             run_id,
         )
         is None
@@ -386,6 +409,15 @@ def dispatch_sdxl_lora_evaluation(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-sdxl-lora-evaluation",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imgsdxlloraevalrun_",
+    )
+
+
+def dispatch_sdxl_canny_comparison(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-learned-comparison",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxlcannycmprun_",
     )
 
 

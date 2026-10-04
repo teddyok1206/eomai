@@ -12,10 +12,12 @@ import stat
 import tempfile
 from pathlib import Path
 
+from eom_image_contracts.models import content_json_bytes
 from eom_image_contracts.sdxl_canny_controlnet import (
     LocalImageSdxlCannyControllerManifest,
     sdxl_canny_controller_pointer,
 )
+from eom_image_contracts.validation import validate_contract
 from eom_image_provider.sdxl_canny_controller_io import resolve_sdxl_canny_controller
 from eom_image_provider.staged_file_io import (
     copy_verified_member,
@@ -53,7 +55,10 @@ def install_sdxl_canny_controller(
         raw = read_staged_member(
             root, "manifest.json", maximum_bytes=64 * 1024, expected_owner_uid=source_uid
         )
+    validate_contract("sdxl-canny-controller-manifest", json.loads(raw))
     manifest = LocalImageSdxlCannyControllerManifest.model_validate_json(raw)
+    if raw != content_json_bytes(manifest.model_dump(mode="json")):
+        raise ValueError("SDXL_CANNY_INSTALL_MANIFEST_NONCANONICAL")
     if manifest.manifest_sha256 != expected_manifest_sha256:
         raise ValueError("SDXL_CANNY_INSTALL_MANIFEST_MISMATCH")
     pointer = sdxl_canny_controller_pointer(manifest)

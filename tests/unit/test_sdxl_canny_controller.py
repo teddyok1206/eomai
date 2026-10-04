@@ -332,6 +332,38 @@ def test_no_destination_replay_or_symlink_overwrite(tmp_path):
         installation.install_sdxl_canny_controller(tmp_path, tmp_path, "sha256:" + "0" * 64)
 
 
+@pytest.mark.parametrize("fault", ["noncanonical", "manifest_hash", "extra_field"])
+def test_install_bad_manifest_precedes_protected_directory_or_weight_checks(
+    tmp_path, monkeypatch, fault
+):
+    source = tmp_path / "acquired"
+    source.mkdir(mode=0o700)
+    manifest = _manifest()
+    value = manifest.model_dump(mode="json")
+    if fault == "noncanonical":
+        raw = json.dumps(value, indent=2).encode()
+    elif fault == "manifest_hash":
+        value["manifest_sha256"] = "sha256:" + "0" * 64
+        raw = content_json_bytes(value)
+    else:
+        value["extra"] = True
+        raw = content_json_bytes(value)
+    target = source / "manifest.json"
+    target.write_bytes(raw)
+    target.chmod(0o600)
+    monkeypatch.setattr(installation.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        installation,
+        "_directory",
+        lambda *a: pytest.fail("bad manifest created protected directory"),
+    )
+    with pytest.raises((ValueError, SchemaError)):
+        installation.install_sdxl_canny_controller(
+            source, tmp_path / "protected", manifest.manifest_sha256
+        )
+    assert not (tmp_path / "protected").exists()
+
+
 def _installed_fixture(tmp_path, monkeypatch):
     manifest = _manifest()
     revision = tmp_path / manifest.model_id / manifest.model_revision_id

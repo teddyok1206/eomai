@@ -31,6 +31,10 @@ from eom_image_contracts import (
     content_sha256,
     validate_contract,
 )
+from eom_image_contracts.sdxl_canny_comparison import (
+    LocalImageSdxlCannyComparisonCommand,
+    LocalImageSdxlCannyDetailReview,
+)
 from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyConditioningCommand
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
@@ -355,6 +359,34 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-conditioning-command/1.0",
             artifact_type="control_local_image_sdxl_canny_conditioning_command",
             idempotency_prefix="local-image-sdxl-canny-conditioning-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_canny_detail_review(
+        self, review: LocalImageSdxlCannyDetailReview
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=review,
+            contract_name="sdxl-canny-detail-review",
+            member="manifests/sdxl-canny-detail-review.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-detail-review/1.0",
+            artifact_type="control_local_image_sdxl_canny_detail_review",
+            idempotency_prefix="local-image-sdxl-canny-detail-review",
+            identity_sha256=review.review_sha256,
+            created_at=review.created_at,
+        )
+
+    def commit_sdxl_canny_comparison_command(
+        self, command: LocalImageSdxlCannyComparisonCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-canny-comparison-command",
+            member="manifests/sdxl-canny-comparison-command.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-comparison-command/1.0",
+            artifact_type="control_local_image_sdxl_canny_comparison_command",
+            idempotency_prefix="local-image-sdxl-canny-comparison-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

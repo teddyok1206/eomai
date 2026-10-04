@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "SdxlCannyDetailDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "conditioning_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Conditioning Sha256",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "PASS",
+            "FAIL"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "source_sha256",
+        "conditioning_sha256",
+        "disposition",
+        "reason"
+      ],
+      "title": "SdxlCannyDetailDecision",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-canny-detail-review/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "conditioning_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "conditioning_result": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "title": "Created By",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/SdxlCannyDetailDecision"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Decisions",
+      "type": "array"
+    },
+    "final_illustration_quality": {
+      "const": "NOT_EVALUATED",
+      "title": "Final Illustration Quality",
+      "type": "string"
+    },
+    "mode": {
+      "const": "OWN_DIRECT_SOURCE_AND_CONDITIONING_NOT_BLIND",
+      "title": "Mode",
+      "type": "string"
+    },
+    "own_review_evidence": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "review_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Review Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-canny-detail-review/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "created_at",
+    "created_by",
+    "conditioning_command",
+    "conditioning_result",
+    "own_review_evidence",
+    "mode",
+    "final_illustration_quality",
+    "decisions",
+    "review_sha256"
+  ],
+  "title": "LocalImageSdxlCannyDetailReview",
+  "type": "object"
+}

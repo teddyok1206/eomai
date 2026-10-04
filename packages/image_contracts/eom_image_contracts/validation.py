@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-canny-detail-review": "local-image-sdxl-canny-detail-review-v1.schema.json",
+    "sdxl-canny-comparison-command": "local-image-sdxl-canny-comparison-command-v1.schema.json",
+    "sdxl-canny-comparison-result": "local-image-sdxl-canny-comparison-result-v1.schema.json",
     "sdxl-canny-controller-manifest": "local-image-sdxl-canny-controller-manifest-v1.schema.json",
     "sdxl-canny-conditioning-command": "local-image-sdxl-canny-conditioning-command-v1.schema.json",
     "sdxl-canny-conditioning-result": "local-image-sdxl-canny-conditioning-result-v1.schema.json",
@@ -350,6 +353,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-canny-detail-review": (
+        "sha256:13cfa653ce4fc931ff170a0781ab09514a8ec1ce53945108e330d96179db4412"
+    ),
+    "sdxl-canny-comparison-command": (
+        "sha256:d23cec6ac2445b2cd4a9fe1445fbbab05618d063e51f7d5ff3f78d7c160fdf37"
+    ),
+    "sdxl-canny-comparison-result": (
+        "sha256:d98851e3292dbc04c9b0e3ddafaa5005043415e0bc84a67c237d253e0b913196"
+    ),
     "sdxl-canny-controller-manifest": (
         "sha256:2fae73482351cb0156ff0c87a756f1498f6e21163d869e550273dfce475776a8"
     ),

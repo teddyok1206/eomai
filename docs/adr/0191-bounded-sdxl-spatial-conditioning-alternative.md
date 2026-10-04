@@ -5,8 +5,9 @@ Date: 2026-10-04 UTC
 Status: CPU input preparation implemented, installed and executed; canonical
 publication/reconstruction/transform-free replay PASS; own source-detail review
 3/3 PASS, not final illustration acceptance. Standalone controller manifest,
-acquisition/installation/resolution implemented and source-verified; actual
-weights/installation and numerical comparison pending. No GPU run submitted.
+acquisition/installation/resolution and matched-comparison path source-verified.
+Pinned controller weights acquired and hash-verified; protected installation and
+numerical comparison pending. No new GPU run submitted.
 
 ## Evidence and hypothesis
 
@@ -22,8 +23,9 @@ declares SDXL Canny conditioning and OpenRAIL++ weights. The
 [upstream file list](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/tree/main)
 offers an fp16 safetensors file; do not fetch the whole repository or either pickle
 variant. Read-only revision, size/SHA and configuration pins are recorded below;
-applicable controller license-text proof remains PENDING, not inferred from the
-label. Diffusers code licensing is separate from weight licensing.
+applicable controller license-text proof was initially PENDING and is resolved
+by the exact Hub-linked evidence below, not inferred from the label. Diffusers
+code licensing is separate from weight licensing.
 
 The [pinned Diffusers 0.35.2 implementation](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl.py)
 provides the SDXL ControlNet pipeline, LoRA loader and explicit spatial-control
@@ -104,8 +106,8 @@ without adding another encoder/conditioning factor. No claim of improvement or
    distinct later gates and are not opened for an own-rejected candidate.
 
 Runtime/library research and this proposal consume no model execution budget.
-The acquisition/model contract, controller license-text proof and frozen numerical
-quota remain pending. The completed CPU checkpoint is documented in
+The acquisition/model contract and controller license proof are now verified;
+actual numerical execution remains pending. The completed CPU checkpoint is documented in
 [ADR 0190](0190-pinned-sdxl-publication-derivatives.md) and the
 [improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
 
@@ -310,3 +312,26 @@ metadata-only acquisition preflight verifies pinned configuration/card/identifie
 mapping/standard-license bytes and returns `PASS weights_acquired=0`. Unit weight
 stubs cover source invariants, not real tensor/installed-model acceptance. No
 new dependency, whole snapshot, base/VAE/LoRA copy, DB or operating change.
+
+### Matched comparison source gate and bounded acquisition
+
+Before protected installation, the extended regression is **403 PASS**, with
+one explicitly deselected pre-existing Catalog infrastructure dependency-boundary
+violation in `source_page_crop_expansion_inputs.py`. This is not a whole-system
+PASS. New spatial execution/backend coverage is 51 cases: metadata-before-pixels,
+input review/hash/canonicality, exclusive handoff, BASE/LORA isolation, fixed
+ControlNet arguments/no T2I loading/no offload, prompt capacity, finite numerics,
+resource/failure prefix and zero-model/no-write replay. Three more installer
+cases reject malformed/noncanonical manifests before protected writes. Strict
+mypy on ten affected core files PASS. Fixture-invocation mistakes and a caught
+final-grayscale replay mismatch are retained in private test logs; no live run
+was submitted to diagnose them. Released predecessor schemas remain unchanged.
+
+The bounded public acquisition completed: 2,502,139,136-byte fp16 safetensors SHA
+`b2e7d3921058a442cc80430d1ec8847f42599c705e2451c95e77cf4dcf8d6c25` matches the
+pinned upstream whitelist. Model `imgmodel_a71bf73b88c95c8e80b24dec550e97aa`,
+revision `imgmodelrev_caa46d1cd6a1a102326c40f1a8ca62fa`, manifest SHA
+`fb13dfe611fd83cf8de64e37f2a126b1d3894a2e3e063017cec7599ebf29ee3c` is sealed
+with configuration/card/Hub-license mapping and standard text. Acquisition/hash
+PASS does not certify tensor loading, VRAM fit, final image quality or activation.
+No GPU/training/heldout call, operating binding change or service restart yet.
