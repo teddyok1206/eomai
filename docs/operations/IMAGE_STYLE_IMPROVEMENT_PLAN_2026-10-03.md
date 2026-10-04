@@ -7,13 +7,16 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 12:49 UTC**: a distinct same-input T2I-zero control
-generated three BASE/three LoRA images after the fixed T2I-0.8 target comparison.
-Execution/publication/installed replay PASS; all six native control outputs own
-REJECTED. Some backgrounds lighten, but gray areas remain and source object counts,
-required parts and arrangement change. Total actual SDXL outputs: 60, all own-REJECTED.
-No additional training, reserved pixels or operating changes. Independent review
-NOT_PERFORMED; GOAL ACTIVE. Earlier 54/48-output summaries remain historical evidence.
+Latest checkpoint, **2026-10-04 13:39 UTC**: separate same-input T2I-midpoint and
+single-negative-clause controls generated six outputs each. Both native cohorts
+own-REJECTED; total actual SDXL outputs 72, all own-REJECTED. Close the strength
+sweep and the tested clause-cause hypothesis rather than repeating generation.
+Actual installed four-cohort replay PASS with zero models/Torch/writes. Existing
+frozen V7 cleanup on the canonical initial six images passes six CPU technical
+checks in Pillow 11.3.0, but saves no PNGs and has quality NOT_EVALUATED. Next is
+the explicit derived-publication boundary in ADR 0190, not an implemented worker
+or quality PASS. No new training, reserved pixels or operating changes.
+Independent review NOT_PERFORMED; GOAL ACTIVE. Earlier 60/54/48 summaries are historical.
 
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
@@ -794,7 +797,8 @@ Archive/operator source `fabe6288` is separate from numerical source `7cda7e33`.
 Slack `devreport_f7ff7e6c418441a08568a34aa11b2fb7` SENT, HTTP 200; checkpoint
 completion explicitly leaves full GOAL ACTIVE and quality REJECTED.
 
-**Next:** freeze one distinct midpoint T2I-strength control **0.4**, at most six
+**Historical next proposal, executed below:** freeze one distinct midpoint T2I-strength
+control **0.4**, at most six
 outputs with these same inputs/seed and no additional training. Judge one-object
 counts, the exact required leaves/roots/light marks, layout and native white
 canvas together against 0.8 and 0.0. This control is proposed, not submitted.
@@ -802,6 +806,139 @@ If it fails, stop an open-ended strength sweep and audit the background prompt/
 conditioning distribution before selecting one further factor. Do not obtain a
 quality PASS by discarding required parts, repainting backgrounds or redefining
 historical contracts/results.
+
+### Actual midpoint, negative-clause control and CPU publication viability, 2026-10-04
+
+Source `c2e347520580348f60a2d4ec19f0125196ddf0e7` adds only backend passthrough
+coverage for 0.4 alongside 0.0/0.8. Focused **82 PASS**, strict mypy on three
+unchanged source modules PASS, operator formatter/linter PASS. No schema, worker
+behavior, new dependency, installation, queue, migration or operating activation.
+Lab contracts/provider remain `7cda7e33`, trainer `cf6746ae`; actual RECORD/pinned
+wheel verification is reused without invoking installation. The unrelated existing
+Catalog infrastructure import-boundary failure remains separate and unresolved.
+
+#### Frozen midpoint control
+
+One new pair uses the same three prepared TRAIN targets, captions, negative
+prompts, seed 104729, 30 steps, guidance 7.0, LoRA strength 1.0 and conditioning
+policy. Only T2I scale 0.8→0.4 and new identities/timestamps change. New numerical
+baseline/evaluation pins are metadata, not dispatches of their legacy six cases.
+Frozen plan SHA
+`sha256:dfb5f1b28fd9a15dc29cc4efab706d3c9e957f728b488dc778ef9b84b98654cf`.
+
+Run `imgsdxltargetcmprun_296c46c29abc9d11d763d3f0b4d61814`: **6/6 outputs**,
+**29,526ms**, peak allocated GPU **8,328,740,352 bytes**, all 16 published members
+equal workspace bytes. Command `artifact_a5cfac85f7a847ea97685dd50ea9d49f` /
+`rev_ad32a9939bf9426ca3493ea98301df6c`, raw SHA
+`sha256:41911f02bf746db80571302dcbfad76ba8abc0969c2bc63d997924c912bb9851`.
+Result `artifact_998e7104532244eb817d4aa2341207d6` /
+`rev_6185828e898649aba0c6e20c10e98b25`, member
+`manifests/sdxl-target-comparison-result.json`, schema `/1.0`, raw SHA
+`sha256:9c640d80ddbe58a84027dfb8bae3e5bba3eec6616b6c329b6d155957d6c97ee5`,
+semantic SHA
+`sha256:446e0b50792e91f7b870b23c962280e74bf3b0d78b268622b0bbab57f07c3440`.
+
+All six native images were directly inspected. Both fan arms multiply source
+objects; both plant arms invent extra flowers/plants and change roots/petals.
+The scooter gains background objects or retains gray canvas with incorrect
+handlebar/wheel-light contours. BASE plant has a lighter background but wrong
+source composition. All six REJECTED. None of the tested 0.8/0.4/0.0 settings
+satisfies style and source meaning together. This bounded three-TRAIN-case,
+one-seed observation closes this strength sweep; it is not a holdout score or
+proof of a universal decoder/adapter defect.
+
+#### Single-clause negative control
+
+One distinct pair removes only the exact comma-delimited `nonwhite background`
+clause from each negative prompt. All source/reference/positive-caption/model/
+LoRA/seed/numerical values equal the original T2I-0.8 pair. New case IDs, prompt
+hashes and staged member names truthfully reflect the prompt change; **all case
+values are not claimed unchanged**. Both tokenizers max **63/77**, down from 67.
+Team prompt original files and operating prompts are unchanged. Frozen plan SHA
+`sha256:a247c52ec8dcd225ba8e2ee89df08cca11ce305091e80117415a1fa800e9ea3a`.
+
+Run `imgsdxltargetcmprun_11f4da73e87b992dff1592dd3c521cb7`: **6/6 outputs**,
+**29,705ms**, same 8,328,740,352-byte peak, all 16 canonical members verified.
+Command `artifact_553279db48fa461f92936d49216229d0` /
+`rev_791998adf3904d1a960dc7b3c2d81c42`, raw SHA
+`sha256:9faec6fc71d9231cb6775466bdf29f04921c88dd8d307be5a17860507f1e5d04`.
+Result `artifact_cf4250d995314afea0e4d3f175991e99` /
+`rev_c9f96b1139a1453ea6a5cd8a8ba3ca82`, same result member/schema as midpoint,
+raw SHA `sha256:1c11a4d642bbbb3b7e746ae68e9fa5eaffc97cafb976fd1c3a4448952486637c`,
+semantic SHA
+`sha256:6e6e8bbec38e4629d3ab3ce0a9e74d2bc4a7571f3097137ace443ebbb7a36f6c`.
+
+Direct native inspection again rejects all six. LoRA gray canvas is nearly
+unchanged; BASE still has grid/extra objects/halos, while required plant roots,
+fan details and scooter light marks remain inaccurate. Do not claim this clause
+as a demonstrated cause or promote its removal into production. New outputs
+12, new training/reserved reads/retries 0, total actual SDXL 72 all own-REJECTED.
+Both new quotas and all historical quotas are exhausted.
+
+Actual installed replay checks negative/midpoint/zero/original target cohorts,
+each six outputs/three conditionings, with model/backend/GPU entry points denied.
+No Torch import or workspace/hash/mtime change. Five production services ACTIVE,
+GPU idle 2MiB/0%; operating V6 raw binding SHA unchanged:
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+
+#### Frozen V7 CPU viability, not derived-output acceptance
+
+The original approved research plan includes publication cleanup. A read-only
+Orchestrator diagnostic resolves the initial T2I-0.8 command/result and six
+native PNGs by exact Artifact/revision/schema/media/raw SHA, verifies workspace
+bytes against canonical members and calls the existing public pure cleanup.
+No old receipt/output is modified, derivative PNG written or new model acquired.
+The lab's actual installed Pillow **11.3.0** is used, not image-test's 12.3.0.
+Implementation raw SHA is
+`sha256:31f097ed863c0859d4d675fc480da39d7912a57aa1e4cebf9ffe2e08c86b2ecb`.
+
+Config source is an immutable `c2e34752` Git blob, raw SHA
+`sha256:45c02d40fead0986a1adbbc470e50ef953b4eda6eea7c89024c07b9d1ece9243`;
+its postprocess value is validated with the existing JSON Schema 2020-12 fragment
+and frozen Pydantic model. Policy semantic SHA
+`sha256:2e76d2456fa719ed0791d256008e02a68ad0bf6642a1359811cd1705250abc33`.
+Policy settings are unchanged; no threshold search, learned transform, GPU or
+training. Existing pure postprocessor tests **4 PASS**, reported separately from
+the 82-test source suite, not added as a new unique aggregate.
+
+All six CPU computations pass fixed foreground/border/edge/detail bounds.
+Computed LoRA foreground fractions are 0.0521125 / 0.0715175 / 0.049005, versus
+native 0.9999725 / 0.9944825 / 0.98984. Border foreground becomes zero. Every
+computed derivative contains only gray 96 and white 255, not dark 32. Thus this
+is **technical viability**, not proof of readable black strokes, restored parts,
+source composition, visual or independent quality. Quality NOT_EVALUATED; saved
+PNG count 0. Wrong/missing roots, leaves, light marks and duplicate objects cannot
+be repaired or excused by a white-background metric.
+
+#### Evidence and next boundary
+
+Own judgments, plans, pointers, operators, focused/type/replay logs and CPU
+diagnostic are archived as **30** verified metadata/log members, zero duplicate
+PNGs/weights: `artifact_560d8f90194b4ae29a9d50c595818c33` /
+`rev_15580007808b46be916bdcd4cd1809f4`, primary
+`reports/own-comparison-review.json`, raw SHA
+`sha256:bf68e81d5fb92df43346600725857f68577bcf80febdaa98ed03b556d3008dc9`.
+Operator/archive source `c2e34752` remains distinct from generation source
+`7cda7e33`. Development prep corrections did not rerun a dispatched cohort or
+alter failed/historical records. Slack `devreport_7362ee3676fb4b889bfeffbaf8536325`
+SENT, HTTP 200; full GOAL remains ACTIVE, independent review NOT_PERFORMED and
+Item/Preview/HWPX canary/activation NOT_PERFORMED.
+
+Local own reviews: `/tmp/eom-sdxl-target-midpoint-own-review-20261004.json`,
+`/tmp/eom-sdxl-target-negative-ablation-own-review-20261004.json` and
+`/tmp/eom-sdxl-v7-postprocess-viability-20261004.json`. Native AI viewing copies
+use `/tmp/eom-sdxl-target-{midpoint,negative-ablation}-samples-20261004/` with the
+same three depiction keys and BASE/LORA arms; these are not publication-cleaned
+samples or newly eligible training targets.
+
+Next: [ADR 0190](../adr/0190-pinned-sdxl-publication-derivatives.md) proposes a closed
+CPU derivative command/result and isolated execution over these pinned native
+outputs with the unchanged V7 policy. Define the wire contract before worker
+behavior; reuse existing cleanup/handoff/commit owner, not a second framework.
+Then register distinct candidate PNGs and inspect source/native/derived details.
+This boundary is **NOT_IMPLEMENTED** here. No new GPU strengths/seeds, negative
+guessing, training, model acquisition or operating activation is granted by the
+successful CPU viability test. Keep native 72/72 rejected history unchanged.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate

@@ -2,9 +2,11 @@
 
 Date: 2026-10-04 UTC
 
-Status: implemented; initial six-output comparison and separate same-input six-output
-T2I-zero control/publication/replay verified. Both cohorts own-REJECTED;
-independent review NOT_PERFORMED.
+Status: implemented; initial six-output comparison and separate same-input zero,
+midpoint and negative-clause-control six-output cohorts published/replayed. All
+native cohorts own-REJECTED; independent review NOT_PERFORMED. Frozen V7 CPU
+cleanup viability passes six technical cases, but no derived PNGs are published
+and publication quality is NOT_EVALUATED. The goal remains ACTIVE.
 
 ## Boundary and decision
 
@@ -104,10 +106,35 @@ completed six outputs in 28,964ms and published 16 verified members as
 Some backgrounds lighten, but gray areas and scientifically wrong composition
 remain: all six rejected. The zero control is causal evidence, not an accepted
 reference-conditioned product. Exact installed zero/parent replay has no model,
-Torch or file changes. A separate 0.4-strength control is the bounded next proposal;
-old quotas remain exhausted and polarity is not changed from this observation.
+Torch or file changes. A separate 0.4-strength control was the bounded next proposal
+at that checkpoint; its actual execution is recorded below. Old quotas remain
+exhausted and polarity is not changed from this observation.
 Detailed native judgments, source-example audit and immutable evidence pointers
 are recorded in the operations improvement plan.
+
+Actual midpoint source `c2e34752`: focused tests 82 PASS; six new outputs in
+29,526ms, same 8,328,740,352-byte peak. Gray LoRA canvas persists and source
+counts/parts fail. Result `artifact_998e7104532244eb817d4aa2341207d6` /
+`rev_6185828e898649aba0c6e20c10e98b25`; all six REJECTED. Close the strength
+sweep rather than adding arbitrary strengths/seeds or training.
+
+One separately frozen negative-clause control at T2I 0.8 then removed exactly one
+negative clause, keeping references, positive captions, model/LoRA/seed/numerics
+matched. New case/prompt identities describe that change truthfully; original
+team/operating prompts are unchanged. Six outputs in 29,705ms, same peak; result
+`artifact_cf4250d995314afea0e4d3f175991e99` /
+`rev_c9f96b1139a1453ea6a5cd8a8ba3ca82`. All six REJECTED; the proposed cause did
+not fix white canvas. Do not promote it as a proven defect. Actual installed
+replay of all four cohorts is zero-model/zero-write/no-Torch. Total actual SDXL
+outputs 72, all own-REJECTED; no new training/reserved reads/activation.
+
+The original quality plan includes deterministic publication cleanup, not only
+raw generation. A read-only call of existing V7 postprocess/2.0 on the canonical
+initial six images passes its frozen technical bounds in installed Pillow 11.3.0.
+The implementation matches source SHA; no PNGs are saved or receipts rewritten.
+All computed outputs have tones 96/255, so technical PASS is not a black-stroke,
+scientific, independent or visual quality PASS. [ADR 0190](0190-pinned-sdxl-publication-derivatives.md)
+records the next explicit derived-output boundary, not an implemented worker.
 
 Schema-first tests must cover old/new isolation, missing/stale/hash/schema/media
 pointers, duplicate identities/pixels, wrong source/target revision/expression,
