@@ -140,8 +140,9 @@ V6는 변경하지 않는다. 아직 가중치 다운로드·변환·설치나 �
 다음 가설은 기존 계획의 ControlNet/IP-Adapter 후보에서 **Canny ControlNet 한 요소만**
 먼저 비교하는 것이다. [공식 모델 카드](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0)는
 SDXL용 Canny 조건과 OpenRAIL++ 가중치 표기를 제공한다. [공식 파일 목록](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/tree/main)의
-fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않는다. 정확한 revision,
-설정·가중치·라이선스 원문의 해시는 아직 고정하지 않았다.
+fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않는다. 14:54 UTC 읽기 전용
+조회로 정확한 revision·설정·예상 가중치 SHA를 ADR 0191에 기록했지만 실제 가중치는 받지
+않았다. controller 라이선스 원문의 근거와 실제 실행 호환성은 아직 확인 전이다.
 [Diffusers 0.35.2 소스](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl.py)에서
 공간 조건과 LoRA를 같이 사용하는 경로를 확인했지만 우리 그림에서 개선된다는 뜻은 아니다.
 

@@ -17,9 +17,9 @@ fp16 VAE and the same reviewed LoRA. The [official model card](https://huggingfa
 declares SDXL Canny conditioning and OpenRAIL++ weights. The
 [upstream file list](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/tree/main)
 offers an fp16 safetensors file; do not fetch the whole repository or either pickle
-variant. Exact revision, file size/SHA, configuration and applicable license-text
-pins are still PENDING, not inferred from the label. Diffusers code licensing is
-separate from weight licensing.
+variant. Read-only revision, size/SHA and configuration pins are recorded below;
+applicable controller license-text proof remains PENDING, not inferred from the
+label. Diffusers code licensing is separate from weight licensing.
 
 The [pinned Diffusers 0.35.2 implementation](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl.py)
 provides the SDXL ControlNet pipeline, LoRA loader and explicit spatial-control
@@ -100,7 +100,66 @@ without adding another encoder/conditioning factor. No claim of improvement or
    distinct later gates and are not opened for an own-rejected candidate.
 
 Runtime/library research and this proposal consume no model execution budget.
-The acquisition/model contract, exact controller pins and new numerical quota
-remain pending. The completed CPU checkpoint is documented in
+The acquisition/model contract, controller license-text proof and frozen numerical
+quota remain pending. The completed CPU checkpoint is documented in
 [ADR 0190](0190-pinned-sdxl-publication-derivatives.md) and the
 [improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
+
+## Read-only metadata pins, 2026-10-04 14:54 UTC
+
+The official Hub metadata API resolved an immutable candidate revision. Small
+configuration/model-card bytes were fetched and hashed; no safetensors, wheel,
+pipeline or GPU allocation was acquired by this preflight.
+
+- Repository: `diffusers/controlnet-canny-sdxl-1.0`.
+- Revision: `eb115a19a10d14909256db740ed109532ab1483c`.
+- `config.json`: 1,309 bytes, SHA-256
+  `81f9bfed178f666c332892cd568a78ed8918fe08aaee994d05428a75ab44f2ca`.
+- `README.md`: 3,580 bytes, SHA-256
+  `78be0e56618abb9aef9a880ce74a4ba7219c97a35d9f27a2763b23475004264c`.
+- `diffusion_pytorch_model.fp16.safetensors`: 2,502,139,136 bytes, upstream
+  LFS SHA-256 `b2e7d3921058a442cc80430d1ec8847f42599c705e2451c95e77cf4dcf8d6c25`.
+  This is an expected download hash, **not a locally verified weight**.
+
+The pinned [model card](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/blob/eb115a19a10d14909256db740ed109532ab1483c/README.md)
+has inconsistent `base_model` front matter naming SD1.5, whereas its instructions
+name SDXL. Do not use the front-matter label to select a different base. The
+[pinned configuration](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/blob/eb115a19a10d14909256db740ed109532ab1483c/config.json)
+declares `ControlNetModel`, `text_time` conditioning, RGB conditioning channels 3,
+latent channels 4, cross-attention dimension 2,048 and projection dimension 2,816.
+These support the proposed SDXL architecture; backend compatibility still needs
+an actual local test. Do not treat its `_name_or_path` as a local source path.
+
+The upstream `openrail++` label is recorded, but a corresponding controller
+license-text source must be established before acquisition. Existing pinned
+SDXL base `LICENSE.md` is 14,109 bytes, SHA-256
+`19b6998b569b53ac1fc2158a8a3202c8699a9a4605b47075715d9c96be7fb6d0`, from
+[base revision 46216598](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/462165984030d82259a11f4367a4eed129e94a7b/LICENSE.md).
+It is not silently substituted as proof of a separate controller's license.
+
+### Optional Canny dependency decision
+
+Candidate `opencv-python-headless==4.11.0.86`, Linux x86-64 ABI3 wheel
+`opencv_python_headless-4.11.0.86-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`,
+49,969,856 bytes, PyPI SHA-256
+`0e0a27c19dd1f40ddff94976cfe43066fbbe9dfbb2ec1907d66c19caef42a57b`.
+Reason: use the actual Canny implementation without Qt/X11/contrib dependencies,
+not an approximate Pillow filter. It stays optional and lab-only; operating
+API/provider/trainer requirements do not change merely because it is a candidate.
+The [versioned package documentation](https://pypi.org/project/opencv-python-headless/4.11.0.86/)
+distinguishes package scripts, OpenCV and bundled third-party licenses; preserve
+the wheel notices and inspect them before installation.
+
+Actual lab NumPy is `2.4.6`. This wheel's Python 3.11 requirement is
+`numpy>=1.23.5`, so its declared requirement does not force a NumPy change.
+Metadata compatibility is not a tested ABI claim: actual import/Canny execution
+and `pip check` are still required. No automatic numerical upgrade/downgrade or
+installation of another `cv2` namespace package is permitted.
+
+Conditioning must keep the existing geometry: grayscale source, aspect-preserving
+fit inside 800×500, white centering canvas 832×512, then OpenCV Canny with thresholds
+100/200, aperture 3 and `L2gradient=False`; binary white edges on black replicated
+to RGB. The thresholds are the official example's initial control, not an optimal
+EOM claim. Freeze a successor policy rather than relabeling the released T2I
+inversion. Required source details must be inspected before GPU acquisition;
+do not try several thresholds until one happens to pass.

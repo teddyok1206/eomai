@@ -1069,8 +1069,13 @@ or dispatched by this checkpoint.
 
 The proposed next boundary is [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md):
 one SDXL Canny ControlNet factor, not ControlNet plus IP-Adapter plus retraining.
-Exact model/license/safetensors pins and optional OpenCV dependency remain
-pending. Three source-conditioned edge maps must retain required details before
+Read-only preflight at 14:54 UTC records exact model revision/configuration/expected
+safetensors SHA and an optional headless OpenCV wheel in ADR 0191. It detects
+inconsistent upstream model-card base metadata and does not substitute the
+existing base license as proof for the controller. Controller license-text proof,
+new contracts, actual optional-library compatibility and conditioning execution
+remain pending; no weight or library was downloaded/installed. Three
+source-conditioned edge maps must retain required details before
 any weight acquisition/GPU request. First pair is proposed at six new outputs
 within the existing fallback ceiling, not submitted. Current library metadata
 was checked without Torch import, weight reads or model calls; research/proposal
