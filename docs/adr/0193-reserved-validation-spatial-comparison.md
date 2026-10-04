@@ -69,3 +69,12 @@ The numerical worker, fixed service handoff, result publication and actual reser
 comparison are **not implemented/executed in this checkpoint**. The result wire format
 is defined first to protect those later boundaries. No production installation or
 activation follows from this source verification.
+
+Actual canonical metadata admission passed for14 reserved crops across7 PDFs/exam
+groups; no PNG/PDF/adapter binary or GPU read/execution. Candidate wheels passed
+complete RECORD/non-editable schema import verification. Evidence is
+`artifact_ee358570a7594ea3a8e6f6c77ea30707` /
+`rev_faba831e64c14f33aa596542736b22cb`; the detailed checkpoint is in the operations
+plan. Dependency tests passed5 with the known predecessor infrastructure-import
+violation explicitly deselected. These facts do not mark the unimplemented worker
+or the incomplete overall quality goal as complete.

@@ -7,7 +7,57 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 20:27 UTC**: the four historical VALIDATION crops
+Latest checkpoint, **2026-10-04 21:12 UTC**: the explicit reserved VALIDATION
+command/result `1.0`, Pydantic identities/result-prefix checks and metadata-first
+Orchestrator admission are implemented at source `0d634a987bcf4488d08a598e1e8b2adf80ceeb6b`.
+[ADR 0193](../adr/0193-reserved-validation-spatial-comparison.md) distinguishes the
+historical TRAIN command as numerical configuration only, not case authority. It
+permits 12–16 uniquely pinned reserved cases, one previously frozen seed and at most
+32 BASE/LORA outputs; source and experiment membership are not retroactively changed.
+It does not relax the independent blind review's minimum-four-family requirement.
+
+Actual canonical read-only admission passed for **14 VALIDATION cases /7 PDFs /7
+exam groups**, with27 bounded metadata members,42 distinct canonical pointers and
+212 guarded read/read-only SQL statements (140 canonical member read calls). The
+frozen local candidate is `imgsdxlvalcmprun_b6ed90bf72715028a0c3071a8b9d7238`, semantic
+command SHA `0045b3e388ca1342b7986b1c5e8dc0640faeef79b36507d2ed05ed36e4967c4f`;
+its local canonical JSON raw SHA is
+`f2635417653066571bba390404f1c4468a9b1c294e469c749363e47df366d7c9`.
+Expected pair coverage is28 outputs, not32 fabricated results. PNG/PDF/adapter bytes,
+HOLDOUT pixels, training and GPU executions were all0 in this admission. No actual
+worker workspace or canonical execution command was submitted.
+
+New and predecessor source regression **334 PASS** (including36 new tests), dependency
+regression **5 PASS /1 known explicitly deselected test**, strict mypy four changed
+files, Ruff format/check, shell syntax and diff checks passed. The existing Catalog
+infrastructure-import violation was not fixed or silently classified as PASS.
+All three candidate wheels were built; their complete RECORDs passed (216/43/29
+members). A non-editable ZIP import validated173 schema resources and the actual
+14-case command without Torch. Candidate wheel directory:
+`/tmp/eom-image-trainer-build/0d634a987bcf4488d08a598e1e8b2adf80ceeb6b.ww7EwN/dist`.
+These packages are **not installed** in production or the numerical worker.
+
+Ten text-only evidence records were committed and resolved byte-for-byte:
+`artifact_ee358570a7594ea3a8e6f6c77ea30707` /
+`rev_faba831e64c14f33aa596542736b22cb`, primary
+`reports/actual-reserved-preflight.json`, raw SHA
+`6566c63de0fd61d3ec2d35e4703d311c118490a2ebdd4943b9f64bc13307f65e`.
+The archive includes development fixture failures, private publisher-invocation
+errors and a safe-reader permission refusal; all occurred before publication and
+the caller was corrected without weakening the supported publisher. Original
+source/model PNGs and bytes were not duplicated. Full pytest logs were not captured;
+the terminal outcome is recorded explicitly as a summary, not mislabeled a full log.
+
+**Numerical worker / fixed handoff / result publisher / actual reserved GPU comparison
+remain NOT_IMPLEMENTED or NOT_EXECUTED.** Next is to implement those boundaries using
+the admitted original sources, native-dimension fit and existing offline numerical/
+GPU-lease/pair/replay machinery, then one bounded matched batch. No TRAIN fallback,
+parameter sweep, implicit schema relabeling or automatic activation. Production V6
+binding SHA remains `f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`;
+all five primary services were active. Full training, four-arm comparison, independent
+blind review and Item Preview/HWPX canary remain unfinished. Goal stays ACTIVE.
+
+Previous checkpoint, **2026-10-04 20:27 UTC**: the four historical VALIDATION crops
 were audited against their four original pages from three PDFs. Exact canonical
 bytes were admitted and staged read-only (2,070,513 bytes;30 guarded read/read-only
 statements). All four are **not selected for the new clean-reference benchmark**:
