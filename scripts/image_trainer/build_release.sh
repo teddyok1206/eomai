@@ -198,6 +198,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/sdxl_canny_controller_io.py",
         "eom_image_provider/sdxl_canny_backend.py",
         "eom_image_provider/sdxl_canny_reference.py",
+        "eom_image_provider/sdxl_validation_comparison.py",
         "eom_image_provider/sdxl_canny_reference_backend.py",
         "eom_image_provider/sdxl_pair_output_validation.py",
         "eom_image_provider/sdxl_canny_comparison.py",

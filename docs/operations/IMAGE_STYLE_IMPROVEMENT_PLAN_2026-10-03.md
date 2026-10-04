@@ -7,7 +7,26 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 21:12 UTC**: the explicit reserved VALIDATION
+Latest source checkpoint, **2026-10-04 21:35 UTC**: the reserved numerical worker,
+existing fixed service handoff and Orchestrator-owned publication adapter are now
+implemented. Historical768×512 source admission remains strict; native reserved
+cropping uses the separately declared fit policy, shared Canny/white initializer
+geometry and one paired GPU lifecycle. Terminal replay verifies exact result,
+initializer, conditioning and raw/final member closure without another transform,
+model load or GPU call. Publication readmits the registered canonical command and
+all original inputs before verifying the exact transforms and calling the existing
+idempotent Artifact publisher. No new queue, service, dependency or migration.
+
+Source tests: **353 PASS**, dependency tests5 PASS /1 known explicit deselection,
+strict mypy8 source files, Ruff format/check, shell syntax and diff PASS. The first
+simulated19-test suite had14 failures caused by future fixture timestamps; the test
+clock was corrected and production future-input rejection strengthened. This is
+not a live GPU failure or an altered source contract. Full terminal logs were not
+captured; these are terminal outcome summaries. Actual numerical installation,
+28 generated outputs, canonical result and own review are still pending at this
+source checkpoint. One frozen14-case batch only; no TRAIN fallback or sweep.
+
+Previous checkpoint, **2026-10-04 21:12 UTC**: the explicit reserved VALIDATION
 command/result `1.0`, Pydantic identities/result-prefix checks and metadata-first
 Orchestrator admission are implemented at source `0d634a987bcf4488d08a598e1e8b2adf80ceeb6b`.
 [ADR 0193](../adr/0193-reserved-validation-spatial-comparison.md) distinguishes the

@@ -26,6 +26,7 @@ from eom_image_contracts import (
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
+from eom_image_contracts.sdxl_validation_comparison import LocalImageSdxlValidationComparisonCommand
 
 from eom_image_provider.diffusers_backend import Ssd1bDiffusersBackend
 from eom_image_provider.informative_lineart_backend import InformativeLineartTorchBackend
@@ -84,6 +85,7 @@ from eom_image_provider.sdxl_publication_comparison import (
     run_sdxl_publication_comparison,
 )
 from eom_image_provider.sdxl_target_comparison import run_sdxl_target_comparison
+from eom_image_provider.sdxl_validation_comparison import run_sdxl_validation_comparison
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -171,7 +173,15 @@ def main() -> None:
             result = publication_result.model_dump(mode="json")
         elif args.operation == "sdxl-learned-comparison":
             learned_command = load_sdxl_comparison_command(args.workspace, args.command)
-            if isinstance(learned_command, LocalImageSdxlCannyReferenceCommand):
+            if isinstance(learned_command, LocalImageSdxlValidationComparisonCommand):
+                validation_result = run_sdxl_validation_comparison(
+                    command=learned_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
+                )
+                result = validation_result.model_dump(mode="json")
+            elif isinstance(learned_command, LocalImageSdxlCannyReferenceCommand):
                 reference_result = run_sdxl_canny_reference(
                     command=learned_command,
                     model_store_root=args.model_store_root,

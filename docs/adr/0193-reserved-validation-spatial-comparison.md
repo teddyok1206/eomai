@@ -49,6 +49,18 @@ run or direct database edits. Publication must readmit the same command and sour
 
 ## Alternative and remaining gates
 
+The worker fits each admitted native PNG once to the pinned800×500 inner area of
+the832×512 white canvas. The existing source placement and Canny encoder are shared;
+historical768×512 validation is not relaxed. Separate `initializers/{case_id}.png`
+(single-frame RGB white-paper pixels, binary member schema
+`local-image-sdxl-validation-initializer/1.0`) and `conditionings/{case_id}.png`
+(existing Canny conditioning schema) preserve the exact declared transforms. They
+are not generated exam visuals. Terminal replay decodes and checks their hashes and
+closed member sets without refitting, extracting edges or loading models. Publication
+readmits canonical inputs and verifies the declared transforms at its explicit
+validation boundary. Only the existing fixed paired-comparison service is used;
+no new service, queue, numerical dependency or production binding is introduced.
+
 Relaxing the TRAIN-only contract or inventing prepared TRAIN targets for the new crops
 would corrupt experiment membership and historical reproducibility. A small explicit
 successor reuses numerical and storage boundaries without building another framework.
@@ -78,3 +90,22 @@ complete RECORD/non-editable schema import verification. Evidence is
 plan. Dependency tests passed5 with the known predecessor infrastructure-import
 violation explicitly deselected. These facts do not mark the unimplemented worker
 or the incomplete overall quality goal as complete.
+
+## Numerical implementation checkpoint
+
+The reserved worker, explicit command dispatch on the existing fixed service,
+native source fitting and Orchestrator-owned result publication are implemented.
+New lifecycle tests cover reserved case/prompt identity, fresh BASE/LORA arms,
+one GPU lease, failed prefix, corrupt/linked/extra output rejection, future-command
+rejection before side effects, transform/model/GPU-free replay, canonical command
+readmission and exact initializer/Canny/publication validation before commit.
+Publication uses the existing idempotent file-set owner, not direct DB/NAS writes.
+
+Focused new and historical regression:353 PASS; dependency checks:5 PASS and the
+same known predecessor test explicitly deselected. Strict mypy8 source files,
+Ruff format/check, shell syntax and diff checks PASS. The initial simulated run
+had14 fixture failures because its deliberately spaced history timestamps were
+in the future; the fixture clock was corrected, not the production invariant.
+No new dependency, migration, service, model sweep or production binding change.
+This checkpoint is source acceptance; the actual28-output reserved diagnostic
+and its numerical/own-review evidence are recorded separately after execution.

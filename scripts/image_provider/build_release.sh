@@ -134,6 +134,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/sdxl_lineart_backend.py",
         "eom_image_provider/sdxl_lineart_probe.py",
         "eom_image_provider/sdxl_learned_comparison.py",
+        "eom_image_provider/sdxl_validation_comparison.py",
         "eom_image_provider/sdxl_model_resolution.py",
         "eom_image_provider/staged_file_io.py",
         "eom_image_provider/informative_lineart_acquisition.py",

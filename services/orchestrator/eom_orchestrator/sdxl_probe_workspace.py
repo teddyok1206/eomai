@@ -43,6 +43,10 @@ from eom_orchestrator.sdxl_training_target_inputs import (
     PreparedSdxlTrainingTargetInputs,
     sdxl_training_target_input_hashes,
 )
+from eom_orchestrator.sdxl_validation_inputs import (
+    PreparedSdxlValidationInputs,
+    sdxl_validation_input_hashes,
+)
 
 
 class SdxlProbeHandoffError(RuntimeError):
@@ -60,6 +64,25 @@ class StagedSdxlProbe:
     workspace: Path
     systemd_unit: str
     command_sha256: str
+
+
+def stage_sdxl_validation_inputs(
+    prepared: PreparedSdxlValidationInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_validation_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-learned-comparison",
+        workspace_parent=workspace_parent,
+        worker=worker,
+        maximum_member_bytes=64 * 1024**2,
+    )
 
 
 def stage_sdxl_canny_reference_inputs(
@@ -313,7 +336,7 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_|imgsdxlcannycmprun_|imgsdxlcannyrefrun_)[0-9a-f]{32}",
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_|imgsdxlcannycmprun_|imgsdxlcannyrefrun_|imgsdxlvalcmprun_)[0-9a-f]{32}",
             run_id,
         )
         is None
@@ -432,6 +455,15 @@ def dispatch_sdxl_lora_evaluation(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-sdxl-lora-evaluation",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imgsdxlloraevalrun_",
+    )
+
+
+def dispatch_sdxl_validation_comparison(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-learned-comparison",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxlvalcmprun_",
     )
 
 

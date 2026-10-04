@@ -61,6 +61,15 @@ def read_sdxl_canny_comparison_sources(
     root: int,
     command: LocalImageSdxlCannyComparisonCommand,
 ) -> SdxlCannyComparisonSources:
+    return parse_sdxl_canny_comparison_sources(
+        command, read_sdxl_canny_comparison_metadata(root, command)
+    )
+
+
+def read_sdxl_canny_comparison_metadata(
+    root: int, command: LocalImageSdxlCannyComparisonCommand
+) -> dict[str, bytes]:
+    """One bounded metadata reader; numerical successors do not need TRAIN pixels."""
     metadata = {}
     for name, pointer in (
         ("canny-command", command.conditioning_command),
@@ -91,7 +100,7 @@ def read_sdxl_canny_comparison_sources(
         "inputs/canny-own-review-evidence.json",
         maximum_bytes=256 * 1024,
     )
-    return parse_sdxl_canny_comparison_sources(command, metadata)
+    return metadata
 
 
 def _replay(

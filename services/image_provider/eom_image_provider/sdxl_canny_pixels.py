@@ -72,13 +72,30 @@ def opencv_canny_pixels(gray: bytes, *, width: int, height: int, policy: SdxlCan
 
 def sdxl_canny_source_canvas(payload: bytes, *, policy: SdxlCannyPolicy) -> Image.Image:
     """One shared placement for edge extraction and a separate white-paper initializer."""
+    return _source_canvas(
+        payload, source_size=(policy.source_width_px, policy.source_height_px), policy=policy
+    )
+
+
+def sdxl_canny_native_source_canvas(
+    payload: bytes, *, width_px: int, height_px: int
+) -> Image.Image:
+    """Reserved native crops are fitted, never relabeled as prepared TRAIN targets."""
+    if not (32 <= width_px <= 4096 and 32 <= height_px <= 4096):
+        raise ProviderError("SDXL_CANNY_INPUT_INVALID")
+    return _source_canvas(payload, source_size=(width_px, height_px), policy=SdxlCannyPolicy())
+
+
+def _source_canvas(
+    payload: bytes, *, source_size: tuple[int, int], policy: SdxlCannyPolicy
+) -> Image.Image:
     try:
         if not 0 < len(payload) <= 16 * 1024**2:
             raise ValueError("Canny input byte budget exceeded")
         with Image.open(io.BytesIO(payload)) as source:
             if (
                 source.format != "PNG"
-                or source.size != (policy.source_width_px, policy.source_height_px)
+                or source.size != source_size
                 or source.mode not in ("L", "RGB")
                 or getattr(source, "n_frames", 1) != 1
             ):
@@ -105,8 +122,18 @@ def canny_conditioning_png(
     extractor: CannyPixels = opencv_canny_pixels,
 ) -> bytes:
     """Declared source materialization; no prompt, morphology rewrite or model path."""
+    return canny_conditioning_canvas_png(
+        sdxl_canny_source_canvas(payload, policy=policy), policy=policy, extractor=extractor
+    )
+
+
+def canny_conditioning_canvas_png(
+    canvas: Image.Image, *, policy: SdxlCannyPolicy, extractor: CannyPixels = opencv_canny_pixels
+) -> bytes:
+    """Extract once from the exact initializer placement, with no second fit."""
     try:
-        canvas = sdxl_canny_source_canvas(payload, policy=policy)
+        if canvas.mode != "L" or canvas.size != (policy.width_px, policy.height_px):
+            raise ProviderError("SDXL_CANNY_INPUT_INVALID")
         edges = extractor(
             canvas.tobytes(), width=policy.width_px, height=policy.height_px, policy=policy
         )
