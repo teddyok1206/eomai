@@ -378,6 +378,47 @@ def test_full_supplemental_metadata_is_admitted_once_before_page_reads(monkeypat
     assert admission.prepare_source_page_crop_reads(object(), review) == reads
 
 
+def test_discovery_reuses_lineage_admission_without_fabricating_a_crop_review(
+    monkeypatch, expanded
+):
+    review = _review(expanded)
+    _records, calls = _reader(monkeypatch, expanded, review)
+    lineage = supplemental.resolve_science_visual_expansion_lineage(
+        object(),
+        supplemental_pilots=review.supplemental_pilots,
+        basis=expanded.basis,
+        observed_at=review.created_at,
+    )
+    assert lineage.plans == expanded.plans and lineage.results == expanded.results
+    assert len(calls) == 1 and len(calls[0]) == 7
+
+
+@pytest.mark.parametrize("fault", ["naive_time", "duplicate", "missing"])
+def test_discovery_rejects_bad_presentation_input_before_metadata_reads(
+    monkeypatch, expanded, fault
+):
+    review = _review(expanded)
+    _reader(monkeypatch, expanded, review)
+    monkeypatch.setattr(
+        supplemental,
+        "resolve_control_artifact_members",
+        lambda *a: pytest.fail("metadata read before input admission"),
+    )
+    arguments = {
+        "supplemental_pilots": review.supplemental_pilots,
+        "basis": expanded.basis,
+        "observed_at": review.created_at,
+    }
+    if fault == "naive_time":
+        arguments["observed_at"] = datetime(2026, 10, 4, 8)
+    elif fault == "duplicate":
+        arguments["supplemental_pilots"] = (review.supplemental_pilots[0],) * 3
+    else:
+        arguments["supplemental_pilots"] = review.supplemental_pilots[:1]
+    with pytest.raises(ValueError):
+        supplemental.resolve_science_visual_expansion_lineage(object(), **arguments)
+
+
 @pytest.mark.parametrize(
     "fault",
     ["page_hash", "source_hash", "parent_hash", "partition", "frame", "predecessor_candidate"],

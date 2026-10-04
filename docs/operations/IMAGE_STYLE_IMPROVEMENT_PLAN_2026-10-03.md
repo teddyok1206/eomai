@@ -318,6 +318,18 @@ relabel source crops as AI outputs, or generate again in the exhausted diagnosti
 Reviewed source candidates remain **23**, actual SDXL outputs **36 own-REJECTED**, independent
 blind review `NOT_PERFORMED`, full-data readiness `INSUFFICIENT`, V6 unchanged, GOAL=ACTIVE.
 
+At **2026-10-04T07:37:07Z**, all three supplemental CPU cohorts finished and were committed:
+**162 new PDFs / 737 pages / 1,536 automatic regions**, with zero GPU/training/activation calls.
+Shard 2 result is `artifact_6c791faf82de4b7cbccc2b7ef1522282` /
+`rev_52f85af6e224451b844a9e362464bcaa`, member `manifests/visual-pilot-result.json`, raw SHA
+`sha256:37a30655a5a484743b99b0f409f4f63f9fa55a3467a3fd98b22657adbdf79f92`, semantic SHA
+`sha256:ba463769968ba104dc6dba0bcdc79409ce18467a4d9914c19a7047ec66f51ea7`.
+Discovery and crop review now share the same read-only complete-lineage admission, so inspecting
+TRAIN pages does not require inventing a review/caption. Final discovery-extension regression is
+**174 PASS**, including four new shared-admission/input-negative cases; this replaces, not adds
+to, the overlapping 170-test checkpoint. The actual extraction success does not increase approved
+source-crop or authored-image quality counts. Literal review and data admission remain next.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

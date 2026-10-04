@@ -35,6 +35,11 @@ source selection, chronology, result closure and document/hash/group partition c
 reading page pixels. Reuse Catalog's authoritative selection function. Missing/stale/conflicting
 or rehashed-but-false lineage fails explicitly; do not resolve latest or substitute an old page.
 
+TRAIN-only discovery and reviewed crop admission share this read-only lineage resolver. Discovery
+does not fabricate a reviewed crop recipe or caption merely to read metadata. Crop admission adds
+selection-specific checks after that shared boundary; neither path reads page pixels on metadata
+failure. Its two real callers use the same completeness/authorization/selection rule.
+
 Every reviewed selection must match its candidate, page, PDF, dimensions, DPI and frozen partition,
 and intersect the candidate it declares. Reuse one selection-lineage check for V1.0 and V1.1.
 Group selected rectangles by unique page pointer and reuse the existing bounded page resolver

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from eom_catalog_contracts import ScienceAssessmentWebCorpusManifestV2
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
@@ -15,6 +16,7 @@ from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlanV4,
     LocalImageScienceCorpusVisualPilotResult,
     LocalImageScienceSourcePageCropReviewV2,
+    ScienceSourcePageCropSupplementalPilot,
     content_json_bytes,
     validate_contract,
     validate_science_visual_pilot_result,
@@ -53,12 +55,59 @@ def resolve_source_page_crop_expansion(
     review: LocalImageScienceSourcePageCropReviewV2,
     basis: ResolvedSdxlTrainingSources,
 ) -> ResolvedScienceSourceCropExpansion:
-    """One bounded indexed metadata snapshot, followed by pure full-lineage admission."""
+    """Admit reviewed selections after the same metadata boundary used for discovery."""
+    if review.training_authorization != basis.crop_set.training_authorization:
+        raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_AUTHORIZATION_MISMATCH")
+    lineage = resolve_science_visual_expansion_lineage(
+        engine,
+        supplemental_pilots=review.supplemental_pilots,
+        basis=basis,
+        observed_at=review.created_at,
+    )
+    validate_source_page_crop_selection_sources(
+        review,
+        plans=lineage.plans,
+        results=lineage.results,
+        result_pointers=tuple(pair.pilot_result for pair in review.supplemental_pilots),
+    )
+    return lineage
+
+
+def resolve_science_visual_expansion_lineage(
+    engine: Engine,
+    *,
+    supplemental_pilots: tuple[ScienceSourcePageCropSupplementalPilot, ...],
+    basis: ResolvedSdxlTrainingSources,
+    observed_at: datetime,
+) -> ResolvedScienceSourceCropExpansion:
+    """Shared read-only discovery/crop admission; never invent a review to read metadata."""
+    if (
+        not 2 <= len(supplemental_pilots) <= 4
+        or observed_at.tzinfo is None
+        or observed_at.utcoffset() != UTC.utcoffset(observed_at)
+        or basis.authorization.approved_at > observed_at
+    ):
+        raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_INPUT_INVALID")
+    supplemental_pilots = tuple(
+        ScienceSourcePageCropSupplementalPilot.model_validate(pair.model_dump(mode="json"))
+        for pair in supplemental_pilots
+    )
+    for pointers in (
+        tuple(pair.pilot_plan for pair in supplemental_pilots),
+        tuple(pair.pilot_result for pair in supplemental_pilots),
+    ):
+        if len(
+            {
+                (pointer.artifact_id, pointer.artifact_revision_id, pointer.member_path)
+                for pointer in pointers
+            }
+        ) != len(pointers):
+            raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_REPEATED_PILOT")
     pointers = (
         basis.authorization.corpus_manifest,
         *(
             pointer
-            for pair in review.supplemental_pilots
+            for pair in supplemental_pilots
             for pointer in (pair.pilot_plan, pair.pilot_result)
         ),
     )
@@ -77,7 +126,7 @@ def resolve_source_page_crop_expansion(
             "science-corpus-visual-pilot-plan-v4",
             LocalImageScienceCorpusVisualPilotPlanV4,
         )
-        for index in range(len(review.supplemental_pilots))
+        for index in range(len(supplemental_pilots))
     )
     results = tuple(
         _document(
@@ -85,15 +134,13 @@ def resolve_source_page_crop_expansion(
             "science-corpus-visual-pilot-result",
             LocalImageScienceCorpusVisualPilotResult,
         )
-        for index in range(len(review.supplemental_pilots))
+        for index in range(len(supplemental_pilots))
     )
     if (
         len({plan.campaign_id for plan in plans}) != 1
         or tuple(plan.campaign_shard_index for plan in plans) != tuple(range(len(plans)))
         or any(plan.campaign_shard_count != len(plans) for plan in plans)
         or len({result.pilot_id for result in results}) != len(results)
-        or basis.authorization.approved_at > review.created_at
-        or review.training_authorization != basis.crop_set.training_authorization
     ):
         raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_COVERAGE_MISMATCH")
     source_ids: set[str] = set()
@@ -106,7 +153,7 @@ def resolve_source_page_crop_expansion(
                 plan,
                 corpus=corpus,
                 authorization=basis.authorization,
-                authorization_pointer=review.training_authorization,
+                authorization_pointer=basis.crop_set.training_authorization,
                 predecessor_plans=basis.plans,
                 predecessor_plan_pointers=predecessors,
             )
@@ -116,7 +163,7 @@ def resolve_source_page_crop_expansion(
         if (
             result.status != "SUCCEEDED"
             or result.started_at < plan.created_at
-            or result.completed_at > review.created_at
+            or result.completed_at > observed_at
         ):
             raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_RESULT_MISMATCH")
         for source in plan.selected_sources:
@@ -129,10 +176,4 @@ def resolve_source_page_crop_expansion(
                 != source.partition
             ):
                 raise ValueError("SCIENCE_SOURCE_CROP_EXPANSION_PARTITION_LEAKAGE")
-    validate_source_page_crop_selection_sources(
-        review,
-        plans=plans,
-        results=results,
-        result_pointers=tuple(pair.pilot_result for pair in review.supplemental_pilots),
-    )
     return ResolvedScienceSourceCropExpansion(plans, results)
