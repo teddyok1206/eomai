@@ -7,6 +7,39 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+TRAIN-only follow-up freeze, **2026-10-04 22:20 UTC**: test the existing reviewed
+target cohort's **10 CLEAN_CONTOUR targets** separately from its23 restrained-tone
+and5 fine-hatching targets. This is a small diagnostic hypothesis, not a proven
+cause of earlier weak style transfer or an independent quality acceptance. The
+existing closed command/result1.1, exact target captions/PNG revisions, trainer,
+GPU lock and Orchestrator handoff already support a selected subset; no successor
+schema, backend modification, model download, service change or DB migration is
+needed. Keep all38 earlier inputs and their adapter immutable.
+
+Freeze at most **one fresh 200-step run**, rank/alpha8, learning rate1e-4, batch1,
+accumulation4, seed20261004, 768×512 exact prepared RGB, maximum3,600,000ms and
+16GiB allocated GPU memory. It starts from the same pinned BASE, not from the
+38-target adapter. Exactly800 micro-samples means80 exposures per selected image,
+versus approximately21 in the38-target pilot; dataset size/exposure and expression
+mix therefore change together. This is **not a controlled claim that expression
+mix alone explains quality**. Six of the ten targets depict people; this is a
+limited contour-style track, not comprehensive object/family coverage.
+
+Before dispatch, re-admit canonical source/target/authorization lineage, freeze the
+exact10-target command, stage only those TRAIN PNGs, and visually inspect their
+hashed contact sheet. Any new target defect is excluded before GPU execution and
+reported without changing historical review bytes. Selected immutable targets and
+the two used preparation batches are pinned in the command; no duplicate dataset
+Artifact/PNG copies are published. Source-contact views are diagnostic materialization,
+not newly generated images. Existing VALIDATION28 outputs and source QA correction,
+spent TRAIN fallback budgets, and unopened HOLDOUT pixels remain unchanged.
+
+New model inference allowance in this training checkpoint is **0**. A comparison
+must be frozen separately against the actual resulting adapter, with explicit
+matched inputs, usage budget and limitations; a training loss is not a style gate.
+Terminal publication/replay must verify exact staged target bytes and the adapter,
+with no new training on replay. Production V6 and Item/HWPX activation stay forbidden.
+
 Latest checkpoint, **2026-10-04 21:59 UTC**: the frozen reserved comparison is now
 executed, validated, published and own-screened. Command bytes/source/cases/seed
 were unchanged. Numerical worker source `41b5fed146c192778ffc20d2c68978917064ea25`
