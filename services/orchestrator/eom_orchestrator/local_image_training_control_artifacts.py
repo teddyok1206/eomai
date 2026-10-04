@@ -31,6 +31,7 @@ from eom_image_contracts import (
     content_sha256,
     validate_contract,
 )
+from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyConditioningCommand
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
 )
@@ -340,6 +341,20 @@ class LocalImageTrainingControlArtifactPublisher:
             else "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.0",
             artifact_type="control_local_image_sdxl_lora_evaluation_command",
             idempotency_prefix="local-image-sdxl-lora-evaluation-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_canny_conditioning_command(
+        self, command: LocalImageSdxlCannyConditioningCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-canny-conditioning-command",
+            member="manifests/sdxl-canny-conditioning-command.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-conditioning-command/1.0",
+            artifact_type="control_local_image_sdxl_canny_conditioning_command",
+            idempotency_prefix="local-image-sdxl-canny-conditioning-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )

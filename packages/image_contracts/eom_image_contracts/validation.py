@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-canny-conditioning-command": "local-image-sdxl-canny-conditioning-command-v1.schema.json",
+    "sdxl-canny-conditioning-result": "local-image-sdxl-canny-conditioning-result-v1.schema.json",
     "sdxl-publication-comparison-command": (
         "local-image-sdxl-publication-comparison-command-v1.schema.json"
     ),
@@ -382,6 +384,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-publication-comparison-command": (
         "sha256:b5c53500b0001a0f0fc27a267e08b9056302d228e65787134708592825d9616b"
+    ),
+    "sdxl-canny-conditioning-command": (
+        "sha256:97741f7e30cb79bd67badb796802f0f982b5d018d5fdd9166b7f2621e451623c"
+    ),
+    "sdxl-canny-conditioning-result": (
+        "sha256:9671d5550fb006872352b2ae38a056747d92135f094186716518ba62b18d751d"
     ),
     "sdxl-publication-comparison-result": (
         "sha256:861e938ddb92bf6f84134e8f772bacd7559648a58dab426181801661fb8de3fd"

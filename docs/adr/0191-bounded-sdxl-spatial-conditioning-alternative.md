@@ -2,7 +2,9 @@
 
 Date: 2026-10-04 UTC
 
-Status: proposed; NOT_IMPLEMENTED, no ControlNet weight acquired or GPU run submitted.
+Status: CPU input-preparation source implemented and verified; actual lab execution
+pending. ControlNet model/acquisition/comparison NOT_IMPLEMENTED; no controller
+weight acquired or GPU run submitted.
 
 ## Evidence and hypothesis
 
@@ -163,3 +165,42 @@ to RGB. The thresholds are the official example's initial control, not an optima
 EOM claim. Freeze a successor policy rather than relabeling the released T2I
 inversion. Required source details must be inspected before GPU acquisition;
 do not try several thresholds until one happens to pass.
+
+## CPU input-preparation implementation boundary
+
+The first implementation is only `local-image-sdxl-canny-conditioning-command/1.0` and its
+result. The command pins an admitted historical target-comparison command,
+frozen recipe/runtime and bounded CPU budget. Reuse that command's full source,
+authorization, split and target-revision admission before materializing at most
+three exact TRAIN PNGs; do not stage LoRA/base/controller weights or other targets.
+This is an explicit workspace boundary, not another canonical copy of the corpus.
+The result records ordered conditioning members, source pointers, sizes/hashes,
+binary polarity/edge counts, runtime and zero model/training execution. It is
+UNREVIEWED input preparation, never illustration acceptance or TRAIN approval.
+
+Reuse the existing exclusive workspace and fixed systemd dispatch adapter with
+a separate CPU-only template. Orchestrator remains the only Artifact publisher.
+The command/result are small frozen values; outputs acquire canonical identity
+through the committed Artifact and immutable revision. No database/index/cache,
+runtime activation, queue or scheduler change. Bounded source/metadata maps and
+ordered tuples keep preparation O(total source pixels + metadata), replay O(bytes
+verified) with no Canny transform, GPU lease or model path. Partial failures retain
+their ordered prefix; orphan/stale/hash/runtime failures cannot replay as success.
+Publication independently reconstructs the three declared edge maps under a
+separate CPU verification quota before canonical commit. Scientific detail review
+is still required. A loose operator script without typed admission/receipt/replay
+would not preserve the provenance needed by the later ControlNet comparison.
+
+Source validation: 278 focused/regression cases PASS; one explicitly excluded
+pre-existing Catalog infrastructure import violation remains open. Strict mypy
+on nine affected core files, formatter/linter, shell and fixed systemd template
+verification PASS. Earlier fixture serialization and incorrect test-invocation
+failures are retained, not treated as runtime defects. These synthetic tests do
+not prove actual OpenCV import/Canny behavior or retained scientific details.
+The optional wheel's exact size/SHA, 97 file RECORD entries and 51 directories
+have been inspected. Its MIT notice SHA is
+`09d719058e782ac7bc71ba21c944e1136cde2bb957c0e888121f0218d6b5f02c`,
+third-party notice SHA
+`4fc3c113d53e95da0f3c433655a67067b7310e53af31eb6d280e94cc6927a363`;
+OpenCV Apache-2.0 and bundled LGPL notices are preserved. This optional library
+download is not controller weight acquisition; no operating dependency changed.

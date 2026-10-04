@@ -15,6 +15,7 @@ from eom_image_contracts import content_json_bytes
 from eom_orchestrator.informative_lineart_extraction_inputs import (
     PreparedInformativeLineartExtractionInputs,
 )
+from eom_orchestrator.sdxl_canny_inputs import PreparedSdxlCannyInputs, sdxl_canny_input_hashes
 from eom_orchestrator.sdxl_learned_comparison_inputs import (
     PreparedSdxlLearnedComparisonInputs,
     sdxl_learned_input_hashes,
@@ -66,6 +67,24 @@ def stage_sdxl_training_target_inputs(
         run_id=prepared.command.run_id,
         command_sha256=prepared.command.command_sha256,
         unit_template="eom-image-sdxl-training-targets",
+        workspace_parent=workspace_parent,
+        worker=worker,
+    )
+
+
+def stage_sdxl_canny_inputs(
+    prepared: PreparedSdxlCannyInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_canny_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-canny-conditioning",
         workspace_parent=workspace_parent,
         worker=worker,
     )
@@ -248,7 +267,7 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_)[0-9a-f]{32}",
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_)[0-9a-f]{32}",
             run_id,
         )
         is None
@@ -376,6 +395,15 @@ def dispatch_informative_lineart_extraction(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-informative-lineart-extraction",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imglineartextractrun_",
+    )
+
+
+def dispatch_sdxl_canny_conditioning(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-canny-conditioning",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxlcannyrun_",
     )
 
 

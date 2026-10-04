@@ -61,6 +61,10 @@ from eom_image_provider.reference_acquisition import (
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
 )
+from eom_image_provider.sdxl_canny_conditioning import (
+    load_sdxl_canny_command,
+    run_sdxl_canny_conditioning,
+)
 from eom_image_provider.sdxl_comparison_command import load_sdxl_comparison_command
 from eom_image_provider.sdxl_learned_comparison import (
     run_sdxl_learned_comparison,
@@ -81,6 +85,9 @@ from eom_image_provider.sdxl_target_comparison import run_sdxl_target_comparison
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eom-local-image")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    canny = subparsers.add_parser("sdxl-canny-conditioning")
+    canny.add_argument("--command", type=Path, required=True)
+    canny.add_argument("--workspace", type=Path, required=True)
     publication = subparsers.add_parser("sdxl-publication-comparison")
     publication.add_argument("--command", type=Path, required=True)
     publication.add_argument("--workspace", type=Path, required=True)
@@ -146,7 +153,13 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        if args.operation == "sdxl-publication-comparison":
+        if args.operation == "sdxl-canny-conditioning":
+            canny_result = run_sdxl_canny_conditioning(
+                command=load_sdxl_canny_command(args.workspace, args.command),
+                workspace=args.workspace,
+            )
+            result = canny_result.model_dump(mode="json")
+        elif args.operation == "sdxl-publication-comparison":
             publication_result = run_sdxl_publication_comparison(
                 command=load_sdxl_publication_command(args.workspace, args.command),
                 workspace=args.workspace,
@@ -458,7 +471,8 @@ def main() -> None:
         raise SystemExit(1) from None
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     if (
-        args.operation in {"sdxl-lineart-probe", "sdxl-publication-comparison"}
+        args.operation
+        in {"sdxl-lineart-probe", "sdxl-publication-comparison", "sdxl-canny-conditioning"}
         and result["status"] == "FAILED"
     ):
         raise SystemExit(1)

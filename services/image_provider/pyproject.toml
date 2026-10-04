@@ -21,6 +21,10 @@ dependencies = [
   "transformers==4.56.2",
 ]
 
+[project.optional-dependencies]
+# CPU Canny conditioning in the numerical lab only; no Qt/X11/contrib or model download.
+sdxl-canny = ["opencv-python-headless==4.11.0.86"]
+
 [project.scripts]
 eom-local-image = "eom_image_provider.cli:main"
 

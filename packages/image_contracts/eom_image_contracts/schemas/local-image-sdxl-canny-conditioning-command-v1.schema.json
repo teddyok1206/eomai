@@ -1,0 +1,285 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "SdxlCannyBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_duration_ms": {
+          "maximum": 60000,
+          "minimum": 1000,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_input_png_bytes": {
+          "const": 16777216,
+          "default": 16777216,
+          "title": "Maximum Input Png Bytes",
+          "type": "integer"
+        },
+        "maximum_outputs": {
+          "const": 3,
+          "default": 3,
+          "title": "Maximum Outputs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_duration_ms"
+      ],
+      "title": "SdxlCannyBudget",
+      "type": "object"
+    },
+    "SdxlCannyPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "aperture_size": {
+          "const": 3,
+          "default": 3,
+          "title": "Aperture Size",
+          "type": "integer"
+        },
+        "fit_height_px": {
+          "const": 500,
+          "default": 500,
+          "title": "Fit Height Px",
+          "type": "integer"
+        },
+        "fit_width_px": {
+          "const": 800,
+          "default": 800,
+          "title": "Fit Width Px",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 512,
+          "default": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "l2_gradient": {
+          "const": false,
+          "default": false,
+          "title": "L2 Gradient",
+          "type": "boolean"
+        },
+        "polarity": {
+          "const": "WHITE_EDGES_ON_BLACK_RGB",
+          "default": "WHITE_EDGES_ON_BLACK_RGB",
+          "title": "Polarity",
+          "type": "string"
+        },
+        "policy_version": {
+          "const": "FIT_800X500_CENTER_832X512_OPENCV_CANNY/1.0",
+          "default": "FIT_800X500_CENTER_832X512_OPENCV_CANNY/1.0",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "resampling": {
+          "const": "PILLOW_LANCZOS",
+          "default": "PILLOW_LANCZOS",
+          "title": "Resampling",
+          "type": "string"
+        },
+        "source_height_px": {
+          "const": 512,
+          "default": 512,
+          "title": "Source Height Px",
+          "type": "integer"
+        },
+        "source_width_px": {
+          "const": 768,
+          "default": 768,
+          "title": "Source Width Px",
+          "type": "integer"
+        },
+        "threshold_high": {
+          "const": 200,
+          "default": 200,
+          "title": "Threshold High",
+          "type": "integer"
+        },
+        "threshold_low": {
+          "const": 100,
+          "default": 100,
+          "title": "Threshold Low",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 832,
+          "default": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "title": "SdxlCannyPolicy",
+      "type": "object"
+    },
+    "SdxlCannyRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_opencv_wheel_sha256": {
+          "const": "sha256:0e0a27c19dd1f40ddff94976cfe43066fbbe9dfbb2ec1907d66c19caef42a57b",
+          "default": "sha256:0e0a27c19dd1f40ddff94976cfe43066fbbe9dfbb2ec1907d66c19caef42a57b",
+          "title": "Expected Opencv Wheel Sha256",
+          "type": "string"
+        },
+        "numpy_version": {
+          "maxLength": 32,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "title": "Numpy Version",
+          "type": "string"
+        },
+        "opencv_module_version": {
+          "const": "4.11.0",
+          "default": "4.11.0",
+          "title": "Opencv Module Version",
+          "type": "string"
+        },
+        "opencv_package_version": {
+          "const": "4.11.0.86",
+          "default": "4.11.0.86",
+          "title": "Opencv Package Version",
+          "type": "string"
+        },
+        "pillow_version": {
+          "maxLength": 32,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "title": "Pillow Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pillow_version",
+        "numpy_version"
+      ],
+      "title": "SdxlCannyRuntime",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-canny-conditioning-command/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "budget": {
+      "$ref": "#/$defs/SdxlCannyBudget"
+    },
+    "case_relation": {
+      "const": "REVIEWED_TRAIN_TARGET_NOT_HOLDOUT",
+      "title": "Case Relation",
+      "type": "string"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "policy": {
+      "$ref": "#/$defs/SdxlCannyPolicy"
+    },
+    "policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_CANNY_INPUT_PREPARATION",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imgsdxlcannyrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runtime": {
+      "$ref": "#/$defs/SdxlCannyRuntime"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-canny-conditioning-command/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "case_relation",
+    "source_command",
+    "policy",
+    "policy_sha256",
+    "runtime",
+    "budget",
+    "command_sha256"
+  ],
+  "title": "LocalImageSdxlCannyConditioningCommand",
+  "type": "object"
+}
