@@ -7,7 +7,30 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 16:02 UTC**: ADR 0191's closed CPU Canny
+Latest checkpoint, **2026-10-04 17:15 UTC**: ADR 0191's fixed Canny ControlNet
+controller was acquired/installed lab-only with exact hashes/license evidence,
+wheel RECORD and actual worker safe-header verification (844 fp16 tensors, no
+model inference). One frozen comparison used the same three TRAIN references,
+captions/negative prompts, seed104729, Euler ancestral/30 steps/CFG7 and LoRA1.0.
+Six outputs in **45.948s**, peak **10,763,098,624 bytes (~10.02GiB)**. Source
+`6e7f1620`, regression403 PASS/one known exclusion, strict mypy10 PASS. Thirteen
+result members/crop reconstructions/canonical bytes verified; installed replay
+verified38 files with model/GPU lease/Canny/write counts0. Own inspection of all
+six native/final images and original sources: LORA composition3/3 improved, but
+final quality **REJECTED6/6** (gray/periodic backgrounds and rough contours; BASE
+fan also adds two objects). This is not independent or heldout acceptance.
+Result `artifact_43c6a3311c9b43dd800c056ea81def35` /
+`rev_f95ec4eaf45f434aa2c241b64a952328`; 34 text-only evidence members archived
+in `artifact_d9bf33372c714fff82a052bcefc596c9` /
+`rev_a8b25cf7c1ba4f68901461d3a2d8b520`. Native78 remain own-REJECTED; old cleanup6
+and conditioning3 are separate. Training/reserved reads0; operating V6/services
+unchanged; GOAL ACTIVE. No automatic use of the remaining fallback quota. Next:
+read-only target/normalization/conditioning audit before any new frozen successor.
+Installer/source-prefix diagnostic and wrong-environment publication import
+failures are retained; recovery verified installed state without reinstall or
+another GPU submission. Earlier checkpoints below are historical.
+
+Previous checkpoint, **2026-10-04 16:02 UTC**: ADR 0191's closed CPU Canny
 input preparation is implemented, installed lab-only and executed once over the
 same three reviewed TRAIN targets. Three binary 832×512 maps in **120ms**;
 canonical four-member byte equality, installed CPU reconstruction and transform-

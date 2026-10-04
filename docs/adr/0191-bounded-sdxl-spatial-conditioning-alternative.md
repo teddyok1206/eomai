@@ -6,8 +6,9 @@ Status: CPU input preparation implemented, installed and executed; canonical
 publication/reconstruction/transform-free replay PASS; own source-detail review
 3/3 PASS, not final illustration acceptance. Standalone controller manifest,
 acquisition/installation/resolution and matched-comparison path source-verified.
-Pinned controller weights acquired and hash-verified; protected installation and
-numerical comparison pending. No new GPU run submitted.
+Pinned controller weights acquired/installed lab-only; frozen numerical comparison
+6/6 SUCCEEDED and canonical publication/replay PASS. Own final quality REJECTED6/6;
+independent/heldout/activation NOT_PERFORMED. Goal remains ACTIVE.
 
 ## Evidence and hypothesis
 
@@ -107,7 +108,7 @@ without adding another encoder/conditioning factor. No claim of improvement or
 
 Runtime/library research and this proposal consume no model execution budget.
 The acquisition/model contract and controller license proof are now verified;
-actual numerical execution remains pending. The completed CPU checkpoint is documented in
+actual numerical execution has since completed as recorded below. The CPU checkpoint is documented in
 [ADR 0190](0190-pinned-sdxl-publication-derivatives.md) and the
 [improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
 
@@ -125,7 +126,8 @@ pipeline or GPU allocation was acquired by this preflight.
   `78be0e56618abb9aef9a880ce74a4ba7219c97a35d9f27a2763b23475004264c`.
 - `diffusion_pytorch_model.fp16.safetensors`: 2,502,139,136 bytes, upstream
   LFS SHA-256 `b2e7d3921058a442cc80430d1ec8847f42599c705e2451c95e77cf4dcf8d6c25`.
-  This is an expected download hash, **not a locally verified weight**.
+  This was initially an expected download hash; the later acquisition/install
+  independently verifies these exact local bytes as recorded below.
 
 The pinned [model card](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/blob/eb115a19a10d14909256db740ed109532ab1483c/README.md)
 has inconsistent `base_model` front matter naming SD1.5, whereas its instructions
@@ -136,8 +138,8 @@ latent channels 4, cross-attention dimension 2,048 and projection dimension 2,81
 These support the proposed SDXL architecture; backend compatibility still needs
 an actual local test. Do not treat its `_name_or_path` as a local source path.
 
-The upstream `openrail++` label is recorded, but a corresponding controller
-license-text source must be established before acquisition. Existing pinned
+The upstream `openrail++` label was recorded; a corresponding controller
+license-text source has since been established before acquisition. Existing pinned
 SDXL base `LICENSE.md` is 14,109 bytes, SHA-256
 `19b6998b569b53ac1fc2158a8a3202c8699a9a4605b47075715d9c96be7fb6d0`, from
 [base revision 46216598](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/462165984030d82259a11f4367a4eed129e94a7b/LICENSE.md).
@@ -334,4 +336,70 @@ revision `imgmodelrev_caa46d1cd6a1a102326c40f1a8ca62fa`, manifest SHA
 `fb13dfe611fd83cf8de64e37f2a126b1d3894a2e3e063017cec7599ebf29ee3c` is sealed
 with configuration/card/Hub-license mapping and standard text. Acquisition/hash
 PASS does not certify tensor loading, VRAM fit, final image quality or activation.
-No GPU/training/heldout call, operating binding change or service restart yet.
+At this acquisition checkpoint there was no GPU/training/heldout call,
+operating binding change or service restart; the later GPU checkpoint follows.
+
+### Actual frozen six-output numerical and own-quality checkpoint
+
+One command `imgsdxlcannycmprun_eaf6a4202c376d7905eddde83f8761bc` froze
+the three existing TRAIN cases and original captions/negatives, seed104729,
+Euler ancestral/30 steps/CFG7, LoRA1.0, ControlNet1.0/range0–1 and all-GPU fp16.
+Ceilings: six outputs, 600,000ms, 15GiB. No fresh T2I baseline, retry, offload,
+strength/seed/prompt sweep or automatic use of the remaining overall fallback
+quota. Numerical SUCCEEDED: six calls in **45,948ms**, peak **10,763,098,624 bytes**.
+Actual RTX5080/capability12.0, Python3.11.15/Torch2.7.1+cu128/Diffusers0.35.2.
+Only lab contracts/provider changed; trainer distribution and numerical versions,
+operating V6 binding, five active services, schema migrations/queues stayed intact.
+
+Actual worker imported the installed packages without repository/Git and verified
+the protected controller hash/844 fp16 safetensors headers without Torch/GPU.
+A pip check inheriting the development source path erroneously included unrelated
+API/Web source distributions. Isolated `python -I -m pip check` and installed
+RECORD were then verified read-only, with **no reinstallation**. A publication
+invocation used the wrong environment (API lacks Pillow), failed before side
+effects and was corrected to the explicit image-test publisher environment.
+No production dependency was added to satisfy either diagnostic mistake.
+
+Orchestrator published 13 members (six raw RGB, six fixed native-crop grayscale,
+one receipt) to `artifact_43c6a3311c9b43dd800c056ea81def35` /
+`rev_f95ec4eaf45f434aa2c241b64a952328`. Result member
+`manifests/sdxl-canny-comparison-result.json`, raw SHA
+`d008219e8d0edc6710f969f708afe077125d682aa2fff4df1de8178718e3a4f6`.
+Result semantic SHA `6ce88a2696e0d3571f6d6f2dd7f952d4528134d6d3914043be4641a0d54bff8c`.
+All member hash/media/dimension/owner/closure and canonical byte equality verified;
+six fixed crop reconstructions match. Actual installed worker-identity terminal
+replay verified 38 staged/output files with model/GPU lease/Canny/write counts0.
+The three control maps and base/VAE/controller/LoRA are not duplicated in output.
+
+Own direct inspection included original sources3, native images6, publication
+images6 and previous same-source T2I LORA images3. Native and publication final
+quality are **REJECTED6/6**; own composition5/6, LORA composition3/3. BASE fan adds
+two objects. LORA preserves the single fan pose and lightens interiors; plant
+leaf/petal placement, veins and root outline improve; scooter wheel-light marks
+return compared with prior T2I LORA. All retain gray/periodic canvas and rough
+strokes; BASE plant also retains color. These are own observations, not an
+independent semantic certificate or evidence of general heldout performance.
+No image cleanup is used to rename this result PASS; previous native72 and
+cleanup6 stay rejected. New native total78, cleanup6 and conditioning3 counted
+separately. New training/reserved reads0; Preview/HWPX/activation gates unopened.
+
+34 text-only records, including all invocation/fixture/recovery failures, are
+archived in `artifact_d9bf33372c714fff82a052bcefc596c9` /
+`rev_a8b25cf7c1ba4f68901461d3a2d8b520`, primary
+`reports/own-spatial-review.json`, SHA
+`b3e6779f207019b71c3edef6a9d3468baeaba0ca37e87e3f760abd2d79aa1c51`.
+No generated image/weight/log is placed in Git. Goal ACTIVE. Next safe work:
+read-only white-background target, VAE/normalization and conditioning-provenance
+audit before proposing a new frozen successor; no automatic numerical sweep.
+
+Initial read-only code audit found no obvious pixel-range double-normalization:
+the training `_latents` uses `pixel/127.5 - 1`, then the pinned VAE scaling factor;
+this backend file is unchanged from installed trainer source `cf6746ae`. The
+installed ControlNet pipeline explicitly preprocesses the binary RGB control
+with `do_normalize=False`, decodes using the VAE scaling factor and invokes
+Diffusers image postprocessing; the provider requires finite `[0,1]` numpy output
+and serializes it once as `[0,255]`. This is code evidence, not an additional VAE
+roundtrip/model execution or a full root-cause conclusion. Gray backgrounds also
+occur in BASE without LoRA, so blaming only the adapter or increasing its strength
+is unsupported. Remaining input/photometric-distribution diagnosis is open;
+do not add a background-whitening workaround or silently repaint scientific marks.

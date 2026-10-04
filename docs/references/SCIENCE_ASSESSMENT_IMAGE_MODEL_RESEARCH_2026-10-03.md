@@ -141,8 +141,8 @@ V6는 변경하지 않는다. 아직 가중치 다운로드·변환·설치나 �
 먼저 비교하는 것이다. [공식 모델 카드](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0)는
 SDXL용 Canny 조건과 OpenRAIL++ 가중치 표기를 제공한다. [공식 파일 목록](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/tree/main)의
 fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않는다. 14:54 UTC 읽기 전용
-조회로 정확한 revision·설정·예상 가중치 SHA를 ADR 0191에 기록했지만 실제 가중치는 받지
-않았다. controller 라이선스 원문의 근거와 실제 실행 호환성은 아직 확인 전이다.
+조회 당시 정확한 revision·설정·예상 가중치 SHA를 ADR 0191에 기록했으며 그 시점에는 실제
+가중치를 받지 않았다. 이후 고정 Hub 라이선스 매핑 근거와 실제 실행을 검증했다(아래 후속 결과).
 [Diffusers 0.35.2 소스](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl.py)에서
 공간 조건과 LoRA를 같이 사용하는 경로를 확인했지만 우리 그림에서 개선된다는 뜻은 아니다.
 
@@ -152,11 +152,22 @@ fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않
 `pip check`와 설치 RECORD를 확인했고 다른 수치 라이브러리는 유지했다. 고정 CPU 변환으로
 윤곽 입력 3장을 120ms에 준비·등록했으며, 원본과 직접 비교한 필수 세부 보존은 3/3 PASS다.
 이는 전처리 입력 검수일 뿐 완성 그림의 품질 PASS가 아니다. 변환 없는 replay도 통과했고
-아직 controller 가중치·GPU 생성·재학습은 없다. 비슷한 Pillow 필터를 Canny라고 부르지 않는다.
+이 CPU checkpoint 당시 controller 가중치·GPU 생성·재학습은 없었다. 비슷한 Pillow 필터를
+Canny라고 부르지 않는다.
 구현·예산·보존 경계는 [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md)에
 제안으로 기록했다. 기존 T2I·CPU 출력과 판단, 운영 V6는 보존한다.
 
 운영 프레임워크는 기존 Hugging Face Diffusers를 유지한다.
+
+17:15 UTC 후속 결과: 같은 3원본과 모든 공통 수치·문구를 고정한 Canny ControlNet
+BASE/LORA 6장을 실제 생성했다(45.948초, peak 약 10.02GiB). 설치·라이선스·해시·등록·재조회는
+통과했으나 최종 그림은 자체 6/6 불합격이다. LoRA 조건에서 원본 배치·잎맥·양쪽 바퀴의 발광
+표식이 개선된 것은 관찰되지만 회색/격자 배경과 거친 선을 해결한 것은 아니다.
+BASE 선풍기에는 객체 2개가 추가됐고, BASE 식물 원시 PNG는 색채도 남는다. 최종 흑백 crop이
+원시 품질을 대신하지 않는다. 기존 72장의 불합격을 바꾸지 않고 새 6장을 더해 원본 누적 78장,
+정리 파생 6장·입력 map 3장은 별도로 관리한다. 독립 blind/heldout·추가 학습·운영 활성화는 없으며,
+다음은 배경 원인의 읽기 전용 입력/수치 경계 점검이다. 현재 결과만으로 ControlNet 전체나
+LoRA 일반 성능을 결론 내리지 않는다.
 
 - ControlNet, T2I-Adapter, IP-Adapter, LoRA를 지원한다.
 - 모델 revision과 weight hash를 고정할 수 있다.
