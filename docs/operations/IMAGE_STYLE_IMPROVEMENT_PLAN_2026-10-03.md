@@ -7,7 +7,40 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 17:15 UTC**: ADR 0191's fixed Canny ControlNet
+Latest checkpoint, **2026-10-04 18:12 UTC**: the deliberate final source-
+initialization diagnostic is installed lab-only and executed once. Same three
+TRAIN references, existing Canny maps/models/prompts/seed/controller and LoRA1;
+only original grayscale white-paper RGB initialization with fixed strength0.35
+changes. Scheduler grid30, actual effective timesteps10. Six BASE/LORA outputs in
+**21.220s**, peak **10,763,590,656 bytes (~10.02GiB)**. Source `26a1d667`,
+regression450 PASS plus one additional timestep test PASS, strict mypy12 files
+PASS; one unchanged infrastructure-import test remains explicitly excluded.
+Initializer pixels and fixed publication crops independently reconstructed;
+all13 canonical members verified. Actual installed worker terminal replay checks
+43 files unchanged, with model/lease/canvas/write counts0, no Torch/Git/source.
+Direct own inspection: **reference preservation, white-paper and composition
+6/6 PASS**, not final independent institutional-style acceptance. Gray periodic
+backgrounds disappear in both arms; BASE improves too, so learned LoRA benefit
+and novel-reference conversion/generalization remain unproved. Fixed grayscale
+publication crops are distinct from native RGB, which can retain color traces.
+Result `artifact_9b7b92dec76e43e2bce0d22828228010` /
+`rev_7822975a2ed04cf498d2905f2f9510c1`, raw receipt SHA
+`74d8eb27261f857c3af1d69d2fa4c7b052605b0ffa854025724e04ecac156f45`.
+Own review and20 other text-only records archived in
+`artifact_6a8617bc39874778a7758c7fa2a48d54` /
+`rev_589cdcb7af904853b0fb8f1d178c194f`, primary `reports/own-reference-review.json`,
+raw SHA `620dce8f8f7db704d419921c715d981ea863e96e967ddf6623da011eb712ecb8`.
+Native outputs84; previous78 and cleanup derivatives6 remain own-REJECTED.
+Fallback12/12 consumed, remainder0; no further TRAIN sweep/retry/retraining.
+New training/reserved reads/downloads0; operating V6 and five services unchanged.
+Independent/heldout/Preview/HWPX/activation remain unopened; GOAL ACTIVE.
+Next is read-only reserved-population and blind-contract compatibility inventory.
+Existing blind V1 requires12–32 distinct depictions, four subject families and
+semantic-raster output pointers; three TRAIN references and probe-output PNGs
+must not be padded or relabeled to satisfy it. Reuse packet/answer-key ownership
+with an explicit additive evaluation contract only after that inventory.
+
+Previous checkpoint, **2026-10-04 17:15 UTC**: ADR 0191's fixed Canny ControlNet
 controller was acquired/installed lab-only with exact hashes/license evidence,
 wheel RECORD and actual worker safe-header verification (844 fp16 tensors, no
 model inference). One frozen comparison used the same three TRAIN references,

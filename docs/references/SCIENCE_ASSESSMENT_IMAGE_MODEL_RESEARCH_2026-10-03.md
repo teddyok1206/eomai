@@ -169,6 +169,22 @@ BASE 선풍기에는 객체 2개가 추가됐고, BASE 식물 원시 PNG는 색�
 다음은 배경 원인의 읽기 전용 입력/수치 경계 점검이다. 현재 결과만으로 ControlNet 전체나
 LoRA 일반 성능을 결론 내리지 않는다.
 
+18:12 UTC 후속 결과: 입력 세 원본은 해시가 일치하고 테두리가 완전히 흰 RGB였다.
+읽기 전용 코드 점검에서 명백한 중복 정규화는 발견하지 못했지만 VAE 오류가 없다는 증명은 아니다.
+고정 [Diffusers 0.35.2 Img2Img 소스](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl_img2img.py)의
+시작 이미지와 윤곽 조건을 분리하는 경로로 마지막 6장만 비교했다. 원본 흑백 RGB를 흰 캔버스의
+초기 이미지로도 주고 strength0.35를 고정했다. 문구·seed·모델·LoRA·Canny 조건은 유지했으며
+30-step 스케줄에서 실제 denoising은10 steps다. 21.220초/peak 약10.02GiB, 등록·재현·재조회 PASS.
+회색 격자 배경이 사라지고 원본의 필수 구성이 유지돼 자체 원본 보존/흰 배경 검수는6/6 PASS다.
+BASE도 개선됐으므로 이 성과는 **원본 보존 초기화 방식의 개선**이지 LoRA 일반 성능 증명이 아니다.
+원본과 거의 같은 선화의 재현은 새 사진을 선화로 바꾸는 시험과 다르다. native RGB의 색채 잔재와
+별도 고정 grayscale crop도 구분한다. 기존 불합격78장·정리 파생6장의 판정은 유지한다.
+원본 누적84장, 전체 fallback12/12 소진이며 추가 TRAIN 강도/seed/문구 sweep은 없다.
+출력·자체 검수·21개 비바이너리 증거 pointer는 ADR0191과 운영 계획에 기록했다.
+다음은 reserved 평가 모집단과 blind 평가 계약의 읽기 전용 호환성 확인이다. 기존 blind V1에
+probe-output PNG를 semantic-raster로 다시 이름 붙이거나 TRAIN3개를12/32개로 반복하지 않는다.
+독립 blind/heldout·새 학습·운영 활성화는 아직 없고 운영 V6는 유지한다.
+
 - ControlNet, T2I-Adapter, IP-Adapter, LoRA를 지원한다.
 - 모델 revision과 weight hash를 고정할 수 있다.
 - CPU offload와 양자화를 지원한다.

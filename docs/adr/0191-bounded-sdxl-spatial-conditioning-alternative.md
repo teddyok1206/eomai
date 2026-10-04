@@ -6,8 +6,11 @@ Status: CPU input preparation implemented, installed and executed; canonical
 publication/reconstruction/transform-free replay PASS; own source-detail review
 3/3 PASS, not final illustration acceptance. Standalone controller manifest,
 acquisition/installation/resolution and matched-comparison path source-verified.
-Pinned controller weights acquired/installed lab-only; frozen numerical comparison
-6/6 SUCCEEDED and canonical publication/replay PASS. Own final quality REJECTED6/6;
+Pinned controller weights acquired/installed lab-only; initial edge-only numerical
+comparison6/6 SUCCEEDED but own final quality REJECTED6/6. Deliberate final source-
+initialized comparison6/6 SUCCEEDED; canonical publication/replay PASS and own
+reference preservation/white-paper screen6/6 PASS. This is not independent final
+style acceptance or novel-reference generalization. Fallback12/12 consumed;
 independent/heldout/activation NOT_PERFORMED. Goal remains ACTIVE.
 
 ## Evidence and hypothesis
@@ -473,3 +476,71 @@ failed diagnostic alongside the passing rerun. No new numerical dependency.
 Source test fixtures reuse pinned20-step predecessors/7 effective steps; the live
 diagnostic is separately frozen to its actual30-step predecessor/10 effective
 steps. Steps cannot diverge from the immutable predecessor or strength formula.
+
+### Source-initialization execution and own-review checkpoint, 18:12 UTC
+
+Committed source `26a1d667fc364b0161f87a2f38efe43e398b41e8`. Lab installation
+changes only contracts/provider wheels; numerical dependencies and trainer remain
+unchanged. Wheel SHA-256 values are respectively
+`5ca80a99b6c071e2a26a399f26bd9d9bdf3f3a00b9d941247387f02fe018d93d` and
+`8940aba3f13f832e3daffbbd1f4b4145db6194e0abca4a9a744dac40b2a95472`.
+Installed RECORD, isolated pip check and actual worker-identity imports PASS;
+previous `6e7f1620` wheels remain pinned rollback inputs. No service restart,
+migration, new model acquisition, dependency or production binding change.
+
+Frozen run `imgsdxlcannyrefrun_1a54f2990e1c9d18d164fa3a26e95339` uses exact
+previous command/result pointers and all retained numerical factors. Command
+`artifact_80069eaa06d744f3a54d5c458d203fda` /
+`rev_ed68d8839e644ac597ecf3890f597ba6`, member
+`manifests/sdxl-canny-reference-command.json`, raw SHA
+`768505df1e15c832ae09e510fe55d3b7935b6e4ba718dfad9b56d181b2ddb238`.
+One GPU dispatch produced6 outputs in **21,220ms**, maximum allocated CUDA memory
+**10,763,590,656 bytes**, RTX5080/capability12.0. Actual runtime verifies10
+timesteps against fixed initialization strength0.35 and scheduler grid30.
+All-GPU fp16; no offload, downgrade, retry, fresh baseline or additional training.
+
+Orchestrator re-admitted the full immutable authorization/split/source lineage,
+reconstructed initialized RGB pixel hashes and all fixed publication crops, then
+published13 members: native RGB6, fixed crop L6 and receipt1. Result
+`artifact_9b7b92dec76e43e2bce0d22828228010` /
+`rev_7822975a2ed04cf498d2905f2f9510c1`, primary
+`manifests/sdxl-canny-reference-result.json`, raw SHA
+`74d8eb27261f857c3af1d69d2fa4c7b052605b0ffa854025724e04ecac156f45`;
+semantic SHA `27cf625ec7678a24dc2532d9b6d34b28ee4f99f095319b3a349599de3d8d9533`.
+All canonical member bytes, media/dimensions, ownership and closed output layout
+match. Installed worker terminal replay checks43 files with unchanged SHA/mtime,
+model/GPU lease/canvas fitting/writes0 and no Torch/Git/repository dependency.
+
+Own direct inspection covered original3, new native6, publication6 and previous
+spatial LORA3. **Own reference-preservation, white-paper and composition screens
+PASS6/6**; independent institutional-style judgment NOT_PERFORMED, novel-image
+generalization NOT_EVALUATED. Gray/periodic backgrounds disappear; fan's single
+hub/grille/base, plant leaf/vein/petal/root layout and scooter's two wheels/light
+groups remain near the original. BASE improves too; this does not demonstrate
+that LoRA learned a generally transferable style. Source-like soft/thick raster
+strokes remain. Native BASE scooter has red/blue traces; final L conversion is
+the prescribed, separately identified publication crop, not native grayscale.
+The original fan visibly has five blade lobes, correcting the earlier own note
+"four blade regions" without rewriting that historical evidence.
+
+Own review is archived with20 other text-only records in
+`artifact_6a8617bc39874778a7758c7fa2a48d54` /
+`rev_589cdcb7af904853b0fb8f1d178c194f`, primary `reports/own-reference-review.json`,
+raw SHA `620dce8f8f7db704d419921c715d981ea863e96e967ddf6623da011eb712ecb8`.
+The first type-check failure and passing rerun are retained. No PNG, weight or
+wheel duplication in this evidence Artifact; generated files remain outside Git.
+
+Native total84, previous rejected78 unchanged; cleanup derivatives6 and control
+inputs3 remain separate. Overall fallback12/12 is consumed, remaining0. No more
+TRAIN diagnostic sweep under this budget. Goal ACTIVE; operating V6, team-lead
+prompt originals and historical corpus remain intact. No reserved pixels read.
+
+Next safe work is read-only reserved population/provenance and evaluation-contract
+inventory, before a separately frozen evaluation. Existing blind evaluation V1
+requires12–32 unique depictions, at least four subject families and generated
+`semantic-raster-png/1.0` pointers. These outputs are genuine
+`local-image-sdxl-lineart-probe-output/1.0` pointers; do not relabel them, repeat
+three TRAIN cases or weaken a released V1 to claim12/32 independent comparisons.
+Reuse existing presentation-packet/answer-key responsibility with an explicitly
+additive successor only if this real use case requires it. Independent reviewer
+availability remains a human gate, not a model execution or automatic approval.
