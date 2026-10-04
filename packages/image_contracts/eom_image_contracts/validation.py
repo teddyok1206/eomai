@@ -12,6 +12,12 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-validation-comparison-command": (
+        "local-image-sdxl-validation-comparison-command-v1.schema.json"
+    ),
+    "sdxl-validation-comparison-result": (
+        "local-image-sdxl-validation-comparison-result-v1.schema.json"
+    ),
     "sdxl-canny-reference-command": "local-image-sdxl-canny-reference-command-v1.schema.json",
     "sdxl-canny-reference-result": "local-image-sdxl-canny-reference-result-v1.schema.json",
     "sdxl-canny-detail-review": "local-image-sdxl-canny-detail-review-v1.schema.json",
@@ -359,6 +365,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-validation-comparison-command": (
+        "sha256:4b04fabb83392de22bf10818f985ac82e098a4bf8d2022f2a9cd6736ea64ea59"
+    ),
+    "sdxl-validation-comparison-result": (
+        "sha256:a459f022c4fec7e6a0108cd157bf842a684f189d2106b39cfcb0b000119ff22b"
+    ),
     "science-source-page-crop-review-v3": (
         "sha256:d2e3bd09d627efd917fc48607f1908e56ee0385ddefd935b8bb57e0293059322"
     ),

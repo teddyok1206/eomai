@@ -37,6 +37,40 @@ class PreparedSdxlCannyReferenceInputs:
     files: tuple[SdxlProbeInputMember, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlCannyReferenceMetadata:
+    """The frozen numerical anchor without TRAIN PNG or adapter materialization."""
+
+    command: LocalImageSdxlCannyReferenceCommand
+    sources: SdxlCannyReferenceSources
+    spatial_metadata: ResolvedSdxlCannyComparisonMetadata
+    files: tuple[SdxlProbeInputMember, ...]
+
+
+def sdxl_canny_reference_metadata_hashes(
+    admitted: ResolvedSdxlCannyReferenceMetadata,
+) -> dict[str, str]:
+    metadata = {file.member_path: file.payload for file in admitted.files}
+    if (
+        parse_sdxl_canny_reference_sources(admitted.command, metadata) != admitted.sources
+        or admitted.spatial_metadata.command != admitted.sources.spatial_command
+        or admitted.spatial_metadata.sources != admitted.sources.spatial_sources
+    ):
+        raise ValueError("SDXL_CANNY_REFERENCE_HANDOFF_SOURCES_INVALID")
+    expected = {
+        path: sha
+        for path, sha in sdxl_canny_comparison_input_hashes(admitted.spatial_metadata).items()
+        if not path.startswith(("inputs/canny/", "inputs/adapter/")) and path != "command.json"
+    }
+    return {
+        **expected,
+        "command.json": "sha256:"
+        + hashlib.sha256(content_json_bytes(admitted.command.model_dump(mode="json"))).hexdigest(),
+        "inputs/spatial-command.json": admitted.command.spatial_command.sha256,
+        "inputs/spatial-result.json": admitted.command.spatial_result.sha256,
+    }
+
+
 def sdxl_canny_reference_input_hashes(
     prepared: PreparedSdxlCannyReferenceInputs,
 ) -> dict[str, str]:
@@ -62,10 +96,10 @@ def sdxl_canny_reference_input_hashes(
     }
 
 
-def prepare_sdxl_canny_reference_inputs(
+def resolve_sdxl_canny_reference_metadata(
     engine: Engine,
     command: LocalImageSdxlCannyReferenceCommand,
-) -> PreparedSdxlCannyReferenceInputs:
+) -> ResolvedSdxlCannyReferenceMetadata:
     validate_contract("sdxl-canny-reference-command", command.model_dump(mode="json"))
     command = LocalImageSdxlCannyReferenceCommand.model_validate_json(command.model_dump_json())
     raw = resolve_control_artifact_member(engine, command.spatial_command, maximum_bytes=256 * 1024)
@@ -81,6 +115,26 @@ def prepare_sdxl_canny_reference_inputs(
         engine, command.spatial_result, maximum_bytes=256 * 1024
     )
     sources = parse_sdxl_canny_reference_sources(command, metadata)
+    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
+    return ResolvedSdxlCannyReferenceMetadata(
+        command,
+        sources,
+        admitted,
+        tuple(
+            SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
+            for name, raw in sorted(metadata.items())
+        ),
+    )
+
+
+def prepare_sdxl_canny_reference_inputs(
+    engine: Engine,
+    command: LocalImageSdxlCannyReferenceCommand,
+) -> PreparedSdxlCannyReferenceInputs:
+    reference = resolve_sdxl_canny_reference_metadata(engine, command)
+    command = reference.command
+    sources, admitted = reference.sources, reference.spatial_metadata
+    metadata = {file.member_path: file.payload for file in reference.files}
     # Both successor and complete predecessor metadata are now admitted; no early pixels.
     files = [
         file

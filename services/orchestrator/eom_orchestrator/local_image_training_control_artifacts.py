@@ -43,6 +43,9 @@ from eom_image_contracts.sdxl_publication_comparison import (
 from eom_image_contracts.sdxl_reviewed_evaluation import LocalImageSdxlReviewedEvaluationCommand
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
+from eom_image_contracts.sdxl_validation_comparison import (
+    LocalImageSdxlValidationComparisonCommand,
+)
 from pydantic import BaseModel
 
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
@@ -388,6 +391,22 @@ class LocalImageTrainingControlArtifactPublisher:
             schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.0",
             artifact_type="control_local_image_sdxl_canny_reference_command",
             idempotency_prefix="local-image-sdxl-canny-reference-command",
+            identity_sha256=command.command_sha256,
+            created_at=command.created_at,
+        )
+
+    def commit_sdxl_validation_comparison_command(
+        self, command: LocalImageSdxlValidationComparisonCommand
+    ) -> ImageEvaluationArtifactMember:
+        return self._commit_document(
+            value=command,
+            contract_name="sdxl-validation-comparison-command",
+            member="manifests/sdxl-validation-comparison-command.json",
+            schema_ref=(
+                "eom://schemas/image-provider/local-image-sdxl-validation-comparison-command/1.0"
+            ),
+            artifact_type="control_local_image_sdxl_validation_comparison_command",
+            idempotency_prefix="local-image-sdxl-validation-comparison-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
         )
