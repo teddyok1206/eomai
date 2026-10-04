@@ -1,0 +1,357 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "LocalImageAssessmentLineArtMetricsV2": {
+      "additionalProperties": false,
+      "properties": {
+        "input_edge_density": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Input Edge Density",
+          "type": "number"
+        },
+        "input_foreground_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Input Foreground Ratio",
+          "type": "number"
+        },
+        "output_border_foreground_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Output Border Foreground Ratio",
+          "type": "number"
+        },
+        "output_component_count": {
+          "maximum": 400000,
+          "minimum": 0,
+          "title": "Output Component Count",
+          "type": "integer"
+        },
+        "output_edge_density": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Output Edge Density",
+          "type": "number"
+        },
+        "output_fine_detail_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Output Fine Detail Ratio",
+          "type": "number"
+        },
+        "output_foreground_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Output Foreground Ratio",
+          "type": "number"
+        },
+        "output_tiny_component_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Output Tiny Component Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "input_foreground_ratio",
+        "output_foreground_ratio",
+        "output_border_foreground_ratio",
+        "input_edge_density",
+        "output_edge_density",
+        "output_fine_detail_ratio",
+        "output_tiny_component_ratio",
+        "output_component_count"
+      ],
+      "title": "LocalImageAssessmentLineArtMetricsV2",
+      "type": "object"
+    },
+    "LocalImageAssessmentLineArtRuntimeV2": {
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "const": "local-image-assessment-line-art-postprocessor/2.0",
+          "default": "local-image-assessment-line-art-postprocessor/2.0",
+          "title": "Contract",
+          "type": "string"
+        },
+        "pillow_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Pillow Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pillow_version"
+      ],
+      "title": "LocalImageAssessmentLineArtRuntimeV2",
+      "type": "object"
+    },
+    "SdxlPublicationOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "arm": {
+          "enum": [
+            "BASE",
+            "LORA"
+          ],
+          "title": "Arm",
+          "type": "string"
+        },
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 500,
+          "default": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^outputs/(base|lora)/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "metrics": {
+          "$ref": "#/$defs/LocalImageAssessmentLineArtMetricsV2"
+        },
+        "mode": {
+          "const": "RGB",
+          "default": "RGB",
+          "title": "Mode",
+          "type": "string"
+        },
+        "output_tones": {
+          "items": {
+            "enum": [
+              32,
+              96,
+              255
+            ],
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Output Tones",
+          "type": "array"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "width_px": {
+          "const": 800,
+          "default": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "arm",
+        "seed",
+        "source",
+        "member_path",
+        "sha256",
+        "size_bytes",
+        "output_tones",
+        "metrics"
+      ],
+      "title": "SdxlPublicationOutput",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-publication-comparison-result/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "case_relation": {
+      "const": "REVIEWED_TRAIN_TARGET_NOT_HOLDOUT",
+      "title": "Case Relation",
+      "type": "string"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "duration_ms": {
+      "maximum": 120000,
+      "minimum": 1,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "LOCAL_IMAGE_LINE_ART_INPUT_INVALID",
+            "LOCAL_IMAGE_LINE_ART_FOREGROUND_INVALID",
+            "LOCAL_IMAGE_LINE_ART_BORDER_INVALID",
+            "LOCAL_IMAGE_LINE_ART_EDGE_DENSITY_INVALID",
+            "LOCAL_IMAGE_LINE_ART_FINE_DETAIL_INVALID",
+            "LOCAL_IMAGE_LINE_ART_TINY_COMPONENTS_INVALID",
+            "LOCAL_IMAGE_LINE_ART_COMPONENT_COUNT_INVALID",
+            "SDXL_PUBLICATION_EXEC_FAILED",
+            "SDXL_PUBLICATION_BUDGET_EXCEEDED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Code"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/SdxlPublicationOutput"
+      },
+      "maxItems": 6,
+      "title": "Outputs",
+      "type": "array"
+    },
+    "policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Policy Sha256",
+      "type": "string"
+    },
+    "quality_state": {
+      "const": "UNREVIEWED_PUBLICATION_CANDIDATES",
+      "title": "Quality State",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Result Sha256",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imgsdxlpublicationrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runtime": {
+      "$ref": "#/$defs/LocalImageAssessmentLineArtRuntimeV2"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-publication-comparison-result/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Result Sha256",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "source_result_sha256",
+    "policy_sha256",
+    "status",
+    "error_code",
+    "case_relation",
+    "quality_state",
+    "activation_policy",
+    "runtime",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256"
+  ],
+  "title": "LocalImageSdxlPublicationComparisonResult",
+  "type": "object"
+}

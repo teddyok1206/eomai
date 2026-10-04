@@ -36,8 +36,17 @@ class PreparedSdxlTargetComparisonInputs:
     files: tuple[SdxlProbeInputMember, ...]
 
 
-def sdxl_target_comparison_input_hashes(
-    prepared: PreparedSdxlTargetComparisonInputs,
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlTargetComparisonMetadata:
+    """Approved source history without targets, weights or generation pixels."""
+
+    command: LocalImageSdxlTargetComparisonCommand
+    sources: SdxlTargetComparisonSources
+    files: tuple[SdxlProbeInputMember, ...]
+
+
+def sdxl_target_comparison_metadata_hashes(
+    prepared: PreparedSdxlTargetComparisonInputs | ResolvedSdxlTargetComparisonMetadata,
 ) -> dict[str, str]:
     command, sources = prepared.command, prepared.sources
     metadata = {file.member_path: file.payload for file in prepared.files}
@@ -59,21 +68,29 @@ def sdxl_target_comparison_input_hashes(
         "command.json": "sha256:"
         + hashlib.sha256(content_json_bytes(command.model_dump(mode="json"))).hexdigest(),
         **{name: pointer.sha256 for name, pointer in pointers.items()},
+    }
+
+
+def sdxl_target_comparison_input_hashes(
+    prepared: PreparedSdxlTargetComparisonInputs,
+) -> dict[str, str]:
+    return {
+        **sdxl_target_comparison_metadata_hashes(prepared),
         **{
             entry.case.staged_member_path: entry.case.reference_image.sha256
-            for entry in command.cases
+            for entry in prepared.command.cases
         },
         **{
             "inputs/adapter/" + file.relative_path: file.sha256
-            for file in sources.lora.manifest.files
+            for file in prepared.sources.lora.manifest.files
         },
     }
 
 
-def prepare_sdxl_target_comparison_inputs(
+def resolve_sdxl_target_comparison_metadata(
     engine: Engine,
     command: LocalImageSdxlTargetComparisonCommand,
-) -> PreparedSdxlTargetComparisonInputs:
+) -> ResolvedSdxlTargetComparisonMetadata:
     validate_contract("sdxl-target-comparison-command", command.model_dump(mode="json"))
     command = LocalImageSdxlTargetComparisonCommand.model_validate_json(command.model_dump_json())
     raw = resolve_control_artifact_member(
@@ -109,7 +126,25 @@ def prepare_sdxl_target_comparison_inputs(
     sources = parse_sdxl_target_comparison_sources(command, metadata)
     original = resolve_sdxl_probe_sources(engine, lora.baseline)
     metadata["inputs/prompt-policy.json"] = original.policy_payload
-    targets = {target.sample_id: target for target in admitted.targets}
+    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
+    return ResolvedSdxlTargetComparisonMetadata(
+        command,
+        sources,
+        tuple(
+            SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
+            for name, raw in sorted(metadata.items())
+        ),
+    )
+
+
+def prepare_sdxl_target_comparison_inputs(
+    engine: Engine,
+    command: LocalImageSdxlTargetComparisonCommand,
+) -> PreparedSdxlTargetComparisonInputs:
+    admitted = resolve_sdxl_target_comparison_metadata(engine, command)
+    command, sources = admitted.command, admitted.sources
+    lora, pin = sources.lora, sources.evaluation.evaluation
+    targets = {target.sample_id: target for target in sources.targets}
     reads = []
     paths = []
     for entry in command.cases:
@@ -140,11 +175,7 @@ def prepare_sdxl_target_comparison_inputs(
         if len(payload) != read.maximum_bytes:
             raise ValueError("SDXL_TARGET_COMPARISON_SIZE_INVALID")
         files.append(SdxlProbeInputMember(path, read.pointer.sha256, payload))
-    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
-    files.extend(
-        SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
-        for name, raw in metadata.items()
-    )
+    files.extend(admitted.files)
     return PreparedSdxlTargetComparisonInputs(
         command, sources, tuple(sorted(files, key=lambda file: file.member_path))
     )

@@ -940,6 +940,41 @@ This boundary is **NOT_IMPLEMENTED** here. No new GPU strengths/seeds, negative
 guessing, training, model acquisition or operating activation is granted by the
 successful CPU viability test. Keep native 72/72 rejected history unchanged.
 
+### CPU publication derivative source implementation, 2026-10-04
+
+[ADR 0190](../adr/0190-pinned-sdxl-publication-derivatives.md) now has a source
+implementation; the NOT_IMPLEMENTED statement above is its preceding checkpoint.
+Closed JSON Schema 2020-12/Pydantic command and result precede the CPU worker.
+Both metadata resolvers reuse full source, split, review and adapter provenance;
+native pixels are resolved only after that admission. The new workspace stages
+metadata and at most six native PNGs, not source PDFs, targets or model weights.
+
+The existing pure postprocess/2.0 pixel algorithm and all frozen settings remain
+unchanged. Its six style invariants have one typed contract rule shared by the
+old V7 receipt, provider and new derivative result. Existing error messages and
+stable provider codes remain supported without matching human text. Native
+outputs/receipts and all released schema bytes are preserved.
+
+The CPU worker rejects runtime mismatch before creating outputs. It records a
+bounded successful set or failed prefix; technical success remains UNREVIEWED
+and activation FORBIDDEN. Exact replay checks parent history, all input/output
+hashes, grayscale tone/dimension/mode and output membership, with zero transforms
+or writes. Extra files, unsafe links, group-writable inputs, stale source,
+unreceipted candidates and wrong policies cannot trigger silent regeneration.
+The existing exclusive handoff and publisher are reused, with a fixed private
+CPU-only systemd template. No new DB/migration/queue/dependency/model/GPU call.
+
+Source gate: **242 PASS**, one explicitly deselected pre-existing Catalog import
+boundary violation. Strict mypy on **13** core modules, formatter/linter, shell
+syntax and systemd template verification PASS. Early fixture-construction and
+static typing corrections happened before any install or live dispatch; their
+failure logs remain separate, not relabeled successful runtime attempts.
+Lab installation, six-output CPU execution,
+canonical derivative publication and direct source/native/derivative visual
+review are PENDING. Operating V6 and all previous model outputs are unchanged.
+The separate pre-existing Catalog infrastructure import violation remains open;
+no filtered source suite is represented as repository-wide PASS.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

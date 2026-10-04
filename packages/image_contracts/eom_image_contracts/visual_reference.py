@@ -1263,10 +1263,65 @@ class LocalImageAssessmentLineArtMetrics(FrozenModel):
     output_edge_density: float = Field(ge=0, le=1)
 
 
+LineArtPolicyErrorCode = Literal[
+    "LOCAL_IMAGE_LINE_ART_FOREGROUND_INVALID",
+    "LOCAL_IMAGE_LINE_ART_BORDER_INVALID",
+    "LOCAL_IMAGE_LINE_ART_EDGE_DENSITY_INVALID",
+    "LOCAL_IMAGE_LINE_ART_FINE_DETAIL_INVALID",
+    "LOCAL_IMAGE_LINE_ART_TINY_COMPONENTS_INVALID",
+    "LOCAL_IMAGE_LINE_ART_COMPONENT_COUNT_INVALID",
+]
+
+
+class LineArtPolicyViolation(ValueError):
+    """Typed policy failure; preserve predecessor messages without matching their text."""
+
+    def __init__(self, code: LineArtPolicyErrorCode, message: str) -> None:
+        self.code = code
+        super().__init__(message)
+
+
 class LocalImageAssessmentLineArtMetricsV2(LocalImageAssessmentLineArtMetrics):
     output_fine_detail_ratio: float = Field(ge=0, le=1)
     output_tiny_component_ratio: float = Field(ge=0, le=1)
     output_component_count: int = Field(ge=0, le=400_000)
+
+    def validate_policy(self, policy: LocalImageAssessmentLineArtPostprocessV2) -> None:
+        """One rule shared by provider computation and downstream publication receipts."""
+        if (
+            not policy.foreground_ratio_min
+            <= self.output_foreground_ratio
+            <= policy.foreground_ratio_max
+        ):
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_FOREGROUND_INVALID",
+                "assessment line-art foreground ratio is outside policy",
+            )
+        if self.output_border_foreground_ratio > policy.border_foreground_ratio_max:
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_BORDER_INVALID",
+                "assessment line-art border ratio is outside policy",
+            )
+        if not policy.edge_density_min <= self.output_edge_density <= policy.edge_density_max:
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_EDGE_DENSITY_INVALID",
+                "assessment line-art edge density is outside policy",
+            )
+        if self.output_fine_detail_ratio > policy.fine_detail_fraction_max:
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_FINE_DETAIL_INVALID",
+                "assessment line-art fine detail exceeds policy",
+            )
+        if self.output_tiny_component_ratio > policy.tiny_component_fraction_max:
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_TINY_COMPONENTS_INVALID",
+                "assessment line-art tiny-component ratio exceeds policy",
+            )
+        if self.output_component_count > policy.component_count_max:
+            raise LineArtPolicyViolation(
+                "LOCAL_IMAGE_LINE_ART_COMPONENT_COUNT_INVALID",
+                "assessment line-art component count exceeds policy",
+            )
 
 
 class LocalImageAssessmentLineArtRuntime(FrozenModel):
@@ -1638,29 +1693,10 @@ class LocalImageReferenceConditionedCompositeReceiptV7(FrozenModel):
         if simplified.border_foreground_ratio > simplification.border_foreground_ratio_max:
             raise ValueError("reference simplification border ratio is outside policy")
         metrics = self.postprocess_metrics
-        if not (
-            self.postprocess.foreground_ratio_min
-            <= metrics.output_foreground_ratio
-            <= self.postprocess.foreground_ratio_max
-        ):
-            raise ValueError("assessment line-art foreground ratio is outside policy")
-        if metrics.output_border_foreground_ratio > self.postprocess.border_foreground_ratio_max:
-            raise ValueError("assessment line-art border ratio is outside policy")
-        if not (
-            self.postprocess.edge_density_min
-            <= metrics.output_edge_density
-            <= self.postprocess.edge_density_max
-        ):
-            raise ValueError("assessment line-art edge density is outside policy")
+        metrics.validate_policy(self.postprocess)
         retention = metrics.output_foreground_ratio / simplified.conditioning_foreground_ratio
         if retention < self.morphology_retention_ratio_min:
             raise ValueError("assessment line-art morphology retention is below policy")
-        if metrics.output_fine_detail_ratio > self.postprocess.fine_detail_fraction_max:
-            raise ValueError("assessment line-art fine detail exceeds policy")
-        if metrics.output_tiny_component_ratio > self.postprocess.tiny_component_fraction_max:
-            raise ValueError("assessment line-art tiny-component ratio exceeds policy")
-        if metrics.output_component_count > self.postprocess.component_count_max:
-            raise ValueError("assessment line-art component count exceeds policy")
         expected = content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
         if self.receipt_sha256 != expected:
             raise ValueError("reference-conditioned V7 receipt hash mismatch")

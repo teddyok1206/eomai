@@ -71,12 +71,19 @@ from eom_image_provider.sdxl_lora_evaluation import (
     load_sdxl_lora_evaluation_command,
     run_sdxl_lora_evaluation,
 )
+from eom_image_provider.sdxl_publication_comparison import (
+    load_sdxl_publication_command,
+    run_sdxl_publication_comparison,
+)
 from eom_image_provider.sdxl_target_comparison import run_sdxl_target_comparison
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eom-local-image")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    publication = subparsers.add_parser("sdxl-publication-comparison")
+    publication.add_argument("--command", type=Path, required=True)
+    publication.add_argument("--workspace", type=Path, required=True)
     learned = subparsers.add_parser("sdxl-learned-comparison")
     learned.add_argument("--command", type=Path, required=True)
     learned.add_argument("--model-store-root", type=Path, required=True)
@@ -139,7 +146,13 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        if args.operation == "sdxl-learned-comparison":
+        if args.operation == "sdxl-publication-comparison":
+            publication_result = run_sdxl_publication_comparison(
+                command=load_sdxl_publication_command(args.workspace, args.command),
+                workspace=args.workspace,
+            )
+            result = publication_result.model_dump(mode="json")
+        elif args.operation == "sdxl-learned-comparison":
             learned_command = load_sdxl_comparison_command(args.workspace, args.command)
             if isinstance(learned_command, LocalImageSdxlTargetComparisonCommand):
                 target_result = run_sdxl_target_comparison(
@@ -444,5 +457,8 @@ def main() -> None:
         print(code, file=sys.stderr)
         raise SystemExit(1) from None
     print(json.dumps(result, sort_keys=True, separators=(",", ":")))
-    if args.operation == "sdxl-lineart-probe" and result["status"] == "FAILED":
+    if (
+        args.operation in {"sdxl-lineart-probe", "sdxl-publication-comparison"}
+        and result["status"] == "FAILED"
+    ):
         raise SystemExit(1)

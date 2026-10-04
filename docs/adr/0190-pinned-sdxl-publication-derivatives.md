@@ -2,8 +2,9 @@
 
 Date: 2026-10-04 UTC
 
-Status: proposed. Existing frozen CPU cleanup was measured read-only; the new
-command/result, worker entry point and derivative publication are NOT_IMPLEMENTED.
+Status: source implementation verified. Command/result schemas, metadata-only
+admission, CPU worker and exclusive handoff are implemented. Installed lab execution and
+canonical derivative publication remain PENDING; this is not quality acceptance.
 
 ## Why this boundary is next
 
@@ -101,3 +102,28 @@ before acquisition or implementation. No new weights are acquired by this ADR.
 
 Evidence and exact diagnostic hashes are in the
 [improvement plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
+
+## Source implementation
+
+The new `local-image-sdxl-publication-comparison-{command,result}/1.0` resources
+were defined before the CPU worker. The full existing target metadata admission
+is shared by both use cases; only the six native PNGs are staged for this one.
+No training targets, conditioning images or adapter weights cross the derivative
+workspace boundary. Existing released schemas/receipts are unchanged.
+
+`postprocess/2.0` policy bounds have one contract-owned typed validation rule.
+The provider maps its explicit violation code to the existing cleanup errors;
+it does not parse human error text. Pixel transformation and frozen settings are
+unchanged. Terminal replay validates receipt, complete source lineage, hashes,
+RGB grayscale tones, pinned runtime and exact output membership without a
+transform. Unsafe links, writable inputs, unreceipted outputs, partial failure
+and ambiguous submission remain errors, never reasons to create another run.
+
+The fixed CPU-only oneshot unit has no GPU/model argument or automatic restart.
+It blocks NAS, repositories, credentials and model stores. It does not create a
+new scheduler, queue, DB schema, dependency or production activation path.
+
+Source gate: 242 focused/regression tests PASS, one explicitly excluded pre-existing
+Catalog import-boundary violation; strict mypy on 13 core files, formatter/linter,
+shell syntax and systemd template verification PASS. No live derivative was
+executed by these synthetic tests.

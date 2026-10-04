@@ -9,6 +9,7 @@ from eom_image_contracts import (
     LocalImageAssessmentLineArtPostprocessV2,
     LocalImageAssessmentLineArtRuntimeV2,
 )
+from eom_image_contracts.visual_reference import LineArtPolicyViolation
 from eom_image_provider.assessment_line_art import (
     AssessmentLineArtError,
     assessment_line_art,
@@ -28,6 +29,36 @@ def _textured_subject_png() -> bytes:
     target = io.BytesIO()
     image.save(target, format="PNG", compress_level=9)
     return target.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid", "code"),
+    [
+        ("output_foreground_ratio", 0.99, "LOCAL_IMAGE_LINE_ART_FOREGROUND_INVALID"),
+        ("output_border_foreground_ratio", 0.99, "LOCAL_IMAGE_LINE_ART_BORDER_INVALID"),
+        ("output_edge_density", 0.99, "LOCAL_IMAGE_LINE_ART_EDGE_DENSITY_INVALID"),
+        ("output_fine_detail_ratio", 0.99, "LOCAL_IMAGE_LINE_ART_FINE_DETAIL_INVALID"),
+        ("output_tiny_component_ratio", 0.99, "LOCAL_IMAGE_LINE_ART_TINY_COMPONENTS_INVALID"),
+        ("output_component_count", 400_000, "LOCAL_IMAGE_LINE_ART_COMPONENT_COUNT_INVALID"),
+    ],
+)
+def test_shared_v2_policy_uses_typed_stable_errors(field, invalid, code):
+    policy = LocalImageAssessmentLineArtPostprocessV2()
+    valid = dict(
+        input_foreground_ratio=0.1,
+        output_foreground_ratio=0.1,
+        output_border_foreground_ratio=0,
+        input_edge_density=0.05,
+        output_edge_density=0.05,
+        output_fine_detail_ratio=0,
+        output_tiny_component_ratio=0,
+        output_component_count=1,
+    )
+    LocalImageAssessmentLineArtMetricsV2.model_validate(valid).validate_policy(policy)
+    invalid_metrics = LocalImageAssessmentLineArtMetricsV2.model_validate({**valid, field: invalid})
+    with pytest.raises(LineArtPolicyViolation) as raised:
+        invalid_metrics.validate_policy(policy)
+    assert raised.value.code == code and isinstance(raised.value, ValueError)
 
 
 def _textured_subject_with_speckles_png() -> bytes:

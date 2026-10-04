@@ -15,6 +15,7 @@ from eom_image_contracts import (
     LocalImageAssessmentLineArtRuntime,
     LocalImageAssessmentLineArtRuntimeV2,
 )
+from eom_image_contracts.visual_reference import LineArtPolicyViolation
 from PIL import (
     Image,
     ImageDraw,
@@ -299,32 +300,25 @@ def assessment_line_art_v2(
         normalized,
         threshold=policy.foreground_luma_threshold,
     )
-    if not policy.foreground_ratio_min <= output_foreground_ratio <= policy.foreground_ratio_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_FOREGROUND_INVALID")
-    if output_border_foreground_ratio > policy.border_foreground_ratio_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_BORDER_INVALID")
-    if not policy.edge_density_min <= output_edge_density <= policy.edge_density_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_EDGE_DENSITY_INVALID")
-    if fine_detail > policy.fine_detail_fraction_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_FINE_DETAIL_INVALID")
-    if tiny_components > policy.tiny_component_fraction_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_TINY_COMPONENTS_INVALID")
-    if component_count > policy.component_count_max:
-        raise AssessmentLineArtError("LOCAL_IMAGE_LINE_ART_COMPONENT_COUNT_INVALID")
+    metrics = LocalImageAssessmentLineArtMetricsV2(
+        input_foreground_ratio=predecessor.metrics.input_foreground_ratio,
+        output_foreground_ratio=output_foreground_ratio,
+        output_border_foreground_ratio=output_border_foreground_ratio,
+        input_edge_density=predecessor.metrics.input_edge_density,
+        output_edge_density=output_edge_density,
+        output_fine_detail_ratio=fine_detail,
+        output_tiny_component_ratio=tiny_components,
+        output_component_count=component_count,
+    )
+    try:
+        metrics.validate_policy(policy)
+    except LineArtPolicyViolation as exc:
+        raise AssessmentLineArtError(exc.code) from exc
 
     target = io.BytesIO()
     normalized.convert("RGB").save(target, format="PNG", optimize=False, compress_level=9)
     return AssessmentLineArtResult(
         png_bytes=target.getvalue(),
-        metrics=LocalImageAssessmentLineArtMetricsV2(
-            input_foreground_ratio=predecessor.metrics.input_foreground_ratio,
-            output_foreground_ratio=output_foreground_ratio,
-            output_border_foreground_ratio=output_border_foreground_ratio,
-            input_edge_density=predecessor.metrics.input_edge_density,
-            output_edge_density=output_edge_density,
-            output_fine_detail_ratio=fine_detail,
-            output_tiny_component_ratio=tiny_components,
-            output_component_count=component_count,
-        ),
+        metrics=metrics,
         runtime=LocalImageAssessmentLineArtRuntimeV2(pillow_version=metadata.version("Pillow")),
     )

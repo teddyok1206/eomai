@@ -12,6 +12,12 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-publication-comparison-command": (
+        "local-image-sdxl-publication-comparison-command-v1.schema.json"
+    ),
+    "sdxl-publication-comparison-result": (
+        "local-image-sdxl-publication-comparison-result-v1.schema.json"
+    ),
     "sdxl-target-comparison-command": "local-image-sdxl-target-comparison-command-v1.schema.json",
     "sdxl-target-comparison-result": "local-image-sdxl-target-comparison-result-v1.schema.json",
     "science-source-page-crop-review": "local-image-science-source-page-crop-review-v1.schema.json",
@@ -373,6 +379,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-target-comparison-command": (
         "sha256:a25080b1bab0060a0163a7e64d128489ff4ebfd275084b437f2201d5bdeaa784"
+    ),
+    "sdxl-publication-comparison-command": (
+        "sha256:b5c53500b0001a0f0fc27a267e08b9056302d228e65787134708592825d9616b"
+    ),
+    "sdxl-publication-comparison-result": (
+        "sha256:861e938ddb92bf6f84134e8f772bacd7559648a58dab426181801661fb8de3fd"
     ),
     "sdxl-target-comparison-result": (
         "sha256:6481f40bb1034617e9e8630e09ad524e6608917e4f471e2997c591e3c1b55b78"
