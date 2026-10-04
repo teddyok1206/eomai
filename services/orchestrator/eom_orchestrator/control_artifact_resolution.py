@@ -180,9 +180,13 @@ def resolve_control_artifact_members(
     except ValueError as exc:
         raise ControlArtifactResolutionError("CONTROL_ARTIFACT_BATCH_INVALID") from exc
     if len(set(pointers)) != len(pointers) or any(
-        type(read.maximum_bytes) is not int or not 0 < read.maximum_bytes <= 32 * 1024**2
+        type(read.maximum_bytes) is not int or not 0 < read.maximum_bytes <= 64 * 1024**2
         for read in reads
     ):
+        raise ControlArtifactResolutionError("CONTROL_ARTIFACT_BATCH_INVALID")
+    # A real bounded LoRA member can exceed the old PNG-only ceiling; keep an aggregate cap so
+    # admitting that member never turns the 128-entry API into an unbounded materialization.
+    if sum(read.maximum_bytes for read in reads) > 128 * 1024**2:
         raise ControlArtifactResolutionError("CONTROL_ARTIFACT_BATCH_INVALID")
     keys = tuple(
         dict.fromkeys((pointer.artifact_id, pointer.artifact_revision_id) for pointer in pointers)

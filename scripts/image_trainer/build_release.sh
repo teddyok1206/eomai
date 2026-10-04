@@ -50,6 +50,9 @@ with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
         "eom_image_contracts/informative_lineart.py",
+        "eom_image_contracts/sdxl_learned_comparison.py",
+        "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-result-v1.schema.json",
         "eom_image_contracts/informative_lineart_extraction.py",
         "eom_image_contracts/schemas/local-image-informative-lineart-extraction-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-informative-lineart-extraction-result-v1.schema.json",
@@ -142,6 +145,7 @@ with zipfile.ZipFile(provider) as archive:
     if not {
         "eom_image_provider/provider.py",
         "eom_image_provider/sdxl_lora_evaluation.py",
+        "eom_image_provider/sdxl_learned_comparison.py",
         "eom_image_provider/sdxl_lora_material.py",
         "eom_image_provider/informative_lineart_acquisition.py",
         "eom_image_provider/informative_lineart_backend.py",

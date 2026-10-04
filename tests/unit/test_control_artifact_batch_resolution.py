@@ -201,3 +201,20 @@ def test_large_manifest_is_indexed_once_not_scanned_for_each_requested_member(tm
     assert resolver.resolve_control_artifact_members(engine, reads) == expected
     assert members.iterations == 1 and members.yielded == 10_006
     assert len(engine.calls) == 2
+
+
+@pytest.mark.parametrize("fault", ["member-over-64mib", "aggregate-over-128mib"])
+def test_batch_ceiling_is_checked_before_any_database_or_filesystem_access(tmp_path, fault):
+    engine, reads, _ = _fixture(tmp_path, count=3)
+    bound = 64 * 1024**2 + 1 if fault == "member-over-64mib" else 64 * 1024**2
+    reads = tuple(resolver.BoundedControlArtifactRead(read.pointer, bound) for read in reads)
+    with pytest.raises(resolver.ControlArtifactResolutionError, match="BATCH_INVALID"):
+        resolver.resolve_control_artifact_members(engine, reads)
+    assert not engine.calls
+
+
+def test_lora_size_bound_reuses_existing_reader_without_allocating_a_64mib_fixture(tmp_path):
+    engine, reads, expected = _fixture(tmp_path, count=1)
+    bound = (resolver.BoundedControlArtifactRead(reads[0].pointer, 64 * 1024**2),)
+    assert resolver.resolve_control_artifact_members(engine, bound) == expected
+    assert len(engine.calls) == 2

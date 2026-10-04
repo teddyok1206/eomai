@@ -60,6 +60,10 @@ from eom_image_provider.reference_acquisition import (
     run_visual_reference_acquisition,
     run_visual_reference_discovery,
 )
+from eom_image_provider.sdxl_learned_comparison import (
+    load_sdxl_learned_comparison_command,
+    run_sdxl_learned_comparison,
+)
 from eom_image_provider.sdxl_lineart_backend import SdxlLineartDiffusersBackend
 from eom_image_provider.sdxl_lineart_probe import load_sdxl_probe_command, run_sdxl_lineart_probe
 from eom_image_provider.sdxl_lora_evaluation import (
@@ -71,6 +75,11 @@ from eom_image_provider.sdxl_lora_evaluation import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eom-local-image")
     subparsers = parser.add_subparsers(dest="operation", required=True)
+    learned = subparsers.add_parser("sdxl-learned-comparison")
+    learned.add_argument("--command", type=Path, required=True)
+    learned.add_argument("--model-store-root", type=Path, required=True)
+    learned.add_argument("--workspace", type=Path, required=True)
+    learned.add_argument("--gpu-lock", type=Path, required=True)
     extraction = subparsers.add_parser("informative-lineart-extraction")
     extraction.add_argument("--command", type=Path, required=True)
     extraction.add_argument("--model-store-root", type=Path, required=True)
@@ -128,7 +137,17 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     try:
-        if args.operation == "informative-lineart-extraction":
+        if args.operation == "sdxl-learned-comparison":
+            learned_command = load_sdxl_learned_comparison_command(args.workspace, args.command)
+            learned_result = run_sdxl_learned_comparison(
+                command=learned_command,
+                model_store_root=args.model_store_root,
+                workspace=args.workspace,
+                gpu_lock=args.gpu_lock,
+                backend=SdxlLineartDiffusersBackend(),
+            )
+            result = learned_result.model_dump(mode="json")
+        elif args.operation == "informative-lineart-extraction":
             extraction_command = load_informative_lineart_extraction_command(
                 args.workspace, args.command
             )

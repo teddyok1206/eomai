@@ -99,10 +99,16 @@ def lineart_conditioning(payload: bytes, *, expected_size: tuple[int, int]) -> b
         raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc
 
 
-def _publication(raw: bytes) -> bytes:
+def sdxl_publication(raw: bytes) -> bytes:
+    """The fixed SDXL publication crop, shared by original and learned-input comparisons."""
     try:
         with Image.open(io.BytesIO(raw)) as source:
-            if source.format != "PNG" or source.size != (832, 512) or source.mode != "RGB":
+            if (
+                source.format != "PNG"
+                or source.size != (832, 512)
+                or source.mode != "RGB"
+                or getattr(source, "n_frames", 1) != 1
+            ):
                 raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
             source.load()
             return _png(source.crop((16, 6, 816, 506)).convert("L"))
@@ -247,7 +253,7 @@ def generate_sdxl_probe_evidence(
                             seed=seed,
                             command=command,
                         )
-                        publication = _publication(generated.png_bytes)
+                        publication = sdxl_publication(generated.png_bytes)
                         name = f"{case.case_id}-{seed:010d}.png"
                         raw_member, final_member = f"outputs/raw/{name}", f"outputs/final/{name}"
                         write_staged_member(root, raw_member, generated.png_bytes)
