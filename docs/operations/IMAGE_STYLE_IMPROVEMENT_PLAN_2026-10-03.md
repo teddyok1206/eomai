@@ -107,6 +107,60 @@ snapshot can represent fixed members; its seed-assignment helper must not reshuf
 used TRAIN groups into VALIDATION/HOLDOUT merely to satisfy minimum counts. Exact/near-duplicate
 review and full-count readiness remain separate, explicit gates.
 
+### 2026-10-04 actual original-page recovery and expansion inventory
+
+Source `335830d6cd29cd7eb37d2c3b892e5e54244277cf` successfully published eleven literal,
+individually inspected crops from six TRAIN PDFs / six exam groups in **3,003 ms**. They include
+people, a heated beaker, prehistoric animals, furniture, domestic equipment and animal pairs.
+Source captions now describe the actual depictions. No OCR masks, guessed contour repair,
+resize, thresholding or model inference was applied. Every committed PNG equals its separately
+inspected CPU preflight by byte hash. Multiple depictions in one original panel are still one
+source PDF/group; they are not independent evidence or unseen-data tests.
+
+Reviewed intent: Artifact `artifact_c3de6b03293a405796d1c18188debc98`, revision
+`rev_3ce604536808451ba52bc7785fe7174a`, member `manifests/science-source-page-crop-review.json`,
+raw SHA `sha256:6dece566b3d88f0a65f5129eaf42a3deaa2cdb7d401332fad7126b9879d909f3`.
+Canonical crop set: Artifact `artifact_f1b0ad42df2f4d7ebbf6e9401d28894a`, revision
+`rev_54583c92322b4d8084c295744b97096e`, member `manifests/science-source-page-crop-set.json`,
+raw SHA `sha256:6a57fb579c34eb0345e3ae11ae4e470230aaac90a30f5116841e7661104a9661`,
+semantic SHA `sha256:54d2d8c0ef7f2a93711ee1f5e8c6ee8b18c6982e7995a2a8bd5821c12512c0f2`.
+It has eleven PNG members plus one manifest, state `REVIEWED_SOURCE_DERIVATIVES` and activation
+`FORBIDDEN`. This is source-data recovery, **not eleven newly authored AI images**, independent
+blind review or full-data training approval. The source telescope's annotation leader and a
+pointing student's speech-bubble tail remain deferred, with failed/preflight evidence preserved.
+
+The metadata-only expansion inventory has **503 total TRAIN candidate rows / 49 PDFs / 40 exam
+groups / 174 original TRAIN pages**. These totals include already inspected parents; they are
+not 503 remaining, eligible or approved examples. Candidate authority/representation remain
+`UNKNOWN_REVIEW_REQUIRED`. Existing selected-source partitions are TRAIN 72 / VALIDATION 18 /
+HOLDOUT 18 and are unchanged. No reserved pixels were read for this inventory. Its raw SHA is
+`sha256:2dc72d79f69edbdc818aa088bfe0751cef0ffebf8093bcf7cdc08111da86faaa`.
+The archived operational snapshot's `remaining_train_metadata_*` fields refer to this same
+**total pool**, not a post-review remainder; this clarification does not rewrite that snapshot.
+
+Own review, exact source pointers, expansion metadata, operational snapshot, operator sources and
+bounded success/failure logs are archived as 22 members at Artifact
+`artifact_7c6a9469f80148c39da78d2fbc71dcbe`, revision
+`rev_4d327e6c720f4b2082873939cb42dbf0`, primary `reports/own-source-review.md`, raw SHA
+`sha256:984d018b7edf49f3113f1af330f5ec1d7fc75d0632e7029d5ca87198fa2eaf50`.
+PNG/PDF bytes are referenced rather than duplicated into this evidence archive.
+The initial archive preflight correctly rejected group-writable local logs before publication;
+only those two generated evidence files were made private before the successful replay.
+
+Final source gates: **176 PASS**, Ruff format/lint and strict focused mypy PASS; immutable
+trainer/contract/provider wheel build and RECORD/resource inspection PASS. New wheels were built
+but **not installed** by this source recovery. The fixed CPU processor used the existing isolated
+trainer identity and pinned Pillow. Five production services stayed active and the operating V6
+binding raw SHA stayed unchanged (`sha256:f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`).
+This phase used 14 CPU preflight crops and eleven published reproductions, **zero GPU calls,
+training updates, reserved-data reads or activations**; repeated crops are not independent data.
+
+Next: inspect bounded batches of the original TRAIN pages, record literal boxes and accurate
+caption/expression decisions, deduplicate across source groups, and pin a sufficient new dataset
+and execution budget before further training. Full-data readiness remains `INSUFFICIENT`.
+Actual SDXL authored outputs stay 36, all own-REJECTED; independent blind review and a quality-
+passing Item Preview/HWPX canary remain open. Whole goal stays ACTIVE.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000
