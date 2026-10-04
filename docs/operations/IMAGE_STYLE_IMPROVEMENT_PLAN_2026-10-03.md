@@ -330,6 +330,90 @@ TRAIN pages does not require inventing a review/caption. Final discovery-extensi
 to, the overlapping 170-test checkpoint. The actual extraction success does not increase approved
 source-crop or authored-image quality counts. Literal review and data admission remain next.
 
+### 2026-10-04 supplemental TRAIN inspection and actual literal publication
+
+Source `400f1c0941e9d4af9d62d536a49ef5825466c201` reused shared metadata admission for all
+three plan/result pairs before reading TRAIN pixels. The read-only observer materialized
+**1,005 TRAIN candidate views / 101 PDFs / 360 unique original pages** through six bounded batches.
+Own inspection covered all 42 discovery sheets and 95 selected original-context views. It did
+not view VALIDATION/HOLDOUT pixels, approve all automatic regions or run a GPU.
+
+The provisional 72 literal crops were individually represented in hash-checked viewing sheets,
+then all 72 corrected crops were viewed again. **49 frames and seven captions** were corrected;
+caption correction is not another independent drawing. Native original pixels were cropped, not
+masked, resized, reconstructed or thresholded. Viewing thumbnails are a separate local boundary.
+The source pool spans cars/truck, apparatus, animals/plants, landscapes and person illustrations.
+Clean contour, restrained gray and fine-hatching expression remain distinct metadata.
+
+At **2026-10-04T08:33:56Z**, the supported Orchestrator publisher committed:
+
+| Document | Artifact / Artifact Revision | Raw primary member SHA |
+| --- | --- | --- |
+| Review V1.1 | `artifact_87740cab1a024143a78eab86f5537b5b` / `rev_d1d74dc15c894636b43d58652f4f1055` | `b814f0b8a70597a384df79e9ed11c26b94752175e5752ceb3a1a4807d57df63f` |
+| Source set V1.1 | `artifact_1629e2ef829f46b3b258ee97e429843e` / `rev_bcab8901313a4d998fee64601eb06cfb` | `3d282df8b06758d503fc6ea680176460f3aa33b18b7580302404907ad187252b` |
+
+Primary paths are `manifests/science-source-page-crop-review.json` and
+`manifests/science-source-page-crop-set.json`. The set contains 72 canonical PNGs plus its manifest,
+logical ID `imgsourcecropset_96ad4438ccaa6a25d92d7e6e4a4cbc4f`, revision
+`imgsourcecropsetrev_a1615350ee98eeabc98bdce5a1ae1532`, semantic SHA
+`sha256:cc6a8c1921c7316301cf9acd87f1c1c7655e56a8604ae39819a4bd1907f38ca2`.
+Publication took 28,633 ms. Every committed PNG and manifest was resolved and hash-/byte-compared
+with the exact preflight file. Prior 23 sources remain unchanged; aggregate **95 candidates /
+58 source PDFs / 48 exam groups**, not 95 independent documents or approved training targets.
+Cross-set exact pixel hashes, identities, TRAIN inheritance and max-3/PDF, max-4/group checks PASS.
+Near-duplicate review and final target admission are separate next gates.
+
+Own screening of the NEW 72 is **42 READY_FOR_TARGET_PREPARATION_WITH_NOTES**, including nine
+isolated outside-object marks needing explicit safe preparation, and **30 DEFER_TARGET_REPAIR_OR_REFERENCE_ONLY**.
+Do not train raw crops with labels/leaders, erase object contours, discard useful references or
+count exact geometry/native-drawing material as approved GPU style samples. The corrected frame
+and actual surrounding text, not a plausible miniature caption, determine the object's identity.
+
+The 39-member evidence set is `artifact_5eb67225f2874fc890281b9fa650ddbb` /
+`rev_6fc6f9f415734f2389cd5475c75f8227`, primary `reports/own-supplemental-source-review.md`, raw SHA
+`sha256:d074da1d1ae4d7e65e9ed22416bfbd3467b5286b2000fa446794ad7b36646a53`.
+It contains bounded metadata/logs/operators, **zero duplicate PNG/PDFs**; primary committed bytes
+were resolved and verified. The first framing invocation failed JSON Schema before reads because
+a temporary wire field used tuples instead of JSON lists. Local screening initially omitted source
+PYTHONPATH; archive preflight rejected group-writable task files. These were corrected in their
+caller/environment/0600-file boundary without loosening contracts, production state changes,
+rerunning extraction, direct DB repair or model retries. Failed applicable logs remain evidence.
+
+Source gates remain **174 PASS** plus separate **59 PASS** corpus-contract regression; do not
+sum overlapping historical counts. CPU extraction lab is installed from `d3a001ac…`; `9f2d2502…`
+was built but not installed. Production V6 is unchanged, five production services active.
+New GPU calls=0, training updates=0, target-training admissions=0. Old 36 SDXL outputs stay
+own-REJECTED, old diagnostic allowance 12/12 consumed, independent blind review NOT_PERFORMED,
+full-data readiness INSUFFICIENT, activation FORBIDDEN. GOAL=ACTIVE.
+
+### Next corrected-data pilot boundary
+
+1. Add the minimal target-preparation successor for pinned literal source sets. The existing
+   target V1.0 covers only the original 16 masked micro inputs; do not change its released schema
+   or rename new source IDs to that old family. Reuse its CPU fit/mask/caption operations and
+   the existing Orchestrator/trainer adapters instead of a parallel processing framework.
+2. Pin exact source review/set/member revisions, whole-corpus authorization and frozen groups
+   before staged PNG reads. Prepare the 42 selected candidates with explicit mask/frame decisions
+   and expression captions; retain deferred data as reference. Resolve and inspect every exact
+   target output before any training admission. Include the prior 23 only after their own target
+   review, not automatically because they are registered sources.
+3. Assemble a small corrected-data pilot using existing split/grouping invariants. Keep logical
+   source identity, target revision, dataset revision and raw hash separate; review near duplicates
+   and material-family/source concentration. Report the actual denominator; do not manufacture
+   100 samples by duplicate resizing or reshuffle previous TRAIN into reserved partitions.
+4. Introduce only the training/evaluation successor that actually needs the new target/dataset
+   references. Pin a NEW bounded training/comparison cohort and its usage authorization before
+   model execution. The old exhausted 12-output diagnostic allowance is not reset by a rename.
+   Source-candidate publication grants no inference/training budget and no production activation.
+5. Compare fixed base versus corrected-data LoRA using truthful source/prompt/seed pins and
+   separate TRAIN diagnostic versus reserved/independent assessment. Only a passing candidate
+   reaches the planned Item Preview/HWPX canary and separate activation/rollback gate.
+
+Local own-inspection files (not new AI outputs):
+`/tmp/eom-supplemental-source-crops-framed-20261004/*.png`; decisions in
+`own-source-screening.json`. Canonical PNGs reside only in the committed Artifact, and evidence
+archives reference them rather than introducing a second canonical payload.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

@@ -82,3 +82,31 @@ stops the supplemental worker or withdraws the experimental candidate, not histo
 
 At this ADR's creation extraction is in progress; V1.1 live publication and corrected-data
 training/independent evaluation are not yet claimed PASS.
+
+## Actual validation checkpoint — 2026-10-04 UTC
+
+All three extraction results subsequently committed 162 new PDFs / 737 pages / 1,536 detected
+regions. TRAIN-only inspection covered 1,005 candidates / 360 unique original pages, followed by
+95 context views and 72 provisional plus 72 corrected literal crops. Own screening corrected
+49 frames and seven captions. Independent review and training admission remain separate.
+
+At 08:33:56 UTC, the existing publisher committed a V1.1 review and a 73-member set (72 PNGs plus
+manifest). Review `artifact_87740cab1a024143a78eab86f5537b5b` /
+`rev_d1d74dc15c894636b43d58652f4f1055`; set `artifact_1629e2ef829f46b3b258ee97e429843e` /
+`rev_bcab8901313a4d998fee64601eb06cfb`. Bounded canonical resolution reproduced the exact
+own-inspected preflight bytes for every PNG. Existing 23 candidates were not changed; aggregate
+95 candidates / 58 PDFs / 48 groups passed exact-ID/hash uniqueness, frozen TRAIN inheritance
+and the existing concentration bounds. These counts are not approved training-target counts.
+
+Latest combined applicable source suite is 174 PASS; corpus-contract regression is separately
+59 PASS. No new DB/migration/dependency, worker privilege, production runtime activation or GPU
+call. The existing CPU child uses pinned Pillow 11.3.0 and literal recipes only. Forty-two new
+sources are ready for explicit target preparation with notes; thirty remain deliberate repair,
+reference or native-drawing candidates. The old 16-source micro command is not reused with
+invented sample IDs or implicitly replaced data.
+
+Thirty-nine bounded metadata/log/operator evidence members, including invocation failures, are
+archived at `artifact_5eb67225f2874fc890281b9fa650ddbb` /
+`rev_6fc6f9f415734f2389cd5475c75f8227`; no duplicate PNG/PDF members. The operating V6 binding
+remains unchanged and five production services were active. Full-data readiness INSUFFICIENT,
+independent blind review NOT_PERFORMED, whole quality goal ACTIVE.
