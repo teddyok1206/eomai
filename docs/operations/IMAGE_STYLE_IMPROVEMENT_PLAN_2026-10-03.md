@@ -7,6 +7,63 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Latest actual TRAIN checkpoint, **2026-10-04 22:27 UTC**: inspected all10 proposed
+contour-track targets before dispatch. Three legitimate institutional drawings
+(hair-dryer/flask, water-bath/flask, piggyback) contain broad gray ground gradients;
+exclude them from this style track only, not from the source corpus. Preserve the
+ten-target command/staged workspace **unexecuted**. The separate seven-target
+command uses a fan, plant, scooter and four human-character drawings from6 PDFs/
+groups, with small legitimate gray fills/hair hatching. It is contour-dominant,
+not binary-only, and native small-raster softness remains. Historical expression
+annotations/reviews, targets,38-target adapter and source partitions are unchanged.
+
+Existing command/result1.1 and the unchanged trainer executed **one fresh200-step
+run /7 exact TRAIN targets**, seed20261004, rank/alpha8, same BASE and frozen recipe,
+in **475,036ms**, final reported step loss**0.011037301272153854**, peak allocated
+GPU memory**5,704,160,768 bytes** (~5.31GiB). Dataset size/exposure and style mix
+change together:114/115 exposures per source versus approximately21 in the earlier
+38-target pilot. Lower loss is **not evidence of improved illustration quality**.
+
+- Run `imgsdxlmicrotrainrun_93837924d652451aba3ceb874d21dcee`.
+- Command `artifact_b42a2caa50a745aab89c26266ff56ddb` /
+  `rev_f35da38a6f824b54a005533643e499a8`, raw SHA
+  `9e516a1b1c152bf73bf110db7168cfe1474346eaadfc4eebbfaadc430516d8da`.
+- Result/adapter `artifact_839be54724214d09a518203836e69b2a` /
+  `rev_1e2d7ded7b9a4f1c9cf1f849c644670f`, primary result1.1 raw SHA
+  `183768b747b63c94f84f703630697c34f8bfac1de11a668f527f1502a9a1fa1c`,
+  semantic SHA`7c4ded122332b5a2f07954e5078b2e6b8291daa5a5b14ecb371f8457b611426b`.
+- Adapter `imgadapter_445310b4899a6d2a83b675a8323aa746` /
+  `imgadapterrev_6a61ae32d96d953c3b8fb999e3a52074`.
+
+Actual installed `eom-image` terminal replay verified7 targets and19 unchanged
+files: model/training/GPU/transform/write counts all0, no Torch/database import.
+Orchestrator freshly re-admitted canonical inputs and committed4 result/manifest/
+config/weight members, all resolved byte-for-byte; no training PNG duplication.
+Nineteen evidence members (17 small text records and2 diagnostic source contact
+sheets, not new AI images) were committed and verified as
+`artifact_1632e1424c00433dabb83eb5138ce44b` /
+`rev_e165e40646c34097871032939ca2dfb8`. Primary `reports/own-source-review.md`,
+raw SHA`968a48a3ec470d0826fdb6706e86873fb4e8d03c7610b818d3660296e29a27fb`.
+User source-view path: `/tmp/eom-sdxl-clean-contour-r2-20261004/source-contact.png`;
+canonical diagnostic view: evidence revision`views/seven-target-screening.png`.
+
+Focused regression**98 PASS**. Initial test collection omitted source PYTHONPATH;
+corrected invocation passed without source/model changes. Private executed dispatch
+operator has one retained cosmetic E501 long-string lint warning, explicitly
+recorded in evidence; do not call every private operator lint-clean. No core
+code/schema/backend/dependency/service modifications or new lab installation.
+Command source9c95638b; actual trainer cf6746ae, provider/contracts8ad0f72b.
+Previous wheel RECORD/dependency/isolation gates remain applicable to these unchanged
+packages, not claimed as newly re-run. New inference outputs0; VALIDATION/HOLDOUT
+pixel reads0; parameter sweeps0; automatic retry0; production activation0.
+
+Next is an explicitly frozen matched comparison against this **actual** adapter,
+not more training or a rerun of the frozen14-case VALIDATION batch. Existing BASE/
+38-target outputs may be reused only with exact matching case/model/prompt/seed/
+numerical pins; do not synthesize evidence or claim that a legacy diagnostic is
+generalization acceptance. Full training/four-arm study, independent blind review,
+four-family gate and Item Preview/HWPX canary remain open. **Goal stays ACTIVE**.
+
 TRAIN-only follow-up freeze, **2026-10-04 22:11 UTC**: test the existing reviewed
 target cohort's **10 CLEAN_CONTOUR targets** separately from its23 restrained-tone
 and5 fine-hatching targets. This is a small diagnostic hypothesis, not a proven
