@@ -2,9 +2,8 @@
 
 Date: 2026-10-04 UTC
 
-Status: source implementation verified. Command/result schemas, metadata-only
-admission, CPU worker and exclusive handoff are implemented. Installed lab execution and
-canonical derivative publication remain PENDING; this is not quality acceptance.
+Status: implemented and technically verified in the isolated lab. Six derivatives
+were published and inspected; all six own-quality REJECTED. No production activation.
 
 ## Why this boundary is next
 
@@ -127,3 +126,25 @@ Source gate: 242 focused/regression tests PASS, one explicitly excluded pre-exis
 Catalog import-boundary violation; strict mypy on 13 core files, formatter/linter,
 shell syntax and systemd template verification PASS. No live derivative was
 executed by these synthetic tests.
+
+## Actual execution and decision
+
+Source `f14d2824` installs contracts/provider only in the numerical lab; trainer
+and operating V6 stay unchanged. One frozen CPU run produces six candidates in
+3,276ms. Seven canonical members and six installed-Pillow reconstructions pass;
+all PNG bytes equal the preceding read-only diagnostic. Actual worker replay
+performs zero transforms/models/writes; four parent cohort replays also pass.
+
+Source/native/derivative inspection at original resolution rejects all six:
+BASE background line artifacts remain; LoRA whitening merges grille/hub,
+petal/vein/root and wheel-light details into coarse gray shapes. Tones are 96/255,
+not black 32. Technical metrics are not enough. Stop this frozen-cleanup experiment
+without loosening policy; preserve all rejected native and derived results.
+
+Result `artifact_d455a78e4e014eeeb561c987237a8094` /
+`rev_23c2cb2c755f42cabde1785c8b1a68d0`. Own-review/execution evidence has 24
+non-binary members in `artifact_73e58cbe825040ecbf252f067989548e` /
+`rev_97b0f22ea07c47b6a2f5b907f575a7f2`. Full pointers, hashes and sample links are
+in the improvement plan. Independent review/held-out quality and Item/HWPX
+canary remain NOT_PERFORMED. The next hypothesis is structural preservation,
+not another cleanup threshold/tone/seed sweep.

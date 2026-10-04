@@ -131,6 +131,27 @@ V6는 변경하지 않는다. 아직 가중치 다운로드·변환·설치나 �
 
 ## 프레임워크 선택
 
+### 2026-10-04 실행 결과에 따른 구조 제어 후보 재검토
+
+실제 SDXL 출력 72장과 고정 CPU 정리 파생 6장은 모두 자체 불합격이다. LoRA 배경을
+하얗게 정리해도 뿌리·잎맥·선풍기 중심/망·바퀴 발광 표시가 보존되지 않는다.
+이는 독립 평가나 모든 모델에 대한 결론이 아니라, 현재 고정 입력 실험의 관찰이다.
+
+다음 가설은 기존 계획의 ControlNet/IP-Adapter 후보에서 **Canny ControlNet 한 요소만**
+먼저 비교하는 것이다. [공식 모델 카드](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0)는
+SDXL용 Canny 조건과 OpenRAIL++ 가중치 표기를 제공한다. [공식 파일 목록](https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/tree/main)의
+fp16 safetensors만 후보로 삼고 pickle 파일/전체 snapshot은 받지 않는다. 정확한 revision,
+설정·가중치·라이선스 원문의 해시는 아직 고정하지 않았다.
+[Diffusers 0.35.2 소스](https://github.com/huggingface/diffusers/blob/v0.35.2/src/diffusers/pipelines/controlnet/pipeline_controlnet_sd_xl.py)에서
+공간 조건과 LoRA를 같이 사용하는 경로를 확인했지만 우리 그림에서 개선된다는 뜻은 아니다.
+
+현재 실험 환경의 Diffusers 0.35.2/Torch 2.7.1+cu128/PEFT 0.17.1/Pillow 11.3.0은 유지한다.
+OpenCV는 없으므로 정식 Canny를 도입한다면 선택적 lab 전용 의존성의 이유·버전·해시를
+먼저 기록해야 한다. 비슷한 Pillow 필터를 Canny라고 부르지 않는다. 윤곽 입력 3장을 먼저
+육안 검수해 필수 세부 요소가 살아 있는지 확인하며, 아직 새 가중치/GPU 실행은 없다.
+구현·예산·보존 경계는 [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md)에
+제안으로 기록했다. 기존 T2I·CPU 출력과 판단, 운영 V6는 보존한다.
+
 운영 프레임워크는 기존 Hugging Face Diffusers를 유지한다.
 
 - ControlNet, T2I-Adapter, IP-Adapter, LoRA를 지원한다.

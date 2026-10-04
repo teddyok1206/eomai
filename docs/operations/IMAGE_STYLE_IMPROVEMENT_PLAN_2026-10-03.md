@@ -7,16 +7,19 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest checkpoint, **2026-10-04 13:39 UTC**: separate same-input T2I-midpoint and
-single-negative-clause controls generated six outputs each. Both native cohorts
-own-REJECTED; total actual SDXL outputs 72, all own-REJECTED. Close the strength
-sweep and the tested clause-cause hypothesis rather than repeating generation.
-Actual installed four-cohort replay PASS with zero models/Torch/writes. Existing
-frozen V7 cleanup on the canonical initial six images passes six CPU technical
-checks in Pillow 11.3.0, but saves no PNGs and has quality NOT_EVALUATED. Next is
-the explicit derived-publication boundary in ADR 0190, not an implemented worker
-or quality PASS. No new training, reserved pixels or operating changes.
-Independent review NOT_PERFORMED; GOAL ACTIVE. Earlier 60/54/48 summaries are historical.
+Latest checkpoint, **2026-10-04 14:36 UTC**: ADR 0190's closed CPU derivative
+boundary is implemented, installed in the isolated lab and executed once over
+the pinned original six native PNGs. Six derivatives in 3,276ms; technical 6/6
+PASS, canonical seven-member hash equality and installed reconstruction/replay
+PASS. Source regression 242 PASS plus one explicitly excluded existing import
+violation. Direct source/native/derivative review rejects all six: BASE background
+lines remain; LoRA whitening loses fine scientific contours and wheel-light
+marks. Original 72 SDXL outputs/own-REJECTED history unchanged and counted
+separately. New model/GPU outputs/training/reserved pixels = 0. Twenty-four
+non-binary execution/own-review evidence members archived. Stop cleanup/strength/
+prompt sweeps; next is a pinned structural-preservation alternative from step 6,
+not another rendering or quality PASS. Operating V6 unchanged; independent
+review NOT_PERFORMED and GOAL ACTIVE. Earlier checkpoints below are historical.
 
 On 2026-10-03 the readable operating binding is SSD-1B V6, hash
 `sha256:c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`.
@@ -974,6 +977,104 @@ canonical derivative publication and direct source/native/derivative visual
 review are PENDING. Operating V6 and all previous model outputs are unchanged.
 The separate pre-existing Catalog infrastructure import violation remains open;
 no filtered source suite is represented as repository-wide PASS.
+
+### Actual CPU derivative publication and rejection, 2026-10-04
+
+Core source `30ae15d5`, immutable packaging source
+`f14d2824dfe54791760cb3618632d9c9e6314ab9`. Only contracts/provider in the
+numerical lab and the fixed CPU template were installed. Installed wheel RECORD,
+actual worker import without Torch, `pip check`, private unit verification and
+five production services pass. Trainer remains `cf6746ae`; operating inference
+environment/configuration remains unchanged. Rollback contract/provider wheels
+from `7cda7e33` are retained with exact installed bytes/raw hashes in install
+evidence. No enabled daemon, restart, privilege/group change, DB migration or
+weight acquisition. The first build preflight rejected an unstaged packaging
+file before building; its reviewed packaging additions were committed separately
+and the clean immutable build passed. No live operation was repeated for that.
+
+Frozen plan SHA
+`sha256:dcd42e86b72f09d39f03fd1b3806a9c1d47e9bc58eb4ba3caaf4257753f8bdf5`.
+Command `artifact_18d7930291b04e07ae6372310e3495f6` /
+`rev_3df7f9498a444918a57fa92fe2344851`, member
+`manifests/sdxl-publication-comparison-command.json`, schema `/1.0`, raw SHA
+`sha256:433ba152b1f4013820ab81f1014445e369b15ae2e5293d0bd90fd917664be158`.
+It pins initial target-comparison command/result and unchanged postprocess/2.0
+semantic SHA `sha256:2e76d2456fa719ed0791d256008e02a68ad0bf6642a1359811cd1705250abc33`,
+Pillow 11.3.0, one CPU run/six derivatives and zero model/training/reserved reads.
+Publication validation has a separate six-reconstruction CPU quota; replay has
+zero transforms. Installation's existing GPU-inode mutex protects package
+quiescence; the CPU worker does not acquire or use a GPU.
+
+Run `imgsdxlpublicationrun_21d8ea22501a745ce42527805b44f7e6`:
+**6/6 derivatives**, **3,276ms**, private oneshot terminal success/exit 0.
+New result `artifact_d455a78e4e014eeeb561c987237a8094` /
+`rev_23c2cb2c755f42cabde1785c8b1a68d0`, primary
+`manifests/sdxl-publication-comparison-result.json`, schema `/1.0`, raw SHA
+`sha256:0e853f970f35075a40d6bc951875d8342e2d02d93fee5c80fb0de2169aa2ff06`,
+semantic SHA
+`sha256:5cb09e27311fa59da98120257f44e16c1b998a644b56da50318d9f7dc9da6178`.
+All seven committed members equal staged bytes. Installed-role reconstruction
+reproduces six PNG hashes/metrics and the preceding diagnostic exactly. The
+new pure implementation file SHA is
+`sha256:2d59c08241d49772a9a24abd510d3cc2bcc4f245de27f2cde293bc41bfee9038`;
+it differs from the prior file because policy validation is shared, not because
+the frozen pixel algorithm/settings changed.
+
+Actual worker replay verifies exact source and output closure without transforms,
+Torch, model/GPU entry or file/hash/mtime change. All four historical target
+cohorts likewise replay after installation with model/GPU entries denied.
+Five production services ACTIVE, GPU idle 2MiB/0%; operating V6 raw binding SHA
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845` unchanged.
+
+#### Own native-resolution source/native/derivative decision
+
+All three exact source targets and all six native/derived images were inspected.
+Source viewing hashes match pinned prepared targets. Every derivative has only
+tones 96/255 and zero border foreground; these technical checks do not make the
+images usable. **Own quality 0/6 accepted, 6/6 REJECTED**:
+
+| Depiction | BASE derivative | LoRA derivative |
+| --- | --- | --- |
+| Pedestal fan | Background grid/lines remain; fused blades/grille | Cleaner canvas, but hub/grille separation lost and jagged filled contours |
+| Plant with roots | Background bands and invented root shape | Four rough leaf positions remain; petals, veins and root topology fuse/erase |
+| Scooter wheel lights | Background bands, malformed details and no light marks | Rough single-scooter pose remains; spokes/light marks/handlebar details disappear |
+
+Do not repair these judgments with threshold/tone/seed tuning or claim missing
+parts were restored by whitening. Original 72 native judgments stay REJECTED;
+the six derivatives have distinct Artifact identity and are not six new model
+calls. Independent/heldout judgments remain NOT_PERFORMED; Item/HWPX canary and
+activation remain gated on genuine scientific/visual quality.
+
+Viewing copies (unadopted diagnostic samples):
+[fan](/tmp/eom-sdxl-publication-samples-20261004/pedestal_fan-lora-104729.png),
+[plant](/tmp/eom-sdxl-publication-samples-20261004/flowering_plant_with_roots-lora-104729.png),
+[scooter](/tmp/eom-sdxl-publication-samples-20261004/kick_scooter_wheel_lights-lora-104729.png).
+All six variants and source/native links are in
+`/tmp/eom-sdxl-publication-own-review-20261004.json`. These are workspace views;
+the registered revisions above remain canonical. Human checks are deferred to
+the final combined reviewer packet, not counted as PASS now.
+
+Own review, frozen plan, source/preflight failures, successful build/install,
+operators, reconstruction/publication/replay logs and Slack checkpoint are
+archived as **24** verified non-binary members, no duplicate PNG/weight files:
+`artifact_73e58cbe825040ecbf252f067989548e` /
+`rev_97b0f22ea07c47b6a2f5b907f575a7f2`, primary
+`reports/own-comparison-review.json`, raw SHA
+`sha256:2bdfaf6d6d4c1bb6cee296cbdf638f84a378fe9857f7a0d932fd50f90ed8c9a1`.
+Slack `devreport_f964351c1efa4f20b64ac88e94675d6f` SENT, HTTP 200; checkpoint
+completed, full GOAL ACTIVE. Next: choose one bounded spatial-conditioning
+alternative with explicit license/model/file/source/resource pins before
+acquisition, using step 6's existing fallback scope. No new model was downloaded
+or dispatched by this checkpoint.
+
+The proposed next boundary is [ADR 0191](../adr/0191-bounded-sdxl-spatial-conditioning-alternative.md):
+one SDXL Canny ControlNet factor, not ControlNet plus IP-Adapter plus retraining.
+Exact model/license/safetensors pins and optional OpenCV dependency remain
+pending. Three source-conditioned edge maps must retain required details before
+any weight acquisition/GPU request. First pair is proposed at six new outputs
+within the existing fallback ceiling, not submitted. Current library metadata
+was checked without Torch import, weight reads or model calls; research/proposal
+does not grant a numerical PASS or a fresh retry quota.
 
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
