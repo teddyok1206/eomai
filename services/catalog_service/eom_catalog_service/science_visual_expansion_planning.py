@@ -217,3 +217,53 @@ def build_science_visual_expansion_plan(
     validate_contract("science-corpus-visual-pilot-plan-v4", plan.model_dump(mode="json"))
     validate_science_visual_authorization_plan(authorization, plan)
     return plan
+
+
+def validate_science_visual_expansion_plan_sources(
+    plan: LocalImageScienceCorpusVisualPilotPlanV4,
+    *,
+    corpus: ScienceAssessmentWebCorpusManifestV2,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+    authorization_pointer: ImageEvaluationArtifactMember,
+    predecessor_plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    predecessor_plan_pointers: tuple[ImageEvaluationArtifactMember, ...],
+) -> None:
+    """Read admission uses the same frozen selection rule as plan construction."""
+    if not predecessor_plans:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_EXPANSION_PREDECESSORS_INVALID")
+    first = predecessor_plans[0]
+    if (
+        plan.predecessor_plans != predecessor_plan_pointers
+        or plan.corpus_manifest != first.corpus_manifest
+        or plan.corpus_id != corpus.corpus_id
+        or plan.corpus_manifest_sha256 != corpus.manifest_sha256
+        or plan.training_authorization != authorization_pointer
+        or plan.selection_seed_sha256 != first.selection_seed_sha256
+        or plan.acquisition_sha256 != first.acquisition_sha256
+        or plan.resolution_sha256 != first.resolution_sha256
+        or plan.resolution_policy_id != first.resolution_policy_id
+        or plan.resolution_policy_sha256 != first.resolution_policy_sha256
+    ):
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_EXPANSION_SOURCE_SCOPE_MISMATCH")
+    excluded = validate_science_visual_expansion_predecessors(
+        corpus=corpus,
+        corpus_manifest=first.corpus_manifest,
+        authorization=authorization,
+        authorization_pointer=authorization_pointer,
+        plans=predecessor_plans,
+        plan_pointers=predecessor_plan_pointers,
+        selection_seed_sha256=first.selection_seed_sha256,
+        created_at=plan.created_at,
+    )
+    expected = select_science_visual_expansion_sources(
+        corpus,
+        selection_seed_sha256=first.selection_seed_sha256,
+        excluded_document_ids=excluded,
+        campaign_shard_index=plan.campaign_shard_index,
+        campaign_shard_count=plan.campaign_shard_count,
+        source_limit=len(plan.selected_sources),
+        page_limit=plan.max_page_images,
+    )
+    if expected != plan.selected_sources:
+        raise ScienceVisualPilotPlanningError("SCIENCE_VISUAL_EXPANSION_SELECTION_MISMATCH")
+    validate_science_visual_authorization_plan(authorization, plan)

@@ -14,6 +14,10 @@ from referencing import Registry, Resource
 SCHEMA_FILES = {
     "science-source-page-crop-review": "local-image-science-source-page-crop-review-v1.schema.json",
     "science-source-page-crop-set": "local-image-science-source-page-crop-set-v1.schema.json",
+    "science-source-page-crop-review-v2": (
+        "local-image-science-source-page-crop-review-v2.schema.json"
+    ),
+    "science-source-page-crop-set-v2": "local-image-science-source-page-crop-set-v2.schema.json",
     "sdxl-training-target-command": "local-image-sdxl-training-target-command-v1.schema.json",
     "sdxl-training-target-result": "local-image-sdxl-training-target-result-v1.schema.json",
     "sdxl-learned-comparison-command": "local-image-sdxl-learned-comparison-command-v1.schema.json",
@@ -329,6 +333,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "science-source-page-crop-review-v2": (
+        "sha256:dbc8dab7f294024b62e73a48f3960137dc0721edfe8076e1c8b495ef92809de8"
+    ),
+    "science-source-page-crop-set-v2": (
+        "sha256:fcc5a1ecf2cc810fa778272851dcfc27c725d537cfe05255139ff69b5f901d69"
+    ),
     "science-source-page-crop-review": (
         "sha256:0aa6766bc1be3667b6dd1873e3635ebd01e21e3267ee52a789de263e8a5bfdc3"
     ),

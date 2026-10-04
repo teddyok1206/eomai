@@ -254,6 +254,70 @@ Recovered source candidates remain 23; actual SDXL authored outputs remain 36 ow
 Full-data readiness is `INSUFFICIENT`, independent blind review is unperformed and V6 is unchanged.
 Whole goal remains ACTIVE.
 
+### 2026-10-04 actual supplemental extraction and crop-provenance checkpoint
+
+The metadata-only preflight for source `d3a001ac109ed9fb3cff77a05ffe0805ef4dfba3` passed
+all three supplemental shards without PDF reads or registry writes. Exact new inputs are
+**162 previously unselected PDFs / 737 pages**, partitioned **108 TRAIN / 27 VALIDATION /
+27 HOLDOUT PDFs**. The original 108 PDFs are excluded, all new document/PDF identities are
+distinct, and the original whole-corpus seed/group partitions are retained. The three actual
+worker scopes are 54 PDFs each and 246 / 252 / 239 pages respectively, each capped at 512
+automatic regions. These are bounded discovery inputs, not 162 approved illustration examples.
+
+Immutable Git wheels were built/inspected. Only contracts and trainer wheels were installed
+in the protected **experimental trainer** environment, with installed RECORD, `pip check`,
+actual worker-identity CPU import/no-Torch and existing isolated unit verification PASS.
+Old `ad1716d6…` rollback wheels/hashes are retained. Provider distribution, inference environment,
+V6 binding, GPU lock ownership/mode and production units stayed unchanged; no service restart.
+Contracts wheel SHA `eb83886cffd5b1383cc106abe3d962975ec493c54b109f2356b5c3cc67ad7b0f`;
+trainer wheel SHA `5a148963889137c65c06a7a729b473a294c04f4a3e2b5fc27dc75f1f0bd90f03`.
+
+All three plans and exclusive workspaces are staged. Actual extraction is sequential through
+the existing private-network/private-device CPU unit; no new queue, worker protocol, GPU job or
+training update. At this checkpoint shards 0 and 1 completed and were committed by Orchestrator,
+while shard 2 is running. The first two results total **498 pages / 1,024 automatic regions**;
+regions include tables/graphs/annotations and are not quality-approved line drawings.
+
+| Shard | Exact result Artifact / Revision | Result member raw SHA |
+| --- | --- | --- |
+| 0 | `artifact_7eb1b7d4d7c54ea0bfb2989358d30ca2` / `rev_df6e5e1d7bba432f9cb57a2b2807bd85` | `ff999085a12206108a3d3407d393be9ab56667b900548dfe9dd0ed4471c192b9` |
+| 1 | `artifact_1ab90ca13b61457b90b058172963394b` / `rev_20f253dd666d4ad79b786d93febba4fa` | `d9d62f1a0955cfac72e7500220c9675c44fb40a760aee521d9f37b90a861e66f` |
+
+The result member is `manifests/visual-pilot-result.json`; each exact result binds its plan's
+semantic hash and complete original-page/candidate member closure. A first collection-only
+operator invocation rejected cleared `ExecMain` timestamps after systemd garbage-collected a
+completed oneshot. It submitted/published nothing and did not change source. After inspecting
+that empty checkpoint, the collector used exact pinned terminal result/runtime and full PNG
+closure instead of treating service health/timestamps as execution proof. It preserved the failed
+log/operator, the same three command identities and all outputs; no extraction was resubmitted.
+
+[ADR 0186](../adr/0186-supplemental-original-page-crop-provenance.md) adds **crop review/set
+V1.1**, rather than attaching supplemental candidate IDs to the old inventory. Complete new
+plan/result pairs and the same original authorization/predecessors are admitted before PNG
+reads. Catalog replays its existing authoritative full-corpus selection; Orchestrator batches
+immutable metadata and unique page pointers, then reuses literal CPU crop processing/publication.
+V1.0 schemas/meaning and PNG/dataset split contracts remain unchanged. No new dependency, DB
+migration, queue, framework, production deployment or automatic training admission.
+
+Current source gates: **170 PASS** across nine focused suites (including 30 supplemental crop
+admission/version/closure cases), plus **59 PASS** corpus-contract regression tests in the
+explicit API environment. These overlap earlier counts and must not be summed with them.
+Ruff format/lint, strict mypy on five changed core modules, release-shell syntax and diff checks
+PASS. Initial new-test runs caught an error-class expectation mismatch; the Orchestrator now
+reports its own stable admission error while preserving the Catalog cause. A final negative test
+also enforces exact review/output version pairing even for a rehashed legacy-shaped output.
+These were source
+test failures, not production incidents or model retries. New crop V1.1 live publication and
+corrected-data training have not yet run at this source checkpoint.
+
+Next: close shard 2 and archive exact release/staging/publication evidence; inspect TRAIN original
+pages, select complete literal objects with correct captions/expression and document/duplicate
+grouping, then prepare/freeze corrected-data training and separate validation/holdout budgets.
+Do not visually inspect reserved pixels for TRAIN tuning, automatically train discovery regions,
+relabel source crops as AI outputs, or generate again in the exhausted diagnostic cohort.
+Reviewed source candidates remain **23**, actual SDXL outputs **36 own-REJECTED**, independent
+blind review `NOT_PERFORMED`, full-data readiness `INSUFFICIENT`, V6 unchanged, GOAL=ACTIVE.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

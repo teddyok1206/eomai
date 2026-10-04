@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal, Self
+from types import MappingProxyType
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -30,6 +32,8 @@ from eom_image_contracts.sdxl_training_targets import TargetExpression
 _PREFIX = "eom://schemas/image-provider/local-image-"
 SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.0"
 SOURCE_PAGE_CROP_SET_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.0"
+SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF = _PREFIX + "science-source-page-crop-review/1.1"
+SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF = _PREFIX + "science-source-page-crop-set/1.1"
 SCIENCE_ORIGINAL_PAGE_SCHEMA_REF = _PREFIX + "science-corpus-visual-pilot-page-image/1.0"
 SourcePageCropPartition = Literal["TRAIN", "VALIDATION", "HOLDOUT"]
 
@@ -176,6 +180,7 @@ class ScienceSourcePageCropMember(FrozenModel):
 
 
 class LocalImageScienceSourcePageCropSet(FrozenModel):
+    _review_schema_ref: ClassVar[str] = SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF
     schema_version: Literal["local-image-science-source-page-crop-set/1.0"]
     crop_set_id: str = Field(pattern=r"^imgsourcecropset_[0-9a-f]{32}$")
     crop_set_revision_id: str = Field(pattern=r"^imgsourcecropsetrev_[0-9a-f]{32}$")
@@ -195,7 +200,7 @@ class LocalImageScienceSourcePageCropSet(FrozenModel):
     @model_validator(mode="after")
     def exact_set(self) -> Self:
         if (
-            self.review.schema_ref != SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF
+            self.review.schema_ref != self._review_schema_ref
             or self.review.media_type != "application/json"
         ):
             raise ValueError("source page crop review pointer mismatch")
@@ -217,6 +222,104 @@ class LocalImageScienceSourcePageCropSet(FrozenModel):
         return self
 
 
+class ScienceSourcePageCropSupplementalPilot(FrozenModel):
+    """Small immutable value pair; parsed plans/results own their semantic identities."""
+
+    pilot_plan: ImageEvaluationArtifactMember
+    pilot_result: ImageEvaluationArtifactMember
+
+    @model_validator(mode="after")
+    def exact_pair(self) -> Self:
+        for pointer, schema_ref, member in (
+            (
+                self.pilot_plan,
+                _PREFIX + "science-corpus-visual-pilot-plan/1.3",
+                "manifests/visual-pilot-plan.json",
+            ),
+            (
+                self.pilot_result,
+                _PREFIX + "science-corpus-visual-pilot-result/1.0",
+                "manifests/visual-pilot-result.json",
+            ),
+        ):
+            if (
+                pointer.schema_ref != schema_ref
+                or pointer.media_type != "application/json"
+                or pointer.member_path != member
+            ):
+                raise ValueError("source page crop supplemental pointer contract mismatch")
+        return self
+
+
+class LocalImageScienceSourcePageCropReviewV2(LocalImageScienceSourcePageCropReview):
+    # This additive wire family intentionally narrows a different discriminator; V1 is unchanged.
+    schema_version: Literal["local-image-science-source-page-crop-review/1.1"]  # type: ignore[assignment]
+    supplemental_pilots: tuple[ScienceSourcePageCropSupplementalPilot, ...] = Field(
+        min_length=2, max_length=4
+    )
+
+    @model_validator(mode="after")
+    def exact_supplemental_population(self) -> Self:
+        for pointers in (
+            tuple(pilot.pilot_plan for pilot in self.supplemental_pilots),
+            tuple(pilot.pilot_result for pilot in self.supplemental_pilots),
+        ):
+            identities = {
+                (pointer.artifact_id, pointer.artifact_revision_id, pointer.member_path)
+                for pointer in pointers
+            }
+            if len(identities) != len(pointers):
+                raise ValueError("source page crop repeats supplemental pilot identity")
+        return self
+
+
+class LocalImageScienceSourcePageCropSetV2(LocalImageScienceSourcePageCropSet):
+    schema_version: Literal["local-image-science-source-page-crop-set/1.1"]  # type: ignore[assignment]
+    _review_schema_ref: ClassVar[str] = SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF
+
+
+@dataclass(frozen=True, slots=True)
+class SourcePageCropProtocol:
+    review_contract: str
+    review_schema_ref: str
+    set_contract: str
+    set_schema_ref: str
+    set_schema_version: str
+    set_model: type[LocalImageScienceSourcePageCropSet]
+
+
+_PROTOCOLS = MappingProxyType(
+    {
+        LocalImageScienceSourcePageCropReview: SourcePageCropProtocol(
+            "science-source-page-crop-review",
+            SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF,
+            "science-source-page-crop-set",
+            SOURCE_PAGE_CROP_SET_SCHEMA_REF,
+            "local-image-science-source-page-crop-set/1.0",
+            LocalImageScienceSourcePageCropSet,
+        ),
+        LocalImageScienceSourcePageCropReviewV2: SourcePageCropProtocol(
+            "science-source-page-crop-review-v2",
+            SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF,
+            "science-source-page-crop-set-v2",
+            SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF,
+            "local-image-science-source-page-crop-set/1.1",
+            LocalImageScienceSourcePageCropSetV2,
+        ),
+    }
+)
+
+
+def source_page_crop_protocol(
+    review: LocalImageScienceSourcePageCropReview,
+) -> SourcePageCropProtocol:
+    """Closed released versions, not implicit subclass compatibility or a plugin registry."""
+    protocol = _PROTOCOLS.get(type(review))
+    if protocol is None:
+        raise ValueError("source page crop unsupported review protocol")
+    return protocol
+
+
 def validate_source_page_crop_sources(
     review: LocalImageScienceSourcePageCropReview,
     *,
@@ -233,14 +336,40 @@ def validate_source_page_crop_sources(
         raise ValueError("source page crop authorization mismatch")
     if len(plans) != len(results) or len(results) != len(inventory.pilot_results):
         raise ValueError("source page crop campaign coverage mismatch")
+    validate_source_page_crop_selection_sources(
+        review,
+        plans=plans,
+        results=results,
+        result_pointers=tuple(pilot.pilot_result for pilot in inventory.pilot_results),
+    )
+
+
+def validate_source_page_crop_selection_sources(
+    review: LocalImageScienceSourcePageCropReview,
+    *,
+    plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...],
+    results: tuple[LocalImageScienceCorpusVisualPilotResult, ...],
+    result_pointers: tuple[ImageEvaluationArtifactMember, ...],
+) -> None:
+    """Shared literal selection rule, after complete original or supplemental admission."""
+    if (
+        not 2 <= len(plans) <= 4
+        or len(plans) != len(results)
+        or len(results) != len(result_pointers)
+    ):
+        raise ValueError("source page crop campaign coverage mismatch")
     sources = {source.document_id: source for plan in plans for source in plan.selected_sources}
+    if len(sources) != sum(len(plan.selected_sources) for plan in plans):
+        raise ValueError("source page crop campaign repeats sources")
     by_candidate = {}
-    for plan, result, pilot in zip(plans, results, inventory.pilot_results, strict=True):
+    for plan, result, result_pointer in zip(plans, results, result_pointers, strict=True):
         if result.completed_at > review.created_at:
             raise ValueError("source page crop source is newer than review")
         pages = {(page.document_id, page.physical_page): page for page in result.page_images}
         for candidate in result.visual_candidates:
-            by_candidate[candidate.candidate_id] = (candidate, pages, pilot.pilot_result, plan)
+            if candidate.candidate_id in by_candidate:
+                raise ValueError("source page crop campaign repeats parent candidates")
+            by_candidate[candidate.candidate_id] = (candidate, pages, result_pointer, plan)
     for selection in review.selections:
         found = by_candidate.get(selection.candidate_id)
         if found is None:
@@ -287,6 +416,12 @@ def validate_source_page_crop_sources(
 def validate_source_page_crop_set(
     review: LocalImageScienceSourcePageCropReview, crop_set: LocalImageScienceSourcePageCropSet
 ) -> None:
+    protocol = source_page_crop_protocol(review)
+    if (
+        type(crop_set) is not protocol.set_model
+        or crop_set.review.schema_ref != protocol.review_schema_ref
+    ):
+        raise ValueError("source page crop review/output protocol mismatch")
     if (
         crop_set.review.sha256
         != "sha256:"
@@ -309,7 +444,8 @@ def source_page_crop_pointer(
     crop_set_pointer: ImageEvaluationArtifactMember, member: ScienceSourcePageCropMember
 ) -> ImageEvaluationArtifactMember:
     if (
-        crop_set_pointer.schema_ref != SOURCE_PAGE_CROP_SET_SCHEMA_REF
+        crop_set_pointer.schema_ref
+        not in {SOURCE_PAGE_CROP_SET_SCHEMA_REF, SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF}
         or crop_set_pointer.media_type != "application/json"
     ):
         raise ValueError("source page crop set pointer contract mismatch")

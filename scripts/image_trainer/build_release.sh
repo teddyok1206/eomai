@@ -57,6 +57,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/science_visual_pilot_codec.py",
         "eom_image_contracts/schemas/local-image-science-source-page-crop-review-v1.schema.json",
         "eom_image_contracts/schemas/local-image-science-source-page-crop-set-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-science-source-page-crop-review-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-science-source-page-crop-set-v2.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-training-target-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-training-target-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-learned-comparison-command-v1.schema.json",

@@ -11,8 +11,6 @@ from pathlib import Path
 
 from eom_image_contracts import (
     INSTITUTIONAL_CROP_SCHEMA_REF,
-    SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF,
-    SOURCE_PAGE_CROP_SET_SCHEMA_REF,
     ImageEvaluationArtifactMember,
     LocalImageScienceSourcePageCropReview,
     LocalImageScienceSourcePageCropSet,
@@ -22,6 +20,7 @@ from eom_image_contracts import (
     validate_contract,
     validate_source_page_crop_set,
 )
+from eom_image_contracts.source_page_crops import source_page_crop_protocol
 from sqlalchemy import Engine
 
 from eom_orchestrator.file_set_control_artifacts import (
@@ -82,6 +81,7 @@ def materialize_and_publish_source_page_crops(
         or (created_at < review.created_at)
     ):
         raise ValueError("SCIENCE_SOURCE_CROP_TIMESTAMP_INVALID")
+    protocol = source_page_crop_protocol(review)
     reads = prepare_source_page_crop_reads(engine, review)
     workspace.mkdir(mode=0o700)
     (workspace / "manifests").mkdir(mode=0o700)
@@ -97,7 +97,7 @@ def materialize_and_publish_source_page_crops(
                 workspace / review_path,
                 _sha(review_raw),
                 len(review_raw),
-                SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF,
+                protocol.review_schema_ref,
                 "application/json",
             ),
         ),
@@ -112,7 +112,7 @@ def materialize_and_publish_source_page_crops(
         artifact_id=published_review.artifact_id,
         artifact_revision_id=published_review.artifact_revision_id,
         member_path=published_review.primary_file,
-        schema_ref=SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF,
+        schema_ref=protocol.review_schema_ref,
         media_type="application/json",
         sha256=published_review.primary_sha256,
     )
@@ -154,7 +154,7 @@ def materialize_and_publish_source_page_crops(
             )
     outputs.sort(key=lambda member: member.selection_id)
     value: dict[str, object] = {
-        "schema_version": "local-image-science-source-page-crop-set/1.0",
+        "schema_version": protocol.set_schema_version,
         "crop_set_id": "imgsourcecropset_"
         + content_sha256({"selection_ids": tuple(member.selection_id for member in outputs)})[7:39],
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
@@ -166,8 +166,8 @@ def materialize_and_publish_source_page_crops(
     }
     value["crop_set_revision_id"] = "imgsourcecropsetrev_" + content_sha256(value)[7:39]
     value["crop_set_sha256"] = content_sha256(value)
-    validate_contract("science-source-page-crop-set", value)
-    crop_set = LocalImageScienceSourcePageCropSet.model_validate(value)
+    validate_contract(protocol.set_contract, value)
+    crop_set = protocol.set_model.model_validate(value)
     validate_source_page_crop_set(review, crop_set)
     crop_raw = content_json_bytes(crop_set.model_dump(mode="json"))
     crop_path = "manifests/science-source-page-crop-set.json"
@@ -178,7 +178,7 @@ def materialize_and_publish_source_page_crops(
             workspace / crop_path,
             _sha(crop_raw),
             len(crop_raw),
-            SOURCE_PAGE_CROP_SET_SCHEMA_REF,
+            protocol.set_schema_ref,
             "application/json",
         )
     )

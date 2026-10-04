@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.1",
+  "title": "Reviewed literal supplemental original-page illustration selections",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "review_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "basis_crop_set",
+    "training_authorization",
+    "selections",
+    "policy",
+    "pillow_version",
+    "activation_policy",
+    "review_sha256",
+    "supplemental_pilots"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-science-source-page-crop-review/1.1"
+    },
+    "review_id": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/review_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/created_at"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/created_by"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/source_commit"
+    },
+    "basis_crop_set": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/basis_crop_set"
+    },
+    "training_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/training_authorization"
+    },
+    "selections": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/selections"
+    },
+    "policy": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/policy"
+    },
+    "pillow_version": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/pillow_version"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/activation_policy"
+    },
+    "review_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.0#/properties/review_sha256"
+    },
+    "supplemental_pilots": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pilot_plan",
+          "pilot_result"
+        ],
+        "properties": {
+          "pilot_plan": {
+            "allOf": [
+              {
+                "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+              },
+              {
+                "properties": {
+                  "schema_ref": {
+                    "const": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-plan/1.3"
+                  },
+                  "media_type": {
+                    "const": "application/json"
+                  },
+                  "member_path": {
+                    "const": "manifests/visual-pilot-plan.json"
+                  }
+                }
+              }
+            ]
+          },
+          "pilot_result": {
+            "allOf": [
+              {
+                "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+              },
+              {
+                "properties": {
+                  "schema_ref": {
+                    "const": "eom://schemas/image-provider/local-image-science-corpus-visual-pilot-result/1.0"
+                  },
+                  "media_type": {
+                    "const": "application/json"
+                  },
+                  "member_path": {
+                    "const": "manifests/visual-pilot-result.json"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

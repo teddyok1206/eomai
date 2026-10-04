@@ -8,10 +8,12 @@ from dataclasses import dataclass
 from eom_image_contracts import (
     ImageEvaluationArtifactMember,
     LocalImageScienceSourcePageCropReview,
+    LocalImageScienceSourcePageCropReviewV2,
     ScienceSourcePageCropSelection,
     validate_contract,
     validate_source_page_crop_sources,
 )
+from eom_image_contracts.source_page_crops import source_page_crop_protocol
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import (
@@ -19,6 +21,7 @@ from eom_orchestrator.control_artifact_resolution import (
     resolve_control_artifact_members,
 )
 from eom_orchestrator.sdxl_probe_inputs import resolve_sdxl_training_sources
+from eom_orchestrator.source_page_crop_expansion_inputs import resolve_source_page_crop_expansion
 
 _MAX_BATCH_BYTES = 128 * 1024**2
 _MAX_BATCH_PAGES = 64
@@ -35,24 +38,29 @@ def prepare_source_page_crop_reads(
     engine: Engine, review: LocalImageScienceSourcePageCropReview
 ) -> tuple[ScienceSourcePageCropRead, ...]:
     """Read-only provenance admission; rejected metadata consumes no page PNG bytes."""
-    validate_contract("science-source-page-crop-review", review.model_dump(mode="json"))
-    review = LocalImageScienceSourcePageCropReview.model_validate(review.model_dump(mode="json"))
+    protocol = source_page_crop_protocol(review)
+    validate_contract(protocol.review_contract, review.model_dump(mode="json"))
+    review = type(review).model_validate(review.model_dump(mode="json"))
     lineage = resolve_sdxl_training_sources(
         engine,
         crop_set_pointer=review.basis_crop_set,
         authorization_pointer=review.training_authorization,
     )
-    validate_source_page_crop_sources(
-        review,
-        crop_set=lineage.crop_set,
-        authorization=lineage.authorization,
-        inventory=lineage.inventory,
-        plans=lineage.plans,
-        results=lineage.results,
-    )
+    if isinstance(review, LocalImageScienceSourcePageCropReviewV2):
+        results = resolve_source_page_crop_expansion(engine, review, lineage).results
+    else:
+        validate_source_page_crop_sources(
+            review,
+            crop_set=lineage.crop_set,
+            authorization=lineage.authorization,
+            inventory=lineage.inventory,
+            plans=lineage.plans,
+            results=lineage.results,
+        )
+        results = lineage.results
     page_sizes = {
         (page.document_id, page.physical_page): page.size_bytes
-        for result in lineage.results
+        for result in results
         for page in result.page_images
     }
     by_page: dict[ImageEvaluationArtifactMember, list[ScienceSourcePageCropSelection]] = {}
