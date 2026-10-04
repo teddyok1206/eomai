@@ -174,8 +174,27 @@ def sdxl_target_placement(
     """Exact rational fit; no filesystem/image dependency or implicit foreground recropping."""
     if sample.sample_id != decision.sample_id or not 1000 <= maximum_upscale_milli <= 4000:
         raise ValueError("SDXL target placement source/scale invalid")
-    frame = decision.framing_box
-    width, height = sample.source_width_px, sample.source_height_px
+    return sdxl_reviewed_target_placement(
+        width=sample.source_width_px,
+        height=sample.source_height_px,
+        framing_box=decision.framing_box,
+        maximum_upscale_milli=maximum_upscale_milli,
+    )
+
+
+def sdxl_reviewed_target_placement(
+    *,
+    width: int,
+    height: int,
+    framing_box: ImageEvaluationBoundingBox,
+    maximum_upscale_milli: int,
+) -> SdxlTargetPlacement:
+    """Shared fixed geometry; identity admission belongs to each released source protocol."""
+    if not (1 <= width <= 4096 and 1 <= height <= 4096) or not (
+        1000 <= maximum_upscale_milli <= 4000
+    ):
+        raise ValueError("SDXL target placement dimensions/scale invalid")
+    frame = framing_box
     left, top = frame.left * width // 10_000, frame.top * height // 10_000
     right = (frame.right * width + 9_999) // 10_000
     bottom = (frame.bottom * height + 9_999) // 10_000
@@ -203,8 +222,12 @@ def sdxl_target_placement(
 def sdxl_target_caption(sample: SdxlLoraMicroSample, decision: SdxlPrepareTargetDecision) -> str:
     if sample.sample_id != decision.sample_id:
         raise ValueError("SDXL target caption source mismatch")
+    return sdxl_reviewed_target_caption(sample.source_caption_en, decision.expression)
+
+
+def sdxl_reviewed_target_caption(source_caption: str, target_expression: TargetExpression) -> str:
     expression: str
-    match decision.expression:
+    match target_expression:
         case "CLEAN_CONTOUR":
             expression = "clean contour lines"
         case "RESTRAINED_TONE":
@@ -213,7 +236,7 @@ def sdxl_target_caption(sample: SdxlLoraMicroSample, decision: SdxlPrepareTarget
             expression = "contour lines with fine hatching"
     return (
         SDXL_LORA_MICRO_STYLE_TRIGGER
-        + sample.source_caption_en
+        + source_caption
         + ", "
         + expression
         + ", plain white background"

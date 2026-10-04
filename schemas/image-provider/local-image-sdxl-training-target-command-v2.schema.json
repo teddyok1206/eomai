@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.1",
+  "title": "CPU-only SDXL targets from a reviewed literal TRAIN source crop set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "source_crop_set",
+    "training_authorization",
+    "decisions",
+    "policy",
+    "maximum_upscale_milli",
+    "pillow_version",
+    "purpose",
+    "activation_policy",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-training-target-command/1.1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^imgsdxltargetpreprun_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 512,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/PreparedDecision"
+          },
+          {
+            "$ref": "#/$defs/DeferredDecision"
+          }
+        ]
+      }
+    },
+    "policy": {
+      "const": "REVIEWED_GRAY_MASK_RATIONAL_FIT_768X512_MARGIN32/1.0"
+    },
+    "maximum_upscale_milli": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 4000
+    },
+    "pillow_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "purpose": {
+      "const": "CPU_ONLY_TRAIN_TARGET_CANDIDATES"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_crop_set": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+    },
+    "training_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+    }
+  },
+  "$defs": {
+    "PreparedDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "disposition",
+        "framing_box",
+        "redaction_boxes",
+        "expression"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "disposition": {
+          "const": "PREPARE"
+        },
+        "framing_box": {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationBoundingBox"
+        },
+        "redaction_boxes": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationBoundingBox"
+          }
+        },
+        "expression": {
+          "enum": [
+            "CLEAN_CONTOUR",
+            "RESTRAINED_TONE",
+            "FINE_HATCHING"
+          ]
+        }
+      }
+    },
+    "DeferredDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "disposition",
+        "reason"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "disposition": {
+          "const": "DEFER"
+        },
+        "reason": {
+          "enum": [
+            "SOURCE_PART_MISSING",
+            "MASK_INTERRUPTS_OBJECT",
+            "DENSE_TEXTURE_SEPARATE_TRACK",
+            "SCIENTIFIC_GEOMETRY_NATIVE",
+            "SOURCE_ANNOTATION_REQUIRES_REPAIR",
+            "REFERENCE_ONLY"
+          ]
+        }
+      }
+    }
+  }
+}

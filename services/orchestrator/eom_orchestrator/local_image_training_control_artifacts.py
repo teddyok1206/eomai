@@ -56,6 +56,9 @@ if TYPE_CHECKING:
         LocalImageSdxlLoraMicroCommand,
         LocalImageSdxlTrainingTargetCommand,
     )
+    from eom_image_contracts.sdxl_source_training_targets import (
+        LocalImageSdxlSourceTrainingTargetCommand,
+    )
 
 AUTHORIZATION_MEMBER = "manifests/training-authorization.json"
 AUTHORIZATION_SCHEMA_REF = "eom://schemas/image-provider/local-image-training-authorization/1.0"
@@ -342,13 +345,18 @@ class LocalImageTrainingControlArtifactPublisher:
         )
 
     def commit_sdxl_training_target_command(
-        self, command: LocalImageSdxlTrainingTargetCommand
+        self,
+        command: LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand,
     ) -> ImageEvaluationArtifactMember:
         return self._commit_document(
             value=command,
-            contract_name="sdxl-training-target-command",
+            contract_name=(
+                "sdxl-training-target-command-v2"
+                if command.schema_version == "local-image-sdxl-training-target-command/1.1"
+                else "sdxl-training-target-command"
+            ),
             member="manifests/sdxl-training-target-command.json",
-            schema_ref="eom://schemas/image-provider/local-image-sdxl-training-target-command/1.0",
+            schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_training_target_command",
             idempotency_prefix="local-image-sdxl-training-target-command",
             identity_sha256=command.command_sha256,

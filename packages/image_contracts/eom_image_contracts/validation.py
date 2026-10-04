@@ -20,6 +20,8 @@ SCHEMA_FILES = {
     "science-source-page-crop-set-v2": "local-image-science-source-page-crop-set-v2.schema.json",
     "sdxl-training-target-command": "local-image-sdxl-training-target-command-v1.schema.json",
     "sdxl-training-target-result": "local-image-sdxl-training-target-result-v1.schema.json",
+    "sdxl-training-target-command-v2": "local-image-sdxl-training-target-command-v2.schema.json",
+    "sdxl-training-target-result-v2": "local-image-sdxl-training-target-result-v2.schema.json",
     "sdxl-learned-comparison-command": "local-image-sdxl-learned-comparison-command-v1.schema.json",
     "sdxl-learned-comparison-result": "local-image-sdxl-learned-comparison-result-v1.schema.json",
     "informative-lineart-extraction-command": (
@@ -350,6 +352,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-training-target-result": (
         "sha256:7c87aa01ab47e58c4d2ad281add924bc34016d27cb4c5dfb951ca16b1267ee6b"
+    ),
+    "sdxl-training-target-command-v2": (
+        "sha256:a0a3b1ade3a67a58fb6011c216a88aa858bdba4067b9be3bfa4e6c65da0fae6d"
+    ),
+    "sdxl-training-target-result-v2": (
+        "sha256:2265855f0ed3689cdf611b3db101867aa3794d622999166f100c96473e53b754"
     ),
     "sdxl-learned-comparison-command": (
         "sha256:16dbd91f7e99db36dcdf54cfd0b80530e10e49b4868aea9233fa93cdc5377595"

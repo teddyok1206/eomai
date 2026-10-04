@@ -25,7 +25,21 @@ from eom_image_contracts import (
     validate_contract,
     validate_sdxl_training_target_result,
 )
-from eom_image_contracts.sdxl_training_targets import TargetErrorCode
+from eom_image_contracts.sdxl_lora_micro import SdxlLoraMicroSample
+from eom_image_contracts.sdxl_source_training_targets import (
+    LocalImageSdxlSourceTrainingTargetCommand,
+    LocalImageSdxlSourceTrainingTargetResult,
+    SdxlPreparedSourceTrainingTarget,
+    SdxlSourcePrepareTargetDecision,
+    SdxlSourceTargetSample,
+    SdxlSourceTrainingTargetSources,
+    parse_sdxl_source_training_target_sources,
+    sdxl_source_target_caption,
+    sdxl_source_target_id,
+    sdxl_source_target_placement,
+    validate_sdxl_source_training_target_result,
+)
+from eom_image_contracts.sdxl_training_targets import SdxlTrainingTargetSources, TargetErrorCode
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.staged_file_io import (
     create_staged_directory,
@@ -45,6 +59,9 @@ from eom_image_trainer.crop_processing import (
 
 MAX_METADATA_BYTES = 2 * 1024**2
 MAX_SOURCE_BYTES = 16 * 1024**2
+TargetCommand = LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand
+TargetResult = LocalImageSdxlTrainingTargetResult | LocalImageSdxlSourceTrainingTargetResult
+TargetSources = SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources
 
 
 class SdxlTrainingTargetError(RuntimeError):
@@ -53,11 +70,18 @@ class SdxlTrainingTargetError(RuntimeError):
         self.code = code
 
 
-def _command(raw: bytes) -> LocalImageSdxlTrainingTargetCommand:
+def _command(raw: bytes) -> TargetCommand:
     try:
         value = json.loads(raw)
-        validate_contract("sdxl-training-target-command", value)
-        command = LocalImageSdxlTrainingTargetCommand.model_validate(value)
+        if not isinstance(value, dict):
+            raise ValueError("command must be an object")
+        command: TargetCommand
+        if value.get("schema_version") == "local-image-sdxl-training-target-command/1.1":
+            validate_contract("sdxl-training-target-command-v2", value)
+            command = LocalImageSdxlSourceTrainingTargetCommand.model_validate(value)
+        else:
+            validate_contract("sdxl-training-target-command", value)
+            command = LocalImageSdxlTrainingTargetCommand.model_validate(value)
         if raw != content_json_bytes(command.model_dump(mode="json")):
             raise ValueError("noncanonical command")
         return command
@@ -65,9 +89,7 @@ def _command(raw: bytes) -> LocalImageSdxlTrainingTargetCommand:
         raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID") from exc
 
 
-def load_sdxl_training_target_command(
-    workspace: Path, command_path: Path
-) -> LocalImageSdxlTrainingTargetCommand:
+def load_sdxl_training_target_command(workspace: Path, command_path: Path) -> TargetCommand:
     if command_path != workspace / "command.json":
         raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID")
     try:
@@ -98,7 +120,7 @@ def _decode(
         raise SdxlTrainingTargetError("SDXL_TARGET_SOURCE_INVALID") from exc
 
 
-def _check_outputs(workspace: Path, root: int, result: LocalImageSdxlTrainingTargetResult) -> None:
+def _check_outputs(workspace: Path, root: int, result: TargetResult) -> None:
     try:
         if result.prepared_targets or os.path.lexists(workspace / "targets"):
             with verified_directory(
@@ -123,11 +145,70 @@ def _check_outputs(workspace: Path, root: int, result: LocalImageSdxlTrainingTar
         raise SdxlTrainingTargetError("SDXL_TARGET_OUTPUT_INVALID") from exc
 
 
+def _load_sources(root: int, command: TargetCommand) -> TargetSources:
+    def read(member: str) -> bytes:
+        return read_staged_member(root, member, maximum_bytes=MAX_METADATA_BYTES)
+
+    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+        return parse_sdxl_source_training_target_sources(
+            command,
+            crop_set_payload=read("inputs/source-crop-set.json"),
+            review_payload=read("inputs/source-review.json"),
+            authorization_payload=read("inputs/authorization.json"),
+        )
+    return parse_sdxl_training_target_sources(
+        command,
+        training_command_payload=read("inputs/training-command.json"),
+        training_result_payload=read("inputs/training-result.json"),
+        crop_set_payload=read("inputs/crop-set.json"),
+        authorization_payload=read("inputs/authorization.json"),
+    )
+
+
+def _validated_result(
+    command: TargetCommand, sources: TargetSources, value: object
+) -> TargetResult:
+    if not isinstance(value, dict):
+        raise ValueError("result must be an object")
+    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+        if not isinstance(sources, SdxlSourceTrainingTargetSources):
+            raise ValueError("source protocol mismatch")
+        validate_contract("sdxl-training-target-result-v2", value)
+        result = LocalImageSdxlSourceTrainingTargetResult.model_validate(value)
+        validate_sdxl_source_training_target_result(command, sources, result)
+        return result
+    if not isinstance(sources, SdxlTrainingTargetSources):
+        raise ValueError("source protocol mismatch")
+    validate_contract("sdxl-training-target-result", value)
+    legacy_result = LocalImageSdxlTrainingTargetResult.model_validate(value)
+    validate_sdxl_training_target_result(command, sources, legacy_result)
+    return legacy_result
+
+
+def _source_result_fields(command: TargetCommand, sources: TargetSources) -> dict[str, str]:
+    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand) and isinstance(
+        sources, SdxlSourceTrainingTargetSources
+    ):
+        return {
+            "schema_version": "local-image-sdxl-training-target-result/1.1",
+            "source_snapshot_sha256": sources.snapshot_sha256,
+        }
+    if isinstance(command, LocalImageSdxlTrainingTargetCommand) and isinstance(
+        sources, SdxlTrainingTargetSources
+    ):
+        return {
+            "schema_version": "local-image-sdxl-training-target-result/1.0",
+            "original_training_command_sha256": sources.training_command.command_sha256,
+            "original_training_result_sha256": sources.training_result.result_sha256,
+        }
+    raise ValueError("source protocol mismatch")
+
+
 def run_sdxl_training_target_command(
     *,
     workspace: Path,
-    command: LocalImageSdxlTrainingTargetCommand,
-) -> LocalImageSdxlTrainingTargetResult:
+    command: TargetCommand,
+) -> TargetResult:
     """Read only declared TRAIN pixels; exclusive output plus verified receipt-only replay."""
     command = _command(content_json_bytes(command.model_dump(mode="json")))
     started_at, started = datetime.now(UTC), time.monotonic()
@@ -140,21 +221,7 @@ def run_sdxl_training_target_command(
                 != command
             ):
                 raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID")
-            sources = parse_sdxl_training_target_sources(
-                command,
-                training_command_payload=read_staged_member(
-                    root, "inputs/training-command.json", maximum_bytes=MAX_METADATA_BYTES
-                ),
-                training_result_payload=read_staged_member(
-                    root, "inputs/training-result.json", maximum_bytes=MAX_METADATA_BYTES
-                ),
-                crop_set_payload=read_staged_member(
-                    root, "inputs/crop-set.json", maximum_bytes=MAX_METADATA_BYTES
-                ),
-                authorization_payload=read_staged_member(
-                    root, "inputs/authorization.json", maximum_bytes=MAX_METADATA_BYTES
-                ),
-            )
+            sources = _load_sources(root, command)
             if os.path.lexists(workspace / "result.json"):
                 raw = read_staged_member(
                     root,
@@ -164,11 +231,9 @@ def run_sdxl_training_target_command(
                 )
                 try:
                     value = json.loads(raw)
-                    validate_contract("sdxl-training-target-result", value)
-                    result = LocalImageSdxlTrainingTargetResult.model_validate(value)
+                    result = _validated_result(command, sources, value)
                     if raw != content_json_bytes(result.model_dump(mode="json")):
                         raise ValueError("noncanonical result")
-                    validate_sdxl_training_target_result(command, sources, result)
                 except (ValueError, TypeError, JsonSchemaValidationError) as exc:
                     raise SdxlTrainingTargetError("SDXL_TARGET_OUTPUT_INVALID") from exc
                 _check_outputs(workspace, root, result)
@@ -177,9 +242,12 @@ def run_sdxl_training_target_command(
                 raise SdxlTrainingTargetError("SDXL_TARGET_OUTPUT_INVALID")
             prepared: list[SdxlPreparedTrainingTarget] = []
             error: TargetErrorCode | None = None
-            samples = {
-                sample.sample_id: sample for sample in sources.training_command.training_samples
-            }
+            source_samples: tuple[SdxlSourceTargetSample, ...] | tuple[SdxlLoraMicroSample, ...] = (
+                sources.samples
+                if isinstance(sources, SdxlSourceTrainingTargetSources)
+                else sources.training_command.training_samples
+            )
+            samples = {sample.sample_id: sample for sample in source_samples}
             try:
                 if pillow_version != command.pillow_version:
                     raise SdxlTrainingTargetError("SDXL_TARGET_RUNTIME_MISMATCH")
@@ -197,16 +265,32 @@ def run_sdxl_training_target_command(
                         ),
                         size=(sample.source_width_px, sample.source_height_px),
                     )
-                    placement = sdxl_target_placement(
-                        sample, decision, maximum_upscale_milli=command.maximum_upscale_milli
-                    )
+                    target_model: type[SdxlPreparedTrainingTarget]
+                    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+                        if not isinstance(sample, SdxlSourceTargetSample) or not isinstance(
+                            decision, SdxlSourcePrepareTargetDecision
+                        ):
+                            raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID")
+                        placement = sdxl_source_target_placement(
+                            sample, decision, maximum_upscale_milli=command.maximum_upscale_milli
+                        )
+                        logical = sdxl_source_target_id(command, sample, decision)
+                        caption = sdxl_source_target_caption(sample, decision)
+                        target_model = SdxlPreparedSourceTrainingTarget
+                    else:
+                        if not isinstance(sample, SdxlLoraMicroSample):
+                            raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID")
+                        placement = sdxl_target_placement(
+                            sample, decision, maximum_upscale_milli=command.maximum_upscale_milli
+                        )
+                        logical = sdxl_target_id(command, sample, decision)
+                        caption = sdxl_target_caption(sample, decision)
+                        target_model = SdxlPreparedTrainingTarget
                     image = materialize_reviewed_sdxl_target(
                         source, decision=decision, placement=placement
                     )
                     payload = png_bytes(image)
                     sha = "sha256:" + hashlib.sha256(payload).hexdigest()
-                    logical = sdxl_target_id(command, sample, decision)
-                    caption = sdxl_target_caption(sample, decision)
                     caption_sha = text_sha256(caption)
                     revision = content_sha256(
                         {
@@ -216,7 +300,7 @@ def run_sdxl_training_target_command(
                             "placement": placement.model_dump(mode="json"),
                         }
                     )
-                    target = SdxlPreparedTrainingTarget(
+                    target = target_model(
                         sample_id=sample.sample_id,
                         target_id=logical,
                         target_revision_id="imgsdxltargetrev_" + revision[7:39],
@@ -246,11 +330,9 @@ def run_sdxl_training_target_command(
             except Exception:
                 error = "SDXL_TARGET_PREPARATION_FAILED"
             body = {
-                "schema_version": "local-image-sdxl-training-target-result/1.0",
+                **_source_result_fields(command, sources),
                 "run_id": command.run_id,
                 "command_sha256": command.command_sha256,
-                "original_training_command_sha256": sources.training_command.command_sha256,
-                "original_training_result_sha256": sources.training_result.result_sha256,
                 "state": "UNREVIEWED_TRAIN_TARGET_CANDIDATES",
                 "activation_policy": "FORBIDDEN",
                 "status": "SUCCEEDED" if error is None else "FAILED",
@@ -267,9 +349,7 @@ def run_sdxl_training_target_command(
                 "duration_ms": max(1, int((time.monotonic() - started) * 1000)),
             }
             value = {**body, "result_sha256": content_sha256(body)}
-            validate_contract("sdxl-training-target-result", value)
-            result = LocalImageSdxlTrainingTargetResult.model_validate(value)
-            validate_sdxl_training_target_result(command, sources, result)
+            result = _validated_result(command, sources, value)
             write_staged_member(
                 root, "result.json", content_json_bytes(result.model_dump(mode="json"))
             )

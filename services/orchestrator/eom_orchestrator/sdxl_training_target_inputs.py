@@ -14,6 +14,16 @@ from eom_image_contracts import (
     parse_sdxl_training_target_sources,
     validate_contract,
 )
+from eom_image_contracts.sdxl_source_training_targets import (
+    LocalImageSdxlSourceTrainingTargetCommand,
+    SdxlSourceTrainingTargetSources,
+    parse_sdxl_source_training_target_sources,
+)
+from eom_image_contracts.source_page_crops import (
+    SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF,
+    LocalImageScienceSourcePageCropSet,
+    LocalImageScienceSourcePageCropSetV2,
+)
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import (
@@ -22,22 +32,40 @@ from eom_orchestrator.control_artifact_resolution import (
     resolve_control_artifact_members,
 )
 from eom_orchestrator.sdxl_probe_inputs import SdxlProbeInputMember, resolve_sdxl_training_sources
+from eom_orchestrator.source_page_crop_inputs import prepare_source_page_crop_reads
 
 
 @dataclass(frozen=True, slots=True)
 class PreparedSdxlTrainingTargetInputs:
-    command: LocalImageSdxlTrainingTargetCommand
-    sources: SdxlTrainingTargetSources
+    command: LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand
+    sources: SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources
     files: tuple[SdxlProbeInputMember, ...]
 
 
 def sdxl_training_target_input_hashes(
-    command: LocalImageSdxlTrainingTargetCommand,
-    sources: SdxlTrainingTargetSources,
+    command: LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand,
+    sources: SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources,
 ) -> dict[str, str]:
     prepared_ids = {
         decision.sample_id for decision in command.decisions if decision.disposition == "PREPARE"
     }
+    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+        if not isinstance(sources, SdxlSourceTrainingTargetSources):
+            raise ValueError("SDXL_TARGET_SOURCE_PROTOCOL_MISMATCH")
+        return {
+            "command.json": "sha256:"
+            + hashlib.sha256(content_json_bytes(command.model_dump(mode="json"))).hexdigest(),
+            "inputs/source-crop-set.json": command.source_crop_set.sha256,
+            "inputs/source-review.json": sources.crop_set.review.sha256,
+            "inputs/authorization.json": command.training_authorization.sha256,
+            **{
+                sample.staged_member_path: sample.source_image.sha256
+                for sample in sources.samples
+                if sample.sample_id in prepared_ids
+            },
+        }
+    if not isinstance(sources, SdxlTrainingTargetSources):
+        raise ValueError("SDXL_TARGET_SOURCE_PROTOCOL_MISMATCH")
     return {
         "command.json": "sha256:"
         + hashlib.sha256(content_json_bytes(command.model_dump(mode="json"))).hexdigest(),
@@ -55,8 +83,10 @@ def sdxl_training_target_input_hashes(
 
 def prepare_sdxl_training_target_inputs(
     engine: Engine,
-    command: LocalImageSdxlTrainingTargetCommand,
+    command: LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand,
 ) -> PreparedSdxlTrainingTargetInputs:
+    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+        return _prepare_literal_source_inputs(engine, command)
     validate_contract("sdxl-training-target-command", command.model_dump(mode="json"))
     command = LocalImageSdxlTrainingTargetCommand.model_validate(command.model_dump(mode="json"))
     original_raw = resolve_control_artifact_member(
@@ -111,6 +141,65 @@ def prepare_sdxl_training_target_inputs(
         ("inputs/training-result.json", result_raw),
         ("inputs/crop-set.json", lineage.crop_set_payload),
         ("inputs/authorization.json", lineage.authorization_payload),
+    ):
+        files.append(SdxlProbeInputMember(path, "sha256:" + hashlib.sha256(raw).hexdigest(), raw))
+    return PreparedSdxlTrainingTargetInputs(
+        command, sources, tuple(sorted(files, key=lambda file: file.member_path))
+    )
+
+
+def _prepare_literal_source_inputs(
+    engine: Engine,
+    command: LocalImageSdxlSourceTrainingTargetCommand,
+) -> PreparedSdxlTrainingTargetInputs:
+    validate_contract("sdxl-training-target-command-v2", command.model_dump(mode="json"))
+    command = LocalImageSdxlSourceTrainingTargetCommand.model_validate(
+        command.model_dump(mode="json")
+    )
+    crop_raw = resolve_control_artifact_member(
+        engine, command.source_crop_set, maximum_bytes=2 * 1024**2
+    )
+    supplemental = command.source_crop_set.schema_ref == SOURCE_PAGE_CROP_SET_V2_SCHEMA_REF
+    validate_contract(
+        "science-source-page-crop-set-v2" if supplemental else "science-source-page-crop-set",
+        json.loads(crop_raw),
+    )
+    crop_set = (
+        LocalImageScienceSourcePageCropSetV2 if supplemental else LocalImageScienceSourcePageCropSet
+    ).model_validate_json(crop_raw)
+    review_raw = resolve_control_artifact_member(engine, crop_set.review, maximum_bytes=2 * 1024**2)
+    auth_raw = resolve_control_artifact_member(
+        engine, command.training_authorization, maximum_bytes=2 * 1024**2
+    )
+    sources = parse_sdxl_source_training_target_sources(
+        command,
+        crop_set_payload=crop_raw,
+        review_payload=review_raw,
+        authorization_payload=auth_raw,
+    )
+    # Existing admission resolves the original frozen corpus and complete extraction provenance.
+    # Only its metadata checks are reused; original page pixels are not materialized here.
+    prepare_source_page_crop_reads(engine, sources.review)
+    prepared_ids = {
+        decision.sample_id for decision in command.decisions if decision.disposition == "PREPARE"
+    }
+    samples = tuple(sample for sample in sources.samples if sample.sample_id in prepared_ids)
+    bounded = tuple(
+        BoundedControlArtifactRead(sample.source_image, sample.size_bytes) for sample in samples
+    )
+    payloads = resolve_control_artifact_members(engine, bounded)
+    files = []
+    for sample, raw in zip(samples, payloads, strict=True):
+        if len(raw) != sample.size_bytes:
+            raise ValueError("SDXL_TARGET_SOURCE_SIZE_INVALID")
+        files.append(
+            SdxlProbeInputMember(sample.staged_member_path, sample.source_image.sha256, raw)
+        )
+    for path, raw in (
+        ("command.json", content_json_bytes(command.model_dump(mode="json"))),
+        ("inputs/source-crop-set.json", crop_raw),
+        ("inputs/source-review.json", review_raw),
+        ("inputs/authorization.json", auth_raw),
     ):
         files.append(SdxlProbeInputMember(path, "sha256:" + hashlib.sha256(raw).hexdigest(), raw))
     return PreparedSdxlTrainingTargetInputs(
