@@ -15,9 +15,12 @@ from eom_image_contracts import (
     validate_sdxl_lora_micro_sources,
 )
 from eom_image_contracts.sdxl_lora_evaluation import parse_sdxl_lora_evaluation_sources
+from eom_image_contracts.sdxl_reviewed_evaluation import LocalImageSdxlReviewedEvaluationCommand
+from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
+from eom_orchestrator.sdxl_micro_inputs import resolve_sdxl_reviewed_micro_sources
 from eom_orchestrator.sdxl_probe_inputs import (
     SdxlProbeInputMember,
     materialize_sdxl_probe_inputs,
@@ -36,8 +39,16 @@ class PreparedSdxlLoraEvaluationInputs:
 def prepare_sdxl_lora_evaluation_inputs(
     engine: Engine, command: LocalImageSdxlLoraEvaluationCommand
 ) -> PreparedSdxlLoraEvaluationInputs:
-    validate_contract("sdxl-lora-evaluation-command", command.model_dump(mode="json"))
-    command = LocalImageSdxlLoraEvaluationCommand.model_validate(command.model_dump(mode="json"))
+    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
+        validate_contract("sdxl-lora-evaluation-command-v2", command.model_dump(mode="json"))
+        command = LocalImageSdxlReviewedEvaluationCommand.model_validate(
+            command.model_dump(mode="json")
+        )
+    else:
+        validate_contract("sdxl-lora-evaluation-command", command.model_dump(mode="json"))
+        command = LocalImageSdxlLoraEvaluationCommand.model_validate(
+            command.model_dump(mode="json")
+        )
     pin = command.evaluation
     metadata = {
         name: resolve_control_artifact_member(engine, pointer, maximum_bytes=256 * 1024)
@@ -62,9 +73,18 @@ def prepare_sdxl_lora_evaluation_inputs(
     ):
         raise ValueError("SDXL_EVALUATION_ADAPTER_SIZE_INVALID")
     probe_sources = resolve_sdxl_probe_sources(engine, sources.baseline)
-    if sources.training_command.crop_set != probe_sources.policy.crop_set:
-        raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
-    validate_sdxl_lora_micro_sources(sources.training_command, probe_sources.crop_set)
+    if isinstance(sources.training_command, LocalImageSdxlReviewedMicroCommand):
+        resolve_sdxl_reviewed_micro_sources(engine, sources.training_command)
+        members = {member.member_path: member for member in probe_sources.crop_set.members}
+        if any(
+            members[case.reference_image.member_path].partition != "TRAIN"
+            for case in sources.baseline.cases
+        ):
+            raise ValueError("SDXL_EVALUATION_LEGACY_DIAGNOSTIC_MUST_BE_TRAIN")
+    else:
+        if sources.training_command.crop_set != probe_sources.policy.crop_set:
+            raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
+        validate_sdxl_lora_micro_sources(sources.training_command, probe_sources.crop_set)
     baseline_inputs = materialize_sdxl_probe_inputs(engine, sources.baseline, probe_sources)
     files = [file for file in baseline_inputs.files if file.member_path != "command.json"]
     for file in sources.manifest.files:

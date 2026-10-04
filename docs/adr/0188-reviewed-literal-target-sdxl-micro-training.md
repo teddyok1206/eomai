@@ -68,3 +68,26 @@ training run, maximum 3,600,000ms and 16GiB peak allocated GPU memory. Compariso
 is a separate pinned command, not reuse of the exhausted old 12-image diagnostic
 allowance. Operational lab installation and actual numerical result are still
 pending at this source checkpoint.
+
+## First comparison boundary
+
+The initial follow-up is an explicitly named **legacy TRAIN reference diagnostic**,
+not holdout or generalization acceptance. An evaluation command/result 1.1 pins
+the new training command/result while retaining the existing baseline command,
+its prompts, original reference PNGs, seeds, model and numerical settings. Exact
+historical BASE pixels may be reused only when those pins match. Released 1.0
+evaluation still requires its original sixteen TRAIN inputs; it is not loosened.
+
+The Orchestrator re-admits the new training metadata's full source lineage without
+re-reading/staging all 38 training PNGs, and separately re-admits the baseline's
+original TRAIN references. The worker resolves neither source independently.
+One successor execution generates only the baseline's declared case/seed outputs;
+the command fixes this new cohort's usage before inference. Original validation
+and holdout pixels remain unopened. A quality result on damaged legacy inputs
+must retain that limitation and does not replace later clean target/held-out review.
+
+Successor diagnostic + original micro/evaluation/learned-comparison/target/
+workspace/publication regression: **290 PASS**, formatter/linter and strict types
+of six affected source files PASS. Shared read-only training-source admission
+returns typed metadata/targets; evaluation does not materialize training PNGs.
+These remain source/CPU gates, not independent image-quality acceptance.

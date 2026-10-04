@@ -33,6 +33,8 @@ SCHEMA_FILES = {
     "informative-lineart-manifest": "local-image-informative-lineart-manifest-v1.schema.json",
     "sdxl-lora-evaluation-command": "local-image-sdxl-lora-evaluation-command-v1.schema.json",
     "sdxl-lora-evaluation-result": "local-image-sdxl-lora-evaluation-result-v1.schema.json",
+    "sdxl-lora-evaluation-command-v2": "local-image-sdxl-lora-evaluation-command-v2.schema.json",
+    "sdxl-lora-evaluation-result-v2": "local-image-sdxl-lora-evaluation-result-v2.schema.json",
     "sdxl-lora-micro-command": "local-image-sdxl-lora-micro-command-v1.schema.json",
     "sdxl-lora-micro-command-v2": "local-image-sdxl-lora-micro-command-v2.schema.json",
     "sdxl-lora-micro-result-v2": "local-image-sdxl-lora-micro-result-v2.schema.json",
@@ -378,6 +380,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-lora-evaluation-command": (
         "sha256:b56392e5e8d92c01311d454ba92c79f4b107e61723abc69667fed6298c279dd2"
+    ),
+    "sdxl-lora-evaluation-command-v2": (
+        "sha256:83d6868d8dadd03f551c5d034c28c071414f2b55936fe6e37f424e3f4b180767"
+    ),
+    "sdxl-lora-evaluation-result-v2": (
+        "sha256:259b3cd7b7b69c342d00a42a77426601132442742f80c45bcd3eb32ba703e43b"
     ),
     "sdxl-lora-evaluation-result": (
         "sha256:d72b98f3723758ea492c98c0b8014e66c987958016a32b8b59ed902f0f6664ca"

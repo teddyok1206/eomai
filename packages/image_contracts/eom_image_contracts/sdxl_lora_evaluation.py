@@ -31,6 +31,10 @@ from eom_image_contracts.sdxl_lora_micro import (
     LocalImageSdxlLoraMicroResult,
     validate_sdxl_lora_micro_result,
 )
+from eom_image_contracts.sdxl_reviewed_micro import (
+    LocalImageSdxlReviewedMicroCommand,
+    LocalImageSdxlReviewedMicroResult,
+)
 
 _PREFIX = "eom://schemas/image-provider/"
 
@@ -45,6 +49,9 @@ class SdxlLoraEvaluationPin(FrozenModel):
     adapter_manifest_sha256: Sha256
     adapter_strength: float = Field(gt=0, le=1)
 
+    def training_contract_version(self) -> str:
+        return "1.0"
+
     @model_validator(mode="after")
     def exact_pointers(self) -> Self:
         for pointer, member, family in (
@@ -57,9 +64,14 @@ class SdxlLoraEvaluationPin(FrozenModel):
                 "sdxl-lora-micro-adapter-manifest",
             ),
         ):
+            version = (
+                self.training_contract_version()
+                if family in {"sdxl-lora-micro-command", "sdxl-lora-micro-result"}
+                else "1.0"
+            )
             if (
                 pointer.media_type != "application/json"
-                or pointer.schema_ref != _PREFIX + "local-image-" + family + "/1.0"
+                or pointer.schema_ref != _PREFIX + "local-image-" + family + "/" + version
                 or pointer.member_path != "manifests/" + member + ".json"
             ):
                 raise ValueError("SDXL evaluation metadata pointer contract mismatch")
@@ -106,13 +118,16 @@ class LocalImageSdxlLoraEvaluationCommand(FrozenModel):
 def validate_sdxl_lora_evaluation_sources(
     command: LocalImageSdxlLoraEvaluationCommand,
     baseline: LocalImageSdxlLineartProbeCommand,
-    training_command: LocalImageSdxlLoraMicroCommand,
+    training_command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand,
     training_result: LocalImageSdxlLoraMicroResult,
     manifest: LocalImageSdxlLoraMicroAdapterManifest,
 ) -> None:
     validate_sdxl_lora_micro_result(training_command, training_result)
     pin = command.evaluation
     sources = {sample.source_image for sample in training_command.training_samples}
+    reviewed = isinstance(training_command, LocalImageSdxlReviewedMicroCommand)
+    if reviewed != (command.evaluation.training_contract_version() == "1.1"):
+        raise ValueError("SDXL evaluation training family differs from declared diagnostic")
     if (
         training_result.status != "SUCCEEDED"
         or training_result.adapter_manifest != manifest
@@ -124,7 +139,7 @@ def validate_sdxl_lora_evaluation_sources(
         or baseline.created_at > command.created_at
         or "INTERNAL_SDXL_COMPARISON"
         not in training_command.experiment_authorization.permitted_uses
-        or any(case.reference_image not in sources for case in baseline.cases)
+        or (not reviewed and any(case.reference_image not in sources for case in baseline.cases))
     ):
         raise ValueError("SDXL evaluation training/baseline provenance mismatch")
 
@@ -132,7 +147,7 @@ def validate_sdxl_lora_evaluation_sources(
 @dataclass(frozen=True, slots=True)
 class SdxlLoraEvaluationSources:
     baseline: LocalImageSdxlLineartProbeCommand
-    training_command: LocalImageSdxlLoraMicroCommand
+    training_command: LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand
     training_result: LocalImageSdxlLoraMicroResult
     manifest: LocalImageSdxlLoraMicroAdapterManifest
 
@@ -149,6 +164,7 @@ def parse_sdxl_lora_evaluation_sources(
     from eom_image_contracts.validation import validate_contract
 
     pin = command.evaluation
+    reviewed = pin.training_contract_version() == "1.1"
     entries = (
         (
             pin.baseline_command,
@@ -159,14 +175,14 @@ def parse_sdxl_lora_evaluation_sources(
         (
             pin.training_command,
             training_command_payload,
-            "sdxl-lora-micro-command",
-            LocalImageSdxlLoraMicroCommand,
+            "sdxl-lora-micro-command-v2" if reviewed else "sdxl-lora-micro-command",
+            LocalImageSdxlReviewedMicroCommand if reviewed else LocalImageSdxlLoraMicroCommand,
         ),
         (
             pin.training_result,
             training_result_payload,
-            "sdxl-lora-micro-result",
-            LocalImageSdxlLoraMicroResult,
+            "sdxl-lora-micro-result-v2" if reviewed else "sdxl-lora-micro-result",
+            LocalImageSdxlReviewedMicroResult if reviewed else LocalImageSdxlLoraMicroResult,
         ),
         (
             pin.adapter_manifest,
@@ -191,7 +207,7 @@ def parse_sdxl_lora_evaluation_sources(
         parsed_fields.append(parsed)
     sources = SdxlLoraEvaluationSources(
         cast(LocalImageSdxlLineartProbeCommand, parsed_fields[0]),
-        cast(LocalImageSdxlLoraMicroCommand, parsed_fields[1]),
+        cast(LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand, parsed_fields[1]),
         cast(LocalImageSdxlLoraMicroResult, parsed_fields[2]),
         cast(LocalImageSdxlLoraMicroAdapterManifest, parsed_fields[3]),
     )
@@ -258,6 +274,7 @@ def validate_sdxl_lora_evaluation_result(
 
     if (
         result.run_id != command.run_id
+        or result.schema_version.rsplit("/", 1)[1] != command.schema_version.rsplit("/", 1)[1]
         or result.command_sha256 != command.command_sha256
         or result.evaluation != command.evaluation
         or result.baseline_command_sha256 != baseline.command_sha256

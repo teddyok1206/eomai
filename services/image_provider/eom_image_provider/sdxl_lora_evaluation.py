@@ -15,6 +15,10 @@ from eom_image_contracts import (
     validate_sdxl_lora_evaluation_result,
 )
 from eom_image_contracts.sdxl_lora_evaluation import parse_sdxl_lora_evaluation_sources
+from eom_image_contracts.sdxl_reviewed_evaluation import (
+    LocalImageSdxlReviewedEvaluationCommand,
+    LocalImageSdxlReviewedEvaluationResult,
+)
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from eom_image_provider.provider import ProviderError
@@ -40,8 +44,13 @@ def load_sdxl_lora_evaluation_command(
         raw = read_staged_member(root, "command.json", maximum_bytes=64 * 1024)
     try:
         value = json.loads(raw)
-        validate_contract("sdxl-lora-evaluation-command", value)
-        command = LocalImageSdxlLoraEvaluationCommand.model_validate(value)
+        command: LocalImageSdxlLoraEvaluationCommand
+        if value.get("schema_version") == "local-image-sdxl-lora-evaluation-command/1.1":
+            validate_contract("sdxl-lora-evaluation-command-v2", value)
+            command = LocalImageSdxlReviewedEvaluationCommand.model_validate(value)
+        else:
+            validate_contract("sdxl-lora-evaluation-command", value)
+            command = LocalImageSdxlLoraEvaluationCommand.model_validate(value)
         if raw != content_json_bytes(command.model_dump(mode="json")):
             raise ValueError("noncanonical evaluation command")
         return command
@@ -88,8 +97,13 @@ def run_sdxl_lora_evaluation(
             raw = read_staged_member(root, "result.json", maximum_bytes=256 * 1024)
             try:
                 value = json.loads(raw)
-                validate_contract("sdxl-lora-evaluation-result", value)
-                result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
+                result: LocalImageSdxlLoraEvaluationResult
+                if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
+                    validate_contract("sdxl-lora-evaluation-result-v2", value)
+                    result = LocalImageSdxlReviewedEvaluationResult.model_validate(value)
+                else:
+                    validate_contract("sdxl-lora-evaluation-result", value)
+                    result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
                 validate_sdxl_lora_evaluation_result(command, sources.baseline, result)
                 if raw != content_json_bytes(result.model_dump(mode="json")):
                     raise ValueError("noncanonical result")
@@ -119,7 +133,9 @@ def run_sdxl_lora_evaluation(
         style_adapter=material,
     )
     value = {
-        "schema_version": "local-image-sdxl-lora-evaluation-result/1.0",
+        "schema_version": "local-image-sdxl-lora-evaluation-result/1.1"
+        if isinstance(command, LocalImageSdxlReviewedEvaluationCommand)
+        else "local-image-sdxl-lora-evaluation-result/1.0",
         "run_id": command.run_id,
         "command_sha256": command.command_sha256,
         "evaluation": pin.model_dump(mode="json"),
@@ -134,9 +150,15 @@ def run_sdxl_lora_evaluation(
         "completed_at": evidence.completed_at.isoformat().replace("+00:00", "Z"),
         "duration_ms": evidence.duration_ms,
     }
+    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
+        value["case_relation"] = command.case_relation
     value["result_sha256"] = content_sha256(value)
-    validate_contract("sdxl-lora-evaluation-result", value)
-    result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
+    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
+        validate_contract("sdxl-lora-evaluation-result-v2", value)
+        result = LocalImageSdxlReviewedEvaluationResult.model_validate(value)
+    else:
+        validate_contract("sdxl-lora-evaluation-result", value)
+        result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
     validate_sdxl_lora_evaluation_result(command, sources.baseline, result)
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         write_staged_member(root, "result.json", content_json_bytes(value))

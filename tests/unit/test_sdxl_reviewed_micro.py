@@ -149,6 +149,10 @@ class _Backend:
                     "r": 8,
                     "lora_alpha": 8,
                     "target_modules": ["to_k", "to_out.0", "to_q", "to_v"],
+                    "base_model_name_or_path": "PINNED_LOCAL_MODEL_REVISION",
+                    "bias": "none",
+                    "inference_mode": True,
+                    "task_type": None,
                 }
             ),
         )

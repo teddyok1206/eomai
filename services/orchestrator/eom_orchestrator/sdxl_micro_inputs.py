@@ -16,6 +16,7 @@ from eom_image_contracts.sdxl_reviewed_micro import (
     parse_sdxl_reviewed_micro_sources,
     sdxl_reviewed_micro_metadata_pointers,
 )
+from eom_image_contracts.sdxl_source_training_targets import SdxlPreparedSourceTrainingTarget
 from eom_image_contracts.source_page_crops import (
     LocalImageScienceSourcePageCropReview,
     LocalImageScienceSourcePageCropReviewV2,
@@ -96,36 +97,11 @@ def _prepare_reviewed_inputs(
     engine: Engine,
     command: LocalImageSdxlReviewedMicroCommand,
 ) -> PreparedSdxlMicroInputs:
-    validate_contract("sdxl-lora-micro-command-v2", command.model_dump(mode="json"))
-    command = LocalImageSdxlReviewedMicroCommand.model_validate(command.model_dump(mode="json"))
-    crop_raw = resolve_control_artifact_member(
-        engine, command.source_crop_set, maximum_bytes=2 * 1024**2
-    )
-    pointers = sdxl_reviewed_micro_metadata_pointers(command, crop_raw)
-    others = tuple(
-        (name, pointer)
-        for name, pointer in pointers.items()
-        if name != "inputs/source-crop-set.json"
-    )
-    payloads = resolve_control_artifact_members(
-        engine, tuple(BoundedControlArtifactRead(pointer, 2 * 1024**2) for _, pointer in others)
-    )
-    metadata = {
-        "inputs/source-crop-set.json": crop_raw,
-        **{name: raw for (name, _), raw in zip(others, payloads, strict=True)},
-    }
-    selected = parse_sdxl_reviewed_micro_sources(command, metadata)
-    # Full approved PDF/discovery/partition lineage admission before any target PNG read.
-    review_model = (
-        LocalImageScienceSourcePageCropReviewV2
-        if pointers["inputs/source-review.json"].schema_ref.endswith("/1.1")
-        else LocalImageScienceSourcePageCropReview
-    )
-    prepare_source_page_crop_reads(
-        engine, review_model.model_validate_json(metadata["inputs/source-review.json"])
-    )
+    sources = resolve_sdxl_reviewed_micro_sources(engine, command)
+    command = sources.command
+    targets = {target.sample_id: target for target in sources.targets}
     reads = tuple(
-        BoundedControlArtifactRead(sample.source_image, selected[sample.sample_id].size_bytes)
+        BoundedControlArtifactRead(sample.source_image, targets[sample.sample_id].size_bytes)
         for sample in command.training_samples
     )
     if any(not 0 < read.maximum_bytes <= 16 * 1024**2 for read in reads):
@@ -138,10 +114,12 @@ def _prepare_reviewed_inputs(
         files.append(
             SdxlProbeInputMember(sample.staged_member_path, sample.source_image.sha256, raw)
         )
-    metadata["command.json"] = content_json_bytes(command.model_dump(mode="json"))
-    files.extend(
-        SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
-        for name, raw in metadata.items()
+    files.extend(sources.metadata)
+    raw_command = content_json_bytes(command.model_dump(mode="json"))
+    files.append(
+        SdxlProbeInputMember(
+            "command.json", "sha256:" + hashlib.sha256(raw_command).hexdigest(), raw_command
+        )
     )
     return PreparedSdxlMicroInputs(command, tuple(sorted(files, key=lambda file: file.member_path)))
 
@@ -171,3 +149,52 @@ def sdxl_micro_input_hashes(prepared: PreparedSdxlMicroInputs) -> dict[str, str]
     else:
         expected["inputs/crop-set.json"] = command.crop_set.sha256
     return expected
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedSdxlReviewedMicroSources:
+    command: LocalImageSdxlReviewedMicroCommand
+    metadata: tuple[SdxlProbeInputMember, ...]
+    targets: tuple[SdxlPreparedSourceTrainingTarget, ...]
+
+
+def resolve_sdxl_reviewed_micro_sources(
+    engine: Engine, command: LocalImageSdxlReviewedMicroCommand
+) -> AdmittedSdxlReviewedMicroSources:
+    """Read metadata and full lineage only; evaluation does not copy training PNGs."""
+    validate_contract("sdxl-lora-micro-command-v2", command.model_dump(mode="json"))
+    command = LocalImageSdxlReviewedMicroCommand.model_validate(command.model_dump(mode="json"))
+    crop_raw = resolve_control_artifact_member(
+        engine, command.source_crop_set, maximum_bytes=2 * 1024**2
+    )
+    pointers = sdxl_reviewed_micro_metadata_pointers(command, crop_raw)
+    others = tuple(
+        (name, pointer)
+        for name, pointer in pointers.items()
+        if name != "inputs/source-crop-set.json"
+    )
+    payloads = resolve_control_artifact_members(
+        engine, tuple(BoundedControlArtifactRead(pointer, 2 * 1024**2) for _, pointer in others)
+    )
+    metadata = {
+        "inputs/source-crop-set.json": crop_raw,
+        **{name: raw for (name, _), raw in zip(others, payloads, strict=True)},
+    }
+    selected = parse_sdxl_reviewed_micro_sources(command, metadata)
+    # Full approved PDF/discovery/partition lineage admission before any target PNG read.
+    review_model = (
+        LocalImageScienceSourcePageCropReviewV2
+        if pointers["inputs/source-review.json"].schema_ref.endswith("/1.1")
+        else LocalImageScienceSourcePageCropReview
+    )
+    prepare_source_page_crop_reads(
+        engine, review_model.model_validate_json(metadata["inputs/source-review.json"])
+    )
+    return AdmittedSdxlReviewedMicroSources(
+        command,
+        tuple(
+            SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
+            for name, raw in sorted(metadata.items())
+        ),
+        tuple(selected[sample.sample_id] for sample in command.training_samples),
+    )
