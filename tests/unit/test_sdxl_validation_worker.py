@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
@@ -66,9 +69,7 @@ def _stage(tmp_path, monkeypatch):
     monkeypatch.setattr(worker, "resolve_sdxl_stack", lambda *a, **k: object())
     monkeypatch.setattr(worker, "resolve_sdxl_canny_controller", lambda *a, **k: object())
     monkeypatch.setattr(worker, "read_canny_runtime", lambda: runtime)
-    monkeypatch.setattr(publication, "read_canny_runtime", lambda: runtime)
     monkeypatch.setattr(worker, "canny_conditioning_canvas_png", canny)
-    monkeypatch.setattr(publication, "canny_conditioning_canvas_png", canny)
     monkeypatch.setattr(worker.metadata, "version", lambda name: "11.3.0")
     return prepared, root, leases
 
@@ -220,9 +221,15 @@ def test_publication_readmits_sources_and_exact_transforms_before_mutation(
 
     monkeypatch.setattr(publication, "prepare_sdxl_validation_inputs", readmit)
     monkeypatch.setattr(publication, "ControlFileSetPublisher", Publisher)
+
+    def verify(_workspace, expected):
+        verified = worker.verify_sdxl_validation_transforms(_workspace)
+        assert content_json_bytes(verified.model_dump(mode="json")) == expected
+
+    monkeypatch.setattr(publication, "verify_reserved_transforms_cpu", verify)
     if fault == "initializer-transform":
         monkeypatch.setattr(
-            publication,
+            worker,
             "sdxl_canny_native_source_canvas",
             lambda *a, **k: sdxl_canny_native_source_canvas(
                 (root / prepared.command.cases[1].case.staged_member_path).read_bytes(),
@@ -231,7 +238,9 @@ def test_publication_readmits_sources_and_exact_transforms_before_mutation(
             ),
         )
     if fault == "raw-publication":
-        monkeypatch.setattr(publication, "sdxl_publication", lambda *a: b"broken")
+        from eom_image_provider import sdxl_lineart_probe as raster
+
+        monkeypatch.setattr(raster, "sdxl_publication", lambda *a: b"broken")
 
     def publish():
         return publication.publish_sdxl_validation_comparison(
@@ -250,7 +259,7 @@ def test_publication_readmits_sources_and_exact_transforms_before_mutation(
         assert events == ["CANONICAL_READMIT", "ARTIFACT_COMMIT"] * 2
         assert result.status == "SUCCEEDED"
     else:
-        with pytest.raises(ValueError):
+        with pytest.raises((ValueError, ProviderError)):
             publish()
         assert events == ([] if fault == "command" else ["CANONICAL_READMIT"])
 
@@ -268,3 +277,37 @@ def test_future_command_rejected_before_any_transform_or_gpu(tmp_path, monkeypat
     with pytest.raises(ProviderError, match="SDXL_PROBE_INPUT_INVALID"):
         _run(prepared, root, backend)
     assert not backend.calls and not leases and not (root / "initializers").exists()
+
+
+@pytest.mark.parametrize("fault", [None, "exit", "large", "mismatch", "timeout", "path"])
+def test_cpu_verification_fixed_identity_no_database_or_gpu_environment(monkeypatch, fault):
+    calls = []
+    reply = b"canonical-result"
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        assert args[:4] == ["/usr/sbin/runuser", "--user", "eom-image", "--"]
+        assert args[4:7] == ["/srv/eom/conda/envs/eom-image-trainer/bin/python", "-I", "-c"]
+        assert kwargs["timeout"] == 60 and not kwargs["check"]
+        assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == ""
+        assert not any("DATABASE" in key or "PASSWORD" in key for key in kwargs["env"])
+        assert "'torch' not in sys.modules" in args[7] and "sqlalchemy" not in args[7]
+        if fault == "timeout":
+            raise subprocess.TimeoutExpired(args, 60)
+        output = (
+            b"x" * (256 * 1024 + 1)
+            if fault == "large"
+            else (b"wrong" if fault == "mismatch" else reply)
+        )
+        return SimpleNamespace(returncode=1 if fault == "exit" else 0, stdout=output)
+
+    monkeypatch.setattr(publication.subprocess, "run", run)
+    workspace = Path("/srv/eom/image-training-workspaces/imgsdxlvalcmprun_" + "a" * 32)
+    if fault == "path":
+        workspace = Path("/tmp/untrusted-workspace")
+    if fault is None:
+        publication.verify_reserved_transforms_cpu(workspace, reply)
+    else:
+        with pytest.raises(ValueError):
+            publication.verify_reserved_transforms_cpu(workspace, reply)
+    assert len(calls) == (0 if fault == "path" else 1)

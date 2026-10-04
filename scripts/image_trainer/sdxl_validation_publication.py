@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from datetime import UTC, datetime
-from importlib import metadata
 from pathlib import Path
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
 from eom_image_contracts.sdxl_validation_comparison import LocalImageSdxlValidationComparisonCommand
-from eom_image_provider.sdxl_canny_pixels import (
-    canny_conditioning_canvas_png,
-    read_canny_runtime,
-    sdxl_canny_native_source_canvas,
-)
-from eom_image_provider.sdxl_lineart_probe import sdxl_publication
 from eom_image_provider.sdxl_validation_comparison import validate_sdxl_validation_workspace_result
 from eom_image_provider.staged_file_io import read_staged_member, verified_directory
 from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
@@ -27,6 +21,53 @@ from eom_orchestrator.sdxl_validation_inputs import prepare_sdxl_validation_inpu
 from sqlalchemy import Engine
 
 _PREFIX = "eom://schemas/image-provider/local-image-"
+
+
+def verify_reserved_transforms_cpu(workspace: Path, expected_result: bytes) -> None:
+    """Fixed no-DB numerical adapter; reuse the result schema, not another IPC family."""
+    if workspace.parent != Path("/srv/eom/image-training-workspaces"):
+        raise ValueError("SDXL_VALIDATION_PUBLICATION_WORKSPACE_INVALID")
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from eom_image_contracts.models import content_json_bytes\n"
+        "from eom_image_provider.sdxl_validation_comparison "
+        "import verify_sdxl_validation_transforms\n"
+        "r=verify_sdxl_validation_transforms(Path(sys.argv[1]))\n"
+        "assert 'torch' not in sys.modules\n"
+        "sys.stdout.buffer.write(content_json_bytes(r.model_dump(mode='json')))\n"
+    )
+    try:
+        completed = subprocess.run(
+            [
+                "/usr/sbin/runuser",
+                "--user",
+                "eom-image",
+                "--",
+                "/srv/eom/conda/envs/eom-image-trainer/bin/python",
+                "-I",
+                "-c",
+                script,
+                str(workspace),
+            ],
+            capture_output=True,
+            check=False,
+            timeout=60,
+            env={
+                "PATH": "/usr/bin:/bin",
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "CUDA_VISIBLE_DEVICES": "",
+                "HF_HUB_OFFLINE": "1",
+                "TRANSFORMERS_OFFLINE": "1",
+            },
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError("SDXL_VALIDATION_PUBLICATION_CPU_UNAVAILABLE") from exc
+    if completed.returncode != 0 or not 0 < len(completed.stdout) <= 256 * 1024:
+        raise ValueError("SDXL_VALIDATION_PUBLICATION_CPU_FAILED")
+    if completed.stdout != expected_result:
+        raise ValueError("SDXL_VALIDATION_PUBLICATION_CPU_RESULT_MISMATCH")
 
 
 def publish_sdxl_validation_comparison(
@@ -57,19 +98,11 @@ def publish_sdxl_validation_comparison(
         raise ValueError("SDXL_VALIDATION_PUBLICATION_COMMAND_MISMATCH")
     prepared = prepare_sdxl_validation_inputs(engine, command)
     sources = prepared.metadata.sources
-    spatial = sources.configuration.sources.spatial_sources
-    if (
-        metadata.version("Pillow") != sources.configuration.command.initialization.pillow_version
-        or read_canny_runtime() != spatial.preparation.runtime
-    ):
-        raise ValueError("SDXL_VALIDATION_PUBLICATION_RUNTIME_INVALID")
     result = validate_sdxl_validation_workspace_result(
         command=command, sources=sources, workspace=workspace, expected_owner_uid=worker_uid
     )
     if created_at < result.completed_at:
         raise ValueError("SDXL_VALIDATION_PUBLICATION_TIME_INVALID")
-    payloads = {file.member_path: file.payload for file in prepared.files}
-    cases = {entry.case.case_id: entry.case for entry in command.cases}
     members = []
     with verified_directory(workspace, expected_owner_uid=worker_uid) as root:
         for file in prepared.files:
@@ -83,6 +116,9 @@ def publish_sdxl_validation_comparison(
                 != file.payload
             ):
                 raise ValueError("SDXL_VALIDATION_PUBLICATION_INPUT_MISMATCH")
+        verify_reserved_transforms_cpu(
+            workspace, content_json_bytes(result.model_dump(mode="json"))
+        )
 
         def admit(
             name: str,
@@ -110,40 +146,25 @@ def publish_sdxl_validation_comparison(
         primary = "manifests/sdxl-validation-comparison-result.json"
         admit("result.json", "sdxl-validation-comparison-result/1.0", destination=primary)
         for trace in result.inputs:
-            case = cases[trace.case_id]
-            canvas = sdxl_canny_native_source_canvas(
-                payloads[case.staged_member_path],
-                width_px=case.reference_width_px,
-                height_px=case.reference_height_px,
-            )
-            if (
-                "sha256:" + hashlib.sha256(canvas.convert("RGB").tobytes()).hexdigest()
-                != trace.initialization_rgb_sha256
-            ):
-                raise ValueError("SDXL_VALIDATION_PUBLICATION_INITIALIZER_MISMATCH")
-            control = admit(
+            admit(
                 "conditionings/" + trace.case_id + ".png",
                 "sdxl-canny-conditioning-output/1.0",
                 sha=trace.conditioning_sha256,
             )
-            if control != canny_conditioning_canvas_png(canvas, policy=spatial.preparation.policy):
-                raise ValueError("SDXL_VALIDATION_PUBLICATION_CANNY_MISMATCH")
             admit("initializers/" + trace.case_id + ".png", "sdxl-validation-initializer/1.0")
         for output in result.outputs:
-            raw = admit(
+            admit(
                 output.raw_member_path,
                 "sdxl-lineart-probe-raw/1.0",
                 sha=output.raw_sha256,
                 size=output.raw_size_bytes,
             )
-            final = admit(
+            admit(
                 output.member_path,
                 "sdxl-lineart-probe-output/1.0",
                 sha=output.sha256,
                 size=output.size_bytes,
             )
-            if final != sdxl_publication(raw):
-                raise ValueError("SDXL_VALIDATION_PUBLICATION_OUTPUT_MISMATCH")
     # The command has its own immutable Artifact; results never duplicate source PNGs.
     return ControlFileSetPublisher(engine).publish(
         members=tuple(sorted(members, key=lambda member: member.file_name)),

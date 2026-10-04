@@ -353,3 +353,58 @@ def run_sdxl_validation_comparison(
             return result
     except (ValueError, TypeError, KeyError, SchemaError, OSError) as exc:
         raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc
+
+
+def verify_sdxl_validation_transforms(workspace: Path) -> LocalImageSdxlValidationComparisonResult:
+    """CPU-only publication verification under the installed numerical interpreter.
+
+    Canonical admission is the parent Orchestrator's responsibility. This fixed
+    adapter recomputes declared transforms but never writes or accesses a model.
+    """
+    from eom_image_provider.sdxl_lineart_probe import sdxl_publication
+
+    command = load_sdxl_comparison_command(workspace, workspace / "command.json")
+    if not isinstance(command, LocalImageSdxlValidationComparisonCommand):
+        raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+    with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
+        sources = read_sdxl_validation_sources(root, command)
+        spatial = sources.configuration.sources.spatial_sources
+        if (
+            metadata.version("Pillow")
+            != sources.configuration.command.initialization.pillow_version
+            or read_canny_runtime() != spatial.preparation.runtime
+        ):
+            raise ProviderError("SDXL_PROBE_MODEL_INVALID")
+        result = validate_sdxl_validation_workspace_result(
+            command=command, sources=sources, workspace=workspace, expected_owner_uid=os.geteuid()
+        )
+        traces = {trace.case_id: trace for trace in result.inputs}
+        members = validate_sdxl_validation_sources(command, sources)
+        for entry, (_, member) in zip(command.cases, members, strict=True):
+            case = entry.case
+            original = read_staged_member(
+                root,
+                case.staged_member_path,
+                maximum_bytes=member.size_bytes,
+                expected_sha256=case.reference_image.sha256,
+            )
+            canvas = sdxl_canny_native_source_canvas(
+                original, width_px=case.reference_width_px, height_px=case.reference_height_px
+            )
+            trace = traces[case.case_id]
+            if _sha(canvas.convert("RGB").tobytes()) != trace.initialization_rgb_sha256:
+                raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
+            if _sha(canny_conditioning_canvas_png(canvas, policy=spatial.preparation.policy)) != (
+                trace.conditioning_sha256
+            ):
+                raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
+        for output in result.outputs:
+            raw = read_staged_member(
+                root,
+                output.raw_member_path,
+                maximum_bytes=output.raw_size_bytes,
+                expected_sha256=output.raw_sha256,
+            )
+            if _sha(sdxl_publication(raw)) != output.sha256:
+                raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
+        return result

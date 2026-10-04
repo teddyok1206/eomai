@@ -7,7 +7,26 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest source checkpoint, **2026-10-04 21:35 UTC**: the reserved numerical worker,
+Latest checkpoint, **2026-10-04 21:48 UTC**: installed numerical source
+`41b5fed146c192778ffc20d2c68978917064ea25` completed the frozen14-case reserved batch:
+**28 outputs**, result semantic SHA
+`91099c68ae1ffbe11572a635fe792cca77fe04b1b728ac011104234b0a61e6a8`.
+An actual installed-role replay verified128 files with zero model calls, GPU leases,
+transforms or writes. The command Artifact is `artifact_abb45f7583c74f53ac35b0f8ff7f050f` /
+`rev_62f51c1614774d00a76eaba61f1f820c`; its previously frozen bytes/hash/identity are
+unchanged. No new TRAIN/HOLDOUT binary reads, training, sweep or production activation.
+
+Two operator/environment failures are preserved: a protected-reader rejection of a
+group-writable repository unit before command/workspace/dispatch mutation (caller now
+compares the installed unit to immutable Git bytes), and SQLAlchemy missing in the
+deliberately DB-free trainer interpreter before result publication. No dependency was
+installed to bypass isolation. Publication now uses a fixed CPU-only installed worker
+subprocess for exact transform verification and the Orchestrator environment for
+canonical admission/commit. Revised source regression359 PASS, dependency5 PASS /
+1 known explicit deselection, strict mypy and Ruff/diff checks PASS. CPU-verifier
+installation, canonical result publication and own quality inspection are pending.
+
+Previous source checkpoint, **2026-10-04 21:35 UTC**: the reserved numerical worker,
 existing fixed service handoff and Orchestrator-owned publication adapter are now
 implemented. Historical768×512 source admission remains strict; native reserved
 cropping uses the separately declared fit policy, shared Canny/white initializer

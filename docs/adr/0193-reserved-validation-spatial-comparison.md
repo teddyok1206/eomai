@@ -109,3 +109,18 @@ in the future; the fixture clock was corrected, not the production invariant.
 No new dependency, migration, service, model sweep or production binding change.
 This checkpoint is source acceptance; the actual28-output reserved diagnostic
 and its numerical/own-review evidence are recorded separately after execution.
+
+The live publication check exposed an interpreter boundary: the numerical trainer
+deliberately has no SQLAlchemy, while the Orchestrator environment has a different
+Pillow release. Neither numerical dependencies nor DB access are added to workers.
+Publication runs transform verification in a fixed CPU-only `eom-image` subprocess
+with the installed numerical interpreter, no credentials, offline flags and hidden
+CUDA. The existing result1.0 is the bounded reply, not a new generic protocol.
+Parent admission compares canonical staged inputs before this call and publishes
+only an exact reply matching its already validated result. This is read-only
+validation of the existing28 outputs, never another generation or altered identity.
+The revised regression passed359 tests, dependency checks5 with the same explicit
+deselection, strict mypy for the changed boundaries and Ruff/diff checks. The installed
+worker has already produced28 reserved outputs and passed a128-file read-only replay
+with zero model calls, GPU leases, transforms or writes. Publication is pending the
+fixed CPU adapter's lab-only installation; no numerical rerun is authorized here.
