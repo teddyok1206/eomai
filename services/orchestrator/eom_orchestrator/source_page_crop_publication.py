@@ -102,7 +102,7 @@ def materialize_and_publish_source_page_crops(
             ),
         ),
         primary_file=review_path,
-        artifact_type="SCIENCE_SOURCE_PAGE_CROP_REVIEW",
+        artifact_type="control_local_image_science_source_page_crop_review",
         manifest_version="science-source-page-crop-review-files/1.0",
         idempotency_key="source-page-crop-review:" + review.review_sha256,
         source_commit=review.source_commit,
@@ -185,7 +185,7 @@ def materialize_and_publish_source_page_crops(
     published_set = publisher.publish(
         members=tuple(sorted(file_members, key=lambda member: member.file_name)),
         primary_file=crop_path,
-        artifact_type="SCIENCE_SOURCE_PAGE_CROP_SET",
+        artifact_type="control_local_image_science_source_page_crop_set",
         manifest_version="science-source-page-crop-set-files/1.0",
         idempotency_key="source-page-crop-set:" + crop_set.crop_set_sha256,
         source_commit=review.source_commit,

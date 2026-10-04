@@ -90,6 +90,23 @@ strict mypy on five changed core modules, release-shell syntax and diff checks P
 Actual source recovery publication/visual inspection is pending at this implementation checkpoint.
 Full-data training, independent blind review and production activation remain pending.
 
+The actual CPU preflight produced twelve candidates in 4,577 ms from eight TRAIN pages, eight
+PDFs and seven exam groups. Visual inspection corrected two selections, then deferred the
+telescope's remaining annotation leader and a student's speech-bubble tail rather than masking
+object pixels. Eleven literal candidates are selected for first publication; extra depictions in
+the same source panel are not additional independent PDFs/groups.
+The first publication request was rejected by the existing receiver before DB/NAS mutation:
+the new producer used an Artifact type without the required `control_` namespace. Read-only
+audit confirms **job rows=0**, CPU crop dispatches=0 for that rejected request; the private intent
+and log remain evidence. The producer now follows the existing namespace (receiver unchanged),
+and its test double delegates to the real receiver's pure file-set preflight. Final source gates
+are **176 PASS**, including 35 new source-page cases. The prior 175/169 runs overlap.
+
+For future split assembly, preserve **all** original source partitions. The existing split
+snapshot can represent fixed members; its seed-assignment helper must not reshuffle previously
+used TRAIN groups into VALIDATION/HOLDOUT merely to satisfy minimum counts. Exact/near-duplicate
+review and full-count readiness remain separate, explicit gates.
+
 Completed source checkpoint: JSON Schema 2020-12 and frozen Pydantic split contract, bounded
 union-find grouping by PDF logical identity, PDF byte hash, exam group and reviewed duplicate
 cluster, deterministic assignment and propagated pinned holdout groups. Input is limited to 10,000

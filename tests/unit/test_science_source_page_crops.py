@@ -36,6 +36,11 @@ from eom_orchestrator import source_page_crop_inputs as admission
 from eom_orchestrator import source_page_crop_processing as processing
 from eom_orchestrator import source_page_crop_publication as publication
 from eom_orchestrator.control_artifact_resolution import ControlArtifactResolutionError
+from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.file_set_control_artifacts import (
+    ControlFileSetMember,
+    ControlFileSetPublisher,
+)
 from jsonschema import Draft202012Validator
 from PIL import Image, ImageDraw
 from PIL import __version__ as pillow_version
@@ -459,6 +464,8 @@ def test_orchestrator_publication_owns_closure_and_partial_failure(monkeypatch, 
             pass
 
         def publish(self, **arguments):
+            # Exercise the real receiver's pure preflight, not an accepting mock contract.
+            ControlFileSetPublisher._request(object.__new__(ControlFileSetPublisher), **arguments)
             calls.append(arguments)
             members = {member.file_name: member for member in arguments["members"]}
             for member in members.values():
@@ -486,6 +493,8 @@ def test_orchestrator_publication_owns_closure_and_partial_failure(monkeypatch, 
         created_at=datetime(2026, 10, 4, 1, tzinfo=UTC),
     )
     assert len(calls) == 2
+    assert calls[0]["artifact_type"] == "control_local_image_science_source_page_crop_review"
+    assert calls[1]["artifact_type"] == "control_local_image_science_source_page_crop_set"
     assert len(calls[0]["members"]) == 1 and len(calls[1]["members"]) == 2
     validate_source_page_crop_set(review, result.crop_set)
     assert result.crop_set.activation_policy == "FORBIDDEN"
@@ -514,3 +523,29 @@ def test_orchestrator_publication_owns_closure_and_partial_failure(monkeypatch, 
     assert len(calls) == before + 1
     assert (tmp_path / "failed/manifests/science-source-page-crop-review.json").exists()
     assert not (tmp_path / "failed/manifests/science-source-page-crop-set.json").exists()
+
+
+def test_invalid_control_namespace_is_rejected_before_job_state(monkeypatch, tmp_path):
+    source = tmp_path / "example.json"
+    raw = b"{}"
+    source.write_bytes(raw)
+    member = ControlFileSetMember(
+        "manifests/example.json",
+        source,
+        _sha(raw),
+        len(raw),
+        "eom://schemas/image-provider/example/1.0",
+        "application/json",
+    )
+    receiver = object.__new__(ControlFileSetPublisher)
+    monkeypatch.setattr(receiver, "_load_or_create_job", lambda **kw: pytest.fail("created job"))
+    with pytest.raises(ControlPlaneError, match="file-set input is invalid"):
+        receiver.publish(
+            members=(member,),
+            primary_file="manifests/example.json",
+            artifact_type="SCIENCE_SOURCE_PAGE_CROP_SET",
+            manifest_version="science-source-page-crop-set-files/1.0",
+            idempotency_key="source-page-crop-set:invalid-example",
+            source_commit="a" * 40,
+            created_at=datetime(2026, 10, 4, tzinfo=UTC),
+        )
