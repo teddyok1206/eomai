@@ -7,6 +7,74 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Latest matched contour-adapter checkpoint, **2026-10-04 23:03 UTC**: the separately
+frozen seven-target follow-up generated exactly **6 new LORA7 outputs**, reusing
+the12 already canonical BASE/LORA38 outputs. Actual inference30,443ms; peak
+allocated GPU memory8,328,740,352 bytes (~7.76GiB), RTX5080. Same six legacy TRAIN
+references, native conditioning bytes, full prompts, seed104729,30 steps, CFG7,
+T2I0.8, style-adapter1.0 and rechecked numerical implementation/dependency pins.
+This is not a new clean-input or held-out experiment, and consumes6/6 of this
+phase's new allowance. No new training, old-arm generation, parameter sweep,
+automatic retry or VALIDATION/HOLDOUT pixel access occurred.
+
+- Run `imgsdxlloraevalrun_4dc9eda7b76c8018297cd45682213fe2`.
+- Command `artifact_d62f804af1b24571bb7a8690512575b1` /
+  `rev_238706caa1084ad0bb6ef646a4fe4f6e`, raw SHA
+  `1692c79558414e6b7e21daa0021b8ed4343ea165fe8fb5a5560870e026b6e0b6`.
+- Result `artifact_85af21fb5e364d7d88bafdeaa7b21dbd` /
+  `rev_998c4d364fb2491cb97c334c06ae72b9`, primary result1.1 raw SHA
+  `d5223fbacec3af41567957108014d75497c4bbfe92722d73fa873ad320597dc7`,
+  semantic SHA`ada78c97c18174129ca618df0e01bdcb43f57ee5d94b5ff72bf0ae2730af3159`.
+  All19 new members resolved byte-for-byte.
+- Evidence `artifact_43214a7afd044265916754d8172c16c7` /
+  `rev_e05358dfe7444198903013e64db8f451`, primary `reports/own-review.md`, raw SHA
+  `ddf698c0f4a4114f998e19ad23b16e309d1117f6dd3b7bb3e344cb4fc94c4eb7`.
+  All14 members verified:13 small text records/operators/logs and1 diagnostic
+  comparison sheet; no source PNG or adapter binary duplication.
+
+Installed-role terminal replay passed with33 unchanged files, zero model/GPU/
+write/replay-transform counts and no Torch/database import. A separate CPU verifier
+under the installed Pillow version exactly recomputed6 conditioning and6 publication
+transforms (12 CPU transforms, not zero). Focused source regression71 PASS; private
+submission/replay/publication/archive Ruff checks passed. No core/source/backend/
+schema/dependency/service change, lab installation, push or production deployment.
+Command source d479adee; actual trainer cf6746ae, provider/contracts8ad0f72b.
+
+Own review inspected all18 native outputs in full-resolution triptychs and all6
+new publication PNGs. New LORA7 reduces some grids, shiny gradients and white edge
+halos, but **REJECTED6/6**: all retain gray canvases; trilobite retains a grid;
+radio retains shadow/pseudo-control marks; tree retains stray/ground marks; glove
+retains a source-related rectangular notch; microscope/vessel scientific detail
+remains unverified. LORA7 publication foreground989–1000, mid-tone864–976 and
+border foreground943–1000 per mille. Gray canvas dominates these metrics; lower
+detail is not a science or style PASS. The comparison does not isolate style mix
+from differing training exposure or prove generalization/indistinguishability.
+Independent review NOT_PERFORMED; Item/HWPX/production activation FORBIDDEN.
+
+The original private publication caller correctly hit the unchanged resolver's
+128MiB aggregate bound while requesting24 old reads at16MiB each (384MiB).
+This happened **after** new-result commit/verification, before old-image reads/
+views, not in the model worker. Preserve its executed bytes/failed log and empty
+`views/`. A separate revised caller uses3 indexed batches of8 and the same result
+idempotency key, recovering views in `views-r2/` without new GPU work, direct DB
+edits, raised limits, new result identity or reinterpretation of failed history.
+Both operators and logs are in the evidence revision above.
+
+User comparison:
+`/tmp/eom-sdxl-contour-comparison-20261004/views-r2/contact.png`, columns
+REFERENCE / BASE / LORA38 / LORA7. Canonical diagnostic member:
+`views/three-arm-comparison.png` in the evidence revision. New individual viewing
+copies and native triptychs are in that local directory; canonical generated PNGs
+remain in the result revision, not duplicated in the evidence.
+
+Next: stop additional legacy sweeps/tiny-subset repetitions. Advance TRAIN-only
+native-resolution source/target admission and diverse document/group-safe corpus
+expansion. Any changed data, recipe or reference-preserving input meaning needs
+an explicit freeze before GPU work, using existing ownership and typed protocols.
+Report actual shortages rather than upsample duplicates to hit a target count.
+Four-arm/full-training study, four-family coverage, independent blind review and
+accepted Item Preview/HWPX canary remain open. **Goal stays ACTIVE**.
+
 Matched seven-target adapter follow-up freeze, **2026-10-04 22:37 UTC**: use the
 existing reviewed evaluation command/result1.1 and fixed isolated evaluation unit.
 Freeze **one new LORA dispatch /6 outputs**, no fresh BASE inference, training,
