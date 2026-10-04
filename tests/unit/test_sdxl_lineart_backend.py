@@ -33,7 +33,7 @@ class _Tokenizer:
 
 
 @pytest.mark.parametrize("fault", [None, "tokens", "shape", "nan", "architecture", "gpu", "oom"])
-@pytest.mark.parametrize("conditioning_scale", [0.0, 0.8])
+@pytest.mark.parametrize("conditioning_scale", [0.0, 0.4, 0.8])
 def test_offline_load_architecture_prompt_capacity_numerics_and_cleanup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
