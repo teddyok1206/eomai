@@ -7,7 +7,7 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-TRAIN-only follow-up freeze, **2026-10-04 22:20 UTC**: test the existing reviewed
+TRAIN-only follow-up freeze, **2026-10-04 22:11 UTC**: test the existing reviewed
 target cohort's **10 CLEAN_CONTOUR targets** separately from its23 restrained-tone
 and5 fine-hatching targets. This is a small diagnostic hypothesis, not a proven
 cause of earlier weak style transfer or an independent quality acceptance. The
@@ -22,8 +22,9 @@ accumulation4, seed20261004, 768×512 exact prepared RGB, maximum3,600,000ms and
 38-target adapter. Exactly800 micro-samples means80 exposures per selected image,
 versus approximately21 in the38-target pilot; dataset size/exposure and expression
 mix therefore change together. This is **not a controlled claim that expression
-mix alone explains quality**. Six of the ten targets depict people; this is a
-limited contour-style track, not comprehensive object/family coverage.
+mix alone explains quality**. Five targets depict human characters, two show
+hand/apparatus interactions, and the remainder are a fan, a plant and a scooter.
+This is a limited contour-style track, not comprehensive object/family coverage.
 
 Before dispatch, re-admit canonical source/target/authorization lineage, freeze the
 exact10-target command, stage only those TRAIN PNGs, and visually inspect their
