@@ -167,3 +167,15 @@ corpus576 output, training-target approval or model quality. The frozen seven-
 region command remains the intended first bounded CPU application execution;
 production V6 and reserved source partitions remain outside that installation
 and render scope. No new model call, training or framework is required for it.
+
+## Installed-role source execution, 2026-10-05 UTC
+
+The lab-only contracts/CPU worker install from93b8361d and the frozen command's
+actual576 execution passed. Six transient image-identity CPU requests rendered
+seven source regions, committed one eight-member canonical set and passed read-
+only replay. Original source PNGs/PDFs, numerical dependencies, inference provider,
+production binding and permanent units/privileges remain unchanged. Separate own
+native-size inspection and a15-member evidence archive record both contour gains
+and persistent source-resolution/annotation/caption limitations. No target has
+been automatically approved, old artifact revised, training run started or model
+quality gate closed. Exact pointers and remaining work are in the operations plan.

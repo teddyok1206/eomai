@@ -7,6 +7,55 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
+Latest native-source execution, **2026-10-05 00:52 UTC**: source
+`93b8361da82e7903aa78bcb0d77fc14f841c91e1` implements closed native render
+request/result contracts, offline CPU worker, fixed transient sandbox, full PNG
+stream validation, command-keyed canonical publication and read-only replay.
+Focused regression304 PASS (two opt-in synthetic Poppler rotated/fractional-page
+cases included), strict mypy8 files, Ruff/format/bash/diff PASS. Repository-wide
+dependency audit5 PASS /1 existing unchanged violation; new source modules pass
+their boundary tests. Do not hide that predecessor issue with dynamic imports.
+
+Only the lab contracts/trainer were installed: contracts wheel SHA
+`6791a83bbfa08352582e164769ade4bc34158fceaf5f008167a3b0349f2214ad`, trainer
+`5ea9f2a46c2a00a7807512c59d70b3b0fda5b630d098540a3c3c3159cd706eac`.
+Wheel RECORD, actual image-identity CPU import without Torch/DB, pip check and
+rollback-wheel validation PASS. Provider remains8ad0f72b; numerical dependencies,
+inference environment, existing unit/polkit, production V6 binding and services
+are unchanged. The provider candidate was built/inspected, not installed.
+
+The existing frozen command below actually ran: six isolated CPU requests,
+seven native576 rectangles, six original TRAIN PDFs/exam groups. Total12,307ms
+including commit/replay, 754,339 PNG bytes and2,278,784 native pixels. No model,
+training, reserved pixel read, new independent drawing or production activation.
+
+- Native source set `artifact_e3a08add239940fbad9bdad8b0de5b15` /
+  `rev_7013b931182748e3ba93db6fbad321d3`, primary
+  `manifests/science-source-pdf-crop-set.json`, raw SHA
+  `f7f98043165ea3b732534f9dedaf4a3cb0615beff720e79b9accabbec90daffb`;
+  all8 members verified by canonical read-only replay, no PDF/render/GPU/write replay.
+- Evidence `artifact_5610564e98b749869bb2b1a80a6e1ed5` /
+  `rev_1e2a719d228b40f39dd18f27683ccb45`, primary`reports/own-review.md`, raw SHA
+  `9d3e067bccdf4653bba3cb052719731bd5fc6636190f05606470d6be016a7adf`;
+  all15 members verified (14 text/operators/logs, one diagnostic contact).
+  No canonical source PNG/PDF or model-weight duplication in this evidence.
+
+Own native-size inspection of all7: fan/two table students/plant/profile show
+clearer contours; holding-paper/scooter remain source-resolution limited. Plant
+and profile are promising candidates, fan needs margin review, two students have
+bubble-tail remnants, holding-paper has B/bubble/caption uncertainty. These are
+source-screening judgments, not accepted training-target counts or new permanent
+corpus deletions. Old source/targets/adapter approvals remain immutable.
+The first diagnostic canvas omitted4 pixels of bottom white margin; its executed
+operator/manifest were preserved. A separate corrected CPU contact derives height
+and asserts every tile's bounds. No source edit or PDF/model rerun occurred.
+User contact:`/tmp/eom-image-native576-20261005/views-r2/contact.png` (1:1 pixels,
+original source, not AI generation). Full-resolution target semantics/diverse TRAIN
+coverage/full training/four-arm independent blind review/Item-HWPX canary remain
+open. **Goal stays ACTIVE; source state is PENDING_TARGET_REVIEW, not activation.**
+
+### Earlier native-source history (not the current execution state)
+
 Native-source/data-preparation checkpoint, **2026-10-04 UTC**: re-admitted the
 actual seven TRAIN regions from six original PDFs/six pages. Twelve isolated
 Poppler renders at 144/288 dpi plus six embedded-image inventories completed;
@@ -79,10 +128,11 @@ User source comparison:
 `/tmp/eom-image-native-pdf-audit-20261004/views/contact.png`; canonical diagnostic
 member `views/native-source-comparison.png` in the evidence above. Seven TRAIN
 regions remain seven regions/six documents, not14 independent drawings.
-Next: implement/test the bounded native576 CPU renderer and result publication,
-then explicitly review higher-resolution targets and diverse corpus inputs before
-any further training. Full training, four-arm/four-family/independent blind study
-and accepted Item/HWPX canary remain open. **Goal stays ACTIVE**.
+At that checkpoint the next task was the bounded native576 renderer/publication,
+now completed in the later execution above. Next: explicitly support/review
+higher-resolution targets and diverse corpus inputs before further training.
+Full training, four-arm/four-family/independent blind study and accepted Item/HWPX
+canary remain open. **Goal stays ACTIVE**.
 
 Latest matched contour-adapter checkpoint, **2026-10-04 23:03 UTC**: the separately
 frozen seven-target follow-up generated exactly **6 new LORA7 outputs**, reusing
