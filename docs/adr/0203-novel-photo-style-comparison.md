@@ -592,3 +592,58 @@ SHA `f20c11871ed90d830684ad0a193a6e869753b4bd29aac08b6e52cbed9fc93374`;
 persisted reread equality PASS, source `f0862ba7`. Milestone Slack IN_PROGRESS
 `devreport_feef983489ad48deb2363442d71ff665` SENT/HTTP2002026-10-05T19:59:24Z;
 reported negative own-quality findings and no production change, not goal completion.
+
+## Next input-only subject-region experiment
+
+Use reviewed conservative rectangular regions in the normalized photograph's
+800x504 coordinate system. The main wagon (body/roof/antenna/two visible wheels),
+enrolled fossil and partial ammonite remain at their original fitted positions.
+Do not infer a wall, unfolded fossil, missing chamber geometry or scientific fact
+from old discovery text. The root experiment intent declares these as subject-
+morphology diagnostics, not a scene-dependent production question. Raw old intent
+and source-review assertions are retained separately; source pixels cannot prove
+all originally requested features exist.
+
+1. Responsibility/boundary: existing Canny pixel owner gets a pure region-retention
+   primitive; contracts own rectangle/protected-region validation. No production
+   worker recipe, dispatch command or provider activation added at this stage.
+2. Canonical source: exact registered licensed reference/plan/result plus existing
+   canonical Canny member. Diagnostic regions are reviewed against the actual PNG,
+   with source SHA, source dimensions, selected bounds and rationale recorded.
+3. Identity: keep logical source/revision/artifact/member/hash separate. Derived
+   input RGB/PNG hashes are inspection evidence, not replacements for originals.
+4. Resolution: re-resolve pinned plan/result/source metadata and bytes/media/hash;
+   region coordinates outside the canvas or touching excluded protected marks fail.
+5. Access: bounded three-source ordered derivation, maps for case/trace lookup,
+   exact bounded rectangle/protected membership checks; no DB/index/cache change.
+6. Structure: reuse frozen ImageEvaluationBoundingBox values, tuples/sets and
+   existing artifact resolver/publisher. No polygon/segmentation framework needed.
+7. Cost: O(W*H + protected regions), bounded832x512 RGB; no repeated image decode.
+8. Transaction/concurrency: root Orchestrator CPU diagnosis only; read-only existing
+   workspace, exclusive task-local display outputs, no GPU lease/queue/claim.
+9. Dependency: contracts validate geometry; existing provider decodes/clips/encodes
+   pixels; Orchestrator resolves/stages/archives. No new numeric dependency.
+10. Failure/retry: require positive retained foreground and contained unique
+    protected regions. Preserve all pixels inside retention, set only exterior
+    control pixels to0, never create a rectangle stroke at the mask boundary.
+    Unsupported or corrupt input fails, no alternate region auto-search/retry.
+11. Simpler alternative: global Gaussian already removed relevant fine marks.
+    Retain original Canny internally, without blur/retrace/rescale/morphology
+    repair. Rectangle clipping may still leave clutter inside; inspect and record
+    that limitation instead of claiming perfect object segmentation.
+
+This is not a new cross-service protocol: the primitive is first exercised by
+source tests and a bounded root CPU inspection, not by a changed worker message.
+Before a future numerical worker can use it, define schema-first reviewed source/
+region provenance and initializer semantics, install/replay verification and a
+separate bounded generation command. Do not silently inject a region into1.0/1.1.
+The existing old numeric recipes and canonical generated outputs remain unchanged.
+
+Source-only checkpoint 2026-10-05T20:16Z: retention/old Canny/reference/white-
+initializer/environment regressions135 PASS/42.62s. Ruff/format/diff and strict
+three-file Python3.12 mypy PASS; the contract also passes Python3.11 checking
+against the numerical environment. Tests cover exact protected/internal pixels,
+zero exterior, no added boundary, byte-identity full-frame replay, one decode,
+invalid/protected-contact coordinates and malformed/blank/nonbinary inputs.
+No installed lab or production code changed; actual three-photo CPU inspection
+is the next separate evidence boundary, not implied by these source-test results.

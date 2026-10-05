@@ -6,7 +6,12 @@ import io
 from importlib import metadata
 from typing import Protocol
 
-from eom_image_contracts.sdxl_canny_conditioning import SdxlCannyPolicy, SdxlCannyRuntime
+from eom_image_contracts.models import ImageEvaluationBoundingBox
+from eom_image_contracts.sdxl_canny_conditioning import (
+    SdxlCannyPolicy,
+    SdxlCannyRuntime,
+    validate_canny_retained_region,
+)
 from PIL import Image, ImageOps
 
 from eom_image_provider.provider import ProviderError
@@ -147,8 +152,8 @@ def canny_conditioning_canvas_png(
         raise ProviderError("SDXL_CANNY_INPUT_INVALID") from exc
 
 
-def canny_png_edge_count(payload: bytes) -> int:
-    """Receipt/media verification only; never re-extracts edges or claims quality."""
+def _binary_canny_image(payload: bytes) -> tuple[Image.Image, int]:
+    """One bounded binary/media decode shared by receipts and region diagnostics."""
     try:
         if not 0 < len(payload) <= 16 * 1024**2:
             raise ValueError("Canny output byte budget exceeded")
@@ -164,6 +169,45 @@ def canny_png_edge_count(payload: bytes) -> int:
             red, green, blue = (channel.tobytes() for channel in image.split())
         if red != green or green != blue or set(red) != {0, 255}:
             raise ValueError("Canny output is not binary RGB")
-        return int(red.count(255))
+        # load() materialized bounded pixels; exiting the context closes only the input file.
+        return image, int(red.count(255))
     except (OSError, ValueError, Image.DecompressionBombError) as exc:
         raise ProviderError("SDXL_CANNY_EDGE_INVALID") from exc
+
+
+def canny_png_edge_count(payload: bytes) -> int:
+    """Receipt/media verification only; never re-extracts edges or claims quality."""
+    _image, count = _binary_canny_image(payload)
+    return count
+
+
+def retained_canny_conditioning_png(
+    payload: bytes,
+    *,
+    policy: SdxlCannyPolicy,
+    retained_box: ImageEvaluationBoundingBox,
+    protected_boxes: tuple[ImageEvaluationBoundingBox, ...],
+) -> bytes:
+    """Keep exact existing edges/coordinates internally; remove only exterior pixels.
+
+    This does not identify a subject, redraw lines, synthesize detail or enable a
+    worker recipe. The caller must separately pin source/intent and reviewed bounds.
+    """
+    try:
+        validate_canny_retained_region(
+            policy=policy, retained_box=retained_box, protected_boxes=protected_boxes
+        )
+    except ValueError as exc:
+        raise ProviderError("SDXL_CANNY_INPUT_INVALID") from exc
+    source, _count = _binary_canny_image(payload)
+    bounds = (retained_box.left, retained_box.top, retained_box.right, retained_box.bottom)
+    if bounds == (0, 0, policy.width_px, policy.height_px):
+        return payload
+    retained = source.crop(bounds)
+    if retained.getchannel("R").tobytes().count(255) == 0:
+        raise ProviderError("SDXL_CANNY_EDGE_INVALID")
+    result = Image.new("RGB", source.size, (0, 0, 0))
+    result.paste(retained, (retained_box.left, retained_box.top))
+    output = io.BytesIO()
+    result.save(output, format="PNG", compress_level=9)
+    return output.getvalue()

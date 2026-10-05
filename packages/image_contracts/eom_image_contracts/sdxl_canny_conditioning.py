@@ -12,6 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from eom_image_contracts.models import (
     FrozenModel,
     ImageEvaluationArtifactMember,
+    ImageEvaluationBoundingBox,
     Sha256,
     content_json_bytes,
     content_sha256,
@@ -54,6 +55,32 @@ class SdxlCannyPolicy(FrozenModel):
     aperture_size: Literal[3] = 3
     l2_gradient: Literal[False] = False
     polarity: Literal["WHITE_EDGES_ON_BLACK_RGB"] = "WHITE_EDGES_ON_BLACK_RGB"
+
+
+def validate_canny_retained_region(
+    *,
+    policy: SdxlCannyPolicy,
+    retained_box: ImageEvaluationBoundingBox,
+    protected_boxes: tuple[ImageEvaluationBoundingBox, ...],
+) -> None:
+    """Geometry only; reviewed subject/background meaning requires separate provenance."""
+    boxes = (retained_box, *protected_boxes)
+    if not 1 <= len(protected_boxes) <= 8 or any(
+        not isinstance(box, ImageEvaluationBoundingBox)
+        or any(type(value) is not int for value in (box.left, box.top, box.right, box.bottom))
+        or not (0 <= box.left < box.right <= policy.width_px)
+        or not (0 <= box.top < box.bottom <= policy.height_px)
+        for box in boxes
+    ):
+        raise ValueError("SDXL_CANNY_RETAINED_REGION_INVALID")
+    if len(set(protected_boxes)) != len(protected_boxes) or any(
+        not (
+            retained_box.left <= box.left < box.right <= retained_box.right
+            and retained_box.top <= box.top < box.bottom <= retained_box.bottom
+        )
+        for box in protected_boxes
+    ):
+        raise ValueError("SDXL_CANNY_RETAINED_REGION_PROTECTED_CONTACT")
 
 
 class SdxlCannyRuntime(FrozenModel):

@@ -37,6 +37,7 @@ tests/unit/test_sdxl_canny_comparison.py
 tests/unit/test_sdxl_canny_conditioning.py
 tests/unit/test_sdxl_canny_controller.py
 tests/unit/test_sdxl_canny_reference.py
+tests/unit/test_sdxl_canny_subject_region.py
 tests/unit/test_sdxl_exterior_lora_compatibility.py
 tests/unit/test_sdxl_exterior_training_targets.py
 tests/unit/test_sdxl_learned_comparison.py
