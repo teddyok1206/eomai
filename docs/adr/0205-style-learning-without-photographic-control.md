@@ -236,3 +236,45 @@ Next action is supported native source eligibility/framing expansion and explici
 training-exposure planning, NOT a caption/pooling patch or another repeated small
 pilot. Full learning, reserved/four-family32-depiction/independent blind gates and
 successor Item/HWPX canary/activation/rollback remain OPEN. Overall goal ACTIVE.
+
+### Native source framing inspection boundary
+
+At source f018a2978deeecdf4765e77021a942b589206c44, twelve original coordinate-context
+views were admitted and actually inspected (eleven TRAIN pages,6131869 bytes).
+Source-region review1.2/native PDF command-set1.0 owners rendered eleven regions
+from six new documents at576 DPI:4554384 pixels,7669149 unique PDF bytes, six
+terminal isolated CPU requests and read-only canonical closure replay PASS.
+No new protocol/migration/dependency/queue/runtime installation was needed.
+
+Actual native output inspection rejected clipped solenoid/power-supply/cloud frames
+and retained annotation/code/reference distinctions on the remaining scenes.
+Successful extraction and correct file hashes do NOT imply clean training data.
+Corrected preliminary names:ordinal22 is an aircraft temperature display, not a
+thermometer; ordinal47 is a pressure/mountain diagram, not a cloud illustration.
+Original candidates/reports remain immutable. Gray fills, real winding strokes,
+intrinsic controls and authored scenes are not categorically excluded.
+
+Practical rule:actually inspect the proposed frame overlay on the unchanged
+original page BEFORE native command registration; inspect actual native pixels
+BEFORE target admission. Translate display origin/ruler margins explicitly rather
+than estimate display pixels as page coordinates. Extend existing owners; do not
+add a crop framework or infer a renderer bug from an imprecise reviewed box.
+
+Seven overlay views were produced, four actually viewed(4,14,16,55). Cloud frame
+[480,1465,735,1645] was corrected and rendered once:the complete1020x720 native cloud
+was actually viewed, its table border is gone, two original dotted guide lines
+remain. First clipped set preserved; no guide-free target or extra independent
+sample claimed. Corrected set artifact_fd066b1279fd47a1b3678611ffa11106 /
+rev_38f63f6f4e304e28915c1088816daf51, manifest SHA
+2141dc7448e7ba1e049b1a173a6378130878d6689f7a94a5ee134c4bb62b5255.
+
+Focused source suites actually99 PASS in13.44s. Detailed per-frame findings, exact
+operator lint limitation and contact-only permission failure are preserved in
+evidence artifact_a73207e4045c4eed98c6c2ee9023adf8 /
+rev_c80dcbc25a9e4963ba94a1ff8aaa269f:46 members reread byte-equal;
+reports/own-review.md SHAce00a415f2693c7482ff14d2c99694cdc0644814befcef36dfcc13da8db96e86.
+Seven CPU requests/twelve region renders/eleven unique illustrations;
+new target admission/training/GPU/reserved reads0. Production binding unchanged,
+five main services active. Continue complete framing, coherent native target
+eligibility and independent TRAIN expansion; all full quality/activation gates
+above remain OPEN. Own inspection is not independent blind review. Goal ACTIVE.
