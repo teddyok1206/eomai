@@ -206,6 +206,34 @@ class SdxlLoraMicroRealizedSample(FrozenModel):
     training_caption_sha256: Sha256
 
 
+def sdxl_lora_adapter_ids(
+    *,
+    training_command_sha256: str,
+    base_model: SdxlLineartStackPointer,
+    files: tuple[LocalImageLoraAdapterFile, ...],
+) -> tuple[str, str]:
+    """Shared adapter identities; protocol tags and manifest hashes remain independent."""
+    if tuple(file.relative_path for file in files) != (
+        "adapter_config.json",
+        "adapter_model.safetensors",
+    ):
+        raise ValueError("SDXL adapter files must be exact and sorted")
+    adapter_id = (
+        "imgadapter_" + content_sha256({"training_command_sha256": training_command_sha256})[7:39]
+    )
+    revision_id = (
+        "imgadapterrev_"
+        + content_sha256(
+            {
+                "adapter_id": adapter_id,
+                "base_model": base_model.model_dump(mode="json"),
+                "files": [file.model_dump(mode="json") for file in files],
+            }
+        )[7:39]
+    )
+    return adapter_id, revision_id
+
+
 class LocalImageSdxlLoraMicroAdapterManifest(FrozenModel):
     schema_version: Literal["local-image-sdxl-lora-micro-adapter-manifest/1.0"]
     adapter_id: str = Field(pattern=r"^imgadapter_[0-9a-f]{32}$")
@@ -226,22 +254,14 @@ class LocalImageSdxlLoraMicroAdapterManifest(FrozenModel):
 
     @model_validator(mode="after")
     def exact_adapter(self) -> Self:
-        if tuple(file.relative_path for file in self.files) != (
-            "adapter_config.json",
-            "adapter_model.safetensors",
-        ):
-            raise ValueError("SDXL adapter files must be exact and sorted")
-        logical = content_sha256({"training_command_sha256": self.training_command_sha256})[7:39]
-        revision = content_sha256(
-            {
-                "adapter_id": "imgadapter_" + logical,
-                "base_model": self.base_model.model_dump(mode="json"),
-                "files": [file.model_dump(mode="json") for file in self.files],
-            }
-        )[7:39]
+        adapter_id, revision_id = sdxl_lora_adapter_ids(
+            training_command_sha256=self.training_command_sha256,
+            base_model=self.base_model,
+            files=self.files,
+        )
         if (
-            self.adapter_id != "imgadapter_" + logical
-            or self.adapter_revision_id != "imgadapterrev_" + revision
+            self.adapter_id != adapter_id
+            or self.adapter_revision_id != revision_id
             or self.manifest_sha256
             != content_sha256(self.model_dump(mode="json", exclude={"manifest_sha256"}))
         ):

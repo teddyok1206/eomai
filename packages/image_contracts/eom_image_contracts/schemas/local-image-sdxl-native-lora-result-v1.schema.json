@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-native-lora-result/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "command_sha256",
+    "profile",
+    "status",
+    "error_code",
+    "adapter_manifest",
+    "realized_samples",
+    "sample_set_sha256",
+    "runtime",
+    "requested_steps",
+    "completed_steps",
+    "final_loss",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-native-lora-result/1.0"
+    },
+    "training_run_id": {
+      "type": "string",
+      "pattern": "^imgsdxlnativetrainrun_[0-9a-f]{32}$"
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/Sha256"
+    },
+    "profile": {
+      "enum": [
+        "NATIVE_RESOLUTION_PILOT",
+        "FULL_STYLE_TRAINING"
+      ]
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "adapter_manifest": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-adapter-manifest/1.0"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "realized_samples": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/RealizedSample"
+      }
+    },
+    "sample_set_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-result/1.0#/$defs/LocalImageLoraTrainingRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requested_steps": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 1000
+    },
+    "completed_steps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000
+    },
+    "final_loss": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3660000
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/Sha256"
+    }
+  },
+  "$defs": {
+    "Sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "RealizedSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "target_png_sha256",
+        "training_caption_sha256",
+        "canvas"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "target_png_sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "training_caption_sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "canvas": {
+          "enum": [
+            "SQUARE_1024",
+            "PORTRAIT_768X1024",
+            "LANDSCAPE_1024X768"
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "NATIVE_RESOLUTION_PILOT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "realized_samples": {
+            "maxItems": 64
+          },
+          "requested_steps": {
+            "maximum": 200
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "FULL_STYLE_TRAINING"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "requested_steps": {
+            "minimum": 200
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error_code": {
+            "type": "null"
+          },
+          "realized_samples": {
+            "minItems": 12
+          },
+          "adapter_manifest": {
+            "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-adapter-manifest/1.0"
+          },
+          "runtime": {
+            "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-result/1.0#/$defs/LocalImageLoraTrainingRuntime"
+          },
+          "final_loss": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "profile": {
+            "const": "FULL_STYLE_TRAINING"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "realized_samples": {
+            "minItems": 100
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "FAILED",
+              "CANCELLED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "adapter_manifest": {
+            "type": "null"
+          },
+          "error_code": {
+            "type": "string",
+            "pattern": "^IMAGE_TRAINING_[A-Z0-9_]{3,96}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "CANCELLED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "error_code": {
+            "const": "IMAGE_TRAINING_CANCELLED"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "error_code": {
+            "not": {
+              "const": "IMAGE_TRAINING_CANCELLED"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

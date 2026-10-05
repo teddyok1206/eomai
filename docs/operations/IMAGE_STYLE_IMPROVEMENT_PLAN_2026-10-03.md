@@ -5,6 +5,37 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
+## Latest native-training source candidate — 2026-10-05 03:43 UTC
+
+Concrete implementation progress, **not a new training/quality PASS**:
+[ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md) now has
+closed native command/result/adapter1.0 schemas and frozen models. Explicit pilot
+12–64/20–200 steps and full TRAIN100–200/200–1000 steps are distinct. Both are
+evaluation-only; automatic activation and checkpoint resume are forbidden.
+Native1.2 target batches, subject/expression/scene conditioning, sorted unique
+sample/target/PNG identity, declared global PDF/group caps and terminal cohort/
+runtime/budget bindings are tested. Source/target history and micro limits remain
+unchanged; ID declarations still require actual full-lineage resolution.
+
+The existing numerical UNet owner now preserves the three native canvases and
+their matching SDXL time IDs. Legacy768x512 and checkpoint behavior have dedicated
+regression protection. Native RGB/geometry mismatch fails before tensor conversion;
+the original micro path cannot alias native geometry. No parallel training engine,
+new dependency, DB, migration, queue, production service or binding was introduced.
+
+Focused regression368 PASS; strict mypy5 files, Ruff/format/bash/diff PASS.
+Architecture/release checks9 PASS /1 unchanged Catalog planning-owner dependency
+failure; it is recorded, not suppressed. Synthetic numerical tests are not GPU
+or visual-quality evidence. Packaging/build and runtime evidence, when present,
+must be recorded separately rather than inferred from source tests.
+
+Metadata-first multi-batch admission, isolated native runner/entry point and
+installed native execution are still pending. This checkpoint launches no model,
+does no training or VALIDATION/HOLDOUT binary reads and activates no model.
+Full100–200 TRAIN,24–40 VALIDATION, four-arm/four-family comparison,32 independent
+blind cases and passing Item/HWPX canary/activation/rollback remain open.
+**Goal ACTIVE. Next: full-lineage native admission and isolated terminal runner.**
+
 ## Latest new-source checkpoint — 2026-10-05 03:00 UTC
 
 Execution source`66e008422ee61dae0381a918b603eb9b20942a14`, with unchanged lab

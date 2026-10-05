@@ -21,6 +21,8 @@ from eom_image_contracts import (
     LocalImageTrainerDependencies,
     LocalImageTrainingDatasetManifest,
 )
+from eom_image_contracts.sdxl_native_lora import SdxlNativeLoraHyperparameters
+from eom_image_contracts.sdxl_native_training_targets import NATIVE_TARGET_CANVASES
 
 from eom_image_trainer.checkpoints import load_latest_checkpoint, save_checkpoint
 from eom_image_trainer.runner import (
@@ -30,12 +32,29 @@ from eom_image_trainer.runner import (
 
 TARGET_MODULES = ("to_k", "to_out.0", "to_q", "to_v")
 DETERMINISTIC_CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+LoraHyperparameters = (
+    LocalImageLoraHyperparameters
+    | LocalImageLoraMicroHyperparameters
+    | SdxlNativeLoraHyperparameters
+)
+_ADMITTED_CANVASES = frozenset({(768, 512), *NATIVE_TARGET_CANVASES.values()})
 
 
 @dataclass(frozen=True, slots=True)
 class LoraTensorSample:
     caption_en: str
     image_path: Path
+    width_px: int = 768
+    height_px: int = 512
+
+    def __post_init__(self) -> None:
+        if (self.width_px, self.height_px) not in _ADMITTED_CANVASES:
+            raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
+
+    @property
+    def sdxl_time_ids(self) -> tuple[int, int, int, int, int, int]:
+        # The prepared canvas is the exact encoded image; no training crop/resize occurs.
+        return (self.height_px, self.width_px, 0, 0, self.height_px, self.width_px)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +67,7 @@ class VaeWeightLocation:
 @dataclass(frozen=True, slots=True)
 class LoraTrainingRecipe:
     dependencies: LocalImageTrainerDependencies
-    hyperparameters: LocalImageLoraHyperparameters | LocalImageLoraMicroHyperparameters
+    hyperparameters: LoraHyperparameters
     seed: int
 
 
@@ -180,7 +199,7 @@ def _runtime_snapshot(*, versions: dict[str, str], torch: Any) -> LocalImageLora
 
 
 def _canonical_config(
-    hyperparameters: LocalImageLoraHyperparameters | LocalImageLoraMicroHyperparameters,
+    hyperparameters: LoraHyperparameters,
 ) -> bytes:
     import json
 
@@ -218,7 +237,7 @@ def _write_config(path: Path, payload: bytes) -> None:
 def _save_final_adapter(
     *,
     model: Any,
-    hyperparameters: LocalImageLoraHyperparameters | LocalImageLoraMicroHyperparameters,
+    hyperparameters: LoraHyperparameters,
     output_root: Path,
 ) -> None:
     from peft.utils import get_peft_model_state_dict  # type: ignore[import-not-found]
@@ -373,10 +392,18 @@ def _latents(
             for sample in samples:
                 with Image.open(sample.image_path) as source:
                     source.load()
-                    if source.format != "PNG" or source.size != (768, 512):
+                    if source.format != "PNG" or source.size != (
+                        sample.width_px,
+                        sample.height_px,
+                    ):
                         raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
-                    payload = bytearray(source.convert("RGB").tobytes())
-                image = torch.frombuffer(payload, dtype=torch.uint8).reshape(512, 768, 3)
+                    if source.size != (768, 512) and source.mode != "RGB":
+                        raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
+                    rgb = source if source.mode == "RGB" else source.convert("RGB")
+                    payload = bytearray(rgb.tobytes())
+                image = torch.frombuffer(payload, dtype=torch.uint8).reshape(
+                    sample.height_px, sample.width_px, 3
+                )
                 image = image.permute(2, 0, 1).unsqueeze(0).to("cuda", dtype=torch.float16)
                 image = image.div(127.5).sub(1.0)
                 latent = vae.encode(image).latent_dist.sample(generator=generator)
@@ -413,6 +440,8 @@ class DiffusersUnetLoraBackend:
         completed_steps = 0
         final_loss: float | None = None
         unet: Any | None = None
+        if checkpoint_policy is not None and hyperparameters.checkpointing_steps == 0:
+            raise TrainingBackendFailure("IMAGE_TRAINING_CHECKPOINT_POLICY_INVALID")
         try:
             import bitsandbytes as bnb  # type: ignore[import-not-found]
             import torch  # type: ignore[import-not-found]
@@ -503,11 +532,11 @@ class DiffusersUnetLoraBackend:
             if accelerator.num_processes != 1:
                 raise TrainingBackendFailure("IMAGE_TRAINING_PROCESS_COUNT_INVALID")
             unet.train()
-            time_ids = torch.tensor(
-                [[512, 768, 0, 0, 512, 768]],
-                dtype=torch.float16,
-                device=accelerator.device,
-            )
+            # At most four immutable canvases; avoid allocation on every micro-step.
+            time_ids_by_geometry = {
+                geometry: torch.tensor([geometry], dtype=torch.float16, device=accelerator.device)
+                for geometry in dict.fromkeys(sample.sdxl_time_ids for sample in samples)
+            }
             restored = (
                 checkpoint_policy.load(
                     model=accelerator.unwrap_model(unet), optimizer=optimizer, torch=torch
@@ -560,7 +589,10 @@ class DiffusersUnetLoraBackend:
                         noisy,
                         timestep,
                         prompt_embeds,
-                        added_cond_kwargs={"text_embeds": pooled, "time_ids": time_ids},
+                        added_cond_kwargs={
+                            "text_embeds": pooled,
+                            "time_ids": time_ids_by_geometry[samples[index].sdxl_time_ids],
+                        },
                     ).sample
                     loss = functional.mse_loss(prediction.float(), target.float())
                     if not bool(torch.isfinite(loss).item()):

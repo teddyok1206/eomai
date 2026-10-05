@@ -12,6 +12,11 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-native-lora-command": "local-image-sdxl-native-lora-command-v1.schema.json",
+    "sdxl-native-lora-result": "local-image-sdxl-native-lora-result-v1.schema.json",
+    "sdxl-native-lora-adapter-manifest": (
+        "local-image-sdxl-native-lora-adapter-manifest-v1.schema.json"
+    ),
     "science-source-pdf-render-request": (
         "local-image-science-source-pdf-render-request-v1.schema.json"
     ),
@@ -375,6 +380,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-native-lora-command": (
+        "sha256:c2e3297dfba67ca6fc5b9ce8402b2135d5b1747346459dd08bedf418dd3e5cbd"
+    ),
+    "sdxl-native-lora-result": (
+        "sha256:01a7df32927b4c8d98fc149333d486b381eea5b3fa550c0a383551b90097cd38"
+    ),
+    "sdxl-native-lora-adapter-manifest": (
+        "sha256:9a45480d4fe70c375554e9081641425df9076ce8c200f521a6808c6a0cc01008"
+    ),
     "science-source-pdf-render-request": (
         "sha256:c77f6f9d7446caae0ff9715c5db16b11be448b97d2afb35de6f70f3f2975f68c"
     ),

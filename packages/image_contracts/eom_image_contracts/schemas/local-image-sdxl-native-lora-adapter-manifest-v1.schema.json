@@ -1,0 +1,156 @@
+{
+  "$defs": {
+    "LocalImageLoraAdapterFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "enum": [
+            "adapter_config.json",
+            "adapter_model.safetensors"
+          ],
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 1073741824,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "LocalImageLoraAdapterFile",
+      "type": "object"
+    },
+    "SdxlLineartStackPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-sdxl-t2i-lineart",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-sdxl-lineart-runner/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "title": "SdxlLineartStackPointer",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-native-lora-adapter-manifest/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "adapter_id": {
+      "pattern": "^imgadapter_[0-9a-f]{32}$",
+      "title": "Adapter Id",
+      "type": "string"
+    },
+    "adapter_revision_id": {
+      "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+      "title": "Adapter Revision Id",
+      "type": "string"
+    },
+    "base_model": {
+      "$ref": "#/$defs/SdxlLineartStackPointer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/LocalImageLoraAdapterFile"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Files",
+      "type": "array"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "sample_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Sample Set Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-native-lora-adapter-manifest/1.0"
+    },
+    "state": {
+      "const": "EVALUATION_ONLY",
+      "title": "State",
+      "type": "string"
+    },
+    "training_command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Training Command Sha256",
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "NATIVE_RESOLUTION_PILOT",
+        "FULL_STYLE_TRAINING"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "adapter_id",
+    "adapter_revision_id",
+    "state",
+    "activation_policy",
+    "base_model",
+    "training_command_sha256",
+    "sample_set_sha256",
+    "files",
+    "created_at",
+    "manifest_sha256",
+    "profile"
+  ],
+  "title": "LocalImageSdxlNativeLoraAdapterManifest",
+  "type": "object"
+}

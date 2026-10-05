@@ -2,9 +2,12 @@
 
 ## Status
 
-Proposed implementation design, 2026-10-05 UTC. Native sources/CPU target delivery
-already exist; this successor training protocol, worker and GPU execution do not.
-It does not activate a model, expand a released micro budget or approve a cohort.
+Contract and numerical-geometry source candidate verified, 2026-10-05 UTC.
+Native sources/CPU target delivery already exist. The successor schemas and frozen
+models, explicit native numerical adapter and geometry regression tests now exist.
+Metadata-first multi-batch admission, isolated successor runner/entry point, installed
+runtime and actual GPU execution remain pending. This is not an operational training
+acceptance, model activation, released micro budget expansion or cohort approval.
 
 ## Evidence and protected boundary
 
@@ -140,3 +143,65 @@ caption bytes breaks provenance; stripping every background/annotation damages
 useful reference data. One explicit training-admission successor over existing
 owners is the smaller maintainable solution. Do not pre-build a generic bucketing,
 plugin, distributed queue or experiment platform for this work.
+
+## Closed source candidate and review — 2026-10-05 UTC
+
+Independent command/result/adapter schemas are
+`local-image-sdxl-native-lora-{command,result,adapter-manifest}/1.0`.
+They are JSON Schema2020-12 with closed fields, packaged byte/hash equality and
+frozen Pydantic models in `eom_image_contracts.sdxl_native_lora`.
+Released micro schema bytes, run namespace, adapter identity derivation, canonical
+adapter configuration and SSD checkpoint behavior remain unchanged. A shared
+adapter-identity function reuses the existing rule without manifest-class aliasing.
+
+| Declared profile | Samples | Optimizer steps | Meaning |
+| --- | ---: | ---: | --- |
+| NATIVE_RESOLUTION_PILOT | 12–64 | 20–200 | Numeric/runtime evidence only |
+| FULL_STYLE_TRAINING | 100–200 | 200–1000 | Full TRAIN cohort, still evaluation-only |
+
+Both profiles pin at most8 native1.2 target batches and allow only1024x1024,
+768x1024 and1024x768 canvases. Admission declarations are sorted unique tuples;
+sample ID, target ID and target PNG SHA cannot repeat. Global declared concentration
+is at most3 sources/PDF and4/group. The subsequent resolver must still validate
+those declarations against full frozen TRAIN lineage and physical-source variants.
+The present types alone do **not** certify those claims by trusting supplied IDs.
+
+Reviewed subject/expression/composition compiles a content-hashed final conditioning
+caption. `ISOLATED_ON_WHITE` and `AUTHORED_SCENE` are explicit; no scene is silently
+given a white-background instruction. The original target caption is not rewritten.
+Review scope is own cohort screening, not independent blind quality approval.
+
+The recipe remains fp16, UNet-only rank8/alpha8, frozen VAE/text encoders, AdamW8bit,
+learning rate1e-4, batch1/accumulation4 and no random flips. Explicit terminal-only
+checkpoint policy means no resume or intermediate checkpoint acceptance. Duration
+is capped1h, declared peak GPU allocation16GiB and input PNG total128MiB. Actual
+input-byte and resource checks still belong to the admission/runner boundaries.
+
+The shared numerical owner now uses admitted per-sample tensor geometry and SDXL
+time IDs, cached for at most four sizes including legacy768x512. It never resizes
+native input. Native RGB enforcement is separate from legacy color conversion;
+the micro wrapper explicitly rejects native canvases. Native and micro wrappers
+remain distinct entry points over the same Diffusers numerical implementation.
+No dependency, database, migration, queue, background service or production
+configuration was added. No worker dispatch or GPU training was executed here.
+
+Verification: focused regression368 PASS; strict mypy5 core files PASS;
+Ruff/format/bash/diff PASS. Follow-up affected contract/backend tests are recorded
+separately from that aggregate. Schema cases cover both profile bounds, canonical
+identity/hash, scene captions, pointers, duplicate/concentration declarations,
+exact terminal cohort/recipe/runtime, failed/cancelled evidence and no accepted
+failure adapter. Numerical tests cover all three native canvases, exact tensor
+reshape/time-ID values, RGB/geometry rejection, non-resume, shared configuration
+and predecessor checkpoint behavior. These use synthetic/stub execution, not
+actual SDXL GPU or visual-quality acceptance.
+
+Repository architecture/release audit9 PASS /1 existing failure:
+`source_page_crop_expansion_inputs.py` imports Catalog planning modules.
+This pre-existing ownership issue remains explicit; neither its audit nor source
+was weakened or hidden. Contract-to-runtime dependency and cycle tests PASS.
+
+Next: implement metadata-first multi-batch admission and isolated terminal runner
+over the existing owners, test frozen partition/physical-source duplicate checks,
+then build/install/identity-verify before a frozen bounded GPU pilot. Evaluation
+consumers must explicitly support the new adapter schema before comparison.
+Full-data, four-arm, independent review, Item/HWPX and activation gates remain open.
