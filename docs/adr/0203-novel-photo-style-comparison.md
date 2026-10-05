@@ -586,3 +586,9 @@ Ruff/format/diff and strict test-file mypy PASS with explicit source MYPYPATH.
 The initial type-check invocation treated the separately packaged trainer as an
 untyped installed library; corrected source discovery, not runtime dependencies
 or source annotations. Both invocation logs are preserved separately.
+Canonical3-member regression evidence `artifact_27498c24c0284550af685e75067d5bbb`
+/ `rev_1e9155d62f1c437f90a59521512a1398`,primary `logs/focused-regression.log`,
+SHA `f20c11871ed90d830684ad0a193a6e869753b4bd29aac08b6e52cbed9fc93374`;
+persisted reread equality PASS, source `f0862ba7`. Milestone Slack IN_PROGRESS
+`devreport_feef983489ad48deb2363442d71ff665` SENT/HTTP2002026-10-05T19:59:24Z;
+reported negative own-quality findings and no production change, not goal completion.
