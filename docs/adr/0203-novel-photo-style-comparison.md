@@ -861,3 +861,108 @@ Milestone Slack IN_PROGRESS `devreport_1f5e243107394b018879c888ccd0a82a`
 SENT/HTTP2002026-10-05T20:53:41Z, phase `Image goal / white denoising matched
 checkpoint`. Reported numerical success separately from failed own style/fidelity
 acceptance, preserved predecessors and unchanged production; not goal completion.
+
+## Actual positive ink-prompt comparison — 2026-10-05T21:08Z
+
+Previous goal turn classified PROGRESS: full-denoising implementation, installed
+gates and actual negative six-output evidence changed the next action. This turn
+used existing1.2, source `a02f788c3870ecad553e997770a9af2e25973543`, with **only
+reviewed positive-prompt wording** changed toward black contours/white interiors.
+No core/schema/install changes; existing lab remainsd1b79a91. No original team-
+prompt edit, new framework/dependency, region/blur/postprocessing/training/HOLDOUT.
+Original negative prompt, photographed facts/composition, seed104729, white RGB,
+full-frame Canny, controller/LoRA/configuration and full-denoising recipe unchanged.
+New positive hashes propagate to new case IDs/staged names/plan/command identities.
+
+Both installed CLIP tokenizers PASS12 checks, maximum67/77 tokens, no truncation.
+Source-free numerical CPU identity, no Torch/tensor/pipeline/GPU load. Existing
+metadata admission44 targets with binary-open guard, staged77 explicit inputs,
+CPU source/control/initializer verification exactly equal to old3. First root
+preparation failed before commit/staging/dispatch because +00:00 timestamp text
+was hashed before canonical Pydantic Z serialization. Preserved failed operator/
+log, corrected the local wrapper to canonical Z and used distinct R2. No core
+guard weakening, state repair or model retry. Bounded operators Ruff/format PASS.
+
+Plan `artifact_e26be9c1c2d54ca5a386f3c56a20618b` /
+`rev_3f98fbf8f7824f88ad33dbacd719643e`, primary
+`manifests/sdxl-photo-style-plan.json`, byte SHA
+`3444e66035ee3b675519b093eebadc4621b55be9aeaccb76422b816d0b6071d5`.
+Command `artifact_4218b6f0fe7e4a31bbe85260ca3ee6f1` /
+`rev_3da0f43f688a4181908d7815efcc3795`, primary
+`manifests/sdxl-photo-style-command.json`, byte SHA
+`49187cddab4910f5d2be211422591c1af82a4b7a77f059153396ec553783b164`.
+One admitted run `imgsdxlvalcmprun_551d59f8c1ae23b4c89d99e348231413`,6 SUCCEEDED,
+35,956ms, peak10,763,033,600 bytes; live activating/start and then terminal
+inactive/dead/success/exit0 observed. No automatic retry/sweep or another dispatch.
+Result `artifact_41fecb30ae5c4be488f91db7364afdc9` /
+`rev_7fed4d700aad44ab90b113681d85afc9`, primary
+`manifests/sdxl-photo-style-result.json`, byte SHA
+`96099d5c642c2cdeb7f34c99f7622e0aeb1a344f0de3a63f78341a8c2f76a4d5`,
+semantic SHA `c156b126c9388f51e55ea2d8760550e94825b6465177c4d1ebd56f0e2f59ca09`.
+Canonical19 members reread equal after readmission and installed CPU verifier;
+matched comparison re-resolved15 source/old/new members and proved all other
+factors equal. Installed terminal replay PASS96 files SHA/mtime equal with model/
+GPU/transform/write0 and no Torch/repository import. Unchanged source122 tests
+and predecessor replay evidence are referenced, not falsely labelled new runs.
+
+Opened new/matched contacts plus all6 native RGB outputs at original resolution.
+All3 remain gray relief/pencil/photo texture rather than deliberate dark exam
+contours. Raw LORA trilobite/wagon show cream/greenish casts; frame bars/clutter
+remain. Main forms recognizable, but fossil pattern fidelity NOT_VERIFIED.
+Foreground/dark per thousand old->new: trilobite BASE383/2->396/0,
+LORA426/0->373/0; ammonite BASE286/22->245/5,LORA289/15->231/5;
+wagon BASE540/1->472/2,LORA433/0->359/0. Pixel MAE4.24–11.09/255 proves an
+output change, not quality gain. Own judgment
+**POSITIVE_INK_PROMPT_ALONE_INSUFFICIENT_GRAY_RELIEF_AND_CLUTTER_REMAIN**.
+Both arms fail own style acceptance for all3; LoRA superiority NOT_ESTABLISHED,
+independent review NOT_PERFORMED. No contrast repair to make examples pass.
+
+Canonical21-member diagnostic evidence `artifact_185ed70ae95b4a3a887c68f1edae01b7`
+/ `rev_1895591c70324d72915215131d092e8b`, primary `reports/own-review.md`, SHA
+`58a9ff7b6edd7fbe2e7f69d96a39b5b8166971e35bd199d051ddaaaf8053f68b`;
+all persisted bytes reread equal. Contains preparation/token/CPU/dispatch/result/
+matched/replay evidence, bounded operators, first root failure and one derived
+contact, not duplicate canonical photos/outputs/weights. Publication/comparison
+wrappers reuse pinned earlier root operators already archived in the preceding
+32-member evidence. Bindingf96eda84… and numerical dependencies unchanged,
+five services active, postflight GPU0%/2MiB. Goal ACTIVE, quality NOT_ACCEPTED,
+current command budget exhausted, production/canary NOT_STARTED.
+
+## Next causal experiment: declared spatial-control window
+
+Registered spatial command fixes scale1.0,start0.0,end1.0; the shared backend
+passes these explicitly for all timesteps and serializes actual model RGB, not
+a gray reference placeholder. **Hypothesis**, not proven cause: dense full-frame
+photo control may dominate style despite the new prompt. Test earlier termination
+at proposed0.65 while retaining early placement constraints. Evaluate anatomy/
+composition/detail loss separately; a simpler or darker image can still fail.
+
+1. Boundary: extend current photo-style family and shared backend/verification,
+   not another worker, dispatch service, queue, control model or framework.
+2. Canonical source: exact registered ink-prompt1.2 plan/result, same licensed
+   photos and native configuration/controller/LoRA; keep negative findings.
+3. Identity: schema-first successor1.3 plan/command/result with a mandatory small
+   frozen control-window value. Preserve released1.0/1.1/1.2 bytes and semantics.
+4. Resolution: existing pointer/source/permission/schema/hash/lifecycle checks;
+   new plan/result control equality and mixed-family negatives. No latest fallback.
+5. Access: ordered3 cases x2 arms, keyed source/trace/output maps; no DB/cache/index.
+6. Structure: reuse control value inheritance/public parameter handoff, frozen
+   typed values and existing manifests; avoid boolean flags or mutable presets.
+7. Scale: one bounded6-output dispatch under16GiB/600s; no sweep or training.
+8. Concurrency: existing isolated worker identity/GPU lock; Orchestrator stages/
+   validates/commits. Old terminal replay remains read-only, no resubmission.
+9. Dependencies: no new library/download/permission; schema before worker behavior,
+   installed RECORD/source-free gates and retained compatible rollback required.
+10. Failure: only declared end value changes; start0/scale1/resource policy/pixels/
+    prompt/negative/seed/LoRA fixed. Reject forged result or undeclared override.
+    Observe native RGB and fine structure; no output repair/automatic parameter retry.
+11. Alternative: more prompt wording did not establish dark lines in the actual
+    comparison; more data/training or simultaneous region/scale changes would not
+    isolate this factor. Do not weaken old fixed control values to run the test.
+
+Use a bounded explicitly declared control end range in the successor rather than
+creating a contract for every scalar value. The initial actual experiment is
+only0.65; no runtime auto-selection, exhaustive search or hidden sweep. Source
+regression, old compatibility/read-only replay, exact backend kwargs/result pins,
+CPU transforms and matched quality review precede any activation. Broader native
+family matrix and independent blind review still remain after a promising recipe.
