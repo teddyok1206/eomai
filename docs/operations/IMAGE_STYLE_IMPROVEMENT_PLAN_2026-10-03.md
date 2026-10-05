@@ -7,7 +7,89 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Verified baseline and limits
 
-Latest native-source execution, **2026-10-05 00:52 UTC**: source
+Latest native-target/source checkpoint, **2026-10-05 02:10 UTC**: source
+`03a542f0663ab0131d6958b5b68e65dce7a675a1` adds the protocol-first native SDXL
+target command/result1.2 described in
+[ADR0195](../adr/0195-native-resolution-sdxl-training-targets.md). This is CPU
+training-input preparation, **not model-generated imagery or training acceptance**.
+The new closed policy preserves each reviewed source frame, uses rational aspect
+fit, grayscale RGB, white margins, three explicit SDXL canvases and at most2x
+declared normalization. Pixel masks are forbidden. Existing fixed768x512 policies,
+released schema bytes and micro96-sample/200-step limits remain unchanged.
+The native targets are not silently accepted through the legacy training alias.
+
+Focused regression **322 PASS**, including the opt-in synthetic Poppler cases;
+strict mypy7 files and core Ruff/format/bash/diff PASS. The repository-wide
+dependency audit remains5 PASS /1 unchanged Catalog planning-owner violation.
+It is a separate ownership refactor, not justification to weaken the audit or
+use dynamic imports. No new dependency, DB/schema migration, queue, permanent
+service, polkit rule, worker authentication or direct worker publication was added.
+
+Only lab contracts/trainer were installed at01:37 UTC. Contracts wheel SHA
+`4a52f2af7a4d3cba2ed5ac91c5a8485b9c01fb9d90d1e42830e7e086ff614726`;
+trainer SHA`db9ead92c407388d3a5ae0f418b44bcac6ec18da7700ab9277950623e5cf678d`.
+RECORD, actual-role CPU import without Torch/SQLAlchemy, pip check and predecessor
+rollback wheels PASS. Provider remains8ad0f72b; numerical dependencies, inference
+environment, production V6 binding and the five main services are unchanged.
+The provider candidate was built/inspected, not installed. All new model calls,
+training steps, VALIDATION/HOLDOUT binary reads and activations in this checkpoint
+are0. **Goal stays ACTIVE; no quality or operational activation PASS is claimed.**
+
+Actual bounded CPU deliveries, with each immutable result re-resolved by the
+Orchestrator and terminal installed-role replay requiring zero transforms/writes:
+
+| Delivery | Actual inputs/output | Immutable result and primary raw SHA |
+| --- | --- | --- |
+| First native targets | Two PREPARE, five DEFER from the existing seven sources;158ms,224,595 PNG bytes; three committed members verified | `artifact_c9dde0da9cfe42e9875de572da778ed3` / `rev_9ba2ec096f7c4578a5b9356c3b96862b`; `18c2d298072a6cd3dae51aa15ce907ecfaa7b1fbdf3b1514e5b13b69a6180060` |
+| Diverse native sources | Twenty reviewed TRAIN regions disjoint from the first seven,15 PDFs/14 exam groups,15 isolated requests;28,756ms including commit/replay,7,596,048 pixels;21 committed members verified | `artifact_fde88bf18c064b188b8a986796862f55` / `rev_372d33d3376840b3acaac0c3792069ae`; `17a5c7fe83e01260b732d2239932c7a2bd284f69eb896a8e071bdb9bf77a3514` |
+| Diverse native targets | Eighteen PREPARE, two native scientific-geometry DEFER;2,798ms,3,368,019 PNG bytes;19 committed members verified | `artifact_03b80b78bcab4803bb946139fec15349` / `rev_d8226c6336fe4e29bb5ebdd986557a26`; `da8ee1849f1d61ffa06ff4ac81a8a220c507e8c862012b67f4661749333fba0b` |
+
+Source member is`manifests/science-source-pdf-crop-set.json`/1.0; both target members
+are`manifests/sdxl-training-target-result.json`/1.2. These raw file hashes are not
+the distinct logical/semantic content hashes. Pointers pin exact revisions rather
+than resolving latest. Metadata and full TRAIN lineage are checked before source
+PNG access; deferred source PNGs are not staged into the target worker.
+
+Own inspection viewed all20 additional source PNGs and all20 prepared target PNGs.
+Plant/profile/dinosaur/eye/mortar/meter contours are promising. Bread, bacterium,
+globe and several instruments retain raster softness; city/forest/mountain/road
+scenes and fine hatching retain their value but belong to separate expression
+tracks, not an automatically pooled clean-contour cohort. Nothing was whitened,
+masked, redrawn or deleted. Scientific diagrams deferred to Python/native paths
+are not permanent corpus exclusions. Original labels/counts/anatomy remain subject
+to scientific validation; this inspection does not certify generated correctness.
+
+Native source coverage is27 distinct selection IDs from20 PDFs/19 exam groups.
+Prepared native candidates are20 distinct IDs from15 PDFs/14 groups. Nineteen of
+those20 overlap the earlier38-target logical-source subset, so the union is
+**39, not58 or65**. DPI/canvas/caption derivatives are not independent drawings.
+This is not an accepted full-training population count.
+
+Evidence `artifact_83f6dccb94184295ac4cb2d2de89b2f0` /
+`rev_257ee3d7c1d54611827a026eda257d02`, primary`reports/own-review.md`, raw SHA
+`c7a3e468a00b987ddf4e83cc0e5df3b583008ed0a222be35d7f84ec13271a10a`.
+All30 members verified: reports/operators/logs and two diagnostic contacts; no
+canonical source/target PNG or model-weight duplication. The first archive caller
+rejected group-writable local input before engine/publisher construction. Only
+local permissions were hardened; a separate caller preserves the original bytes
+and failure log. No validator patch, DB row edit, source/target rerun or new model
+call occurred. One E501 warning in the executed first target-publication operator
+is preserved as a diagnostic warning, not relabeled as a core-code gate PASS.
+
+User views: `/tmp/eom-image-native-diverse20-20261005/views/sources.png` and
+`/tmp/eom-image-native-diverse20-20261005/views/targets.png`. They are aspect-fit
+diagnostic thumbnails of original/CPU-prepared assets, **not AI-generated samples**.
+Canonical pixels are unchanged. Own review is complete but not independent.
+
+Next: genuinely different reviewed TRAIN regions with document/group diversity,
+then a native-sized training successor rather than a legacy micro-limit change.
+Full100–200 TRAIN/24–40 VALIDATION, four-arm/four-family comparison,32-case
+independent blind review and passing Item Preview/HWPX canary/activation/rollback
+remain open. Loss, source fidelity and border metrics are not publishing approval.
+
+### Earlier native-source execution (preserved history)
+
+Native-source execution, **2026-10-05 00:52 UTC**: source
 `93b8361da82e7903aa78bcb0d77fc14f841c91e1` implements closed native render
 request/result contracts, offline CPU worker, fixed transient sandbox, full PNG
 stream validation, command-keyed canonical publication and read-only replay.
