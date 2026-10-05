@@ -7,6 +7,72 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Diverse native TRAIN preparation — 14:58 UTC
+
+Operation source `5f2c96a591997af0d30b98f4368b3c11d5ee6efc`; installed lab wheels
+remain3625b079. No core/schema/install/dependency/service/production change in this
+milestone. Eight existing page previews were viewed/hash-matched, then canonical
+review/authorization/document/group split and unprepared membership re-admitted.
+Existing isolated CPU pipeline rendered8 native regions from **7 distinct TRAIN
+PDFs**,7 requests/1,682,784 crop pixels/9,325,201 PDF bytes in14,730ms; canonical
+replay0 additional renders. All8 actual native PNGs viewed before target decisions.
+Source Artifact `artifact_7e3e83031f894b8ca39303105fe7c20b` /
+`rev_d099b70dc7c74509b241fe90f811d052`, raw crop-set SHA
+`92ab87904644bb359fb18a3e28e7c069f99ee626541dd97cfdb206c22a367e5e`.
+
+Five new unique target subjects prepared through existing native1.2 (3 targets/
+523ms) and exterior1.3 (2 targets/383ms) CPU workers. Deliberately authored bust/
+torso framing and gray fills are retained rather than categorically rejected.
+Literal captions describe the upper-body profile, one woman plus her reflection,
+overhead sedan and two seated gesturing subjects. Detached speech-tip fragments
+removed only with unchanged3px/white250 protected-region policy. No reconstruction,
+OCR, global threshold, new renderer or forced contour classification. Own source
+inspection deferred curling stone (whole gray field/crossing guides), rose (cut
+petal) and tomato plant (leader connected to subject), with explicit reasons.
+
+Own output review found the first sedan402px frame cut front contour. That variant
+is **HOLD_FRAME_CORRECTION**, not eligible by virtue of worker success. One separate
+immutable406px-frame correction prepared1 target in140ms from the same source/
+sample, no PDF re-render. Corrected car output viewed: READY_WITH_NOTES, preserving
+contour/mirrors/source softness; slight guide anti-alias fringe remains a note.
+Original result is untouched; correction does **not** increase unique sample count.
+All five chosen final subjects are own READY_WITH_NOTES, not independent review.
+
+| Delivery | Artifact / revision | Raw result SHA-256 |
+| --- | --- | --- |
+| Native3, old clipped car held | `artifact_a868c25e902241a496b035791f824501` / `rev_198c247452f047e3b3712a6531cd73b9` | `5aa3cc541a9037ce22c93f29e6da35d0e13d5af9a1c38cdb4eb5959f85be1a65` |
+| Exterior2 | `artifact_b293e6042d2e410f8287b7fc93eb32f7` / `rev_1b8dae384a7f42f3960d58dbd3f984f2` | `c4731f5e8f186927706516f88932ef0fe94dcf0e9f45c574e5944d217a802d44` |
+| Explicit car correction | `artifact_4cfca464d2ca47388347807f79781bb7` / `rev_13de3fde2edf4922b47ecbccefc3a6e8` | `03b35e8f7bd74fc7c2df4fe83f9a227fd5fcb0008ad62cc3ba53b545a74eddfa` |
+
+All9 committed result/PNG members re-resolved/hash-checked. Actual installed-role
+terminal replay for all three runs:0 transforms/writes/model calls. Receipts retain
+PENDING own review; later own assessments are separate immutable evidence.
+One pane publication command did not initially start; actual process/pane/log/
+receipt absence checked before the same operation was dispatched. No worker
+redispatch or new identity used to bypass unknown execution. Operator source/
+recipe/publication/runtime/inventory/archive Ruff/format PASS; no new core test
+suite claimed for unchanged code, and earlier302 PASS is not counted again.
+
+Canonical metadata-only audit at14:58:48 UTC: **56 distinct prepared IDs**,
+47 inside95-source pool/9 outside. One additional historical car variant, not a
+57th sample or duplicate accepted training sample. Corrected car selection is an
+explicit immutable pin, not latest.11 preparation chains/47 cached metadata reads/
+0 PDF,PNG,model bytes. Counts8 contour/7 hatching/41 tone: variety increased but
+balance is still open; source95/58 PDFs/48 groups TRAIN concentration stays valid.
+Full100 admission NOT_ACHIEVED, no new GPU/training/generation/activation.
+
+Twenty-six text evidence members committed and all hashes verified:
+`artifact_910327845114499babe3970feb7be216` /
+`rev_bee06f6fa07840beb6b8b7412856a836`, `reports/own-review.md`, SHA
+`bc63eea8cb27305b613c581cc8eb32dea86749237a06ae8edf15814cb6fcf809`.
+No duplicate PNG/PDF/weights evidence archive. All five primary services active.
+Next expand distinct approved TRAIN object/contour sources outside this narrow95
+pool using existing source-review/crop pipeline, not repeatedly mining annotated
+portraits or inflating count with correction variants. Full cohort admission,
+reference/reserved comparison, independent blind review and quality-passing
+Item/HWPX canary/activation/rollback remain OPEN; exhausted old40/200-update branch
+stays closed. Goal ACTIVE.
+
 ### Native evaluation successor and actual exterior derivative — 14:39 UTC
 
 ADR0200 / frozen source `3625b079c3edc382b719a8a36452945178205c3e` adds explicit

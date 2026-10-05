@@ -133,3 +133,16 @@ Every persisted member hash passed; no duplicate PNG/PDF/weight archive.
 Temporary archive operator had one E501 line-format finding and was preserved
 as executed; no all-operator-lint claim. Core source Ruff/type/test gates remain
 as recorded above. All five primary services were active after the CPU delivery.
+
+Later data-only operation at14:58 UTC prepared five additional distinct source
+IDs and an explicit same-sample car frame correction. Total distinct prepared56,
+one historical same-sample variant; the clipped earlier car output is held, not
+silently overwritten or counted as a new drawing. All three installed-role target
+replays pass with0 transformations/writes/models; no contract/core/install change.
+Canonical own-review/source/runtime/target/inventory evidence:
+`artifact_910327845114499babe3970feb7be216` /
+`rev_bee06f6fa07840beb6b8b7412856a836`, own-review SHA
+`bc63eea8cb27305b613c581cc8eb32dea86749237a06ae8edf15814cb6fcf809`.
+This is additional TRAIN data preparation, not training admission or independent
+quality acceptance. Full source/target/correction counts and remaining gates are
+in the operations plan; no permission to broaden old evaluation wires follows.
