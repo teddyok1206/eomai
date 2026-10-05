@@ -5,9 +5,75 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Verified baseline and limits
+## Latest new-source checkpoint — 2026-10-05 03:00 UTC
 
-Latest native-target/source checkpoint, **2026-10-05 02:10 UTC**: source
+Execution source`66e008422ee61dae0381a918b603eb9b20942a14`, with unchanged lab
+core`03a542f0663ab0131d6958b5b68e65dce7a675a1`:19 reviewed TRAIN regions from
+17 parent candidates not present in the earlier72 supplemental review. Original
+context/literal frames were inspected; complete labels/bases and paragraph boundaries
+were corrected without painting source pixels. This adds16 pages /14 PDFs /14 groups,
+but does not prove perceptual independence from every institutional drawing.
+
+Actual native576 delivery:14 isolated CPU requests,27,672ms including commit/replay,
+9,841,968 pixels and2,484,507 PNG bytes. Set`artifact_e47fd01aadbc4181aeafd67308ee4b4b`
+/`rev_65fdc2582b0b46929422ca26c10df43a`, member
+`manifests/science-source-pdf-crop-set.json`/1.0, raw SHA
+`21c7d4087319ba06f167dc96b028ec66378c12770c9af8205a53bba1304185cc`.
+Source review is separately pinned to`artifact_eb989ef89eb84003bcf47f5db7b1e8d2`
+/`rev_24907234aece4777ba8fceb5ca6e1d66`, raw SHA
+`759c16fd4e9a1321f72ddfdd1d9ecdba3cca9716d33834d73149bd78bbe74f38`.
+
+Three native targets actually prepared:shirt, towel and partial crash-test scene.
+The shirt caption no longer invents a pocket; the car caption identifies a crash-test
+dummy rather than a generic driver. Whole authored frames, restrained tone and
+source raster limitations remain. Target result`artifact_de83ea394b5f42cf969c47f4bda69a72`
+/`rev_81f05a691fa048e3a97582c06dd1f818`, member
+`manifests/sdxl-training-target-result.json`/1.2, raw SHA
+`4f4aa8abfdfc657bdea2eca4f3c2873ae9411b005eba7f1847d39cdd392aed01`.
+Actual523ms /552,004 PNG bytes; eight staged metadata/PREPARE files,16 explicit
+DEFER source images not staged, four canonical output members verified. Installed
+CPU identity's terminal replay proved zero transforms/writes/model calls.
+
+The bridge/reflection source is a valuable authored scene, but the released caption
+recipe would falsely append`plain white background`. It remains a reference rather
+than being forced through that recipe. Other annotation-bearing instruments/anatomy
+are retained for shape/reference and deterministic rendering, not deleted or counted
+as clean textless targets. Native review covered the four initial style candidates
+and all three final targets; exhaustive native-detail/scientific certification of
+the15 annotated references is not claimed. Original-context review covered all19.
+
+Full source coverage now46 distinct native region IDs /30 PDFs /29 groups. Native
+prepared candidates23 /16 PDFs /15 groups; union with earlier38 source identities
+is**42**, not61 or84. Corrected captions, higher dpi and alternate frames/canvases
+are not independent drawings or full-training admission.
+
+Evidence`artifact_c62690ea1adb42af8e3f3dcf7f4c7862`
+/`rev_261f871024b545ecbe3111ba01a7cdf8`, primary`reports/own-review.md`, raw SHA
+`7e2d1c6d6f29be67393e1e22079364579269b658a2902a2b32366894001bfc6d`.
+All31 text/operator/log members verified; no canonical PNG/PDF/model duplication.
+Private UTC/hash-preflight and malformed-pointer-literal startup failures are
+preserved with separate corrected callers. No core guard was weakened, no DB row
+edited, and neither failed caller had submitted a worker request. One prior
+operator import-order warning is preserved, not relabeled as clean lint evidence.
+
+This checkpoint adds no core/runtime dependency or schema/queue/service change.
+Core322-test/mypy evidence below is referenced, **not re-executed here**. Production
+model, prompts and five services remain unchanged; GPU calls/training/reserved
+binary reads/activation0. Own inspection is not independent quality review.
+
+Next native-training design is explicitly proposed in
+[ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md): reuse the
+existing numerical adapter and pinned target owners, admit final literal captions
+and isolated-versus-scene composition, validate multiple native batches before
+pixels, and match each VAE tensor/SDXL time IDs to its canvas. This successor is
+**not implemented/installed/run** by this checkpoint; old micro limits and source
+history stay immutable. Full100–200 TRAIN/24–40 VALIDATION, four-arm/four-family
+comparison,32-case independent review and Item/HWPX canary/activation/rollback
+remain open. **Goal stays ACTIVE.**
+
+## Earlier native-target baseline and limits (preserved evidence)
+
+Earlier native-target/source checkpoint, **2026-10-05 02:10 UTC**: source
 `03a542f0663ab0131d6958b5b68e65dce7a675a1` adds the protocol-first native SDXL
 target command/result1.2 described in
 [ADR0195](../adr/0195-native-resolution-sdxl-training-targets.md). This is CPU
@@ -81,7 +147,7 @@ User views: `/tmp/eom-image-native-diverse20-20261005/views/sources.png` and
 diagnostic thumbnails of original/CPU-prepared assets, **not AI-generated samples**.
 Canonical pixels are unchanged. Own review is complete but not independent.
 
-Next: genuinely different reviewed TRAIN regions with document/group diversity,
+Next at that checkpoint: genuinely different reviewed TRAIN regions with document/group diversity,
 then a native-sized training successor rather than a legacy micro-limit change.
 Full100–200 TRAIN/24–40 VALIDATION, four-arm/four-family comparison,32-case
 independent blind review and passing Item Preview/HWPX canary/activation/rollback
