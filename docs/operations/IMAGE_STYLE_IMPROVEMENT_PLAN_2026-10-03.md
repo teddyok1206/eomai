@@ -7,7 +7,7 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
-### Current native44 checkpoint and novel-photo preparation
+### Current native44 checkpoint and actual novel-photo diagnostic
 
 The schema-only17:03 entry below is historical, not the current consumer state.
 [ADR0202](../adr/0202-native-adapter-reserved-validation.md) records installed
@@ -28,15 +28,27 @@ Preparation schema/frozen source authority/metadata-first native admission and
 existing publisher are implemented. This preparation plan does not itself dispatch
 a worker. ADR0203 now records the thin command/result, canonical staging, numerical
 consumer and common publication support:231 source tests PASS, strict typing and
-real tokenizer preflight PASS. Original plan bytes remain unchanged. Installed
-wheel verification and one frozen six-output photo-to-style comparison are next;
-no new generated photograph conversion has occurred at this source checkpoint.
+real tokenizer preflight PASS. Original plan bytes remain unchanged. Source1a98a93a
+lab-only wheel/RECORD/role/import and one six-output photograph comparison completed:
+30897ms/10763099136 peak bytes, canonical19-member result
+`artifact_958c360472614301819c38d62f962a1b` /
+`rev_801925edecfb474c8b6eb48d08c1fa31`. All committed bytes reread equal, CPU transform
+verification PASS; installed terminal replay96 files unchanged/models-GPU-writes0.
+
+Own inspection: **EXAM_LINE_ART_TARGET_NOT_MET**. Outputs remain near grayscale
+photographs; trilobite LoRA introduces faint patterned background. This six-output
+budget is exhausted, not a reason to rerun it. Confirmed generic-prompt vs exact
+native training phrase mismatch motivates a separately identified bounded successor
+plan; causal benefit remains untested. Dense photographic conditioning and mixed
+tonal training are separate hypotheses. Do not label these conversions as novel
+drawings, learned style superiority or independent human-reviewed quality.
 
 Canonically approved source inventory15 bundles, four actual photo references
 viewed (three initial + one alternate); source filename/intent alone cannot establish
 morphology suitability. Preserve rejected cluster-shell candidate; car/trilobite/
-polished-cross-section reference limitations are recorded in ADR0203. No training,
-model/GPU calls, new download, production change or independent blind review.
+polished-cross-section reference limitations are recorded in ADR0203. No new
+training/download/production change or independent blind review in this photo step;
+actual GPU inference6 outputs is distinct from the earlier preparation-only checkpoint.
 Four-family/32-depiction quality, independent human review, Item Preview/HWPX and
 activation/rollback gates remain OPEN; goal ACTIVE. Do not re-open exhausted old
 generation budgets or treat technical tests as visual quality acceptance.

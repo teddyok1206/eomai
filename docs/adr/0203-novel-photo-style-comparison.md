@@ -221,3 +221,43 @@ model file hashes were checked, but no tensor/pipeline/GPU was loaded. One initi
 read-only operator used a nonexistent tokenizer role; corrected BASE subdirectories
 passed. Installed wheel/role/RECORD verification and the one six-output comparison
 are still pending at this source checkpoint; this is not image-quality acceptance.
+
+## Installed six-output photo diagnostic — 18:49 UTC
+
+Consumer source `1a98a93acfd579eccc0d4c3571b080783427c1ce`; inspected wheel
+contracts SHA `8b464b38f0824edc80d878cf58b279b62bfec94b014c5e670efccb3fb4a48044`,
+provider SHA `aa3ea3cb522e64f0f2ba4669b494464546b326346d1a57340c24a8e68c529079`.
+Lab-only install/RECORD/actual eom-image role/source-free import/pip check PASS.
+Trainer, numeric dependencies, units, production binding and five services unchanged;
+previous d1ba1151 wheels and hashes recorded for rollback.
+
+Canonical thin command `artifact_7b0d9fab09554325a300ba311d63d788` /
+`rev_4cd99a958af64be7adf5243424471253`; one dispatch
+`imgsdxlvalcmprun_4faff836c8c5520b25711385c0a38777`,77 staged members,
+3 licensed photographs/6 BASE-LORA conversions,30 scheduled/21 effective steps,
+strength0.70/seed104729. SUCCEEDED/30897ms/10763099136 peak bytes. Result
+`artifact_958c360472614301819c38d62f962a1b` /
+`rev_801925edecfb474c8b6eb48d08c1fa31`,19 members; committed reread equality PASS.
+Primary result byteSHA `3701e1e0b40d1db4362e18500c9028c5051e44171b7251ca8c540e36f09c69fd`.
+CPU-only installed transform verification PASS; terminal replay96 unchanged files,
+model/GPU/transform/write0 (read-only image validation still decodes PNGs). Current
+six-output generation budget exhausted; no retry, training, HOLDOUT or activation.
+
+Own actual contact/individual panel/native-wagon inspection:
+**EXAM_LINE_ART_TARGET_NOT_MET**, not institutional quality PASS. Both arms remain
+near monochrome photographs, with photographic texture/background/shadow. LoRA
+trilobite adds faint repeated diagonal/grid-like background patterns. Partial shop
+ammonite framing remains partial/cluttered. This is a genuine conversion diagnostic,
+not drawings from scratch; SOURCE_PHOTO / BASE_PHOTO_CONVERSION / LORA_PHOTO_CONVERSION
+labels must remain explicit. No independent review or morphology certification.
+
+Confirmed prompt mismatch: native training captions prepend the existing shared
+`eom exam line art, ` phrase; this frozen plan used generic exam wording instead.
+Causality is not isolated. Next bounded hypothesis is a **new plan identity/value**
+in the same plan1.0 contract using the exact phrase, preserving this run/plan and
+checking tokens before any new budget/dispatch. Do not reject historical generic
+plans by retrofitting a new contract invariant. Dense Canny/photo initialization,
+mixed tonal training targets and challenging source backgrounds are other hypotheses;
+investigate independently before coarser-control recipe changes or larger training.
+Technical gates PASS, style quality NOT_ACCEPTED, independent review NOT_PERFORMED,
+four-family/32-case and Item Preview/HWPX/activation gates OPEN; goal ACTIVE.
