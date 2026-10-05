@@ -23,7 +23,10 @@ from eom_orchestrator.control_artifact_resolution import (
     BoundedControlArtifactRead,
     resolve_control_artifact_members,
 )
-from eom_orchestrator.sdxl_probe_inputs import resolve_sdxl_training_sources
+from eom_orchestrator.sdxl_probe_inputs import (
+    ResolvedSdxlTrainingSources,
+    resolve_sdxl_training_sources,
+)
 from eom_orchestrator.source_page_crop_expansion_inputs import (
     resolve_science_visual_expansion_lineage,
     resolve_source_page_crop_expansion,
@@ -55,17 +58,29 @@ def prepare_source_page_crop_reads(
 
 
 def resolve_source_page_crop_provenance(
-    engine: Engine, review: SourcePageCropReview
+    engine: Engine,
+    review: SourcePageCropReview,
+    *,
+    basis: ResolvedSdxlTrainingSources | None = None,
 ) -> ScienceSourcePageCropProvenance:
     """Read-only provenance admission; rejected metadata consumes no page PNG bytes."""
     protocol = source_page_crop_protocol(review)
     validate_contract(protocol.review_contract, review.model_dump(mode="json"))
     review = type(review).model_validate(review.model_dump(mode="json"))
-    lineage = resolve_sdxl_training_sources(
-        engine,
-        crop_set_pointer=review.basis_crop_set,
-        authorization_pointer=review.training_authorization,
-    )
+    if basis is None:
+        lineage = resolve_sdxl_training_sources(
+            engine,
+            crop_set_pointer=review.basis_crop_set,
+            authorization_pointer=review.training_authorization,
+        )
+    else:
+        # A per-call admitted snapshot is reusable only for the identical pinned basis.
+        if (
+            basis.crop_set_pointer != review.basis_crop_set
+            or basis.authorization_pointer != review.training_authorization
+        ):
+            raise ValueError("SCIENCE_SOURCE_CROP_CACHED_BASIS_POINTER_MISMATCH")
+        lineage = basis
     plans = lineage.plans
     if isinstance(review, LocalImageScienceSourcePageCropReviewV3):
         if review.training_authorization != lineage.crop_set.training_authorization or (

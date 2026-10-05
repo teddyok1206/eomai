@@ -30,6 +30,10 @@ from eom_orchestrator.sdxl_learned_comparison_inputs import (
 )
 from eom_orchestrator.sdxl_lora_evaluation_inputs import PreparedSdxlLoraEvaluationInputs
 from eom_orchestrator.sdxl_micro_inputs import PreparedSdxlMicroInputs, sdxl_micro_input_hashes
+from eom_orchestrator.sdxl_native_lora_inputs import (
+    PreparedSdxlNativeLoraInputs,
+    sdxl_native_lora_input_hashes,
+)
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
 from eom_orchestrator.sdxl_publication_inputs import (
     PreparedSdxlPublicationInputs,
@@ -322,6 +326,25 @@ def stage_sdxl_lora_evaluation_inputs(
     )
 
 
+def stage_sdxl_native_lora_inputs(
+    prepared: PreparedSdxlNativeLoraInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    """Use the same exclusive handoff with the native protocol's exact closure."""
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_native_lora_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.training_run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-native-lora",
+        workspace_parent=workspace_parent,
+        worker=worker,
+    )
+
+
 def _stage_inputs(
     *,
     files: tuple[SdxlProbeInputMember, ...],
@@ -336,7 +359,7 @@ def _stage_inputs(
 ) -> StagedSdxlProbe:
     if (
         re.fullmatch(
-            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_|imgsdxlcannycmprun_|imgsdxlcannyrefrun_|imgsdxlvalcmprun_)[0-9a-f]{32}",
+            r"(?:imgsdxlproberun_|imgsdxlmicrotrainrun_|imgsdxlnativetrainrun_|imgsdxlloraevalrun_|imglineartextractrun_|imgsdxllearnedrun_|imgsdxltargetpreprun_|imgsdxltargetcmprun_|imgsdxlpublicationrun_|imgsdxlcannyrun_|imgsdxlcannycmprun_|imgsdxlcannyrefrun_|imgsdxlvalcmprun_)[0-9a-f]{32}",
             run_id,
         )
         is None
@@ -455,6 +478,15 @@ def dispatch_sdxl_lora_evaluation(staged: StagedSdxlProbe) -> None:
         unit_template="eom-image-sdxl-lora-evaluation",
         parent=Path("/srv/eom/image-training-workspaces"),
         prefix="imgsdxlloraevalrun_",
+    )
+
+
+def dispatch_sdxl_native_lora(staged: StagedSdxlProbe) -> None:
+    _dispatch(
+        staged,
+        unit_template="eom-image-sdxl-native-lora",
+        parent=Path("/srv/eom/image-training-workspaces"),
+        prefix="imgsdxlnativetrainrun_",
     )
 
 

@@ -70,11 +70,16 @@ from eom_image_trainer.science_subject_multiseed_runner import (
     load_science_subject_multiseed_command,
     run_science_subject_multiseed_command,
 )
-from eom_image_trainer.sdxl_lora_backend import SdxlMicroLoraBackend
+from eom_image_trainer.sdxl_lora_backend import SdxlMicroLoraBackend, SdxlNativeLoraBackend
 from eom_image_trainer.sdxl_micro_runner import (
     SdxlMicroRunnerError,
     load_sdxl_micro_command,
     run_sdxl_micro_command,
+)
+from eom_image_trainer.sdxl_native_lora_runner import (
+    SdxlNativeLoraRunnerError,
+    load_sdxl_native_lora_command,
+    run_sdxl_native_lora_command,
 )
 from eom_image_trainer.sdxl_training_target_runner import (
     SdxlTrainingTargetError,
@@ -111,6 +116,11 @@ def _parser() -> argparse.ArgumentParser:
     sdxl_micro.add_argument("--model-store-root", required=True, type=Path)
     sdxl_micro.add_argument("--workspace", required=True, type=Path)
     sdxl_micro.add_argument("--gpu-lock", required=True, type=Path)
+    native_lora = subcommands.add_parser("sdxl-native-lora")
+    native_lora.add_argument("--command", required=True, type=Path)
+    native_lora.add_argument("--model-store-root", required=True, type=Path)
+    native_lora.add_argument("--workspace", required=True, type=Path)
+    native_lora.add_argument("--gpu-lock", required=True, type=Path)
     evaluate = subcommands.add_parser("evaluate-micro-probe")
     evaluate.add_argument("--command", required=True, type=Path)
     evaluate.add_argument("--model-store-root", required=True, type=Path)
@@ -196,6 +206,31 @@ def _lock_gpu(path: Path) -> int:
 
 def main() -> None:
     args = _parser().parse_args()
+    if args.operation == "sdxl-native-lora":
+        try:
+            native_command = load_sdxl_native_lora_command(args.workspace, args.command)
+            lock_descriptor = _lock_gpu(args.gpu_lock)
+            previous_sigterm = signal.getsignal(signal.SIGTERM)
+
+            def _cancel_native_lora(_signum: int, _frame: object) -> None:
+                raise KeyboardInterrupt
+
+            try:
+                signal.signal(signal.SIGTERM, _cancel_native_lora)
+                native_result = run_sdxl_native_lora_command(
+                    workspace=args.workspace,
+                    model_store_root=args.model_store_root,
+                    command=native_command,
+                    backend=SdxlNativeLoraBackend(),
+                )
+            finally:
+                signal.signal(signal.SIGTERM, previous_sigterm)
+                os.close(lock_descriptor)
+        except (TrainingRunnerError, SdxlNativeLoraRunnerError) as exc:
+            raise SystemExit(exc.code) from exc
+        if native_result.status != "SUCCEEDED":
+            raise SystemExit(native_result.error_code or "IMAGE_TRAINING_EXEC_FAILED")
+        return
     if args.operation == "sdxl-micro-probe":
         try:
             sdxl_command = load_sdxl_micro_command(args.workspace, args.command)

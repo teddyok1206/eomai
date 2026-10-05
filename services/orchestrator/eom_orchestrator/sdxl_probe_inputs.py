@@ -65,6 +65,8 @@ class ResolvedSdxlTrainingSources:
     inventory: LocalImageScienceVisualCampaignPatternInventory
     plans: tuple[LocalImageScienceCorpusVisualPilotPlanV3, ...]
     results: tuple[LocalImageScienceCorpusVisualPilotResult, ...]
+    crop_set_pointer: ImageEvaluationArtifactMember
+    authorization_pointer: ImageEvaluationArtifactMember
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +189,8 @@ def resolve_sdxl_training_sources(
         inventory,
         tuple(plans),
         tuple(results),
+        crop_set_pointer,
+        authorization_pointer,
     )
 
 

@@ -5,7 +5,35 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native-training source candidate — 2026-10-05 03:43 UTC
+## Latest native-admission/runner candidate — 2026-10-05 04:38 UTC
+
+[ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md) now has
+complete metadata-first multi-batch admission and an explicit isolated native
+terminal runner/CLI/systemd handoff. The shared frozen basis is resolved once;
+distinct native sets are allowed, cross-batch physical-source variants and PDF
+aliases are rejected globally. Exact hashes, final caption conditioning, source
+lineage, TRAIN partition, native RGB/geometry and budgets precede model work.
+No original pixels are rewritten. GPU/workspace and adapter-output owners are
+reused; no new dependency, database, migration, queue or auth boundary was added.
+
+Focused regression442 PASS; final affected runner/handoff44 PASS separately
+(overlapping suite, not486 unique tests). Strict mypy11 files, Ruff/format14 files,
+systemd template verification, bash/diff PASS. Terminal failure/cancellation,
+nonfinite loss, source corruption, no-write/no-model replay, private handoff and
+old micro rejection/regression are synthetic/stub-tested, not GPU evidence.
+Architecture/release9 PASS /1 unchanged Catalog planning-owner dependency failure;
+no test or guard was suppressed. Actual five production services remained active
+at04:38 UTC; GPU2MiB/0%.
+
+Installed native runtime, actual cohort admission/training, consumer compatibility
+and visual acceptance remain pending. This checkpoint publishes no adapter, starts
+no worker/model, installs no unit/runtime and activates nothing. Full100–200 TRAIN,
+24–40 VALIDATION, four-arm/four-family comparison,32 independent blind cases and
+passing Item/HWPX canary/activation/rollback are still required.
+**Goal ACTIVE. Next: immutable build and actual lab-role validation, then a frozen
+bounded native pilot.**
+
+## Previous native-training source candidate — 2026-10-05 03:43 UTC
 
 Concrete implementation progress, **not a new training/quality PASS**:
 [ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md) now has

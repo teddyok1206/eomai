@@ -2,11 +2,11 @@
 
 ## Status
 
-Contract and numerical-geometry source candidate verified, 2026-10-05 UTC.
-Native sources/CPU target delivery already exist. The successor schemas and frozen
-models, explicit native numerical adapter and geometry regression tests now exist.
-Metadata-first multi-batch admission, isolated successor runner/entry point, installed
-runtime and actual GPU execution remain pending. This is not an operational training
+Metadata admission and isolated native-runner source candidate verified, 2026-10-05 UTC.
+Native sources/CPU target delivery already exist. The successor schemas, frozen
+models, numerical adapter, complete multi-batch admission, local terminal runner and
+explicit CLI/systemd handoff now exist. Installed native runtime and actual GPU
+execution remain pending. This is not an operational training
 acceptance, model activation, released micro budget expansion or cohort approval.
 
 ## Evidence and protected boundary
@@ -205,3 +205,86 @@ over the existing owners, test frozen partition/physical-source duplicate checks
 then build/install/identity-verify before a frozen bounded GPU pilot. Evaluation
 consumers must explicitly support the new adapter schema before comparison.
 Full-data, four-arm, independent review, Item/HWPX and activation gates remain open.
+
+## Multi-batch admission implementation design — 2026-10-05 UTC
+
+The contract package owns pure metadata decoding, explicit target→native-set→
+native-command→source-review dependencies and cohort/recipe binding. The Orchestrator
+owns bounded canonical reads and the existing complete source-provenance resolver;
+the worker reads only the resulting closed local workspace. No new persistent
+entity, database column, queue, generic graph framework or dependency is needed.
+
+One metadata member path derives from the **whole pinned pointer**, not just its
+location or raw hash. A per-call map caches parsed metadata and payload by that
+pointer; a second keyed map rejects conflicting declarations for the same artifact/
+revision/member. Shared authorization, reviews and native sets are materialized
+once. A typed dependency frontier requires only metadata; selected PNG reads occur
+after every batch and distinct review passes. Internal file maps are bounded by
+2MiB/member and32MiB total; the admitted PNG budget remains the command's limit.
+These are workspace materialization limits, not a new cross-service JSON protocol.
+
+Different native source sets/reviews are supported, but their approved frozen basis
+pointer must agree. This pins the existing document/group split without confusing
+that common historical basis with one common native target source-set identity.
+Full canonical provenance is resolved once per distinct review before media.
+Every selected target binds exact ID/revision/hash/canvas, declared PDF/group and
+prepared expression; final subject/composition remain explicit reviewed derivatives.
+
+Global physical-source guard keys PDF SHA and physical page, then compares frames
+within the already bounded3-source/PDF bucket. Equal/contained frames (intersection
+at least80% of the smaller frame) cannot become separate examples by caption, DPI,
+canvas or review revision. Disjoint actual drawings inside one detector candidate
+remain permissible; candidate ID alone is not physical drawing identity. This is a
+bounded source-variant guard, **not proof of semantic/perceptual independence**.
+PDF aliases/conflicting source pointers or IDs fail explicitly. Complexity is
+O(N+M): frame comparisons are constant per admitted PDF, not an unbounded N² scan.
+
+Replay requires the same command, metadata closure and hashes; no latest lookup or
+recovery is invented. Rejected metadata/lineage consumes zero PDF/page/target PNG
+bytes and cannot dispatch a worker. Prepared input is a temporary materialization,
+not canonical publication. The simpler per-batch-only check is insufficient because
+it admits cross-batch variants and repeated source concentration.
+
+## Source implementation verification — 2026-10-05 04:38 UTC
+
+The pure metadata owner now caches the complete pinned closure and validates all
+native batches before selected PNG reads. The Orchestrator reuses one admitted
+frozen basis and complete canonical lineage per distinct review. A different native
+set is permitted; a changed frozen basis or physical-source variant is not. Final
+training conditioning is an explicit derivative; candidate captions are unchanged.
+No original/VALIDATION/HOLDOUT PDF/page bytes or model weights are needed to reject
+invalid metadata. Synthetic tests prove one decode per unique pointer and one root
+lineage resolution; these are boundary/complexity evidence, not semantic uniqueness.
+
+The local successor runner validates staged metadata, fixed input inventories,
+actual PNG hash/size/RGB/native canvas and final conditioning before model work. It
+never writes transformed training PNGs. It shares the numerical backend, GPU lock,
+adapter output validation and protected workspace handoff with existing owners.
+`sdxl-native-lora` and `eom-image-sdxl-native-lora@.service` are explicit lab entry
+points, not aliases for micro1.0/1.1. Their source definition does not install/start
+a service. The metadata-only operator preflight is labeled
+`PREFLIGHT_METADATA_PASS`; it cannot claim pixel or GPU validation.
+
+Terminal success requires the complete requested cohort/steps, exact dependencies,
+bounded duration/memory and validated evaluation-only adapter. FAILED/CANCELLED
+receipts cannot carry an accepted manifest. Nonfinite loss cannot corrupt JSON
+receipts. Replay checks pinned inputs/output identity but performs no PNG decode,
+model resolution, training, output rewrite or new identity. Unreceipted partial
+output blocks resubmission. Existing result/adapter schema bytes are unchanged.
+
+Verification: focused source regression442 PASS; final affected runner/handoff
+rerun44 PASS after two additional boundary cases (overlapping evidence, not486
+distinct tests). Strict mypy11 core/CLI files PASS; Ruff/format14 files,
+`systemd-analyze verify`, bash syntax and diff whitespace checks PASS.
+Architecture/release9 PASS /1 unchanged Catalog planning-owner dependency failure.
+That failure remains explicit and was neither hidden nor weakened. Initial runner
+test failures and fixture corrections preceded the recorded final passes.
+
+These are source/stub tests, not installed worker-role/GPU/visual-quality acceptance.
+At04:38 UTC the five main production services were active; GPU usage2MiB/0%.
+No model/dependency/runtime installation, unit activation, production config change,
+training, artifact publication or reserved binary read occurred in this checkpoint.
+Next: immutable build/RECORD/non-source Python3.11 checks, supported lab install and
+actual source/cohort preflight before one bounded pilot. The eventual100–200 TRAIN,
+24–40 VALIDATION, four-arm/four-family comparison,32 independent blind cases and
+passing Item/HWPX canary/activation/rollback remain open. Goal ACTIVE.

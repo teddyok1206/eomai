@@ -55,8 +55,8 @@ from eom_image_trainer.runner import (
     TrainingBackendFailure,
     TrainingBackendResult,
     TrainingRunnerError,
-    validate_adapter_files,
 )
+from eom_image_trainer.sdxl_adapter_output import validate_sdxl_adapter_files
 
 _Document = TypeVar("_Document", bound=BaseModel)
 MAX_METADATA_BYTES = 2 * 1024**2
@@ -122,16 +122,6 @@ def load_sdxl_micro_command(
         raise SdxlMicroRunnerError("IMAGE_TRAINING_COMMAND_INVALID") from exc
 
 
-def _adapter_files(workspace: Path) -> tuple[dict[str, object], ...]:
-    with verified_directory(workspace / "adapter", expected_owner_uid=os.geteuid()) as descriptor:
-        if tuple(sorted(os.listdir(descriptor))) != (
-            "adapter_config.json",
-            "adapter_model.safetensors",
-        ):
-            raise SdxlMicroRunnerError("IMAGE_TRAINING_ADAPTER_INVALID")
-    return validate_adapter_files(workspace / "adapter")
-
-
 def _replay(
     root: int,
     workspace: Path,
@@ -173,7 +163,7 @@ def _replay(
         if result.adapter_manifest is not None:
             if tuple(
                 file.model_dump(mode="json") for file in result.adapter_manifest.files
-            ) != _adapter_files(workspace):
+            ) != validate_sdxl_adapter_files(workspace):
                 raise ValueError("adapter differs from terminal receipt")
             raw = read_staged_member(
                 root,
@@ -193,7 +183,7 @@ def _manifest(
     realized: tuple[SdxlLoraMicroRealizedSample, ...],
     workspace: Path,
 ) -> LocalImageSdxlLoraMicroAdapterManifest:
-    files = _adapter_files(workspace)
+    files = validate_sdxl_adapter_files(workspace)
     logical = (
         "imgadapter_" + content_sha256({"training_command_sha256": command.command_sha256})[7:39]
     )

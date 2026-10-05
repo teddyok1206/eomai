@@ -294,18 +294,27 @@ def parse_sdxl_native_training_target_sources(
         "science-corpus-training-authorization",
         LocalImageScienceCorpusTrainingAuthorization,
     )
+    return validate_sdxl_native_training_target_sources(
+        command,
+        crop_set=crop_set,
+        source_command=source_command,
+        review=review,
+        authorization=authorization,
+    )
+
+
+def validate_sdxl_native_training_target_sources(
+    command: LocalImageSdxlNativeTrainingTargetCommand,
+    *,
+    crop_set: LocalImageScienceSourcePdfCropSet,
+    source_command: LocalImageScienceSourcePdfCropCommand,
+    review: SourcePageCropReview,
+    authorization: LocalImageScienceCorpusTrainingAuthorization,
+) -> SdxlNativeTrainingTargetSources:
+    """Share already decoded immutable metadata at a new admission boundary."""
     validate_native_source_pdf_crop_set(
         source_command, review, crop_set, command_pointer=crop_set.command
     )
-    if (
-        review.training_authorization != command.training_authorization
-        or authorization.approved_at > review.created_at
-        or crop_set.created_at > command.created_at
-        or source_command.pillow_version != command.pillow_version
-        or tuple(d.sample_id for d in command.decisions)
-        != tuple(m.selection_id for m in crop_set.members)
-    ):
-        raise ValueError("SDXL_NATIVE_TARGET_SOURCE_SCOPE_INVALID")
     selections = select_native_source_pdf_regions(source_command, review)
     samples = tuple(
         SdxlSourceTargetSample(
@@ -325,15 +334,7 @@ def parse_sdxl_native_training_target_sources(
         )
         for selection, member in zip(selections, crop_set.members, strict=True)
     )
-    by_id = {sample.sample_id: sample for sample in samples}
-    for decision in command.decisions:
-        if isinstance(decision, SdxlNativePrepareTargetDecision):
-            sdxl_native_target_placement(
-                by_id[decision.sample_id],
-                decision,
-                maximum_upscale_milli=command.maximum_upscale_milli,
-            )
-    return SdxlNativeTrainingTargetSources(
+    sources = SdxlNativeTrainingTargetSources(
         crop_set,
         source_command,
         review,
@@ -348,6 +349,37 @@ def parse_sdxl_native_training_target_sources(
             }
         ),
     )
+    validate_sdxl_native_training_target_command_sources(command, sources)
+    return sources
+
+
+def validate_sdxl_native_training_target_command_sources(
+    command: LocalImageSdxlNativeTrainingTargetCommand,
+    sources: SdxlNativeTrainingTargetSources,
+) -> None:
+    """Check a batch recipe against a decoded, previously validated source snapshot."""
+    if (
+        sources.review.training_authorization != command.training_authorization
+        or sources.authorization.approved_at > sources.review.created_at
+        or sources.crop_set.created_at > command.created_at
+        or sources.source_command.pillow_version != command.pillow_version
+        or tuple(d.sample_id for d in command.decisions)
+        != tuple(m.selection_id for m in sources.crop_set.members)
+        or any(
+            (sample.source_image.artifact_id, sample.source_image.artifact_revision_id)
+            != (command.source_crop_set.artifact_id, command.source_crop_set.artifact_revision_id)
+            for sample in sources.samples
+        )
+    ):
+        raise ValueError("SDXL_NATIVE_TARGET_SOURCE_SCOPE_INVALID")
+    by_id = {sample.sample_id: sample for sample in sources.samples}
+    for decision in command.decisions:
+        if isinstance(decision, SdxlNativePrepareTargetDecision):
+            sdxl_native_target_placement(
+                by_id[decision.sample_id],
+                decision,
+                maximum_upscale_milli=command.maximum_upscale_milli,
+            )
 
 
 def sdxl_native_target_placement(
