@@ -7,6 +7,35 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Contour-source expansion — frozen next operation
+
+The native VAE diagnostic passed; do not spend another training budget on an
+unreviewed mixture dominated by restrained tones (current prepared counts 7/7/33).
+Use one existing source-PDF command to recover twelve **previously unprepared**
+TRAIN selections from the pinned expanded source review: inclined cart/track,
+doctor examining patient, rooftop-antenna house, pedestal fan, boxing glove,
+mitochondrion, hand/tweezers/beaker, jellyfish, seated monkey, two piggyback boys,
+wheel-light scooter and wheelchair boy. These are source review's contour class;
+that label is a hypothesis until their actual native pixels are inspected.
+
+Re-admit the exact approved review, authorization, lineage, source document/group
+split and already-prepared ID set before any PDF materialization. Existing native
+576dpi immutable frames, renderer/Pillow pins and Orchestrator publication only.
+Budget at most twelve distinct TRAIN PDFs/CPU requests, twelve region renders,
+32 million crop pixels and 128MiB PDF bytes; zero reserved pixels, GPU, generation
+or training. Capture callbacks without the prior temporary B008 default expression.
+One fixed request per PDF; receipt replay must perform no new rendering. Preserve
+errors; no automatic redispatch, DB/schema/queue/unit/model/production change.
+
+Then individually inspect all twelve exact native source PNGs. Freeze complete
+object counts/composition captions, expression and native-canvas decisions before
+one supported CPU target-preparation command; obvious annotations/partial contours
+are declared deferred, not silently erased. Native1.2 still forbids redaction.
+Target receipt/hash/closure and installed terminal replay must pass; inspect every
+prepared PNG again. No count-based automatic admission or training, no claim of
+independent blind review. IDs identify distinct reviewed regions, not guaranteed
+independent diagrams; concentration and perceptual duplicates remain admission gates.
+
 ### Native GPU precision — actual result, 2026-10-05 12:59 UTC
 
 **NATIVE_GPU_PRECISION_PASS, goal ACTIVE; no illustration quality/activation claim.**
