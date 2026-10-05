@@ -971,3 +971,37 @@ Milestone Slack IN_PROGRESS `devreport_75ee23d4f6db4cfe8f392c017d7b9de4`
 SENT/HTTP2002026-10-05T21:09:57Z, phase `Image goal / ink-prompt causal comparison`.
 Reported actual six-output negative style finding, unchanged production and the
 control-window hypothesis separately from numerical/receipt success.
+
+## Control-window successor source checkpoint — 2026-10-05T21:22Z
+
+Defined JSON Schema2020-12 photo-style plan/command/result1.3 before worker
+behavior, with a mandatory frozen control-window value. Start0.0/scale1.0 and
+ALL_GPU_FP16_NO_OFFLOAD remain fixed; only declared end0.25..1.0 is permitted.
+Initial proposed experiment is0.65, not an automatic search or new contract per
+scalar. Full-white initializer/strength1.0/scheduler30/effective30 unchanged.
+Released1.0/1.1/1.2 schema bytes and inherited full-duration control preserved.
+
+Contracts own window selection; the existing numerical backend gets the typed
+value and the new result must exactly match its pinned plan. Shared pipeline,
+pixel owner, paired lifecycle, GPU lock, Orchestrator staging/commit, source/CPU
+verification and terminal replay reused. No new unit/backend/dependency/queue/
+permission or production configuration. Existing wheel-resource gate includes v4.
+
+Focused control/full/white/photo/environment157 PASS/92.15s. New35 tests cover
+strict bounds/immutability, wrong/missing fields, cross-version pins, original
+full-control behavior, actual shared pipeline end handoff, failure prefixes/OOM,
+rehashed result-window tampering, CPU read-only verification and one commit owner.
+Ruff/format/diff/bash PASS; strict four-file Python3.12 and two-contract-file
+Python3.11 mypy PASS against their explicit Conda dependency environments.
+
+Initial pytest invocation used the wrong environment-test filename (no tests
+ran); corrected command. Next156 PASS/1 FAIL caught the new manifest entry's
+sorting position; corrected manifest, then reran all157 PASS. Initial mypy used
+the API environment lacking Pillow; explicitly selected image-test dependencies,
+not a new dependency or relaxed import check. All failed/successful logs retained.
+
+This source gate does not prove installed compatibility, inference style or
+source fidelity. Next build/RECORD, lab-only install with retained d1b79a91
+rollback, installed-role/source-free imports and old terminal replays, then one
+bounded matched end0.65 comparison. Goal ACTIVE; no new GPU/training/HOLDOUT,
+production activation or Item/HWPX canary at this checkpoint.

@@ -56,6 +56,7 @@ tests/unit/test_sdxl_native_lora_runner.py
 tests/unit/test_sdxl_native_training_targets.py
 tests/unit/test_sdxl_native_validation.py
 tests/unit/test_sdxl_photo_style.py
+tests/unit/test_sdxl_photo_style_control_window.py
 tests/unit/test_sdxl_photo_style_execution.py
 tests/unit/test_sdxl_photo_style_full_denoising.py
 tests/unit/test_sdxl_photo_style_white_initializer.py

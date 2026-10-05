@@ -34,7 +34,9 @@ from eom_image_contracts.sdxl_native_canny_reference import (
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.sdxl_photo_style import (
     SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
+    LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStylePlan,
+    SdxlPhotoStyleControlWindow,
     SdxlPhotoStyleFullDenoisingInitialization,
     SdxlPhotoStyleInitialization,
     SdxlPhotoStyleSource,
@@ -95,6 +97,10 @@ class LocalImageSdxlPhotoStyleFullDenoisingCommand(LocalImageSdxlPhotoStyleComma
     schema_version: Literal["local-image-sdxl-photo-style-command/1.2"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoStyleControlWindowCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.3"]  # type: ignore[assignment]
+
+
 def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
     if not isinstance(value, dict):
         raise ValueError("photo execution command object required")
@@ -103,6 +109,7 @@ def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
         "local-image-sdxl-photo-style-command/1.0": LocalImageSdxlPhotoStyleCommand,
         "local-image-sdxl-photo-style-command/1.1": LocalImageSdxlPhotoStyleWhiteCommand,
         "local-image-sdxl-photo-style-command/1.2": LocalImageSdxlPhotoStyleFullDenoisingCommand,
+        "local-image-sdxl-photo-style-command/1.3": LocalImageSdxlPhotoStyleControlWindowCommand,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo command family")
@@ -230,6 +237,11 @@ class LocalImageSdxlPhotoStyleFullDenoisingResult(LocalImageSdxlPhotoStyleWhiteR
     initialization: SdxlPhotoStyleFullDenoisingInitialization
 
 
+class LocalImageSdxlPhotoStyleControlWindowResult(LocalImageSdxlPhotoStyleFullDenoisingResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.3"]  # type: ignore[assignment]
+    control_window: SdxlPhotoStyleControlWindow
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
@@ -238,6 +250,7 @@ def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
         "local-image-sdxl-photo-style-result/1.0": LocalImageSdxlPhotoStyleResult,
         "local-image-sdxl-photo-style-result/1.1": LocalImageSdxlPhotoStyleWhiteResult,
         "local-image-sdxl-photo-style-result/1.2": LocalImageSdxlPhotoStyleFullDenoisingResult,
+        "local-image-sdxl-photo-style-result/1.3": LocalImageSdxlPhotoStyleControlWindowResult,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo result family")
@@ -290,3 +303,8 @@ def validate_photo_style_result(
         or result.runtime.peak_gpu_memory_bytes > plan.budget.maximum_peak_gpu_memory_bytes
     ):
         raise ValueError("photo success coverage/resource budget mismatch")
+    if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan) and (
+        not isinstance(result, LocalImageSdxlPhotoStyleControlWindowResult)
+        or result.control_window != plan.control_window
+    ):
+        raise ValueError("photo result differs from declared spatial-control window")

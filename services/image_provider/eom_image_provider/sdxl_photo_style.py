@@ -15,7 +15,11 @@ from typing import cast, get_args
 from eom_image_contracts.models import content_json_bytes, content_sha256
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
-from eom_image_contracts.sdxl_photo_style import photo_style_version
+from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoStyleControlWindowPlan,
+    photo_style_control_parameters,
+    photo_style_version,
+)
 from eom_image_contracts.sdxl_photo_style_execution import (
     LocalImageSdxlPhotoStyleCommand,
     LocalImageSdxlPhotoStyleResult,
@@ -149,6 +153,9 @@ def run_sdxl_photo_style(
                 raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
             spatial = sources.configuration_sources.spatial_sources
             plan = sources.plan
+            control = photo_style_control_parameters(
+                plan, sources.configuration_sources.spatial_command.control
+            )
             if (
                 metadata.version("Pillow") != plan.initialization.pillow_version
                 or read_canny_runtime() != spatial.preparation.runtime
@@ -195,7 +202,7 @@ def run_sdxl_photo_style(
                     gpu_lock=gpu_lock,
                     backend=backend_factory(
                         controller,
-                        sources.configuration_sources.spatial_command.control,
+                        control,
                         plan.initialization,
                         pixels.initializations,
                     ),
@@ -234,6 +241,8 @@ def run_sdxl_photo_style(
                 completed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 duration_ms=max(1, int((time.monotonic() - start) * 1000)),
             )
+            if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan):
+                value["control_window"] = plan.control_window.model_dump(mode="json")
             result = parse_photo_style_result({**value, "result_sha256": content_sha256(value)})
             validate_photo_style_result(command, sources, result)
             write_staged_member(

@@ -18,6 +18,7 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
+from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonBudget
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
@@ -166,6 +167,26 @@ class LocalImageSdxlPhotoStyleFullDenoisingPlan(LocalImageSdxlPhotoStyleWhitePla
     initialization: SdxlPhotoStyleFullDenoisingInitialization
 
 
+class SdxlPhotoStyleControlWindow(SdxlCannyControlParameters):
+    """Keep early spatial guidance; declare its end instead of adapting it at runtime."""
+
+    guidance_end: float = Field(ge=0.25, le=1.0, strict=True)
+
+
+class LocalImageSdxlPhotoStyleControlWindowPlan(LocalImageSdxlPhotoStyleFullDenoisingPlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.3"]  # type: ignore[assignment]
+    control_window: SdxlPhotoStyleControlWindow
+
+
+def photo_style_control_parameters(
+    plan: LocalImageSdxlPhotoStylePlan, inherited: SdxlCannyControlParameters
+) -> SdxlCannyControlParameters:
+    """Released plans inherit full control; only1.3 owns an explicit window value."""
+    if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan):
+        return plan.control_window
+    return inherited
+
+
 _PHOTO_STYLE_CONTRACTS = MappingProxyType(
     {
         "local-image-sdxl-photo-style-plan/1.0": "sdxl-photo-style-plan",
@@ -177,6 +198,9 @@ _PHOTO_STYLE_CONTRACTS = MappingProxyType(
         "local-image-sdxl-photo-style-result/1.0": "sdxl-photo-style-result",
         "local-image-sdxl-photo-style-result/1.1": "sdxl-photo-style-result-v2",
         "local-image-sdxl-photo-style-result/1.2": "sdxl-photo-style-result-v3",
+        "local-image-sdxl-photo-style-plan/1.3": "sdxl-photo-style-plan-v4",
+        "local-image-sdxl-photo-style-command/1.3": "sdxl-photo-style-command-v4",
+        "local-image-sdxl-photo-style-result/1.3": "sdxl-photo-style-result-v4",
     }
 )
 
@@ -204,6 +228,7 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
         "local-image-sdxl-photo-style-plan/1.0": LocalImageSdxlPhotoStylePlan,
         "local-image-sdxl-photo-style-plan/1.1": LocalImageSdxlPhotoStyleWhitePlan,
         "local-image-sdxl-photo-style-plan/1.2": LocalImageSdxlPhotoStyleFullDenoisingPlan,
+        "local-image-sdxl-photo-style-plan/1.3": LocalImageSdxlPhotoStyleControlWindowPlan,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")

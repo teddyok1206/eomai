@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.3",
+  "title": "Licensed photo plan with an explicit bounded spatial-control window, not visual acceptance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "dispatch_policy",
+    "activation_policy",
+    "source_population",
+    "configuration_anchor",
+    "cases",
+    "seed",
+    "initialization",
+    "budget",
+    "plan_sha256",
+    "control_window"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-plan/1.3"
+    },
+    "plan_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/plan_id"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/source_commit"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/created_at"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/purpose"
+    },
+    "dispatch_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/dispatch_policy"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/activation_policy"
+    },
+    "source_population": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/source_population"
+    },
+    "configuration_anchor": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/configuration_anchor"
+    },
+    "cases": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/cases"
+    },
+    "seed": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/seed"
+    },
+    "initialization": {
+      "$ref": "#/$defs/initialization"
+    },
+    "budget": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/budget"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/properties/plan_sha256"
+    },
+    "control_window": {
+      "$ref": "#/$defs/control_window"
+    }
+  },
+  "$defs": {
+    "initialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "denoising_strength",
+        "scheduler_steps",
+        "effective_denoising_steps",
+        "pillow_version"
+      ],
+      "properties": {
+        "policy": {
+          "const": "CONSTANT_WHITE_RGB_832X512_FULL_DENOISE/1.0"
+        },
+        "denoising_strength": {
+          "type": "number",
+          "const": 1
+        },
+        "scheduler_steps": {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/$defs/initialization/properties/scheduler_steps"
+        },
+        "effective_denoising_steps": {
+          "const": 30
+        },
+        "pillow_version": {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/$defs/initialization/properties/pillow_version"
+        }
+      }
+    },
+    "control_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conditioning_scale",
+        "guidance_start",
+        "guidance_end",
+        "resource_profile"
+      ],
+      "properties": {
+        "conditioning_scale": {
+          "type": "number",
+          "const": 1
+        },
+        "guidance_start": {
+          "type": "number",
+          "const": 0
+        },
+        "guidance_end": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 1
+        },
+        "resource_profile": {
+          "const": "ALL_GPU_FP16_NO_OFFLOAD"
+        }
+      }
+    }
+  }
+}

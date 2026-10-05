@@ -77,6 +77,7 @@ def load_sdxl_comparison_command(
             "local-image-sdxl-photo-style-command/1.0",
             "local-image-sdxl-photo-style-command/1.1",
             "local-image-sdxl-photo-style-command/1.2",
+            "local-image-sdxl-photo-style-command/1.3",
         ):
             parsed = parse_photo_style_command(value)
         else:
