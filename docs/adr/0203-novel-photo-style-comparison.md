@@ -1005,3 +1005,118 @@ source fidelity. Next build/RECORD, lab-only install with retained d1b79a91
 rollback, installed-role/source-free imports and old terminal replays, then one
 bounded matched end0.65 comparison. Goal ACTIVE; no new GPU/training/HOLDOUT,
 production activation or Item/HWPX canary at this checkpoint.
+
+## Actual control-window lab and six-output checkpoint — 2026-10-05T21:39Z
+
+Source/installed contracts+provider `248a5c0da9e323ac570e2db44516110cc6714acb`.
+Build at `248a5c0d.gt13Ec/dist` git-archive/wheel simulation PASS; actual lab-only
+install RECORD/role/source-free imports/pip check PASS. Contracts wheel SHA
+`f68023bd404fb6fa15475873c3bcb09c1c9c265d6743d1c3177b2118c9b2aca2`, provider
+`0e4f7dd46f52d631e9c05ef1e2d7db51e38467c08695c4f032b86ca6795afa75`.
+Trainer built but NOT installed; numerical dependencies/trainer/units/production
+binding unchanged. Rollback remains d1b79a91.5d2FnJ/dist contracts1ef60064… /
+provideraf6cd751…, not executed. Actual generic1.0/exact1.0/white1.1/ink1.2
+installed terminal replays each96 file SHA/mtime PASS with side effects0.
+
+Registered ink1.2 plan is the immutable predecessor; cases/case IDs/positive and
+negative prompts/source reviews/photos/fit/Canny/white RGB/noise/seed104729/
+controller/LoRA/configuration/resource policy unchanged. Only declared
+guidance_end1.0->0.65; start0.0/scale1.0 fixed. Both old tokenizer checks reused
+under EXACT prompt/model/configuration pins (12 checks/max67/77), not rerun or
+mislabelled.44-target metadata binary-open guard and77-member explicit staging
+PASS. Installed CPU3 conditioning/white hashes exactly match predecessor;
+no Torch/DB/repository/GPU or workspace writes.
+
+Plan `artifact_d7210c5c3ec744b0acbe478e01639601` /
+`rev_5bf49361c20448798b744d2d16b35ec3`, primary
+`manifests/sdxl-photo-style-plan.json`, byte SHA
+`76df511792043c9b05d3fe60d6e16bdb627e5431d5e82fce075a2d21a792e1ec`,
+semantic SHA `f9bb3d8c2b0acf2c461f282f5098d7681a16874c32e755bb085f69e9d6a4b9ee`.
+Command `artifact_931da0b92d844997ae97b594eeeec38a` /
+`rev_444c4579c9e7445eb9512c2848e194d5`, primary
+`manifests/sdxl-photo-style-command.json`, byte SHA
+`50b2bf931add100279cb28e728f4065af2f1d581d2d4befe734a546e9244786b`.
+One admitted run `imgsdxlvalcmprun_a820e05a9eba3fbe624204857574d9e0`,6 SUCCEEDED
+36,309ms/peak10,763,033,600 bytes. Actual live activating/GPU90% and terminal
+inactive/dead/success/exit0 observed; no retry/sweep or another dispatch.
+Result `artifact_45f7d7b9a9ca40b0a6c2486ec503dddc` /
+`rev_f95c762b17604ec89885460a038a076a`, primary
+`manifests/sdxl-photo-style-result.json`, byte SHA
+`c5923cf6f63f812369440d50c14a8dd1451cbf26fd7e0d6f92dda0170e320cba`,
+semantic SHA `40c641c20c58e22b3a3c29895e37e2b4d271e8e0f9c0d8b0f9b9e3ffdba1ccb5`.
+Canonical19 members reread equal after installed CPU verification/readmission;
+matched15 source/old/new members PASS all unchanged factors; new installed
+terminal replay96 SHA/mtime equal, model/GPU/transform/write0.
+
+Opened new/matched contacts AND all6 native832x512 RGB files at original resolution.
+No output repair. Left column SOURCE_PHOTO_NOT_GENERATED; remaining four columns
+old end1 BASE/LORA and new end0.65 BASE/LORA. Gray relief/hatching/frames and native
+LORA cream/green casts remain. Trilobite specific segment markings generalize;
+wagon scenery/vehicle details drift. Ammonite becomes an invented regular spiral,
+violating explicit partial-section/no-complete-spiral review. This is a concrete
+semantic rejection, not only a style preference. Old full control already had
+imperfect fine fidelity;0.65 makes completion/generalization more conspicuous.
+
+Foreground/dark per thousand old->new: trilobite BASE396/0->388/0,
+LORA373/0->356/0; wagon BASE472/2->482/3,LORA359/0->346/1;
+ammonite BASE245/5->244/6,LORA231/5->224/8. Pixel MAE4.90–9.76/255 proves change,
+not improvement; nearly all foreground still mid-tone. Own decision
+**CONTROL_END065_NOT_ACCEPTED_STYLE_UNRESOLVED_AND_DETAIL_DRIFT**.
+All3 fail own exam-style acceptance in both arms; scientific fidelity not accepted,
+LoRA superiority NOT_ESTABLISHED, independent blind review NOT_PERFORMED.
+
+Initial root preparation accessed parent.control rather than spatial_command.control.
+Failed BEFORE token proof/artifact commit/staging/dispatch; retained operator/log
+and corrected local accessor in distinct R2. No core guard or historical success
+reinterpretation. Earlier source invocation/manifest-sort/mypy-environment failures
+also retained with passing evidence. Canonical35-member evidence
+`artifact_e669fbfd3bab4d9491ab015e1c27f618` /
+`rev_425de3c0fd4b4e36ad65cd9b619fb1bc`, primary `reports/own-review.md`, SHA
+`85c347a6cc8ba97ec37d2d43258bc72547fb41eaf7f066842f356fc0249ca435`;
+all persisted bytes reread equal. One derived matched contact only; no duplicate
+canonical source/output/weight bytes in evidence. Bindingf96eda84… and five
+services unchanged/active, postflight GPU0%/2MiB. Command budget exhausted.
+Goal ACTIVE; production activation/Item-HWPX canary NOT_STARTED.
+
+## Next input factor: numerical retained-region handoff design
+
+Do not blindly relax control or silently select0.65. Proposed next comparison
+restores original end1.0 and changes ONLY reviewed region retention, using the
+already tested `retained_canny_conditioning_png`/geometry owner. This proposal is
+not installed numerical behavior or proof that masking fixes style/hallucination.
+
+1. Boundary: extend existing photo-style contract, source/CPU verification and
+   same backend/paired executor. No segmentation model, queue or new framework.
+2. Canonical source: registered ink1.2 plan/result and pinned source-region CPU
+   evidence `artifact_15f4fdc19413494f9072976a4ccabf09` /
+   `rev_815ab05317324c1ea45ccd166ad41381`; originals never modified.
+3. Revisions: schema-first successor with mandatory per-case reviewed region /
+   protected-region values and provenance, not an undeclared runtime flag. Existing
+  1.0–1.3 remain immutable; exact full-duration control must be explicit.
+4. Resolution: source/revision/member/hash/schema/media/access/lifecycle plus
+   coordinate-system, fit, nonempty retained foreground, protected containment
+   and result region/control hash equality. No latest/auto-region fallback.
+5. Access: ordered3 cases x2 arms; keyed case/review/trace maps, no DB/cache/index.
+6. Structures: existing frozen bounding boxes, typed pointers/tuples/manifests;
+   source geometry and mapped canvas geometry remain distinct and reproducible.
+7. Cost: existing O(W*H+protected regions),832x512 bound, same16GiB/600s numerical
+   ceiling and at most one6-output dispatch; no sweep/training/HOLDOUT.
+8. Concurrency/commit: isolated worker/staged inputs/GPU lock, Orchestrator sole
+   validation+commit owner; no worker DB/NAS/repository/privilege expansion.
+9. Dependency: shared pixel primitive, offline installed gates and retained
+   rollback; no new library/controller/base-model download. Old replay stays pure.
+10. Failure/idempotency: preserve every interior/protected pixel, zero only reviewed
+    irrelevant exterior control, no added rectangle/blur/retrace/rescale. Reject
+    ambiguous or scene-essential removal; terminal result replay side effects0.
+11. Alternative: Gaussian lost fine marks;0.65 failed without reducing gray style
+    and relaxed morphology. Conservative region control isolates clutter without
+    that relaxation but leaves interior clutter; inspect rather than invent PASS.
+
+Scene-dependent source context must NOT be deleted implicitly. These three cases
+are declared morphology diagnostics, with reviewed exclusion of irrelevant
+backdrop; preserving main placement/geometry remains essential. Actual numerical
+results, fine scientific review and negative cases must precede promotion. Later
+audit44-target9-contour/6-hatch/29-tone style mix before a separate bounded training
+change. Region, training and other parameters must not be mixed into one causal
+test. Broader native-family matrix, independent blind review and final quality /
+resource / Preview-HWPX / activation gates remain open.
