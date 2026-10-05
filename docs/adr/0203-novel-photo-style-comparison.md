@@ -274,3 +274,30 @@ preserved. It did not cause another model invocation or change an acceptance res
 Milestone Slack IN_PROGRESS sent HTTP200 as
 `devreport_0d31edfa650f4b0782a3887c56a955dd`; quality shortfall and next bounded
 hypothesis reported explicitly, not a whole-goal completion.
+
+## Next bounded comparison: exact learned phrase, unchanged recipe
+
+The next experiment changes only each positive prompt by prepending the existing
+native caption phrase, using a new immutable plan value within plan1.0. It does not
+change plan1.0 semantics or make generic historical plans invalid. Preserve the
+old command/result and exhausted budget. Pin the same configuration1.2, licensed
+photo revisions/review, negative text, seed104729, native44 adapter, strength0.70,
+30 scheduled/21 effective steps and numeric runtime. Case IDs/prompts/hashes and
+plan/command IDs change as required by content identity; compare by depiction key
+and immutable reference hash, not by matching those newly derived IDs.
+
+Budget: at most one separately identified dispatch, six outputs total (BASE/LORA
+for the same three sources), no automatic retry, no sweep, no training/HOLDOUT,
+no production change. Both CLIP tokenizers must accept the complete prompts before
+command submission. Canonical plan/source readmission, installed code/dependency
+identity, fixed worker/unit, source-free publication and read-only terminal replay
+remain mandatory. A failed operator before submission is not a generation retry;
+an unknown dispatched outcome must be observed using its existing unit, not resubmitted.
+
+Primary judgment remains actual white-paper examination line art, not small pixel
+differences or an edge score. Retain labelled SOURCE_PHOTO/GENERIC_BASE/GENERIC_LORA/
+EXACT_PHRASE_BASE/EXACT_PHRASE_LORA views, declaring photo initialization. Analyze
+BASE effects separately from LoRA effects: a generic-vs-prefix difference alone is
+not proof of learned-adapter improvement. A positive result on these three difficult
+references is still not independent blind review, untouched HOLDOUT, four-family/
+32-case acceptance or readiness for Item/HWPX/production activation.
