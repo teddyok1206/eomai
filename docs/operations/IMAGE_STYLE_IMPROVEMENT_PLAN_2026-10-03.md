@@ -7,6 +7,47 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Canonical inventory and next native-data preparation — frozen scope
+
+The metadata-only inventory at2026-10-05T12:04:15Z re-resolved the three
+canonical source crop sets, original/supplemental source provenance and four
+native target command/result pairs. It establishes95 unique source regions from
+58 PDFs/48 exam groups, all TRAIN, with0 duplicate IDs/exact pixel hashes and
+maximum3 per PDF/4 per group. It does **not** establish95 admitted training targets.
+Only29 distinct sample IDs have native targets:20 within this source pool and9
+from separately reviewed native-source batches. Reframing a drawing does not
+make it independent data. No PDF/PNG/model member was opened;25 direct metadata
+members were cached by their complete immutable pointer. Source expressions are
+26 clean contour/11 fine hatching/58 restrained tone; prepared expressions are
+5/4/20 respectively. Full-cohort admission and independent review remain OPEN.
+
+Next bounded operation: prepare the previously unprepared original11 and
+expansion12 TRAIN regions, using their existing immutable review pointers and
+the existing native-PDF crop1.0 and native-target1.2 owners. Budget: two CPU
+source batches,23 region renders, at most16 distinct source PDFs,32 million
+native pixels and128MiB source bytes **per batch**, then two CPU target runs.
+No GPU/model/training calls, reserved-source pixels, new schemas/dependencies,
+runtime installation or production setting changes. Persist exact commands and
+dispatch intent first; ambiguous completion stops further side effects.
+
+Own source inspection has viewed all23 original crops. Freeze18 PREPARE and
+5 DEFER decisions: gray-background heater scene, tightly cropped glasses bust,
+undersized pushing boy/mouse-and-syringe and desk with intrinsic cover text.
+Native1.2 does not permit masking; do not weaken it or erase these originals.
+The18 candidates include fossils, animals, radio/television, laboratory glassware,
+rooms/industrial scenery and student illustrations. Captions must describe
+actual skeletons, pairs and scene composition, not assume a single isolated
+object. Preserve the three separate expression classes and optical detail;
+576dpi rasterization is not additional independent drawings or new source detail.
+
+After actual target publication, inspect every prepared PNG, verify exact caption,
+canvas, white outer margin and surviving source marks, and record admission
+separately from technical delivery. Re-resolve all committed members and exercise
+installed-role terminal replay without pixel transformation/model/write calls.
+Do not train on automatically counted entries, inflate data with variants, or
+restart the exhausted40/200-update branch. Full training still needs adequate
+composition/style coverage and separately bounded numerical/quality evaluation.
+
 ### Learning-exposure comparison — actual result,2026-10-05 11:53 UTC
 
 **Technical PASS, own publication quality REJECTED8/8; goal ACTIVE.** One fresh
