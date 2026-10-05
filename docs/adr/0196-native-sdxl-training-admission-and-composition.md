@@ -2,6 +2,36 @@
 
 ## Status
 
+### Contour-balanced successor pilot plan — 2026-10-05 UTC
+
+After ADR0198's matched reference comparison, native23 style superiority remains
+unproven. Freeze one new **12-target, 200-step** numerical pilot through this
+existing contract, not by increasing the old budget or resuming its adapter.
+Start from the same base model, recipe and seed; no new runtime or dependency.
+The changed variable is the reviewed cohort: six new prepared targets plus six
+existing isolated drawings (eye, measuring apparatus, two-size-particle beaker,
+balance, broad-leaf plant and mortar). The new six include five contour-dominant
+examples and one restrained-tone example. All twelve are isolated on white;
+authored landscapes/scenes and fine-hatching examples are absent in this pilot.
+This is five contour/seven restrained-tone, not a claim of pure contour coverage.
+
+Recheck all twelve PNGs and full canonical multi-batch lineage before staging.
+Three related botanical drawings share a page; tissue and chromosome drawings
+share another. They are distinct depicted regions, not independent documents.
+Reject actual overlapping source variants using the existing whole-cohort guard.
+Keep legitimate gray fills, apparatus polarity marks and source softness; do not
+erase or invent pixels. The balance/older beaker remain raster-soft, documented
+limitations rather than evidence of reconstructed high-resolution detail.
+
+One new training dispatch, at most200 optimizer updates/1hour/16GiB allocated GPU,
+no automatic retry/resume, no reserved-pixel reads or production activation. Freeze
+own screening and typed command before crossing the supported worker dispatch.
+Training success proves numerical execution only. Follow with a separately frozen
+matched comparison using the existing native consumer; no automatic sweep.
+Changing both cohort composition and expression mix is a candidate-quality test,
+not an isolated causal proof for either factor. Full diverse training, held-out and
+independent blind review, Item/HWPX and activation gates remain unchanged.
+
 Metadata admission, isolated native lab runtime, real cohort admission and the first
 200-step native GPU pilot verified, 2026-10-05 UTC.
 Native sources/CPU target delivery already exist. The successor schemas, frozen
