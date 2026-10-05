@@ -966,3 +966,8 @@ only0.65; no runtime auto-selection, exhaustive search or hidden sweep. Source
 regression, old compatibility/read-only replay, exact backend kwargs/result pins,
 CPU transforms and matched quality review precede any activation. Broader native
 family matrix and independent blind review still remain after a promising recipe.
+
+Milestone Slack IN_PROGRESS `devreport_75ee23d4f6db4cfe8f392c017d7b9de4`
+SENT/HTTP2002026-10-05T21:09:57Z, phase `Image goal / ink-prompt causal comparison`.
+Reported actual six-output negative style finding, unchanged production and the
+control-window hypothesis separately from numerical/receipt success.
