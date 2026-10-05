@@ -151,3 +151,31 @@ unchanged; five main services active at archive. New training/reserved reads=0.
 Independent blind review NOT_PERFORMED. Full-data learning, reserved generalization,
 four-family32-depiction quality/fidelity/resource review and successor Item/HWPX
 canary/activation/rollback remain open. Overall goal ACTIVE, no completion claim.
+
+## Bounded installed conditioning parity check
+
+Before another training recipe change, run the opt-in integration diagnostic
+test_sdxl_conditioning_parity.py against the current installed wheels and the exact
+registered TRAIN24 command. Existing Orchestrator resolution admits the full
+native authority closure before staging only the small immutable command and
+hash-pinned test into an isolated local eom-image workspace. The numerical role
+has no DB/NAS/repository access. No dataset PNG, reserved input, LoRA/UNet/VAE
+tensor, optimizer, image generation, GPU lease or production write is required.
+
+This CPU-only test loads the2 existing pinned text encoders, calls the actual
+trainer caption-encoding function, and compares hidden and projected pooled
+outputs to the actual installed T2I pipeline encode_prompt for all24 captions.
+Only device routing is patched from CUDA to CPU; embedding/tokenizer/pooling
+computation is not mocked. Require exact fp16 tensor equality, finite values,
+both tokenizer capacities and all realized native time-ID geometries. A real
+pipeline is constructed with text modules only; configuration-only UNet shape
+checks are explicitly distinct from UNet inference. Default invocation must SKIP
+unless explicitly opted in. Limit one execution,10 minutes CPU/2 threads, with
+the same terminal handle observed rather than repeating on observation timeout.
+
+This diagnostic can reject a text-conditioning mismatch, but cannot certify
+CUDA numerical parity, optimizer/loss correctness, trained style improvement,
+fidelity or full model/production quality. Keep those gates separate. Preserve
+the executed test/operator/log and report actual two text-model loads, not zero
+model calls merely because no images are generated. No new wire protocol,
+framework, dependency, install or released recipe reinterpretation is introduced.
