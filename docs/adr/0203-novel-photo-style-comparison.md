@@ -2,6 +2,14 @@
 
 ## Status and observed gap
 
+Current checkpoint2026-10-05 UTC: the photo consumer and white-initializer1.1
+successor are implemented, lab-installed and numerically tested. Both controlled
+photo conversions remain **NOT_ACCEPTED** for exam illustration quality. White
+initialization produces unreadably faint marks. Current six-output budget is
+exhausted; the next task is CPU-only coarse-control diagnosis, not another GPU
+dispatch or activation. Detailed chronological evidence follows.
+
+Initial preparation checkpoint (historical):
 Source admission implemented and verified; paired consumer not implemented yet,
 2026-10-05 UTC. No new photo conversion, GPU dispatch or activation claimed.
 The thirteen native44 reserved pairs are source-initialized reconstructions of
@@ -433,3 +441,99 @@ Wheel resource gates require these explicit successors alongside all predecessor
 Installed lab verification, canonical successor plan, real conditioner inspection
 and one separately bounded six-output diagnostic remain pending here. No new
 training/HOLDOUT or quality/independent-review/activation acceptance is claimed.
+
+## Constant-white1.1: installed execution and actual quality finding
+
+Source/lab contracts-provider `1083fd4ec12c7cdf5e7b06f6abdf507a3feda589`.
+Wheel RECORD, actual eom-image role import, installed dependencies/PIP check and
+white RGB/old-schema checks PASS. Numeric dependencies, trainer, fixed units,
+production binding and five main services unchanged; no restart. Previous
+`1a98a93a` contracts/provider wheels retained as the bounded lab rollback set.
+
+Canonical plan `artifact_67d57fbfb6164d4ebd11a720e4900657` /
+`rev_708bba95bed24e27a967a3b5c3159f9d`, byteSHA
+`e2837aac9421380790af8d41ced85d3bd483dff5702d5e1ba153094bbeeb5959`.
+Same exact-phrase source/prompt/negative/config/runtime permits reuse of the
+previous real two-tokenizer capacity proof; this is not a fresh token test.
+71 metadata members readmitted before binary materialization;77 staged members.
+Actual CPU view: same dense three Canny inputs, all-white832x512 initializer;
+input proof is not final scientific/quality acceptance.
+
+One six-output dispatch `imgsdxlvalcmprun_607c6537880956e3d373d53d9b24a85d`,
+SUCCEEDED/33201ms/10763099136 peak GPU bytes. Actual unit journal completes at
+2026-10-05T19:36:42.178902Z. A later unloaded systemd instance returns start
+timestamp0; never interpret that alone as "not executed" and resubmit.
+Canonical19-member result `artifact_4d4fe245f6e446bf919d1e6270de0a90` /
+`rev_f0abb0af3d66476588b92b55c90a19d1`, primary byteSHA
+`03bce93f5386784d27ca55fa6e6122c8bb7edbe38a5aa3a4cedf1bd8059ea0f9`.
+CPU transform proof/committed reread equality PASS. Installed terminal replay
+PASS/96 unchanged files, model/GPU/transforms/writes0. Previous generic and
+exact-phrase terminal receipts also replay unchanged under the new consumer.
+
+Both plans/results and15 canonical photo/output members re-resolved. Positive/
+negative/config/runtime/seed unchanged, control hashes equal3/3, initializer
+hashes different3/3. Viewed all six outputs, matched five-column contact, native
+trilobite and final wagon. **EXAM_LINE_ART_TARGET_NOT_MET**3/3: nearly white
+contours, pale native coloration and inadequate printed legibility. Source
+photographs are explicitly not generated; all four output columns are photo-
+edge-conditioned conversions, not from-scratch institutional drawings.
+
+Foreground below245, rounded thousandths BASE/LORA: trilobite0/1,wagon0/0,
+ammonite39/67; dark-fraction below96 reports0 in all six. Large white-vs-photo
+MAE112.61/112.69,128.46/128.96,69.36/70.40 is not style improvement. BASE also
+becomes faint; do not assign this outcome exclusively to LoRA or assert that
+the adapter learned nothing. No output darkening/thresholding was used to
+disguise this quality failure. Numerical success remains immutable and separate.
+
+CPU-only polarity inversion of the three canonical Canny inputs was then
+viewed: black pixels3.24/6.16/18.26% (ammonite/trilobite/wagon). Main shapes
+remain, but shop clutter, stone texture, trees/grass and fit-frame borders also
+remain. **RAW_CONTOUR_INPUT_TOO_CLUTTERED_FOR_EXAM**. This is input processing,
+not an AI-generated illustration; no workspace mutation/model/GPU/HOLDOUT0.
+Do not proceed directly to a raw-contour initializer GPU run.
+
+Canonical34-member diagnostic evidence `artifact_66065d55950a42e5894d9f477008d2b7`
+/ `rev_c4e9568f471047b69adc1ecaaddf6abc`, primary `reports/own-review.md`, SHA
+`aaa1c6cb50e3db821dcf54d49d98a0e6e5e475660a1758353ab2db0c8c09ce2f`;
+all persisted bytes reread equal. Source gates, initial test/type limitations,
+install/dispatch/publication/replay/matched/input-only evidence retained. No
+duplicate canonical photographs/PDFs/weights/generated output binaries. The
+first non-tty sudo check lacked cached credentials while EOM:3 remained valid;
+replay succeeded in that same pane without extra grants or model calls.
+
+Independent blind review NOT_PERFORMED; four-family/32-case/HOLDOUT, Item/HWPX
+and activation gates OPEN/FORBIDDEN. Production unaffected; goal ACTIVE.
+
+### Next CPU-only diagnosis: suppress fine photo edges before any new recipe
+
+1. Responsibility: one derived input inspection within existing source/pixel
+   owners, not a new worker/queue/evaluator or production mode.
+2. Canonical source: same approved photo, exact staged original and canonical
+   Canny result pointers; no new acquisition/TRAIN/HOLDOUT or source replacement.
+3. Identity: record original logical/revision/member/SHA and diagnostic RGB/PNG
+   hashes. Do not overwrite1.0/1.1 initializer/control/output identities or receipts.
+4. Resolution: re-resolve registered result/plan and validate staged photograph
+   hashes/media/dimensions. Compare the actual old control, not guessed filenames.
+5. Access: three indexed/pinned sources, one ordered derivation per source;
+   read-only worker inputs and explicit temporary inspection output boundary.
+6. Structure: existing typed pointer plus small immutable operation evidence;
+   maps for case lookup and closed derived file set. No DB/cache/index change.
+7. Cost: O(total source pixels) bounded CPU operations;3 inputs,0 GPU/model calls.
+8. Concurrency: inspect only completed staged work, no workspace modification,
+   dispatch/claim/lease or reopened generation budget.
+9. Ownership: Orchestrator resolves/validates/archives; isolated numeric identity
+   reads staged input, uses already installed pinned Pillow/OpenCV/NumPy only.
+10. Failure: invalid pixels/hash/runtime/media/file closure reject; no automatic
+    alternate blur/threshold search. Preserve both reduced-detail and lost-detail
+    observations. Scientific contours, wheels and segment locations must remain.
+11. Simpler alternative: raw Canny polarity inversion already inspected and too
+    cluttered. Test **one** fixed5x5 Gaussian/sigma1.0/reflect101 before the same
+    Canny100/200/aperture3/L2false. Same832x512 fit and all coordinates. No threshold,
+    cropping/masking/frame removal/training/prompt/initializer changes in this test.
+
+This CPU-only diagnostic is not yet executed at this checkpoint. Observe fine-
+texture suppression, artificial fit-frame edges and structural-detail loss
+separately. Merely reducing edge count is not acceptance. If this candidate loses
+essential features or retains clutter, report it and choose the next factor before
+any schema-first worker successor. Do not add an unused inference recipe or run
+another GPU sweep merely to give the diagnostic a new version number.
