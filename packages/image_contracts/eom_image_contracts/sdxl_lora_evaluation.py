@@ -76,12 +76,19 @@ class SdxlLoraEvaluationPin(FrozenModel):
     def training_contract_version(self) -> str:
         return "1.0"
 
+    def training_result_contract_version(self) -> str:
+        return self.training_contract_version()
+
     def training_contract_family(self) -> str:
         return "sdxl-lora-micro"
 
     @model_validator(mode="after")
     def exact_pointers(self) -> Self:
         training = self.training_contract_family()
+        versions = {
+            training + "-command": self.training_contract_version(),
+            training + "-result": self.training_result_contract_version(),
+        }
         for pointer, member, family in (
             (self.baseline_command, "sdxl-lineart-probe-command", "sdxl-lineart-probe-command"),
             (self.training_command, training + "-command", training + "-command"),
@@ -92,11 +99,7 @@ class SdxlLoraEvaluationPin(FrozenModel):
                 training + "-adapter-manifest",
             ),
         ):
-            version = (
-                self.training_contract_version()
-                if family in {training + "-command", training + "-result"}
-                else "1.0"
-            )
+            version = versions.get(family, "1.0")
             if (
                 pointer.media_type != "application/json"
                 or pointer.schema_ref != _PREFIX + "local-image-" + family + "/" + version

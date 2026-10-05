@@ -12,6 +12,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lora-evaluation-command-v5": "local-image-sdxl-lora-evaluation-command-v5.schema.json",
+    "sdxl-lora-evaluation-result-v5": "local-image-sdxl-lora-evaluation-result-v5.schema.json",
     "sdxl-training-target-command-v4": "local-image-sdxl-training-target-command-v4.schema.json",
     "sdxl-training-target-result-v4": "local-image-sdxl-training-target-result-v4.schema.json",
     "sdxl-native-lora-command-v2": "local-image-sdxl-native-lora-command-v2.schema.json",
@@ -389,6 +391,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lora-evaluation-command-v5": (
+        "sha256:ceda0c221b76a9ca6ebfbc48b46a6046c14b4291926c1a6d29041b2e530fd391"
+    ),
+    "sdxl-lora-evaluation-result-v5": (
+        "sha256:d027d0310fbe571546f81ca32a18d681d32e2f2165418b8fb689dc024592b618"
+    ),
     "sdxl-training-target-command-v4": (
         "sha256:f2acc0c316ad89e437743199c8c45017738556ba2fba24353e93392c2df68f00"
     ),

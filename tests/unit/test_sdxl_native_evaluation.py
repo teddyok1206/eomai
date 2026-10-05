@@ -22,6 +22,7 @@ from eom_image_contracts.sdxl_native_evaluation import (
 from eom_image_contracts.sdxl_native_lora import (
     LocalImageSdxlNativeLoraCommand,
     LocalImageSdxlNativeLoraResult,
+    NativeLoraCommand,
 )
 from eom_image_contracts.validation import SCHEMA_FILES, SCHEMA_SHA256, load_schema
 from eom_image_provider import sdxl_lineart_probe as generation
@@ -143,7 +144,7 @@ def _prepare(monkeypatch, command=None, records=None, *, fault=None):
 
     monkeypatch.setattr(admission, "resolve_sdxl_native_lora_sources", admit)
     prepared = admission.prepare_sdxl_lora_evaluation_inputs(object(), command)
-    assert len(calls) == 1 and isinstance(calls[0], LocalImageSdxlNativeLoraCommand)
+    assert len(calls) == 1 and isinstance(calls[0], NativeLoraCommand)
     return prepared, reader
 
 

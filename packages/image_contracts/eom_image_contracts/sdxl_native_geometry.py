@@ -13,6 +13,7 @@ from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
     SdxlNativeEvaluationSources,
     SdxlNativeLoraEvaluationPin,
+    SdxlNativeLoraEvaluationPinV2,
 )
 from eom_image_contracts.sdxl_native_training_targets import NATIVE_TARGET_CANVASES
 
@@ -65,6 +66,11 @@ class LocalImageSdxlNativeGeometryCommand(LocalImageSdxlNativeEvaluationCommand)
         ):
             raise ValueError("SDXL_NATIVE_GEOMETRY_CASE_OR_BUDGET_INVALID")
         return self
+
+
+class LocalImageSdxlNativeGeometryCommandV2(LocalImageSdxlNativeGeometryCommand):
+    schema_version: Literal["local-image-sdxl-lora-evaluation-command/1.4"]  # type: ignore[assignment]
+    evaluation: SdxlNativeLoraEvaluationPinV2
 
 
 def validate_sdxl_native_geometry_sources(
@@ -156,6 +162,11 @@ class LocalImageSdxlNativeGeometryResult(FrozenModel):
         return self
 
 
+class LocalImageSdxlNativeGeometryResultV2(LocalImageSdxlNativeGeometryResult):
+    schema_version: Literal["local-image-sdxl-lora-evaluation-result/1.4"]  # type: ignore[assignment]
+    evaluation: SdxlNativeLoraEvaluationPinV2
+
+
 def validate_sdxl_native_geometry_result(
     command: LocalImageSdxlNativeGeometryCommand,
     sources: SdxlNativeEvaluationSources,
@@ -171,7 +182,8 @@ def validate_sdxl_native_geometry_result(
     actual = tuple((o.arm, o.sample_id, o.canvas) for o in result.outputs)
     captions = {c.sample_id: c.training_caption_sha256 for c in command.cases}
     if (
-        result.run_id != command.run_id
+        result.schema_version != command.schema_version.replace("-command/", "-result/")
+        or result.run_id != command.run_id
         or result.command_sha256 != command.command_sha256
         or result.evaluation != command.evaluation
         or result.model != sources.baseline.model

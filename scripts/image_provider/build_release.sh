@@ -48,6 +48,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/sdxl_native_geometry.py",
         "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-command-v4.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v4.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-command-v5.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v5.schema.json",
         "eom_image_contracts/sdxl_native_canny_reference.py",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-command-v2.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-result-v2.schema.json",

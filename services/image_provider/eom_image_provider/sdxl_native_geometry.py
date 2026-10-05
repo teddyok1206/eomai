@@ -16,7 +16,10 @@ from eom_image_contracts import (
     LocalImageRuntime,
     content_json_bytes,
     content_sha256,
-    validate_contract,
+)
+from eom_image_contracts.sdxl_evaluation_codec import (
+    parse_sdxl_evaluation_command,
+    parse_sdxl_evaluation_result,
 )
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_evaluation import (
@@ -132,8 +135,9 @@ def _replay(
     try:
         raw = read_staged_member(root, "result.json", maximum_bytes=256 * 1024)
         value = json.loads(raw)
-        validate_contract("sdxl-lora-evaluation-result-v4", value)
-        result = LocalImageSdxlNativeGeometryResult.model_validate(value)
+        result = parse_sdxl_evaluation_result(value)
+        if not isinstance(result, LocalImageSdxlNativeGeometryResult):
+            raise ValueError("geometry receipt family mismatch")
         validate_sdxl_native_geometry_result(command, sources, result)
         if raw != content_json_bytes(result.model_dump(mode="json")):
             raise ValueError("noncanonical geometry receipt")
@@ -173,9 +177,10 @@ def run_sdxl_native_geometry(
     expected_model_owner_uid: int = 0,
 ) -> LocalImageSdxlNativeGeometryResult:
     try:
-        value = command.model_dump(mode="json")
-        validate_contract("sdxl-lora-evaluation-command-v4", value)
-        command = LocalImageSdxlNativeGeometryCommand.model_validate(value)
+        parsed = parse_sdxl_evaluation_command(command.model_dump(mode="json"))
+        if not isinstance(parsed, LocalImageSdxlNativeGeometryCommand):
+            raise ValueError("geometry command family mismatch")
+        command = parsed
         with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
             sources = _read_sources(root, command)
             for file in sources.manifest.files:
@@ -289,7 +294,7 @@ def run_sdxl_native_geometry(
     except Exception:
         error = "SDXL_PROBE_EXEC_FAILED"
     value = {
-        "schema_version": "local-image-sdxl-lora-evaluation-result/1.3",
+        "schema_version": command.schema_version.replace("-command/", "-result/"),
         "run_id": command.run_id,
         "command_sha256": command.command_sha256,
         "evaluation": command.evaluation.model_dump(mode="json"),
@@ -308,8 +313,9 @@ def run_sdxl_native_geometry(
         "duration_ms": max(1, int((time.monotonic() - start) * 1000)),
     }
     value["result_sha256"] = content_sha256(value)
-    validate_contract("sdxl-lora-evaluation-result-v4", value)
-    result = LocalImageSdxlNativeGeometryResult.model_validate(value)
+    result = parse_sdxl_evaluation_result(value)
+    if not isinstance(result, LocalImageSdxlNativeGeometryResult):
+        raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
     validate_sdxl_native_geometry_result(command, sources, result)
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         write_staged_member(root, "result.json", content_json_bytes(value))
