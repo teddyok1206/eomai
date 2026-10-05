@@ -7,6 +7,46 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Next bounded learning-exposure comparison — frozen, NOT_EXECUTED
+
+Native12's actual8 raw geometry outputs demonstrate framing violations in BASE
+and additional native-canvas polarity/texture collapse in LoRA. Source review has
+not reproduced a current implementation defect. Do not change training formulas,
+add suppression/cleanup, expand the corpus or invent a defect from this evidence.
+
+Hypothesis:200 optimizer updates at the already admitted1e-4 learning rate may
+over-adapt this12-subject cohort. One **new40-update** run starts from the same pinned
+base, not the rejected weights. All12 target pointers/bytes, native canvases,
+captions, seed20261005, rank/alpha8, accumulation4, fp16, optimizer, dependencies,
+normalization, timestep/noise recipe and no-resume policy remain unchanged. The
+released native training1.0 profile already permits20–200 updates; no new schema,
+worker, dependency, installation, unit, database or production setting is needed.
+This does not claim40 updates will be better or sufficient for full training.
+
+Reuse the immutable prior cohort screening as evidence of unchanged reviewed TRAIN
+inputs, with a new explicit bounded experiment screening record and chronology;
+do not call it a newly independent review. Re-admit full target/authorization lineage
+before materializing source PNGs through existing Orchestrator preparation/staging.
+Freeze40 updates, at most600,000ms and16GiB allocated GPU, one run/no resume/retry.
+Persist dispatch intent before systemd and stop on ambiguous/failed completion.
+
+After a valid published adapter, reuse evaluation1.3 for the exact previous two
+TRAIN subjects and8 raw images:BASE/LoRA×legacy/native, same captions/negative
+policy/seed104729/30 steps/CFG7/T2I0/strength1/no initializer. All8 are actually new;
+the four BASE images also check same-recipe output reproducibility against the
+previous immutable result. Pin prior200-update result and compare matching keys,
+not filenames/latest. New comparison budget8 images,600,000ms,16GiB; no sweep/retry.
+All outputs retain raw RGB dimensions; no source/result pixel corrections.
+
+Record technical acceptance separately from own visual evaluation. Inspect all8
+and classify object count, framing, background/polarity, scientific-content errors
+and stroke style. Report unchanged/worse outcomes too. Compare4 new LoRA outputs
+with the4 exact200-update counterparts; training exposure is the numerical variable,
+not a resolution-only claim. A technical pass/lower loss is not style superiority.
+Do not promote either adapter without full corpus, independent blind and product
+gates. This experiment consumes a distinct frozen40-step/8-image budget; all old
+exhausted budgets and rejected history remain unchanged. Goal ACTIVE.
+
 The contour12 comparison remains REJECTED; no new adapter is activated. Prior
 zero-T2I, negative-prompt, polarity, learned-extractor and source-initialization
 diagnostics have already run. Do not spend their exhausted budgets again.
