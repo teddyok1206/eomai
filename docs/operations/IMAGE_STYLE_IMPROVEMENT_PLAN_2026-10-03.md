@@ -5,7 +5,59 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native four-arm completion — 2026-10-05 06:26 UTC
+## Latest contour-input preparation — 2026-10-05 06:48 UTC
+
+**CPU delivery PASS; own input review6/6 with limitations; goal ACTIVE.**
+Following the rejected four-arm experiment, reviewed TRAIN source material rather
+than rerunning the same seeds/prompts. Thirteen existing discovery sheets and16
+literal source contexts were revisited; ten literal frames were selected from
+seven PDFs/pages/groups. All ten144-dpi crops, ten576-dpi crops and six final target
+PNGs were individually inspected. No reserved pixel reads, model calls, training,
+runtime installation, new schema/dependency, core code or production activation.
+Execution source: `c84f57a0f6bdd1fa0e8bd0424da4eb2364e65dc6`.
+
+Seven isolated CPU requests rendered ten576-dpi regions (2,871,904 pixels), then
+the supported target1.2 worker prepared six targets in643ms and deferred four.
+Prepared: five contour-dominant and one restrained-tone example, three portrait,
+two landscape and one square canvas, **four distinct PDFs/groups**. Legitimate
+gray fills/gradients are preserved; "contour" does not imply binary-only pixels.
+Two portraits and a mitotic diagram remain source-resolution limited. A cart with
+direction arrow remains a native/scientific-geometry reference, not erased input.
+The old `SIX_LEAF_PLANT_WITH_ROOTS` source key/caption remains immutable; the derived
+caption explicitly says four large pointed veined leaves in two pairs. The fan
+is a revised frame of an existing drawing; plants share an older panel, and tissue
+and chromosome examples share a PDF/page. Do not count frame IDs as independent
+drawings or pool old23+new6 without whole-cohort variant/concentration admission.
+
+- Source set: `artifact_67195d16b0f04a20881a2b0c5d2c5115` /
+  `rev_c1bad93c75534c1b9b7347e517f8a328`,
+  `manifests/science-source-pdf-crop-set.json`, raw SHA
+  `3bb768d8dacfc95a9d41d5048a1e81724daeb5d7e74ec9e5f2d7c0c314ecba46`.
+- Target result: `artifact_1519d40c7daf42eba0ef391cee893a11` /
+  `rev_df803bccfad143e9ae8d0845557cf41b`,
+  `manifests/sdxl-training-target-result.json`, raw SHA
+  `bddb9654476e70cf615a0c38b833ac9e0c2e9e700e3d3f385eed60ba2f9611a6`.
+- Twenty-two text evidence members: `artifact_5dc6b5f82ee84cbd998aa813b558b651` /
+  `rev_e830cdf7785c4046a8b5414670df7072`, `reports/own-review.md`, raw SHA
+  `52e26f17bdf53fe7e931323da4171e53ee62c782114dbacf4c019d9c742a391c`.
+
+Native canonical replay and all seven target members passed hash/content checks;
+installed target-worker terminal replay performed0 transforms/writes/model calls.
+Source/target/publication operators passed Ruff/format; the earlier executed local
+framing script's four long-caption E501 warnings remain disclosed in evidence.
+No new core regression run is implied. Private source views are under
+`/tmp/eom-image-contour-native10-20261005/workspace/crops/`; final source-derived
+target views/report under `/tmp/eom-sdxl-contour-native6-targets-20261005/`.
+These are training examples, **not newly generated illustrations**.
+
+**Next:** extend the existing source-initialized Canny comparison owner only where
+explicit native-adapter compatibility is missing; preserve released micro schemas.
+Then freeze the next bounded comparison and any whole-cohort training admission.
+This input PASS does not justify a strength/seed sweep or increasing pilot steps.
+Full corpus diversity, independent blind/scientific quality and Item/HWPX gates
+remain open. Five main services active; production binding unchanged.
+
+## Previous native four-arm completion — 2026-10-05 06:26 UTC
 
 **Technical PASS; own publication review REJECTED24/24; goal ACTIVE.**
 The bounded [ADR0197](../adr/0197-native-lora-matched-input-diagnostic.md) experiment
