@@ -1,0 +1,86 @@
+# ADR 0204: Stroke-led native TRAIN pilot, separate from reference preprocessing
+
+## Status and evidence
+
+2026-10-05 UTC. Proposed bounded experiment through existing released contracts;
+not numerical execution, training success, quality approval or activation.
+
+ADR0203's six novel-photo retained-region outputs still have gray relief and one
+unwanted LORA object. Canonical TRAIN44 audit actually inspected all44 targets:
+9 contour/6 fine-hatch/29 tone, with precise ink/flat-fill drawings as well as
+soft raster, gradient and texture. This heterogeneity is observed; its causal
+effect on failed photo transfer is NOT established. BASE also fails. Preserve
+native44/200-update baseline and previously promising fan/beaker examples.
+
+Twenty tagged-contour candidates outside the current training sample IDs were
+re-resolved from the immutable95-source TRAIN pool and actually viewed. Some are
+alternative frames of an already used subject; others contain connected leaders,
+exterior text/arrows, soft rasters or intentional partial figures. A tag is not
+admission. Their original pixels/labels/old deferrals remain unchanged. New source
+framing/preparation is a separate task, not mixed with this training factor.
+
+## Bounded design
+
+1. Responsibility/boundary: existing native-training Orchestrator prepares one
+   own-reviewed cohort and dispatches one isolated numerical worker. No new queue,
+   training framework, registry, model, dependency, privilege or production path.
+2. Canonical source: native44 command1.1 artifact_22c13da7e8c544b395f73b5f316520e9 /
+   rev_ad049b679783422685f0458ba495a1ee, byte
+   33e8ec620670c5347d8c38c79b86ac8ec1614fe119d26017892273d49e2bf0a5;
+   TRAIN audit artifact_bac3d4a6cfc14960897763bb80a98bcb /
+   rev_424d0a0fb4e446cbb3d2bc5bbddde200. Original target PNGs never changed.
+3. Identity: new content-derived native-training command/run and terminal adapter
+   revision under existing command1.1/result1.0/manifest1.0. Do not mutate old
+   command, recipes, targets, captions or weights. Existing JSON Schema/Pydantic
+   contracts already express an own-screened12–64-target pilot; no successor wire
+   merely to encode a different valid frozen selection.
+4. Resolution: exact artifact/revision/member/schema/media/SHA/access/lifecycle,
+   source authorization, physical-frame nonoverlap, document TRAIN partition and
+   command/target/caption closure before selected PNG reads. Missing/stale fails;
+   no latest substitution, duplicated reframe or count by filename.
+5. Access: ordered immutable24 samples, keyed target/batch lookup, sets for
+   uniqueness and Counter concentration checks; selected-only bounded PNG staging.
+6. Structures/scale: existing frozen samples/pointers/command, no DB/index/cache
+   change. O(cohort+metadata+selected pixels), bounded16MiB target materialization;
+   model/weights materialized only through the existing guarded model adapter.
+7. Selection: audit ordinals2,3,4,5,6,7,9,10,12,14,17,20,22,23,26,28,31,35,36,
+   38,41,42,43,44. Exact9 CLEAN_CONTOUR,4 FINE_HATCHING,11 RESTRAINED_TONE.
+   Stroke-led does not mean binary ink: meaningful flat gray fills/hatching remain.
+   Selection excludes soft/gradient-dominated examples without editing them;
+   diagrams and existing labels are not recertified as scientifically exact.
+8. Concurrency/transaction: one unique workspace/run, existing exclusive GPU lease
+   and one terminal publication via Orchestrator. At most one training dispatch,
+   200 updates,1 hour,16GiB allocated GPU. No automatic retry/resume/sweep; inspect
+   the same handle if observation times out. Preserve failed/partial histories.
+9. Adapter/dependency: same SDXL base, rank/alpha8, learning rate1e-4, fp16,
+   gradient accumulator4, optimizer, seed20261005, VAE precision policy and installed
+   numerical dependencies. Only cohort selection changes. Training source remains
+   staged local inputs; no worker repository/DB/NAS/root-auth access.
+10. Evaluation/failure: training SUCCEEDED is not quality PASS. If it succeeds,
+   declare a new existing-contract configuration that pins this adapter, then one
+   six-output same-photo/prompt/seed/initializer/full-control/retained-region pair
+   against native44. At most6 generated outputs; no mixing prompt/controller/
+   region changes or undeclared output postprocessing. Reserved validation,
+   untouched final HOLDOUT, scientific fidelity and independent blind review stay
+   separate required goal gates. No Item/HWPX canary before actual quality gates.
+11. Simpler alternative: use the nine contour-labelled targets alone or threshold
+   every target. Nine do not meet the existing pilot minimum/diversity and binary
+   thresholding can erase useful science-bearing fills. The24 selection uses
+   already reviewed canonical samples and unchanged valid contracts, tests one
+   training-distribution hypothesis and avoids new crop/preprocessing confounders.
+
+## Execution gates and rollback
+
+Before dispatch: schema/Pydantic/canonical command and complete metadata admission,
+installed wheel RECORD/dependency/source-free worker role, selected input hashes,
+no active numerical image unit, exact systemd template and GPU lock preflight.
+Core code is unchanged; existing native admission/lifecycle tests apply, and this
+specific command must pass live readmission. Do not cite old tests as this pilot's
+numerical or quality acceptance.
+
+After terminal result: validate exact result/manifest/weights, supported no-model
+terminal replay and immutable publication. No deployment or activation involved;
+rollback is leaving the preserved native44/production binding selected. Do not
+overwrite failed results, reset leases, patch DB rows or silently reinitialize.
+Any new comparable evaluation input/configuration requires its own frozen command
+before generation. Broader goal remains ACTIVE regardless of this pilot outcome.
