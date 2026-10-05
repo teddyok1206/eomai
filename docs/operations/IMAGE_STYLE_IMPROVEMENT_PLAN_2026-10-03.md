@@ -7,7 +7,60 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
-### Reviewed exterior cleanup — source candidate, 2026-10-05 UTC
+### Native evaluation successor and actual exterior derivative — 14:39 UTC
+
+ADR0200 / frozen source `3625b079c3edc382b719a8a36452945178205c3e` adds explicit
+geometry evaluation command/result1.4, pinning training-command1.1/result1.0/
+adapter-manifest1.0. Predecessor schema bytes/behavior stay intact. Focused source
+gate302 PASS/zero skips, six source modules mypy PASS and eight source/test files
+Ruff/format PASS. This is only a TRAIN raw-geometry diagnostic consumer; old native
+reference/reserved comparisons are not silently broadened. Full quality remains OPEN.
+
+Three frozen wheels installed in the existing isolated trainer environment after
+hash-checked rollback, complete RECORD checks and actual eom-image source-free
+imports. Wheel directory
+`/tmp/eom-image-trainer-build/3625b079c3edc382b719a8a36452945178205c3e.MBUwpt/dist`;
+contracts/provider/trainer SHA-256 respectively:
+`0d5b1ee9ee9c91c04b89a56814cca531b03dfd9d47c8448ee15a4842ab99484d`,
+`35e71020d4263cdd94d3d2310fc63cd2de3ecbdc429d5facb5d87fa1a0f387bc`,
+`411528e4918a3e5a0cb3dcc45fb0bc6447ec99aa201019cf47cb33810df91063`.
+Numerical dependencies unchanged, no unit changes/service restarts/production
+binding changes/model calls/training/generation. Installed-role and candidate
+simulation evidence are separate, not inferred from unit tests.
+
+Viewed both original native PDF crops again. House/dish exterior lettering was
+removed with explicitly reviewed mask/protected regions; roof/window/door/dish
+pixels and intentional tone retained. One CPU run prepared1/deferred11 in76ms;
+three deferrals are previously prepared REFERENCE_ONLY. New result+PNG committed,
+both hashes re-resolved; actual installed-role replay0 transformations/writes/models.
+Own result review READY_WITH_NOTES, preserving source softness/native aspect ratio;
+no independent approval. Monkey is deferred: faint lettering fringes fail unchanged
+white-clearance guard; no repaired pixels, worker dispatch or guard relaxation.
+An initial local comparison against an older page-preview hash was rejected before
+writes; canonical native crop-set hashes then re-admitted. No source identity changed.
+
+New result `artifact_9c1547a8715847639dc6ee6797162e74` /
+`rev_4486a9019b41465787c7080e1bc923a4`, raw manifest SHA
+`94ef17646ca7d134850a0da7147cdf651b01ae77b1d0dba9960548409f5c3c85`.
+Fresh metadata-only inventory at14:39:15 UTC: **51 distinct prepared IDs**,
+42 within95-source pool/9 outside,0 same-sample variants,8 chains/39 metadata reads,
+0 PDF/PNG/model reads;8 CLEAN_CONTOUR/7 FINE_HATCHING/36 RESTRAINED_TONE.
+Counts are not51 independently admitted drawings; full100 admission NOT_ACHIEVED.
+Next enlarge/rebalance unique usable native targets, especially contours, before
+training. The exhausted12-target40/200-update branch remains closed. Reference-
+preserving successor, reserved evaluation, independent blind review and quality-
+passing Item/HWPX canary/activation/rollback remain OPEN. Goal ACTIVE.
+
+Canonical26-member text evidence: `artifact_66b18c3ad1754a1197a79b495c870f4a` /
+`rev_507d3b5d06164a9b87f28184b61f5597`, own review SHA
+`f890aa0d3c892195e554628fc352aa781509528314269dc7b1b4cc69a7df3444`.
+All persisted hashes PASS, no duplicate PNG/PDF/weights archive. Source test failure
+logs preserved. Temporary archive operator has one E501 formatting finding,
+archived as executed; core source gate remains PASS, not all-operator-lint PASS.
+All five primary services active; production binding SHA still
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+
+### Reviewed exterior cleanup — historical source candidate, 2026-10-05 UTC
 
 ADR0199's source implementation adds explicit target command/result1.3 and native
 training-command1.1, preserving all predecessor schema bytes, numerical recipes

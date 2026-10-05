@@ -2,8 +2,9 @@
 
 ## Status
 
-Source implementation verified, 2026-10-05 UTC. No model execution, installed
-package or production activation performed by this source acceptance.
+Source implementation verified, 2026-10-05 UTC. That source acceptance did not
+execute models or install packages. Later lab-only installation and CPU delivery
+are recorded below; production activation and quality gates remain open.
 
 ## Boundary and decision
 
@@ -93,3 +94,42 @@ Neither is silently converted into a training1.1 or native reserved consumer.
 Geometry1.4 closes only the admitted TRAIN raw geometry diagnostic consumer.
 Reference-preserving and reserved/blind successors remain part of the full goal,
 not evidence to re-run the exhausted old diagnostic or activate a model now.
+
+## Actual lab installation and bounded CPU delivery
+
+Frozen source `3625b079c3edc382b719a8a36452945178205c3e` produced the three
+contracts/provider/trainer wheels. Complete RECORD closure and source-free imports
+passed both candidate simulation and the actual installed eom-image role. Previous
+three wheels were hash-verified as rollback inputs before installation. Only these
+lab packages changed; numerical dependencies, service units and production model
+binding did not. No service restart, GPU call, training update or generation.
+Installation log `/tmp/eom-native-eval-successor-install-20261005.log`.
+
+The existing isolated CPU target worker prepared one explicitly reviewed exterior
+house/dish derivative in76ms, with11 deferrals including three already-prepared
+REFERENCE_ONLY subjects. Original pixels outside the declared exterior text mask
+were protected; no source rewrite, reconstruction, threshold or inpainting. All
+output pixels were subsequently viewed: own assessment READY_WITH_NOTES, not
+independent evaluation. Monkey remains deferred because faint exterior text fringe
+failed the unchanged3px/white250 guard during local no-write recipe checks.
+
+Result `artifact_9c1547a8715847639dc6ee6797162e74` /
+`rev_4486a9019b41465787c7080e1bc923a4`, raw result SHA
+`94ef17646ca7d134850a0da7147cdf651b01ae77b1d0dba9960548409f5c3c85`.
+Result/PNG members were re-resolved/hash-checked after Orchestrator publication;
+actual installed-role terminal replay performed zero transforms/model calls/writes.
+Metadata-only inventory:51 distinct prepared IDs,42 within95-source pool/9 outside,
+zero same-sample variants,8 preparation chains/39 cached metadata members,
+zero PDF/PNG/model byte reads; expression counts8 contour/7 hatching/36 tone.
+Full100 training admission is NOT_ACHIEVED; TRAIN-only preparation is not reserved
+validation or independent quality PASS. New training has not been dispatched.
+
+Twenty-six text-only evidence members, including preserved source test failures,
+installation, operators, inventory and separate own review, committed through the
+existing publisher: `artifact_66b18c3ad1754a1197a79b495c870f4a` /
+`rev_507d3b5d06164a9b87f28184b61f5597`, `reports/own-review.md`, SHA
+`f890aa0d3c892195e554628fc352aa781509528314269dc7b1b4cc69a7df3444`.
+Every persisted member hash passed; no duplicate PNG/PDF/weight archive.
+Temporary archive operator had one E501 line-format finding and was preserved
+as executed; no all-operator-lint claim. Core source Ruff/type/test gates remain
+as recorded above. All five primary services were active after the CPU delivery.
