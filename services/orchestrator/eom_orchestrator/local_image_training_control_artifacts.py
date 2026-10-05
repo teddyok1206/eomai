@@ -39,6 +39,7 @@ from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyCondi
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_evaluation_codec import sdxl_evaluation_command_contract
 from eom_image_contracts.sdxl_native_canny_reference import reference_command_contract
+from eom_image_contracts.sdxl_photo_style import LocalImageSdxlPhotoStylePlan
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
 )
@@ -394,6 +395,22 @@ class LocalImageTrainingControlArtifactPublisher:
             idempotency_prefix="local-image-sdxl-canny-reference-command",
             identity_sha256=command.command_sha256,
             created_at=command.created_at,
+        )
+
+    def commit_sdxl_photo_style_plan(
+        self, plan: LocalImageSdxlPhotoStylePlan
+    ) -> ImageEvaluationArtifactMember:
+        if plan.source_commit != self.source_commit:
+            raise ValueError("photo style plan source commit differs from publisher")
+        return self._commit_document(
+            value=plan,
+            contract_name="sdxl-photo-style-plan",
+            member="manifests/sdxl-photo-style-plan.json",
+            schema_ref="eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0",
+            artifact_type="control_local_image_sdxl_photo_style_plan",
+            idempotency_prefix="local-image-sdxl-photo-style-plan",
+            identity_sha256=plan.plan_sha256,
+            created_at=plan.created_at,
         )
 
     def commit_sdxl_validation_comparison_command(

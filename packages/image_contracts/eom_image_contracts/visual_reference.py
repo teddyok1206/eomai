@@ -581,6 +581,15 @@ def validate_visual_reference_acquisition(
         raise ValueError("visual-reference bundle differs from its intent")
     if bundle.observed_at != command.observed_at:
         raise ValueError("visual-reference bundle observation differs from its command")
+    validate_visual_reference_bundle_intent(bundle, intent)
+
+
+def validate_visual_reference_bundle_intent(
+    bundle: LocalImageVisualReferenceBundle, intent: LocalImageVisualReferenceIntent
+) -> None:
+    """One source-selection rule for acquisition and later immutable readmission."""
+    if bundle.subject != intent.subject:
+        raise ValueError("visual-reference bundle differs from its intent")
     if len(bundle.sources) != len(intent.candidates):
         raise ValueError("visual-reference bundle candidate coverage differs")
     for candidate, source in zip(intent.candidates, bundle.sources, strict=True):

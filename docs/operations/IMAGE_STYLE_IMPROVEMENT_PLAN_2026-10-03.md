@@ -7,6 +7,38 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Current native44 checkpoint and novel-photo preparation
+
+The schema-only17:03 entry below is historical, not the current consumer state.
+[ADR0202](../adr/0202-native-adapter-reserved-validation.md) records installed
+contracts/provider source d1ba1151 and one completed native44/reserved13 paired
+dispatch:26 outputs/53010ms/10763590656 peak bytes, canonical79-member result
+`artifact_4c888cca72b44c2bab5a741f9da5c94f` /
+`rev_b300f6413bec4a7cbc2b77128f066f44`. BASE13 raw/final pairs are byte-identical
+to historical BASE; native LoRA differences are subtle. Output interpretation is
+**SOURCE_INITIALIZED RECONSTRUCTION OF EXISTING EXAM DRAWINGS**, not novel
+authorship or proved style advantage. Canonical12-member terminal evidence
+`artifact_025647d9a7f146cf820153d1a1671e66` /
+`rev_459869770f8542bc8b58c8abf4865f3e`; installed replay163 unchanged files,
+models/transforms/GPU/writes0 (read-only PNG validation still decodes images).
+
+[ADR0203](../adr/0203-novel-photo-style-comparison.md) separates the next actual
+gap: licensed non-exam photographs must test conversion rather than source copying.
+Preparation schema/frozen source authority/metadata-first native admission and
+existing publisher are implemented, focused118 tests PASS. This preparation plan
+does not dispatch a worker. Numerical successor/result/staging/publisher support,
+installed wheel verification and one frozen photo-to-style comparison are next;
+no new generated photograph conversion has occurred in this checkpoint.
+
+Canonically approved source inventory15 bundles, four actual photo references
+viewed (three initial + one alternate); source filename/intent alone cannot establish
+morphology suitability. Preserve rejected cluster-shell candidate; car/trilobite/
+polished-cross-section reference limitations are recorded in ADR0203. No training,
+model/GPU calls, new download, production change or independent blind review.
+Four-family/32-depiction quality, independent human review, Item Preview/HWPX and
+activation/rollback gates remain OPEN; goal ACTIVE. Do not re-open exhausted old
+generation budgets or treat technical tests as visual quality acceptance.
+
 ### Native44 reserved-source preflight and schema-first successor — 17:03 UTC
 
 Fresh canonical native37-member training closure and historical reserved command

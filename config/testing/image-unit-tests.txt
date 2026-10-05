@@ -54,6 +54,7 @@ tests/unit/test_sdxl_native_geometry_successor.py
 tests/unit/test_sdxl_native_lora_runner.py
 tests/unit/test_sdxl_native_training_targets.py
 tests/unit/test_sdxl_native_validation.py
+tests/unit/test_sdxl_photo_style.py
 tests/unit/test_sdxl_publication_comparison.py
 tests/unit/test_sdxl_reviewed_evaluation.py
 tests/unit/test_sdxl_reviewed_micro.py
