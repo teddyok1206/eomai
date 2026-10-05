@@ -36,6 +36,16 @@ document/PDF/group leakage before any binary/model read. Existing native576 sour
 rendering is TRAIN-only and must not be relaxed for low-resolution reserved sources.
 The full quality/independent-review/Item-HWPX/activation gates stay OPEN; goal ACTIVE.
 
+Source checkpoint `54b09912245fa13928959ff07bfd8de3485ea624`; canonical17-member
+text evidence `artifact_e7406ada2aa94628b59bc4fe78397453` /
+`rev_942b6e5c6a0541809fbfea32bdf04cb1`, primary `reports/own-review.md`, SHA
+`6d9737f73be836dbaa6b861087f069613c6faeecb4773e60c04a76105365d0f5`, all persisted
+hashes PASS; no duplicate PNG/PDF/weight members. Source-file group-write archive
+preflight rejection was resolved by narrowing only four exact evidence-source
+file modes without changing bytes/Git tree or runtime. Slack milestone SENT200,
+`devreport_44f6689c5a4d4fa28bf6098ea01201c7` at17:07:18 UTC. No GPU dispatch or
+installation took place in this checkpoint.
+
 ### Canonical TRAIN44 pilot and matched reference results — 16:45 UTC
 
 Operation source `766ed3f904ac0f395c4c46431f57b52e41b926a4`. The lab-only

@@ -151,3 +151,10 @@ No Pydantic successor/worker, actual native validation GPU run, install/resource
 release closure or new quality gate is claimed. The old consumer continues to
 reject the successor instead of silently using a micro adapter. This deliberate
 fail-closed state must remain until steps2–6 are complete.
+
+Canonical17-member text evidence is committed under source54b09912:
+`artifact_e7406ada2aa94628b59bc4fe78397453` /
+`rev_942b6e5c6a0541809fbfea32bdf04cb1`, primary `reports/own-review.md`, SHA
+`6d9737f73be836dbaa6b861087f069613c6faeecb4773e60c04a76105365d0f5`;
+all members re-resolved with typed hash checks. Source PNGs/PDFs/weights are not
+duplicated. Slack milestone SENT200, `devreport_44f6689c5a4d4fa28bf6098ea01201c7`.
