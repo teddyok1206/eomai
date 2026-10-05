@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-photo-style-plan-v2": "local-image-sdxl-photo-style-plan-v2.schema.json",
+    "sdxl-photo-style-command-v2": "local-image-sdxl-photo-style-command-v2.schema.json",
+    "sdxl-photo-style-result-v2": "local-image-sdxl-photo-style-result-v2.schema.json",
     "sdxl-photo-style-command": "local-image-sdxl-photo-style-command-v1.schema.json",
     "sdxl-photo-style-result": "local-image-sdxl-photo-style-result-v1.schema.json",
     "sdxl-photo-style-plan": "local-image-sdxl-photo-style-plan-v1.schema.json",
@@ -402,6 +405,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-photo-style-plan-v2": (
+        "sha256:b5b504723e19eea420a1746cf4bcc2b14e507361597fd55fcfcbd76cab4746dc"
+    ),
+    "sdxl-photo-style-command-v2": (
+        "sha256:f074df3113830a01ad91a3bb8f8b1d3ffcc257075548168117a9c5ae4c1f8cda"
+    ),
+    "sdxl-photo-style-result-v2": (
+        "sha256:975413abde12fffcaba0a833db49137422dba4f4bc85b4f42dde4c9cc8035bab"
+    ),
     "sdxl-photo-style-command": (
         "sha256:281f56f8e3e9c18299c815b48b8f444c0b770138a159e0556109ae7b14231322"
     ),

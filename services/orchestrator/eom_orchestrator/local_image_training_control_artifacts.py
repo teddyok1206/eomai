@@ -39,7 +39,10 @@ from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyCondi
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_evaluation_codec import sdxl_evaluation_command_contract
 from eom_image_contracts.sdxl_native_canny_reference import reference_command_contract
-from eom_image_contracts.sdxl_photo_style import LocalImageSdxlPhotoStylePlan
+from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoStylePlan,
+    photo_style_contract_name,
+)
 from eom_image_contracts.sdxl_photo_style_execution import LocalImageSdxlPhotoStyleCommand
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
@@ -405,9 +408,9 @@ class LocalImageTrainingControlArtifactPublisher:
             raise ValueError("photo style plan source commit differs from publisher")
         return self._commit_document(
             value=plan,
-            contract_name="sdxl-photo-style-plan",
+            contract_name=photo_style_contract_name(plan.schema_version),
             member="manifests/sdxl-photo-style-plan.json",
-            schema_ref="eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0",
+            schema_ref="eom://schemas/image-provider/" + plan.schema_version,
             artifact_type="control_local_image_sdxl_photo_style_plan",
             idempotency_prefix="local-image-sdxl-photo-style-plan",
             identity_sha256=plan.plan_sha256,
@@ -421,7 +424,7 @@ class LocalImageTrainingControlArtifactPublisher:
             raise ValueError("photo style command source commit differs from publisher")
         return self._commit_document(
             value=command,
-            contract_name="sdxl-photo-style-command",
+            contract_name=photo_style_contract_name(command.schema_version),
             member="manifests/sdxl-photo-style-command.json",
             schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_photo_style_command",

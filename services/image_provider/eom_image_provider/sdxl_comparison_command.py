@@ -73,7 +73,10 @@ def load_sdxl_comparison_command(
             "local-image-sdxl-validation-comparison-command/1.1",
         ):
             parsed = parse_sdxl_validation_command(value)
-        elif schema == "local-image-sdxl-photo-style-command/1.0":
+        elif schema in (
+            "local-image-sdxl-photo-style-command/1.0",
+            "local-image-sdxl-photo-style-command/1.1",
+        ):
             parsed = parse_photo_style_command(value)
         else:
             raise ValueError("unsupported paired comparison command family")

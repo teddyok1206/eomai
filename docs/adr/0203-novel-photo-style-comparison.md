@@ -393,3 +393,43 @@ No generated-output whitening is permitted as a substitute for learned style.
 If white initialization fails, preserve/report it before a separate coarse-contour
 or style-data-balance decision; no automatic parameter search. Independent review
 and full institution-style acceptance remain necessary for any activation.
+
+## Constant-white initializer successor: source implementation checkpoint
+
+Plan/command/result1.1 are now schema-first successors; the existing1.0 resources
+and meanings are unchanged. New schemas reference unchanged predecessor fields
+rather than cloning their large case/pointer contracts. White recipe has the same
+strength0.70/30 scheduled/21 effective steps/Pillow11.3.0; only initializer policy
+is `CONSTANT_WHITE_RGB_832X512/1.0`. Frozen Pydantic subclasses share the original
+authority/identity/result rules. Closed version selection rejects mismatched
+plan/command/result recipes, unsupported versions and invented fallback.
+
+Existing pixel preparation now accepts the pinned initializer value: source canvas
+still constructs identical Canny, while the successor supplies constant-white RGB
+to the existing img2img backend. The historical default remains photo grayscale.
+Initializer RGB SHA `2a1305062f642d1db1cc642ac56bd73710d20fa355a02cd84f31a90d23d4e106`
+is required by both schema and result model; exact PNG/decoded RGB checks reinforce
+it. CPU publication recomputes the same authoritative initializer function. Terminal
+replay remains transform/model/GPU/write-free; nonwhite pixels/rehashed declarations
+fail without another dispatch. Current staging, metadata/source admission, physical
+lease, Artifact publisher, CLI/unit and numerical dependencies are reused.
+
+Source gates:294 tests PASS/142.14s, including white success/failed prefixes,
+constant pixels, version mismatch, cross-version pointers, closed recipe,
+publication canonical/CPU/input negatives and historical photo/native/reserved
+regressions. Initial focused test83 PASS/1 fixture directory collision; corrected
+test uses separate old/white workspaces and final regression PASS. Ruff/format,
+diff checks and both build-script syntax PASS. Strict changed-file mypy8/Python3.12
+and2 contracts/Python3.11 PASS with unchanged imports followed silently. The broad
+transitive run reports existing Pillow typing errors in unmodified
+reference_simplification.py; initial API-interpreter invocation also lacked image
+dependency stubs. No runtime dependency was added or unrelated source patched to
+conceal those separate environment/baseline limitations.
+
+New schema byteSHA plan `b5b504723e19eea420a1746cf4bcc2b14e507361597fd55fcfcbd76cab4746dc`,
+command `f074df3113830a01ad91a3bb8f8b1d3ffcc257075548168117a9c5ae4c1f8cda`,
+result `975413abde12fffcaba0a833db49137422dba4f4bc85b4f42dde4c9cc8035bab`.
+Wheel resource gates require these explicit successors alongside all predecessors.
+Installed lab verification, canonical successor plan, real conditioner inspection
+and one separately bounded six-output diagnostic remain pending here. No new
+training/HOLDOUT or quality/independent-review/activation acceptance is claimed.

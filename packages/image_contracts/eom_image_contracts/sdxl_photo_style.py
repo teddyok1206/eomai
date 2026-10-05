@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
@@ -74,6 +75,17 @@ class SdxlPhotoStyleInitialization(FrozenModel):
     pillow_version: Literal["11.3.0"]
 
 
+SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256 = (
+    "sha256:2a1305062f642d1db1cc642ac56bd73710d20fa355a02cd84f31a90d23d4e106"
+)
+
+
+class SdxlPhotoStyleWhiteInitialization(SdxlPhotoStyleInitialization):
+    """Only the initializer changes; photo-derived spatial control remains separate."""
+
+    policy: Literal["CONSTANT_WHITE_RGB_832X512/1.0"]  # type: ignore[assignment]
+
+
 class SdxlPhotoStyleBudget(SdxlLearnedComparisonBudget):
     maximum_duration_ms: int = Field(ge=1, le=600_000)
     maximum_peak_gpu_memory_bytes: int = Field(ge=1, le=16 * 1024**3)
@@ -134,6 +146,56 @@ class LocalImageSdxlPhotoStylePlan(FrozenModel):
         ):
             raise ValueError("photo style plan identity/hash mismatch")
         return self
+
+
+class LocalImageSdxlPhotoStyleWhitePlan(LocalImageSdxlPhotoStylePlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.1"]  # type: ignore[assignment]
+    initialization: SdxlPhotoStyleWhiteInitialization
+
+
+_PHOTO_STYLE_CONTRACTS = MappingProxyType(
+    {
+        "local-image-sdxl-photo-style-plan/1.0": "sdxl-photo-style-plan",
+        "local-image-sdxl-photo-style-plan/1.1": "sdxl-photo-style-plan-v2",
+        "local-image-sdxl-photo-style-command/1.0": "sdxl-photo-style-command",
+        "local-image-sdxl-photo-style-command/1.1": "sdxl-photo-style-command-v2",
+        "local-image-sdxl-photo-style-result/1.0": "sdxl-photo-style-result",
+        "local-image-sdxl-photo-style-result/1.1": "sdxl-photo-style-result-v2",
+    }
+)
+
+
+def photo_style_contract_name(schema_version: str) -> str:
+    """Closed released family; never guess a compatible or latest recipe."""
+    try:
+        return _PHOTO_STYLE_CONTRACTS[schema_version]
+    except KeyError as exc:
+        raise ValueError("unsupported photo style contract") from exc
+
+
+def photo_style_version(schema_version: str) -> str:
+    photo_style_contract_name(schema_version)
+    return schema_version.rsplit("/", 1)[1]
+
+
+def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
+    from eom_image_contracts.validation import validate_contract
+
+    if not isinstance(value, dict):
+        raise ValueError("photo plan object required")
+    schema = value.get("schema_version")
+    if schema not in (
+        "local-image-sdxl-photo-style-plan/1.0",
+        "local-image-sdxl-photo-style-plan/1.1",
+    ):
+        raise ValueError("unsupported photo plan family")
+    validate_contract(photo_style_contract_name(schema), value)
+    model = (
+        LocalImageSdxlPhotoStyleWhitePlan
+        if schema.endswith("/1.1")
+        else LocalImageSdxlPhotoStylePlan
+    )
+    return model.model_validate(value)
 
 
 def photo_style_artifact_pointer(

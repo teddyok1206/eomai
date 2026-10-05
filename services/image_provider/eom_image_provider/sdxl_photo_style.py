@@ -15,6 +15,7 @@ from typing import cast, get_args
 from eom_image_contracts.models import content_json_bytes, content_sha256
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
+from eom_image_contracts.sdxl_photo_style import photo_style_version
 from eom_image_contracts.sdxl_photo_style_execution import (
     LocalImageSdxlPhotoStyleCommand,
     LocalImageSdxlPhotoStyleResult,
@@ -48,6 +49,7 @@ from eom_image_provider.sdxl_photo_style_sources import read_sdxl_photo_style_so
 from eom_image_provider.sdxl_reference_pixels import (
     REFERENCE_PIXEL_DIRECTORIES,
     prepare_sdxl_reference_pixels,
+    sdxl_reference_initializer,
     validate_sdxl_reference_pixel_members,
 )
 from eom_image_provider.staged_file_io import (
@@ -159,6 +161,7 @@ def run_sdxl_photo_style(
                 originals,
                 policy=spatial.preparation.policy,
                 conditioner=canny_conditioning_canvas_png,
+                initialization=plan.initialization,
             )
             create_sdxl_pair_directories(root, workspace)
             try:
@@ -207,7 +210,8 @@ def run_sdxl_photo_style(
             except Exception:
                 pair = SdxlPairInferenceEvidence((), None, "SDXL_PROBE_EXEC_FAILED")
             value = dict(
-                schema_version="local-image-sdxl-photo-style-result/1.0",
+                schema_version="local-image-sdxl-photo-style-result/"
+                + photo_style_version(command.schema_version),
                 run_id=command.run_id,
                 command_sha256=command.command_sha256,
                 plan_sha256=plan.plan_sha256,
@@ -270,7 +274,11 @@ def verify_sdxl_photo_style_transforms(workspace: Path) -> LocalImageSdxlPhotoSt
                 original, width_px=case.reference_width_px, height_px=case.reference_height_px
             )
             if (
-                _sha(canvas.convert("RGB").tobytes())
+                _sha(
+                    sdxl_reference_initializer(
+                        canvas, initialization=sources.plan.initialization
+                    ).tobytes()
+                )
                 != traces[case.case_id].initialization_rgb_sha256
                 or _sha(canny_conditioning_canvas_png(canvas, policy=spatial.preparation.policy))
                 != traces[case.case_id].conditioning_sha256

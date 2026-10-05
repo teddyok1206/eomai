@@ -21,6 +21,7 @@ from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoStylePlan,
     SdxlPhotoStyleSource,
     parse_photo_style_bundle,
+    parse_photo_style_plan_value,
     parse_photo_style_source,
     photo_style_artifact_pointer,
     photo_style_training_image_hashes,
@@ -33,7 +34,6 @@ from eom_image_contracts.sdxl_photo_style_execution import (
     parse_photo_style_plan,
     validate_photo_style_execution_sources,
 )
-from eom_image_contracts.validation import validate_contract
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import (
@@ -229,8 +229,7 @@ def resolve_sdxl_photo_style_metadata(
 ) -> ResolvedSdxlPhotoStyleMetadata:
     """Re-admit configuration and licensed sources before any binary input can be read."""
     value = plan.model_dump(mode="json")
-    validate_contract("sdxl-photo-style-plan", value)
-    plan = LocalImageSdxlPhotoStylePlan.model_validate(value)
+    plan = parse_photo_style_plan_value(value)
     anchor_raw = resolve_control_artifact_member(
         engine, plan.configuration_anchor, maximum_bytes=256 * 1024
     )

@@ -33,10 +33,15 @@ from eom_image_contracts.sdxl_native_canny_reference import (
 )
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.sdxl_photo_style import (
+    SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
     LocalImageSdxlPhotoStylePlan,
     SdxlPhotoStyleInitialization,
     SdxlPhotoStyleSource,
+    SdxlPhotoStyleWhiteInitialization,
+    parse_photo_style_plan_value,
+    photo_style_contract_name,
     photo_style_training_image_hashes,
+    photo_style_version,
     validate_photo_style_sources,
 )
 from eom_image_contracts.validation import validate_contract
@@ -66,7 +71,8 @@ class LocalImageSdxlPhotoStyleCommand(FrozenModel):
     def exact_command(self) -> Self:
         if (
             self.plan.schema_ref
-            != "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0"
+            != "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/"
+            + photo_style_version(self.schema_version)
             or self.plan.member_path != "manifests/sdxl-photo-style-plan.json"
             or self.plan.media_type != "application/json"
         ):
@@ -80,11 +86,26 @@ class LocalImageSdxlPhotoStyleCommand(FrozenModel):
         return self
 
 
+class LocalImageSdxlPhotoStyleWhiteCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.1"]  # type: ignore[assignment]
+
+
 def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
     if not isinstance(value, dict):
         raise ValueError("photo execution command object required")
-    validate_contract("sdxl-photo-style-command", value)
-    return LocalImageSdxlPhotoStyleCommand.model_validate(value)
+    schema = value.get("schema_version")
+    if schema not in (
+        "local-image-sdxl-photo-style-command/1.0",
+        "local-image-sdxl-photo-style-command/1.1",
+    ):
+        raise ValueError("unsupported photo command family")
+    validate_contract(photo_style_contract_name(schema), value)
+    model = (
+        LocalImageSdxlPhotoStyleWhiteCommand
+        if schema.endswith("/1.1")
+        else LocalImageSdxlPhotoStyleCommand
+    )
+    return model.model_validate(value)
 
 
 def parse_photo_style_plan(
@@ -95,10 +116,10 @@ def parse_photo_style_plan(
     ):
         raise ValueError("photo execution plan byte size/hash mismatch")
     value = json.loads(raw)
-    validate_contract("sdxl-photo-style-plan", value)
-    plan = LocalImageSdxlPhotoStylePlan.model_validate(value)
+    plan = parse_photo_style_plan_value(value)
     if (
-        raw != content_json_bytes(plan.model_dump(mode="json"))
+        photo_style_version(plan.schema_version) != photo_style_version(command.schema_version)
+        or raw != content_json_bytes(plan.model_dump(mode="json"))
         or plan.plan_id != command.plan_id
         or plan.plan_sha256 != command.plan_sha256
         or command.created_at < plan.created_at
@@ -188,11 +209,36 @@ class LocalImageSdxlPhotoStyleResult(FrozenModel):
         return self
 
 
+class LocalImageSdxlPhotoStyleWhiteResult(LocalImageSdxlPhotoStyleResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.1"]  # type: ignore[assignment]
+    initialization: SdxlPhotoStyleWhiteInitialization
+
+    @model_validator(mode="after")
+    def exact_white_initializer(self) -> Self:
+        if any(
+            trace.initialization_rgb_sha256 != SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256
+            for trace in self.inputs
+        ):
+            raise ValueError("white photo result contains a nonwhite initializer")
+        return self
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
-    validate_contract("sdxl-photo-style-result", value)
-    return LocalImageSdxlPhotoStyleResult.model_validate(value)
+    schema = value.get("schema_version")
+    if schema not in (
+        "local-image-sdxl-photo-style-result/1.0",
+        "local-image-sdxl-photo-style-result/1.1",
+    ):
+        raise ValueError("unsupported photo result family")
+    validate_contract(photo_style_contract_name(schema), value)
+    model = (
+        LocalImageSdxlPhotoStyleWhiteResult
+        if schema.endswith("/1.1")
+        else LocalImageSdxlPhotoStyleResult
+    )
+    return model.model_validate(value)
 
 
 def validate_photo_style_result(
@@ -211,7 +257,8 @@ def validate_photo_style_result(
     traces = {row.case_id: row for row in result.inputs}
     native = sources.configuration_sources
     if (
-        result.run_id != command.run_id
+        photo_style_version(result.schema_version) != photo_style_version(command.schema_version)
+        or result.run_id != command.run_id
         or result.command_sha256 != command.command_sha256
         or result.plan_sha256 != command.plan_sha256
         or result.configuration_command_sha256 != sources.configuration.command_sha256

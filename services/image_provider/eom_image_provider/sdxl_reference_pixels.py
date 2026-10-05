@@ -10,8 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eom_image_contracts.sdxl_canny_conditioning import SdxlCannyPolicy
-from eom_image_contracts.sdxl_canny_reference import SdxlCannyReferenceTrace
+from eom_image_contracts.sdxl_canny_reference import (
+    SdxlCannyReferenceInitialization,
+    SdxlCannyReferenceTrace,
+)
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
+from eom_image_contracts.sdxl_photo_style import (
+    SdxlPhotoStyleInitialization,
+    SdxlPhotoStyleWhiteInitialization,
+)
 from PIL import Image
 
 from eom_image_provider.sdxl_canny_pixels import (
@@ -39,6 +46,23 @@ class PreparedSdxlReferencePixels:
     traces: tuple[SdxlCannyReferenceTrace, ...]
 
 
+def sdxl_reference_initializer(
+    canvas: Image.Image,
+    *,
+    initialization: SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization | None = None,
+) -> Image.Image:
+    """Keep historical photo tone unless an explicit constant-white successor is pinned."""
+    if canvas.size != (832, 512):
+        raise ValueError("reference canvas dimensions mismatch")
+    if isinstance(initialization, SdxlPhotoStyleWhiteInitialization):
+        return Image.new("RGB", (832, 512), "white")
+    if initialization is None or isinstance(
+        initialization, (SdxlCannyReferenceInitialization, SdxlPhotoStyleInitialization)
+    ):
+        return canvas.convert("RGB")
+    raise ValueError("unsupported reference initializer")
+
+
 def prepare_sdxl_reference_pixels(
     root: int,
     cases: tuple[SdxlLineartProbeCase, ...],
@@ -46,6 +70,7 @@ def prepare_sdxl_reference_pixels(
     *,
     policy: SdxlCannyPolicy,
     conditioner: Callable[..., bytes],
+    initialization: SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization | None = None,
 ) -> PreparedSdxlReferencePixels:
     from types import MappingProxyType
 
@@ -59,7 +84,7 @@ def prepare_sdxl_reference_pixels(
             height_px=case.reference_height_px,
         )
         control = conditioner(canvas, policy=policy)
-        rgb_image = canvas.convert("RGB")
+        rgb_image = sdxl_reference_initializer(canvas, initialization=initialization)
         rgb = rgb_image.tobytes()
         encoded = io.BytesIO()
         rgb_image.save(encoded, format="PNG", compress_level=9)
