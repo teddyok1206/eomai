@@ -5,7 +5,65 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native-adapter comparison source checkpoint — 2026-10-05
+## Latest native comparison and own quality review — 2026-10-05 06:08 UTC
+
+**Technical execution PASS; own publication quality REJECTED6/6; goal ACTIVE.**
+The explicit native evaluation consumer was committed as
+`ef32aa4a27b9b3b4d0576f61b6b32a797f4b4151`. Immutable archive wheels passed RECORD
+and source-free Python3.11 simulation. Lab contracts/provider were installed;
+actual `eom-image` imports and pip check PASS. No numerical dependencies, trainer,
+units, production bindings, service restarts or data changed during installation.
+
+| Lab component | Installed wheel SHA-256 |
+| --- | --- |
+| contracts | `443174f2c27aa9ff90c11f0de19beb005580d955a454d2a824d474d6bcec873b` |
+| provider | `4b9ecdafded9e480da16dac86bcca93d66de7bec62612ee547fb58f956dba5f1` |
+
+Build directory: `/tmp/eom-image-trainer-build/ef32aa4a27b9b3b4d0576f61b6b32a797f4b4151.Gj1y0q/dist`.
+Trainer wheel was built but not installed. Verified rollback inputs remain the
+ba13157c contracts and8ad0f72b provider, with paths/hashes in the private install receipt.
+
+New run `imgsdxlloraevalrun_4d59082d8883afcfa286de3bb6a6923a` generated exactly6
+native-adapter outputs in34,810ms, peak GPU8,328,740,352 bytes. The historical6 BASE
+outputs were reused after exact source/runtime/conditioning verification; zero
+new BASE generations and zero training updates. Command Artifact
+`artifact_6324a0863a0244229124d4c4250eee69` / `rev_ffcba5e0b481477995feabc3b0aea8c9`,
+raw SHA`06f2baff4b775f04def08b0fff561c5e5a5cf7ae00fa4f7a46816ee37d015c35`.
+
+Result Artifact`artifact_ce8c3af7155042598652e990191d7c48` /
+`rev_8fb939881ca145c6b36822c71d77c7a2`,
+`manifests/sdxl-lora-evaluation-result.json`, raw SHA
+`4b4b5b095bcc7f42757b91262afb7acb27cfb38d45ab527500382b395a37e281`;
+semantic SHA`9c4a7e52cae252afb4028a4c8d1634505f0c2f6a22bebd0e82636ff5faa477a5`.
+All19 members were committed/re-resolved. Installed-role replay preserved33 file
+identities/sizes/mtimes with zero model calls/writes and no Torch import.
+
+All12 BASE/native PNGs were opened individually. Radio, trilobite, deciduous tree,
+heated vessel, glove and microscope retain gray/grid backgrounds, halos and dark
+fill; several native outputs have softer contours. Own review rejects all6 for
+publication; independent review NOT_PERFORMED. Midtone fractions increase in5/6
+cases (native696–817‰), edge fractions decrease in5/6, border foreground953–1000‰.
+These measurements describe the defect and do not certify scientific correctness.
+No generated image was substituted with a thresholded/background-cleaned version.
+
+Own review and12 text evidence members: `artifact_0d3a22f5cbb5409d84569477c6446e82`
+/ `rev_02b69cb6929c4fc0b3c064a0a236e6dc`, `reports/own-review.md`, SHA
+`4ad2252d903af8f2721d64705cfd8a42c984f878c3609a5ed8c0cd1ae9a953fa`.
+Private evidence and viewing files: `/tmp/eom-native-evaluation-20261005/`;
+samples are `samples/{depiction_key}-{base,native}.png`. Twelve viewing hashes match
+canonical output receipts. At06:08 all five main services are active, GPU2MiB/0%,
+and V6 production binding SHA is unchanged. Automatic activation remains forbidden.
+
+**Next:** use the existing zero-strength/midpoint/negative-clause and spatial
+control evidence to complete native-compatible comparisons separating conditioning
+from LoRA style on clean admitted inputs. Do not simply repeat an exhausted run,
+infer a polarity change (the upstream polarity was already verified), or enlarge
+training on loss alone. Native pilot23 includes no CLEAN_CONTOUR examples; it is
+not the final balanced corpus. This diagnostic's6/6 budget is exhausted and old
+budgets remain unchanged. Full100–200 TRAIN,24–40 VALIDATION, four arms/four families,
+32 independent blind cases and quality-passing Item/HWPX/activation gates remain open.
+
+## Previous native-adapter comparison source checkpoint — 2026-10-05
 
 The user resumed the goal card; authoritative state is ACTIVE. The completed
 23-sample/200-step pilot below is preserved. [ADR0197](../adr/0197-native-lora-matched-input-diagnostic.md)

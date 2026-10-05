@@ -2,7 +2,7 @@
 
 Date: 2026-10-05 UTC
 
-Status: source implementation verified; installed native inference and quality pending.
+Status: installed native diagnostic technically verified; all six outputs own-REJECTED.
 
 1. Responsibility: extend the existing isolated LoRA evaluation owner with the
    explicit command/result successor `local-image-sdxl-lora-evaluation/1.2`.
@@ -70,3 +70,35 @@ native comparison additionally requires exact equality of the frozen basis pin.
 The closed evaluation codec centralizes the three supported command/result
 families across publication, staging and worker loading. Unrelated legacy spatial
 and reserved-comparison training unions were not widened.
+
+## Actual installed diagnostic
+
+Source `ef32aa4a27b9b3b4d0576f61b6b32a797f4b4151` was built from an immutable
+archive. Lab contracts/provider only were installed after wheel/installed RECORD,
+GPU-lock/quiescence and rollback-wheel checks. Actual source-free `eom-image`
+identity imports, old/new schemas and pip check passed. Trainer, numeric dependencies,
+units, production binding and five production services were unchanged.
+
+One separately frozen six-generation native run completed in34,810ms, peak GPU
+8,328,740,352 bytes. The historical six BASE outputs were revalidated and reused;
+no BASE rerun or training update. Conditioning byte hashes match exactly. Actual
+installed-role replay preserved33 file identities/sizes/mtimes, with zero model
+calls/writes and no Torch import. All19 committed output members re-resolved exactly.
+
+Result `artifact_ce8c3af7155042598652e990191d7c48` /
+`rev_8fb939881ca145c6b36822c71d77c7a2`, raw result SHA
+`4b4b5b095bcc7f42757b91262afb7acb27cfb38d45ab527500382b395a37e281`.
+Own review and twelve text evidence members: `artifact_0d3a22f5cbb5409d84569477c6446e82`
+/ `rev_02b69cb6929c4fc0b3c064a0a236e6dc`, `reports/own-review.md`, SHA
+`4ad2252d903af8f2721d64705cfd8a42c984f878c3609a5ed8c0cd1ae9a953fa`.
+
+All twelve viewing images were individually inspected and hashes checked. Native
+outputs retain gray/grid backgrounds, halos and dark fill; several contours soften.
+All six are REJECTED for publication. Midtones increase in5/6 paired cases, while
+edge fractions decrease in5/6; these are descriptive metrics, not scientific quality
+scores. The native training pilot does not improve this inherited conditioning
+configuration enough for use. Do not infer a polarity fix contrary to the already
+verified upstream model card, or enlarge training solely because numerical loss is low.
+Keep previous zero-strength/negative-clause/spatial controls; the next native-compatible
+comparison must isolate conditioning and style on clean admitted inputs. This6/6
+budget is exhausted. Goal ACTIVE; full corpus/reserved/blind/Item/HWPX gates remain open.
