@@ -5,7 +5,100 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest installed native lab checkpoint — 2026-10-05 04:46 UTC
+## Latest native GPU pilot terminal evidence — 2026-10-05 05:34 UTC
+
+The native pilot completed **SUCCEEDED,200/200 steps,23 realized samples** in
+476,581ms. Final loss0.046861886978149414; peak allocated GPU memory6,166,987,776
+bytes (about5.74GiB) on RTX5080. These are numerical/runtime results, not a style
+quality score or a comparable improvement over the earlier differently prepared
+cohort. No new inference sample has yet been generated from this adapter.
+
+Actual installed `eom-image` terminal replay PASS with model resolution, tensor
+preparation, PNG decoding, training and output writes explicitly denied. All44
+workspace files retained their identities/sizes/mtimes; Torch was not imported.
+Full canonical admission was verified again before Orchestrator publication.
+The four declared output members were committed and re-resolved with exact hashes;
+no training PNGs were duplicated into the result artifact.
+
+Result Artifact`artifact_cfb1791e0def461fb2972f59f4a6c2a6`,
+revision`rev_55a3c4173dc545239489badaf88983de`:
+
+| Member | Raw SHA-256 |
+| --- | --- |
+| `manifests/sdxl-native-lora-result.json` | `cdd1bab647fa6e360d8a46e399d155532d236a6859132a917d7d269062407599` |
+| `manifests/sdxl-native-lora-adapter-manifest.json` | `7818c54f986676fc76e317808fd1e355d32c51ab35b5362b4c1af6d96132272e` |
+| `adapter/adapter_config.json` | `bca3e61a9357e06a5ee21c3c0855375786b9a54a8124eee20953f704738b921e` |
+| `adapter/adapter_model.safetensors` | `de97af966a9f05ae698d19a2fa87a71857dee6fc3ca339f529d0eecce9c7e9b4` |
+
+Adapter`imgadapter_8671c9a070475d9b147c049b27d86669`,
+revision`imgadapterrev_ba3900bbad12dde187b822ff72052988`;
+manifest semantic SHA`6170c60231ffdfef548e6a5398734979d87db2d52c75499d831a85b5778fb043`.
+Result semantic SHA`44c8dafe1769ae23b5f47820f1f97d5d148eb15596e135e4d6be99d59b64cce3`.
+State remains evaluation-only with automatic activation forbidden. Private publication
+and replay evidence is in`/tmp/eom-sdxl-native-pilot23-20261005/`.
+
+Thirteen bounded operator/failed-and-successful-log/replay evidence members are
+archived as Artifact`artifact_c85acbea44a04dc2814b44aa1f4940f2`,
+revision`rev_1552e3443050434fb67745d653442338`,
+`reports/native-pilot-acceptance.md`, raw SHA
+`706ccc72a856719b86f07451a7e2fc7c08dd4cb54f9541a3a74ca899ab93adf3`.
+The archive references canonical image/adapter artifacts and copies no binary members.
+At05:36 UTC all five main services remained active; the provider binding was unchanged,
+and GPU usage returned to2MiB/0%. The evidence-only archive caller has three E501
+line-length findings; no core lint/test result was reclassified because of that script.
+
+**Goal ACTIVE. Next: explicit native-adapter comparison compatibility and frozen
+matched-input samples.** No old micro manifest will be relabeled. Full-data training,
+reserved validation, independent blind review and publishing/activation gates remain open.
+
+## Previous native GPU pilot dispatch — 2026-10-05 05:28 UTC
+
+The first native-resolution GPU training run is actually running:
+`imgsdxlnativetrainrun_0fff9b0d3a524ab67021cc8b4313a1d5`, started05:23:28 UTC.
+The isolated native unit uses installed lab source`ba13157c`; its command pins
+source`635e6a9f`, which adds documentation only. One run,200 optimizer steps,
+terminal-only output, maximum1h/16GiB; no automatic retry or activation.
+
+All23 prepared TRAIN PNGs were opened individually. Their viewing-copy hashes
+match the pinned canonical targets. The admitted population is16 PDFs/15 groups,
+with7 square,6 portrait and10 landscape canvases. Final conditioning retains
+15 isolated backgrounds and8 authored scenes; seven subject descriptions were
+clarified from the visible image. The original candidate captions and pixels
+remain immutable. Expression counts are19 restrained-tone and4 fine-hatching;
+this pilot does not establish clean-contour coverage. Raster softness, small
+original marks and authored partial frames are explicitly recorded in own review.
+
+Complete canonical metadata/authorization/frozen-TRAIN/physical-source admission
+PASS before PNG/model reads. The16-member metadata closure and23 PNGs plus command
+were staged as40 files; selected PNG bytes4,144,618. Full independent drawing
+uniqueness and scientific correctness are not inferred from identity/frame checks.
+
+Command Artifact`artifact_f058118543224963a9195f2eea8273ee`,
+revision`rev_23555761a49a4c1eaf5f3f73b11c903a`,
+`manifests/sdxl-native-lora-command.json`, raw SHA
+`28d67f593141c3449a831622df919a8f384289ddcfabb13262c1111f4d981a00`.
+Own screening Artifact`artifact_d18c30f933474fa5836bca92c2a95725`,
+revision`rev_46b102eb701446a58a7d7e7f3d5cfc93`,
+`reports/native-lora-cohort-own-review.md`, raw SHA
+`350ca31c03b0dc1f8a2ab448b9f9d70838c2cf3743fe8d20458c6b7402b7d165`.
+Private operator evidence:`/tmp/eom-sdxl-native-pilot23-20261005/`.
+
+The first operator invocation was rejected before command publication/staging/GPU:
+UTC`+00:00` was hashed before Pydantic serialized it as`Z`. The corrected caller
+reused the same canonical own-review artifact and exact population. No additional
+training was submitted; the failed invocation remains recorded. Ruff/format PASS
+for corrected preparation and terminal publication operators. Existing core source
+tests are reused; there is no production core modification at this checkpoint.
+
+Slack start milestone SENT`devreport_c13793156fbe48bab3fb8b7e31599e47`.
+**Goal ACTIVE; current terminal result, visual quality and comparison compatibility
+are pending.** The full100–200 TRAIN,24–40 VALIDATION, four-arm/four-family comparison,
+32 independent blind cases, passing Item/HWPX canary and reversible activation
+remain open. A prepared terminal publisher will verify actual installed-role replay
+with model, training, PNG decoding and writes denied, then commit only the declared
+result/adapter members through the existing Orchestrator file-set owner.
+
+## Previous installed native lab checkpoint — 2026-10-05 04:46 UTC
 
 Source`ba13157c39f1a6b8c3c69664c4f6fa678bcf9892` was committed and all three
 immutable archive wheels built. SHA/RECORD and source-free/offline Python3.11.15

@@ -2,13 +2,16 @@
 
 ## Status
 
-Metadata admission and isolated native lab runtime verified, 2026-10-05 UTC.
+Metadata admission, isolated native lab runtime, real cohort admission and the first
+200-step native GPU pilot verified, 2026-10-05 UTC.
 Native sources/CPU target delivery already exist. The successor schemas, frozen
 models, numerical adapter, complete multi-batch admission, local terminal runner and
 explicit CLI/systemd handoff now exist. The native lab contracts/trainer are installed
-and the actual worker identity imports them successfully. Real cohort admission,
-actual GPU execution and visual quality remain pending. This is not an operational training
-acceptance, model activation, released micro budget expansion or cohort approval.
+and the actual worker identity imports them successfully. The23-source/16-PDF/15-group
+cohort passed full canonical admission; actual GPU training completed200/200 steps
+in476,581ms. Installed-role no-model/no-write terminal replay and canonical four-member
+result publication passed. Visual quality and compatible comparison consumers remain
+pending. This is numerical pilot acceptance, not full training or model activation.
 
 ## Evidence and protected boundary
 
