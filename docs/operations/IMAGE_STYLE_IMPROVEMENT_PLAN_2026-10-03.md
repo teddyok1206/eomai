@@ -5,7 +5,33 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native-admission/runner candidate — 2026-10-05 04:38 UTC
+## Latest installed native lab checkpoint — 2026-10-05 04:46 UTC
+
+Source`ba13157c39f1a6b8c3c69664c4f6fa678bcf9892` was committed and all three
+immutable archive wheels built. SHA/RECORD and source-free/offline Python3.11.15
+simulation PASS. Only lab contracts/trainer were installed; actual `eom-image`
+identity import, installed wheel contents and `pip check` PASS. New native template
+was installed/verified but remains inactive. GPU lock/quiescence and rollback wheel
+checks preceded replacement. No provider, numeric dependency, existing micro unit,
+polkit, production binding/service or source data changed. No service restart,
+model/PNG read, GPU call or training step occurred during installation.
+
+Contracts SHA`d1e3ff29afd0ef1c90fb20f3060a8fe2f39ffc6456be6ae24aad80b30071d78a`;
+trainer SHA`f46fd33dc699a06ce81915f32f738415cf36bc578470e014ab44696d62d733b9`.
+Build directory
+`/tmp/eom-image-trainer-build/ba13157c39f1a6b8c3c69664c4f6fa678bcf9892.UFhPZS/dist`;
+private install evidence`/tmp/eom-native-lora-admission-install-20261005.{py,log}`.
+The old03a542f wheels remain verified rollback inputs. Installed-role import is
+not an actual sandbox, GPU, training or image-quality PASS.
+
+**Goal ACTIVE; concrete progress. Next: truthful final-caption/composition pilot
+freeze and full canonical preflight before one bounded native GPU submission.**
+The23 prepared native candidates do not satisfy the full100–200 TRAIN gate.
+24–40 VALIDATION, four-arm/four-family comparison,32 independent blind cases and
+passing Item/HWPX canary/activation/rollback remain open. Existing models/data/auth
+are preserved; no external LLM API or paid-credit image generation was used.
+
+## Previous native-admission/runner candidate — 2026-10-05 04:38 UTC
 
 [ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md) now has
 complete metadata-first multi-batch admission and an explicit isolated native

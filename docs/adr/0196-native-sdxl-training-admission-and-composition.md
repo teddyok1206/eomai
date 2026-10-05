@@ -2,11 +2,12 @@
 
 ## Status
 
-Metadata admission and isolated native-runner source candidate verified, 2026-10-05 UTC.
+Metadata admission and isolated native lab runtime verified, 2026-10-05 UTC.
 Native sources/CPU target delivery already exist. The successor schemas, frozen
 models, numerical adapter, complete multi-batch admission, local terminal runner and
-explicit CLI/systemd handoff now exist. Installed native runtime and actual GPU
-execution remain pending. This is not an operational training
+explicit CLI/systemd handoff now exist. The native lab contracts/trainer are installed
+and the actual worker identity imports them successfully. Real cohort admission,
+actual GPU execution and visual quality remain pending. This is not an operational training
 acceptance, model activation, released micro budget expansion or cohort approval.
 
 ## Evidence and protected boundary
@@ -288,3 +289,46 @@ Next: immutable build/RECORD/non-source Python3.11 checks, supported lab install
 actual source/cohort preflight before one bounded pilot. The eventual100–200 TRAIN,
 24–40 VALIDATION, four-arm/four-family comparison,32 independent blind cases and
 passing Item/HWPX canary/activation/rollback remain open. Goal ACTIVE.
+
+## Immutable build and actual lab install — 2026-10-05 04:46 UTC
+
+Source`ba13157c39f1a6b8c3c69664c4f6fa678bcf9892` was committed with a clean tree.
+Its immutable archive built all three wheels with complete schema/module inventory.
+Wheel SHA/RECORD and source-free Python3.11.15 simulation passed. New native metadata,
+runner/adapter-output and old/new CLI imports use wheel bytes, not repository source;
+offline schema validation imports no Torch or SQLAlchemy and reads no PNG/model.
+
+Only lab contracts and trainer were installed:
+
+| Component | Raw wheel SHA-256 | Installed |
+| --- | --- | --- |
+| contracts | `d1e3ff29afd0ef1c90fb20f3060a8fe2f39ffc6456be6ae24aad80b30071d78a` | yes, lab only |
+| trainer | `f46fd33dc699a06ce81915f32f738415cf36bc578470e014ab44696d62d733b9` | yes, lab only |
+| provider candidate | `c273655093baf6e717636dac7f2cd637ee708df76d3b628c395acc70ec649b7a` | no |
+
+The install held the existing GPU lock and required no active image execution.
+Existing installed wheel bytes and available rollback wheels were verified before
+replacement. Actual `eom-image` identity import, installed RECORD and `pip check`
+PASS. Numerical dependencies, existing provider/micro template, production binding
+and all five service states were unchanged. No worker received sudo/groups/auth.
+The new native template was installed/verified but not started/enabled; no polkit
+rule or production service changed and no restart/model/PNG/GPU/training occurred.
+This is installed role/import evidence, **not actual sandbox or numerical acceptance**.
+
+Build directory:
+`/tmp/eom-image-trainer-build/ba13157c39f1a6b8c3c69664c4f6fa678bcf9892.UFhPZS/dist`.
+Private operators/evidence:
+`/tmp/eom-native-lora-admission-wheel-verify-20261005.py` and
+`/tmp/eom-native-lora-admission-install-20261005.{py,log}`.
+Previous contracts/trainer wheels remain available in the03a542f build directory
+listed by the install receipt. Rollback restores those exact wheels after stopping
+any new lab execution; the previous native template was absent. No source data,
+training result or old adapter is deleted or rewritten by that rollback.
+
+Next: freeze the actually inspected pilot's final captions/composition and exact
+native target pointers, resolve full canonical metadata before staging, then run
+one bounded native GPU pilot. The current23 prepared candidates are not the eventual
+100–200 TRAIN cohort or independent quality acceptance. Four-arm consumers must
+explicitly support the new adapter schema before evaluation. All full-data,
+VALIDATION, independent blind review, Item/HWPX and activation/rollback gates remain
+open. Goal ACTIVE; this turn is concrete implementation/build/install progress.
