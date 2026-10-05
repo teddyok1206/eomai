@@ -769,3 +769,90 @@ source checkpoint is not installed-worker or new generation acceptance. Next:
 build/RECORD, numerical-role source-free import, retained rollback, old receipt
 replay and one separately admitted matched six-output comparison, never a hidden
 repeat of the exhausted1.1 command.
+
+## Actual full-denoising matched checkpoint — 2026-10-05T20:53Z
+
+Source `d1b79a91ba45293af652aeb1695fe3707c6f8c04` was built from an immutable
+Git archive. Wheel contents/RECORD and source-free installed simulation PASS.
+Only contracts/provider were installed in the existing numerical lab; trainer,
+numerical dependencies, unit templates, permissions and production unchanged.
+Contracts wheel SHA `1ef60064a199a366e08bda4b2fc5f085bc1233792040831cf0878a9e61c45578`;
+provider SHA `af6cd7519d9ec505b1f5e669f782d0d7a1fafe12f4278544d5297a7fbb564a65`.
+Build directory
+`/tmp/eom-image-trainer-build/d1b79a91ba45293af652aeb1695fe3707c6f8c04.5d2FnJ/dist`.
+Prior lab1083fd4e rollback wheels/RECORD were checked and retained; not rolled back.
+
+One separately admitted existing paired worker run
+`imgsdxlvalcmprun_be156686116230dc48669327c82df967` completed6 outputs in35,858ms,
+peak10,763,033,600 bytes, terminal inactive/dead/success/exit0. No retry, parameter
+sweep, mask/blur, changed prompt/controller/LoRA/seed, new training or HOLDOUT.
+Only strength0.70->1.00 changed; effective21->30 steps follow the declared recipe.
+White RGB hash, original full-frame Canny and all source/prompt pins stayed equal.
+
+Pinned plan `artifact_f7adb670b2b14127be482fe0423b5ee0` /
+`rev_8fc561bf92db48228b2a68c7af1fc2a0`, primary
+`manifests/sdxl-photo-style-plan.json`, byte SHA
+`51c8dd5633fb68490a3401aee4afae66986054fca340d1defb6224d380ac3b6a`.
+Command `artifact_50ef9249d1b94807bebbd179a652cb01` /
+`rev_7fc9e97951224455a6f08cbfff0edf02`, primary
+`manifests/sdxl-photo-style-command.json`, byte SHA
+`41c94401c06c0cc9fc4421cc196470acd08a0bedb86cb0b844deef36628b89ef`.
+Result `artifact_3c89768b8764486c9caabdcfe73a5941` /
+`rev_dab70204b49242e6a114493a5f6a8549`, primary
+`manifests/sdxl-photo-style-result.json`, byte SHA
+`da7c05c61e3625339b0921379ee6416484b7237a05dccab4f64c2dd9055382ae`,
+semantic SHA `d8ab4e4d248c0b3ad57aec6b3490cee0719a07d85052d9251c045a652ad3f538`.
+All19 canonical members reread equal after source readmission and installed-role
+CPU transform verification. Root matched comparison reread15 pinned source/old/
+new members. Measured peak memory is an observation, not a conditioning variable.
+
+Opened new and matched contacts plus all6 original-resolution native RGB outputs,
+without darkening/repairing output. Source-photo panels explicitly say
+SOURCE_PHOTO_NOT_GENERATED; four subsequent columns are actual old/new model
+outputs, reference-controlled rather than drawn from scratch.
+
+| Source | BASE foreground0.70->1.00 (per thousand) | LORA foreground0.70->1.00 |
+|---|---:|---:|
+| Partial polished ammonite | 39->286 | 67->289 |
+| Enrolled trilobite | 0->383 | 1->426 |
+| Parked passenger wagon | 0->540 | 0->433 |
+
+Near-blank output decreased on this fixed three-source/one-seed comparison, but
+this is **not exam-style acceptance**. Wagon remains pale photographic/pencil
+texture with trees/ground/background cars; native LORA has a slight color cast.
+Trilobite is pale/embossed with weak structural contrast and frame artifacts.
+Ammonite's partial outline is recognizable but internal markings soften/change,
+shop clutter remains and native backgrounds contain unwanted glyph-like strokes.
+Scientific pattern fidelity NOT_VERIFIED; own exam-style acceptance fails both
+arms for all3. Own decision
+**NEAR_BLANK_REDUCED_BUT_GRAY_PHOTO_STYLE_AND_FIDELITY_NOT_ACCEPTED**.
+LoRA superiority NOT_ESTABLISHED; independent blind review NOT_PERFORMED.
+
+Installed numerical identity replayed old generic1.0, exact-phrase1.0, white1.1
+and new1.2 terminal receipts: all4 PASS, each96 files SHA/mtime unchanged and
+model/GPU/transform/write0, no Torch or repository import. The first queued generic
+read-only console invocation yielded no log; after no active execution remained,
+a distinct explicit R2 read-only replay was observed PASS. This was not a model
+failure, generation retry or justification to resubmit a terminal command.
+
+Canonical32-member diagnostic evidence `artifact_ae6fce2acb5048dca3b222016dbd5198`
+/ `rev_c7fcac42c18b4ab7ad88b2b84c752f19`, primary `reports/own-review.md`, SHA
+`3186509122c7daa38ee127cc99c5073c0ecd0434cbfbc63bc0b6547b091e22a6`;
+all persisted bytes reread equal. Includes initial fixture-hash failure, successful
+source122-test/types, build/install/rollback records, dispatch/publication/matched
+records,4 replay logs, bounded operators and one derived contact. No duplicate
+canonical source photographs, generated PNGs or weights. Initial frozen-budget/
+pre-dispatch records remain historical intent; actual terminal receipts establish
+execution. Archive itself makes0 model/GPU/training/HOLDOUT calls. Production
+binding SHA remainsf96eda84…, five services active, GPU0%/2MiB at postflight.
+
+Next: one reviewed **positive-prompt contrast/stroke variation** within existing
+1.2, explicitly black contours/white paper rather than pale pencil/relief/photo
+shading. Preserve observed subject anatomy/composition, negative prompt, seed,
+controller, LoRA and numerical recipe; pin new prompt/case/plan revisions and
+check both tokenizers before any bounded matched dispatch. Do not edit original
+content-team prompt files or add another schema/backend/framework for a permitted
+prompt variation. Do not combine region masking into this experiment. Broader
+native-family and independent review follow only after a promising result.
+Goal ACTIVE; current generation budget exhausted; production activation and
+Item/HWPX canary NOT_STARTED, quality NOT_ACCEPTED.
