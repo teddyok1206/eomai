@@ -52,10 +52,56 @@ the operator now hashes it into the existing128-character bound. Refusal log ret
 no validator relaxation/model rerun. All3 lab wheels/RECORD reverified; five services
 active and exact production binding unchanged. No images/weights copied into evidence.
 
-**Next:** the separately frozen native-versus-legacy geometry diagnostic below.
+**Next at that checkpoint:** the separately frozen native-versus-legacy geometry
+diagnostic below, now actually executed and recorded in the following section.
 Do not add a generation framework, whiten backgrounds, increase training or promote
 an adapter merely because this engineering check passed. Goal ACTIVE; existing
 rejected verdicts and all full-corpus/independent/product gates remain unchanged.
+
+### Native-geometry actual comparison — 2026-10-05 11:35 UTC
+
+**Technical PASS, own publication-quality REJECTED8/8, goal ACTIVE.** All8 fresh
+BASE/LoRA×legacy/native×fan/beaker images completed once in44,802ms, peak allocated
+GPU9,863,167,488 bytes. No source pixels, initializer, training, network, resize,
+whitening or retries. Every raw output was visually opened individually. Legacy
+fan LoRA shows a white-background lineart signal but produces three malformed fans;
+native fan LoRA collapses into white tangled mesh on gray. Both beaker arms retain
+gray shading, wrong object counts, clipping or incorrect particle distribution.
+Native geometry did not repair publication quality. The two actual TRAIN targets
+were rehashed/re-opened: one complete object on white, with compatible captions.
+No mislabeled multi-object target or reproduced current numerical defect was found
+by this bounded check; causal mechanism and generalization remain unproven.
+
+- Command: `artifact_40f30aaa2c4d4c1386898770aa642bc9` /
+  `rev_81b75a50f0274413a2df5bff8ae17967`, raw SHA
+  `58f807182f10912105a916b5311b6ff8dd0a88ccee83cc655c7ef7823f5dbb9c`.
+- Result and8 raw PNGs: `artifact_8e42bf8666ac4dcc81e46fe36664853c` /
+  `rev_14cadb86081340abbce3f6179d5ef7fe`, primary
+  `manifests/sdxl-lora-evaluation-result.json`, raw SHA
+  `5d6b92199853b0d92e4374ac6d18b441cb9d34bffb97b1fff8d789b8f31e24ca`.
+- Text-only evidence22 members: `artifact_163c4a8c59b742cab6cb200c6226b690` /
+  `rev_eac1dd6e7b6546a4aa61283f6e2479b1`, primary`reports/own-review.md`, raw SHA
+  `eb22164338027d4d2c73d15c1e5cdd923f866461e094a5ce84a9021e421697d5`.
+  Raw PNGs and adapter weights are referenced, not duplicated in this evidence set.
+
+All9 result members and22 evidence members canonically re-resolved. Actual installed
+eom-image terminal replay PASS:16 files unchanged,0 model/lease/weight-materialization/
+write calls and no Torch/source import. Source-free old/new schema wheel simulation,
+RECORD, actual-role import and pip-check PASS. Source`59d4ae96` contracts/provider
+installed in lab only; previous`b8f432f9` wheels remain exact rollback artifacts.
+Trainer, numerical dependencies, units, production binding and five active services
+unchanged; no restart. Initial evidence archive refused group-writable local test
+logs before publication; logs tightened to0600 and exact existing viewing-hash proof
+checked before supported retry. Refusal preserved; no validator relaxation/GPU rerun.
+Viewing materialization/report:`/tmp/eom-native-geometry-20261005/`.
+
+Next: distinguish object framing failure from adapter polarity/texture failure using
+the pinned train/inference recipe before expanding training. Existing source review
+shows bounded fp16 VAE normalization/scaling, native time IDs, caption embeddings,
+epsilon/v-prediction scheduler target and PEFT adapter loading; that is not numerical
+parity proof. Any lower-impact adapter/training comparison requires its own frozen
+budget and hypothesis; this8-image budget is exhausted. Do not repeat prior ablations
+or promote this adapter. Full-cohort/independent/product/activation gates remain OPEN.
 
 ### Native-geometry implementation checkpoint — 2026-10-05
 
@@ -84,7 +130,7 @@ fixed-size runner is insufficient because silently changing its canvas would
 reinterpret historical receipts. Build/install and actual8-image execution are
 still pending at this source checkpoint; engineering PASS is not quality PASS.
 
-### Next bounded native-geometry diagnostic — plan, NOT_EXECUTED
+### Frozen native-geometry diagnostic plan — EXECUTED above
 
 One comparison, at most8 new images; no new training, acquisition, reserved reads,
 production activation, retries or numerical sweep. Use native12's already published
