@@ -1120,3 +1120,9 @@ audit44-target9-contour/6-hatch/29-tone style mix before a separate bounded trai
 change. Region, training and other parameters must not be mixed into one causal
 test. Broader native-family matrix, independent blind review and final quality /
 resource / Preview-HWPX / activation gates remain open.
+
+Milestone Slack IN_PROGRESS `devreport_4ae682d466664eeba40cdb348569510d`
+SENT/HTTP2002026-10-05T21:40:55Z, phase `Image goal / control-window causal
+comparison`. Reported actual6-output style/fidelity rejection separately from
+numerical/source/lab success, retained evidence and next single input factor.
+Goal remains ACTIVE; no production or canary acceptance claimed.
