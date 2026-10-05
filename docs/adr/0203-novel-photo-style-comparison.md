@@ -125,3 +125,26 @@ isolated shell. Its suture/cross-section observation must not be generalized to 
 complete external spiral. No fresh download, source cropping, dataset inclusion or
 HOLDOUT access. A three-source diagnostic may explicitly retain these challenging
 compositions but cannot be advertised as ideal isolated-object source quality.
+
+## Canonical preparation checkpoint
+
+Source10c309e5, frozen plan `imgsdxlphotoplan_a4344171f5d12cc2075313f8c8593670`,
+semantic SHA `da7cd8a58c9cbd11079d7289fec724177ac28be1f5edd986a4ba8bb298f22a35`.
+Canonical plan `artifact_80daa088a3a44325a55929fe8ea0b55b` /
+`rev_64c4f5e26ee84d49ab3e10ad025708b2`, member
+`manifests/sdxl-photo-style-plan.json`, byteSHA
+`a4182e5997721fe8adb16c8b51bdd641b41a156973656a13446bb2036ba86173`.
+Canonical metadata admission/re-admission equality PASS:71 metadata members,
+full native44 closure,3 photo references. Binary-open guard confirms0 PNG/PDF/weight
+opens during both metadata passes; prior own inspection separately read4 existing
+PNGs. The registered plan was read back with identical bytes. No worker dispatch,
+model/GPU call, new training, download or activation. Prospective comparison6 outputs
+is not a produced result. Complete installed numerical successor, prompt-token
+preflight and bounded paired result remain pending.
+
+Ruff/format/diff PASS; strict mypy5 core files Python3.12 PASS and2 contracts using
+the actual Python3.11 lab interpreter PASS. Including the schema registry in the
+Python3.11 check found absent `types-jsonschema` in the numerical environment;
+the registry passed strict checking in the explicit API/test environment. No runtime
+dependency was installed to work around missing development stubs. Do not call this
+an installed-runtime/wheel acceptance or visual-quality gate.
