@@ -7,6 +7,48 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Native GPU precision — actual result, 2026-10-05 12:59 UTC
+
+**NATIVE_GPU_PRECISION_PASS, goal ACTIVE; no illustration quality/activation claim.**
+Source `1396273c7ff553b158f24daf25e9bdca0ab83f29`, exact installed lab runtime,
+two original TRAIN targets and six synthetic fixtures executed all eight frozen
+GPU tests: PASS, zero skips. Numerical time 9.382s; unittest 16.988s;
+peak allocated GPU memory 3,605,388,800 bytes. Three VAE loads, 24 encodes,
+16 decodes, zero UNet/optimizer/training/generation/reserved-source reads.
+Actual installed encoder sampled/scaled fp16 latents match the manual same-seed
+recipe bitwise; input hashes, production binding and installed wheels unchanged.
+Max normalization roundoff 0.000486374, latent NRMSE 0.0188143, decoded MAE
+0.000539136; minimum white-corner mean 0.998541, contour polarity 0.954699.
+All frozen tolerances passed without relaxation or numerical retry.
+
+This narrow eight-input diagnostic did not reproduce VAE-induced gray paper or
+polarity inversion. Do not infer UNet, noise-target, optimizer, conditioning or
+LoRA quality correctness, or replace fp16 as a speculative production fix.
+The rejected 40/200-update adapters and exhausted comparison cohort stay closed.
+Next is distinct-source TRAIN admission with precise count/composition captions
+and separate contour/hatching/restrained-tone policy; more training requires a
+new pinned cohort/recipe, not a repeat of that twelve-target learning-length branch.
+
+R1/R2 failed developer invocations and original staged script are preserved;
+both stopped with zero tests before lease/model tensors. R3 used PrivateTmp and
+the public verified-directory descriptor API, staging only a new script in the
+same workspace and reusing two PNGs. CPU gate 38 PASS (including three descriptor
+regressions), eight explicit GPU skips subsequently executed above; formatter,
+linter, imported-API types and diff checks PASS. A text-only evidence publication
+first refused a group-writable source-gate log before commit; its bytes were
+unchanged and permissions restricted for the successful existing-publisher replay.
+No weakened file-validation rule, new canonical PNG or numerical rerun.
+
+Canonical twenty-member evidence Artifact `artifact_e45580dbe942439ba3633f6f97e87e41`,
+revision `rev_a38035cba3b8489cbaf3c9fb4eca4fe8`, primary
+`reports/numerical-review.md`, SHA
+`sha256:ea6e065c6c55f9d3d7c52af0667cf228b7408c049540cf00fc45421757665fed`.
+All twenty members re-resolved/hash-checked; no PNG/PDF/weight duplication.
+Local result `/tmp/eom-native-vae-precision-r3-20261005/record.json`, report
+`/tmp/eom-native-vae-precision-r3-20261005/numerical-review.md`.
+Independent blind review, full TRAIN/VALIDATION coverage and quality-passing
+Item Preview/HWPX canary remain open. No goal completion or production activation.
+
 ### Native GPU VAE precision diagnostic — frozen plan
 
 First developer invocation terminated during Diffusers/Torch import before VAE
