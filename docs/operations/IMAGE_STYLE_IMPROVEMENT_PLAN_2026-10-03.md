@@ -7,6 +7,68 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Canonical TRAIN44 pilot and matched reference results — 16:45 UTC
+
+Operation source `766ed3f904ac0f395c4c46431f57b52e41b926a4`. The lab-only
+contracts/provider3944b93a installation now PASSes actual `eom-image` role imports,
+complete installed RECORD and pip-check. Numerical dependencies, trainer wheel,
+systemd unit bytes, production binding and five primary services are unchanged.
+Earlier sections below are historical checkpoints, not the current installed state.
+
+Own source review inspected all48 proposed PNGs in eight contact sheets plus two
+suspect full-size originals. Four were excluded: duplicate fan framing, two literal
+caption/annotation holds, and one group-cap exclusion (not a quality rejection).
+Existing canonical native1.1 admission PASS: **44 targets/eight batches/29 PDFs/
+27 exam groups**, max3/PDF4/group;9 contour/6 fine-hatching/29 restrained-tone.
+26 identities are new versus native23. TRAIN provenance, authorization, exact
+revision/hash and physical-region overlap checks PASS; reserved inputs unused.
+
+One actual native pilot `imgsdxlnativetrainrun_474bec1583f3faeb284e21c534c1ef93`
+SUCCEEDED,44 exact realized targets,200/200 updates,477059ms, peak allocated CUDA
+6166987776 bytes. Final loss0.02726241946220398 is not a visual-quality score.
+Canonical result/adapter `artifact_7a0e8d85b5d048318f17e458c3353e21` /
+`rev_cd24c19b1a7f4cfa8633270c6b39bb3c`; installed terminal replay PASS with86
+unchanged files and model/pixel/write calls0. No duplicate dataset PNG artifact.
+
+Reference1.2 actually consumed native1.1 lineage through evaluation1.4: one
+`imgsdxlcannyrefrun_67ab96e9778d0a6941e1abcc9a9b7ca4` SUCCEEDED, exactly6 BASE/LORA
+outputs/20486ms/peak allocated CUDA10763590656 bytes. Geometry declarations are
+metadata-only, not dispatched. All3 new BASE raw/final outputs are byte-identical
+to the previous native23 reference baseline. Initializer/crop reconstruction,
+13-member canonical read-back and48-file installed no-side-effect replay PASS.
+Result `artifact_93739553231b424dbc199b26a93a0834` /
+`rev_6d2e5c440803451186de5484640a2614`, result byte SHA
+`db165ad45fa20e233ade27fe685d7c01e63c39ada4d3152c2f0a15cb2ffe006a`.
+
+Actually viewed all6 final outputs,3 new LORA raw outputs and3 previous LORA final
+outputs. Fan/plant/scooter composition is retained; differences are subtle, not
+a demonstrated style improvement. New-vs-BASE raw mean absolute channel changes
+on0..255 are0.798544/0.422700/0.503180 respectively. **LoRA superiority remains
+NOT_ESTABLISHED**; this is own TRAIN diagnostic review, not independent/blind or
+reserved-split acceptance. Earlier positive source fan/beaker feedback is not
+transferred to newly generated images; this comparison did not generate a beaker.
+
+Immutable21-member terminal text evidence `artifact_f2ffe5ca8dc84cdf8776ef67dd4fb9de`
+ / `rev_4abf0e147ae045b1af1463cc31d534f9`, `reports/own-review.md`, SHA
+`34eff04394ca68853043d66fc57c054f7b14bd839e7a1bf1aca7d4f2bd738a89`;
+all persisted hashes PASS. Start evidence15 members `artifact_a1d1425e91e84e859b0d99ed55eec05b`
+ / `rev_26e9e231dd2a4531b3e807b524ca8e20`. Original receipts'83-file count is
+preserved/explained: actual owner input closure82=37 metadata+44PNG+command.
+Historical temporary prepare16 E501 warnings and archive preflight rejection of
+group-writable logs are recorded; no model retry/history rewrite. Final operators
+lint/format PASS. No new core source/test-count claim in this operational checkpoint.
+Slack start/terminal SENT200: `devreport_e83a74b6b13f4df28b45e2ff67277b4d` /
+`devreport_ad544b97006d41b398143a381b6e33e9`.
+
+These pilot/comparison budgets are now exhausted; no automatic sweep or retry.
+Next pre-register source-disjoint native-adapter validation using existing split,
+source and comparison owners, explicit consumer-contract support where needed,
+and separate shape/count/style rubric. Expand distinct literal object targets
+toward coherent full100 admission in parallel, without equating101 source regions
+or60 prepared identities with100 eligible training examples. Independent blind
+review, reserved evaluation, quality-passing Item/HWPX canary and activation/rollback
+remain OPEN. Production activation FORBIDDEN; GPU released; goal ACTIVE.
+
 ### Native1.1 source-initialized comparison source checkpoint
 
 [ADR0201](../adr/0201-native-successor-source-initialized-comparison.md) closes the
