@@ -18,6 +18,15 @@ reuse that workspace, do not copy inputs, change numerical code or reinterpret t
 failed invocation. One R2 diagnostic invocation records its own unit/log/result.
 The actual eight-input numerical budget was not started/consumed by this import error.
 
+R2 likewise stopped before lease/VAE loads/encode/decode: the new diagnostic passed
+a Path to read_staged_member, whose public API requires a verified directory file
+descriptor. This is a diagnostic invocation defect, not a trainer/provider defect.
+Use its existing verified_directory context and add non-CUDA tests for real bounded
+reads, hashes, symlinks and traversal; type-check imported API signatures, not only
+untyped import stubs. Preserve R2's FAILED record. Stage corrected test code as a
+new file in the same private workspace, reuse unchanged two PNGs and numerical
+recipe, and run one R3 diagnostic invocation. No production fix or numerical change.
+
 Data preparation is actual progress, but the prior128x128 float32 CPU check cannot
 prove native CUDA fp16 encoding parity. Before more LoRA training, perform one
 developer opt-in diagnostic using the existing pinned SDXL/fp16-fixed VAE and

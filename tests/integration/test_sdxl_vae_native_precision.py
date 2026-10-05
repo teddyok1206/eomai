@@ -37,6 +37,19 @@ MAX_DURATION_SECONDS = 180
 MAX_GPU_BYTES = 14 * 1024**3
 
 
+def _read_real_target(root: Path, name: str, sha256: str) -> bytes:
+    from eom_image_provider.staged_file_io import read_staged_member, verified_directory
+
+    with verified_directory(root, expected_owner_uid=os.geteuid()) as descriptor:
+        return read_staged_member(
+            descriptor,
+            name + ".png",
+            maximum_bytes=2 * 1024**2,
+            expected_sha256="sha256:" + sha256,
+            expected_owner_uid=os.geteuid(),
+        )
+
+
 @unittest.skipUnless(
     os.environ.get("EOM_RUN_SDXL_VAE_NATIVE_PRECISION") == "1",
     "explicit pinned-model native GPU precision opt-in required",
@@ -57,7 +70,6 @@ class NativeVaePrecisionDiagnostic(unittest.TestCase):
         from eom_image_contracts import SdxlLineartStackPointer
         from eom_image_provider.provider import acquire_gpu_lease
         from eom_image_provider.sdxl_model_resolution import resolve_sdxl_stack
-        from eom_image_provider.staged_file_io import read_staged_member
         from eom_image_trainer import diffusers_backend as actual  # type: ignore[import-not-found]
         from PIL import Image
 
@@ -86,12 +98,7 @@ class NativeVaePrecisionDiagnostic(unittest.TestCase):
                     path.chmod(0o600)
                     cases.append((name, path, pixels))
             for name, size, sha in REAL_INPUTS:
-                raw = read_staged_member(
-                    root,
-                    name + ".png",
-                    maximum_bytes=2 * 1024**2,
-                    expected_sha256="sha256:" + sha,
-                )
+                raw = _read_real_target(root, name, sha)
                 with Image.open(io.BytesIO(raw)) as image:
                     image.load()
                     if image.format != "PNG" or image.mode != "RGB" or image.size != size:
