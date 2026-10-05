@@ -148,3 +148,10 @@ Python3.11 check found absent `types-jsonschema` in the numerical environment;
 the registry passed strict checking in the explicit API/test environment. No runtime
 dependency was installed to work around missing development stubs. Do not call this
 an installed-runtime/wheel acceptance or visual-quality gate.
+
+Canonical17-member text evidence `artifact_a957201a8d41434c994253890cf45c03` /
+`rev_1010e8f789174105ac38c25403a15af9`, primary `reports/own-review.md`, SHA
+`78d8489464e162bbefbb761f52bb65f42ffddf89db3908c9962257507e9d5cef`; all persisted
+members reread equal. No duplicate source PNG/PDF/weight members. Source operators
+and logs are explicit temporary materializations; current lab consumer remains
+d1ba1151, production binding unchanged. The overall goal is still ACTIVE.
