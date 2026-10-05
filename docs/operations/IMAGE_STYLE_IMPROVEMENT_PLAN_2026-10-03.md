@@ -47,6 +47,31 @@ has occurred. Full cohort admission, independent blind review and Item/HWPX cana
 remain open. Prepared inventory remains fifty distinct sample IDs, not fifty
 accepted independent drawings. Goal ACTIVE.
 
+Frozen source `8053b524a6471ea1a35dcc5657c2d016cf76338e` built all three
+candidate wheels from its Git archive. Wheel contents, complete RECORD closure/
+member SHA/size checks and isolated source-free imports/schema resources PASS.
+Probe `/tmp/eom-exterior-wheel-probe-20261005.json`; build directory
+`/tmp/eom-image-trainer-build/8053b524a6471ea1a35dcc5657c2d016cf76338e.uHuUOi/dist`.
+Wheel SHA-256 (contracts/provider/trainer, respectively):
+`876de510af2a66393746a908ff46e8ae93f5cc98dbf3b540ca424ef3af8091b5`,
+`41d4220d3e245ce22defb7bf00a8d405201f120857361700a887b6f21bd9b54c`,
+`cc9f7dfb87ba006dcce40f070ae9992c7a6463650a5b280bcf3b06dfc30dec6f`.
+No Torch/Diffusers/Transformers imported by this probe; zero model/GPU calls.
+This is candidate-wheel verification in the isolated test interpreter, **not**
+actual installed-role verification. Lab/runtime installs remain unchanged.
+All five primary services independently queried active at this milestone.
+
+Nineteen text-only source/test/build/probe evidence members committed by the existing
+Orchestrator file-set publisher, with every persisted member re-resolved/hash-checked:
+`artifact_721eafa1561a445eb6f5a4dd7ed5dbb5` /
+`rev_72d996bc119547019e3ce30f07a2bc64`; primary
+`reports/candidate-wheels.json`, SHA
+`99075870f9229df77e7a8f5b12566bd6d6c801fc4615e9f4e92407f0709c85f3`.
+No PNG/PDF/weights copied. Initial evidence submission was rejected before DB/commit
+because operator-generated files were group-writable; only these exact local evidence
+files were tightened to0600, then the same publisher boundary succeeded. Its failure
+log remains `/tmp/eom-exterior-source-evidence-20261005.log`; no runtime rule relaxed.
+
 ### Contour expansion — actual result, 2026-10-05 13:13 UTC
 
 Frozen source `719aa33c67bd3759f75c10d1322f7adb4daad0d4` recovered twelve
