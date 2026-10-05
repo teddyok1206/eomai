@@ -23,6 +23,24 @@ regression protection. Native RGB/geometry mismatch fails before tensor conversi
 the original micro path cannot alias native geometry. No parallel training engine,
 new dependency, DB, migration, queue, production service or binding was introduced.
 
+Source candidate commit`2a570a912e617e7559d80f9701e6673dadd81858`. Its three
+immutable source wheels built/inspected successfully. Contracts wheel SHA
+`8f89ce65c141af747ce66e28cb0f97870b3c8177481b128053a4f8532bb74fe2`;
+trainer`eb809faa5b97e73eed7851ef40b7c389f2907ff4d49964804f3e7fb1874c044c`;
+provider candidate`ba9ac016ef686437614853b4a7349fab4811f91fd989eb7f27e961dd316ac7f0`.
+Explicit lab Python3.11.15 read-only wheel simulation verified every wheel SHA/
+RECORD row, offline public schema validation, package imports without repository
+source, native and legacy time IDs, and zero Torch/SQLAlchemy import/model/PNG/GPU
+reads. R2 operator uses public contract APIs; the earlier diagnostic caller is
+preserved separately. Affected contract/backend rerun101 PASS after final RGB-copy
+cleanup. Operators/logs are private`/tmp/eom-native-lora-wheel-verify{,-r2}-20261005.*`;
+new wheel directory is
+`/tmp/eom-image-trainer-build/2a570a912e617e7559d80f9701e6673dadd81858.JjmJXQ/dist`.
+This is non-editable wheel simulation, **not an installation or actual worker-role
+acceptance**. Installed lab remains03a542f contracts/trainer; provider, numerical
+dependencies and production remain unchanged. At03:43 UTC five production services
+were active and GPU was idle2MiB/0%.
+
 Focused regression368 PASS; strict mypy5 files, Ruff/format/bash/diff PASS.
 Architecture/release checks9 PASS /1 unchanged Catalog planning-owner dependency
 failure; it is recorded, not suppressed. Synthetic numerical tests are not GPU
