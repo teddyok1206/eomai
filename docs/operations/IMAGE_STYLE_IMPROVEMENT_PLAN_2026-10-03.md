@@ -7,6 +7,51 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Wider TRAIN object-source checkpoint — 15:35 UTC
+
+Operation source `a8c96c7935ca09dd6bafb685004176afb57a5967`; installed lab3625b079,
+core/schema/production unchanged. Ten previously unselected parent candidates
+inspected using typed TRAIN provenance before source-page bytes. Final source
+set6 literal regions/5 parents (separate shirt and cloth in one panel) committed
+through existing Orchestrator owner; seven members hash-verified. Combined source
+pool **101 regions/100 parents**,61 PDFs/50 groups, max3/PDF4/group and exact ID/hash
+duplicates0. This is not101 training targets. Annotated intestine stays reference.
+
+Five native576-DPI regions from4 TRAIN PDFs:4 isolated CPU requests,1,164,832 pixels/
+5,684,292 PDF bytes,9,242ms; immutable replay0 new renders. All actual native PNGs
+viewed. Telescope stand frame corrected, but intrinsic plate lettering means
+REFERENCE_ONLY; no object-pixel erasure. Native1.2 prepared3/deferred2 in469ms,
+exterior1.3 prepared1/deferred4 in97ms. Rabbit exterior word mask initially failed
+four faint248-249 boundary pixels; explicitly expanded x85→75 after inspection,
+unchanged3px/white250/protected subjects PASS. No OCR/inpainting/threshold/guard bypass.
+
+Own output inspection found meter has3 terminals, not caption's2. Old variant
+HOLD_CAPTION_CORRECTION; separate immutable1-target correction61ms, same sample/
+PNG bytes, no PDF re-render. All four chosen targets viewed, READY_WITH_NOTES,
+not independent approval. Shirt/cloth preserve restrained texture/tone rather
+than forcing initial FINE_HATCHING hypothesis. Three result/PNG deliveries8
+members hash-verified; installed-role terminal replay0 transforms/writes/models.
+
+Final metadata-only audit at15:35:38 UTC: **60 distinct prepared IDs** (56+4),
+51 within101-source pool/9 outside. Two historical same-sample variants (car frame,
+meter caption), NOT62 drawings; corrected revisions explicitly pinned, not latest.
+14 preparation chains/57 cached metadata reads/0 PDF,PNG,model reads. Expressions
+9 contour/7 hatching/44 tone; previous holds preserved, full100 admission still
+NOT_ACHIEVED. No GPU training/generation/install/service/permission/activation changes.
+
+Canonical42-member text evidence `artifact_068263e7d12643429907ced430a20b93` /
+`rev_d42fe39a922045978c8cc9df121ec5a6`, `reports/own-review.md`, SHA
+`0bfdf388d189453586f6a724cab4669dab790dca2c22dbf441780eef12ef067d`.
+All persisted hashes PASS, no binary evidence archive. Temporary truncated-source
+SyntaxError and group-writable evidence-input rejection preserved; both fixed
+before their publication side effects, no weakened read guard. Operators Ruff/
+format PASS, no new core test suite claimed. Five main services active; production
+binding unchanged. Next inspect broader existing approved TRAIN pools for distinct
+objects/contours within the existing concentration budget; avoid repeatedly mining
+annotated portraits. Full cohort admission, reference/reserved successors, independent
+blind review and quality-passing Item/HWPX canary/activation/rollback OPEN. Exhausted
+old40/200-update12-target branch remains CLOSED. Goal ACTIVE.
+
 ### Diverse native TRAIN preparation — 14:58 UTC
 
 Operation source `5f2c96a591997af0d30b98f4368b3c11d5ee6efc`; installed lab wheels
