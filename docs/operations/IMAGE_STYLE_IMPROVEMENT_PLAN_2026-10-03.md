@@ -7,6 +7,52 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Contour expansion — actual result, 2026-10-05 13:13 UTC
+
+Frozen source `719aa33c67bd3759f75c10d1322f7adb4daad0d4` recovered twelve
+previously unprepared TRAIN regions from ten PDFs: 3,495,328 crop pixels,
+13,267,988 PDF bytes, ten isolated CPU requests in19,696ms. Canonical source
+Artifact `artifact_0cfb30701249474296d5a1723b1f31c6` /
+`rev_68b15d2c8e4c493d979adc2cb833fc6f`, source set raw SHA
+`fc14c92d3248f090bc1f309991bceae66f69c712c6d87954440e950d6fd8a539`;
+read-only replay performed zero additional rendering. Every original PNG viewed.
+
+Actual pixels contradicted inherited contour classification: intentional gray
+fills, central/exterior annotations and clipped parts are common. One installed
+CPU target run prepared three full reviewed subjects in303ms, with nine explicit
+deferrals. Fan and exactly two piggyback boys use RESTRAINED_TONE; two-wheel scooter
+with intentional star/light symbols uses CLEAN_CONTOUR. Three literal composition
+captions, native aspect ratio and white margins preserved; no masks/inpainting.
+All three outputs viewed: READY_WITH_NOTES, including inherited scooter softness.
+Result Artifact `artifact_aac029ff000d4a3a9e84e647257de462` /
+`rev_9910997c3b7e462e89994ace398e5534`, raw SHA
+`22819b43c608ece32404d645769f0661ee5b30f79c1b42ff5c83632056bf13b0`.
+Four result/PNG members re-resolved/hash-checked; actual installed-role terminal
+replay made zero transformations/model calls/writes. Delivery's PENDING own review
+is preserved; later assessment is separate evidence, not a receipt rewrite.
+
+Fresh metadata-only inventory resolved seven exact preparation chains/37 direct
+metadata members and zero PDF/PNG/model bytes: **50 distinct prepared sample IDs**,
+41 within original95-source pool and9 outside, zero same-sample variants;
+delivered expression counts8/7/35. These are not fifty admitted independent drawings;
+full100 target admission remains OPEN. No training/generation/GPU/production change.
+
+Canonical twenty-one-member evidence `artifact_30515da086804f6ca960d826477a108b` /
+`rev_f3e2eaa92b6b484db2a16351c0152449`, primary `reports/own-review.md`, SHA
+`5d4ed526d68742d478a33cec66869ecafb696f06df9ad6fd7da3c37ce6e70ccb`;
+all members hash-verified, no new PNG/PDF/weight copy. Temporary source/publish/
+inventory operators passed Ruff; executed submit operator has three E501 caption
+line-format findings and is archived unchanged, not merged core/all-linter-PASS.
+Existing core/schema/runtime unchanged; previous core test evidence is not counted
+again as a newly executed suite. All five primary services remain active.
+
+Next actual bottleneck is usable annotation-free source packaging, not VAE precision.
+ADR0199 proposes a protocol-first exterior-only reviewed cleanup successor at the
+existing CPU target boundary, including protected subject geometry/white-clearance
+checks and exact training-consumer compatibility. Native1.2 remains no-mask;
+central overlaps/missing parts remain deferred. No new policy deployed or training
+scheduled from unadmitted results. Independent blind review and canary stay open.
+
 ### Contour-source expansion — frozen next operation
 
 The native VAE diagnostic passed; do not spend another training budget on an
