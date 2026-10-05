@@ -11,7 +11,8 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 **DATA_PREPARATION_PROGRESS; goal ACTIVE, no model activation.** The frozen
 operation below completed23 native region renders through16 isolated CPU requests,
-then18 target transformations in two installed runs. Original/source/caption,
+from15 distinct TRAIN PDFs (one PDF occurs in both batches), then18 target
+transformations in two installed runs. Original/source/caption,
 split, pointer/media/hash, canvas and result closure passed. Canonical source
 replay used0 additional PDF renderer calls; target terminal replay under actual
 eom-image used0 transforms/model calls/writes. All20 target/result members were
@@ -53,6 +54,13 @@ copies are under`/tmp/eom-native-original23-20261005/` and
 are under`/tmp/eom-native-cohort{-expanded}-inventory-20261005/`.
 Temporary source operator's B008 callback-default lint finding is recorded in the
 own report, not falsely counted as core regression failure or all-lint PASS.
+
+The archived prose originally summed6+10 per-batch requests as16 unique PDFs.
+Authoritative execution metadata already correctly records15 distinct documents.
+Append-only correction preserves the original report: `artifact_3ba2e60a7cab4b98aa26b39780d5f3b5` /
+`rev_bb9e67b915ea4b758767ae6e39c09ea3`, primary`reports/source-count-correction.md`,
+raw SHA`8791c375c3df67954dfecd3c7013147feeec6b8411b5268d32151b2cd8f870c0`.
+Canonical correction re-resolved byte-for-byte;0 reruns or historical edits.
 
 **Next:** correct held data with explicit immutable successors; improve balanced
 native TRAIN coverage without counting reframes/upsampling as new drawings.
