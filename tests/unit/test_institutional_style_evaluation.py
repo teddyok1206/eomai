@@ -30,6 +30,7 @@ from eom_image_trainer.institutional_style_evaluator import (
     evaluate_institutional_style,
 )
 from eom_image_trainer.institutional_style_metrics import (
+    InstitutionalStyleMetricsError,
     institutional_style_metrics,
     institutional_style_presentation_metrics,
     normalize_institutional_style_presentation,
@@ -305,6 +306,24 @@ def test_institutional_style_presentation_normalizes_crop_whitespace() -> None:
     tight_metrics = institutional_style_presentation_metrics(tight.getvalue())
     assert tight_metrics == institutional_style_presentation_metrics(padded_payload.getvalue())
     assert tight_metrics.foreground_fraction_milli > 100
+
+
+@pytest.mark.parametrize("stroke", [245, 250, 255])
+def test_blank_or_faint_raster_cannot_enter_blind_presentation(stroke: int) -> None:
+    image = Image.new("L", (96, 64), 255)
+    ImageDraw.Draw(image).ellipse((20, 12, 76, 52), outline=stroke, width=3)
+    encoded = io.BytesIO()
+    image.save(encoded, format="PNG")
+    payload = encoded.getvalue()
+
+    # Successful raster serialization and a small metric value are not a style pass.
+    measured = institutional_style_metrics(payload)
+    assert measured.foreground_fraction_milli == measured.dark_fraction_milli == 0
+    with pytest.raises(
+        InstitutionalStyleMetricsError,
+        match=r"^INSTITUTIONAL_STYLE_FOREGROUND_MISSING$",
+    ):
+        normalize_institutional_style_presentation(payload)
 
 
 def _review_with_generated_side(

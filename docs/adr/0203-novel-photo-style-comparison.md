@@ -537,3 +537,52 @@ separately. Merely reducing edge count is not acceptance. If this candidate lose
 essential features or retains clutter, report it and choose the next factor before
 any schema-first worker successor. Do not add an unused inference recipe or run
 another GPU sweep merely to give the diagnostic a new version number.
+
+## Fixed coarse-control CPU result — no new inference recipe
+
+The declared one-candidate5x5/sigma1.0/reflect101 diagnostic was executed under
+the installed isolated eom-image identity. Registered white command/plan/result
+were resolved first; staged photo hashes and licensed metadata reader checks
+reused. Original Canny bytes exactly reproduced under pinned Pillow11.3.0,
+OpenCV4.11.0.86/NumPy2.4.6. Source-free/Torch-free/DB-free child, CPU single-thread
+OpenCL off, closed seven derived files and96 unchanged workspace size/mtime
+entries verified. This metadata snapshot is not a fresh all-byte SHA proof;
+the preceding terminal replay supplies the separate96-file SHA/mtime evidence.
+
+Viewed all three old/coarse input-only panels. Edge count ammonite13816->9428
+(-31.8%),trilobite26238->12420(-52.7%),wagon77767->39778(-48.8%). Main placement
+and silhouettes remain recognizable, but fossil internal marks become sparse/
+interrupted while shop/trees/grass and fit-frame borders remain. Judgment:
+**COARSE_CONTROL_ALONE_INSUFFICIENT_DETAIL_LOSS_AND_CLUTTER_REMAIN**. Reduced
+edge counts are not semantic preservation or style acceptance. No stronger blur/
+threshold sweep, new worker recipe, model/GPU dispatch, training or HOLDOUT.
+
+Canonical6-member evidence `artifact_1b01579ea35e4be48aae83ff358a7ba3` /
+`rev_16dc0a12d7ac4ac59afffd2f83a681e4`,primary `reports/own-review.md`, SHA
+`8515c561dbee4f6197375c3a210fbea684d5e90bf2b5cd980d4a8b6d09fb2115`;
+all persisted bytes reread equal. Report/admission/operator/log and one derived
+input contact retained; no duplicate original photos/weights/generated outputs.
+Numeric dependencies, binding and five services unchanged; GPU idle at postflight.
+
+Next priority is to separate **subject structural evidence from irrelevant
+exterior background**, not globally weaken all contours. Review against the
+authoring/reference intent before any source-region operation: scene-dependent
+background stays; optional exterior clutter may be suppressed only without
+moving/reframing the main subject or touching protected scientific details.
+Original/source/revision/member/hash remain pinned and unchanged. A future region
+recipe must pin reviewed coordinates/protected regions, reject stale or mismatched
+source/invalid boundaries/protected-region contact, share the current pixel owner
+and CPU verifier, and be schema-first before worker execution. Start with CPU
+examples and actual own inspection; no generic segmentation framework, permission
+expansion, new dependencies or new GPU budget at this checkpoint.
+
+Regression coverage was also added for valid PNGs containing only blank/too-faint
+marks: raw metric serialization can succeed, but the existing blind-presentation
+normalizer rejects absent foreground. This protects the existing evaluation
+meaning rather than adding a new runtime heuristic or reclassifying historical
+numerical results. It does not automatically certify every nonblank drawing.
+Focused evaluation/white-recipe/test-environment regression47 PASS/30.24s;
+Ruff/format/diff and strict test-file mypy PASS with explicit source MYPYPATH.
+The initial type-check invocation treated the separately packaged trainer as an
+untyped installed library; corrected source discovery, not runtime dependencies
+or source annotations. Both invocation logs are preserved separately.
