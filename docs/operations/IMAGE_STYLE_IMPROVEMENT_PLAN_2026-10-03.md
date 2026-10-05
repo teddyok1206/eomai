@@ -7,6 +7,44 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Native GPU VAE precision diagnostic — frozen plan
+
+Data preparation is actual progress, but the prior128x128 float32 CPU check cannot
+prove native CUDA fp16 encoding parity. Before more LoRA training, perform one
+developer opt-in diagnostic using the existing pinned SDXL/fp16-fixed VAE and
+actual installed training encoder. This adds no production worker protocol,
+schema, queue, database, dependency, installed wheel or long-lived service.
+
+Inputs: six synthetic white/rectangle fixtures, two for each native1024x1024,
+768x1024 and1024x768 canvas, plus exactly the prior native12 TRAIN fan and square
+beaker targets. Re-admit the unchanged training command, entire metadata/authorization
+and frozen source lineage through the existing Orchestrator owner **before**
+reading only these two canonical PNGs. Target IDs/revisions/schema/media/hash stay
+pinned; neither reserved pixels nor the two newly held source pairs are used.
+One explicitly declared local diagnostic input materialization, no canonical copies.
+
+Use a dormant integration test, root-staged and run under actual eom-image with
+installed packages/source-free interpreter, offline/no NAS/DB/auth access and the
+existing exclusive physical GPU lock inode. Freeze eight inputs, fp32/fp16 VAE
+mean encode/decode passes and one actual installed fp16 training-encoder pass,
+seed20261005; three VAE loads, no UNet/LoRA/optimizer/generation/training updates.
+One transient bounded diagnostic unit, hard180s execution window,14GiB allocated
+GPU budget, no automatic repeat; root owner captures bounded logs only.
+
+Gate: exact native latent shapes and unchanged input hashes; normalization max
+error<=0.001, fp16/fp32 posterior-mean relative RMSE<=0.02, decoded pixel MAE<=0.01,
+decoded white paper mean>0.9, rectangle paper/stroke polarity>0.3, and bitwise
+equality of actual fp16 training latents to the independently exercised same-seed
+fp16 encode recipe. These frozen diagnostic tolerances are not illustration
+publication thresholds and must not be relaxed after observing output.
+
+Capture the exact code/runtime/model/input hashes, all case metrics and actual
+test outcomes. Model or lease failures stop further side effects; numerical
+failure is evidence to investigate, not permission for arbitrary training or
+production changes. A PASS only closes this input/encoder photometric hypothesis;
+it cannot establish UNet/LoRA denoising, semantic accuracy, composition or quality.
+Preserve both prior own-rejected adapters and their acceptance history.
+
 ### Native-data expansion — actual result,2026-10-05 12:24 UTC
 
 **DATA_PREPARATION_PROGRESS; goal ACTIVE, no model activation.** The frozen
