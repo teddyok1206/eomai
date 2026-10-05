@@ -29,6 +29,25 @@ No production binding/service/dependency/DB changes. Lab remains installed3625b0
 Candidate wheel checks, installed role, full-cohort admission, native reserved
 evaluation, independent blind review and passing Item/HWPX/activation remain OPEN.
 
+Subsequent candidate-wheel checks are now PASS: source
+`3944b93af928a28116499548a9519df11bcab723`,3 immutable archive wheels, complete RECORD/
+member hashes,11 source-free imports and7 schema resources under Python3.11.15 -I;
+Torch/Diffusers/Transformers imports0. This is operator simulation, not installed-role
+evidence. Lab still3625b079; five main services active and GPU idle0%/2MiB. No actual
+training/generation, install, production binding or permission change.
+
+Build directory `/tmp/eom-image-trainer-build/3944b93af928a28116499548a9519df11bcab723.6RxfHe/dist`:
+contracts `081b0d92bc378eb47d57100af8c7e51668ee82c14b89f1ffa9146b86848a1594`,
+provider `5e935195afbc669b16f445cb4b265874ed0398aa367feec4b66a99e2d55edd73`,
+trainer `09ba6682381dc704c50a9d326932dbc82b49732e88aa8e83d73c2ea39d07db7f`.
+Canonical9-member text evidence `artifact_abd22230cab048c299dfbb7c40b7edd1` /
+`rev_025263c742f5474ca3c2628d663796e5`, `reports/verification.md`, SHA
+`016b7608f1044fc2dbc78b6c613c21d56a269943e533df3b110f93952024bfcb`, all re-resolved
+hashes PASS. No binary evidence duplication. Slack SENT200,
+`devreport_cd7d92e077234f15ba8cda690f097553` at16:04:14 UTC. Subsequent work is
+coherent reviewed cohort admission with explicit revisions/caption/budget before
+training, not reopening the exhausted12-target40/200-update branch. Goal ACTIVE.
+
 ### Wider TRAIN object-source checkpoint — 15:35 UTC
 
 Operation source `a8c96c7935ca09dd6bafb685004176afb57a5967`; installed lab3625b079,

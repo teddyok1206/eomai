@@ -83,3 +83,22 @@ Source-only tests use synthetic inputs/backends and do not establish model quali
 Release wheel closure/source-free checks are next; lab installation, actual worker-role
 execution and a bounded native1.1 trained adapter comparison are not yet recorded.
 The60 distinct prepared target IDs do not become accepted by this consumer change.
+
+## Immutable wheel verification checkpoint
+
+Source `3944b93af928a28116499548a9519df11bcab723` built3 candidate wheels from an
+immutable Git archive. Complete RECORD/member hashes,11 wheel-only imports and7
+schema resources PASS under isolated Python3.11.15. No Torch/Diffusers/Transformers
+import. This operator simulation is not an installed-role or GPU execution claim.
+Lab remains3625b079; production services active and GPU idle. No installed package,
+dependency, service, source target, training update or production binding change.
+
+Nine bounded text evidence members committed through the existing Orchestrator
+owner and re-resolved with typed hashes:
+`artifact_abd22230cab048c299dfbb7c40b7edd1` /
+`rev_025263c742f5474ca3c2628d663796e5`, primary `reports/verification.md`, SHA
+`016b7608f1044fc2dbc78b6c613c21d56a269943e533df3b110f93952024bfcb`.
+No PNG/PDF/weights duplicated. Slack milestone SENT200,
+`devreport_cd7d92e077234f15ba8cda690f097553`. Whole goal stays ACTIVE; installation,
+coherent diverse-cohort admission, reserved evaluation and independent quality gates
+remain separate subsequent work.
