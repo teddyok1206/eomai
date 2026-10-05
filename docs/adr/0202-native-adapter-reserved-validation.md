@@ -2,9 +2,10 @@
 
 ## Status
 
-Consumer source-verified, 2026-10-05 UTC; **lab installation and live reserved
-comparison pending**. Canonical metadata preflight and own inspection of thirteen
-eligible sources are complete. The earlier schema-only checkpoint below is historical.
+Consumer installed and bounded reserved comparison technically verified, 2026-10-05
+UTC; **quality superiority and activation not established**. Canonical metadata
+preflight and own inspection of thirteen eligible sources/generated pairs are complete.
+The earlier schema-only and source-only checkpoints below are historical.
 This decision does not authorize activation or reinterpret historical acceptance.
 
 ## Verified need
@@ -195,3 +196,44 @@ serialization and tuple-union typing failures were corrected before the final
 focused run. No new native reserved GPU dispatch or quality acceptance is claimed.
 Production activation, independent blind review, four-family coverage and the final
 Item Preview/HWPX canary remain separate pending gates.
+
+## Installed and bounded live checkpoint
+
+Source `d1ba1151a697251a66aab8de920a118271011fcd` built both existing release families.
+Trainer/provider builds yield identical contract/provider wheel hashes:
+`b48dc76d3a8474fae1077571dcdc4a1ca7d11135ccfab22264ab13779dc13a0d` and
+`f0cdd88dbfe65b8a4c001e7eaa0822dc45be6934160b62870de3c95659bd3ef6`.
+Only lab contracts/provider were installed. Wheel RECORD, source-free imports,
+actual isolated worker-role imports and pip check PASS; numerical dependencies,
+trainer, units, binding, privileges and production service restarts unchanged.
+Previous3944b93a rollback wheels were verified before installation.
+
+Frozen thirteen VALIDATION cases retain exact source/caption/seed104729 and historical
+numeric configuration; the held wheat remnant remains excluded. Full native37-member
+source metadata readmission passes before any binary open. One26-output dispatch,
+run `imgsdxlvalcmprun_2aa51019cb3af8bb0de7c7dc7841bcc7`, SUCCEEDED in53010ms,
+peak10763590656 bytes. No new training, HOLDOUT access, prompt/seed sweep or retry.
+
+Canonical command: `artifact_0781d0a63fb84208a41a2b199b8733ba` /
+`rev_9a0958fdc9bc408da9404911bbbb8422`, byteSHA
+`c0ecf4ec32e142e5072930b5d271921bfc0970d7ac9da989189a70bc58572c61`.
+Canonical79-member result: `artifact_4c888cca72b44c2bab5a741f9da5c94f` /
+`rev_b300f6413bec4a7cbc2b77128f066f44`, primary
+`manifests/sdxl-validation-comparison-result.json`, byteSHA
+`a33d47869ed5a0703456f23cecb3c87b24a46d44a5f0aa917fcf85b5c7e64eb0`.
+Every committed member was re-resolved with typed hashes. The existing publication
+owner also verifies transforms under the installed numerical identity before commit.
+
+Installed worker terminal replay validates163 files unchanged with model/GPU lease/
+source-canvas transform/write calls0 and no Torch import. Read-only source/initializer
+decode validation remains present; do not claim pixel-decode-free replay.
+All thirteen BASE raw and final hashes equal the historical matched BASE outputs.
+Own inspection of all thirteen triples and enlarged apparatus/funnel pairs finds
+composition mostly preserved but **no established consistent LoRA superiority**.
+Inputs already have exam style; this is not novel-photo conversion acceptance.
+Small-source aliasing and fine junction shifts remain limits. Legitimate gray fill,
+partial framing and context-appropriate people are not blanket exclusion criteria.
+
+The26-output budget is exhausted; no automatic rerun. Independent blind review,
+missing four-family coverage and quality-passing Item Preview/HWPX remain pending.
+Production activation is forbidden; five services remain active and GPU is idle.
