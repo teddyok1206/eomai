@@ -7,6 +7,61 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Native-data expansion — actual result,2026-10-05 12:24 UTC
+
+**DATA_PREPARATION_PROGRESS; goal ACTIVE, no model activation.** The frozen
+operation below completed23 native region renders through16 isolated CPU requests,
+then18 target transformations in two installed runs. Original/source/caption,
+split, pointer/media/hash, canvas and result closure passed. Canonical source
+replay used0 additional PDF renderer calls; target terminal replay under actual
+eom-image used0 transforms/model calls/writes. All20 target/result members were
+re-resolved. Regression104 PASS,2 explicitly opt-in synthetic Poppler cases skipped.
+Installed lab wheel/RECORD/dependency/source-free role audit PASS; no installation,
+core/schema/dependency/unit/production change. All five primary services active.
+
+Own inspection of every23 original crop and18 prepared PNG gave16
+READY_WITH_NOTES and2 HOLD. The latter are an actual four-chimney scene paired
+with an inherited three-chimney caption, and a remaining speech-tip fragment
+above hair. Exclude both from training until explicit successors correct them;
+do not edit successful historical commands/results or remove them from delivery
+counts. Native576dpi retained source raster softness in some examples and cannot
+invent optical detail. Skeletal/pair/scene captions, fine hatching, restrained
+tones and contour strata must not be conflated into one dense universal style.
+
+Fresh metadata-only inventory resolved six exact preparation chains and33 direct
+metadata members, opening0 PDF/PNG/model members:47 distinct prepared sample IDs,
+38 within the original95-source pool and the unchanged9 from separate native-source
+parents;0 same-sample variants. Prepared expression counts7/7/33. This is **not**
+47 training-approved independent drawings; full100-cohort admission remains OPEN.
+Both pending-receipt delivery records are preserved; later own-review evidence is
+a separate immutable record. No training/model/GPU calls or reserved pixel views.
+
+- Recovery native targets: `artifact_b7a1d18be78e43288103ae8b02fb4ee2` /
+  `rev_82b3cea978ef43348699274d5220a3df`, primary raw SHA
+  `a2e387584fbc7dc25b251e7ddc3c1bc1b6f2ff35fa9e133bb0e9e53572c880b2`.
+- Expansion native targets: `artifact_d93f47b8f9fd46f6b24f3893795239a9` /
+  `rev_ab6e891d91844e3cbca9ed08f4904762`, primary raw SHA
+  `c34043c87baeafd529dda9313272c2047a6a9fed50c5acfc71af6e58817795bc`.
+- Text-only evidence36 members: `artifact_89d88c19f3384d77a2d4e265c48c54c7` /
+  `rev_30942241565a4524a52c2ac7bcc1b729`, primary`reports/own-review.md`, raw SHA
+  `70d3620cbc408a20d85e139bca4dc311393f009989ae073a1b3c4b43782e3a28`.
+
+All36 evidence members re-resolved byte-for-byte, with0 duplicate PNG/PDF/model
+payloads in the evidence artifact. Source execution and exact own-viewed target
+copies are under`/tmp/eom-native-original23-20261005/` and
+`/tmp/eom-native-original18-targets-20261005/`; two authoritative inventory files
+are under`/tmp/eom-native-cohort{-expanded}-inventory-20261005/`.
+Temporary source operator's B008 callback-default lint finding is recorded in the
+own report, not falsely counted as core regression failure or all-lint PASS.
+
+**Next:** correct held data with explicit immutable successors; improve balanced
+native TRAIN coverage without counting reframes/upsampling as new drawings.
+Before more training expenditure, freeze and run direct native-GPU fp16/fp32 VAE
+parity evidence if that numerical uncertainty remains. Existing CPU128-pixel
+photometric PASS is not native-GPU parity. The40/200-update branch remains closed;
+no arbitrary small training/seed/strength sweep. Independent blind review, reserved
+validation, quality-passing Item Preview/HWPX and reversible activation remain OPEN.
+
 ### Canonical inventory and next native-data preparation — frozen scope
 
 The metadata-only inventory at2026-10-05T12:04:15Z re-resolved the three
