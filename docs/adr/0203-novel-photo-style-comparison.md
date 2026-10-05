@@ -693,6 +693,12 @@ of canonical source photos, generated outputs or weights; no region worker-input
 artifact promoted under an old recipe. Numerical lab remains1083fd4e; dependencies,
 production binding and five services unchanged, postflight GPU0%/2MiB.
 
+Milestone Slack IN_PROGRESS `devreport_577ed9e2caa3490ebc39ccd49dc178e4`
+SENT/HTTP2002026-10-05T20:26:27Z, phase `Image goal / retained-region CPU
+checkpoint`; reported source135 PASS, actual internal/protected-pixel invariants,
+remaining style limitations and no model/production change. This is not goal
+completion or institutional quality acceptance.
+
 ## Next isolated numerical hypothesis: white initializer and denoising
 
 The region experiment does not explain the near-blank **BASE and LORA**1.1
