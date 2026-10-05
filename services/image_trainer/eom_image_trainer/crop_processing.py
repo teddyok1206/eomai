@@ -11,6 +11,11 @@ from eom_image_contracts import (
     SdxlPrepareTargetDecision,
     SdxlTargetPlacement,
 )
+from eom_image_contracts.sdxl_native_training_targets import (
+    NATIVE_TARGET_CANVASES,
+    SdxlNativePrepareTargetDecision,
+    SdxlNativeTargetPlacement,
+)
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 MAX_SOURCE_IMAGE_PIXELS = 50_000_000
@@ -135,12 +140,22 @@ def materialize_reviewed_sdxl_target(
     source: Image.Image,
     *,
     decision: SdxlPrepareTargetDecision,
-    placement: SdxlTargetPlacement,
+    placement: SdxlTargetPlacement | SdxlNativeTargetPlacement,
 ) -> Image.Image:
     """Apply only the explicit reviewed recipe; never infer missing shape or erase annotation."""
     frame = _pixel_box(decision.framing_box, width=source.width, height=source.height)
     if frame != placement.source_pixel_box:
         raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+    if isinstance(placement, SdxlNativeTargetPlacement):
+        if not isinstance(decision, SdxlNativePrepareTargetDecision) or (
+            decision.canvas != placement.canvas or decision.redaction_boxes
+        ):
+            raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+        canvas_size = NATIVE_TARGET_CANVASES[placement.canvas]
+    else:
+        if isinstance(decision, SdxlNativePrepareTargetDecision):
+            raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
+        canvas_size = (OUTPUT_WIDTH, OUTPUT_HEIGHT)
     left, top, right, bottom = frame
     crop = source.crop(frame).convert("L")
     drawing = ImageDraw.Draw(crop)
@@ -155,7 +170,7 @@ def materialize_reviewed_sdxl_target(
     resized = crop.resize(
         (placement.resized_width_px, placement.resized_height_px), Image.Resampling.LANCZOS
     )
-    canvas = Image.new("L", (OUTPUT_WIDTH, OUTPUT_HEIGHT), 255)
+    canvas = Image.new("L", canvas_size, 255)
     canvas.paste(resized, (placement.offset_x_px, placement.offset_y_px))
     return canvas.convert("RGB")
 

@@ -26,6 +26,19 @@ from eom_image_contracts import (
     validate_sdxl_training_target_result,
 )
 from eom_image_contracts.sdxl_lora_micro import SdxlLoraMicroSample
+from eom_image_contracts.sdxl_native_training_targets import (
+    NATIVE_TARGET_CANVASES,
+    LocalImageSdxlNativeTrainingTargetCommand,
+    LocalImageSdxlNativeTrainingTargetResult,
+    SdxlNativePrepareTargetDecision,
+    SdxlNativeTargetPlacement,
+    SdxlNativeTrainingTargetSources,
+    SdxlPreparedNativeTrainingTarget,
+    parse_sdxl_native_training_target_sources,
+    sdxl_native_target_id,
+    sdxl_native_target_placement,
+    validate_sdxl_native_training_target_result,
+)
 from eom_image_contracts.sdxl_source_training_targets import (
     LocalImageSdxlSourceTrainingTargetCommand,
     LocalImageSdxlSourceTrainingTargetResult,
@@ -39,7 +52,12 @@ from eom_image_contracts.sdxl_source_training_targets import (
     sdxl_source_target_placement,
     validate_sdxl_source_training_target_result,
 )
-from eom_image_contracts.sdxl_training_targets import SdxlTrainingTargetSources, TargetErrorCode
+from eom_image_contracts.sdxl_training_targets import (
+    SdxlTargetPlacement,
+    SdxlTrainingTargetSources,
+    TargetErrorCode,
+    sdxl_reviewed_target_caption,
+)
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.staged_file_io import (
     create_staged_directory,
@@ -59,9 +77,20 @@ from eom_image_trainer.crop_processing import (
 
 MAX_METADATA_BYTES = 2 * 1024**2
 MAX_SOURCE_BYTES = 16 * 1024**2
-TargetCommand = LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand
-TargetResult = LocalImageSdxlTrainingTargetResult | LocalImageSdxlSourceTrainingTargetResult
-TargetSources = SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources
+TargetCommand = (
+    LocalImageSdxlTrainingTargetCommand
+    | LocalImageSdxlSourceTrainingTargetCommand
+    | LocalImageSdxlNativeTrainingTargetCommand
+)
+TargetResult = (
+    LocalImageSdxlTrainingTargetResult
+    | LocalImageSdxlSourceTrainingTargetResult
+    | LocalImageSdxlNativeTrainingTargetResult
+)
+TargetSources = (
+    SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources | SdxlNativeTrainingTargetSources
+)
+PreparedTarget = SdxlPreparedTrainingTarget | SdxlPreparedNativeTrainingTarget
 
 
 class SdxlTrainingTargetError(RuntimeError):
@@ -76,7 +105,10 @@ def _command(raw: bytes) -> TargetCommand:
         if not isinstance(value, dict):
             raise ValueError("command must be an object")
         command: TargetCommand
-        if value.get("schema_version") == "local-image-sdxl-training-target-command/1.1":
+        if value.get("schema_version") == "local-image-sdxl-training-target-command/1.2":
+            validate_contract("sdxl-training-target-command-v3", value)
+            command = LocalImageSdxlNativeTrainingTargetCommand.model_validate(value)
+        elif value.get("schema_version") == "local-image-sdxl-training-target-command/1.1":
             validate_contract("sdxl-training-target-command-v2", value)
             command = LocalImageSdxlSourceTrainingTargetCommand.model_validate(value)
         else:
@@ -149,6 +181,14 @@ def _load_sources(root: int, command: TargetCommand) -> TargetSources:
     def read(member: str) -> bytes:
         return read_staged_member(root, member, maximum_bytes=MAX_METADATA_BYTES)
 
+    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+        return parse_sdxl_native_training_target_sources(
+            command,
+            crop_set_payload=read("inputs/source-crop-set.json"),
+            source_command_payload=read("inputs/native-crop-command.json"),
+            review_payload=read("inputs/source-review.json"),
+            authorization_payload=read("inputs/authorization.json"),
+        )
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
         return parse_sdxl_source_training_target_sources(
             command,
@@ -170,6 +210,13 @@ def _validated_result(
 ) -> TargetResult:
     if not isinstance(value, dict):
         raise ValueError("result must be an object")
+    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+        if not isinstance(sources, SdxlNativeTrainingTargetSources):
+            raise ValueError("source protocol mismatch")
+        validate_contract("sdxl-training-target-result-v3", value)
+        native_result = LocalImageSdxlNativeTrainingTargetResult.model_validate(value)
+        validate_sdxl_native_training_target_result(command, sources, native_result)
+        return native_result
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
         if not isinstance(sources, SdxlSourceTrainingTargetSources):
             raise ValueError("source protocol mismatch")
@@ -186,6 +233,13 @@ def _validated_result(
 
 
 def _source_result_fields(command: TargetCommand, sources: TargetSources) -> dict[str, str]:
+    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand) and isinstance(
+        sources, SdxlNativeTrainingTargetSources
+    ):
+        return {
+            "schema_version": "local-image-sdxl-training-target-result/1.2",
+            "source_snapshot_sha256": sources.snapshot_sha256,
+        }
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand) and isinstance(
         sources, SdxlSourceTrainingTargetSources
     ):
@@ -240,11 +294,14 @@ def run_sdxl_training_target_command(
                 return result
             if os.path.lexists(workspace / "targets"):
                 raise SdxlTrainingTargetError("SDXL_TARGET_OUTPUT_INVALID")
-            prepared: list[SdxlPreparedTrainingTarget] = []
+            prepared: list[PreparedTarget] = []
+            native_output_hashes: set[str] = set()
             error: TargetErrorCode | None = None
             source_samples: tuple[SdxlSourceTargetSample, ...] | tuple[SdxlLoraMicroSample, ...] = (
                 sources.samples
-                if isinstance(sources, SdxlSourceTrainingTargetSources)
+                if isinstance(
+                    sources, (SdxlSourceTrainingTargetSources, SdxlNativeTrainingTargetSources)
+                )
                 else sources.training_command.training_samples
             )
             samples = {sample.sample_id: sample for sample in source_samples}
@@ -265,8 +322,26 @@ def run_sdxl_training_target_command(
                         ),
                         size=(sample.source_width_px, sample.source_height_px),
                     )
-                    target_model: type[SdxlPreparedTrainingTarget]
-                    if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
+                    target_model: (
+                        type[SdxlPreparedTrainingTarget] | type[SdxlPreparedNativeTrainingTarget]
+                    )
+                    placement: SdxlTargetPlacement | SdxlNativeTargetPlacement
+                    canvas_size = (768, 512)
+                    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+                        if not isinstance(sample, SdxlSourceTargetSample) or not isinstance(
+                            decision, SdxlNativePrepareTargetDecision
+                        ):
+                            raise SdxlTrainingTargetError("SDXL_TARGET_INPUT_INVALID")
+                        placement = sdxl_native_target_placement(
+                            sample, decision, maximum_upscale_milli=command.maximum_upscale_milli
+                        )
+                        logical = sdxl_native_target_id(command, sample, decision)
+                        caption = sdxl_reviewed_target_caption(
+                            decision.reviewed_caption_en, decision.expression
+                        )
+                        canvas_size = NATIVE_TARGET_CANVASES[decision.canvas]
+                        target_model = SdxlPreparedNativeTrainingTarget
+                    elif isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
                         if not isinstance(sample, SdxlSourceTargetSample) or not isinstance(
                             decision, SdxlSourcePrepareTargetDecision
                         ):
@@ -291,6 +366,10 @@ def run_sdxl_training_target_command(
                     )
                     payload = png_bytes(image)
                     sha = "sha256:" + hashlib.sha256(payload).hexdigest()
+                    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+                        if sha in native_output_hashes:
+                            raise SdxlTrainingTargetError("SDXL_TARGET_SOURCE_INVALID")
+                        native_output_hashes.add(sha)
                     caption_sha = text_sha256(caption)
                     revision = content_sha256(
                         {
@@ -300,20 +379,22 @@ def run_sdxl_training_target_command(
                             "placement": placement.model_dump(mode="json"),
                         }
                     )
-                    target = target_model(
-                        sample_id=sample.sample_id,
-                        target_id=logical,
-                        target_revision_id="imgsdxltargetrev_" + revision[7:39],
-                        source_crop_sha256=sample.source_image.sha256,
-                        member_path="targets/" + logical + ".png",
-                        sha256=sha,
-                        size_bytes=len(payload),
-                        width_px=768,
-                        height_px=512,
-                        mode="RGB",
-                        training_caption_en=caption,
-                        training_caption_sha256=caption_sha,
-                        placement=placement,
+                    target = target_model.model_validate(
+                        {
+                            "sample_id": sample.sample_id,
+                            "target_id": logical,
+                            "target_revision_id": "imgsdxltargetrev_" + revision[7:39],
+                            "source_crop_sha256": sample.source_image.sha256,
+                            "member_path": "targets/" + logical + ".png",
+                            "sha256": sha,
+                            "size_bytes": len(payload),
+                            "width_px": canvas_size[0],
+                            "height_px": canvas_size[1],
+                            "mode": "RGB",
+                            "training_caption_en": caption,
+                            "training_caption_sha256": caption_sha,
+                            "placement": placement,
+                        }
                     )
                     write_staged_member(root, target.member_path, payload)
                     prepared.append(target)

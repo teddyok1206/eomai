@@ -165,6 +165,58 @@ class SdxlTargetPlacement(FrozenModel):
         return self
 
 
+@dataclass(frozen=True, slots=True)
+class ReviewedTargetGeometry:
+    """Small immutable fit value; no independent identity or persisted cache."""
+
+    source_pixel_box: tuple[int, int, int, int]
+    resized_width_px: int
+    resized_height_px: int
+    offset_x_px: int
+    offset_y_px: int
+
+
+def reviewed_target_geometry(
+    *,
+    width: int,
+    height: int,
+    framing_box: ImageEvaluationBoundingBox,
+    maximum_upscale_milli: int,
+    canvas_size: tuple[int, int],
+) -> ReviewedTargetGeometry:
+    """One exact rational fit shared by released and explicit native-canvas recipes."""
+    canvas_width, canvas_height = canvas_size
+    if not (1 <= width <= 4096 and 1 <= height <= 4096) or not (
+        1000 <= maximum_upscale_milli <= 4000
+        and 512 <= canvas_width <= 1024
+        and 512 <= canvas_height <= 1024
+    ):
+        raise ValueError("SDXL target placement dimensions/scale invalid")
+    frame = framing_box
+    left, top = frame.left * width // 10_000, frame.top * height // 10_000
+    right = (frame.right * width + 9_999) // 10_000
+    bottom = (frame.bottom * height + 9_999) // 10_000
+    crop_width, crop_height = right - left, bottom - top
+    if crop_width < 16 or crop_height < 16:
+        raise ValueError("SDXL target reviewed frame is too small")
+    numerator, denominator = canvas_width - 64, crop_width
+    for candidate_numerator, candidate_denominator in (
+        (canvas_height - 64, crop_height),
+        (maximum_upscale_milli, 1000),
+    ):
+        if candidate_numerator * denominator < numerator * candidate_denominator:
+            numerator, denominator = candidate_numerator, candidate_denominator
+    resized_width = max(1, crop_width * numerator // denominator)
+    resized_height = max(1, crop_height * numerator // denominator)
+    return ReviewedTargetGeometry(
+        (left, top, right, bottom),
+        resized_width,
+        resized_height,
+        (canvas_width - resized_width) // 2,
+        (canvas_height - resized_height) // 2,
+    )
+
+
 def sdxl_target_placement(
     sample: SdxlLoraMicroSample,
     decision: SdxlPrepareTargetDecision,
@@ -190,32 +242,19 @@ def sdxl_reviewed_target_placement(
     maximum_upscale_milli: int,
 ) -> SdxlTargetPlacement:
     """Shared fixed geometry; identity admission belongs to each released source protocol."""
-    if not (1 <= width <= 4096 and 1 <= height <= 4096) or not (
-        1000 <= maximum_upscale_milli <= 4000
-    ):
-        raise ValueError("SDXL target placement dimensions/scale invalid")
-    frame = framing_box
-    left, top = frame.left * width // 10_000, frame.top * height // 10_000
-    right = (frame.right * width + 9_999) // 10_000
-    bottom = (frame.bottom * height + 9_999) // 10_000
-    crop_width, crop_height = right - left, bottom - top
-    if crop_width < 16 or crop_height < 16:
-        raise ValueError("SDXL target reviewed frame is too small")
-    numerator, denominator = 704, crop_width
-    for candidate_numerator, candidate_denominator in (
-        (448, crop_height),
-        (maximum_upscale_milli, 1000),
-    ):
-        if candidate_numerator * denominator < numerator * candidate_denominator:
-            numerator, denominator = candidate_numerator, candidate_denominator
-    resized_width = max(1, crop_width * numerator // denominator)
-    resized_height = max(1, crop_height * numerator // denominator)
+    geometry = reviewed_target_geometry(
+        width=width,
+        height=height,
+        framing_box=framing_box,
+        maximum_upscale_milli=maximum_upscale_milli,
+        canvas_size=(768, 512),
+    )
     return SdxlTargetPlacement(
-        source_pixel_box=(left, top, right, bottom),
-        resized_width_px=resized_width,
-        resized_height_px=resized_height,
-        offset_x_px=(768 - resized_width) // 2,
-        offset_y_px=(512 - resized_height) // 2,
+        source_pixel_box=geometry.source_pixel_box,
+        resized_width_px=geometry.resized_width_px,
+        resized_height_px=geometry.resized_height_px,
+        offset_x_px=geometry.offset_x_px,
+        offset_y_px=geometry.offset_y_px,
     )
 
 

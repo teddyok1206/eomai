@@ -71,6 +71,9 @@ if TYPE_CHECKING:
         LocalImageSdxlLoraMicroCommand,
         LocalImageSdxlTrainingTargetCommand,
     )
+    from eom_image_contracts.sdxl_native_training_targets import (
+        LocalImageSdxlNativeTrainingTargetCommand,
+    )
     from eom_image_contracts.sdxl_source_training_targets import (
         LocalImageSdxlSourceTrainingTargetCommand,
     )
@@ -469,15 +472,22 @@ class LocalImageTrainingControlArtifactPublisher:
 
     def commit_sdxl_training_target_command(
         self,
-        command: LocalImageSdxlTrainingTargetCommand | LocalImageSdxlSourceTrainingTargetCommand,
+        command: LocalImageSdxlTrainingTargetCommand
+        | LocalImageSdxlSourceTrainingTargetCommand
+        | LocalImageSdxlNativeTrainingTargetCommand,
     ) -> ImageEvaluationArtifactMember:
+        match command.schema_version:
+            case "local-image-sdxl-training-target-command/1.0":
+                contract_name = "sdxl-training-target-command"
+            case "local-image-sdxl-training-target-command/1.1":
+                contract_name = "sdxl-training-target-command-v2"
+            case "local-image-sdxl-training-target-command/1.2":
+                contract_name = "sdxl-training-target-command-v3"
+            case _:
+                raise ValueError("SDXL_TARGET_COMMAND_SCHEMA_UNSUPPORTED")
         return self._commit_document(
             value=command,
-            contract_name=(
-                "sdxl-training-target-command-v2"
-                if command.schema_version == "local-image-sdxl-training-target-command/1.1"
-                else "sdxl-training-target-command"
-            ),
+            contract_name=contract_name,
             member="manifests/sdxl-training-target-command.json",
             schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_training_target_command",
