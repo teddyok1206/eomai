@@ -12,6 +12,12 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "science-source-pdf-render-request": (
+        "local-image-science-source-pdf-render-request-v1.schema.json"
+    ),
+    "science-source-pdf-render-result": (
+        "local-image-science-source-pdf-render-result-v1.schema.json"
+    ),
     "science-source-pdf-crop-command": "local-image-science-source-pdf-crop-command-v1.schema.json",
     "science-source-pdf-crop-set": "local-image-science-source-pdf-crop-set-v1.schema.json",
     "sdxl-validation-comparison-command": (
@@ -367,6 +373,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "science-source-pdf-render-request": (
+        "sha256:c77f6f9d7446caae0ff9715c5db16b11be448b97d2afb35de6f70f3f2975f68c"
+    ),
+    "science-source-pdf-render-result": (
+        "sha256:fe07b6f2eaa6d4eeb5e4b2c0fab30419b1a555b3560b982d61e1f5e91298773d"
+    ),
     "science-source-pdf-crop-command": (
         "sha256:8c9e6c89f6e1afb5356f67dbf3184c78b676a8bf35d422a66c7b470bd2579a66"
     ),

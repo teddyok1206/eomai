@@ -110,3 +110,60 @@ source reads or576-dpi dispatch). Three candidate wheels built/inspected; wheel-
 schema/command import passed without repository sys.path or runtime installation.
 Pointers and exact identities are recorded in the operations plan. This closes
 the preparation/intention gate only, not the pending renderer/worker/target gates.
+
+## CPU render handoff design
+
+Use one closed render request/result value contract per unique PDF, reusing the
+source's existing metadata and existing PNG member value. A request pins the
+parent command logical ID/semantic hash, tool/Pillow identity and at most three
+literal frames. Its content hash binds the result to the exact request; it is a
+bounded value, not another registry/entity. The parent application constructs the
+request from admitted provenance, checks PDF bytes once per source, invokes the
+fixed CPU adapter and validates all returned members before set publication.
+
+The installed image worker receives that small canonical request and PDF bytes
+on stdin, checks the PDF SHA and sizes before Poppler, and returns a closed ZIP of
+typed metadata and PNGs. No worker path, query, NAS resolution, queue or database
+behavior is introduced. Clip coordinates are exactly four times the original
+144-dpi grid. Each result binds the request hash, ordered selection IDs, native
+dimensions and PNG hashes. This remains O(S + selected pixels), bounded by the
+existing per-document concentration and batch pixel/byte limits. A transient
+systemd sandbox uses the existing image identity, private network/devices/tmp,
+read-only system, inaccessible secrets/NAS/source and bounded memory/tasks/time.
+The orchestration adapter owns process/sandbox behavior; the worker owns only
+offline rendering. Canonical file-set publication, unique commit/replay and
+failed history remain with the existing Orchestrator publisher. An uncertain
+process observation is not permission to redispatch. Tests separate mock/synthetic
+process checks from opt-in installed-role sandbox execution and source-quality
+inspection. No new dependency or persistent framework is needed.
+
+Publication is keyed by the pinned command's semantic SHA, not the output's
+timestamp-dependent identity. The existing unique job/commit boundary therefore
+rejects a different delivery for the same command instead of creating duplicate
+canonical sets. Request/output hashes, exclusive local workspace and read-only
+canonical replay remain separate from that durable commit identity.
+
+The expanded dependency audit also exposed an unchanged predecessor violation:
+`source_page_crop_expansion_inputs.py` imports two pure planning interfaces from
+`eom_catalog_service` (present at HEAD9239624b, last changed in400f1c09). The new
+domain/worker/publication modules do not add that dependency. Do not hide it with
+dynamic imports or weaken the repository-wide check. Extract the shared frozen
+selection rule to an appropriate contract/domain owner in a separate focused
+maintenance change; its current global audit failure is not a native-render PASS.
+
+## Native worker source gate, 2026-10-05 UTC
+
+The closed render request/result schemas were defined before worker behavior and
+are mirrored/hashed in the release inspectors. The CPU worker, fixed transient
+sandbox adapter, full PNG/ZIP validation, command-keyed canonical publication and
+read-only replay are now implemented. Focused regression304 PASS (including two
+opt-in real-Poppler synthetic rotated/fractional-page cases), strict mypy8 source
+files, Ruff/format/bash syntax and diff checks PASS. The repository-wide dependency
+audit remains5 PASS /1 unchanged predecessor violation; it is not suppressed or
+reclassified. New native-source domain/worker/publication boundary tests PASS.
+
+These source tests do not establish installed-role sandbox execution, actual
+corpus576 output, training-target approval or model quality. The frozen seven-
+region command remains the intended first bounded CPU application execution;
+production V6 and reserved source partitions remain outside that installation
+and render scope. No new model call, training or framework is required for it.

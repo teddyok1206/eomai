@@ -107,6 +107,7 @@ markers = [
   "hwpx_privileged: validates HWPX ownership with real root-only filesystem operations",
   "workflow_privileged: validates the real private-group worker filesystem handoff",
   "image_trainer_runtime: validates the isolated CUDA LoRA trainer environment and checkpoint I/O",
+  "native_pdf_toolchain: opt-in synthetic CPU Poppler rendering; no GPU, model or corpus input",
 ]
 
 [tool.ruff]

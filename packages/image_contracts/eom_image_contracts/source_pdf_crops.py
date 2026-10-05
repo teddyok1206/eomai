@@ -16,8 +16,12 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
-from eom_image_contracts.science_corpus_visual import ScienceVisualToolIdentity
+from eom_image_contracts.science_corpus_visual import (
+    ScienceVisualPilotSource,
+    ScienceVisualToolIdentity,
+)
 from eom_image_contracts.source_page_crops import (
+    SCIENCE_ORIGINAL_PAGE_SCHEMA_REF,
     SOURCE_PAGE_CROP_REVIEW_SCHEMA_REF,
     SOURCE_PAGE_CROP_REVIEW_V2_SCHEMA_REF,
     SOURCE_PAGE_CROP_REVIEW_V3_SCHEMA_REF,
@@ -77,6 +81,7 @@ class LocalImageScienceSourcePdfCropCommand(FrozenModel):
             or self.source_review.media_type != "application/json"
             or self.source_review.member_path != "manifests/science-source-page-crop-review.json"
             or self.renderer.path != "/usr/bin/pdftoppm"
+            or len(self.renderer.version) > 64
         ):
             raise ValueError("native PDF crop source/renderer contract mismatch")
         if self.selection_ids != tuple(sorted(set(self.selection_ids))) or any(
@@ -130,7 +135,9 @@ def select_native_source_pdf_regions(
     return selected
 
 
-def native_source_pdf_crop_dimensions(selection: ScienceSourcePageCropRegion) -> tuple[int, int]:
+def native_source_pdf_crop_dimensions(
+    selection: ScienceSourcePageCropRegion | NativeSourcePdfRenderRegion,
+) -> tuple[int, int]:
     left, top, right, bottom = selection.pixel_box
     factor = NATIVE_SOURCE_RENDER_DPI // selection.page_render_dpi
     width, height = (right - left) * factor, (bottom - top) * factor
@@ -224,3 +231,134 @@ def validate_native_source_pdf_crop_set(
     for selection, member in zip(selected, crop_set.members, strict=True):
         if (member.width_px, member.height_px) != native_source_pdf_crop_dimensions(selection):
             raise ValueError("NATIVE_PDF_CROP_SET_DIMENSIONS_MISMATCH")
+
+
+class NativeSourcePdfRenderRegion(FrozenModel):
+    """Literal frame values only; source/caption provenance remains with the parent review."""
+
+    selection_id: str = Field(pattern=r"^imgsourcecrop_[0-9a-f]{32}$")
+    physical_page: int = Field(ge=1, le=512)
+    source_page: ImageEvaluationArtifactMember
+    page_width_px: int = Field(ge=100, le=10_000)
+    page_height_px: int = Field(ge=100, le=10_000)
+    page_render_dpi: Literal[144]
+    pixel_box: tuple[int, int, int, int]
+
+    @model_validator(mode="after")
+    def bounded_frame(self) -> Self:
+        left, top, right, bottom = self.pixel_box
+        if not (0 <= left < right < self.page_width_px and 0 <= top < bottom < self.page_height_px):
+            raise ValueError("NATIVE_PDF_RENDER_FRAME_INVALID")
+        native_source_pdf_crop_dimensions(self)
+        return self
+
+
+class NativeSourcePdfRenderRequest(FrozenModel):
+    schema_version: Literal["local-image-science-source-pdf-render-request/1.0"]
+    command_id: str = Field(pattern=r"^imgpdfcropcommand_[0-9a-f]{32}$")
+    command_sha256: Sha256
+    source: ScienceVisualPilotSource
+    regions: tuple[NativeSourcePdfRenderRegion, ...] = Field(min_length=1, max_length=3)
+    render_dpi: Literal[576]
+    renderer: ScienceVisualToolIdentity
+    pillow_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_request(self) -> Self:
+        ids = tuple(region.selection_id for region in self.regions)
+        if (
+            self.source.partition != "TRAIN"
+            or self.source.bytes > 64 * 1024**2
+            or self.renderer.path != "/usr/bin/pdftoppm"
+            or len(self.renderer.version) > 64
+            or ids != tuple(sorted(set(ids)))
+        ):
+            raise ValueError("NATIVE_PDF_RENDER_REQUEST_INVALID")
+        for region in self.regions:
+            if region.physical_page > self.source.page_count or (
+                region.source_page.media_type != "image/png"
+                or region.source_page.schema_ref != SCIENCE_ORIGINAL_PAGE_SCHEMA_REF
+                or region.source_page.member_path
+                != f"pages/{self.source.document_id}/page-{region.physical_page}.png"
+            ):
+                raise ValueError("NATIVE_PDF_RENDER_SOURCE_PAGE_MISMATCH")
+        if (
+            sum(
+                width * height
+                for width, height in (
+                    native_source_pdf_crop_dimensions(region) for region in self.regions
+                )
+            )
+            > MAX_NATIVE_BATCH_PIXELS
+        ):
+            raise ValueError("NATIVE_PDF_CROP_PIXEL_BUDGET_EXCEEDED")
+        if self.request_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"request_sha256"})
+        ):
+            raise ValueError("NATIVE_PDF_RENDER_REQUEST_HASH_MISMATCH")
+        return self
+
+
+def native_source_pdf_render_request(
+    command: LocalImageScienceSourcePdfCropCommand,
+    source: ScienceVisualPilotSource,
+    selections: tuple[ScienceSourcePageCropRegion, ...],
+) -> NativeSourcePdfRenderRequest:
+    """Project one already-admitted PDF without losing parent command or frame identity."""
+    if not selections or not {selection.selection_id for selection in selections} <= set(
+        command.selection_ids
+    ):
+        raise ValueError("NATIVE_PDF_RENDER_COMMAND_SELECTION_MISMATCH")
+    if any(
+        selection.source_document != source.pdf
+        or selection.document_id != source.document_id
+        or selection.exam_group_sha256 != source.exam_group_sha256
+        or selection.partition != source.partition
+        for selection in selections
+    ):
+        raise ValueError("NATIVE_PDF_RENDER_SOURCE_MISMATCH")
+    fields = set(NativeSourcePdfRenderRegion.model_fields)
+    value = {
+        "schema_version": "local-image-science-source-pdf-render-request/1.0",
+        "command_id": command.command_id,
+        "command_sha256": command.command_sha256,
+        "source": source.model_dump(mode="json"),
+        "regions": [selection.model_dump(mode="json", include=fields) for selection in selections],
+        "render_dpi": command.render_dpi,
+        "renderer": command.renderer.model_dump(mode="json"),
+        "pillow_version": command.pillow_version,
+    }
+    value["request_sha256"] = content_sha256(value)
+    validate_contract("science-source-pdf-render-request", value)
+    return NativeSourcePdfRenderRequest.model_validate(value)
+
+
+class NativeSourcePdfRenderResult(FrozenModel):
+    schema_version: Literal["local-image-science-source-pdf-render-result/1.0"]
+    request_sha256: Sha256
+    members: tuple[ScienceSourcePageCropMember, ...] = Field(min_length=1, max_length=3)
+    activation_policy: Literal["FORBIDDEN"]
+
+    @model_validator(mode="after")
+    def unique_members(self) -> Self:
+        ids = tuple(member.selection_id for member in self.members)
+        if ids != tuple(sorted(set(ids))) or len({member.sha256 for member in self.members}) != len(
+            ids
+        ):
+            raise ValueError("NATIVE_PDF_RENDER_RESULT_DUPLICATE")
+        return self
+
+
+def validate_native_source_pdf_render_result(
+    request: NativeSourcePdfRenderRequest, result: NativeSourcePdfRenderResult
+) -> None:
+    validate_contract("science-source-pdf-render-result", result.model_dump(mode="json"))
+    if result.request_sha256 != request.request_sha256 or (
+        tuple(member.selection_id for member in result.members)
+        != tuple(region.selection_id for region in request.regions)
+    ):
+        raise ValueError("NATIVE_PDF_RENDER_RESULT_REQUEST_MISMATCH")
+    for region, member in zip(request.regions, result.members, strict=True):
+        if (member.width_px, member.height_px) != native_source_pdf_crop_dimensions(region):
+            raise ValueError("NATIVE_PDF_RENDER_RESULT_DIMENSIONS_MISMATCH")
