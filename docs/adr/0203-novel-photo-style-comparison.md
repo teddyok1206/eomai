@@ -1171,3 +1171,99 @@ Next immutable wheel build, source-free simulation/lab-only install with248a5c0d
 rollback and old terminal replays, then a separately frozen single6-output region
 comparison against ink1.2 (not0.65). Goal ACTIVE; newGPU/training/HOLDOUT0,
 production activation/canary NOT_STARTED at this source checkpoint.
+
+## Retained-region numerical rejection and TRAIN-style audit — 2026-10-05T22:20Z
+
+Core437280d37124ad9404bcdcfbf118de57bb913a1d built from immutable Git archive;
+contracts wheel SHA c986071754bc63053132f3b29f1d172c578b327ce0c8bff41d7461f7d7d0326d,
+provider faf9bd83c2148d5ecbbbfbc9c5120626f967e93693d78fdfaad4e3f9fdf28b92.
+Source-free wheel/RECORD simulation and lab-only installed-role import/pip checks
+PASS. Exact248a5c0d rollback wheels retained. Trainer/dependencies/systemd units,
+production binding and five services unchanged; no service restart or new model.
+Initial non-installing simulation's exec-local generator scope failed; a corrected
+temporary operator used direct loops. Original failed operator/log preserved,
+core unchanged and failed simulation side effects0.
+
+Historical generic/exact1.0,white1.1,ink1.2,window1.3 installed terminal replays
+each verify96 file SHA/mtime with model/lease/transform/write0. Frozen new1.4
+restores full control(start0/end1/scale1) and changes only reviewed exterior
+conditioning retention against registered ink1.2. Same cases/prompts/reference
+revisions/seed104729/full-white30-step initializer/native44 adapter/configuration
+and numerical runtime. CPU source-free inspection matches the earlier canonical
+three candidate Canny hashes and unchanged initializer RGB; bounded own-review
+member staged once.78 inputs; metadata admission44 targets with binary-open guard.
+Prompt capacity reused only identical registered text/model/config pins, not new
+tokenizer execution or unsupported no-truncation assumption.
+
+Plan artifact_8695c734d9924077a5fe37b708051231 /
+rev_88c088c12c6842bb824d6b0bfff73a61, byte
+5e1a91289f16e5f3d009040886bff7c9dd1571fa37a72d9fcaf2bb1e8d029c87.
+Command artifact_10a3a3dd9f40429c91544fb3fd9b8700 /
+rev_386fdccf81474975b48294e1da7f84a2, byte
+a908f04609484b74dbe59cc8879f69c13b1595674ad7dfd7f492809243d1f2a5.
+One dispatch imgsdxlvalcmprun_9c218530575a81b3c705953fe6b2d724;
+6 SUCCEEDED/35871ms/peak10763033600 bytes, no OOM/retry/sweep/training/HOLDOUT.
+Result artifact_f8fc48b718044115af303604ec061e3c /
+rev_4daa3b8f558b487db3694406a2cb661d, primary
+manifests/sdxl-photo-style-result.json, byte
+619e6c2ad785919125cbff486097da72791a5a3adebf3cf2f169df804f2d8bd1,
+semantic01d26f738da3200e7260e05057e5874d78c1d82718ca4a8c23de641d7627410f.
+Canonical19 members reread equal, matched15 source/old/new members/pins PASS.
+New terminal replay97 files SHA/mtime and forbidden effects0.
+
+Actually viewed all6 native832x512 RGB outputs and both labelled contacts.
+Exterior scene noise decreases, but gray relief/pencil, interior clutter and
+rectangular support/frame artifacts remain. LORA trilobite has pale green/cream
+cast. Partial-ammonite LORA adds an unwanted far-left circular spiral-like object;
+reference/control does not contain that subject. Fine anatomical/wheel/window/
+suture fidelity NOT_VERIFIED. All6 fail clean exam-line-art objective; dark/mid
+fraction per1000: trilobite BASE0/332,LORA0/342; wagon8/269,4/260;
+ammonite4/143,2/135. Metrics are not scientific correctness certification.
+Decision RETAINED_REGION_NOT_ACCEPTED_FOR_STYLE_AND_LORA_SPURIOUS_OBJECT.
+No LoRA superiority, canary or production activation claimed.
+
+Evidence39 artifact_fac335f4e588411f91d723df4219a9d0 /
+rev_a18212dd9cf04b50a9f83972c5acfd06, primary reports/own-review.md,
+SHA e49718687011a48f30ff18f8c66cfef16f65411147596e48593ac1e921f9776a.
+Persisted bytes reread equal; one derived comparison contact only, no duplicate
+canonical source/output/weight bytes. Failed test/simulation histories retained.
+
+Separate read-only audit resolved the native44 TRAIN closure, then exactly44
+target PNGs (8299203 bytes) once, with permission/lifecycle/schema/media/hash and
+size/PNG/dimension checks.8 batches/37 metadata members/29 documents/27 exam groups,
+all TRAIN; no VALIDATION/HOLDOUT/original PDF/model/GPU/training reads/calls.
+Actual expression counts9 CLEAN_CONTOUR/6 FINE_HATCHING/29 RESTRAINED_TONE;
+composition33 ISOLATED_ON_WHITE/11 AUTHORED_SCENE. All44 inspected through six
+labelled diagnostic contacts, not at full native print resolution or blind.
+Many strong outlines coexist with meaningful flat fills, gradient/texture and
+pale/soft raster sources. CLEAN_CONTOUR does not mean no gray pixels. Do not
+erase science-bearing fills/hatching/background or relabel existing metadata.
+Own finding TRAIN_STYLE_HETEROGENEITY_CONFIRMED_CAUSAL_EFFECT_NOT_ESTABLISHED:
+tone29/44 is not proven causal, BASE also fails; native fan/beaker promise is not
+invalidated by novel-photo failures. Do not present contact inspection as anatomy
+or source-document scientific certification.
+
+The initial temporary audit mislabelled a complete typed training-command model
+as a pointer. A metadata-only corrected projection verified its exact canonical
+lineage and used the actual immutable pointer plus small run ID/semantic SHA.
+Original report/operator/log preserved; no repeated target read/core workaround.
+
+TRAIN audit evidence14 artifact_bac3d4a6cfc14960897763bb80a98bcb /
+rev_424d0a0fb4e446cbb3d2bc5bbddde200, primary reports/own-review.md, SHA
+aae575e906587f744036fa5a69479ccdc24f267d4cef36dc829b8bf583e6cba4;
+all persisted bytes reread equal. Six derived contacts and pointer-oriented audit
+only; no canonical target PNG duplication. Corrected training command points to
+artifact_22c13da7e8c544b395f73b5f316520e9 /
+rev_ad049b679783422685f0458ba495a1ee,
+manifests/sdxl-native-lora-command.json1.1, byte
+33e8ec620670c5347d8c38c79b86ac8ec1614fe119d26017892273d49e2bf0a5.
+
+Next: inspect more already approved TRAIN contour candidates within frozen
+document splits, using existing source/crop/target owners. Preserve native44
+baseline and source pixels/captions; no9-sample replication/minimum weakening or
+automatic binarization. A visually consistent diverse successor cohort is a
+training hypothesis, tested separately at fixed base/steps/hyperparameters with
+paired same inputs. New schedule only if existing contracts cannot express it,
+schema-first; no parallel framework. Reserved validation and final HOLDOUT remain
+unmodified. Independent blind review/broader-family quality+fidelity/resource/
+Preview-HWPX/activation gates OPEN; goal ACTIVE.
