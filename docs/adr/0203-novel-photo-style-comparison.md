@@ -301,3 +301,84 @@ BASE effects separately from LoRA effects: a generic-vs-prefix difference alone 
 not proof of learned-adapter improvement. A positive result on these three difficult
 references is still not independent blind review, untouched HOLDOUT, four-family/
 32-case acceptance or readiness for Item/HWPX/production activation.
+
+## Exact training phrase experiment — 2026-10-05 UTC
+
+Plan value `imgsdxlphotoplan_b36592cfbc036e9a6d192bf08ed951e1`, registered as
+`artifact_574b209143ff4931b3b2ef7b99341790` /
+`rev_ea3c05508b8d495eaf6150b206045b93`. Existing contracts/provider consumer
+`1a98a93a` RECORD and numeric dependencies reverified read-only; intervening source
+`c8022341` changes are documentation-only on affected code paths. No reinstall.
+Both pinned tokenizers accept positive67/74/73, negative37, limit77.
+
+One six-output dispatch `imgsdxlvalcmprun_77d84cf2b76ea3c5008f88111b7a61d2`:
+SUCCEEDED/31038ms/10763099136 peak bytes. Result
+`artifact_8807bea31cea42fb8d965b788341faf9` /
+`rev_4a9e18ce8a9c4128818cda85a6f91d09`,19 committed members reread equal,
+primary byteSHA `06e909b8835c49baef46427aefe067ce73365679e91076ecdc79faae69f89f85`.
+CPU transform proof and installed terminal replay PASS/96 unchanged files;
+replay model/GPU/transform/write0, read-only PNG validation still decodes pixels.
+Current budget exhausted, no training/HOLDOUT/sweep/retry/activation.
+
+Registered generic/prefix plans/results and15 photo/output members re-resolved.
+Depiction/source hash mapping preserves order independently of new case IDs;
+all three conditioning and initializer RGB hashes are exactly equal. New labelled
+five-column views distinguish source photograph from all four model conversions.
+Actual contact, individual trilobite and native wagon own review:
+**EXAM_LINE_ART_TARGET_NOT_MET**3/3. Photo texture, broad shadow/tones and scene
+clutter remain; a different background texture is not examination-style success.
+Exact-vs-generic grayscale MAE BASE/LORA: trilobite4.30/5.19, wagon7.57/6.24,
+ammonite2.80/3.45 on0–255. BASE also changes. Pixel differences are not learned-
+style proof; **the exact phrase alone is insufficient under this frozen recipe**,
+not proof that the adapter learned nothing or one exclusive failure cause.
+
+One early publication invocation rejected an activating unit before Artifact
+mutation; same handle subsequently terminal, then publication PASS. One display
+comparison invocation lacked source PYTHONPATH and failed on import before writes;
+corrected invocation PASS. Preserve these logs, not extra generation. Existing
+231 source-test PASS remains applicable to unchanged code; operators Ruff/format
+PASS. Independent review/full32-case/four-family/Item/HWPX gates stay OPEN;
+production binding and dependencies unchanged, goal ACTIVE.
+
+### Next recipe decision: separate shape guidance from photographic tone
+
+The current pixel owner fits a grayscale photograph for both Canny construction
+and img2img initialization. The backend explicitly sends that RGB initializer
+and separate control image. Source inspection establishes this coupling, not
+its exclusive causal responsibility for the observed failure.
+
+1. Boundary: extend the existing photo comparison contracts/pixel owner/backend/
+   publication verifier; no parallel worker, queue, API, registry or framework.
+2. Canonical source: same licensed photo/manifest/source-review revisions, native44
+   adapter/configuration and exact-phrase plan/result; no new training images.
+3. Identity: preserve all released1.0 bytes/meaning. An explicit successor recipe
+   uses constant-white832×512 RGB initialization, not a photo-derived grayscale
+   initializer falsely retaining the previous policy name. New plan/command/result
+   revisions pin it; source/case/artifact/revision/SHA remain distinct.
+4. Resolution: same schema/media/lifecycle/permission/hash/source-authority and
+   TRAIN collision checks before bytes; exact initializer/control byte closure.
+5. Access: bounded metadata batches, keyed case/arm/trace lookup, sorted frozen
+   output, exclusive claim/terminal replay. No DB/query/index change.
+6. Structures: frozen typed recipe/commands/results, discriminated contract family,
+   existing maps/sets and GPU inode lock. No new persistent derived cache.
+7. Complexity: O(total source pixels) Canny and constant O(832×512) initializer;
+   three sources, one separately bounded six-output BASE/LORA diagnostic.
+8. Concurrency: current Orchestrator commit/dispatch and physical lease; source-free
+   worker, one identity/maxdispatch1, automatic retry/sweep0, activation FORBIDDEN.
+9. Dependency direction: contracts define recipe; existing provider owns pixels/
+   inference, Orchestrator stages/publishes. Reuse current numeric libraries.
+10. Failure: missing scientific detail in inspected conditioning stops before GPU;
+    white initializer proof/resource/closure/hash errors fail closed. Preserve
+    failed history, observe ambiguous unit, replay without models/transforms/writes.
+11. Simpler alternative: more prompt text already failed to produce line art.
+    This one initializer-factor comparison retains prompt/negative/seed/Canny/
+    control/steps/strength/adapter and tests whether tone transmission is material.
+    Changing control detail and training simultaneously would confound that test.
+
+This recipe is **not implemented/dispatched at this checkpoint**. Define successor
+JSON Schema2020-12 before models/worker behavior, verify exact CPU transforms and
+installed replay, then inspect the same Canny inputs before one GPU dispatch.
+No generated-output whitening is permitted as a substitute for learned style.
+If white initialization fails, preserve/report it before a separate coarse-contour
+or style-data-balance decision; no automatic parameter search. Independent review
+and full institution-style acceptance remain necessary for any activation.
