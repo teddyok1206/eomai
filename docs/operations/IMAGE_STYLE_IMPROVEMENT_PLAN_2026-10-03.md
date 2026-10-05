@@ -7,7 +7,64 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
-### Next bounded learning-exposure comparison — frozen, NOT_EXECUTED
+### Learning-exposure comparison — actual result,2026-10-05 11:53 UTC
+
+**Technical PASS, own publication quality REJECTED8/8; goal ACTIVE.** One fresh
+native40 run completed40/40 updates in103,940ms, peak6,166,987,776 allocated GPU
+bytes. Same exact12 target pointers/native geometry/captions/dependencies/seed and
+numerical recipe as native200; only optimizer update count changed. New bounded
+cohort-screening record explicitly reused prior unchanged own-screened input
+evidence, not a new independent review. Existing contracts/runtime used unchanged.
+
+Eight actual raw comparison images completed in44,661ms, peak9,863,167,488 bytes.
+The4 new BASE images are byte-identical to their exact previous immutable counterparts;
+all4 LoRA images changed. Canonical old/new command/result/PNG pointers and exact
+matching keys were resolved before comparison. Actual views of all8 confirm
+multiplicity/crop/shading violations remain in BASE. Native40 LoRA fan has severe
+zebra-like texture; native40 beaker has white contours on gray, two vessels and
+missing particle field. No output is publication-ready. Fourfold update reduction
+alone did not fix this branch; neither over-adaptation's absence nor superiority
+of40/200 updates is proved. Do not use similarly small final loss as a quality score.
+
+- Training command `artifact_ff66f11a51f1493aaf0ae3124888d364` /
+  `rev_33edde8a74ad4622867c19b5feb89779`, raw SHA
+  `f870eb2bfcf7d7a0ab9f74e73f6723c106583f49867b325443f4f63087692a60`.
+- Training result/adapter `artifact_49cb805902de4119b48f168a91263a28` /
+  `rev_f54dc939e09c401eacaf84867dc4ceaa`, result raw SHA
+  `c6e09d8c8424cce69aee9007665f92af324dde3449fa37e36a565104587a1e84`.
+- Comparison command `artifact_8d00387bf50246478b4e2b0f74dcc17e` /
+  `rev_be7e28860f3a46ceb3391f75f7bc7378`, raw SHA
+  `a60d6298502e1ce014385647ebc5d8ac67f181e6eb4bcba4b79362b598c0149f`.
+- Result/8 raw PNGs `artifact_ec0cb738704846b29d215764f85af4f5` /
+  `rev_9c1cdc83394d478084b92c8c77c5a67e`, primary
+  `manifests/sdxl-lora-evaluation-result.json`, raw SHA
+  `a0f5c7a878ee5d9e2f252019be37486019e866dd08f079816cbece61ae634847`.
+- Text evidence23 members `artifact_5878a65aa54e42219f8f71dd39c3084b` /
+  `rev_c3384c469c314d6894ed9079457d3f41`, primary`reports/own-review.md`, raw SHA
+  `6d0d6eea863c27b7d71cb59cd1fd3d862b363da31cbb0ce86702b05848c86727`.
+
+All4 training,9 comparison and23 evidence members canonically re-resolved. Actual
+installed-role terminal replay PASS for training33/comparison16 files, with0
+model/training/pixel-decode or comparison lease/weight-materialization/write calls.
+Existing native-contract/geometry regression96 PASS. No core code/schema, dependency,
+runtime install, unit, production binding or service change/restart. Source for
+the frozen experiment`82269365`; both40/200 adapters remain EVALUATION_ONLY.
+Reports/views:`/tmp/eom-native40-training-20261005/` and
+`/tmp/eom-native40-evaluation-20261005/`.
+
+**Next direction:** stop the exhausted learning-length branch. Inventory and screen
+eligible TRAIN composition/style inputs before full-cohort preparation; do not add
+arbitrary short runs or seed/strength sweeps. Local metadata locates12/11/72 TRAIN
+selections in the original expansion/recovery/supplemental review files, across
+10/6/43 declared PDFs and9/6/37 groups respectively. These are per-file metadata
+counts only, not a deduplicated canonical population or95 approved native targets.
+Re-resolve canonical publications and source split/overlap before selecting/preparing
+more targets. Validation/holdout pixels remain untouched. Full100–200 TRAIN,
+24–40 VALIDATION,32 independent blind cases/four families and quality-passing
+Preview/HWPX/activation gates remain OPEN. If actual numerical parity is uncertain,
+a separately frozen direct check is preferable to more arbitrary training.
+
+### Frozen learning-exposure comparison plan — EXECUTED above
 
 Native12's actual8 raw geometry outputs demonstrate framing violations in BASE
 and additional native-canvas polarity/texture collapse in LoRA. Source review has
