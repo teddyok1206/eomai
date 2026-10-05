@@ -23,6 +23,7 @@ from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
     parse_sdxl_native_evaluation_sources,
 )
+from eom_image_contracts.sdxl_native_geometry import LocalImageSdxlNativeGeometryCommand
 from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.sdxl_reviewed_evaluation import (
     LocalImageSdxlReviewedEvaluationCommand,
@@ -68,6 +69,8 @@ def run_sdxl_lora_evaluation(
     backend: SdxlProbeBackend,
     expected_model_owner_uid: int = 0,
 ) -> LocalImageSdxlLoraEvaluationResult:
+    if isinstance(command, LocalImageSdxlNativeGeometryCommand):
+        raise ProviderError("SDXL_PROBE_INPUT_INVALID")
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         pin = command.evaluation
         try:
@@ -108,6 +111,8 @@ def run_sdxl_lora_evaluation(
             try:
                 value = json.loads(raw)
                 result = parse_sdxl_evaluation_result(value)
+                if not isinstance(result, LocalImageSdxlLoraEvaluationResult):
+                    raise ValueError("legacy runner cannot replay native-geometry receipt")
                 validate_sdxl_lora_evaluation_result(command, baseline, result)
                 if raw != content_json_bytes(result.model_dump(mode="json")):
                     raise ValueError("noncanonical result")
@@ -158,6 +163,8 @@ def run_sdxl_lora_evaluation(
         value["case_relation"] = command.case_relation
     value["result_sha256"] = content_sha256(value)
     result = parse_sdxl_evaluation_result(value)
+    if not isinstance(result, LocalImageSdxlLoraEvaluationResult):
+        raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
     validate_sdxl_lora_evaluation_result(command, baseline, result)
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         write_staged_member(root, "result.json", content_json_bytes(value))

@@ -13,6 +13,10 @@ from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
     LocalImageSdxlNativeEvaluationResult,
 )
+from eom_image_contracts.sdxl_native_geometry import (
+    LocalImageSdxlNativeGeometryCommand,
+    LocalImageSdxlNativeGeometryResult,
+)
 from eom_image_contracts.sdxl_reviewed_evaluation import (
     LocalImageSdxlReviewedEvaluationCommand,
     LocalImageSdxlReviewedEvaluationResult,
@@ -33,9 +37,15 @@ _COMMANDS: Mapping[str, tuple[str, type[LocalImageSdxlLoraEvaluationCommand]]] =
             "sdxl-lora-evaluation-command-v3",
             LocalImageSdxlNativeEvaluationCommand,
         ),
+        "local-image-sdxl-lora-evaluation-command/1.3": (
+            "sdxl-lora-evaluation-command-v4",
+            LocalImageSdxlNativeGeometryCommand,
+        ),
     }
 )
-_RESULTS: Mapping[str, tuple[str, type[LocalImageSdxlLoraEvaluationResult]]] = MappingProxyType(
+SdxlEvaluationResult = LocalImageSdxlLoraEvaluationResult | LocalImageSdxlNativeGeometryResult
+
+_RESULTS: Mapping[str, tuple[str, type[SdxlEvaluationResult]]] = MappingProxyType(
     {
         "local-image-sdxl-lora-evaluation-result/1.0": (
             "sdxl-lora-evaluation-result",
@@ -48,6 +58,10 @@ _RESULTS: Mapping[str, tuple[str, type[LocalImageSdxlLoraEvaluationResult]]] = M
         "local-image-sdxl-lora-evaluation-result/1.2": (
             "sdxl-lora-evaluation-result-v3",
             LocalImageSdxlNativeEvaluationResult,
+        ),
+        "local-image-sdxl-lora-evaluation-result/1.3": (
+            "sdxl-lora-evaluation-result-v4",
+            LocalImageSdxlNativeGeometryResult,
         ),
     }
 )
@@ -70,7 +84,7 @@ def parse_sdxl_evaluation_command(value: object) -> LocalImageSdxlLoraEvaluation
     return entry[1].model_validate(value)
 
 
-def parse_sdxl_evaluation_result(value: object) -> LocalImageSdxlLoraEvaluationResult:
+def parse_sdxl_evaluation_result(value: object) -> SdxlEvaluationResult:
     if not isinstance(value, dict) or not isinstance(value.get("schema_version"), str):
         raise ValueError("SDXL_EVALUATION_RESULT_FAMILY_INVALID")
     entry = _RESULTS.get(value["schema_version"])

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import content_json_bytes
+from eom_image_contracts.sdxl_native_geometry import LocalImageSdxlNativeGeometryCommand
 
 from eom_orchestrator.informative_lineart_extraction_inputs import (
     PreparedInformativeLineartExtractionInputs,
@@ -309,10 +310,15 @@ def stage_sdxl_lora_evaluation_inputs(
         "inputs/training-command.json": pin.training_command.sha256,
         "inputs/training-result.json": pin.training_result.sha256,
         "inputs/adapter-manifest.json": pin.adapter_manifest.sha256,
-        "inputs/prompt-policy.json": baseline.prompt_policy.sha256,
-        **{case.staged_member_path: case.reference_image.sha256 for case in baseline.cases},
         **{"inputs/adapter/" + file.relative_path: file.sha256 for file in prepared.manifest.files},
     }
+    if not isinstance(command, LocalImageSdxlNativeGeometryCommand):
+        expected.update(
+            {
+                "inputs/prompt-policy.json": baseline.prompt_policy.sha256,
+                **{case.staged_member_path: case.reference_image.sha256 for case in baseline.cases},
+            }
+        )
     return _stage_inputs(
         files=prepared.files,
         expected=expected,

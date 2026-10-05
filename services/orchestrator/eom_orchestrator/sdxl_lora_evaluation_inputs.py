@@ -19,6 +19,10 @@ from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
     parse_sdxl_native_evaluation_sources,
 )
+from eom_image_contracts.sdxl_native_geometry import (
+    LocalImageSdxlNativeGeometryCommand,
+    validate_sdxl_native_geometry_sources,
+)
 from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from sqlalchemy import Engine
@@ -72,6 +76,8 @@ def prepare_sdxl_lora_evaluation_inputs(
             != probe_sources.policy.crop_set
         ):
             raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
+        if isinstance(command, LocalImageSdxlNativeGeometryCommand):
+            validate_sdxl_native_geometry_sources(command, native)
     else:
         sources = parse_sdxl_lora_evaluation_sources(command, **payloads)
         baseline, manifest = sources.baseline, sources.manifest
@@ -88,8 +94,11 @@ def prepare_sdxl_lora_evaluation_inputs(
         for file in manifest.files
     ):
         raise ValueError("SDXL_EVALUATION_ADAPTER_SIZE_INVALID")
-    baseline_inputs = materialize_sdxl_probe_inputs(engine, baseline, probe_sources)
-    files = [file for file in baseline_inputs.files if file.member_path != "command.json"]
+    if isinstance(command, LocalImageSdxlNativeGeometryCommand):
+        files: list[SdxlProbeInputMember] = []
+    else:
+        baseline_inputs = materialize_sdxl_probe_inputs(engine, baseline, probe_sources)
+        files = [file for file in baseline_inputs.files if file.member_path != "command.json"]
     for file in manifest.files:
         pointer = ImageEvaluationArtifactMember(
             artifact_id=pin.training_result.artifact_id,

@@ -45,6 +45,9 @@ with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
         "eom_image_contracts/sdxl_native_evaluation.py",
+        "eom_image_contracts/sdxl_native_geometry.py",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-command-v4.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v4.schema.json",
         "eom_image_contracts/sdxl_native_canny_reference.py",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-command-v2.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-result-v2.schema.json",
@@ -151,6 +154,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/reference_acquisition.py",
         "eom_image_provider/reference_simplification.py",
         "eom_image_provider/sdxl_lineart_backend.py",
+        "eom_image_provider/sdxl_native_geometry.py",
         "eom_image_provider/sdxl_lineart_probe.py",
         "eom_image_provider/sdxl_learned_comparison.py",
         "eom_image_provider/sdxl_validation_comparison.py",

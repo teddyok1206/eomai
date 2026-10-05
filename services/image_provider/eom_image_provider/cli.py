@@ -25,6 +25,7 @@ from eom_image_contracts import (
 )
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
+from eom_image_contracts.sdxl_native_geometry import LocalImageSdxlNativeGeometryCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import LocalImageSdxlValidationComparisonCommand
 
@@ -80,6 +81,7 @@ from eom_image_provider.sdxl_lora_evaluation import (
     load_sdxl_lora_evaluation_command,
     run_sdxl_lora_evaluation,
 )
+from eom_image_provider.sdxl_native_geometry import run_sdxl_native_geometry
 from eom_image_provider.sdxl_publication_comparison import (
     load_sdxl_publication_command,
     run_sdxl_publication_comparison,
@@ -239,14 +241,23 @@ def main() -> None:
             result = lineart_result.model_dump(mode="json")
         elif args.operation == "sdxl-lora-evaluation":
             lora_command = load_sdxl_lora_evaluation_command(args.workspace, args.command)
-            with acquire_gpu_lease(args.gpu_lock):
-                lora_result = run_sdxl_lora_evaluation(
+            if isinstance(lora_command, LocalImageSdxlNativeGeometryCommand):
+                result = run_sdxl_native_geometry(
                     command=lora_command,
                     model_store_root=args.model_store_root,
                     workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
                     backend=SdxlLineartDiffusersBackend(),
-                )
-            result = lora_result.model_dump(mode="json")
+                ).model_dump(mode="json")
+            else:
+                with acquire_gpu_lease(args.gpu_lock):
+                    lora_result = run_sdxl_lora_evaluation(
+                        command=lora_command,
+                        model_store_root=args.model_store_root,
+                        workspace=args.workspace,
+                        backend=SdxlLineartDiffusersBackend(),
+                    )
+                result = lora_result.model_dump(mode="json")
         elif args.operation == "create-manifest":
             manifest = create_model_manifest(
                 args.revision_directory,
@@ -503,6 +514,9 @@ def main() -> None:
     if (
         args.operation
         in {"sdxl-lineart-probe", "sdxl-publication-comparison", "sdxl-canny-conditioning"}
-        and result["status"] == "FAILED"
-    ):
+        or (
+            args.operation == "sdxl-lora-evaluation"
+            and isinstance(lora_command, LocalImageSdxlNativeGeometryCommand)
+        )
+    ) and result["status"] == "FAILED":
         raise SystemExit(1)

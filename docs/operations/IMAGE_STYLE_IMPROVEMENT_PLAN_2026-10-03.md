@@ -57,6 +57,33 @@ Do not add a generation framework, whiten backgrounds, increase training or prom
 an adapter merely because this engineering check passed. Goal ACTIVE; existing
 rejected verdicts and all full-corpus/independent/product gates remain unchanged.
 
+### Native-geometry implementation checkpoint — 2026-10-05
+
+Source validation:218 focused/regression tests PASS, including30 new geometry
+tests; strict mypy8 production modules and Ruff/format11 files PASS. Initial fixture,
+descriptor-relative directory and UTC canonicalization failures were corrected
+before any model call; their local logs remain retained. The separate repository
+dependency audit is5 PASS/1 FAIL: the unchanged Catalog planning imports in
+`source_page_crop_expansion_inputs.py` remain a pre-existing issue, not a passing
+whole-repository gate or a reason to change this experiment's scope.
+
+The explicit1.3 command/result schemas precede worker behavior and are mirrored in
+the installed contract package. The command reuses immutable native evaluation
+pins; its standalone raw-only result does not invent legacy publication outputs.
+Orchestrator admission resolves full native training lineage and baseline policy
+before adapter bytes. Only four metadata files, two adapter members and command
+are staged; baseline PNGs and source pixels are not materialized. Ordered typed
+outputs and bounded maps/sets provide O(n) validation for at most8 outputs.
+
+Existing application owners, CLI/systemd template, shared offline pipeline and
+physical GPU lease remain authoritative. Terminal replay verifies canonical
+receipt, exact output closure and member hashes before model/lease/write calls.
+Partial output without a terminal receipt refuses regeneration. No DB/index,
+dependency, queue, unit or production activation change is introduced. The older
+fixed-size runner is insufficient because silently changing its canvas would
+reinterpret historical receipts. Build/install and actual8-image execution are
+still pending at this source checkpoint; engineering PASS is not quality PASS.
+
 ### Next bounded native-geometry diagnostic — plan, NOT_EXECUTED
 
 One comparison, at most8 new images; no new training, acquisition, reserved reads,

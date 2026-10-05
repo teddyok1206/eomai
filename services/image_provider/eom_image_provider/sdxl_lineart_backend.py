@@ -10,6 +10,11 @@ from importlib import metadata
 from typing import Any
 
 from eom_image_contracts import LocalImageRuntime, LocalImageSdxlLineartProbeCommand
+from eom_image_contracts.sdxl_native_geometry import (
+    GeometryCanvas,
+    SdxlNativeGeometryNumerics,
+    geometry_dimensions,
+)
 from PIL import Image
 
 from eom_image_provider.prompt_capacity import require_prompt_capacity
@@ -32,6 +37,51 @@ class SdxlLineartSession:
         seed: int,
         command: LocalImageSdxlLineartProbeCommand,
     ) -> GeneratedBackground:
+        return self._generate(
+            conditioning=conditioning,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            dimensions=(832, 512),
+            inference_steps=command.inference_steps,
+            guidance_scale=command.guidance_scale,
+            adapter_conditioning_scale=command.adapter_conditioning_scale,
+        )
+
+    def generate_geometry(
+        self,
+        *,
+        prompt: str,
+        negative_prompt: str,
+        canvas: GeometryCanvas,
+        numerics: SdxlNativeGeometryNumerics,
+    ) -> GeneratedBackground:
+        dimensions = geometry_dimensions(canvas)
+        control = io.BytesIO()
+        Image.new("RGB", dimensions, (0, 0, 0)).save(control, format="PNG")
+        return self._generate(
+            conditioning=control.getvalue(),
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=numerics.seed,
+            dimensions=dimensions,
+            inference_steps=numerics.inference_steps,
+            guidance_scale=numerics.guidance_scale,
+            adapter_conditioning_scale=numerics.adapter_conditioning_scale,
+        )
+
+    def _generate(
+        self,
+        *,
+        conditioning: bytes,
+        prompt: str,
+        negative_prompt: str,
+        seed: int,
+        dimensions: tuple[int, int],
+        inference_steps: int,
+        guidance_scale: float,
+        adapter_conditioning_scale: float,
+    ) -> GeneratedBackground:
         import numpy as np
 
         require_prompt_capacity(
@@ -41,26 +91,27 @@ class SdxlLineartSession:
             overflow_error="SDXL_PROBE_PROMPT_TRUNCATED",
         )
         with Image.open(io.BytesIO(conditioning)) as source:
-            if source.format != "PNG" or source.mode != "RGB" or source.size != (832, 512):
+            if source.format != "PNG" or source.mode != "RGB" or source.size != dimensions:
                 raise ProviderError("SDXL_PROBE_INPUT_INVALID")
             image = source.copy()
         try:
+            width, height = dimensions
             response = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 image=image,
-                width=832,
-                height=512,
+                width=width,
+                height=height,
                 generator=self.torch.Generator(device="cuda").manual_seed(seed),
-                num_inference_steps=command.inference_steps,
-                guidance_scale=command.guidance_scale,
-                adapter_conditioning_scale=command.adapter_conditioning_scale,
+                num_inference_steps=inference_steps,
+                guidance_scale=guidance_scale,
+                adapter_conditioning_scale=adapter_conditioning_scale,
                 output_type="np",
             )
             self.torch.cuda.synchronize(0)
             raster = np.asarray(response.images)
             if (
-                raster.shape != (1, 512, 832, 3)
+                raster.shape != (1, height, width, 3)
                 or not np.isfinite(raster).all()
                 or raster.min() < 0
                 or raster.max() > 1
