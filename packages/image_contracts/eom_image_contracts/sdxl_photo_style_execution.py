@@ -35,6 +35,7 @@ from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.sdxl_photo_style import (
     SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
     LocalImageSdxlPhotoStylePlan,
+    SdxlPhotoStyleFullDenoisingInitialization,
     SdxlPhotoStyleInitialization,
     SdxlPhotoStyleSource,
     SdxlPhotoStyleWhiteInitialization,
@@ -90,22 +91,23 @@ class LocalImageSdxlPhotoStyleWhiteCommand(LocalImageSdxlPhotoStyleCommand):
     schema_version: Literal["local-image-sdxl-photo-style-command/1.1"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoStyleFullDenoisingCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.2"]  # type: ignore[assignment]
+
+
 def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
     if not isinstance(value, dict):
         raise ValueError("photo execution command object required")
     schema = value.get("schema_version")
-    if schema not in (
-        "local-image-sdxl-photo-style-command/1.0",
-        "local-image-sdxl-photo-style-command/1.1",
-    ):
+    models: dict[str, type[LocalImageSdxlPhotoStyleCommand]] = {
+        "local-image-sdxl-photo-style-command/1.0": LocalImageSdxlPhotoStyleCommand,
+        "local-image-sdxl-photo-style-command/1.1": LocalImageSdxlPhotoStyleWhiteCommand,
+        "local-image-sdxl-photo-style-command/1.2": LocalImageSdxlPhotoStyleFullDenoisingCommand,
+    }
+    if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo command family")
     validate_contract(photo_style_contract_name(schema), value)
-    model = (
-        LocalImageSdxlPhotoStyleWhiteCommand
-        if schema.endswith("/1.1")
-        else LocalImageSdxlPhotoStyleCommand
-    )
-    return model.model_validate(value)
+    return models[schema].model_validate(value)
 
 
 def parse_photo_style_plan(
@@ -223,22 +225,24 @@ class LocalImageSdxlPhotoStyleWhiteResult(LocalImageSdxlPhotoStyleResult):
         return self
 
 
+class LocalImageSdxlPhotoStyleFullDenoisingResult(LocalImageSdxlPhotoStyleWhiteResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.2"]  # type: ignore[assignment]
+    initialization: SdxlPhotoStyleFullDenoisingInitialization
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
     schema = value.get("schema_version")
-    if schema not in (
-        "local-image-sdxl-photo-style-result/1.0",
-        "local-image-sdxl-photo-style-result/1.1",
-    ):
+    models: dict[str, type[LocalImageSdxlPhotoStyleResult]] = {
+        "local-image-sdxl-photo-style-result/1.0": LocalImageSdxlPhotoStyleResult,
+        "local-image-sdxl-photo-style-result/1.1": LocalImageSdxlPhotoStyleWhiteResult,
+        "local-image-sdxl-photo-style-result/1.2": LocalImageSdxlPhotoStyleFullDenoisingResult,
+    }
+    if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo result family")
     validate_contract(photo_style_contract_name(schema), value)
-    model = (
-        LocalImageSdxlPhotoStyleWhiteResult
-        if schema.endswith("/1.1")
-        else LocalImageSdxlPhotoStyleResult
-    )
-    return model.model_validate(value)
+    return models[schema].model_validate(value)
 
 
 def validate_photo_style_result(

@@ -86,6 +86,14 @@ class SdxlPhotoStyleWhiteInitialization(SdxlPhotoStyleInitialization):
     policy: Literal["CONSTANT_WHITE_RGB_832X512/1.0"]  # type: ignore[assignment]
 
 
+class SdxlPhotoStyleFullDenoisingInitialization(SdxlPhotoStyleWhiteInitialization):
+    """One numerical factor; identical white pixels and photo-derived spatial control."""
+
+    policy: Literal["CONSTANT_WHITE_RGB_832X512_FULL_DENOISE/1.0"]  # type: ignore[assignment]
+    denoising_strength: float = Field(ge=1.0, le=1.0, strict=True)
+    effective_denoising_steps: Literal[30]  # type: ignore[assignment]
+
+
 class SdxlPhotoStyleBudget(SdxlLearnedComparisonBudget):
     maximum_duration_ms: int = Field(ge=1, le=600_000)
     maximum_peak_gpu_memory_bytes: int = Field(ge=1, le=16 * 1024**3)
@@ -153,14 +161,22 @@ class LocalImageSdxlPhotoStyleWhitePlan(LocalImageSdxlPhotoStylePlan):
     initialization: SdxlPhotoStyleWhiteInitialization
 
 
+class LocalImageSdxlPhotoStyleFullDenoisingPlan(LocalImageSdxlPhotoStyleWhitePlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.2"]  # type: ignore[assignment]
+    initialization: SdxlPhotoStyleFullDenoisingInitialization
+
+
 _PHOTO_STYLE_CONTRACTS = MappingProxyType(
     {
         "local-image-sdxl-photo-style-plan/1.0": "sdxl-photo-style-plan",
         "local-image-sdxl-photo-style-plan/1.1": "sdxl-photo-style-plan-v2",
+        "local-image-sdxl-photo-style-plan/1.2": "sdxl-photo-style-plan-v3",
         "local-image-sdxl-photo-style-command/1.0": "sdxl-photo-style-command",
         "local-image-sdxl-photo-style-command/1.1": "sdxl-photo-style-command-v2",
+        "local-image-sdxl-photo-style-command/1.2": "sdxl-photo-style-command-v3",
         "local-image-sdxl-photo-style-result/1.0": "sdxl-photo-style-result",
         "local-image-sdxl-photo-style-result/1.1": "sdxl-photo-style-result-v2",
+        "local-image-sdxl-photo-style-result/1.2": "sdxl-photo-style-result-v3",
     }
 )
 
@@ -184,18 +200,15 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
     if not isinstance(value, dict):
         raise ValueError("photo plan object required")
     schema = value.get("schema_version")
-    if schema not in (
-        "local-image-sdxl-photo-style-plan/1.0",
-        "local-image-sdxl-photo-style-plan/1.1",
-    ):
+    models: dict[str, type[LocalImageSdxlPhotoStylePlan]] = {
+        "local-image-sdxl-photo-style-plan/1.0": LocalImageSdxlPhotoStylePlan,
+        "local-image-sdxl-photo-style-plan/1.1": LocalImageSdxlPhotoStyleWhitePlan,
+        "local-image-sdxl-photo-style-plan/1.2": LocalImageSdxlPhotoStyleFullDenoisingPlan,
+    }
+    if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")
     validate_contract(photo_style_contract_name(schema), value)
-    model = (
-        LocalImageSdxlPhotoStyleWhitePlan
-        if schema.endswith("/1.1")
-        else LocalImageSdxlPhotoStylePlan
-    )
-    return model.model_validate(value)
+    return models[schema].model_validate(value)
 
 
 def photo_style_artifact_pointer(

@@ -76,6 +76,7 @@ def load_sdxl_comparison_command(
         elif schema in (
             "local-image-sdxl-photo-style-command/1.0",
             "local-image-sdxl-photo-style-command/1.1",
+            "local-image-sdxl-photo-style-command/1.2",
         ):
             parsed = parse_photo_style_command(value)
         else:

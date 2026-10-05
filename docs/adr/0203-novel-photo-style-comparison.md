@@ -737,3 +737,35 @@ This checkpoint does not implement/admit the1.2 recipe or spend generation
 budget. First define JSON Schema2020-12, frozen Pydantic and negative/replay tests;
 then implement and verify the shared consumer before any new dispatch. Region
 provenance remains a separate future contract if that input variant is needed.
+
+## Full-denoising successor source checkpoint — 2026-10-05
+
+Added schema-first photo-style plan/command/result1.2, with immutable predecessor
+schema bytes preserved. The named policy is
+`CONSTANT_WHITE_RGB_832X512_FULL_DENOISE/1.0`: fixed strength1.00, scheduler30,
+effective30, Pillow11.3 and the same white RGB hash. No region, prompt, LoRA,
+controller/scale, seed or source changes. Source/command/result parsers use
+explicit model lookup; no inferred latest or mixed-version acceptance.
+
+Reused the existing initializer, numerical backend, step-count guard, paired
+executor, Orchestrator staging/commit owner and CPU verifier. No new worker unit,
+backend, dependency, permissions, production configuration or queue. Added v3
+wheel-resource requirements to the existing build gate. The new class inherits
+white-pixel validation; historical1.0 remains photo-initialized and1.1 remains
+strength0.70/effective21. Numerical success still means NOT_REVIEWED quality.
+
+Focused full-denoising/white/photo/source/environment regression122 PASS/72.61s;
+Ruff/format/diff/bash syntax PASS; strict core4-file Python3.12 and contract2-file
+Python3.11 mypy PASS. New tests cover exact new policy, old resource hashes,
+cross-version pointers, undeclared factors/region/retry/activation, forged result
+recipe/lineage/coverage/quality, actual backend strength/timestep handoff,
+terminal failure/success read-only replay and shared publication/CPU verification.
+
+Initial gate120 PASS/2 FAIL was a synthetic backend test fixture: changing its
+scheduled steps without resealing its command hash correctly triggered the
+existing hash guard. Corrected the test fixture, not the production invariant;
+the full122-test gate then passed. Both logs are preserved separately. This
+source checkpoint is not installed-worker or new generation acceptance. Next:
+build/RECORD, numerical-role source-free import, retained rollback, old receipt
+replay and one separately admitted matched six-output comparison, never a hidden
+repeat of the exhausted1.1 command.
