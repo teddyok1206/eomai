@@ -7,6 +7,35 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Native44 reserved-source preflight and schema-first successor — 17:03 UTC
+
+Fresh canonical native37-member training closure and historical reserved command
+readmission prove **13 retained VALIDATION sources disjoint from native44**, with
+selection/document/original-PDF SHA/exam-group intersections0. They span6 PDFs/
+6 exam groups; the previous wheat-seedling remnant hold remains excluded. Both
+source crop-set revisions remain pinned. Metadata phase reads0 binaries; subsequent
+bounded source inspection reads13 existing crop PNGs and views all13 in3 contact
+sheets. No TRAIN PNG/adapter weight/HOLDOUT read or model call. These are previously
+used VALIDATION examples, not untouched HOLDOUT samples. Some are48x99/57x75;
+diagnostic eligibility is not institutional print-quality acceptance. Existing
+three-family coverage does not satisfy the independent four-family gate.
+
+[ADR0202](../adr/0202-native-adapter-reserved-validation.md) records the native
+consumer gap: reserved1.0 pins reference1.0 and otherwise loads a historical micro
+adapter. New command/result1.1 JSON Schema2020-12 drafts explicitly require
+reference1.2 and both native lineage hashes, without changing predecessor bytes.
+New schema13 tests plus existing reserved contract/worker61 regression tests =74
+PASS; touched registry strict mypy/Python3.11, Ruff/format and diff PASS. This is
+**schema-first only**: Pydantic successor, complete metadata/adapter selection,
+worker/publication/installed-role support and actual26-output validation are still
+pending. Existing consumer intentionally rejects successor inputs; no permissive
+fallback, new dependency/unit/migration, runtime install or production change.
+
+Next implement ADR0202 through existing owners and independently check native-only
+document/PDF/group leakage before any binary/model read. Existing native576 source
+rendering is TRAIN-only and must not be relaxed for low-resolution reserved sources.
+The full quality/independent-review/Item-HWPX/activation gates stay OPEN; goal ACTIVE.
+
 ### Canonical TRAIN44 pilot and matched reference results — 16:45 UTC
 
 Operation source `766ed3f904ac0f395c4c46431f57b52e41b926a4`. The lab-only

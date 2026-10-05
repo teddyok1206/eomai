@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-command/1.1",
+  "title": "Native-adapter reserved VALIDATION matched spatial comparison command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "experiment_partition",
+    "configuration_role",
+    "configuration_anchor",
+    "crop_sources",
+    "cases",
+    "seed",
+    "budget",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-validation-comparison-command/1.1"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^imgsdxlvalcmprun_[0-9a-f]{32}$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_RESERVED_SPATIAL_DIAGNOSTIC"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "experiment_partition": {
+      "const": "VALIDATION"
+    },
+    "configuration_role": {
+      "const": "NUMERICAL_CONFIGURATION_ONLY_NOT_CASE_AUTHORITY"
+    },
+    "configuration_anchor": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/pointer"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.2"
+            },
+            "member_path": {
+              "const": "manifests/sdxl-canny-reference-command.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "crop_sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/crop_source"
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reserved_case"
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "properties": {
+        "maximum_duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1800000
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17179869184
+        },
+        "maximum_outputs": {
+          "const": 32,
+          "default": 32
+        }
+      }
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "crop_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "review",
+        "crop_set"
+      ],
+      "properties": {
+        "review": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/pointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-science-source-page-crop-review/1.2"
+                },
+                "member_path": {
+                  "const": "manifests/science-source-page-crop-review.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "crop_set": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/pointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-science-source-page-crop-set/1.2"
+                },
+                "member_path": {
+                  "const": "manifests/science-source-page-crop-set.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "reserved_case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_set_sha256",
+        "selection_id",
+        "case"
+      ],
+      "properties": {
+        "source_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "selection_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "case": {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/case"
+        }
+      }
+    }
+  }
+}

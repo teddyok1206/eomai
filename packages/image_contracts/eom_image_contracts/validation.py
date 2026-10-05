@@ -38,6 +38,12 @@ SCHEMA_FILES = {
     "sdxl-validation-comparison-result": (
         "local-image-sdxl-validation-comparison-result-v1.schema.json"
     ),
+    "sdxl-validation-comparison-command-v2": (
+        "local-image-sdxl-validation-comparison-command-v2.schema.json"
+    ),
+    "sdxl-validation-comparison-result-v2": (
+        "local-image-sdxl-validation-comparison-result-v2.schema.json"
+    ),
     "sdxl-canny-reference-command": "local-image-sdxl-canny-reference-command-v1.schema.json",
     "sdxl-canny-reference-result": "local-image-sdxl-canny-reference-result-v1.schema.json",
     "sdxl-canny-reference-command-v2": "local-image-sdxl-canny-reference-command-v2.schema.json",
@@ -446,6 +452,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-validation-comparison-result": (
         "sha256:a459f022c4fec7e6a0108cd157bf842a684f189d2106b39cfcb0b000119ff22b"
+    ),
+    "sdxl-validation-comparison-command-v2": (
+        "sha256:2b39462b79cfee2132f30650c36616dc8a8a0325e9359ed2fb5d092ba56aba35"
+    ),
+    "sdxl-validation-comparison-result-v2": (
+        "sha256:1767718eff8c436cfca616d6ae954b83b294785098e0ba5e4f1196b725757669"
     ),
     "science-source-page-crop-review-v3": (
         "sha256:d2e3bd09d627efd917fc48607f1908e56ee0385ddefd935b8bb57e0293059322"
