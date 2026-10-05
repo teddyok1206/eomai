@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal, Self, cast
+from typing import Literal, Self, TypeVar, cast
 
 from pydantic import Field, field_validator, model_validator
 
@@ -37,6 +37,30 @@ from eom_image_contracts.sdxl_reviewed_micro import (
 )
 
 _PREFIX = "eom://schemas/image-provider/"
+_MetadataModel = TypeVar("_MetadataModel", bound=FrozenModel)
+
+
+def parse_sdxl_evaluation_metadata(  # noqa: UP047 -- isolated numerical runtime is Python 3.11.
+    pointer: ImageEvaluationArtifactMember,
+    raw: bytes,
+    contract: str,
+    model: type[_MetadataModel],
+) -> _MetadataModel:
+    """Bound and authenticate metadata before either I/O owner materializes media."""
+    from eom_image_contracts.validation import validate_contract
+
+    if (
+        not 0 < len(raw) <= 256 * 1024
+        or "sha256:" + hashlib.sha256(raw).hexdigest() != pointer.sha256
+    ):
+        raise ValueError("SDXL evaluation metadata hash/bound mismatch")
+    value = json.loads(raw)
+    validate_contract(contract, value)
+    parsed = model.model_validate(value)
+    canonical = content_json_bytes(parsed.model_dump(mode="json"))
+    if raw not in (canonical, canonical + b"\n"):
+        raise ValueError("SDXL evaluation metadata is noncanonical")
+    return parsed
 
 
 class SdxlLoraEvaluationPin(FrozenModel):
@@ -52,21 +76,25 @@ class SdxlLoraEvaluationPin(FrozenModel):
     def training_contract_version(self) -> str:
         return "1.0"
 
+    def training_contract_family(self) -> str:
+        return "sdxl-lora-micro"
+
     @model_validator(mode="after")
     def exact_pointers(self) -> Self:
+        training = self.training_contract_family()
         for pointer, member, family in (
             (self.baseline_command, "sdxl-lineart-probe-command", "sdxl-lineart-probe-command"),
-            (self.training_command, "sdxl-lora-micro-command", "sdxl-lora-micro-command"),
-            (self.training_result, "sdxl-lora-micro-result", "sdxl-lora-micro-result"),
+            (self.training_command, training + "-command", training + "-command"),
+            (self.training_result, training + "-result", training + "-result"),
             (
                 self.adapter_manifest,
-                "sdxl-lora-micro-adapter-manifest",
-                "sdxl-lora-micro-adapter-manifest",
+                training + "-adapter-manifest",
+                training + "-adapter-manifest",
             ),
         ):
             version = (
                 self.training_contract_version()
-                if family in {"sdxl-lora-micro-command", "sdxl-lora-micro-result"}
+                if family in {training + "-command", training + "-result"}
                 else "1.0"
             )
             if (
@@ -161,9 +189,9 @@ def parse_sdxl_lora_evaluation_sources(
     manifest_payload: bytes,
 ) -> SdxlLoraEvaluationSources:
     """Pure byte/schema/provenance checks shared by the two authorized I/O boundaries."""
-    from eom_image_contracts.validation import validate_contract
-
     pin = command.evaluation
+    if pin.training_contract_family() != "sdxl-lora-micro":
+        raise ValueError("SDXL micro evaluation cannot consume another training family")
     reviewed = pin.training_contract_version() == "1.1"
     entries = (
         (
@@ -193,18 +221,7 @@ def parse_sdxl_lora_evaluation_sources(
     )
     parsed_fields: list[FrozenModel] = []
     for pointer, raw, contract, model in entries:
-        if (
-            not 0 < len(raw) <= 256 * 1024
-            or "sha256:" + hashlib.sha256(raw).hexdigest() != pointer.sha256
-        ):
-            raise ValueError("SDXL evaluation metadata hash/bound mismatch")
-        value = json.loads(raw)
-        validate_contract(contract, value)
-        parsed = model.model_validate(value)
-        canonical = content_json_bytes(parsed.model_dump(mode="json"))
-        if raw not in (canonical, canonical + b"\n"):
-            raise ValueError("SDXL evaluation metadata is noncanonical")
-        parsed_fields.append(parsed)
+        parsed_fields.append(parse_sdxl_evaluation_metadata(pointer, raw, contract, model))
     sources = SdxlLoraEvaluationSources(
         cast(LocalImageSdxlLineartProbeCommand, parsed_fields[0]),
         cast(LocalImageSdxlLoraMicroCommand | LocalImageSdxlReviewedMicroCommand, parsed_fields[1]),

@@ -5,7 +5,32 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native GPU pilot terminal evidence — 2026-10-05 05:34 UTC
+## Latest native-adapter comparison source checkpoint — 2026-10-05
+
+The user resumed the goal card; authoritative state is ACTIVE. The completed
+23-sample/200-step pilot below is preserved. [ADR0197](../adr/0197-native-lora-matched-input-diagnostic.md)
+adds explicit evaluation 1.2 support for native-training 1.0 without relabeling the
+adapter or changing predecessor schemas. Existing isolated generation/handoff,
+GPU lock, publication and terminal replay remain the execution owners. Canonical
+native training lineage and baseline TRAIN membership must pass against the same
+frozen basis before PNG/weight materialization; training PNGs are not restaged.
+
+New native consumer coverage: 24 synthetic tests. The expanded non-live run gave
+1009 PASS /2 FAIL; after repairing the image-environment test inventory (20 older
+omissions and this new test), its 2 tests PASS. The unchanged Catalog planning
+dependency violation remains openly recorded, so this is 1010/1011 distinct
+checks passing, not an unqualified repository PASS. Strict focused mypy9,
+Ruff/format10, release-script syntax and whitespace checks PASS. Initial test
+fixture import/format issues were corrected before these final results.
+
+Next: immutable lab wheel build/installed-role checks, then a separately bounded
+native-adapter diagnostic. Historical matching BASE images may be reused only
+after their source/runtime/conditioning equivalence is verified; do not regenerate
+an old exhausted cohort. This diagnostic retains its declared 832x512 inference
+geometry and TRAIN-only meaning. Full native/reserved/four-arm/blind/publication
+quality gates remain open. No production activation or new inference yet.
+
+## Previous native GPU pilot terminal evidence — 2026-10-05 05:34 UTC
 
 The native pilot completed **SUCCEEDED,200/200 steps,23 realized samples** in
 476,581ms. Final loss0.046861886978149414; peak allocated GPU memory6,166,987,776

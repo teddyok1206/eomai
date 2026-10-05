@@ -44,6 +44,10 @@ contract, provider = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/sdxl_native_evaluation.py",
+        "eom_image_contracts/sdxl_evaluation_codec.py",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-command-v3.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v3.schema.json",
         "eom_image_contracts/sdxl_validation_comparison.py",
         "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-result-v1.schema.json",

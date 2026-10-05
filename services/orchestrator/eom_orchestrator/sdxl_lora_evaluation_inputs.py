@@ -11,16 +11,21 @@ from eom_image_contracts import (
     LocalImageSdxlLoraEvaluationCommand,
     LocalImageSdxlLoraMicroAdapterManifest,
     content_json_bytes,
-    validate_contract,
     validate_sdxl_lora_micro_sources,
 )
+from eom_image_contracts.sdxl_evaluation_codec import parse_sdxl_evaluation_command
 from eom_image_contracts.sdxl_lora_evaluation import parse_sdxl_lora_evaluation_sources
-from eom_image_contracts.sdxl_reviewed_evaluation import LocalImageSdxlReviewedEvaluationCommand
+from eom_image_contracts.sdxl_native_evaluation import (
+    LocalImageSdxlNativeEvaluationCommand,
+    parse_sdxl_native_evaluation_sources,
+)
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
 from eom_orchestrator.sdxl_micro_inputs import resolve_sdxl_reviewed_micro_sources
+from eom_orchestrator.sdxl_native_lora_inputs import resolve_sdxl_native_lora_sources
 from eom_orchestrator.sdxl_probe_inputs import (
     SdxlProbeInputMember,
     materialize_sdxl_probe_inputs,
@@ -32,23 +37,14 @@ from eom_orchestrator.sdxl_probe_inputs import (
 class PreparedSdxlLoraEvaluationInputs:
     command: LocalImageSdxlLoraEvaluationCommand
     baseline: LocalImageSdxlLineartProbeCommand
-    manifest: LocalImageSdxlLoraMicroAdapterManifest
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
     files: tuple[SdxlProbeInputMember, ...]
 
 
 def prepare_sdxl_lora_evaluation_inputs(
     engine: Engine, command: LocalImageSdxlLoraEvaluationCommand
 ) -> PreparedSdxlLoraEvaluationInputs:
-    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
-        validate_contract("sdxl-lora-evaluation-command-v2", command.model_dump(mode="json"))
-        command = LocalImageSdxlReviewedEvaluationCommand.model_validate(
-            command.model_dump(mode="json")
-        )
-    else:
-        validate_contract("sdxl-lora-evaluation-command", command.model_dump(mode="json"))
-        command = LocalImageSdxlLoraEvaluationCommand.model_validate(
-            command.model_dump(mode="json")
-        )
+    command = parse_sdxl_evaluation_command(command.model_dump(mode="json"))
     pin = command.evaluation
     metadata = {
         name: resolve_control_artifact_member(engine, pointer, maximum_bytes=256 * 1024)
@@ -59,35 +55,42 @@ def prepare_sdxl_lora_evaluation_inputs(
             ("adapter-manifest", pin.adapter_manifest),
         )
     }
-    sources = parse_sdxl_lora_evaluation_sources(
-        command,
-        baseline_payload=metadata["baseline-command"],
-        training_command_payload=metadata["training-command"],
-        training_result_payload=metadata["training-result"],
-        manifest_payload=metadata["adapter-manifest"],
-    )
+    payloads = {
+        "baseline_payload": metadata["baseline-command"],
+        "training_command_payload": metadata["training-command"],
+        "training_result_payload": metadata["training-result"],
+        "manifest_payload": metadata["adapter-manifest"],
+    }
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
+    if isinstance(command, LocalImageSdxlNativeEvaluationCommand):
+        native = parse_sdxl_native_evaluation_sources(command, **payloads)
+        baseline, manifest = native.baseline, native.manifest
+        probe_sources = resolve_sdxl_probe_sources(engine, baseline)
+        admitted = resolve_sdxl_native_lora_sources(engine, native.training_command)
+        if (
+            admitted.sources.batches[0].sources.review.basis_crop_set
+            != probe_sources.policy.crop_set
+        ):
+            raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
+    else:
+        sources = parse_sdxl_lora_evaluation_sources(command, **payloads)
+        baseline, manifest = sources.baseline, sources.manifest
+        probe_sources = resolve_sdxl_probe_sources(engine, baseline)
+        if isinstance(sources.training_command, LocalImageSdxlReviewedMicroCommand):
+            resolve_sdxl_reviewed_micro_sources(engine, sources.training_command)
+        else:
+            if sources.training_command.crop_set != probe_sources.policy.crop_set:
+                raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
+            validate_sdxl_lora_micro_sources(sources.training_command, probe_sources.crop_set)
     # Bound both adapter members before the existing full-lineage PNG admission materializes bytes.
     if any(
         file.size_bytes > (64 * 1024 if file.relative_path.endswith(".json") else 64 * 1024**2)
-        for file in sources.manifest.files
+        for file in manifest.files
     ):
         raise ValueError("SDXL_EVALUATION_ADAPTER_SIZE_INVALID")
-    probe_sources = resolve_sdxl_probe_sources(engine, sources.baseline)
-    if isinstance(sources.training_command, LocalImageSdxlReviewedMicroCommand):
-        resolve_sdxl_reviewed_micro_sources(engine, sources.training_command)
-        members = {member.member_path: member for member in probe_sources.crop_set.members}
-        if any(
-            members[case.reference_image.member_path].partition != "TRAIN"
-            for case in sources.baseline.cases
-        ):
-            raise ValueError("SDXL_EVALUATION_LEGACY_DIAGNOSTIC_MUST_BE_TRAIN")
-    else:
-        if sources.training_command.crop_set != probe_sources.policy.crop_set:
-            raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
-        validate_sdxl_lora_micro_sources(sources.training_command, probe_sources.crop_set)
-    baseline_inputs = materialize_sdxl_probe_inputs(engine, sources.baseline, probe_sources)
+    baseline_inputs = materialize_sdxl_probe_inputs(engine, baseline, probe_sources)
     files = [file for file in baseline_inputs.files if file.member_path != "command.json"]
-    for file in sources.manifest.files:
+    for file in manifest.files:
         pointer = ImageEvaluationArtifactMember(
             artifact_id=pin.training_result.artifact_id,
             artifact_revision_id=pin.training_result.artifact_revision_id,
@@ -108,7 +111,7 @@ def prepare_sdxl_lora_evaluation_inputs(
         files.append(SdxlProbeInputMember(path, "sha256:" + hashlib.sha256(raw).hexdigest(), raw))
     return PreparedSdxlLoraEvaluationInputs(
         command,
-        sources.baseline,
-        sources.manifest,
+        baseline,
+        manifest,
         tuple(sorted(files, key=lambda file: file.member_path)),
     )

@@ -76,6 +76,8 @@ SCHEMA_FILES = {
     "sdxl-lora-evaluation-result": "local-image-sdxl-lora-evaluation-result-v1.schema.json",
     "sdxl-lora-evaluation-command-v2": "local-image-sdxl-lora-evaluation-command-v2.schema.json",
     "sdxl-lora-evaluation-result-v2": "local-image-sdxl-lora-evaluation-result-v2.schema.json",
+    "sdxl-lora-evaluation-command-v3": "local-image-sdxl-lora-evaluation-command-v3.schema.json",
+    "sdxl-lora-evaluation-result-v3": "local-image-sdxl-lora-evaluation-result-v3.schema.json",
     "sdxl-lora-micro-command": "local-image-sdxl-lora-micro-command-v1.schema.json",
     "sdxl-lora-micro-command-v2": "local-image-sdxl-lora-micro-command-v2.schema.json",
     "sdxl-lora-micro-result-v2": "local-image-sdxl-lora-micro-result-v2.schema.json",
@@ -380,6 +382,12 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lora-evaluation-command-v3": (
+        "sha256:9958022acdd6af532de4ecd0f12e59b81672ef01dd0d4b124a5019dc7ec32ba8"
+    ),
+    "sdxl-lora-evaluation-result-v3": (
+        "sha256:7002491259fd0ca74e4e6a6ac7ea75907a427d25d29e06e6497a902cee0d11fe"
+    ),
     "sdxl-native-lora-command": (
         "sha256:c2e3297dfba67ca6fc5b9ce8402b2135d5b1747346459dd08bedf418dd3e5cbd"
     ),

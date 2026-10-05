@@ -37,10 +37,10 @@ from eom_image_contracts.sdxl_canny_comparison import (
 )
 from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyConditioningCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
+from eom_image_contracts.sdxl_evaluation_codec import sdxl_evaluation_command_contract
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
 )
-from eom_image_contracts.sdxl_reviewed_evaluation import LocalImageSdxlReviewedEvaluationCommand
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import (
@@ -343,13 +343,9 @@ class LocalImageTrainingControlArtifactPublisher:
     ) -> ImageEvaluationArtifactMember:
         return self._commit_document(
             value=command,
-            contract_name="sdxl-lora-evaluation-command-v2"
-            if isinstance(command, LocalImageSdxlReviewedEvaluationCommand)
-            else "sdxl-lora-evaluation-command",
+            contract_name=sdxl_evaluation_command_contract(command),
             member="manifests/sdxl-lora-evaluation-command.json",
-            schema_ref="eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.1"
-            if isinstance(command, LocalImageSdxlReviewedEvaluationCommand)
-            else "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.0",
+            schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_lora_evaluation_command",
             idempotency_prefix="local-image-sdxl-lora-evaluation-command",
             identity_sha256=command.command_sha256,

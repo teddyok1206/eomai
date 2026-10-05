@@ -9,15 +9,23 @@ from pathlib import Path
 from eom_image_contracts import (
     LocalImageSdxlLoraEvaluationCommand,
     LocalImageSdxlLoraEvaluationResult,
+    LocalImageSdxlLoraMicroAdapterManifest,
     content_json_bytes,
     content_sha256,
-    validate_contract,
     validate_sdxl_lora_evaluation_result,
 )
+from eom_image_contracts.sdxl_evaluation_codec import (
+    parse_sdxl_evaluation_command,
+    parse_sdxl_evaluation_result,
+)
 from eom_image_contracts.sdxl_lora_evaluation import parse_sdxl_lora_evaluation_sources
+from eom_image_contracts.sdxl_native_evaluation import (
+    LocalImageSdxlNativeEvaluationCommand,
+    parse_sdxl_native_evaluation_sources,
+)
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.sdxl_reviewed_evaluation import (
     LocalImageSdxlReviewedEvaluationCommand,
-    LocalImageSdxlReviewedEvaluationResult,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
@@ -44,13 +52,7 @@ def load_sdxl_lora_evaluation_command(
         raw = read_staged_member(root, "command.json", maximum_bytes=64 * 1024)
     try:
         value = json.loads(raw)
-        command: LocalImageSdxlLoraEvaluationCommand
-        if value.get("schema_version") == "local-image-sdxl-lora-evaluation-command/1.1":
-            validate_contract("sdxl-lora-evaluation-command-v2", value)
-            command = LocalImageSdxlReviewedEvaluationCommand.model_validate(value)
-        else:
-            validate_contract("sdxl-lora-evaluation-command", value)
-            command = LocalImageSdxlLoraEvaluationCommand.model_validate(value)
+        command = parse_sdxl_evaluation_command(value)
         if raw != content_json_bytes(command.model_dump(mode="json")):
             raise ValueError("noncanonical evaluation command")
         return command
@@ -83,28 +85,30 @@ def run_sdxl_lora_evaluation(
                     ("adapter-manifest", pin.adapter_manifest),
                 )
             }
-            sources = parse_sdxl_lora_evaluation_sources(
-                command,
-                baseline_payload=payloads["baseline-command"],
-                training_command_payload=payloads["training-command"],
-                training_result_payload=payloads["training-result"],
-                manifest_payload=payloads["adapter-manifest"],
+            arguments = {
+                "baseline_payload": payloads["baseline-command"],
+                "training_command_payload": payloads["training-command"],
+                "training_result_payload": payloads["training-result"],
+                "manifest_payload": payloads["adapter-manifest"],
+            }
+            manifest: (
+                LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
             )
+            if isinstance(command, LocalImageSdxlNativeEvaluationCommand):
+                native = parse_sdxl_native_evaluation_sources(command, **arguments)
+                baseline, manifest = native.baseline, native.manifest
+            else:
+                sources = parse_sdxl_lora_evaluation_sources(command, **arguments)
+                baseline, manifest = sources.baseline, sources.manifest
         except (ValueError, TypeError, JsonSchemaValidationError) as exc:
             raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc
-        material = load_sdxl_lora_material(root, sources.manifest, strength=pin.adapter_strength)
+        material = load_sdxl_lora_material(root, manifest, strength=pin.adapter_strength)
         if os.path.lexists(workspace / "result.json"):
             raw = read_staged_member(root, "result.json", maximum_bytes=256 * 1024)
             try:
                 value = json.loads(raw)
-                result: LocalImageSdxlLoraEvaluationResult
-                if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
-                    validate_contract("sdxl-lora-evaluation-result-v2", value)
-                    result = LocalImageSdxlReviewedEvaluationResult.model_validate(value)
-                else:
-                    validate_contract("sdxl-lora-evaluation-result", value)
-                    result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
-                validate_sdxl_lora_evaluation_result(command, sources.baseline, result)
+                result = parse_sdxl_evaluation_result(value)
+                validate_sdxl_lora_evaluation_result(command, baseline, result)
                 if raw != content_json_bytes(result.model_dump(mode="json")):
                     raise ValueError("noncanonical result")
             except (ValueError, TypeError, JsonSchemaValidationError) as exc:
@@ -125,7 +129,7 @@ def run_sdxl_lora_evaluation(
         if os.path.lexists(workspace / "outputs"):
             raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
     evidence = generate_sdxl_probe_evidence(
-        command=sources.baseline,
+        command=baseline,
         model_store_root=model_store_root,
         workspace=workspace,
         backend=backend,
@@ -133,14 +137,12 @@ def run_sdxl_lora_evaluation(
         style_adapter=material,
     )
     value = {
-        "schema_version": "local-image-sdxl-lora-evaluation-result/1.1"
-        if isinstance(command, LocalImageSdxlReviewedEvaluationCommand)
-        else "local-image-sdxl-lora-evaluation-result/1.0",
+        "schema_version": command.schema_version.replace("-command/", "-result/"),
         "run_id": command.run_id,
         "command_sha256": command.command_sha256,
         "evaluation": pin.model_dump(mode="json"),
-        "baseline_command_sha256": sources.baseline.command_sha256,
-        "model": sources.baseline.model.model_dump(mode="json"),
+        "baseline_command_sha256": baseline.command_sha256,
+        "model": baseline.model.model_dump(mode="json"),
         "status": "SUCCEEDED" if evidence.error_code is None else "FAILED",
         "error_code": evidence.error_code,
         "runtime": None if evidence.runtime is None else evidence.runtime.model_dump(mode="json"),
@@ -150,16 +152,13 @@ def run_sdxl_lora_evaluation(
         "completed_at": evidence.completed_at.isoformat().replace("+00:00", "Z"),
         "duration_ms": evidence.duration_ms,
     }
-    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
+    if isinstance(
+        command, (LocalImageSdxlReviewedEvaluationCommand, LocalImageSdxlNativeEvaluationCommand)
+    ):
         value["case_relation"] = command.case_relation
     value["result_sha256"] = content_sha256(value)
-    if isinstance(command, LocalImageSdxlReviewedEvaluationCommand):
-        validate_contract("sdxl-lora-evaluation-result-v2", value)
-        result = LocalImageSdxlReviewedEvaluationResult.model_validate(value)
-    else:
-        validate_contract("sdxl-lora-evaluation-result", value)
-        result = LocalImageSdxlLoraEvaluationResult.model_validate(value)
-    validate_sdxl_lora_evaluation_result(command, sources.baseline, result)
+    result = parse_sdxl_evaluation_result(value)
+    validate_sdxl_lora_evaluation_result(command, baseline, result)
     with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
         write_staged_member(root, "result.json", content_json_bytes(value))
     return result

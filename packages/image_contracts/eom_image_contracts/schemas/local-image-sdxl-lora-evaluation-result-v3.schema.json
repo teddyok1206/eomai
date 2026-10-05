@@ -1,0 +1,454 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "LocalImageRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "compute_capability": {
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "title": "Compute Capability",
+          "type": "string"
+        },
+        "cuda_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Cuda Version",
+          "type": "string"
+        },
+        "diffusers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Diffusers Version",
+          "type": "string"
+        },
+        "gpu_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Gpu Name",
+          "type": "string"
+        },
+        "peak_gpu_memory_bytes": {
+          "minimum": 1,
+          "title": "Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "provider_version": {
+          "const": "eom-local-image-provider/1.0",
+          "default": "eom-local-image-provider/1.0",
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "python_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Python Version",
+          "type": "string"
+        },
+        "torch_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Torch Version",
+          "type": "string"
+        },
+        "transformers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Transformers Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "cuda_version",
+        "gpu_name",
+        "compute_capability",
+        "peak_gpu_memory_bytes"
+      ],
+      "title": "LocalImageRuntime",
+      "type": "object"
+    },
+    "SdxlLineartProbeConditioning": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^outputs/conditioning/imgsdxlcase_[0-9a-f]{32}\\.png$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "member_path",
+        "sha256",
+        "width_px",
+        "height_px"
+      ],
+      "title": "SdxlLineartProbeConditioning",
+      "type": "object"
+    },
+    "SdxlLineartProbeOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "duration_ms": {
+          "maximum": 3600000,
+          "minimum": 1,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^outputs/final/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "raw_member_path": {
+          "pattern": "^outputs/raw/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$",
+          "title": "Raw Member Path",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "seed",
+        "member_path",
+        "sha256",
+        "raw_member_path",
+        "raw_sha256",
+        "width_px",
+        "height_px",
+        "duration_ms",
+        "peak_gpu_memory_bytes"
+      ],
+      "title": "SdxlLineartProbeOutput",
+      "type": "object"
+    },
+    "SdxlLineartStackPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-sdxl-t2i-lineart",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-sdxl-lineart-runner/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256",
+        "provider_family",
+        "runtime_contract_version"
+      ],
+      "title": "SdxlLineartStackPointer",
+      "type": "object"
+    },
+    "SdxlNativeLoraEvaluationPin": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_id": {
+          "pattern": "^imgadapter_[0-9a-f]{32}$",
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "adapter_manifest": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "adapter_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Adapter Manifest Sha256",
+          "type": "string"
+        },
+        "adapter_revision_id": {
+          "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+          "title": "Adapter Revision Id",
+          "type": "string"
+        },
+        "adapter_strength": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Adapter Strength",
+          "type": "number"
+        },
+        "baseline_command": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "training_command": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "training_result": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        }
+      },
+      "required": [
+        "baseline_command",
+        "training_command",
+        "training_result",
+        "adapter_manifest",
+        "adapter_id",
+        "adapter_revision_id",
+        "adapter_manifest_sha256",
+        "adapter_strength"
+      ],
+      "title": "SdxlNativeLoraEvaluationPin",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Baseline Command Sha256",
+      "type": "string"
+    },
+    "case_relation": {
+      "const": "LEGACY_TRAIN_REFERENCE_DIAGNOSTIC_NOT_HOLDOUT",
+      "title": "Case Relation",
+      "type": "string"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "conditionings": {
+      "items": {
+        "$ref": "#/$defs/SdxlLineartProbeConditioning"
+      },
+      "maxItems": 6,
+      "title": "Conditionings",
+      "type": "array"
+    },
+    "duration_ms": {
+      "maximum": 3600000,
+      "minimum": 1,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "SDXL_PROBE_INPUT_INVALID",
+            "SDXL_PROBE_MODEL_INVALID",
+            "SDXL_PROBE_HASH_MISMATCH",
+            "SDXL_PROBE_GPU_UNAVAILABLE",
+            "SDXL_PROBE_OOM",
+            "SDXL_PROBE_EXEC_FAILED",
+            "SDXL_PROBE_OUTPUT_INVALID",
+            "SDXL_PROBE_BUDGET_EXCEEDED",
+            "SDXL_PROBE_PROMPT_TRUNCATED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Code"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/SdxlNativeLoraEvaluationPin"
+    },
+    "model": {
+      "$ref": "#/$defs/SdxlLineartStackPointer"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/SdxlLineartProbeOutput"
+      },
+      "maxItems": 12,
+      "title": "Outputs",
+      "type": "array"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Result Sha256",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imgsdxlloraevalrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalImageRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-lora-evaluation-result/1.2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "evaluation",
+    "baseline_command_sha256",
+    "model",
+    "status",
+    "error_code",
+    "runtime",
+    "conditionings",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256",
+    "case_relation"
+  ],
+  "title": "LocalImageSdxlNativeEvaluationResult",
+  "type": "object"
+}

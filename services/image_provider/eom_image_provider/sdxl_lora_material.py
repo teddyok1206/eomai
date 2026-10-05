@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from eom_image_contracts import LocalImageSdxlLoraMicroAdapterManifest
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.staged_file_io import read_staged_member
@@ -17,13 +18,16 @@ _TARGETS = ("to_k", "to_out.0", "to_q", "to_v")
 
 @dataclass(frozen=True, slots=True)
 class SdxlLoraAdapterMaterial:
-    manifest: LocalImageSdxlLoraMicroAdapterManifest
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
     weights: bytes
     strength: float
 
 
 def load_sdxl_lora_material(
-    root: int, manifest: LocalImageSdxlLoraMicroAdapterManifest, *, strength: float
+    root: int,
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest,
+    *,
+    strength: float,
 ) -> SdxlLoraAdapterMaterial:
     if not 0 < strength <= 1:
         raise ProviderError("SDXL_PROBE_INPUT_INVALID")
