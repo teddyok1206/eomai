@@ -86,3 +86,27 @@ Actual wheel-only Python3.11 import, installation, bounded GPU execution and ima
 quality remain subsequent evidence. Production binding and lab runtime are unchanged
 at this source checkpoint. The6 prepared new targets have not been trained here;
 the next adapter diagnostic may use the already completed native23 training result.
+
+## Installed and bounded-execution checkpoint
+
+Implementation source `b8f432f92ffb6f856e957f9bc0d295e929a794f4` was built into
+immutable wheels. RECORD/source-free Python3.11 simulation, lab-only installation,
+actual eom-image role import and pip check PASS. No trainer/numerical dependency/
+unit/production binding changes or restarts. The previous paragraph remains the
+historical pre-install checkpoint, not the current installation state.
+
+One reviewed TRAIN diagnostic completed6/6 outputs, BASE3/native23-LoRA3, in20,642ms.
+No training, retries, reserved reads or production activation. All13 canonical
+result members re-resolved; actual terminal replay preserved48 files with0 model
+calls/GPU leases/transforms/writes. Three BASE hashes exactly match the previous
+reference1.0 run. All6 final PNGs were visually inspected: composition preserved,
+but native versus BASE style superiority is NOT_ESTABLISHED and publication
+acceptance is not granted. Input softness remains visible. No independent or
+blind quality review has been performed.
+
+Result `artifact_a36e082c54dc4adfa26cdd1fdab31370` /
+`rev_b6e31da80667420fbae8c6390fadb93b`; full hashes, wheel identities, rollback,
+text evidence and next cohort-admission work are in the
+[operations checkpoint](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
+The new six prepared source targets remain untrained. No strength/seed/step sweep
+or automatic activation is authorized by this technical result.

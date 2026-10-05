@@ -5,7 +5,74 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest contour-input preparation — 2026-10-05 06:48 UTC
+## Latest native reference comparison — 2026-10-05 07:20 UTC
+
+**Technical PASS; source composition preserved; native-style superiority not
+established; goal ACTIVE.** [ADR0198](../adr/0198-native-adapter-source-initialized-comparison.md)
+adds explicit command/result1.1 to the existing source-initialized Canny owner.
+Source `b8f432f92ffb6f856e957f9bc0d295e929a794f4`: schema-first native lineage
+admission, selected-native-only weight staging, closed result identity and replay.
+No new inference backend/framework, DB migration, numeric dependency or unit.
+
+Focused/compatibility tests163 PASS including21 new cases, strict mypy7 and
+Ruff/format8 PASS. Dependency audit5 PASS/1 unchanged Catalog-planning import
+violation in `source_page_crop_expansion_inputs.py`; not a whole-repository PASS.
+Immutable provider-build wheels passed RECORD/source-free Python3.11 simulation.
+Only lab contracts/provider installed; actual-role import and pip check PASS.
+Trainer, numeric dependencies, units and production binding remain unchanged.
+
+| Installed lab component | Wheel SHA-256 |
+| --- | --- |
+| contracts | `bd7ea9033ba0fba2ca417ce6777a321fbba3fb1d20ffc51c49cf0eba0f3f37ac` |
+| provider | `ae0f2bd1295c32ba0fcd2b22277e62ecbe756f489d0533ad077f19b30072e57b` |
+
+Build directory: `/tmp/eom-image-provider-build/b8f432f92ffb6f856e957f9bc0d295e929a794f4.bvZyM4/dist`.
+Rollback remains the ef32aa4a lab contracts/provider wheel pair in the private
+install receipt. No production restart, activation or permission changes.
+
+One new bounded job generated exactly6 outputs: BASE3/native23-LoRA3 using the
+same three historical TRAIN reference cases, fixed initializer/control/prompt/
+seed and denoise0.35 recipe. Native23 was already trained; no new training steps
+and no use of the newly prepared6 targets. No retries/reserved reads/downloads.
+Run `imgsdxlcannyrefrun_07ed1ccd6a2a139fe9b9218c1c7738ba`; duration20,642ms,
+peak allocated GPU10,763,590,656 bytes. Six-output budget exhausted.
+
+- Command1.1: `artifact_52cacfac59a945a284f80914ade92824` /
+  `rev_d8c10e454de54aaaa53ad61c503e36ad`,
+  `manifests/sdxl-canny-reference-command.json`, raw SHA
+  `e45afc1dee6499bdb04e7ccafe222c516258fd9a922103b1700a6d00a5452242`.
+- Result1.1: `artifact_a36e082c54dc4adfa26cdd1fdab31370` /
+  `rev_b6e31da80667420fbae8c6390fadb93b`,
+  `manifests/sdxl-canny-reference-result.json`, raw SHA
+  `1ab4ac89871f30a88b7d6b635bf845fd6cdfe0ff2e77c86be144b99a69edae0c`;
+  semantic SHA`42616473e6981ed60e3dd677e9007b110cbad3d73bc6d8b5c94386b5fe2ef454`.
+
+Thirteen output members committed/re-resolved; initializer and raw-to-final
+reconstruction PASS. Actual installed terminal replay preserved48 files with0
+model calls/GPU leases/transforms/writes. All6 final images individually viewed;
+all12 viewing raw/final hashes rechecked. Three BASE outputs match historical
+raw/final hashes exactly; native outputs differ from the historical micro adapter.
+
+**Finding:** fan, plant and scooter arrangement/white background are preserved.
+Native versus BASE is near-identical by eye; low-resolution softness/jagged edges
+remain. This establishes composition-preserving execution, not LoRA superiority,
+text-only drawing ability, publication acceptance or held-out generalization.
+The user's positive fan/beaker feedback was about prepared real-source targets;
+do not relabel those as generated images. This generated comparison has no beaker.
+
+Own report and26 text evidence members: `artifact_b775c22c52df40eebf1b0e5929be4818` /
+`rev_de90bd6471be47f8b994dd63827171ca`, `reports/own-review.md`, raw SHA
+`72877be307c8f0a71245673bd32c673d073eeec0216d967c42fe2aa7bf97bac0`.
+Private report `/tmp/eom-native-reference-own-review-20261005.md`; samples
+`/tmp/eom-native-reference-samples-20261005/`. No PNG/adapter duplicate in evidence.
+
+**Next:** use existing native cohort admission to freeze a small balanced
+contour-style successor pilot, avoiding duplicate frames/shared-PDF concentration;
+do not automatically pool23+6 or sweep this exhausted comparison. Newly prepared6
+remain untrained. Independent/blind scientific quality, reserved evaluation,
+Item/HWPX and activation gates stay open. Five services active; GPU2MiB/0%.
+
+## Previous contour-input preparation — 2026-10-05 06:48 UTC
 
 **CPU delivery PASS; own input review6/6 with limitations; goal ACTIVE.**
 Following the rejected four-arm experiment, reviewed TRAIN source material rather
