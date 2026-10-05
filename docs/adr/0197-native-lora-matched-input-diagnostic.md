@@ -2,7 +2,7 @@
 
 Date: 2026-10-05 UTC
 
-Status: installed native diagnostic technically verified; all six outputs own-REJECTED.
+Status: native four-arm diagnostic technically verified; all24 cells own-REJECTED.
 
 1. Responsibility: extend the existing isolated LoRA evaluation owner with the
    explicit command/result successor `local-image-sdxl-lora-evaluation/1.2`.
@@ -132,3 +132,17 @@ cells; own review is not independent. This TRAIN diagnostic is deliberately not
 the final24–40 reserved-case/four-family/blind gate. Its result will decide whether
 the native style adapter merits clean-input native-resolution follow-up or whether
 the next effort must change training data/conditioning rather than repeat this run.
+
+### Four-arm terminal result
+
+Both missing arms completed, exactly12 new outputs and12 reused. All24 were
+individually inspected and own-REJECTED: zero-residual outputs lose object/count/
+composition, while the conditioned outputs retain gray/grid/halo defects. Native
+LoRA reduces measured edges but does not establish better scientific line art.
+Installed-role replay had0 model calls/writes;38 committed members and24 viewing
+hashes verified. No core/schema/dependency/runtime/production changes were needed.
+The pre-dispatch installed-library permission-check failure and corrected operator
+are preserved, not hidden. Detailed pointers, per-arm resource evidence and the
+next clean-contour/source-initialized direction are in the operations plan's
+2026-10-05 06:26 entry. This diagnostic budget is exhausted. Overall goal ACTIVE;
+reserved/four-family/independent-blind/Item-HWPX acceptance remains open.

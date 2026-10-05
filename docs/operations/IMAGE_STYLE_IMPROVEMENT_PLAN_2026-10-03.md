@@ -5,7 +5,66 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native comparison and own quality review — 2026-10-05 06:08 UTC
+## Latest native four-arm completion — 2026-10-05 06:26 UTC
+
+**Technical PASS; own publication review REJECTED24/24; goal ACTIVE.**
+The bounded [ADR0197](../adr/0197-native-lora-matched-input-diagnostic.md) experiment
+completed the missing BASE and native-LoRA-only cells:12 new outputs and12 reused
+canonical outputs, six fixed TRAIN cases/four arms. No retraining, retries, new
+dependency/schema/core code, runtime installation or production activation.
+Experiment source: `90beda24b8534149ae4bfe2b3383551f6395fdf4`.
+
+| Arm | T2I scale / native LoRA | New outputs | Duration / peak allocated GPU bytes |
+| --- | --- | ---: | --- |
+| BASE | 0.0 / absent | 6 | 25,498ms / 8,280,481,280 |
+| T2I | 0.8 / absent | 0, six reused | historical receipt preserved |
+| LORA | 0.0 / strength1.0 | 6 | 30,612ms / 8,328,740,352 |
+| T2I_LORA | 0.8 / strength1.0 | 0, six reused | preceding native receipt preserved |
+
+Model, prompts, seeds, steps, guidance, conditioning hashes and geometry are fixed.
+Scale0 is a residual ablation in the same pipeline, not a separate plain-SDXL model.
+The initial PLAN failed before command publication/GPU dispatch because installed
+Conda code was checked with an Artifact file-permission reader. The r2 operator
+separates installed-code identity/hash audit; no Artifact rule or permissions were
+relaxed. Failed operator/log are retained with the successful evidence.
+
+New result pointers (`manifests/sdxl-lineart-probe-result.json` /1.0 and
+`manifests/sdxl-lora-evaluation-result.json` /1.2 respectively):
+
+- BASE: `artifact_0074bd3a2ef5422fbb474244a6b63073` /
+  `rev_eb87ec18e97d414ea47ff2c10e97ba2a`; raw SHA
+  `59310c87e68d535202a39dd7f93b17966940e01a239bf2e322dee1cbc519928d`.
+- LORA: `artifact_a871c7b9705f45fe8f3519bed91900d9` /
+  `rev_00c15d5737c742ef992bdef7c85dd7a7`; raw SHA
+  `4741746e2c703efc5aadd5ab21dd72f1a6c58a83ce4675efe7a7a7ea424c2ab1`.
+
+All38 new canonical members were re-resolved byte-for-byte. Actual installed-role
+replay preserved27/33 files with0 model calls/writes and no Torch/source import.
+All24 viewing copies match canonical hashes and were opened individually.
+Private report/samples: `/tmp/eom-native-four-arm-20261005/`.
+Fourteen text evidence members: `artifact_a3ac17a3687646aa970836745d312f35` /
+`rev_5aa38b1d02134d6693552cbaae910db2`, `reports/own-review.md`, SHA
+`f14a031335c0623cd3528f760d1d13d52a163b3106cfcf9375d90f878b0e5b5a`.
+PNG/adapter bytes are not duplicated in this text archive.
+
+**Finding:** removing T2I reduces the conspicuous grid but sacrifices subject
+composition, count and recognizable anatomy/device form. Native LoRA alone gives
+thicker/simpler forms, not clean publication-quality strokes. Gray fields exist
+even without either component, so neither is proven the sole cause. Median edge
+fractions BASE/LORA are168/92 per mille; T2I/T2I_LORA145.5/106.5. Those descriptive
+metrics do not certify quality. Do not silently whiten outputs or infer prompt
+truncation: both installed tokenizers already reject overflow before inference.
+
+**Next:** no more strength/prompt/seed sweeps on this exhausted cohort. Review and
+admit clean-contour TRAIN targets (native pilot currently19 restrained-tone,
+4 fine-hatching,0 clean-contour). Reuse the already tested source-initialized
+spatial path as the composition-preserving comparator; add only a narrow explicit
+native-adapter successor if its existing contract requires one. Freeze the next
+bounded experiment after input review, not by increasing this pilot's step count.
+Independent/reserved/four-family and Item/HWPX quality gates remain unfulfilled.
+Five main services active, production binding unchanged, GPU2MiB/0% after completion.
+
+## Previous native comparison and own quality review — 2026-10-05 06:08 UTC
 
 **Technical execution PASS; own publication quality REJECTED6/6; goal ACTIVE.**
 The explicit native evaluation consumer was committed as
