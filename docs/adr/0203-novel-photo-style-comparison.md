@@ -261,3 +261,16 @@ mixed tonal training targets and challenging source backgrounds are other hypoth
 investigate independently before coarser-control recipe changes or larger training.
 Technical gates PASS, style quality NOT_ACCEPTED, independent review NOT_PERFORMED,
 four-family/32-case and Item Preview/HWPX/activation gates OPEN; goal ACTIVE.
+
+Canonical25-member diagnostic evidence `artifact_9f1a3714c3324d70967c2d3c57c1c1f5` /
+`rev_3909b2b06c2e4278b2e204beee679e43`, primary `reports/own-review.md`, SHA
+`2fdf02b28aceb672bba0badf03642bf6996bd97cc7e0c1c4fdd21460fda2962b`;
+all persisted evidence bytes reread equal. Includes one derived SOURCE_PHOTO/BASE/LORA
+contact sheet, measured reports, source tests and initial failure logs, pinned install/
+submit/publish/replay operators. No duplicate canonical source PNG/PDF/adapter bytes.
+Initial evidence packaging rejected group-writable temporary logs before any commit;
+only these exact task-local log permissions were tightened, and the failure was
+preserved. It did not cause another model invocation or change an acceptance result.
+Milestone Slack IN_PROGRESS sent HTTP200 as
+`devreport_0d31edfa650f4b0782a3887c56a955dd`; quality shortfall and next bounded
+hypothesis reported explicitly, not a whole-goal completion.
