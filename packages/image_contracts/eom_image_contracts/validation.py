@@ -33,6 +33,8 @@ SCHEMA_FILES = {
     ),
     "sdxl-canny-reference-command": "local-image-sdxl-canny-reference-command-v1.schema.json",
     "sdxl-canny-reference-result": "local-image-sdxl-canny-reference-result-v1.schema.json",
+    "sdxl-canny-reference-command-v2": "local-image-sdxl-canny-reference-command-v2.schema.json",
+    "sdxl-canny-reference-result-v2": "local-image-sdxl-canny-reference-result-v2.schema.json",
     "sdxl-canny-detail-review": "local-image-sdxl-canny-detail-review-v1.schema.json",
     "sdxl-canny-comparison-command": "local-image-sdxl-canny-comparison-command-v1.schema.json",
     "sdxl-canny-comparison-result": "local-image-sdxl-canny-comparison-result-v1.schema.json",
@@ -426,6 +428,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-canny-reference-result": (
         "sha256:7f66e5633422784dbd1f0d717713b3d12134405c263b2fcc5852ccec6cd82e5e"
+    ),
+    "sdxl-canny-reference-command-v2": (
+        "sha256:de0ecc73b97755ecfd3ae8d07edd167b9682ccb96fc8b744e93dc2ce269de25b"
+    ),
+    "sdxl-canny-reference-result-v2": (
+        "sha256:6a5f53168cdda1de73c13d46c16895b4cb1611b827daf32f1bd065220d4d9213"
     ),
     "sdxl-canny-detail-review": (
         "sha256:13cfa653ce4fc931ff170a0781ab09514a8ec1ce53945108e330d96179db4412"

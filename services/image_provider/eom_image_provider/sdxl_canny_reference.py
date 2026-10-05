@@ -22,12 +22,20 @@ from eom_image_contracts.sdxl_canny_reference import (
     SdxlCannyReferenceSources,
     SdxlCannyReferenceTrace,
     parse_sdxl_canny_reference_predecessors,
-    validate_sdxl_canny_reference_result,
     validate_sdxl_canny_reference_sources,
 )
 from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonOutput
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
-from eom_image_contracts.validation import validate_contract
+from eom_image_contracts.sdxl_native_canny_reference import (
+    LocalImageSdxlNativeCannyReferenceCommand,
+    SdxlNativeCannyReferenceSources,
+    attach_native_reference_sources,
+    native_reference_evaluation,
+    native_reference_metadata_pointers,
+    parse_reference_command,
+    parse_reference_result,
+    validate_reference_result,
+)
 from jsonschema import ValidationError as SchemaError
 from PIL import Image
 
@@ -91,6 +99,21 @@ def read_sdxl_canny_reference_sources(
         *predecessor, read_sdxl_canny_comparison_sources(root, predecessor[0])
     )
     validate_sdxl_canny_reference_sources(command, sources)
+    if isinstance(command, LocalImageSdxlNativeCannyReferenceCommand):
+        raw = read_staged_member(
+            root,
+            "inputs/native-evaluation-command.json",
+            maximum_bytes=256 * 1024,
+            expected_sha256=command.native_evaluation_command.sha256,
+        )
+        evaluation = native_reference_evaluation(command, raw)
+        native = {"inputs/native-evaluation-command.json": raw}
+        for name, pin in native_reference_metadata_pointers(command, evaluation).items():
+            if name not in native:
+                native[name] = read_staged_member(
+                    root, name, maximum_bytes=256 * 1024, expected_sha256=pin.sha256
+                )
+        return attach_native_reference_sources(command, sources, native)
     return sources
 
 
@@ -108,9 +131,8 @@ def _replay(
         raw = read_staged_member(
             root, "result.json", maximum_bytes=256 * 1024, expected_owner_uid=os.geteuid()
         )
-        validate_contract("sdxl-canny-reference-result", json.loads(raw))
-        result = LocalImageSdxlCannyReferenceResult.model_validate_json(raw)
-        validate_sdxl_canny_reference_result(command, sources, result)
+        result = parse_reference_result(json.loads(raw))
+        validate_reference_result(command, sources, result)
         if raw != content_json_bytes(result.model_dump(mode="json")):
             raise ValueError("noncanonical reference result")
         validate_sdxl_pair_output_members(root, workspace, result.outputs)
@@ -129,7 +151,7 @@ def run_sdxl_canny_reference(
     expected_model_owner_uid: int = 0,
 ) -> LocalImageSdxlCannyReferenceResult:
     try:
-        command = LocalImageSdxlCannyReferenceCommand.model_validate_json(command.model_dump_json())
+        command = parse_reference_command(command.model_dump(mode="json"))
         with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
             if load_sdxl_comparison_command(workspace, workspace / "command.json") != command:
                 raise ValueError("reference invocation differs from staged command")
@@ -212,8 +234,12 @@ def run_sdxl_canny_reference(
                 )
                 material = load_sdxl_lora_material(
                     root,
-                    spatial.targets.lora.manifest,
-                    strength=spatial.targets.evaluation.evaluation.adapter_strength,
+                    sources.native.manifest
+                    if isinstance(sources, SdxlNativeCannyReferenceSources)
+                    else spatial.targets.lora.manifest,
+                    strength=sources.evaluation.evaluation.adapter_strength
+                    if isinstance(sources, SdxlNativeCannyReferenceSources)
+                    else spatial.targets.evaluation.evaluation.adapter_strength,
                 )
                 pair = run_sdxl_pair_inference(
                     root=root,
@@ -261,11 +287,15 @@ def run_sdxl_canny_reference(
                 completed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 duration_ms=max(1, int((time.monotonic() - start) * 1000)),
             )
-            result = LocalImageSdxlCannyReferenceResult.model_validate(
-                {**value, "result_sha256": content_sha256(value)}
-            )
-            validate_sdxl_canny_reference_result(command, sources, result)
-            validate_contract("sdxl-canny-reference-result", result.model_dump(mode="json"))
+            if isinstance(sources, SdxlNativeCannyReferenceSources):
+                value.update(
+                    schema_version="local-image-sdxl-canny-reference-result/1.1",
+                    native_evaluation_command_sha256=sources.evaluation.command_sha256,
+                    native_adapter_manifest_sha256=sources.native.manifest.manifest_sha256,
+                    case_relation="REVIEWED_TRAIN_REFERENCE_NOT_HOLDOUT",
+                )
+            result = parse_reference_result({**value, "result_sha256": content_sha256(value)})
+            validate_reference_result(command, sources, result)
             write_staged_member(
                 root, "result.json", content_json_bytes(result.model_dump(mode="json"))
             )

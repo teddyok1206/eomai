@@ -16,6 +16,8 @@ from eom_image_contracts.sdxl_canny_conditioning import (
     LocalImageSdxlCannyConditioningCommand,
     parse_sdxl_canny_parent,
 )
+from eom_image_contracts.sdxl_lora_micro import LocalImageSdxlLoraMicroAdapterManifest
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.validation import validate_contract
 from sqlalchemy import Engine
 
@@ -48,6 +50,14 @@ class ResolvedSdxlCannyComparisonMetadata:
     sources: SdxlCannyComparisonSources
     source_metadata: ResolvedSdxlTargetComparisonMetadata
     files: tuple[SdxlProbeInputMember, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlCannyAdapterInput:
+    """Selected, fully admitted adapter; historical metadata need not stage its old weights."""
+
+    training_result: ImageEvaluationArtifactMember
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
 
 
 def sdxl_canny_comparison_input_hashes(
@@ -143,6 +153,8 @@ def resolve_sdxl_canny_comparison_metadata(
 def materialize_sdxl_canny_comparison_files(
     engine: Engine,
     admitted: ResolvedSdxlCannyComparisonMetadata,
+    *,
+    adapter_input: SdxlCannyAdapterInput | None = None,
 ) -> tuple[SdxlProbeInputMember, ...]:
     command, sources = admitted.command, admitted.sources
     # Only now may image and adapter bytes cross the explicit workspace boundary.
@@ -163,8 +175,10 @@ def materialize_sdxl_canny_comparison_files(
             )
         )
         paths.append("inputs/canny/" + output.case_id + ".png")
-    pin = sources.targets.evaluation.evaluation
-    for file in sources.targets.lora.manifest.files:
+    selected = adapter_input or SdxlCannyAdapterInput(
+        sources.targets.evaluation.evaluation.training_result, sources.targets.lora.manifest
+    )
+    for file in selected.manifest.files:
         if (
             not 0
             < file.size_bytes
@@ -174,8 +188,8 @@ def materialize_sdxl_canny_comparison_files(
         reads.append(
             BoundedControlArtifactRead(
                 ImageEvaluationArtifactMember(
-                    artifact_id=pin.training_result.artifact_id,
-                    artifact_revision_id=pin.training_result.artifact_revision_id,
+                    artifact_id=selected.training_result.artifact_id,
+                    artifact_revision_id=selected.training_result.artifact_revision_id,
                     member_path="adapter/" + file.relative_path,
                     schema_ref="eom://schemas/image-provider/local-image-lora-adapter-file/1.0",
                     media_type="application/json"

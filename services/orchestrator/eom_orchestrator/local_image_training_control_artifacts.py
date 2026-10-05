@@ -38,6 +38,7 @@ from eom_image_contracts.sdxl_canny_comparison import (
 from eom_image_contracts.sdxl_canny_conditioning import LocalImageSdxlCannyConditioningCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_evaluation_codec import sdxl_evaluation_command_contract
+from eom_image_contracts.sdxl_native_canny_reference import reference_command_contract
 from eom_image_contracts.sdxl_publication_comparison import (
     LocalImageSdxlPublicationComparisonCommand,
 )
@@ -385,9 +386,9 @@ class LocalImageTrainingControlArtifactPublisher:
     ) -> ImageEvaluationArtifactMember:
         return self._commit_document(
             value=command,
-            contract_name="sdxl-canny-reference-command",
+            contract_name=reference_command_contract(command),
             member="manifests/sdxl-canny-reference-command.json",
-            schema_ref="eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.0",
+            schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_canny_reference_command",
             idempotency_prefix="local-image-sdxl-canny-reference-command",
             identity_sha256=command.command_sha256,

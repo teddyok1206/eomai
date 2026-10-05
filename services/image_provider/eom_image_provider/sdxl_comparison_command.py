@@ -10,6 +10,7 @@ from eom_image_contracts.models import content_json_bytes
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_learned_comparison import LocalImageSdxlLearnedComparisonCommand
+from eom_image_contracts.sdxl_native_canny_reference import parse_reference_command
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import LocalImageSdxlValidationComparisonCommand
 from eom_image_contracts.validation import validate_contract
@@ -52,9 +53,11 @@ def load_sdxl_comparison_command(
         elif schema == "local-image-sdxl-canny-comparison-command/1.0":
             validate_contract("sdxl-canny-comparison-command", value)
             parsed = LocalImageSdxlCannyComparisonCommand.model_validate(value)
-        elif schema == "local-image-sdxl-canny-reference-command/1.0":
-            validate_contract("sdxl-canny-reference-command", value)
-            parsed = LocalImageSdxlCannyReferenceCommand.model_validate(value)
+        elif schema in (
+            "local-image-sdxl-canny-reference-command/1.0",
+            "local-image-sdxl-canny-reference-command/1.1",
+        ):
+            parsed = parse_reference_command(value)
         elif schema == "local-image-sdxl-validation-comparison-command/1.0":
             validate_contract("sdxl-validation-comparison-command", value)
             parsed = LocalImageSdxlValidationComparisonCommand.model_validate(value)
