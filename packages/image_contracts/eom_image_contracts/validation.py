@@ -42,6 +42,8 @@ SCHEMA_FILES = {
     "sdxl-canny-reference-result": "local-image-sdxl-canny-reference-result-v1.schema.json",
     "sdxl-canny-reference-command-v2": "local-image-sdxl-canny-reference-command-v2.schema.json",
     "sdxl-canny-reference-result-v2": "local-image-sdxl-canny-reference-result-v2.schema.json",
+    "sdxl-canny-reference-command-v3": "local-image-sdxl-canny-reference-command-v3.schema.json",
+    "sdxl-canny-reference-result-v3": "local-image-sdxl-canny-reference-result-v3.schema.json",
     "sdxl-canny-detail-review": "local-image-sdxl-canny-detail-review-v1.schema.json",
     "sdxl-canny-comparison-command": "local-image-sdxl-canny-comparison-command-v1.schema.json",
     "sdxl-canny-comparison-result": "local-image-sdxl-canny-comparison-result-v1.schema.json",
@@ -462,6 +464,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-canny-reference-result-v2": (
         "sha256:6a5f53168cdda1de73c13d46c16895b4cb1611b827daf32f1bd065220d4d9213"
+    ),
+    "sdxl-canny-reference-command-v3": (
+        "sha256:3689e5446ce17d8b8b5a54db2362524d522543a972a4957e72dccbf2b194def3"
+    ),
+    "sdxl-canny-reference-result-v3": (
+        "sha256:80533f1e59e04f8cb972daa606b4c0e0c3952dc4a5582abb26975d24a6bdd868"
     ),
     "sdxl-canny-detail-review": (
         "sha256:13cfa653ce4fc931ff170a0781ab09514a8ec1ce53945108e330d96179db4412"

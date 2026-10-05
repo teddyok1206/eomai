@@ -34,6 +34,7 @@ from eom_image_contracts.sdxl_native_canny_reference import (
     native_reference_metadata_pointers,
     parse_reference_command,
     parse_reference_result,
+    reference_protocol,
     validate_reference_result,
 )
 from jsonschema import ValidationError as SchemaError
@@ -270,7 +271,7 @@ def run_sdxl_canny_reference(
             except Exception:
                 error = "SDXL_PROBE_EXEC_FAILED"
             value = dict(
-                schema_version="local-image-sdxl-canny-reference-result/1.0",
+                schema_version=reference_protocol(command).result_version,
                 run_id=command.run_id,
                 command_sha256=command.command_sha256,
                 spatial_command_sha256=sources.spatial_command.command_sha256,
@@ -289,7 +290,6 @@ def run_sdxl_canny_reference(
             )
             if isinstance(sources, SdxlNativeCannyReferenceSources):
                 value.update(
-                    schema_version="local-image-sdxl-canny-reference-result/1.1",
                     native_evaluation_command_sha256=sources.evaluation.command_sha256,
                     native_adapter_manifest_sha256=sources.native.manifest.manifest_sha256,
                     case_relation="REVIEWED_TRAIN_REFERENCE_NOT_HOLDOUT",

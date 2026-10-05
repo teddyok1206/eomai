@@ -56,6 +56,7 @@ def load_sdxl_comparison_command(
         elif schema in (
             "local-image-sdxl-canny-reference-command/1.0",
             "local-image-sdxl-canny-reference-command/1.1",
+            "local-image-sdxl-canny-reference-command/1.2",
         ):
             parsed = parse_reference_command(value)
         elif schema == "local-image-sdxl-validation-comparison-command/1.0":

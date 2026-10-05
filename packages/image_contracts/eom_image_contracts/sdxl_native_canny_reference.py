@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Literal, Self
 
 from pydantic import model_validator
@@ -22,6 +23,10 @@ from eom_image_contracts.sdxl_native_evaluation import (
     SdxlNativeEvaluationSources,
     parse_sdxl_native_evaluation_sources,
 )
+from eom_image_contracts.sdxl_native_geometry import (
+    LocalImageSdxlNativeGeometryCommandV2,
+    validate_sdxl_native_geometry_sources,
+)
 from eom_image_contracts.validation import validate_contract
 
 
@@ -33,9 +38,9 @@ class LocalImageSdxlNativeCannyReferenceCommand(LocalImageSdxlCannyReferenceComm
     @model_validator(mode="after")
     def native_pin(self) -> Self:
         pin = self.native_evaluation_command
+        protocol = reference_protocol(self)
         if (
-            pin.schema_ref
-            != "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.2"
+            pin.schema_ref != protocol.evaluation_schema
             or pin.media_type != "application/json"
             or pin.member_path != "manifests/sdxl-lora-evaluation-command.json"
         ):
@@ -50,6 +55,71 @@ class LocalImageSdxlNativeCannyReferenceResult(LocalImageSdxlCannyReferenceResul
     case_relation: Literal["REVIEWED_TRAIN_REFERENCE_NOT_HOLDOUT"]
 
 
+class LocalImageSdxlNativeCannyReferenceCommandV2(LocalImageSdxlNativeCannyReferenceCommand):
+    schema_version: Literal["local-image-sdxl-canny-reference-command/1.2"]  # type: ignore[assignment]
+
+
+class LocalImageSdxlNativeCannyReferenceResultV2(LocalImageSdxlNativeCannyReferenceResult):
+    schema_version: Literal["local-image-sdxl-canny-reference-result/1.2"]  # type: ignore[assignment]
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlReferenceProtocol:
+    command_version: str
+    result_version: str
+    command_model: type[LocalImageSdxlCannyReferenceCommand]
+    result_model: type[LocalImageSdxlCannyReferenceResult]
+    command_contract: str
+    result_contract: str
+    evaluation_schema: str | None = None
+    evaluation_model: type[LocalImageSdxlNativeEvaluationCommand] | None = None
+    evaluation_contract: str | None = None
+
+
+# One closed codec owns parsing, provenance and result selection across all consumers.
+_PROTOCOLS = (
+    SdxlReferenceProtocol(
+        "local-image-sdxl-canny-reference-command/1.0",
+        "local-image-sdxl-canny-reference-result/1.0",
+        LocalImageSdxlCannyReferenceCommand,
+        LocalImageSdxlCannyReferenceResult,
+        "sdxl-canny-reference-command",
+        "sdxl-canny-reference-result",
+    ),
+    SdxlReferenceProtocol(
+        "local-image-sdxl-canny-reference-command/1.1",
+        "local-image-sdxl-canny-reference-result/1.1",
+        LocalImageSdxlNativeCannyReferenceCommand,
+        LocalImageSdxlNativeCannyReferenceResult,
+        "sdxl-canny-reference-command-v2",
+        "sdxl-canny-reference-result-v2",
+        "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.2",
+        LocalImageSdxlNativeEvaluationCommand,
+        "sdxl-lora-evaluation-command-v3",
+    ),
+    SdxlReferenceProtocol(
+        "local-image-sdxl-canny-reference-command/1.2",
+        "local-image-sdxl-canny-reference-result/1.2",
+        LocalImageSdxlNativeCannyReferenceCommandV2,
+        LocalImageSdxlNativeCannyReferenceResultV2,
+        "sdxl-canny-reference-command-v3",
+        "sdxl-canny-reference-result-v3",
+        "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4",
+        LocalImageSdxlNativeGeometryCommandV2,
+        "sdxl-lora-evaluation-command-v5",
+    ),
+)
+_COMMAND_PROTOCOLS = MappingProxyType({p.command_version: p for p in _PROTOCOLS})
+_RESULT_PROTOCOLS = MappingProxyType({p.result_version: p for p in _PROTOCOLS})
+
+
+def reference_protocol(command: LocalImageSdxlCannyReferenceCommand) -> SdxlReferenceProtocol:
+    protocol = _COMMAND_PROTOCOLS.get(command.schema_version)
+    if protocol is None or type(command) is not protocol.command_model:
+        raise ValueError("SDXL_CANNY_REFERENCE_COMMAND_FAMILY_INVALID")
+    return protocol
+
+
 @dataclass(frozen=True, slots=True)
 class SdxlNativeCannyReferenceSources(SdxlCannyReferenceSources):
     evaluation: LocalImageSdxlNativeEvaluationCommand
@@ -59,11 +129,14 @@ class SdxlNativeCannyReferenceSources(SdxlCannyReferenceSources):
 def native_reference_evaluation(
     command: LocalImageSdxlNativeCannyReferenceCommand, raw: bytes
 ) -> LocalImageSdxlNativeEvaluationCommand:
+    protocol = reference_protocol(command)
+    if protocol.evaluation_model is None or protocol.evaluation_contract is None:
+        raise ValueError("SDXL_CANNY_REFERENCE_COMMAND_FAMILY_INVALID")
     return _document(
         raw,
         command.native_evaluation_command,
-        LocalImageSdxlNativeEvaluationCommand,
-        "sdxl-lora-evaluation-command-v3",
+        protocol.evaluation_model,
+        protocol.evaluation_contract,
     )
 
 
@@ -96,6 +169,8 @@ def attach_native_reference_sources(
         training_result_payload=metadata["inputs/native-training-result.json"],
         manifest_payload=metadata["inputs/native-adapter-manifest.json"],
     )
+    if isinstance(evaluation, LocalImageSdxlNativeGeometryCommandV2):
+        validate_sdxl_native_geometry_sources(evaluation, native)
     historical = inherited.spatial_sources.targets.lora
     if (
         evaluation.created_at > command.created_at
@@ -123,42 +198,29 @@ def parse_reference_sources(
 
 
 def reference_command_contract(command: LocalImageSdxlCannyReferenceCommand) -> str:
-    if type(command) is LocalImageSdxlNativeCannyReferenceCommand:
-        return "sdxl-canny-reference-command-v2"
-    if type(command) is LocalImageSdxlCannyReferenceCommand:
-        return "sdxl-canny-reference-command"
-    raise ValueError("SDXL_CANNY_REFERENCE_COMMAND_FAMILY_INVALID")
+    return reference_protocol(command).command_contract
 
 
 def parse_reference_command(value: object) -> LocalImageSdxlCannyReferenceCommand:
     if not isinstance(value, dict):
         raise ValueError("SDXL_CANNY_REFERENCE_COMMAND_FAMILY_INVALID")
-    model: type[LocalImageSdxlCannyReferenceCommand]
-    if value.get("schema_version") == "local-image-sdxl-canny-reference-command/1.0":
-        model, contract = LocalImageSdxlCannyReferenceCommand, "sdxl-canny-reference-command"
-    elif value.get("schema_version") == "local-image-sdxl-canny-reference-command/1.1":
-        model, contract = (
-            LocalImageSdxlNativeCannyReferenceCommand,
-            "sdxl-canny-reference-command-v2",
-        )
-    else:
+    version = value.get("schema_version")
+    protocol = _COMMAND_PROTOCOLS.get(version) if isinstance(version, str) else None
+    if protocol is None:
         raise ValueError("SDXL_CANNY_REFERENCE_COMMAND_FAMILY_INVALID")
-    validate_contract(contract, value)
-    return model.model_validate(value)
+    validate_contract(protocol.command_contract, value)
+    return protocol.command_model.model_validate(value)
 
 
 def parse_reference_result(value: object) -> LocalImageSdxlCannyReferenceResult:
     if not isinstance(value, dict):
         raise ValueError("SDXL_CANNY_REFERENCE_RESULT_FAMILY_INVALID")
-    model: type[LocalImageSdxlCannyReferenceResult]
-    if value.get("schema_version") == "local-image-sdxl-canny-reference-result/1.0":
-        model, contract = LocalImageSdxlCannyReferenceResult, "sdxl-canny-reference-result"
-    elif value.get("schema_version") == "local-image-sdxl-canny-reference-result/1.1":
-        model, contract = LocalImageSdxlNativeCannyReferenceResult, "sdxl-canny-reference-result-v2"
-    else:
+    version = value.get("schema_version")
+    protocol = _RESULT_PROTOCOLS.get(version) if isinstance(version, str) else None
+    if protocol is None:
         raise ValueError("SDXL_CANNY_REFERENCE_RESULT_FAMILY_INVALID")
-    validate_contract(contract, value)
-    return model.model_validate(value)
+    validate_contract(protocol.result_contract, value)
+    return protocol.result_model.model_validate(value)
 
 
 def validate_reference_result(
@@ -166,6 +228,8 @@ def validate_reference_result(
     sources: SdxlCannyReferenceSources,
     result: LocalImageSdxlCannyReferenceResult,
 ) -> None:
+    if type(result) is not reference_protocol(command).result_model:
+        raise ValueError("reference result family/adapter identity mismatch")
     validate_sdxl_canny_reference_result(command, sources, result)
     if isinstance(command, LocalImageSdxlNativeCannyReferenceCommand):
         if (

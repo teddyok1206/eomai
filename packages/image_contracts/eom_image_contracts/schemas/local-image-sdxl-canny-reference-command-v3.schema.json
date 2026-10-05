@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "SdxlCannyComparisonBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_duration_ms": {
+          "maximum": 1800000,
+          "minimum": 1,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_outputs": {
+          "const": 6,
+          "default": 6,
+          "title": "Maximum Outputs",
+          "type": "integer"
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Maximum Peak Gpu Memory Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "title": "SdxlCannyComparisonBudget",
+      "type": "object"
+    },
+    "SdxlCannyReferenceInitialization": {
+      "additionalProperties": false,
+      "properties": {
+        "denoising_strength": {
+          "default": 0.35,
+          "maximum": 0.35,
+          "minimum": 0.35,
+          "title": "Denoising Strength",
+          "type": "number"
+        },
+        "effective_denoising_steps": {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Effective Denoising Steps",
+          "type": "integer"
+        },
+        "pillow_version": {
+          "const": "11.3.0",
+          "default": "11.3.0",
+          "title": "Pillow Version",
+          "type": "string"
+        },
+        "policy": {
+          "const": "FIT_GRAYSCALE_WHITE_RGB_832X512/1.0",
+          "default": "FIT_GRAYSCALE_WHITE_RGB_832X512/1.0",
+          "title": "Policy",
+          "type": "string"
+        },
+        "scheduler_steps": {
+          "default": 30,
+          "maximum": 100,
+          "minimum": 3,
+          "title": "Scheduler Steps",
+          "type": "integer"
+        }
+      },
+      "title": "SdxlCannyReferenceInitialization",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "budget": {
+      "$ref": "#/$defs/SdxlCannyComparisonBudget"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "initialization": {
+      "$ref": "#/$defs/SdxlCannyReferenceInitialization"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_MATCHED_CANNY_SOURCE_INITIALIZATION",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imgsdxlcannyrefrun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-canny-reference-command/1.2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "spatial_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "spatial_result": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "case_relation": {
+      "const": "REVIEWED_TRAIN_REFERENCE_NOT_HOLDOUT",
+      "type": "string"
+    },
+    "native_evaluation_command": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "member_path": {
+              "const": "manifests/sdxl-lora-evaluation-command.json"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "spatial_command",
+    "spatial_result",
+    "initialization",
+    "budget",
+    "command_sha256",
+    "case_relation",
+    "native_evaluation_command"
+  ],
+  "title": "LocalImageSdxlNativeCannyReferenceCommandV2",
+  "type": "object"
+}

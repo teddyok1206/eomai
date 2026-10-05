@@ -7,6 +7,28 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Native1.1 source-initialized comparison source checkpoint
+
+[ADR0201](../adr/0201-native-successor-source-initialized-comparison.md) closes the
+consumer gap between native-training1.1 and reference-initialized comparison. New
+reference command/result1.2 explicitly pins evaluation1.4; all predecessor schema
+bytes remain unchanged. Existing Orchestrator lineage/admission/publisher, isolated
+workspace/CLI, GPU lease and paired inference owner are reused. Geometry provenance
+is checked as metadata only, not executed. Same frozen reference/Canny/prompt/seed/
+initializer/strength0.35/numerics/budgets; selected adapter is the comparison factor.
+Rehashed cross-family results and missing/stale/corrupt/denied pointers are rejected.
+Succeeded/failed prefix receipts replay without transforms, model calls or writes.
+
+Combined focused366 PASS (31 new successor tests); overlapping29/79 earlier runs
+are not added. Strict mypy4/Python3.12 and3.11, Ruff/format5, shell syntax/diff PASS.
+Full dependency audit5 PASS/1 pre-existing Catalog expansion/pilot import violation;
+not suppressed, not a whole-repository PASS. Source checks consume zero actual GPU
+calls/training updates. No new targets; prepared distinct count stays60, with holds
+and explicit corrected revisions unchanged. Quality NOT_REVIEWED, activation FORBIDDEN.
+No production binding/service/dependency/DB changes. Lab remains installed3625b079.
+Candidate wheel checks, installed role, full-cohort admission, native reserved
+evaluation, independent blind review and passing Item/HWPX/activation remain OPEN.
+
 ### Wider TRAIN object-source checkpoint — 15:35 UTC
 
 Operation source `a8c96c7935ca09dd6bafb685004176afb57a5967`; installed lab3625b079,
