@@ -2,8 +2,10 @@
 
 ## Status and evidence
 
-2026-10-05 UTC. Proposed bounded experiment through existing released contracts;
-not numerical execution, training success, quality approval or activation.
+2026-10-05 UTC. Bounded experiment executed through existing released contracts.
+Training and matched-transfer execution PASS; overall own exam-style review FAIL,
+with one local improvement. No activation or broader-goal completion. The design
+below was committed before dispatch; actual receipts are recorded separately below.
 
 ADR0203's six novel-photo retained-region outputs still have gray relief and one
 unwanted LORA object. Canonical TRAIN44 audit actually inspected all44 targets:
@@ -84,3 +86,62 @@ rollback is leaving the preserved native44/production binding selected. Do not
 overwrite failed results, reset leases, patch DB rows or silently reinitialize.
 Any new comparable evaluation input/configuration requires its own frozen command
 before generation. Broader goal remains ACTIVE regardless of this pilot outcome.
+
+## Actual bounded execution, 2026-10-05 UTC
+
+One24-target native pilot completed200 optimizer updates in472773ms, allocated
+peak6166987776 bytes; result SUCCEEDED. Exact source-closed command1.1 byte SHA
+451427f18626563557c9dc651359026ae159c049e710efa5c7f25a786dae2b5f,
+artifact_52e5cbb42d884723955a4c1e8166130a /
+rev_0188f6e9a9084c7b8d205e82072796ea. Registered result/manifest/configuration/
+weights:artifact_707dfc07965040ffbb4cf62c4fb1b35f /
+rev_3eb77c9dbac24387b50f697213f38c31;4 members reread with identity/hash checks.
+Source-free installed trainer replay verified all64 workspace SHA/stat snapshots
+unchanged without Torch, model/decode/backend training or writes.
+
+One six-output photo-style1.4 comparison then completed in35946ms, peak
+10763033600 bytes. The exact command run is
+`imgsdxlvalcmprun_65584e748c2a0ba2a9091ebb6410006d`; no additional dispatch or
+retry. Registered19-member result artifact_2dde475ef64e4bef8bfb71b7cb115d1d /
+rev_bd8748cdeea44e87ba6b26a120d40d9d; result bytes SHA
+ec637091d60e55ef56ca7a3466beca23a7e4145b48f81a23443b7149e3201378.
+Native geometry1.4/reference1.2 successor configuration was metadata-only,
+never dispatched or claimed as independent geometry acceptance.
+
+CPU proof preserved all3 conditioning/white-initializer hashes and exact
+photo/case/prompt/negative/seed/control/region reviews/base/runtime. Both tokenizer
+capacity12-row proof was reused only after matching exact prompt/base/tokenizer
+provenance, not because the changed adapter configuration SHA was identical.
+The15-member registered old44/new24 matched comparison has identical BASE pixels
+in all3 cases and changed LORA pixels in all3. Fixed updates with a smaller cohort
+also change repeat exposure; do not claim a pure causal test of contour proportions.
+Installed photo terminal replay verified95 workspace SHA/mtime snapshots with no
+model, GPU lease, transform or write side effects.
+
+All6 unmodified native832x512 RGB outputs and the labelled matched contact were
+actually viewed. Ammonite's invented far-left spiral disappears; border foreground
+per1000 falls47→4. Trilobite gray relief/cream-green cast and wagon grain/background
+remain. LORA midtone per1000 is342→353 /260→261 /135→96 respectively. Metrics and
+lower loss are not scientific correctness or quality acceptance. Decision:
+PARTIAL_LOCAL_IMPROVEMENT_NOT_ACCEPTED_FOR_EXAM_STYLE. No general superiority or
+independent blind review claim; exact morphology remains NOT_VERIFIED.
+
+Immutable44-member evidence artifact_5ddb64d447da47f99beab79a1bdc5041 /
+rev_3447cddccb1649ffa16135606e49889f, reports/own-review.md SHA
+3e76f51a2705b689e3817b71464a53af31a1371b5030742161ab37aa036ba2c2,
+views/matched-comparison.png SHA
+d66053ca04d9e218934285b0325ea399d79fdd355b240cc2825f598632f96f9f.
+All44 archived members reread byte-equal. Includes the twenty-candidate own review,
+exact executed/corrected inspection operators, metadata/dispatch/replay/publication
+receipts and logs. Original source PNGs/weights are not duplicated in evidence or Git.
+
+No core/schema/DB/dependency/installed runtime/production changes. Installed
+contracts/provider remain437280d3, trainer3625b079; wheel RECORD/dependency/role
+preflight PASS. Experiment design source was0fe42641; a later documentation commit
+does not retrospectively change runtime/source pins. Production binding SHA
+f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845 unchanged;
+five production services active at archival. No reserved validation/HOLDOUT reads.
+Local operator formatter/linter checks PASS; previous core tests are not relabelled
+as newly executed tests. Next isolate the actual control/style-transfer bottleneck
+(BASE fails too) before another frozen factor; do not indiscriminately expand data,
+training duration, prompts and conditioning together. All broader goal gates remain.
