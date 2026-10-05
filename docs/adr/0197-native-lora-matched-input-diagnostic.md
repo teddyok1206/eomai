@@ -102,3 +102,33 @@ verified upstream model card, or enlarge training solely because numerical loss 
 Keep previous zero-strength/negative-clause/spatial controls; the next native-compatible
 comparison must isolate conditioning and style on clean admitted inputs. This6/6
 budget is exhausted. Goal ACTIVE; full corpus/reserved/blind/Item/HWPX gates remain open.
+
+## Bounded four-arm completion after the six-output diagnostic
+
+The existing zero-strength experiment used the old38-target adapter and three
+different cases. It cannot supply the absent native-LoRA-only or base-only cells
+for this six-case cohort. Complete the factorial diagnostic using existing contracts:
+
+| Arm | T2I scale | Native LoRA | Evidence |
+| --- | --- | --- | --- |
+| BASE | 0.0 | absent | six new outputs |
+| T2I | 0.8 | absent | reuse accepted historical BASE receipt |
+| LORA | 0.0 | strength1.0 | six new outputs |
+| T2I_LORA | 0.8 | strength1.0 | reuse the new native comparison receipt |
+
+All six case/source/prompt/negative/seed pins, stack, scheduler,30 steps, guidance7
+and832x512 geometry stay fixed. Scale0 is already supported/tested by probe1.0;
+native evaluation1.2 already consumes the trained adapter. No schema, core code,
+dependency, numerical owner, unit, dataset or production modification is needed.
+Freeze/publish exact commands before dispatch; ceiling12 new outputs, one execution
+per new arm, no training, no retries or strength/seed sweep. Prior exhausted budgets
+remain closed. Parent history is referenced, not regenerated or reinterpreted.
+
+The zero-scaled adapter path is an ablation of T2I residuals in the same pipeline,
+not a claim that another plain-SDXL implementation is byte-identical. Verify the
+actual installed pipeline multiplication and dependency/source parity before use.
+No conditioning transforms or gray pixel editing change. Classify each of the24
+cells; own review is not independent. This TRAIN diagnostic is deliberately not
+the final24–40 reserved-case/four-family/blind gate. Its result will decide whether
+the native style adapter merits clean-input native-resolution follow-up or whether
+the next effort must change training data/conditioning rather than repeat this run.
