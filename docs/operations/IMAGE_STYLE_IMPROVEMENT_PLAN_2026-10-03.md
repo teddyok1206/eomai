@@ -5,7 +5,81 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest native reference comparison — 2026-10-05 07:20 UTC
+## Latest contour-balanced pilot and comparison — 2026-10-05 07:45 UTC
+
+**Training/comparison technical PASS; own publication review REJECTED6/6; goal ACTIVE.**
+Executed the bounded [ADR0196](../adr/0196-native-sdxl-training-admission-and-composition.md)
+successor plan from `48d06664b15a9c898763fc32dad05c99f359923a` without new core code,
+schema, dependency, runtime install or production changes. All12 target PNGs were
+individually re-inspected: six new prepared targets plus six older isolated drawings.
+Eight PDFs/groups, five contour/seven restrained-tone examples, no authored scenes
+or fine-hatching members. Six portrait/four landscape/two square canvases. Related
+plants share one page; tissue/chromosomes another; beaker/mortar another document.
+Whole-cohort canonical admission passed (16 metadata/29 staged members); this is
+not12 independent documents or proof of perceptual independence. Source softness,
+legitimate gray fills and apparatus polarity marks were preserved.
+
+One fresh native training run completed200/200 updates in472,471ms, peak allocated
+GPU6,166,987,776 bytes. Same base/recipe/seed as native23, no resume/retry. Final loss
+0.01354 is numerical evidence, not image quality or a cross-dataset improvement.
+Run `imgsdxlnativetrainrun_0293537814b63054156dcf1a3517cdc1`.
+
+- Command: `artifact_018c29d512f049979c84874466c1444e` /
+  `rev_a0442b410f0043258beefb20b71dcdff`, `manifests/sdxl-native-lora-command.json`,
+  raw SHA`e3a82adb084cca0bc6e5ca4f7f167e40f85a2471da5cf6595c4b8a89df6c731e`.
+- Result/adapter: `artifact_46da739282554f42861fc3c26f1a66ef` /
+  `rev_193013b20a8c4fb8ac5fa5b8695cedb5`, `manifests/sdxl-native-lora-result.json`,
+  raw SHA`b4a17f04855987d0a087d3c75d365c3eee86819add4237c30501121060d1c7ee`.
+- Adapter: `imgadapter_189fc6d6ab394bea9e7f46d9758d97f2` /
+  `imgadapterrev_e974d9070fa7634b54d720e14cf0a32b`, manifest semantic SHA
+  `69c8d4edc0bf5186fcd0c048007f462530afcee566a60bc4557ad3407d9c11e5`.
+
+All4 canonical output members re-resolved; actual installed-worker terminal replay
+preserved33 files with0 model/decode/training/write calls. Native contract/admission/
+runner/workspace regression138 PASS; six private operators Ruff/format PASS after
+one pre-execution long-line correction. All3 lab wheel RECORD/role checks revalidated,
+dependencies unchanged. Existing unrelated Catalog import audit issue remains open.
+
+**Matched quality test:** six new T2I+native12 images in33,393ms, peak8,328,740,352
+bytes. Historical BASE and native23 images reused, zero new generations for those
+arms. Here BASE includes T2I but no style LoRA, not plain SDXL. Same baseline command,
+six TRAIN references/case-seeds, prompts, conditioning hashes, strength and numeric
+runtime verified. No reserved reads, source-initialized regenerations or sweeps.
+This uses the previously failing path to test style change, rather than treating
+near-identity source-initialized output as proof of improvement. Six-output budget
+exhausted; no more training/inference is implied by this completion.
+
+- Evaluation command: `artifact_d88686b5159b4ccd98475a2e6f2883b1` /
+  `rev_5e84824a1cc347bc81e972e31434ae9d`,
+  raw SHA`0e42d47a4a500680e154bd2773f01d31a0b63aa4b8701854f50ea27431a21627`.
+- Result: `artifact_b156f98a47364ce69fa8d7a7c72d608a` /
+  `rev_d49b0bcd766245a5a9ad4fba16368550`, `manifests/sdxl-lora-evaluation-result.json`,
+  raw SHA`402e4ddc704a7a97a6fe6f204874d1f8abd0c8654845d9acb09b78295e0d89d9`.
+
+Nineteen canonical members verified; installed terminal replay33 files/0 model/writes.
+All18 final views (BASE/native23/native12) opened individually and hash verified.
+Several drawings simplify, but all6 new images retain gray/grid backgrounds, dark
+fills and/or rough/deformed details. Edge fraction drops in4/6 versus native23;
+midtone rises in5/6; border foreground961–1000 per mille. These are defect descriptors,
+not quality scores. The small clean-background/contour cohort did **not** fix this
+failure at this recipe; this does not establish that LoRA can never work.
+
+Own report and21 text evidence members: `artifact_71f200d9fedc4e8fbf4b50221ea90e56` /
+`rev_72c6d4df71ac4d60a33f5f0f40afeed0`, `reports/own-review.md`, raw SHA
+`245e9ccacc09a337a0b2c6b7cd4461dfbf44a901e9973400a2d779a0e631ca71`.
+Private report/samples: `/tmp/eom-contour12-evaluation-20261005/`.
+No generated PNG/adapter duplicates in the text evidence archive.
+
+**Next:** narrow the shared inference defect before more training: inspect pinned
+control images, actual RGB outputs, prompt wiring/model/pipeline/scheduler and
+fixed832x512 versus native geometry; compare existing zero-T2I/source-initialized
+evidence. Do not repeat prior polarity/strength experiments, silently whiten images,
+or infer a sole cause from this pilot. Freeze a discriminating test only after the
+read-only audit. Full corpus, reserved/independent blind/scientific quality, Item/HWPX
+and activation gates remain open. Five services active; production unchanged;
+GPU2MiB/0%. No model has been promoted.
+
+## Previous native reference comparison — 2026-10-05 07:20 UTC
 
 **Technical PASS; source composition preserved; native-style superiority not
 established; goal ACTIVE.** [ADR0198](../adr/0198-native-adapter-source-initialized-comparison.md)

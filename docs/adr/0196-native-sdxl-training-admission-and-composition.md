@@ -32,6 +32,15 @@ Changing both cohort composition and expression mix is a candidate-quality test,
 not an isolated causal proof for either factor. Full diverse training, held-out and
 independent blind review, Item/HWPX and activation gates remain unchanged.
 
+This plan executed from `48d06664` at07:29–07:40 UTC:12 samples/8 documents/8 groups,
+200 steps/472,471ms, four registered members and transform/model/write-free actual
+role replay PASS. Matching the prior six failing TRAIN cases produced6 new outputs;
+BASE/native23 were reused. All18 final views were inspected, and all6 new outputs
+remain rejected for publication despite simplification in some drawings. The gray/
+grid-background defect survives. See the operations plan's07:45 checkpoint for
+immutable pointers,138 passing regressions, evidence and the next read-only inference
+audit. No further data/step sweep or production activation follows automatically.
+
 Metadata admission, isolated native lab runtime, real cohort admission and the first
 200-step native GPU pilot verified, 2026-10-05 UTC.
 Native sources/CPU target delivery already exist. The successor schemas, frozen
