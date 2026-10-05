@@ -32,12 +32,74 @@ Default focused regression:43 PASS,6 diagnostic tests intentionally SKIPPED with
 the protected-model opt-in. Formatter/linter and strict mypy PASS. Initial mypy
 caught missing class-variable declarations in the test fixture; these were fixed
 before model execution, without suppression or changes to runtime packages.
-**Actual model diagnostic
-PENDING operator authentication**; no model PASS is implied by collection/skip.
-After this small photometric check, choose a separately frozen native-geometry
-comparison only if it adds discriminating evidence. Do not add a generation
-framework, whiten backgrounds, increase training or promote an adapter merely
-because an engineering check passed. Production remains unchanged; goal ACTIVE.
+That default skip was not model execution. Subsequent actual CPU execution at
+2026-10-05T10:45:19Z–10:45:29Z passed6/6 against the same protected model revision
+and installed eom-image identity. White decoded mean0.999979/minimum0.986377;
+normalization and output transform match real Diffusers within1e-6/1e-7. This
+supports CPU photometric capability only, not GPU fp16/native-resolution parity,
+a sole cause of gray generation, trained-style superiority or publication quality.
+Two synthetic inputs, one batched VAE encode/decode,0 generations/training/GPU.
+Existing tmux authentication was still usable even though the tool session's sudo
+timestamp was not; no credential or auth-policy change was required.
+
+Six text members committed/re-resolved through the existing Orchestrator publisher:
+`artifact_cc079ab446b94ce49e28a129579cdf64` /
+`rev_094cf24fc2ee45cab814eb0bbf5c1b61`, primary`reports/review.md`, raw SHA
+`861251009cf7f4e5d507321255b41511f3e2ec0058333b4dc139164ccb2a5eae`.
+Private record/report/log:`/tmp/eom-sdxl-vae-cpu-diagnostic-20261005/`.
+Initial archive invocation refused a129-character idempotency key before transaction;
+the operator now hashes it into the existing128-character bound. Refusal log retained,
+no validator relaxation/model rerun. All3 lab wheels/RECORD reverified; five services
+active and exact production binding unchanged. No images/weights copied into evidence.
+
+**Next:** the separately frozen native-versus-legacy geometry diagnostic below.
+Do not add a generation framework, whiten backgrounds, increase training or promote
+an adapter merely because this engineering check passed. Goal ACTIVE; existing
+rejected verdicts and all full-corpus/independent/product gates remain unchanged.
+
+### Next bounded native-geometry diagnostic — plan, NOT_EXECUTED
+
+One comparison, at most8 new images; no new training, acquisition, reserved reads,
+production activation, retries or numerical sweep. Use native12's already published
+adapter and two of its admitted TRAIN subjects: pedestal fan
+`imgsourcecrop_1f4b0375c1c545ccbc95a994c008e6ef` (768x1024) and beaker
+`imgsourcecrop_c0c8d67997235040cbde3a0e3292734c` (1024x1024).
+For each subject compare BASE versus native12 at both legacy832x512 and its actual
+native training canvas:2 subjects×2 geometries×2 arms=8. All8 are new matched
+diagnostic outputs, not reinterpreted historical results or another training run.
+
+Freeze30 steps/CFG7/seed104729/style strength1, current model/scheduler/numerical
+versions and exact admitted training-caption hashes. The existing content-team
+negative policy must be pinned and admitted explicitly; do not mutate team files
+or silently truncate. T2I contribution is explicitly0 in **all** arms, with no image
+initializer, to separate learned style from source-conditioning effects. This is
+a trained-subject text-only capability diagnostic, not reference-shape preservation,
+novel-object accuracy or holdout evidence. Changing geometry also changes aspect,
+latent noise shape and SDXL size conditioning; do not claim a resolution-only cause.
+
+Extend the existing native evaluation owner with an explicit schema2020-12/Pydantic
+successor **before behavior**; old1.0–1.2 bytes/meaning remain unchanged. Metadata
+admission must reuse full native training lineage/model/authorization checks before
+reading the chosen adapter. Cases pin selected native sample identities/caption
+hashes; no TRAIN PNGs need copying for text-only inference. Indexed pointer lookup,
+sets for exact case/arm/geometry coverage and immutable typed outputs bound this
+8-image experiment. No new DB/index/queue/framework/service/unit or dependency.
+
+Reuse existing command-keyed staging, CLI/template, exclusive physical GPU lease,
+shared offline pipeline loader and strict finite/shape/memory checks. Fresh pipeline
+per BASE/LORA avoids adapter contamination. Legacy geometry remains explicit; native
+micro-conditioning matches the generated canvas. Output raw RGB at declared sizes;
+no fixed800x500 resize, grayscale conversion, whitening or presentation cleanup in
+this diagnostic. Orchestrator validates/commits immutable members; worker never
+writes NAS/DB. Replay must verify output identity without model/GPU/write calls;
+unknown completion forbids redispatch. Freeze final command/budget before dispatch.
+
+Required new evidence: old-schema regression, native canvas/coverage/hash failures,
+metadata-before-adapter-read, selected-only staging, effective numerical kwargs,
+failure receipts/terminal replay, wheel/actual-role checks, then8 actual views and
+honest own review. Prefer reuse over a parallel numerical runner. Full100–200 TRAIN,
+24–40 VALIDATION,32 independent blind cases/four families and quality-passing
+Item Preview/HWPX/activation/rollback remain open regardless of this result.
 
 ## Latest contour-balanced pilot and comparison — 2026-10-05 07:45 UTC
 
