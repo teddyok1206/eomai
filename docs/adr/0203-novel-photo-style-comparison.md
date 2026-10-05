@@ -647,3 +647,87 @@ zero exterior, no added boundary, byte-identity full-frame replay, one decode,
 invalid/protected-contact coordinates and malformed/blank/nonbinary inputs.
 No installed lab or production code changed; actual three-photo CPU inspection
 is the next separate evidence boundary, not implied by these source-test results.
+
+## Actual retained-region CPU checkpoint — 2026-10-05T20:24Z
+
+Root source verification at `b933861f79e1f7c5a06aab15f65d76ff8ecc6a65`, not
+installed-worker acceptance. Re-resolved registered1.1 command/plan/result and
+six canonical photo/control members. The CPU child validated complete staged
+source closure under Pillow11.3/OpenCV4.11/numpy2.4.6, retaining the worker
+workspace's explicit UID ownership check. Root source imports do not justify
+worker repository access; no privileges changed. Model/GPU/training/HOLDOUT0,
+workspace writes0, old96 file size/mtime unchanged (not a fresh full-SHA replay).
+
+Actual normalized800x504 fit794x500 centered at(19,6), canvas832x512. Conservative
+reviewed source rectangles mapped without changing subject scale/placement:
+
+| Source | Original edges | Retained edges | Removed exterior | Internal/protected pixel changes |
+|---|---:|---:|---:|---:|
+| Partial polished ammonite | 13,816 | 6,395 | 7,421 (53.7%) | 0 / 0 |
+| Enrolled trilobite | 26,238 | 23,664 | 2,574 (9.8%) | 0 / 0 |
+| Parked passenger wagon | 77,767 | 32,441 | 45,326 (58.3%) | 0 / 0 |
+
+Opened actual combined source/old-control/region-control contact. The original
+main outlines/visible wagon wheels and fossil markings remain; exterior source
+frames/sky/clutter decrease. Internal grass/neighboring cars, shop objects and
+stone texture remain. Truncated clutter can make the rectangular support boundary
+visible even though no rectangle stroke was added. Thus own decision
+**REGION_PIXEL_PRESERVATION_PASS_STYLE_SIMPLIFICATION_NOT_COMPLETE**. These
+inverted Canny displays are processing inputs, NOT generated exam illustrations.
+No claim of perfect segmentation, full anatomy, independent review or style PASS.
+
+The first root wrapper incorrectly invoked the worker-specific command loader,
+which requires the caller UID to own the staged workspace. It created only an
+admission receipt and empty task-local view directory before failure. Preserved
+failed operator/log/receipt, then used existing explicit-owner directory adapter
+and public schema/canonical command parser in distinct R2 paths. Production
+guards, core source and worker permissions were not weakened to fit a root
+diagnostic. No model retry or overwrite of the failed attempt.
+
+Canonical12-member evidence `artifact_15f4fdc19413494f9072976a4ccabf09` /
+`rev_815ab05317324c1ea45ccd166ad41381`,primary `reports/own-review.md`, SHA
+`deb85ec3a77888d3766c46db0be7dfe3aa594dc641943c878cf77b2060cc0d58`;
+all persisted bytes reread equal. Review/admission/inspection/source tests/types,
+operators/logs including first failure and one derived contact retained. No copy
+of canonical source photos, generated outputs or weights; no region worker-input
+artifact promoted under an old recipe. Numerical lab remains1083fd4e; dependencies,
+production binding and five services unchanged, postflight GPU0%/2MiB.
+
+## Next isolated numerical hypothesis: white initializer and denoising
+
+The region experiment does not explain the near-blank **BASE and LORA**1.1
+outputs. Existing white img2img initialization uses strength0.70 and21 effective
+steps out of30. Test full-noise strength1.00/30 effective steps as one hypothesis,
+not as an established root cause or completed fix. Use old full-frame Canny
+controls initially; do not change prompt/seed/LoRA/regions/noise together.
+
+1. Boundary: extend existing photo-style contract/pixel/backend/verification
+   owners; same offline img2img pipeline and paired executor, not a new framework.
+2. Source: immutable registered1.1 plan/result and exact licensed photographs,
+   controller/base/VAE/LoRA configuration; previous negative findings preserved.
+3. Revisions: schema-first successor1.2 plan/command/result, exact named
+   initialization policy. Do not mutate released1.0/1.1 bytes or semantics.
+4. Resolution: existing source/revision/member/media/hash/permission/lifecycle
+   checks plus exact prompt/control equality and declared initializer/timestep
+   receipts. Reject wrong versions, forged effective-step counts or stale pins.
+5. Access: ordered3 cases x2 arms; keyed trace/output maps, one model load per
+   existing paired lifecycle; no DB/index/search/cache changes.
+6. Structures: existing frozen policy/plan/result/pointer values and manifests;
+   closed version mapping and shared pixel owner, not boolean option growth.
+7. Scale: at most6 outputs in one bounded dispatch, existing16GiB/600s ceiling;
+   record actual resource use separately. No parameter/seed sweep or training.
+8. Concurrency: existing isolated service identity/workspace and GPU lock;
+   Orchestrator resolves/stages/validates/commits; no workers writing NAS/DB.
+9. Dependencies: no new runtime/model/library, existing installed numerical
+   interpreter/RECORD gates. Source tests alone do not authorize lab invocation.
+10. Failure/replay: keep terminal result/exhausted-budget meanings; old receipt
+    replay is read-only, no implicit rerun. New command needs its own bounded
+    admission and installed-consumer/CPU transform verification.
+11. Alternative: changed prompts, output darkening or more blur confound the
+    matched result and may conceal failures. Separate numerical factor first,
+    preserve unenhanced generated bytes and own-vs-independent review boundary.
+
+This checkpoint does not implement/admit the1.2 recipe or spend generation
+budget. First define JSON Schema2020-12, frozen Pydantic and negative/replay tests;
+then implement and verify the shared consumer before any new dispatch. Region
+provenance remains a separate future contract if that input variant is needed.
