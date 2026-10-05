@@ -103,3 +103,10 @@ at this checkpoint; no actual 576-dpi result or model-quality PASS is claimed.
 The next implementation must test clipped render coordinates, rotated/fractional
 pages, bounded output, renderer identity, exact result closure and replay before
 dispatch. Full-resolution target/training semantics remain a further boundary.
+
+On 2026-10-05 UTC, live metadata-only admission under source487a1364 accepted the
+seven original TRAIN regions/six PDFs and froze one canonical command (no binary
+source reads or576-dpi dispatch). Three candidate wheels built/inspected; wheel-only
+schema/command import passed without repository sys.path or runtime installation.
+Pointers and exact identities are recorded in the operations plan. This closes
+the preparation/intention gate only, not the pending renderer/worker/target gates.

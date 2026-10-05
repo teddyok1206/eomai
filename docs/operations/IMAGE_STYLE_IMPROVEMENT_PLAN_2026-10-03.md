@@ -45,6 +45,36 @@ installed576-dpi worker/renderer/publication PASS; those boundaries and actual
 native576 output are still pending. No new dependency, DB/queue/model/preset,
 production deployment, lab installation or training activation was introduced.
 
+Source-only follow-up, **2026-10-05 UTC**: actual full-lineage metadata admission
+under source `487a1364b6343fc0766786fb52138f568c49e73a` accepted the same7 TRAIN
+regions/six PDFs (7,650,028 input bytes;2,278,784 requested native output pixels).
+No PDF/PNG bytes or native576 renders were consumed by this preflight. One
+immutable preparation command is now frozen, not dispatched:
+
+- `imgpdfcropcommand_88cb9af2c2279cbe486731a63388dd21`, command semantic SHA
+  `6a8f0b9619bde9d6819c097ecc3ad04f6c6235152b03cebf04b495413069e4b6`.
+- Command `artifact_bf358585809b4185929dc0ebee50572d` /
+  `rev_3efff07679144387b700eedcca0881c4`, member
+  `manifests/science-source-pdf-crop-command.json`, raw SHA
+  `e07fe73debabd4d68f3d0b6e96aa08e44da0daa5d928cfa650d05705fbecf99b`.
+- Follow-up evidence `artifact_ac28159b6e044da6bf6b65daafa18f4d` /
+  `rev_3db3671a649c45dfb126ef76c33214cc`, primary
+  `reports/source-preparation-checkpoint.json`, raw SHA
+  `6d28507bd6f66dc48b297298c194faeb157cd86144b7101214364767762409bb`.
+  All5 text members and the command's1 member verified; no binary source copies.
+
+The existing immutable-archive release builder built and inspected three candidate
+wheels. Contracts wheel SHA`53f26de72b270f8e7fcc590d4c6487c4a45915a13ca607ed480234480ecbe1c1`,
+provider SHA`8b706d757a1e28ecab9a1e6cbf846aea5970ab919d0e0393b8ffd24f87834d48`,
+trainer SHA`55f138fb3d45a208d321bfdcdf4935bb05fad2f72d76b1de0e8131838d4dd75d`.
+An isolated `python -I` wheel-only import/schema/canonical-command validation passed,
+without repository sys.path, Torch/SQLAlchemy imports, runtime install or PDF read.
+This is a package/import gate, not an installed-role/576-renderer acceptance.
+Production V6 binding SHA remains
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`;
+five main services active, GPU idle2MiB/0% at the read-only final observation.
+No new training/VALIDATION/HOLDOUT read, activation, service restart or push occurred.
+
 User source comparison:
 `/tmp/eom-image-native-pdf-audit-20261004/views/contact.png`; canonical diagnostic
 member `views/native-source-comparison.png` in the evidence above. Seven TRAIN
