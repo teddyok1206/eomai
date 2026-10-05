@@ -28,12 +28,13 @@ from eom_image_contracts import (
 from eom_image_contracts.sdxl_lora_micro import SdxlLoraMicroSample
 from eom_image_contracts.sdxl_native_training_targets import (
     NATIVE_TARGET_CANVASES,
-    LocalImageSdxlNativeTrainingTargetCommand,
-    LocalImageSdxlNativeTrainingTargetResult,
+    NativeTrainingTargetCommand,
+    NativeTrainingTargetResult,
     SdxlNativePrepareTargetDecision,
     SdxlNativeTargetPlacement,
     SdxlNativeTrainingTargetSources,
     SdxlPreparedNativeTrainingTarget,
+    native_training_target_protocol,
     parse_sdxl_native_training_target_sources,
     sdxl_native_target_id,
     sdxl_native_target_placement,
@@ -80,12 +81,12 @@ MAX_SOURCE_BYTES = 16 * 1024**2
 TargetCommand = (
     LocalImageSdxlTrainingTargetCommand
     | LocalImageSdxlSourceTrainingTargetCommand
-    | LocalImageSdxlNativeTrainingTargetCommand
+    | NativeTrainingTargetCommand
 )
 TargetResult = (
     LocalImageSdxlTrainingTargetResult
     | LocalImageSdxlSourceTrainingTargetResult
-    | LocalImageSdxlNativeTrainingTargetResult
+    | NativeTrainingTargetResult
 )
 TargetSources = (
     SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources | SdxlNativeTrainingTargetSources
@@ -105,9 +106,13 @@ def _command(raw: bytes) -> TargetCommand:
         if not isinstance(value, dict):
             raise ValueError("command must be an object")
         command: TargetCommand
-        if value.get("schema_version") == "local-image-sdxl-training-target-command/1.2":
-            validate_contract("sdxl-training-target-command-v3", value)
-            command = LocalImageSdxlNativeTrainingTargetCommand.model_validate(value)
+        if value.get("schema_version") in {
+            "local-image-sdxl-training-target-command/1.2",
+            "local-image-sdxl-training-target-command/1.3",
+        }:
+            protocol = native_training_target_protocol(value["schema_version"])
+            validate_contract(protocol.command_contract, value)
+            command = protocol.command_model.model_validate(value)
         elif value.get("schema_version") == "local-image-sdxl-training-target-command/1.1":
             validate_contract("sdxl-training-target-command-v2", value)
             command = LocalImageSdxlSourceTrainingTargetCommand.model_validate(value)
@@ -181,7 +186,7 @@ def _load_sources(root: int, command: TargetCommand) -> TargetSources:
     def read(member: str) -> bytes:
         return read_staged_member(root, member, maximum_bytes=MAX_METADATA_BYTES)
 
-    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+    if isinstance(command, NativeTrainingTargetCommand):
         return parse_sdxl_native_training_target_sources(
             command,
             crop_set_payload=read("inputs/source-crop-set.json"),
@@ -210,11 +215,12 @@ def _validated_result(
 ) -> TargetResult:
     if not isinstance(value, dict):
         raise ValueError("result must be an object")
-    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+    if isinstance(command, NativeTrainingTargetCommand):
         if not isinstance(sources, SdxlNativeTrainingTargetSources):
             raise ValueError("source protocol mismatch")
-        validate_contract("sdxl-training-target-result-v3", value)
-        native_result = LocalImageSdxlNativeTrainingTargetResult.model_validate(value)
+        protocol = native_training_target_protocol(command.schema_version)
+        validate_contract(protocol.result_contract, value)
+        native_result = protocol.result_model.model_validate(value)
         validate_sdxl_native_training_target_result(command, sources, native_result)
         return native_result
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
@@ -233,11 +239,11 @@ def _validated_result(
 
 
 def _source_result_fields(command: TargetCommand, sources: TargetSources) -> dict[str, str]:
-    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand) and isinstance(
+    if isinstance(command, NativeTrainingTargetCommand) and isinstance(
         sources, SdxlNativeTrainingTargetSources
     ):
         return {
-            "schema_version": "local-image-sdxl-training-target-result/1.2",
+            "schema_version": command.schema_version.replace("-command/", "-result/"),
             "source_snapshot_sha256": sources.snapshot_sha256,
         }
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand) and isinstance(
@@ -327,7 +333,7 @@ def run_sdxl_training_target_command(
                     )
                     placement: SdxlTargetPlacement | SdxlNativeTargetPlacement
                     canvas_size = (768, 512)
-                    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+                    if isinstance(command, NativeTrainingTargetCommand):
                         if not isinstance(sample, SdxlSourceTargetSample) or not isinstance(
                             decision, SdxlNativePrepareTargetDecision
                         ):
@@ -366,7 +372,7 @@ def run_sdxl_training_target_command(
                     )
                     payload = png_bytes(image)
                     sha = "sha256:" + hashlib.sha256(payload).hexdigest()
-                    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+                    if isinstance(command, NativeTrainingTargetCommand):
                         if sha in native_output_hashes:
                             raise SdxlTrainingTargetError("SDXL_TARGET_SOURCE_INVALID")
                         native_output_hashes.add(sha)

@@ -28,8 +28,10 @@ def _png(sample_id, width, height):
     return png_bytes(image)
 
 
-def _stage(monkeypatch, tmp_path, *, pixel_factory=_png):
-    command, records, pixels, *_ = _fixture(monkeypatch, pixel_factory=pixel_factory)
+def _stage(monkeypatch, tmp_path, *, pixel_factory=_png, exterior_batch=False):
+    command, records, pixels, *_ = _fixture(
+        monkeypatch, pixel_factory=pixel_factory, exterior_batch=exterior_batch
+    )
     workspace = tmp_path / command.training_run_id
     workspace.mkdir(mode=0o700)
     _write(workspace / "command.json", content_json_bytes(command.model_dump(mode="json")))

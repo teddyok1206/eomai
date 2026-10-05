@@ -14,9 +14,10 @@ from eom_image_contracts import content_json_bytes, content_sha256, validate_con
 from eom_image_contracts.sdxl_lora_micro import sdxl_lora_adapter_ids
 from eom_image_contracts.sdxl_native_lora import (
     LocalImageSdxlNativeLoraAdapterManifest,
-    LocalImageSdxlNativeLoraCommand,
     LocalImageSdxlNativeLoraResult,
+    NativeLoraCommand,
     SdxlNativeLoraRealizedSample,
+    native_lora_command_protocol,
     validate_sdxl_native_lora_result,
 )
 from eom_image_contracts.sdxl_native_lora_sources import (
@@ -60,17 +61,18 @@ class NativeLoraTrainingBackend(Protocol):
         *,
         stack: ResolvedSdxlStack,
         samples: tuple[LoraTensorSample, ...],
-        command: LocalImageSdxlNativeLoraCommand,
+        command: NativeLoraCommand,
         output_root: Path,
     ) -> TrainingBackendResult: ...
 
 
 # The actual isolated CUDA interpreter is Python3.11, not the source test interpreter.
-def _document(  # noqa: UP047
-    raw: bytes, contract: str, model: type[_Document]
+def _validated_document(  # noqa: UP047
+    raw: bytes, value: object, contract: str, model: type[_Document]
 ) -> _Document:
     try:
-        value = json.loads(raw)
+        if not isinstance(value, dict):
+            raise ValueError("document must be an object")
         validate_contract(contract, value)
         document = model.model_validate(value)
         if raw != content_json_bytes(document.model_dump(mode="json")):
@@ -80,9 +82,17 @@ def _document(  # noqa: UP047
         raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_DOCUMENT_INVALID") from exc
 
 
-def load_sdxl_native_lora_command(
-    workspace: Path, command_path: Path
-) -> LocalImageSdxlNativeLoraCommand:
+def _document(  # noqa: UP047
+    raw: bytes, contract: str, model: type[_Document]
+) -> _Document:
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError) as exc:
+        raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_DOCUMENT_INVALID") from exc
+    return _validated_document(raw, value, contract, model)
+
+
+def load_sdxl_native_lora_command(workspace: Path, command_path: Path) -> NativeLoraCommand:
     if command_path != workspace / "command.json":
         raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_COMMAND_PATH_INVALID")
     try:
@@ -90,9 +100,15 @@ def load_sdxl_native_lora_command(
             raw = read_staged_member(
                 root, "command.json", maximum_bytes=NATIVE_LORA_MAX_METADATA_BYTES
             )
-        return _document(raw, "sdxl-native-lora-command", LocalImageSdxlNativeLoraCommand)
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            raise ValueError("command must be an object")
+        protocol = native_lora_command_protocol(value.get("schema_version", ""))
+        return _validated_document(raw, value, protocol.contract, protocol.model)
     except ProviderError as exc:
         raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_COMMAND_INVALID") from exc
+    except (ValueError, TypeError) as exc:
+        raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_DOCUMENT_INVALID") from exc
 
 
 def _directory_members(root: int, parts: tuple[str, ...]) -> set[str]:
@@ -110,7 +126,7 @@ def _directory_members(root: int, parts: tuple[str, ...]) -> set[str]:
             os.close(descriptor)
 
 
-def _admit_metadata(root: int, command: LocalImageSdxlNativeLoraCommand) -> SdxlNativeLoraSources:
+def _admit_metadata(root: int, command: NativeLoraCommand) -> SdxlNativeLoraSources:
     admission = SdxlNativeLoraMetadataAdmission(command)
     while pending := admission.pending_pointers():
         for pointer in pending:
@@ -137,7 +153,7 @@ def _admit_metadata(root: int, command: LocalImageSdxlNativeLoraCommand) -> Sdxl
 
 
 def _replay(
-    root: int, workspace: Path, command: LocalImageSdxlNativeLoraCommand
+    root: int, workspace: Path, command: NativeLoraCommand
 ) -> LocalImageSdxlNativeLoraResult | None:
     if not os.path.lexists(workspace / "result.json"):
         if any(
@@ -181,7 +197,7 @@ def _replay(
 def _tensor_samples(
     root: int,
     workspace: Path,
-    command: LocalImageSdxlNativeLoraCommand,
+    command: NativeLoraCommand,
     sources: SdxlNativeLoraSources,
     realized: list[SdxlNativeLoraRealizedSample],
 ) -> tuple[LoraTensorSample, ...]:
@@ -217,7 +233,7 @@ def _tensor_samples(
 
 
 def _manifest(
-    command: LocalImageSdxlNativeLoraCommand,
+    command: NativeLoraCommand,
     realized: list[SdxlNativeLoraRealizedSample],
     workspace: Path,
 ) -> LocalImageSdxlNativeLoraAdapterManifest:
@@ -248,7 +264,7 @@ def _manifest(
 
 
 def _matching_runtime(
-    command: LocalImageSdxlNativeLoraCommand, runtime: LocalImageLoraTrainingRuntime | None
+    command: NativeLoraCommand, runtime: LocalImageLoraTrainingRuntime | None
 ) -> LocalImageLoraTrainingRuntime | None:
     if runtime is None or any(
         getattr(runtime, name) != getattr(command.dependencies, name)
@@ -262,14 +278,15 @@ def run_sdxl_native_lora_command(
     *,
     workspace: Path,
     model_store_root: Path,
-    command: LocalImageSdxlNativeLoraCommand,
+    command: NativeLoraCommand,
     backend: NativeLoraTrainingBackend,
 ) -> LocalImageSdxlNativeLoraResult:
     """Validate metadata before pixels/models; preserve terminal outcomes without resume."""
+    protocol = native_lora_command_protocol(command.schema_version)
     command = _document(
         content_json_bytes(command.model_dump(mode="json")),
-        "sdxl-native-lora-command",
-        LocalImageSdxlNativeLoraCommand,
+        protocol.contract,
+        protocol.model,
     )
     if workspace.name != command.training_run_id:
         raise SdxlNativeLoraRunnerError("IMAGE_TRAINING_WORKSPACE_ID_MISMATCH")

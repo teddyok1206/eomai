@@ -7,6 +7,46 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ## Current inference-boundary audit — 2026-10-05
 
+### Reviewed exterior cleanup — source candidate, 2026-10-05 UTC
+
+ADR0199's source implementation adds explicit target command/result1.3 and native
+training-command1.1, preserving all predecessor schema bytes, numerical recipes
+and immutable source pixels. Existing CPU target executor/publication and metadata-first
+native training closure are extended; no second worker, OCR, inpainting or dependency.
+Reviewer-declared masks require protected subject boxes and a three-pixel white ring;
+only the declared derivative pixels change. Actual semantic protection still requires
+viewing the original and result, not merely counting successful checks.
+
+Final focused gate: **355 PASS** in35.14s, no skips; includes three native canvases,
+pixel equality outside masks, connected-leader/contact rejection, failed no-retry
+receipts, old/new schema separation, mixed target batches, metadata-before-media
+negative permission/stale/hash paths, synthetic training lifecycle and no-write replay.
+Ruff/format and thirteen-source-file mypy PASS; shell syntax/staged diff checks PASS.
+Logs `/tmp/eom-exterior-focused-gate-r7-20261005.log` and
+`/tmp/eom-exterior-type-gate-r4-20261005.log`. Command loader cleanup
+removes redundant JSON parsing and shares one validation/canonical check; its
+focused runner/compatibility recheck is recorded separately in
+`/tmp/eom-exterior-loader-gate-20261005.log` (47 PASS), not added to the355 count.
+The numerical adapter accepts the explicit successor through the same native recipe;
+stubbed backend tests prove handoff identity, not GPU execution or learned quality.
+Earlier schema mismatch and test-manifest
+failures are retained, not overwritten. Image test manifest now includes two new
+tests and two previously omitted native geometry/precision-input tests.
+
+Separate global dependency scan:5 PASS/1 existing failure. The unchanged
+`source_page_crop_expansion_inputs.py` imports Catalog expansion-planning/pilot
+implementation. This is not an all-system dependency PASS; the new contracts remain
+below infrastructure. Do not weaken the test or silently broaden this source release.
+
+Consumer limitation is explicit: released native evaluation1.2 and geometry1.3
+still reject training-command1.1, covered by a negative test. Next implement and
+test an explicit comparison successor pinning command1.1/result1.0, then verify
+wheels/installed source-free role before executing the reviewed house/monkey cleanup.
+No new cleanup, GPU run, training, output sample, production install or activation
+has occurred. Full cohort admission, independent blind review and Item/HWPX canary
+remain open. Prepared inventory remains fifty distinct sample IDs, not fifty
+accepted independent drawings. Goal ACTIVE.
+
 ### Contour expansion — actual result, 2026-10-05 13:13 UTC
 
 Frozen source `719aa33c67bd3759f75c10d1322f7adb4daad0d4` recovered twelve

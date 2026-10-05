@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -24,6 +25,8 @@ from eom_image_contracts.sdxl_lineart_probe import (
 from eom_image_contracts.sdxl_lora_micro import SDXL_LORA_MICRO_STYLE_TRIGGER, sdxl_lora_adapter_ids
 from eom_image_contracts.sdxl_native_training_targets import (
     NATIVE_TARGET_CANVASES,
+    SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF,
+    SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF,
     SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF,
     SDXL_NATIVE_TARGET_PNG_SCHEMA_REF,
     SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF,
@@ -39,6 +42,7 @@ from eom_image_contracts.validation import validate_contract
 
 _PREFIX = "eom://schemas/image-provider/local-image-"
 SDXL_NATIVE_LORA_COMMAND_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.0"
+SDXL_NATIVE_LORA_COMMAND_V2_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.1"
 SDXL_NATIVE_LORA_RESULT_SCHEMA_REF = _PREFIX + "sdxl-native-lora-result/1.0"
 SDXL_NATIVE_LORA_ADAPTER_SCHEMA_REF = _PREFIX + "sdxl-native-lora-adapter-manifest/1.0"
 NativeLoraProfile = Literal["NATIVE_RESOLUTION_PILOT", "FULL_STYLE_TRAINING"]
@@ -94,20 +98,31 @@ class SdxlNativeLoraConditioning(FrozenModel):
 class SdxlNativeLoraTargetBatch(FrozenModel):
     command: ImageEvaluationArtifactMember
     result: ImageEvaluationArtifactMember
+    _schema_pairs: ClassVar[tuple[tuple[str, str], ...]] = (
+        (SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF, SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF),
+    )
 
     @model_validator(mode="after")
     def exact_protocol(self) -> Self:
-        for pointer, name, schema in (
-            (self.command, "command", SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF),
-            (self.result, "result", SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF),
+        if (self.command.schema_ref, self.result.schema_ref) not in self._schema_pairs:
+            raise ValueError("SDXL_NATIVE_LORA_BATCH_POINTER_INVALID")
+        for pointer, name in (
+            (self.command, "command"),
+            (self.result, "result"),
         ):
             if (
                 pointer.member_path != f"manifests/sdxl-training-target-{name}.json"
-                or pointer.schema_ref != schema
                 or pointer.media_type != "application/json"
             ):
                 raise ValueError("SDXL_NATIVE_LORA_BATCH_POINTER_INVALID")
         return self
+
+
+class SdxlNativeLoraTargetBatchV2(SdxlNativeLoraTargetBatch):
+    _schema_pairs: ClassVar[tuple[tuple[str, str], ...]] = (
+        (SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF, SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF),
+        (SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF, SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF),
+    )
 
 
 class SdxlNativeLoraSample(FrozenModel):
@@ -168,8 +183,8 @@ class SdxlNativeLoraBudget(FrozenModel):
     maximum_input_png_bytes: int = Field(ge=1, le=128 * 1024**2)
 
 
-class LocalImageSdxlNativeLoraCommand(FrozenModel):
-    schema_version: Literal["local-image-sdxl-native-lora-command/1.0"]
+class _NativeLoraCommand(FrozenModel):
+    schema_version: str
     training_run_id: str = Field(pattern=r"^imgsdxlnativetrainrun_[0-9a-f]{32}$")
     created_at: datetime
     created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
@@ -253,6 +268,45 @@ class LocalImageSdxlNativeLoraCommand(FrozenModel):
         ):
             raise ValueError("SDXL_NATIVE_LORA_COMMAND_IDENTITY_OR_HASH_INVALID")
         return self
+
+
+class LocalImageSdxlNativeLoraCommand(_NativeLoraCommand):
+    schema_version: Literal["local-image-sdxl-native-lora-command/1.0"]
+
+
+class LocalImageSdxlNativeLoraCommandV2(_NativeLoraCommand):
+    schema_version: Literal["local-image-sdxl-native-lora-command/1.1"]
+    target_batches: tuple[SdxlNativeLoraTargetBatchV2, ...] = Field(min_length=1, max_length=8)
+
+
+NativeLoraCommand = LocalImageSdxlNativeLoraCommand | LocalImageSdxlNativeLoraCommandV2
+
+
+@dataclass(frozen=True, slots=True)
+class NativeLoraCommandProtocol:
+    contract: str
+    model: type[LocalImageSdxlNativeLoraCommand] | type[LocalImageSdxlNativeLoraCommandV2]
+
+
+_NATIVE_LORA_COMMAND_PROTOCOLS: Mapping[str, NativeLoraCommandProtocol] = MappingProxyType(
+    {
+        "local-image-sdxl-native-lora-command/1.0": NativeLoraCommandProtocol(
+            "sdxl-native-lora-command",
+            LocalImageSdxlNativeLoraCommand,
+        ),
+        "local-image-sdxl-native-lora-command/1.1": NativeLoraCommandProtocol(
+            "sdxl-native-lora-command-v2",
+            LocalImageSdxlNativeLoraCommandV2,
+        ),
+    }
+)
+
+
+def native_lora_command_protocol(version: str) -> NativeLoraCommandProtocol:
+    try:
+        return _NATIVE_LORA_COMMAND_PROTOCOLS[version]
+    except KeyError as exc:
+        raise ValueError("SDXL_NATIVE_LORA_COMMAND_PROTOCOL_UNSUPPORTED") from exc
 
 
 class SdxlNativeLoraRealizedSample(FrozenModel):
@@ -369,7 +423,7 @@ class LocalImageSdxlNativeLoraResult(FrozenModel):
 
 
 def validate_sdxl_native_lora_result(
-    command: LocalImageSdxlNativeLoraCommand, result: LocalImageSdxlNativeLoraResult
+    command: NativeLoraCommand, result: LocalImageSdxlNativeLoraResult
 ) -> None:
     """Bind terminal evidence to the exact cohort/recipe, not a protocol-name alias."""
     validate_contract("sdxl-native-lora-result", result.model_dump(mode="json"))

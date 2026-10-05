@@ -37,6 +37,8 @@ tests/unit/test_sdxl_canny_comparison.py
 tests/unit/test_sdxl_canny_conditioning.py
 tests/unit/test_sdxl_canny_controller.py
 tests/unit/test_sdxl_canny_reference.py
+tests/unit/test_sdxl_exterior_lora_compatibility.py
+tests/unit/test_sdxl_exterior_training_targets.py
 tests/unit/test_sdxl_learned_comparison.py
 tests/unit/test_sdxl_lineart_backend.py
 tests/unit/test_sdxl_lineart_probe.py
@@ -46,6 +48,7 @@ tests/unit/test_sdxl_micro_runner.py
 tests/unit/test_sdxl_model_resolution.py
 tests/unit/test_sdxl_native_canny_reference.py
 tests/unit/test_sdxl_native_evaluation.py
+tests/unit/test_sdxl_native_geometry.py
 tests/unit/test_sdxl_native_lora_runner.py
 tests/unit/test_sdxl_native_training_targets.py
 tests/unit/test_sdxl_publication_comparison.py
@@ -54,6 +57,7 @@ tests/unit/test_sdxl_reviewed_micro.py
 tests/unit/test_sdxl_source_training_targets.py
 tests/unit/test_sdxl_target_comparison.py
 tests/unit/test_sdxl_training_targets.py
+tests/unit/test_sdxl_vae_native_precision_input.py
 tests/unit/test_sdxl_validation_comparison.py
 tests/unit/test_sdxl_validation_worker.py
 tests/unit/test_unet_lora_numerical_loop.py

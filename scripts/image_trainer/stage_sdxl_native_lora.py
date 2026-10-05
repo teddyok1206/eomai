@@ -11,8 +11,7 @@ from pathlib import Path
 
 from eom_image_contracts import ImageEvaluationArtifactMember, content_json_bytes, validate_contract
 from eom_image_contracts.sdxl_native_lora import (
-    SDXL_NATIVE_LORA_COMMAND_SCHEMA_REF,
-    LocalImageSdxlNativeLoraCommand,
+    native_lora_command_protocol,
 )
 from eom_image_contracts.sdxl_native_lora_sources import NATIVE_LORA_MAX_METADATA_BYTES
 from eom_orchestrator.control_artifact_resolution import resolve_control_artifact_member
@@ -33,6 +32,7 @@ def main() -> None:
     parser.add_argument("--artifact-id", required=True)
     parser.add_argument("--artifact-revision-id", required=True)
     parser.add_argument("--sha256", required=True)
+    parser.add_argument("--schema-version", choices=("1.0", "1.1"), default="1.0")
     execution = parser.add_mutually_exclusive_group()
     execution.add_argument("--preflight-only", action="store_true")
     execution.add_argument("--dispatch", action="store_true")
@@ -43,7 +43,10 @@ def main() -> None:
         artifact_id=args.artifact_id,
         artifact_revision_id=args.artifact_revision_id,
         member_path="manifests/sdxl-native-lora-command.json",
-        schema_ref=SDXL_NATIVE_LORA_COMMAND_SCHEMA_REF,
+        schema_ref=(
+            "eom://schemas/image-provider/local-image-sdxl-native-lora-command/"
+            + args.schema_version
+        ),
         media_type="application/json",
         sha256=args.sha256,
     )
@@ -53,8 +56,11 @@ def main() -> None:
             engine, pointer, maximum_bytes=NATIVE_LORA_MAX_METADATA_BYTES
         )
         value = json.loads(raw)
-        validate_contract("sdxl-native-lora-command", value)
-        command = LocalImageSdxlNativeLoraCommand.model_validate(value)
+        protocol = native_lora_command_protocol(
+            "local-image-sdxl-native-lora-command/" + args.schema_version
+        )
+        validate_contract(protocol.contract, value)
+        command = protocol.model.model_validate(value)
         if raw != content_json_bytes(command.model_dump(mode="json")):
             raise SystemExit("SDXL_NATIVE_LORA_COMMAND_CANONICAL_INVALID")
         if args.preflight_only:

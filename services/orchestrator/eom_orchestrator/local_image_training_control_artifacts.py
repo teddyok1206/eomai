@@ -73,7 +73,7 @@ if TYPE_CHECKING:
         LocalImageSdxlTrainingTargetCommand,
     )
     from eom_image_contracts.sdxl_native_training_targets import (
-        LocalImageSdxlNativeTrainingTargetCommand,
+        NativeTrainingTargetCommand,
     )
     from eom_image_contracts.sdxl_source_training_targets import (
         LocalImageSdxlSourceTrainingTargetCommand,
@@ -471,7 +471,7 @@ class LocalImageTrainingControlArtifactPublisher:
         self,
         command: LocalImageSdxlTrainingTargetCommand
         | LocalImageSdxlSourceTrainingTargetCommand
-        | LocalImageSdxlNativeTrainingTargetCommand,
+        | NativeTrainingTargetCommand,
     ) -> ImageEvaluationArtifactMember:
         match command.schema_version:
             case "local-image-sdxl-training-target-command/1.0":
@@ -480,6 +480,8 @@ class LocalImageTrainingControlArtifactPublisher:
                 contract_name = "sdxl-training-target-command-v2"
             case "local-image-sdxl-training-target-command/1.2":
                 contract_name = "sdxl-training-target-command-v3"
+            case "local-image-sdxl-training-target-command/1.3":
+                contract_name = "sdxl-training-target-command-v4"
             case _:
                 raise ValueError("SDXL_TARGET_COMMAND_SCHEMA_UNSUPPORTED")
         return self._commit_document(

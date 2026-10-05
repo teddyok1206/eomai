@@ -14,12 +14,18 @@ from eom_image_contracts.models import (
     content_json_bytes,
 )
 from eom_image_contracts.science_corpus_visual import LocalImageScienceCorpusTrainingAuthorization
-from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommand
+from eom_image_contracts.sdxl_native_lora import NativeLoraCommand, native_lora_command_protocol
 from eom_image_contracts.sdxl_native_training_targets import (
+    SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF,
+    SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF,
     SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF,
     SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF,
+    LocalImageSdxlExteriorTrainingTargetCommand,
+    LocalImageSdxlExteriorTrainingTargetResult,
     LocalImageSdxlNativeTrainingTargetCommand,
     LocalImageSdxlNativeTrainingTargetResult,
+    NativeTrainingTargetCommand,
+    NativeTrainingTargetResult,
     SdxlNativeTrainingTargetSources,
     SdxlPreparedNativeTrainingTarget,
     validate_sdxl_native_training_target_command_sources,
@@ -65,6 +71,16 @@ _REVIEW_MODELS = (
 # A closed business dependency graph, not an extensible parser/plugin registry.
 _JSON_DOCUMENTS: Mapping[str, tuple[str, str, type[FrozenModel]]] = MappingProxyType(
     {
+        SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF: (
+            "sdxl-training-target-command-v4",
+            "sdxl-training-target-command",
+            LocalImageSdxlExteriorTrainingTargetCommand,
+        ),
+        SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF: (
+            "sdxl-training-target-result-v4",
+            "sdxl-training-target-result",
+            LocalImageSdxlExteriorTrainingTargetResult,
+        ),
         SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF: (
             "sdxl-training-target-command-v3",
             "sdxl-training-target-command",
@@ -93,8 +109,8 @@ _JSON_DOCUMENTS: Mapping[str, tuple[str, str, type[FrozenModel]]] = MappingProxy
     }
 )
 NativeLoraMetadataValue = (
-    LocalImageSdxlNativeTrainingTargetCommand
-    | LocalImageSdxlNativeTrainingTargetResult
+    NativeTrainingTargetCommand
+    | NativeTrainingTargetResult
     | LocalImageScienceSourcePdfCropSet
     | LocalImageScienceSourcePdfCropCommand
     | SourcePageCropReview
@@ -145,7 +161,7 @@ def _decode_metadata(pointer: ImageEvaluationArtifactMember, raw: bytes) -> Nati
 
 
 def _dependencies(value: NativeLoraMetadataValue) -> tuple[ImageEvaluationArtifactMember, ...]:
-    if isinstance(value, LocalImageSdxlNativeTrainingTargetCommand):
+    if isinstance(value, NativeTrainingTargetCommand):
         return (value.source_crop_set, value.training_authorization)
     if isinstance(value, LocalImageScienceSourcePdfCropSet):
         return (value.command,)
@@ -158,8 +174,8 @@ def _dependencies(value: NativeLoraMetadataValue) -> tuple[ImageEvaluationArtifa
 
 @dataclass(frozen=True, slots=True)
 class SdxlNativeLoraBatchSources:
-    command: LocalImageSdxlNativeTrainingTargetCommand
-    result: LocalImageSdxlNativeTrainingTargetResult
+    command: NativeTrainingTargetCommand
+    result: NativeTrainingTargetResult
     sources: SdxlNativeTrainingTargetSources
 
 
@@ -174,11 +190,10 @@ class SdxlNativeLoraSources:
 class SdxlNativeLoraMetadataAdmission:
     """Per-call bounded parser state, shared by canonical admission and local validation."""
 
-    def __init__(self, command: LocalImageSdxlNativeLoraCommand) -> None:
-        validate_contract("sdxl-native-lora-command", command.model_dump(mode="json"))
-        self.command = LocalImageSdxlNativeLoraCommand.model_validate(
-            command.model_dump(mode="json")
-        )
+    def __init__(self, command: NativeLoraCommand) -> None:
+        protocol = native_lora_command_protocol(command.schema_version)
+        validate_contract(protocol.contract, command.model_dump(mode="json"))
+        self.command = protocol.model.model_validate(command.model_dump(mode="json"))
         self._documents: dict[ImageEvaluationArtifactMember, NativeLoraMetadataValue] = {}
         self._required: set[ImageEvaluationArtifactMember] = set()
         self._locations: dict[tuple[str, str, str], ImageEvaluationArtifactMember] = {}
@@ -236,8 +251,12 @@ class SdxlNativeLoraMetadataAdmission:
         prepared = {}
         common_basis = None
         for pin in command.target_batches:
-            target_command = self._document(pin.command, LocalImageSdxlNativeTrainingTargetCommand)
-            target_result = self._document(pin.result, LocalImageSdxlNativeTrainingTargetResult)
+            target_command = self._documents.get(pin.command)
+            target_result = self._documents.get(pin.result)
+            if not isinstance(target_command, NativeTrainingTargetCommand) or not isinstance(
+                target_result, NativeTrainingTargetResult
+            ):
+                raise ValueError("SDXL_NATIVE_LORA_METADATA_DOCUMENT_MISSING")
             if (
                 target_command.training_authorization != command.training_authorization
                 or target_result.status != "SUCCEEDED"
@@ -342,7 +361,7 @@ def _validate_physical_sources(regions: tuple[ScienceSourcePageCropRegion, ...])
 
 
 def parse_sdxl_native_lora_sources(
-    command: LocalImageSdxlNativeLoraCommand, metadata: Mapping[str, bytes]
+    command: NativeLoraCommand, metadata: Mapping[str, bytes]
 ) -> SdxlNativeLoraSources:
     """The staged worker uses the same pure rule and must supply exactly the metadata closure."""
     admission = SdxlNativeLoraMetadataAdmission(command)

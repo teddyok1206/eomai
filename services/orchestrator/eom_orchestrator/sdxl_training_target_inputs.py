@@ -15,8 +15,9 @@ from eom_image_contracts import (
     validate_contract,
 )
 from eom_image_contracts.sdxl_native_training_targets import (
-    LocalImageSdxlNativeTrainingTargetCommand,
+    NativeTrainingTargetCommand,
     SdxlNativeTrainingTargetSources,
+    native_training_target_protocol,
     parse_sdxl_native_training_target_sources,
 )
 from eom_image_contracts.sdxl_source_training_targets import (
@@ -47,7 +48,7 @@ from eom_orchestrator.source_pdf_crop_inputs import prepare_source_pdf_crop_read
 TrainingTargetCommand = (
     LocalImageSdxlTrainingTargetCommand
     | LocalImageSdxlSourceTrainingTargetCommand
-    | LocalImageSdxlNativeTrainingTargetCommand
+    | NativeTrainingTargetCommand
 )
 TrainingTargetSources = (
     SdxlTrainingTargetSources | SdxlSourceTrainingTargetSources | SdxlNativeTrainingTargetSources
@@ -68,7 +69,7 @@ def sdxl_training_target_input_hashes(
     prepared_ids = {
         decision.sample_id for decision in command.decisions if decision.disposition == "PREPARE"
     }
-    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+    if isinstance(command, NativeTrainingTargetCommand):
         if not isinstance(sources, SdxlNativeTrainingTargetSources):
             raise ValueError("SDXL_TARGET_SOURCE_PROTOCOL_MISMATCH")
         return {
@@ -120,7 +121,7 @@ def prepare_sdxl_training_target_inputs(
     engine: Engine,
     command: TrainingTargetCommand,
 ) -> PreparedSdxlTrainingTargetInputs:
-    if isinstance(command, LocalImageSdxlNativeTrainingTargetCommand):
+    if isinstance(command, NativeTrainingTargetCommand):
         return _prepare_native_source_inputs(engine, command)
     if isinstance(command, LocalImageSdxlSourceTrainingTargetCommand):
         return _prepare_literal_source_inputs(engine, command)
@@ -186,13 +187,12 @@ def prepare_sdxl_training_target_inputs(
 
 
 def _prepare_native_source_inputs(
-    engine: Engine, command: LocalImageSdxlNativeTrainingTargetCommand
+    engine: Engine, command: NativeTrainingTargetCommand
 ) -> PreparedSdxlTrainingTargetInputs:
     """Full source admission first; no PDF/page/deferred PNG read or substituted revision."""
-    validate_contract("sdxl-training-target-command-v3", command.model_dump(mode="json"))
-    command = LocalImageSdxlNativeTrainingTargetCommand.model_validate(
-        command.model_dump(mode="json")
-    )
+    protocol = native_training_target_protocol(command.schema_version)
+    validate_contract(protocol.command_contract, command.model_dump(mode="json"))
+    command = protocol.command_model.model_validate(command.model_dump(mode="json"))
     crop_raw = resolve_control_artifact_member(
         engine, command.source_crop_set, maximum_bytes=2 * 1024**2
     )

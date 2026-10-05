@@ -6,7 +6,7 @@ from pathlib import Path
 
 from eom_image_contracts import LocalImageSdxlLoraMicroCommand
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartStackPointer
-from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommand
+from eom_image_contracts.sdxl_native_lora import NativeLoraCommand
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 
@@ -68,7 +68,7 @@ class SdxlNativeLoraBackend:
         *,
         stack: ResolvedSdxlStack,
         samples: tuple[LoraTensorSample, ...],
-        command: LocalImageSdxlNativeLoraCommand,
+        command: NativeLoraCommand,
         output_root: Path,
     ) -> TrainingBackendResult:
         actual = tuple((s.caption_en, (s.width_px, s.height_px)) for s in samples)

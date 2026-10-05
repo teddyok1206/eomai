@@ -55,6 +55,12 @@ SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF = (
 SDXL_NATIVE_TARGET_PNG_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-sdxl-training-target-png/1.1"
 )
+SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.3"
+)
+SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF = (
+    "eom://schemas/image-provider/local-image-sdxl-training-target-result/1.3"
+)
 NativeTargetCanvas = Literal["SQUARE_1024", "PORTRAIT_768X1024", "LANDSCAPE_1024X768"]
 NATIVE_TARGET_CANVASES: Mapping[NativeTargetCanvas, tuple[int, int]] = MappingProxyType(
     {
@@ -79,6 +85,38 @@ class SdxlNativePrepareTargetDecision(SdxlSourcePrepareTargetDecision):
         return value
 
 
+class SdxlExteriorPrepareTargetDecision(SdxlNativePrepareTargetDecision):
+    """An explicit reviewer recipe, never an inferred annotation/object classifier."""
+
+    redaction_boxes: tuple[ImageEvaluationBoundingBox, ...] = Field(min_length=1, max_length=4)
+    protected_subject_boxes: tuple[ImageEvaluationBoundingBox, ...] = Field(
+        min_length=1, max_length=8
+    )
+    annotation_policy: Literal["REVIEWED_EXTERIOR_ONLY_PROTECTED_RING3_WHITE250/1.0"]
+
+    @model_validator(mode="after")
+    def protect_subjects(self) -> Self:
+        frame = self.framing_box
+        for box in self.protected_subject_boxes:
+            if not (
+                frame.left <= box.left < box.right <= frame.right
+                and frame.top <= box.top < box.bottom <= frame.bottom
+            ):
+                raise ValueError("SDXL_TARGET_PROTECTED_REGION_OUTSIDE_FRAME")
+        for mask in self.redaction_boxes:
+            if any(
+                mask.left < box.right
+                and box.left < mask.right
+                and mask.top < box.bottom
+                and box.top < mask.bottom
+                for box in self.protected_subject_boxes
+            ):
+                raise ValueError("SDXL_TARGET_ANNOTATION_PROTECTED_CONTACT")
+        if len(set(self.protected_subject_boxes)) != len(self.protected_subject_boxes):
+            raise ValueError("SDXL_TARGET_PROTECTED_REGION_DUPLICATE")
+        return self
+
+
 class SdxlNativeDeferTargetDecision(FrozenModel):
     sample_id: _SampleId
     disposition: Literal["DEFER"]
@@ -101,8 +139,10 @@ SdxlNativeTargetDecision = Annotated[
 ]
 
 
-class LocalImageSdxlNativeTrainingTargetCommand(FrozenModel):
-    schema_version: Literal["local-image-sdxl-training-target-command/1.2"]
+class _NativeTrainingTargetCommand(FrozenModel):
+    """Shared immutable fields/rules; only the closed wire specializations are admitted."""
+
+    schema_version: str
     run_id: str = Field(pattern=r"^imgsdxltargetpreprun_[0-9a-f]{32}$")
     created_at: datetime
     created_by: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:@-]+$")
@@ -110,7 +150,7 @@ class LocalImageSdxlNativeTrainingTargetCommand(FrozenModel):
     source_crop_set: ImageEvaluationArtifactMember
     training_authorization: ImageEvaluationArtifactMember
     decisions: tuple[SdxlNativeTargetDecision, ...] = Field(min_length=1, max_length=32)
-    policy: Literal["REVIEWED_NATIVE_GRAY_RATIONAL_FIT_MARGIN32_NO_MASK/1.0"]
+    policy: str
     maximum_upscale_milli: int = Field(ge=1000, le=2000)
     pillow_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
     purpose: Literal["CPU_ONLY_TRAIN_TARGET_CANDIDATES"]
@@ -150,6 +190,28 @@ class LocalImageSdxlNativeTrainingTargetCommand(FrozenModel):
         ):
             raise ValueError("SDXL_NATIVE_TARGET_COMMAND_IDENTITY_INVALID")
         return self
+
+
+class LocalImageSdxlNativeTrainingTargetCommand(_NativeTrainingTargetCommand):
+    schema_version: Literal["local-image-sdxl-training-target-command/1.2"]
+    policy: Literal["REVIEWED_NATIVE_GRAY_RATIONAL_FIT_MARGIN32_NO_MASK/1.0"]
+
+
+class LocalImageSdxlExteriorTrainingTargetCommand(_NativeTrainingTargetCommand):
+    schema_version: Literal["local-image-sdxl-training-target-command/1.3"]
+    policy: Literal["REVIEWED_NATIVE_EXTERIOR_WHITE_RING3_FIT_MARGIN32/1.0"]
+    decisions: tuple[
+        Annotated[
+            SdxlExteriorPrepareTargetDecision | SdxlNativeDeferTargetDecision,
+            Field(discriminator="disposition"),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=32)
+
+
+NativeTrainingTargetCommand = (
+    LocalImageSdxlNativeTrainingTargetCommand | LocalImageSdxlExteriorTrainingTargetCommand
+)
 
 
 class SdxlNativeTargetPlacement(FrozenModel):
@@ -210,8 +272,8 @@ class SdxlPreparedNativeTrainingTarget(FrozenModel):
         return self
 
 
-class LocalImageSdxlNativeTrainingTargetResult(FrozenModel):
-    schema_version: Literal["local-image-sdxl-training-target-result/1.2"]
+class _NativeTrainingTargetResult(FrozenModel):
+    schema_version: str
     run_id: str = Field(pattern=r"^imgsdxltargetpreprun_[0-9a-f]{32}$")
     command_sha256: Sha256
     source_snapshot_sha256: Sha256
@@ -251,6 +313,59 @@ class LocalImageSdxlNativeTrainingTargetResult(FrozenModel):
         return self
 
 
+class LocalImageSdxlNativeTrainingTargetResult(_NativeTrainingTargetResult):
+    schema_version: Literal["local-image-sdxl-training-target-result/1.2"]
+
+
+class LocalImageSdxlExteriorTrainingTargetResult(_NativeTrainingTargetResult):
+    schema_version: Literal["local-image-sdxl-training-target-result/1.3"]
+
+
+NativeTrainingTargetResult = (
+    LocalImageSdxlNativeTrainingTargetResult | LocalImageSdxlExteriorTrainingTargetResult
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTrainingTargetProtocol:
+    command_contract: str
+    result_contract: str
+    command_model: (
+        type[LocalImageSdxlNativeTrainingTargetCommand]
+        | type[LocalImageSdxlExteriorTrainingTargetCommand]
+    )
+    result_model: (
+        type[LocalImageSdxlNativeTrainingTargetResult]
+        | type[LocalImageSdxlExteriorTrainingTargetResult]
+    )
+
+
+_NATIVE_TARGET_PROTOCOLS: Mapping[str, NativeTrainingTargetProtocol] = MappingProxyType(
+    {
+        "local-image-sdxl-training-target-command/1.2": NativeTrainingTargetProtocol(
+            "sdxl-training-target-command-v3",
+            "sdxl-training-target-result-v3",
+            LocalImageSdxlNativeTrainingTargetCommand,
+            LocalImageSdxlNativeTrainingTargetResult,
+        ),
+        "local-image-sdxl-training-target-command/1.3": NativeTrainingTargetProtocol(
+            "sdxl-training-target-command-v4",
+            "sdxl-training-target-result-v4",
+            LocalImageSdxlExteriorTrainingTargetCommand,
+            LocalImageSdxlExteriorTrainingTargetResult,
+        ),
+    }
+)
+
+
+def native_training_target_protocol(version: str) -> NativeTrainingTargetProtocol:
+    """One closed protocol selection for all existing CPU-target owners."""
+    try:
+        return _NATIVE_TARGET_PROTOCOLS[version]
+    except KeyError as exc:
+        raise ValueError("SDXL_NATIVE_TARGET_PROTOCOL_UNSUPPORTED") from exc
+
+
 @dataclass(frozen=True, slots=True)
 class SdxlNativeTrainingTargetSources:
     crop_set: LocalImageScienceSourcePdfCropSet
@@ -262,7 +377,7 @@ class SdxlNativeTrainingTargetSources:
 
 
 def parse_sdxl_native_training_target_sources(
-    command: LocalImageSdxlNativeTrainingTargetCommand,
+    command: NativeTrainingTargetCommand,
     *,
     crop_set_payload: bytes,
     source_command_payload: bytes,
@@ -304,7 +419,7 @@ def parse_sdxl_native_training_target_sources(
 
 
 def validate_sdxl_native_training_target_sources(
-    command: LocalImageSdxlNativeTrainingTargetCommand,
+    command: NativeTrainingTargetCommand,
     *,
     crop_set: LocalImageScienceSourcePdfCropSet,
     source_command: LocalImageScienceSourcePdfCropCommand,
@@ -354,7 +469,7 @@ def validate_sdxl_native_training_target_sources(
 
 
 def validate_sdxl_native_training_target_command_sources(
-    command: LocalImageSdxlNativeTrainingTargetCommand,
+    command: NativeTrainingTargetCommand,
     sources: SdxlNativeTrainingTargetSources,
 ) -> None:
     """Check a batch recipe against a decoded, previously validated source snapshot."""
@@ -408,7 +523,7 @@ def sdxl_native_target_placement(
 
 
 def sdxl_native_target_id(
-    command: LocalImageSdxlNativeTrainingTargetCommand,
+    command: NativeTrainingTargetCommand,
     sample: SdxlSourceTargetSample,
     decision: SdxlNativePrepareTargetDecision,
 ) -> str:
@@ -428,11 +543,12 @@ def sdxl_native_target_id(
 
 
 def validate_sdxl_native_training_target_result(
-    command: LocalImageSdxlNativeTrainingTargetCommand,
+    command: NativeTrainingTargetCommand,
     sources: SdxlNativeTrainingTargetSources,
-    result: LocalImageSdxlNativeTrainingTargetResult,
+    result: NativeTrainingTargetResult,
 ) -> None:
-    validate_contract("sdxl-training-target-result-v3", result.model_dump(mode="json"))
+    protocol = native_training_target_protocol(command.schema_version)
+    validate_contract(protocol.result_contract, result.model_dump(mode="json"))
     if (
         result.run_id != command.run_id
         or result.command_sha256 != command.command_sha256

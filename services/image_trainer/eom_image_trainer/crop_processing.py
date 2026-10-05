@@ -13,10 +13,16 @@ from eom_image_contracts import (
 )
 from eom_image_contracts.sdxl_native_training_targets import (
     NATIVE_TARGET_CANVASES,
+    SdxlExteriorPrepareTargetDecision,
     SdxlNativePrepareTargetDecision,
     SdxlNativeTargetPlacement,
 )
 from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
+
+from eom_image_trainer.exterior_annotation_pixels import (
+    ExteriorAnnotationError,
+    remove_reviewed_exterior_annotations,
+)
 
 MAX_SOURCE_IMAGE_PIXELS = 50_000_000
 OUTPUT_WIDTH = 768
@@ -148,7 +154,11 @@ def materialize_reviewed_sdxl_target(
         raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
     if isinstance(placement, SdxlNativeTargetPlacement):
         if not isinstance(decision, SdxlNativePrepareTargetDecision) or (
-            decision.canvas != placement.canvas or decision.redaction_boxes
+            decision.canvas != placement.canvas
+            or (
+                decision.redaction_boxes
+                and not isinstance(decision, SdxlExteriorPrepareTargetDecision)
+            )
         ):
             raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
         canvas_size = NATIVE_TARGET_CANVASES[placement.canvas]
@@ -156,10 +166,17 @@ def materialize_reviewed_sdxl_target(
         if isinstance(decision, SdxlNativePrepareTargetDecision):
             raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")
         canvas_size = (OUTPUT_WIDTH, OUTPUT_HEIGHT)
+    if isinstance(decision, SdxlExteriorPrepareTargetDecision):
+        try:
+            source = remove_reviewed_exterior_annotations(source, decision)
+        except ExteriorAnnotationError as exc:
+            raise CropProcessingError(str(exc)) from exc
     left, top, right, bottom = frame
     crop = source.crop(frame).convert("L")
     drawing = ImageDraw.Draw(crop)
-    for mask in decision.redaction_boxes:
+    for mask in (
+        () if isinstance(decision, SdxlExteriorPrepareTargetDecision) else decision.redaction_boxes
+    ):
         x0, y0, x1, y1 = _pixel_box(mask, width=source.width, height=source.height)
         if not (left <= x0 < x1 <= right and top <= y0 < y1 <= bottom):
             raise CropProcessingError("SDXL_TARGET_SOURCE_INVALID")

@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 
 from eom_image_contracts import ImageEvaluationArtifactMember, content_json_bytes
-from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommand
+from eom_image_contracts.sdxl_native_lora import NativeLoraCommand
 from eom_image_contracts.sdxl_native_lora_sources import (
     NATIVE_LORA_MAX_METADATA_BYTES,
     SdxlNativeLoraMetadataAdmission,
@@ -29,19 +29,19 @@ from eom_orchestrator.source_page_crop_inputs import resolve_source_page_crop_pr
 
 @dataclass(frozen=True, slots=True)
 class AdmittedSdxlNativeLoraSources:
-    command: LocalImageSdxlNativeLoraCommand
+    command: NativeLoraCommand
     sources: SdxlNativeLoraSources
     metadata: tuple[SdxlProbeInputMember, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class PreparedSdxlNativeLoraInputs:
-    command: LocalImageSdxlNativeLoraCommand
+    command: NativeLoraCommand
     files: tuple[SdxlProbeInputMember, ...]
 
 
 def resolve_sdxl_native_lora_sources(
-    engine: Engine, command: LocalImageSdxlNativeLoraCommand
+    engine: Engine, command: NativeLoraCommand
 ) -> AdmittedSdxlNativeLoraSources:
     """No PDF/page/target image read while any declaration or frozen lineage is unverified."""
     admission = SdxlNativeLoraMetadataAdmission(command)
@@ -91,7 +91,7 @@ def resolve_sdxl_native_lora_sources(
 
 
 def prepare_sdxl_native_lora_inputs(
-    engine: Engine, command: LocalImageSdxlNativeLoraCommand
+    engine: Engine, command: NativeLoraCommand
 ) -> PreparedSdxlNativeLoraInputs:
     admitted = resolve_sdxl_native_lora_sources(engine, command)
     command, sources = admitted.command, admitted.sources

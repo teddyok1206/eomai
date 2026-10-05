@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "base_model",
+    "training_authorization",
+    "experiment_authorization",
+    "target_batches",
+    "training_samples",
+    "profile",
+    "review_scope",
+    "screening_evidence",
+    "reviewed_at",
+    "reviewed_by",
+    "caption_policy",
+    "preprocessing_policy",
+    "checkpoint_policy",
+    "dependencies",
+    "hyperparameters",
+    "budget",
+    "seed",
+    "purpose",
+    "activation_policy",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-native-lora-command/1.1"
+    },
+    "training_run_id": {
+      "type": "string",
+      "pattern": "^imgsdxlnativetrainrun_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "base_model": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/SdxlLineartStackPointer"
+    },
+    "training_authorization": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Pointer"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-science-corpus-training-authorization/1.0"
+            },
+            "member_path": {
+              "const": "manifests/science-corpus-training-authorization.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "experiment_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/SdxlExperimentAuthorization"
+    },
+    "target_batches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/TargetBatch"
+      }
+    },
+    "training_samples": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/NativeSample"
+      }
+    },
+    "profile": {
+      "enum": [
+        "NATIVE_RESOLUTION_PILOT",
+        "FULL_STYLE_TRAINING"
+      ]
+    },
+    "review_scope": {
+      "const": "OWN_TRAIN_COHORT_SCREENING_NOT_INDEPENDENT"
+    },
+    "screening_evidence": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Pointer"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/operations/plain-text-log/1.0"
+            },
+            "member_path": {
+              "type": "string",
+              "pattern": "^reports/"
+            },
+            "media_type": {
+              "const": "text/plain"
+            }
+          }
+        }
+      ]
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:@-]+$"
+    },
+    "caption_policy": {
+      "const": "REVIEWED_SUBJECT_EXPRESSION_COMPOSITION/1.0"
+    },
+    "preprocessing_policy": {
+      "const": "EXACT_ADMITTED_PREPARED_NATIVE_RGB/1.0"
+    },
+    "checkpoint_policy": {
+      "const": "TERMINAL_ONLY_NO_RESUME/1.0"
+    },
+    "dependencies": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/LocalImageTrainerDependencies"
+    },
+    "hyperparameters": {
+      "$ref": "#/$defs/NativeHyperparameters"
+    },
+    "budget": {
+      "$ref": "#/$defs/NativeBudget"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_SDXL_NATIVE_STYLE_TRAINING"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "command_sha256": {
+      "$ref": "#/$defs/Sha256"
+    }
+  },
+  "$defs": {
+    "Pointer": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-micro-command/1.0#/$defs/ImageEvaluationArtifactMember"
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "Conditioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "literal_subject",
+        "expression",
+        "composition"
+      ],
+      "properties": {
+        "literal_subject": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 256,
+          "pattern": "^[ -~]+$"
+        },
+        "expression": {
+          "enum": [
+            "CLEAN_CONTOUR",
+            "RESTRAINED_TONE",
+            "FINE_HATCHING"
+          ]
+        },
+        "composition": {
+          "enum": [
+            "ISOLATED_ON_WHITE",
+            "AUTHORED_SCENE"
+          ]
+        }
+      }
+    },
+    "NativeSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_id",
+        "target_id",
+        "target_revision_id",
+        "source_image",
+        "source_document_id",
+        "exam_group_sha256",
+        "canvas",
+        "conditioning",
+        "training_caption_sha256"
+      ],
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$"
+        },
+        "target_id": {
+          "type": "string",
+          "pattern": "^imgsdxltarget_[0-9a-f]{32}$"
+        },
+        "target_revision_id": {
+          "type": "string",
+          "pattern": "^imgsdxltargetrev_[0-9a-f]{32}$"
+        },
+        "source_image": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Pointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-training-target-png/1.1"
+                },
+                "member_path": {
+                  "type": "string",
+                  "pattern": "^targets/imgsdxltarget_[0-9a-f]{32}\\.png$"
+                },
+                "media_type": {
+                  "const": "image/png"
+                }
+              }
+            }
+          ]
+        },
+        "source_document_id": {
+          "type": "string",
+          "pattern": "^sciencedoc_[0-9a-f]{32}$"
+        },
+        "exam_group_sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "canvas": {
+          "enum": [
+            "SQUARE_1024",
+            "PORTRAIT_768X1024",
+            "LANDSCAPE_1024X768"
+          ]
+        },
+        "conditioning": {
+          "$ref": "#/$defs/Conditioning"
+        },
+        "training_caption_sha256": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "TargetBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "result"
+      ],
+      "properties": {
+        "command": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Pointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "enum": [
+                    "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.2",
+                    "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.3"
+                  ]
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-training-target-command.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "result": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/Pointer"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "enum": [
+                    "eom://schemas/image-provider/local-image-sdxl-training-target-result/1.2",
+                    "eom://schemas/image-provider/local-image-sdxl-training-target-result/1.3"
+                  ]
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-training-target-result.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "command": {
+                  "properties": {
+                    "schema_ref": {
+                      "const": "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.2"
+                    }
+                  }
+                },
+                "result": {
+                  "properties": {
+                    "schema_ref": {
+                      "const": "eom://schemas/image-provider/local-image-sdxl-training-target-result/1.2"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "properties": {
+                "command": {
+                  "properties": {
+                    "schema_ref": {
+                      "const": "eom://schemas/image-provider/local-image-sdxl-training-target-command/1.3"
+                    }
+                  }
+                },
+                "result": {
+                  "properties": {
+                    "schema_ref": {
+                      "const": "eom://schemas/image-provider/local-image-sdxl-training-target-result/1.3"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "NativeHyperparameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter_type",
+        "rank",
+        "alpha",
+        "train_batch_size",
+        "gradient_accumulation_steps",
+        "gradient_checkpointing",
+        "mixed_precision",
+        "optimizer",
+        "learning_rate",
+        "max_train_steps",
+        "checkpointing_steps",
+        "random_flip",
+        "train_text_encoders",
+        "train_vae"
+      ],
+      "properties": {
+        "adapter_type": {
+          "const": "UNET_LORA"
+        },
+        "rank": {
+          "const": 8
+        },
+        "alpha": {
+          "const": 8
+        },
+        "train_batch_size": {
+          "const": 1
+        },
+        "gradient_accumulation_steps": {
+          "const": 4
+        },
+        "gradient_checkpointing": {
+          "const": true
+        },
+        "mixed_precision": {
+          "const": "fp16"
+        },
+        "optimizer": {
+          "const": "adamw_8bit"
+        },
+        "learning_rate": {
+          "const": "1e-4"
+        },
+        "max_train_steps": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 1000
+        },
+        "checkpointing_steps": {
+          "const": 0
+        },
+        "random_flip": {
+          "const": false
+        },
+        "train_text_encoders": {
+          "const": false
+        },
+        "train_vae": {
+          "const": false
+        }
+      }
+    },
+    "NativeBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes",
+        "maximum_input_png_bytes"
+      ],
+      "properties": {
+        "maximum_duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600000
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17179869184
+        },
+        "maximum_input_png_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 134217728
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "NATIVE_RESOLUTION_PILOT"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "training_samples": {
+            "maxItems": 64
+          },
+          "hyperparameters": {
+            "properties": {
+              "max_train_steps": {
+                "maximum": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "FULL_STYLE_TRAINING"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "training_samples": {
+            "minItems": 100
+          },
+          "hyperparameters": {
+            "properties": {
+              "max_train_steps": {
+                "minimum": 200
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "title": "Native style LoRA over explicitly reviewed no-mask and exterior-annotation target successors"
+}

@@ -2,9 +2,11 @@
 
 ## Status
 
-Proposed next implementation boundary, 2026-10-05 UTC. No schema released,
-worker behavior, dependency, installed package, source pixels or production
-activation changed by this decision note. Native target1.2 remains no-mask.
+Accepted source implementation boundary, 2026-10-05 UTC. Native target1.2
+remains no-mask; its schema bytes and recipe are unchanged. Successor target1.3
+and native training-command1.1 are development candidates, not installed lab or
+production releases. No actual cleanup, training, generation, source pixel or
+production activation change is implied by source test acceptance.
 
 ## Evidence and scope
 
@@ -88,3 +90,47 @@ render, generation, GPU or training. Inspect originals and derivatives side by s
 if a safe exterior recipe cannot be declared, defer honestly and find other sources.
 Full training cohort, independent blind review and Item/HWPX canary remain separate
 open gates. This note does not promote either rejected twelve-target adapter.
+
+## Implemented wire and pixel boundary
+
+- Target command/result1.3 use package-owned `sdxl-training-target-*-v4` schemas;
+  PREPARE requires1–4 sorted unique mask rectangles,1–8 unique protected subject
+  rectangles, and `REVIEWED_EXTERIOR_ONLY_PROTECTED_RING3_WHITE250/1.0`.
+  Protected boxes and masks must lie within the declared frame and be disjoint.
+- Floor/ceil normalized coordinates map once to native source pixels. A three-pixel
+  exterior ring, clipped only at the declared frame edge, must not touch protected
+  regions and every ring pixel must have grayscale value at least250. White fill
+  touches only declared rectangles; the original image and all other pixels remain
+  byte-identical before existing grayscale/native rational-fit/margin processing.
+- A white ring is only a contact guard. Disconnected internal marks cannot be
+  classified semantically by this rule. The operator must protect all relevant
+  depicted geometry and reinspect the derivative. No OCR, inpainting, replacement
+  drawing, extra dependency or automatic admission was introduced.
+- Native training-command1.1 uses `sdxl-native-lora-command-v2`. Each target batch
+  must be an exact1.2/1.2 or1.3/1.3 command/result pair. Mixed valid batches are
+  explicit; crossed pairs, unknown schemas and old training-command1.0/new target
+  pairs fail. Existing numerical recipe and cohort limits are unchanged.
+- Training result/adapter-manifest remain1.0: their fields and meaning have not
+  changed, and exact command hash binds output to its input version/recipe.
+  CLI staging requires explicit `--schema-version 1.1`; default1.0 does not guess.
+  Public closed protocol resolvers are reused by admission and workers.
+
+## Consumer inventory and remaining gates
+
+Source target admission, publication, CPU worker, native training metadata closure,
+native training worker and CLI staging support the explicit successors. Build gates
+require the three new schemas and the pixel module in wheels. Synthetic training
+backend tests are lifecycle/format evidence, not evidence of numerical or image quality.
+
+Released native matched evaluation1.2 and native geometry diagnostic1.3 still pin
+training-command1.0/result1.0. An explicit negative test preserves their rejection
+of training-command1.1. Before installing or executing this successor pipeline,
+add an explicit evaluation successor that pins command1.1/result1.0 without
+broadening old wires, then pass source/wheel/installed-role gates. Do not train
+an adapter whose supported evaluation path is missing. No activation is requested.
+
+Next bounded operation remains original house/monkey review and CPU cleanup only
+after those gates; both may still be deferred if subject/clearance checks fail.
+Every changed recipe creates a successor target for the same source sample, not
+an independent drawing. The current fifty prepared sample IDs are not fifty
+admitted independent TRAIN targets; full100 admission remains open.

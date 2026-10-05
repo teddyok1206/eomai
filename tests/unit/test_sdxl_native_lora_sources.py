@@ -14,6 +14,7 @@ from eom_image_contracts import (
 )
 from eom_image_contracts.sdxl_native_lora import (
     LocalImageSdxlNativeLoraCommand,
+    LocalImageSdxlNativeLoraCommandV2,
     SdxlNativeLoraConditioning,
 )
 from eom_image_contracts.sdxl_native_lora_sources import (
@@ -22,11 +23,8 @@ from eom_image_contracts.sdxl_native_lora_sources import (
     sdxl_native_lora_metadata_member_path,
 )
 from eom_image_contracts.sdxl_native_training_targets import (
-    SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF,
     SDXL_NATIVE_TARGET_PNG_SCHEMA_REF,
-    SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF,
-    LocalImageSdxlNativeTrainingTargetCommand,
-    LocalImageSdxlNativeTrainingTargetResult,
+    native_training_target_protocol,
     parse_sdxl_native_training_target_sources,
     sdxl_native_target_id,
     sdxl_native_target_placement,
@@ -61,7 +59,7 @@ from tests.unit.test_sdxl_native_lora_contracts import _command_value, _seal_com
 from tests.unit.test_sdxl_training_targets import _seal as _seal_target_command
 
 
-def _fixture(monkeypatch, variant=None, *, pixel_factory=None):
+def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=False):
     review, basis, reader = _fixture_review(monkeypatch, count=12)
     special_ids = None
     if variant is not None:
@@ -142,17 +140,34 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None):
             }
             for i, sid in enumerate(ids)
         ]
-        target_command = LocalImageSdxlNativeTrainingTargetCommand.model_validate(
+        version = "1.3" if exterior_batch and batch_index == 1 else "1.2"
+        protocol = native_training_target_protocol(
+            "local-image-sdxl-training-target-command/" + version
+        )
+        if version == "1.3":
+            for decision in decisions:
+                decision.update(
+                    redaction_boxes=[{"left": 9250, "top": 80, "right": 9800, "bottom": 420}],
+                    protected_subject_boxes=[
+                        {"left": 500, "top": 400, "right": 9000, "bottom": 9800}
+                    ],
+                    annotation_policy="REVIEWED_EXTERIOR_ONLY_PROTECTED_RING3_WHITE250/1.0",
+                )
+        target_command = protocol.command_model.model_validate(
             _seal_target_command(
                 {
-                    "schema_version": "local-image-sdxl-training-target-command/1.2",
+                    "schema_version": "local-image-sdxl-training-target-command/" + version,
                     "created_at": "2026-10-04T17:00:00Z",
                     "created_by": "fixture.operator",
                     "source_commit": "a" * 40,
                     "source_crop_set": crop_pointer.model_dump(mode="json"),
                     "training_authorization": review.training_authorization.model_dump(mode="json"),
                     "decisions": decisions,
-                    "policy": "REVIEWED_NATIVE_GRAY_RATIONAL_FIT_MARGIN32_NO_MASK/1.0",
+                    "policy": (
+                        "REVIEWED_NATIVE_EXTERIOR_WHITE_RING3_FIT_MARGIN32/1.0"
+                        if version == "1.3"
+                        else "REVIEWED_NATIVE_GRAY_RATIONAL_FIT_MARGIN32_NO_MASK/1.0"
+                    ),
                     "maximum_upscale_milli": 1500,
                     "pillow_version": review.pillow_version,
                     "purpose": "CPU_ONLY_TRAIN_TARGET_CANDIDATES",
@@ -207,7 +222,7 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None):
             )
             targets.append(target)
         result_value = {
-            "schema_version": "local-image-sdxl-training-target-result/1.2",
+            "schema_version": "local-image-sdxl-training-target-result/" + version,
             "run_id": target_command.run_id,
             "command_sha256": target_command.command_sha256,
             "source_snapshot_sha256": sources.snapshot_sha256,
@@ -223,16 +238,16 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None):
             "duration_ms": 1000,
         }
         result_value["result_sha256"] = content_sha256(result_value)
-        target_result = LocalImageSdxlNativeTrainingTargetResult.model_validate(result_value)
+        target_result = protocol.result_model.model_validate(result_value)
         result_pointer = record(
             target_result,
-            SDXL_NATIVE_TARGET_RESULT_SCHEMA_REF,
+            "eom://schemas/image-provider/local-image-sdxl-training-target-result/" + version,
             "sdxl-training-target-result",
             300 + batch_index,
         )
         command_pointer = record(
             target_command,
-            SDXL_NATIVE_TARGET_COMMAND_SCHEMA_REF,
+            "eom://schemas/image-provider/local-image-sdxl-training-target-command/" + version,
             "sdxl-training-target-command",
             400 + batch_index,
         )
@@ -279,10 +294,13 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None):
         created_at="2026-10-04T18:00:00Z",
         reviewed_at="2026-10-04T17:40:00Z",
     )
-    command = LocalImageSdxlNativeLoraCommand.model_validate(_seal_command(value))
+    model = LocalImageSdxlNativeLoraCommandV2 if exterior_batch else LocalImageSdxlNativeLoraCommand
+    if exterior_batch:
+        value["schema_version"] = "local-image-sdxl-native-lora-command/1.1"
+    command = model.model_validate(_seal_command(value))
     screening = b"Own synthetic full-cohort review; not independent review."
     value["screening_evidence"]["sha256"] = text_sha256(screening.decode())
-    command = LocalImageSdxlNativeLoraCommand.model_validate(_seal_command(value))
+    command = model.model_validate(_seal_command(value))
     records[command.screening_evidence] = screening
     return command, records, pixels, review, basis, reader, tuple(native_sets)
 
@@ -309,8 +327,13 @@ def test_multi_batch_sources_support_distinct_sets_one_cached_review_and_scene_d
     ) == len(records)
 
 
-def test_canonical_owner_verifies_all_metadata_and_frozen_lineage_before_selected_pngs(monkeypatch):
-    command, records, pixels, _review, _basis, reader, _sets = _fixture(monkeypatch)
+@pytest.mark.parametrize("exterior_batch", [False, True])
+def test_canonical_owner_verifies_all_metadata_and_frozen_lineage_before_selected_pngs(
+    monkeypatch, exterior_batch
+):
+    command, records, pixels, _review, _basis, reader, _sets = _fixture(
+        monkeypatch, exterior_batch=exterior_batch
+    )
     calls = []
 
     def read(_engine, reads):
@@ -360,8 +383,11 @@ def test_canonical_owner_verifies_all_metadata_and_frozen_lineage_before_selecte
         "stale",
     ],
 )
-def test_metadata_failures_consume_no_png_or_pdf_bytes(monkeypatch, fault):
-    command, records, _pixels, _review, _basis, _reader, _sets = _fixture(monkeypatch)
+@pytest.mark.parametrize("exterior_batch", [False, True])
+def test_metadata_failures_consume_no_png_or_pdf_bytes(monkeypatch, fault, exterior_batch):
+    command, records, _pixels, _review, _basis, _reader, _sets = _fixture(
+        monkeypatch, exterior_batch=exterior_batch
+    )
     staged = _staged_metadata(records)
     if fault == "foreign":
         staged["inputs/metadata/unknown.json"] = b"{}"
