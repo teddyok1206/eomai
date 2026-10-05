@@ -1267,3 +1267,8 @@ paired same inputs. New schedule only if existing contracts cannot express it,
 schema-first; no parallel framework. Reserved validation and final HOLDOUT remain
 unmodified. Independent blind review/broader-family quality+fidelity/resource/
 Preview-HWPX/activation gates OPEN; goal ACTIVE.
+
+Milestone Slack IN_PROGRESS devreport_d0ad35d24d284819985b3a9dcd6cb5d3
+SENT/HTTP2002026-10-05T22:21:17Z, phase `Image goal / retained-region test and
+TRAIN audit`. Reported actual style/content rejection and non-causal TRAIN mix
+findings separately from technical PASS; no new training/activation claimed.
