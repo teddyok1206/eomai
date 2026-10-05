@@ -11,6 +11,10 @@ from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyCompari
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_learned_comparison import LocalImageSdxlLearnedComparisonCommand
 from eom_image_contracts.sdxl_native_canny_reference import parse_reference_command
+from eom_image_contracts.sdxl_photo_style_execution import (
+    LocalImageSdxlPhotoStyleCommand,
+    parse_photo_style_command,
+)
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import (
     LocalImageSdxlValidationComparisonCommand,
@@ -32,6 +36,7 @@ def load_sdxl_comparison_command(
     | LocalImageSdxlCannyComparisonCommand
     | LocalImageSdxlCannyReferenceCommand
     | LocalImageSdxlValidationComparisonCommand
+    | LocalImageSdxlPhotoStyleCommand
 ):
     if command_path != workspace / "command.json":
         raise ProviderError("SDXL_PROBE_INPUT_INVALID")
@@ -46,6 +51,7 @@ def load_sdxl_comparison_command(
             | LocalImageSdxlCannyComparisonCommand
             | LocalImageSdxlCannyReferenceCommand
             | LocalImageSdxlValidationComparisonCommand
+            | LocalImageSdxlPhotoStyleCommand
         )
         if schema == "local-image-sdxl-learned-comparison-command/1.0":
             validate_contract("sdxl-learned-comparison-command", value)
@@ -67,6 +73,8 @@ def load_sdxl_comparison_command(
             "local-image-sdxl-validation-comparison-command/1.1",
         ):
             parsed = parse_sdxl_validation_command(value)
+        elif schema == "local-image-sdxl-photo-style-command/1.0":
+            parsed = parse_photo_style_command(value)
         else:
             raise ValueError("unsupported paired comparison command family")
         if raw != content_json_bytes(parsed.model_dump(mode="json")):

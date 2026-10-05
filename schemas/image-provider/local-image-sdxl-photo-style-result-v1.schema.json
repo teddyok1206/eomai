@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.0",
+  "title": "Photo style comparison result; numerical completion is not visual approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "plan_sha256",
+    "configuration_command_sha256",
+    "native_evaluation_command_sha256",
+    "native_adapter_manifest_sha256",
+    "case_relation",
+    "native_fit_policy",
+    "initialization",
+    "quality_acceptance",
+    "activation_policy",
+    "training_steps",
+    "holdout_binary_reads",
+    "status",
+    "error_code",
+    "runtime",
+    "inputs",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-result/1.0"
+    },
+    "run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-command/1.0#/properties/run_id"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-command/1.0#/properties/command_sha256"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-command/1.0#/properties/plan_sha256"
+    },
+    "configuration_command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-result/1.1#/properties/configuration_command_sha256"
+    },
+    "native_evaluation_command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-result/1.1#/properties/native_evaluation_command_sha256"
+    },
+    "native_adapter_manifest_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-result/1.1#/properties/native_adapter_manifest_sha256"
+    },
+    "case_relation": {
+      "const": "LICENSED_PHOTO_REFERENCES_NOT_CORPUS_HOLDOUT"
+    },
+    "native_fit_policy": {
+      "const": "NATIVE_FIT_800X500_CENTER_832X512_OPENCV_CANNY/1.0"
+    },
+    "initialization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0#/$defs/initialization"
+    },
+    "quality_acceptance": {
+      "const": "NOT_REVIEWED"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "training_steps": {
+      "const": 0
+    },
+    "holdout_binary_reads": {
+      "const": 0
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "error_code": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-result/1.1#/properties/error_code"
+    },
+    "runtime": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-validation-comparison-result/1.1#/properties/runtime"
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "eom://schemas/image-provider/local-image-sdxl-canny-reference-result/1.0#/$defs/SdxlCannyReferenceTrace"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "eom://schemas/image-provider/local-image-sdxl-canny-reference-result/1.0#/$defs/SdxlLearnedComparisonOutput"
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600000
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -18,6 +18,7 @@ from eom_image_contracts.sdxl_canny_reference import (
     parse_sdxl_canny_reference_sources,
     validate_sdxl_canny_reference_result,
 )
+from eom_image_contracts.sdxl_lora_micro import LocalImageSdxlLoraMicroAdapterManifest
 from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
     SdxlNativeEvaluationSources,
@@ -27,7 +28,29 @@ from eom_image_contracts.sdxl_native_geometry import (
     LocalImageSdxlNativeGeometryCommandV2,
     validate_sdxl_native_geometry_sources,
 )
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.validation import validate_contract
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlReferenceAdapter:
+    training_result: ImageEvaluationArtifactMember
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
+    strength: float
+
+
+def sdxl_reference_adapter(sources: SdxlCannyReferenceSources) -> SdxlReferenceAdapter:
+    """Canonical staging and every matched consumer select the same pinned weights."""
+    if isinstance(sources, SdxlNativeCannyReferenceSources):
+        return SdxlReferenceAdapter(
+            sources.evaluation.evaluation.training_result,
+            sources.native.manifest,
+            sources.evaluation.evaluation.adapter_strength,
+        )
+    pin = sources.spatial_sources.targets.evaluation.evaluation
+    return SdxlReferenceAdapter(
+        pin.training_result, sources.spatial_sources.targets.lora.manifest, pin.adapter_strength
+    )
 
 
 class LocalImageSdxlNativeCannyReferenceCommand(LocalImageSdxlCannyReferenceCommand):

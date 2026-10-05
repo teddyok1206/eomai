@@ -59,7 +59,7 @@ def _seal_plan(value):
     return value
 
 
-def _source(index=1, *, original_hash=None):
+def _source(index=1, *, original_hash=None, normalized_bytes=None):
     intent_value = dict(
         schema_version="local-image-visual-reference-intent/1.0",
         intent_id="imgrefintent_" + f"{index:032x}",
@@ -122,7 +122,12 @@ def _source(index=1, *, original_hash=None):
             ),
         ),
         primary_reference_id="imgref_" + f"{index:032x}",
-        normalized_member=dict(size_bytes=2000, sha256=_sha(f"normalized:{index}".encode())),
+        normalized_member=dict(
+            size_bytes=len(normalized_bytes) if normalized_bytes is not None else 2000,
+            sha256=_sha(
+                normalized_bytes if normalized_bytes is not None else f"normalized:{index}".encode()
+            ),
+        ),
     )
     bundle_value.update(
         state="APPROVED",

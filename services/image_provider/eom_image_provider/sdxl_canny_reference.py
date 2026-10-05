@@ -37,6 +37,7 @@ from eom_image_contracts.sdxl_native_canny_reference import (
     reference_protocol,
     validate_reference_result,
 )
+from eom_image_contracts.sdxl_photo_style import SdxlPhotoStyleInitialization
 from jsonschema import ValidationError as SchemaError
 from PIL import Image
 
@@ -70,7 +71,7 @@ ReferenceBackendFactory = Callable[
     [
         ResolvedSdxlCannyController,
         SdxlCannyControlParameters,
-        SdxlCannyReferenceInitialization,
+        SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization,
         Mapping[str, SdxlCannyReferencePixels],
     ],
     SdxlProbeBackend,

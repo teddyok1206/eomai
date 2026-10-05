@@ -32,13 +32,13 @@ from eom_image_contracts.sdxl_learned_comparison import (
     SdxlLearnedComparisonOutput,
 )
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase, SdxlProbeErrorCode
-from eom_image_contracts.sdxl_lora_micro import LocalImageSdxlLoraMicroAdapterManifest
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
     SdxlNativeCannyReferenceSources,
+    SdxlReferenceAdapter,
     parse_reference_sources,
+    sdxl_reference_adapter,
 )
-from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
 from eom_image_contracts.sdxl_native_lora_sources import (
     SdxlNativeLoraSources,
     parse_sdxl_native_lora_sources,
@@ -189,26 +189,11 @@ class SdxlValidationConfiguration:
     native_training_sources: SdxlNativeLoraSources | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class SdxlValidationAdapter:
-    training_result: ImageEvaluationArtifactMember
-    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
-    strength: float
+SdxlValidationAdapter = SdxlReferenceAdapter
 
 
-def sdxl_validation_adapter(configuration: SdxlValidationConfiguration) -> SdxlValidationAdapter:
-    """One rule owns the weights selected by canonical staging and numerical execution."""
-    sources = configuration.sources
-    if isinstance(sources, SdxlNativeCannyReferenceSources):
-        return SdxlValidationAdapter(
-            sources.evaluation.evaluation.training_result,
-            sources.native.manifest,
-            sources.evaluation.evaluation.adapter_strength,
-        )
-    pin = sources.spatial_sources.targets.evaluation.evaluation
-    return SdxlValidationAdapter(
-        pin.training_result, sources.spatial_sources.targets.lora.manifest, pin.adapter_strength
-    )
+def sdxl_validation_adapter(configuration: SdxlValidationConfiguration) -> SdxlReferenceAdapter:
+    return sdxl_reference_adapter(configuration.sources)
 
 
 def parse_sdxl_validation_configuration(

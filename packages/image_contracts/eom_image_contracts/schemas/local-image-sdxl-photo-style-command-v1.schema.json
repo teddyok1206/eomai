@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-command/1.0",
+  "title": "Pinned licensed photograph style comparison execution command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "plan",
+    "plan_id",
+    "plan_sha256",
+    "command_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-command/1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^imgsdxlvalcmprun_[0-9a-f]{32}$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_PHOTO_TO_EXAM_STYLE"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN"
+    },
+    "plan": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/pointer"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.0"
+            },
+            "member_path": {
+              "const": "manifests/sdxl-photo-style-plan.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^imgsdxlphotoplan_[0-9a-f]{32}$"
+    },
+    "plan_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "command_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

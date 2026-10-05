@@ -86,6 +86,31 @@ for independent human blind review. Item Preview/HWPX and activation stay pendin
 No claim of a new photograph conversion, LoRA advantage or production improvement
 is made by step1 alone.
 
+### Execution transport and shared implementation boundary
+
+The execution command pins the registered preparation plan by logical plan ID,
+semantic hash and exact Artifact member byte hash. Do not copy the plan's cases or
+binary payloads into every command. A new small command/result family identifies
+PHOTO_TO_EXAM_STYLE, not institutional VALIDATION. Its run ID uses the existing
+paired unit's bounded `imgsdxlvalcmprun_` namespace; no new unit, queue or privileges.
+Command source may succeed the frozen plan source; timestamps cannot precede it.
+
+One common staged reference-metadata reader supplies the existing reserved consumer
+and the new photo consumer. It reads complete native metadata before pixels/weights.
+Share source initialization, paired inference, selected-adapter and pixel evidence
+validation through current owners, while keeping institutional crop authority and
+licensed photo authority separate. Do not implement photographic inputs by pretending
+they are twelve reserved crops or silently accepting unsupported schemas.
+
+Result pins command/plan/configuration/native evaluation/adapter semantic hashes,
+exact ordered case/arm/seed prefix, initializer/control hashes and measured resource
+usage. SUCCESS requires all two-arm outputs; failures preserve a valid prefix and
+never become success on replay. Replay validates existing evidence without new
+models/GPU/transforms/writes. CPU publication verification still recomputes pinned
+transforms under the installed numerical runtime; source bytes and weights are not
+copied into result Artifacts. Existing Orchestrator ownership, physical GPU lease,
+read-only resolution, staging and commit idempotency remain unchanged.
+
 ## Source implementation and actual photo inspection
 
 JSON Schema2020-12 mirrored preparation plan1.0 has SHA
@@ -155,3 +180,44 @@ Canonical17-member text evidence `artifact_a957201a8d41434c994253890cf45c03` /
 members reread equal. No duplicate source PNG/PDF/weight members. Source operators
 and logs are explicit temporary materializations; current lab consumer remains
 d1ba1151, production binding unchanged. The overall goal is still ACTIVE.
+
+## Photo execution consumer — source gates, 2026-10-05
+
+Mirrored JSON Schema2020-12 command1.0 SHA
+`281f56f8e3e9c18299c815b48b8f444c0b770138a159e0556109ae7b14231322`
+and result1.0 SHA
+`80d8cab8d0f0fe7959a0c262c4b5806529e223f1ef91b64d750d59474f10dee6`
+precede the frozen Pydantic execution consumer. A small command pins the registered
+plan revision/byte hash and plan logical identity/semantic hash, not another copy
+of its cases. The original preparation plan bytes/hash remain unchanged.
+
+Canonical metadata admission completes before bounded photograph/selected native
+adapter reads. The staged handoff reparses the exact native metadata closure and
+photo bundles/intents rather than trusting an injected derived DTO. The worker
+checks the same native44 authority and selected adapter. Common metadata and
+initializer/Canny evidence are shared with the existing reserved consumer; its
+source authority and frozen initialization0.35 remain separate from photo0.70.
+Paired inference, physical GPU lock, closed ordered failed-prefix results, CPU-only
+read-only transform verification and existing Artifact publisher are reused.
+No new queue, unit, privilege, dependency, production binding or activation policy.
+
+Final source regression231 PASS/122.45s: photo execution34, photo authority28,
+native/legacy reserved contract and worker, reference1.0/1.1/1.2 and test-environment
+boundaries. New cases exercise registered plan identity, canonical/native source
+closure, exact selected weights, bounded existing handoff, successful/failed-prefix
+execution, zero-side-effect terminal replay, input/result/derived pixel tampering,
+partial-workspace refusal and source-free publication after canonical readmission.
+Initial invocation/fixture errors, an overbroad native metadata parse and a missing
+test import were fixed before final PASS; no GPU dispatch/model retry occurred.
+Ruff/format/diff and shell syntax PASS. Strict mypy15 source files/Python3.12 PASS,
+3 contracts using the actual lab Python3.11 PASS. A broader Python3.11 provider
+check lacks the existing jsonschema development stub; no numerical dependency
+was installed to conceal that environment limitation.
+
+Real protected-stack/tokenizer preflight for the original three-source plan PASS:
+both pinned CLIP tokenizers report positive lengths61/68/67 and negative37 against
+limit77. No prompt truncation or successor-plan mutation is necessary. Protected
+model file hashes were checked, but no tensor/pipeline/GPU was loaded. One initial
+read-only operator used a nonexistent tokenizer role; corrected BASE subdirectories
+passed. Installed wheel/role/RECORD verification and the one six-output comparison
+are still pending at this source checkpoint; this is not image-quality acceptance.

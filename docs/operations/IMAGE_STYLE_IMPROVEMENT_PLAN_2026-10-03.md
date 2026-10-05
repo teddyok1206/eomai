@@ -25,10 +25,12 @@ models/transforms/GPU/writes0 (read-only PNG validation still decodes images).
 [ADR0203](../adr/0203-novel-photo-style-comparison.md) separates the next actual
 gap: licensed non-exam photographs must test conversion rather than source copying.
 Preparation schema/frozen source authority/metadata-first native admission and
-existing publisher are implemented, focused118 tests PASS. This preparation plan
-does not dispatch a worker. Numerical successor/result/staging/publisher support,
-installed wheel verification and one frozen photo-to-style comparison are next;
-no new generated photograph conversion has occurred in this checkpoint.
+existing publisher are implemented. This preparation plan does not itself dispatch
+a worker. ADR0203 now records the thin command/result, canonical staging, numerical
+consumer and common publication support:231 source tests PASS, strict typing and
+real tokenizer preflight PASS. Original plan bytes remain unchanged. Installed
+wheel verification and one frozen six-output photo-to-style comparison are next;
+no new generated photograph conversion has occurred at this source checkpoint.
 
 Canonically approved source inventory15 bundles, four actual photo references
 viewed (three initial + one alternate); source filename/intent alone cannot establish

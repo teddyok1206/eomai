@@ -6,10 +6,16 @@ import hashlib
 import json
 from dataclasses import dataclass
 
-from eom_image_contracts.models import content_json_bytes
+from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
 from eom_image_contracts.sdxl_native_canny_reference import (
+    LocalImageSdxlNativeCannyReferenceCommandV2,
     SdxlNativeCannyReferenceSources,
     parse_reference_command,
+    sdxl_reference_adapter,
+)
+from eom_image_contracts.sdxl_native_lora_sources import (
+    parse_sdxl_native_lora_sources,
+    sdxl_native_lora_metadata_member_path,
 )
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoStylePlan,
@@ -17,7 +23,15 @@ from eom_image_contracts.sdxl_photo_style import (
     parse_photo_style_bundle,
     parse_photo_style_source,
     photo_style_artifact_pointer,
+    photo_style_training_image_hashes,
     validate_photo_style_sources,
+)
+from eom_image_contracts.sdxl_photo_style_execution import (
+    LocalImageSdxlPhotoStyleCommand,
+    SdxlPhotoStyleExecutionSources,
+    parse_photo_style_command,
+    parse_photo_style_plan,
+    validate_photo_style_execution_sources,
 )
 from eom_image_contracts.validation import validate_contract
 from sqlalchemy import Engine
@@ -30,6 +44,7 @@ from eom_orchestrator.control_artifact_resolution import (
 from eom_orchestrator.sdxl_canny_reference_inputs import (
     ResolvedSdxlCannyReferenceMetadata,
     resolve_sdxl_canny_reference_metadata,
+    sdxl_canny_reference_metadata_hashes,
 )
 from eom_orchestrator.sdxl_probe_inputs import SdxlProbeInputMember
 
@@ -40,6 +55,173 @@ class ResolvedSdxlPhotoStyleMetadata:
     configuration: ResolvedSdxlCannyReferenceMetadata
     sources: tuple[SdxlPhotoStyleSource, ...]
     files: tuple[SdxlProbeInputMember, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlPhotoStyleExecutionMetadata:
+    command: LocalImageSdxlPhotoStyleCommand
+    admitted: ResolvedSdxlPhotoStyleMetadata
+    sources: SdxlPhotoStyleExecutionSources
+    files: tuple[SdxlProbeInputMember, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedSdxlPhotoStyleInputs:
+    metadata: ResolvedSdxlPhotoStyleExecutionMetadata
+    files: tuple[SdxlProbeInputMember, ...]
+
+    @property
+    def command(self) -> LocalImageSdxlPhotoStyleCommand:
+        return self.metadata.command
+
+
+def resolve_sdxl_photo_style_execution_metadata(
+    engine: Engine, command: LocalImageSdxlPhotoStyleCommand
+) -> ResolvedSdxlPhotoStyleExecutionMetadata:
+    command = parse_photo_style_command(command.model_dump(mode="json"))
+    raw = resolve_control_artifact_member(engine, command.plan, maximum_bytes=256 * 1024)
+    plan = parse_photo_style_plan(command, raw)
+    admitted = resolve_sdxl_photo_style_metadata(engine, plan)
+    native = admitted.configuration.native_admission
+    if (
+        native is None
+        or not isinstance(
+            admitted.configuration.command, LocalImageSdxlNativeCannyReferenceCommandV2
+        )
+        or not isinstance(admitted.configuration.sources, SdxlNativeCannyReferenceSources)
+    ):
+        raise ValueError("PHOTO_STYLE_NATIVE_CONFIGURATION_MISMATCH")
+    sources = SdxlPhotoStyleExecutionSources(
+        plan,
+        admitted.configuration.command,
+        admitted.configuration.sources,
+        native.sources,
+        admitted.sources,
+    )
+    validate_photo_style_execution_sources(command, sources)
+    files = tuple(
+        sorted(
+            (
+                *admitted.files,
+                SdxlProbeInputMember(
+                    "command.json",
+                    "sha256:"
+                    + hashlib.sha256(
+                        content_json_bytes(command.model_dump(mode="json"))
+                    ).hexdigest(),
+                    content_json_bytes(command.model_dump(mode="json")),
+                ),
+            ),
+            key=lambda file: file.member_path,
+        )
+    )
+    return ResolvedSdxlPhotoStyleExecutionMetadata(command, admitted, sources, files)
+
+
+def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dict[str, str]:
+    admitted = prepared.metadata.admitted
+    command, sources = prepared.command, prepared.metadata.sources
+    metadata = {file.member_path: file.payload for file in prepared.metadata.files}
+    if (
+        parse_photo_style_plan(command, metadata["plan.json"]) != sources.plan
+        or parse_sdxl_native_lora_sources(
+            sources.configuration_sources.native.training_command,
+            {path: raw for path, raw in metadata.items() if path.startswith("inputs/metadata/")},
+        )
+        != sources.native_training_sources
+        or tuple(
+            parse_photo_style_source(
+                entry.visual_reference,
+                bundle_raw=metadata["inputs/photo-sources/" + entry.case.case_id + "/bundle.json"],
+                intent_raw=metadata["inputs/photo-sources/" + entry.case.case_id + "/intent.json"],
+            )
+            for entry in sources.plan.cases
+        )
+        != sources.photos
+    ):
+        raise ValueError("PHOTO_STYLE_HANDOFF_SOURCES_INVALID")
+    validate_photo_style_execution_sources(command, sources)
+    if (
+        sources.plan != admitted.plan
+        or sources.configuration != admitted.configuration.command
+        or sources.configuration_sources != admitted.configuration.sources
+        or admitted.configuration.native_admission is None
+        or sources.native_training_sources != admitted.configuration.native_admission.sources
+        or sources.photos != admitted.sources
+    ):
+        raise ValueError("PHOTO_STYLE_HANDOFF_SOURCES_INVALID")
+    expected = sdxl_canny_reference_metadata_hashes(admitted.configuration)
+    expected.pop("command.json")
+    expected.update(
+        {
+            "command.json": "sha256:"
+            + hashlib.sha256(content_json_bytes(command.model_dump(mode="json"))).hexdigest(),
+            "plan.json": command.plan.sha256,
+            "inputs/configuration-command.json": sources.plan.configuration_anchor.sha256,
+        }
+    )
+    expected.update(
+        {
+            sdxl_native_lora_metadata_member_path(p): p.sha256
+            for p in sources.native_training_sources.metadata_pointers
+        }
+    )
+    for entry, source in zip(sources.plan.cases, sources.photos, strict=True):
+        prefix = "inputs/photo-sources/" + entry.case.case_id + "/"
+        expected[prefix + "bundle.json"] = source.reference.bundle_manifest.sha256
+        expected[prefix + "intent.json"] = source.bundle.intent.sha256
+        expected[entry.case.staged_member_path] = entry.case.reference_image.sha256
+    selected = sdxl_reference_adapter(sources.configuration_sources)
+    expected.update(
+        {"inputs/adapter/" + file.relative_path: file.sha256 for file in selected.manifest.files}
+    )
+    return expected
+
+
+def prepare_sdxl_photo_style_inputs(
+    engine: Engine, command: LocalImageSdxlPhotoStyleCommand
+) -> PreparedSdxlPhotoStyleInputs:
+    admitted = resolve_sdxl_photo_style_execution_metadata(engine, command)
+    paths, reads = [], []
+    for entry, source in zip(admitted.sources.plan.cases, admitted.sources.photos, strict=True):
+        paths.append(entry.case.staged_member_path)
+        reads.append(
+            BoundedControlArtifactRead(
+                entry.case.reference_image, source.bundle.normalized_member.size_bytes
+            )
+        )
+    selected = sdxl_reference_adapter(admitted.sources.configuration_sources)
+    for file in selected.manifest.files:
+        bound = 64 * 1024 if file.relative_path.endswith(".json") else 64 * 1024**2
+        if not 0 < file.size_bytes <= bound:
+            raise ValueError("PHOTO_STYLE_ADAPTER_SIZE_INVALID")
+        reads.append(
+            BoundedControlArtifactRead(
+                ImageEvaluationArtifactMember(
+                    artifact_id=selected.training_result.artifact_id,
+                    artifact_revision_id=selected.training_result.artifact_revision_id,
+                    member_path="adapter/" + file.relative_path,
+                    schema_ref="eom://schemas/image-provider/local-image-lora-adapter-file/1.0",
+                    media_type="application/json"
+                    if file.relative_path.endswith(".json")
+                    else "application/octet-stream",
+                    sha256=file.sha256,
+                ),
+                file.size_bytes,
+            )
+        )
+        paths.append("inputs/adapter/" + file.relative_path)
+    payloads = resolve_control_artifact_members(engine, tuple(reads))
+    files = list(admitted.files)
+    for path, read, raw in zip(paths, reads, payloads, strict=True):
+        if len(raw) != read.maximum_bytes:
+            raise ValueError("PHOTO_STYLE_INPUT_SIZE_INVALID")
+        files.append(SdxlProbeInputMember(path, read.pointer.sha256, raw))
+    prepared = PreparedSdxlPhotoStyleInputs(
+        admitted, tuple(sorted(files, key=lambda f: f.member_path))
+    )
+    sdxl_photo_style_input_hashes(prepared)
+    return prepared
 
 
 def resolve_sdxl_photo_style_metadata(
@@ -91,11 +273,7 @@ def resolve_sdxl_photo_style_metadata(
         for ref, raw, bundle in zip(references, bundle_raws, bundles, strict=True)
     )
     native = admitted.native_admission
-    training_hashes = frozenset(
-        member.sha256
-        for batch in native.sources.batches
-        for member in batch.sources.crop_set.members
-    ) | frozenset(target.sha256 for target in native.sources.targets)
+    training_hashes = photo_style_training_image_hashes(native.sources)
     validate_photo_style_sources(plan, sources, training_image_hashes=training_hashes)
     # This immutable handoff carries the already admitted metadata, not another
     # canonical traversal or any duplicated image/adapter binary.

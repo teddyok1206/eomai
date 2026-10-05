@@ -26,6 +26,7 @@ from eom_image_contracts import (
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_native_geometry import LocalImageSdxlNativeGeometryCommand
+from eom_image_contracts.sdxl_photo_style_execution import LocalImageSdxlPhotoStyleCommand
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import LocalImageSdxlValidationComparisonCommand
 
@@ -82,6 +83,7 @@ from eom_image_provider.sdxl_lora_evaluation import (
     run_sdxl_lora_evaluation,
 )
 from eom_image_provider.sdxl_native_geometry import run_sdxl_native_geometry
+from eom_image_provider.sdxl_photo_style import run_sdxl_photo_style
 from eom_image_provider.sdxl_publication_comparison import (
     load_sdxl_publication_command,
     run_sdxl_publication_comparison,
@@ -175,7 +177,15 @@ def main() -> None:
             result = publication_result.model_dump(mode="json")
         elif args.operation == "sdxl-learned-comparison":
             learned_command = load_sdxl_comparison_command(args.workspace, args.command)
-            if isinstance(learned_command, LocalImageSdxlValidationComparisonCommand):
+            if isinstance(learned_command, LocalImageSdxlPhotoStyleCommand):
+                photo_result = run_sdxl_photo_style(
+                    command=learned_command,
+                    model_store_root=args.model_store_root,
+                    workspace=args.workspace,
+                    gpu_lock=args.gpu_lock,
+                )
+                result = photo_result.model_dump(mode="json")
+            elif isinstance(learned_command, LocalImageSdxlValidationComparisonCommand):
                 validation_result = run_sdxl_validation_comparison(
                     command=learned_command,
                     model_store_root=args.model_store_root,

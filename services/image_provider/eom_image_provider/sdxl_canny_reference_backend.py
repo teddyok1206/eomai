@@ -13,6 +13,7 @@ from typing import Any
 from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_canny_reference import SdxlCannyReferenceInitialization
 from eom_image_contracts.sdxl_lineart_probe import LocalImageSdxlLineartProbeCommand
+from eom_image_contracts.sdxl_photo_style import SdxlPhotoStyleInitialization
 from PIL import Image
 
 from eom_image_provider.provider import GeneratedBackground, ProviderError
@@ -37,7 +38,7 @@ class SdxlCannyReferenceSession:
         pipeline: Any,
         torch: Any,
         control: SdxlCannyControlParameters,
-        initialization: SdxlCannyReferenceInitialization,
+        initialization: SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization,
         inputs: Mapping[str, SdxlCannyReferencePixels],
     ) -> None:
         self.pipeline, self.torch = pipeline, torch
@@ -91,7 +92,7 @@ class SdxlCannyReferenceDiffusersBackend:
         self,
         controller: ResolvedSdxlCannyController,
         control: SdxlCannyControlParameters,
-        initialization: SdxlCannyReferenceInitialization,
+        initialization: SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization,
         inputs: Mapping[str, SdxlCannyReferencePixels],
     ) -> None:
         self.controller, self.control, self.initialization = controller, control, initialization

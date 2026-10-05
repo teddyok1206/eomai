@@ -17,7 +17,9 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
+from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonBudget
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
+from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.visual_reference import (
     LocalImageVisualReferenceBundle,
     LocalImageVisualReferenceIntent,
@@ -72,7 +74,7 @@ class SdxlPhotoStyleInitialization(FrozenModel):
     pillow_version: Literal["11.3.0"]
 
 
-class SdxlPhotoStyleBudget(FrozenModel):
+class SdxlPhotoStyleBudget(SdxlLearnedComparisonBudget):
     maximum_duration_ms: int = Field(ge=1, le=600_000)
     maximum_peak_gpu_memory_bytes: int = Field(ge=1, le=16 * 1024**3)
     maximum_outputs: Literal[12] = 12
@@ -238,3 +240,10 @@ def validate_photo_style_sources(
             raise ValueError("photo style source chronology/duplicate/training collision")
         originals.add(primary.original_sha256)
         pages.add(primary.page_id)
+
+
+def photo_style_training_image_hashes(sources: SdxlNativeLoraSources) -> frozenset[str]:
+    """One collision population for canonical and staged native admissions."""
+    return frozenset(
+        member.sha256 for batch in sources.batches for member in batch.sources.crop_set.members
+    ) | frozenset(target.sha256 for target in sources.targets)

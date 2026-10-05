@@ -35,6 +35,10 @@ from eom_orchestrator.sdxl_native_lora_inputs import (
     PreparedSdxlNativeLoraInputs,
     sdxl_native_lora_input_hashes,
 )
+from eom_orchestrator.sdxl_photo_style_inputs import (
+    PreparedSdxlPhotoStyleInputs,
+    sdxl_photo_style_input_hashes,
+)
 from eom_orchestrator.sdxl_probe_inputs import PreparedSdxlProbeInputs, SdxlProbeInputMember
 from eom_orchestrator.sdxl_publication_inputs import (
     PreparedSdxlPublicationInputs,
@@ -69,6 +73,25 @@ class StagedSdxlProbe:
     workspace: Path
     systemd_unit: str
     command_sha256: str
+
+
+def stage_sdxl_photo_style_inputs(
+    prepared: PreparedSdxlPhotoStyleInputs,
+    *,
+    workspace_parent: Path,
+    worker: SdxlProbeWorkspaceOwner,
+) -> StagedSdxlProbe:
+    return _stage_inputs(
+        files=prepared.files,
+        expected=sdxl_photo_style_input_hashes(prepared),
+        command_payload=content_json_bytes(prepared.command.model_dump(mode="json")),
+        run_id=prepared.command.run_id,
+        command_sha256=prepared.command.command_sha256,
+        unit_template="eom-image-sdxl-learned-comparison",
+        workspace_parent=workspace_parent,
+        worker=worker,
+        maximum_member_bytes=64 * 1024**2,
+    )
 
 
 def stage_sdxl_validation_inputs(
