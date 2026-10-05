@@ -179,3 +179,60 @@ fidelity or full model/production quality. Keep those gates separate. Preserve
 the executed test/operator/log and report actual two text-model loads, not zero
 model calls merely because no images are generated. No new wire protocol,
 framework, dependency, install or released recipe reinterpretation is introduced.
+
+### Actual parity result and fresh TRAIN diversity evidence
+
+Source test commit dcbf8df36d5ae08727a555e681c6504a8a495e81. Default focused run
+42 PASS/4 expected opt-in SKIP; test formatter/Ruff and scoped mypy PASS. The
+installed eom-image CPU run genuinely executed4 tests and PASS (PID308971,
+2026-10-05 23:22:19.461348–23:23:52.680954 UTC, returncode0). All24 exact captions
+have byte-equal hidden[1,77,2048] and pooled[1,1280] fp16 tensors between the actual
+trainer and installed T2I pipeline; maximum deltas0, all finite. Maximum actual
+token length56 of77 in both tokenizers. All3 native time-ID geometries agree.
+Two real frozen text encoders loaded; no GPU/generation/training/dataset pixels.
+Installed3-wheel RECORD/role/dependency preflight PASS, installs0, staged files
+unchanged. This is CPU device-routed text parity, not CUDA/optimizer/loss quality.
+
+The first owner invocation rejected group-writable source-test mode664 before
+runtime/model/workspace creation. Tightening permissions only on the newly created
+task file to600 retained identical source SHA. Preserve that first log and the
+separate successful R2 log; no runtime/core pointer guard was weakened.
+
+Existing campaign/source lineage was then re-resolved before fresh PNG reads.
+Current pool:503 TRAIN candidates/49 documents,39 documents absent from native44.
+First20 new documents × largest3 candidate boxes yielded60 display views from47
+pages (26292027 bytes), exact schema/media/SHA/dimensions verified. All5 contacts
+were actually viewed at their native1920x1380 display resolution. These are
+ORIGINAL institution crops, NOT GENERATED images or admitted native targets.
+
+Own exhaustive routes:12 native-reframe candidates,17 text/table regions,
+29 primarily code/graph/map/exact-count regions,2 photograph-reference regions.
+The12 ordinal candidates are4,6,14,16,18,22,24,25,30,34,47,55:apparatus bodies,
+tree, thermometer, bus/person scene, sky scene, students, biological structure and
+clouds. Their full original/native576 frames and literal captions still need
+supported review. Newly admitted samples=0. Scientific symbols stay in canonical
+sources; no automatic pixel erasure or accepted-state mutation. Largest-area
+sampling favors whole questions/text;12/60 is NOT corpus-wide illustration yield.
+Inspect original pages/smaller candidates, not the largest-box heuristic as if it
+were a style extractor. Preserve useful scenes, gray fills and reference/code data.
+
+Evidence artifact_003f69df380b42cca1ce8ba244b3f2a6 /
+rev_57a8abccba6d48d69da8f37137b6180c,20 members reread byte-equal:
+reports/own-review.md SHAfa6711cb57a1956630a1a42dc3cea2acdb2b013a18ba91ad940b104928cbacd5;
+logs/conditioning-test.log SHA29b65d32eebfd5a29fcee12e20ed7e55decbe39d1de41808e5ffc8abb2e1f1eb.
+Archive includes exact test/operators, first failure, R2, source report and5
+original-not-generated contacts, not duplicate canonical47 page PNGs or weights.
+Production binding unchanged and five main services active at archival.
+
+Training exposure is also a confound:both prior pilots used200 optimizer updates
+and gradient accumulation4, so the normal successful loop implies800 micro-steps.
+That is about33.3 passes for24 samples versus18.2 for44 samples. This follows the
+inspected loop/configuration, not a newly captured per-sample training trace or
+proof of overfitting. Freeze exposure/cohort together when planning the full
+100–200 TRAIN successor; do not equate equal optimizer-step count to equal epochs,
+increase steps blindly, relax released limits or duplicate samples to reach100.
+
+Next action is supported native source eligibility/framing expansion and explicit
+training-exposure planning, NOT a caption/pooling patch or another repeated small
+pilot. Full learning, reserved/four-family32-depiction/independent blind gates and
+successor Item/HWPX canary/activation/rollback remain OPEN. Overall goal ACTIVE.
