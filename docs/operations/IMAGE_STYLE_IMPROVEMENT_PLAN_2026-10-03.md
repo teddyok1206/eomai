@@ -5,6 +5,40 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
+## Current inference-boundary audit — 2026-10-05
+
+The contour12 comparison remains REJECTED; no new adapter is activated. Prior
+zero-T2I, negative-prompt, polarity, learned-extractor and source-initialization
+diagnostics have already run. Do not spend their exhausted budgets again.
+
+Read-only source inspection confirms that native training uses its exact prepared
+1024-based canvas for SDXL time IDs, while the current legacy comparison explicitly
+uses832x512 for both output and default size conditioning. This is a distribution
+difference, **not a reproduced implementation defect or proven cause**. The same
+legacy geometry was declared in the command and must not be silently changed.
+
+`tests/integration/test_sdxl_vae_numerical.py` adds a removable, opt-in **CPU-only
+developer diagnostic**, not a worker, new protocol or production path. It resolves
+the exact existing protected model pointer, verifies its manifest/files with the
+existing resolver, and tests two synthetic128x128 inputs (white and a rectangle).
+It compares manual training normalization with actual Diffusers preprocessing,
+latent scaling/decode finiteness, output postprocessing and photometric polarity.
+No corpus/held-out pixels, LoRA, UNet, text encoder, diffusion generation, GPU,
+training, network or file output is used. Existing numerical dependencies suffice.
+CPU float32/mean-posterior results must not be called GPU fp16 parity, native-size
+quality, model generalization or a successful image-quality fix.
+
+Default focused regression:43 PASS,6 diagnostic tests intentionally SKIPPED without
+the protected-model opt-in. Formatter/linter and strict mypy PASS. Initial mypy
+caught missing class-variable declarations in the test fixture; these were fixed
+before model execution, without suppression or changes to runtime packages.
+**Actual model diagnostic
+PENDING operator authentication**; no model PASS is implied by collection/skip.
+After this small photometric check, choose a separately frozen native-geometry
+comparison only if it adds discriminating evidence. Do not add a generation
+framework, whiten backgrounds, increase training or promote an adapter merely
+because an engineering check passed. Production remains unchanged; goal ACTIVE.
+
 ## Latest contour-balanced pilot and comparison — 2026-10-05 07:45 UTC
 
 **Training/comparison technical PASS; own publication review REJECTED6/6; goal ACTIVE.**
