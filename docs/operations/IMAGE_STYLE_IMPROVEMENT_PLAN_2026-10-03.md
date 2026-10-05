@@ -9,6 +9,15 @@ Success requires semantic accuracy as well as style, not merely passing edge-den
 
 ### Native GPU VAE precision diagnostic — frozen plan
 
+First developer invocation terminated during Diffusers/Torch import before VAE
+loads, case setup, encode/decode or training: ProtectSystem=strict made default
+temporary paths unwritable. Preserve the R1 logs/execution/FAILED record. Correct
+only the transient diagnostic unit with PrivateTmp=yes, as existing image units
+already use. Revalidate the same staged test/model/target bytes and frozen thresholds;
+reuse that workspace, do not copy inputs, change numerical code or reinterpret the
+failed invocation. One R2 diagnostic invocation records its own unit/log/result.
+The actual eight-input numerical budget was not started/consumed by this import error.
+
 Data preparation is actual progress, but the prior128x128 float32 CPU check cannot
 prove native CUDA fp16 encoding parity. Before more LoRA training, perform one
 developer opt-in diagnostic using the existing pinned SDXL/fp16-fixed VAE and
