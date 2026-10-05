@@ -18,6 +18,7 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
+from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_canny_reference import (
     SdxlCannyReferenceTrace,
     validate_sdxl_canny_reference_sources,
@@ -36,6 +37,7 @@ from eom_image_contracts.sdxl_photo_style import (
     SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
     LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStylePlan,
+    LocalImageSdxlPhotoStyleRetainedRegionPlan,
     SdxlPhotoStyleControlWindow,
     SdxlPhotoStyleFullDenoisingInitialization,
     SdxlPhotoStyleInitialization,
@@ -43,6 +45,7 @@ from eom_image_contracts.sdxl_photo_style import (
     SdxlPhotoStyleWhiteInitialization,
     parse_photo_style_plan_value,
     photo_style_contract_name,
+    photo_style_region_reviews_sha256,
     photo_style_training_image_hashes,
     photo_style_version,
     validate_photo_style_sources,
@@ -101,6 +104,10 @@ class LocalImageSdxlPhotoStyleControlWindowCommand(LocalImageSdxlPhotoStyleComma
     schema_version: Literal["local-image-sdxl-photo-style-command/1.3"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoStyleRetainedRegionCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.4"]  # type: ignore[assignment]
+
+
 def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
     if not isinstance(value, dict):
         raise ValueError("photo execution command object required")
@@ -110,6 +117,7 @@ def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
         "local-image-sdxl-photo-style-command/1.1": LocalImageSdxlPhotoStyleWhiteCommand,
         "local-image-sdxl-photo-style-command/1.2": LocalImageSdxlPhotoStyleFullDenoisingCommand,
         "local-image-sdxl-photo-style-command/1.3": LocalImageSdxlPhotoStyleControlWindowCommand,
+        "local-image-sdxl-photo-style-command/1.4": LocalImageSdxlPhotoStyleRetainedRegionCommand,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo command family")
@@ -242,6 +250,12 @@ class LocalImageSdxlPhotoStyleControlWindowResult(LocalImageSdxlPhotoStyleFullDe
     control_window: SdxlPhotoStyleControlWindow
 
 
+class LocalImageSdxlPhotoStyleRetainedRegionResult(LocalImageSdxlPhotoStyleFullDenoisingResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.4"]  # type: ignore[assignment]
+    control: SdxlCannyControlParameters
+    region_reviews_sha256: Sha256
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
@@ -251,6 +265,7 @@ def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
         "local-image-sdxl-photo-style-result/1.1": LocalImageSdxlPhotoStyleWhiteResult,
         "local-image-sdxl-photo-style-result/1.2": LocalImageSdxlPhotoStyleFullDenoisingResult,
         "local-image-sdxl-photo-style-result/1.3": LocalImageSdxlPhotoStyleControlWindowResult,
+        "local-image-sdxl-photo-style-result/1.4": LocalImageSdxlPhotoStyleRetainedRegionResult,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo result family")
@@ -308,3 +323,9 @@ def validate_photo_style_result(
         or result.control_window != plan.control_window
     ):
         raise ValueError("photo result differs from declared spatial-control window")
+    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan) and (
+        not isinstance(result, LocalImageSdxlPhotoStyleRetainedRegionResult)
+        or result.control != plan.control
+        or result.region_reviews_sha256 != photo_style_region_reviews_sha256(plan)
+    ):
+        raise ValueError("photo result differs from declared retained-region review/control")

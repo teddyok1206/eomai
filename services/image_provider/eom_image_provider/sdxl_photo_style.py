@@ -17,7 +17,9 @@ from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoStyleControlWindowPlan,
+    LocalImageSdxlPhotoStyleRetainedRegionPlan,
     photo_style_control_parameters,
+    photo_style_region_reviews_sha256,
     photo_style_version,
 )
 from eom_image_contracts.sdxl_photo_style_execution import (
@@ -49,6 +51,7 @@ from eom_image_provider.sdxl_pair_inference import (
     run_sdxl_pair_inference,
 )
 from eom_image_provider.sdxl_pair_output_validation import validate_sdxl_pair_output_members
+from eom_image_provider.sdxl_photo_conditioning import photo_style_conditioner
 from eom_image_provider.sdxl_photo_style_sources import read_sdxl_photo_style_sources
 from eom_image_provider.sdxl_reference_pixels import (
     REFERENCE_PIXEL_DIRECTORIES,
@@ -167,7 +170,7 @@ def run_sdxl_photo_style(
                 tuple(row.case for row in plan.cases),
                 originals,
                 policy=spatial.preparation.policy,
-                conditioner=canny_conditioning_canvas_png,
+                conditioner=photo_style_conditioner(plan, canny=canny_conditioning_canvas_png),
                 initialization=plan.initialization,
             )
             create_sdxl_pair_directories(root, workspace)
@@ -243,6 +246,9 @@ def run_sdxl_photo_style(
             )
             if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan):
                 value["control_window"] = plan.control_window.model_dump(mode="json")
+            if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+                value["control"] = plan.control.model_dump(mode="json")
+                value["region_reviews_sha256"] = photo_style_region_reviews_sha256(plan)
             result = parse_photo_style_result({**value, "result_sha256": content_sha256(value)})
             validate_photo_style_result(command, sources, result)
             write_staged_member(
@@ -276,6 +282,7 @@ def verify_sdxl_photo_style_transforms(workspace: Path) -> LocalImageSdxlPhotoSt
         )
         traces = {row.case_id: row for row in result.inputs}
         originals = _read_originals(root, sources)
+        conditioner = photo_style_conditioner(sources.plan, canny=canny_conditioning_canvas_png)
         for entry in sources.plan.cases:
             case = entry.case
             original = originals[case.case_id]
@@ -289,7 +296,7 @@ def verify_sdxl_photo_style_transforms(workspace: Path) -> LocalImageSdxlPhotoSt
                     ).tobytes()
                 )
                 != traces[case.case_id].initialization_rgb_sha256
-                or _sha(canny_conditioning_canvas_png(canvas, policy=spatial.preparation.policy))
+                or _sha(conditioner(case, canvas, policy=spatial.preparation.policy))
                 != traces[case.case_id].conditioning_sha256
             ):
                 raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")

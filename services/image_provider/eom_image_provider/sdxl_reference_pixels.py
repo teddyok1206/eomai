@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import io
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from eom_image_contracts.sdxl_canny_conditioning import SdxlCannyPolicy
 from eom_image_contracts.sdxl_canny_reference import (
@@ -34,6 +35,12 @@ from eom_image_provider.staged_file_io import (
 )
 
 REFERENCE_PIXEL_DIRECTORIES = ("conditionings", "initializers")
+
+
+class SdxlReferenceConditioner(Protocol):
+    def __call__(
+        self, case: SdxlLineartProbeCase, canvas: Image.Image, *, policy: SdxlCannyPolicy
+    ) -> bytes: ...
 
 
 def _sha(raw: bytes) -> str:
@@ -69,7 +76,7 @@ def prepare_sdxl_reference_pixels(
     originals: Mapping[str, bytes],
     *,
     policy: SdxlCannyPolicy,
-    conditioner: Callable[..., bytes],
+    conditioner: SdxlReferenceConditioner,
     initialization: SdxlCannyReferenceInitialization | SdxlPhotoStyleInitialization | None = None,
 ) -> PreparedSdxlReferencePixels:
     from types import MappingProxyType
@@ -83,7 +90,7 @@ def prepare_sdxl_reference_pixels(
             width_px=case.reference_width_px,
             height_px=case.reference_height_px,
         )
-        control = conditioner(canvas, policy=policy)
+        control = conditioner(case, canvas, policy=policy)
         rgb_image = sdxl_reference_initializer(canvas, initialization=initialization)
         rgb = rgb_image.tobytes()
         encoded = io.BytesIO()

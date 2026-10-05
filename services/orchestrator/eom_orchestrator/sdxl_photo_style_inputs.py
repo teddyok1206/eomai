@@ -19,12 +19,14 @@ from eom_image_contracts.sdxl_native_lora_sources import (
 )
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoStylePlan,
+    LocalImageSdxlPhotoStyleRetainedRegionPlan,
     SdxlPhotoStyleSource,
     parse_photo_style_bundle,
     parse_photo_style_plan_value,
     parse_photo_style_source,
     photo_style_artifact_pointer,
     photo_style_training_image_hashes,
+    validate_photo_style_region_evidence,
     validate_photo_style_sources,
 )
 from eom_image_contracts.sdxl_photo_style_execution import (
@@ -160,6 +162,11 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
             "inputs/configuration-command.json": sources.plan.configuration_anchor.sha256,
         }
     )
+    if isinstance(sources.plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+        validate_photo_style_region_evidence(
+            sources.plan, metadata["inputs/photo-region-review.txt"]
+        )
+        expected["inputs/photo-region-review.txt"] = sources.plan.region_review_evidence.sha256
     expected.update(
         {
             sdxl_native_lora_metadata_member_path(p): p.sha256
@@ -284,6 +291,12 @@ def resolve_sdxl_photo_style_metadata(
     metadata.update({member.member_path: member.payload for member in native.metadata})
     metadata["inputs/configuration-command.json"] = anchor_raw
     metadata["plan.json"] = content_json_bytes(plan.model_dump(mode="json"))
+    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+        review_raw = resolve_control_artifact_member(
+            engine, plan.region_review_evidence, maximum_bytes=64 * 1024
+        )
+        validate_photo_style_region_evidence(plan, review_raw)
+        metadata["inputs/photo-region-review.txt"] = review_raw
     for entry, raw, bundle in zip(plan.cases, bundle_raws, bundles, strict=True):
         prefix = "inputs/photo-sources/" + entry.case.case_id + "/"
         metadata[prefix + "bundle.json"] = raw

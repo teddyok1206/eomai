@@ -7,7 +7,12 @@ from eom_image_contracts.sdxl_native_canny_reference import (
     SdxlNativeCannyReferenceSources,
     parse_reference_sources,
 )
-from eom_image_contracts.sdxl_photo_style import parse_photo_style_bundle, parse_photo_style_source
+from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoStyleRetainedRegionPlan,
+    parse_photo_style_bundle,
+    parse_photo_style_source,
+    validate_photo_style_region_evidence,
+)
 from eom_image_contracts.sdxl_photo_style_execution import (
     LocalImageSdxlPhotoStyleCommand,
     SdxlPhotoStyleExecutionSources,
@@ -29,6 +34,16 @@ def read_sdxl_photo_style_sources(
         ),
     )
     metadata = read_sdxl_reference_metadata(root, plan.configuration_anchor)
+    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+        validate_photo_style_region_evidence(
+            plan,
+            read_staged_member(
+                root,
+                "inputs/photo-region-review.txt",
+                maximum_bytes=64 * 1024,
+                expected_sha256=plan.region_review_evidence.sha256,
+            ),
+        )
     if (
         not isinstance(metadata.command, LocalImageSdxlNativeCannyReferenceCommandV2)
         or metadata.native_training_sources is None

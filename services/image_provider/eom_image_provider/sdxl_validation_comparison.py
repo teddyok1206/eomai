@@ -192,7 +192,9 @@ def run_sdxl_validation_comparison(
                 tuple(entry.case for entry in command.cases),
                 originals,
                 policy=spatial.preparation.policy,
-                conditioner=canny_conditioning_canvas_png,
+                conditioner=lambda case, canvas, *, policy: canny_conditioning_canvas_png(
+                    canvas, policy=policy
+                ),
             )
             initializations, traces = pixels.initializations, pixels.traces
             create_sdxl_pair_directories(root, workspace)

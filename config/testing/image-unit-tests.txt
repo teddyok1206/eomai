@@ -59,6 +59,7 @@ tests/unit/test_sdxl_photo_style.py
 tests/unit/test_sdxl_photo_style_control_window.py
 tests/unit/test_sdxl_photo_style_execution.py
 tests/unit/test_sdxl_photo_style_full_denoising.py
+tests/unit/test_sdxl_photo_style_retained_region.py
 tests/unit/test_sdxl_photo_style_white_initializer.py
 tests/unit/test_sdxl_publication_comparison.py
 tests/unit/test_sdxl_reviewed_evaluation.py

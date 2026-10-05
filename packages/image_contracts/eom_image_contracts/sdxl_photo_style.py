@@ -22,6 +22,7 @@ from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonBudget
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
+from eom_image_contracts.sdxl_photo_region_review import SdxlPhotoRetainedRegionReview
 from eom_image_contracts.visual_reference import (
     LocalImageVisualReferenceBundle,
     LocalImageVisualReferenceIntent,
@@ -178,12 +179,60 @@ class LocalImageSdxlPhotoStyleControlWindowPlan(LocalImageSdxlPhotoStyleFullDeno
     control_window: SdxlPhotoStyleControlWindow
 
 
+class LocalImageSdxlPhotoStyleRetainedRegionPlan(LocalImageSdxlPhotoStyleFullDenoisingPlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.4"]  # type: ignore[assignment]
+    control: SdxlCannyControlParameters
+    region_reviews: tuple[SdxlPhotoRetainedRegionReview, ...] = Field(min_length=1, max_length=6)
+    region_review_evidence: ImageEvaluationArtifactMember
+
+    @model_validator(mode="after")
+    def exact_region_reviews(self) -> Self:
+        if tuple(r.case_id for r in self.region_reviews) != tuple(
+            e.case.case_id for e in self.cases
+        ):
+            raise ValueError("photo region reviews differ from uniquely ordered plan cases")
+        cases = {e.case.case_id: e.case for e in self.cases}
+        if any(
+            r.reference_sha256 != cases[r.case_id].reference_image.sha256
+            or r.reviewed_at > self.created_at
+            for r in self.region_reviews
+        ):
+            raise ValueError("photo region source or review chronology mismatch")
+        pin = self.region_review_evidence
+        if (
+            pin.schema_ref != "eom://schemas/operations/plain-text-log/1.0"
+            or pin.member_path != "reports/own-review.md"
+            or pin.media_type != "text/plain"
+        ):
+            raise ValueError("photo region requires explicit pinned own-review evidence")
+        return self
+
+
+def photo_style_region_reviews_sha256(plan: LocalImageSdxlPhotoStyleRetainedRegionPlan) -> str:
+    return content_sha256([r.model_dump(mode="json") for r in plan.region_reviews])
+
+
+def validate_photo_style_region_evidence(
+    plan: LocalImageSdxlPhotoStyleRetainedRegionPlan, raw: bytes
+) -> None:
+    if not 0 < len(raw) <= 64 * 1024 or (
+        "sha256:" + hashlib.sha256(raw).hexdigest() != plan.region_review_evidence.sha256
+    ):
+        raise ValueError("photo region review evidence bound/hash mismatch")
+    if not raw.decode("utf-8").strip() or b"\x00" in raw:
+        raise ValueError("photo region review evidence is not nonempty UTF8 text")
+
+
 def photo_style_control_parameters(
     plan: LocalImageSdxlPhotoStylePlan, inherited: SdxlCannyControlParameters
 ) -> SdxlCannyControlParameters:
     """Released plans inherit full control; only1.3 owns an explicit window value."""
     if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan):
         return plan.control_window
+    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+        if plan.control != inherited:
+            raise ValueError("photo retained region must keep inherited full spatial control")
+        return plan.control
     return inherited
 
 
@@ -201,6 +250,9 @@ _PHOTO_STYLE_CONTRACTS = MappingProxyType(
         "local-image-sdxl-photo-style-plan/1.3": "sdxl-photo-style-plan-v4",
         "local-image-sdxl-photo-style-command/1.3": "sdxl-photo-style-command-v4",
         "local-image-sdxl-photo-style-result/1.3": "sdxl-photo-style-result-v4",
+        "local-image-sdxl-photo-style-plan/1.4": "sdxl-photo-style-plan-v5",
+        "local-image-sdxl-photo-style-command/1.4": "sdxl-photo-style-command-v5",
+        "local-image-sdxl-photo-style-result/1.4": "sdxl-photo-style-result-v5",
     }
 )
 
@@ -229,6 +281,7 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
         "local-image-sdxl-photo-style-plan/1.1": LocalImageSdxlPhotoStyleWhitePlan,
         "local-image-sdxl-photo-style-plan/1.2": LocalImageSdxlPhotoStyleFullDenoisingPlan,
         "local-image-sdxl-photo-style-plan/1.3": LocalImageSdxlPhotoStyleControlWindowPlan,
+        "local-image-sdxl-photo-style-plan/1.4": LocalImageSdxlPhotoStyleRetainedRegionPlan,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")

@@ -1126,3 +1126,48 @@ SENT/HTTP2002026-10-05T21:40:55Z, phase `Image goal / control-window causal
 comparison`. Reported actual6-output style/fidelity rejection separately from
 numerical/source/lab success, retained evidence and next single input factor.
 Goal remains ACTIVE; no production or canary acceptance claimed.
+
+Retained-region implementation choice: photo-style1.4 explicitly fixes full
+control and embeds small immutable per-case source-coordinate region reviews.
+The existing canonical own-review evidence is a separate pinned text pointer,
+resolved/staged once (64KiB bound), not copied into the plan or result. Contract
+geometry maps fixed normalized800x504 fit794x500/offset19,6 conservatively with
+integer floor/ceil; CPU tests compare the actual Pillow fit. Results carry the
+review-value hash plus exact control, not a second copy of all review records.
+One case-aware conditioner extends the existing shared pixel-preparation interface
+for full and retained cases; generation and CPU verification use the same owner.
+
+## Retained-region successor source checkpoint — 2026-10-05T22:00Z
+
+Defined Draft2020-12 photo-style1.4 plan/command/result before worker behavior.
+Mandatory full start0/end1/scale1 control and ordered per-case region reviews
+replace no legacy semantics. Each review pins exact source SHA, fixed coordinate
+system, conservative rectangle, unique contained protected rectangles, UTC own
+reviewer/time and morphology-only context assertion. Explicit canonical evidence
+pointer is bounded/UTF8/hash-checked, resolved/staged once before binary inputs.
+Result owns exact control and review-value SHA rather than duplicate reviews.
+
+Contract geometry / provider pixels / Orchestrator staging+commit ownership stay
+separate. A small case-aware conditioner shares normal and retained pixel setup;
+CPU verifier uses the identical function. Wrong/missing case/source rejects before
+pixel dereference, not latest/full fallback. Mapping is tested against actual
+Pillow794x500/offset19,6 and earlier three reviewed coordinate examples. Existing
+primitive preserves internal/protected pixels, no invented mask stroke/rescaling.
+No new dependency/DB/queue/unit/permissions or worker NAS/DB/source access.
+
+Executed focused groups243 PASS/138.83s and reserved-validation74 PASS/41.23s.
+Then before-pixel wrong-case protection99 PASS/51.61s (overlapping cases), final
+region/evidence/environment54 PASS/34.68s. Ruff/format/diff/two build-script bash
+checks PASS; strict9-source-file Python3.12 and3-contract-file Python3.11 checks
+PASS against explicit image-test/numerical environments. Both build entrypoints
+require the new schema/region/pixel owner; provider gate also verifies preserved
+1.2/1.3 resources it previously did not list explicitly.
+
+Final negative test initially expected KeyError; the shared fixture correctly
+raised stable CONTROL_ARTIFACT_POINTER_INVALID. Retained53 PASS/1 FAIL log and
+changed only the test to assert that existing supported error, reran54 PASS.
+No runtime guard weakened. Source PASS is not an installed/numerical/style gate.
+Next immutable wheel build, source-free simulation/lab-only install with248a5c0d
+rollback and old terminal replays, then a separately frozen single6-output region
+comparison against ink1.2 (not0.65). Goal ACTIVE; newGPU/training/HOLDOUT0,
+production activation/canary NOT_STARTED at this source checkpoint.
