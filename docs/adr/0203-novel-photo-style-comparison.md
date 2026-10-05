@@ -340,6 +340,17 @@ corrected invocation PASS. Preserve these logs, not extra generation. Existing
 PASS. Independent review/full32-case/four-family/Item/HWPX gates stay OPEN;
 production binding and dependencies unchanged, goal ACTIVE.
 
+Canonical21-member diagnostic evidence `artifact_9a8aec9cede041e5a85f2534e980675d` /
+`rev_fb9c85b0aa164613967f7d1f75e05391`, primary `reports/own-review.md`, SHA
+`c2b35c9eabcba9ebe7a0a39d2c8c3c63bcc3be3d164f93a94b64e3f40cfcde1c`;
+all persisted evidence reread equal. Includes measured matched comparison, one
+derived five-column contact sheet, frozen budget and failed invocation logs;
+no duplicate canonical photographs/weights/output binaries. Initial packaging
+rejected the group-writable temporary review file before Artifact mutation;
+only that exact file was tightened to0600 and the failure log retained.
+Postflight: five primary services active, numeric dependencies unchanged,
+production binding SHA unchanged, fixed unit inactive/dead/success, GPU idle.
+
 ### Next recipe decision: separate shape guidance from photographic tone
 
 The current pixel owner fits a grayscale photograph for both Canny construction
