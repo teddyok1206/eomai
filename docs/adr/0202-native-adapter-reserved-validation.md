@@ -2,9 +2,9 @@
 
 ## Status
 
-Protocol-first schema draft source-verified, 2026-10-05 UTC; **consumer not implemented
-or installed**. Canonical metadata preflight and own inspection of thirteen eligible
-sources are complete.
+Consumer source-verified, 2026-10-05 UTC; **lab installation and live reserved
+comparison pending**. Canonical metadata preflight and own inspection of thirteen
+eligible sources are complete. The earlier schema-only checkpoint below is historical.
 This decision does not authorize activation or reinterpret historical acceptance.
 
 ## Verified need
@@ -127,8 +127,8 @@ not relax it, mislabel VALIDATION as TRAIN or touch HOLDOUT for an attractive sa
 7. Own and independent review evidence; no activation before the full quality gate.
 
 No new dependency, unit, role privilege, migration, framework or production setting
-is required. Step1 is implemented and source-verified; steps2–7 are pending, not
-silently marked implemented.
+is required. Steps1–5 and the source gates in step6 are implemented and verified;
+immutable wheel/role installation, bounded live dispatch and step7 remain pending.
 
 ## Protocol-first source checkpoint
 
@@ -147,10 +147,10 @@ Fixture pointers/hashes are synthetic: this is wire-shape evidence, not native
 provenance/adapter selection acceptance. Strict mypy/Python3.11 on the touched
 schema registry, Ruff/formatter on registry/test, and diff check PASS.
 
-No Pydantic successor/worker, actual native validation GPU run, install/resource
-release closure or new quality gate is claimed. The old consumer continues to
-reject the successor instead of silently using a micro adapter. This deliberate
-fail-closed state must remain until steps2–6 are complete.
+At this earlier checkpoint no Pydantic successor/worker, actual native validation
+GPU run, install/resource release closure or new quality gate was claimed. The old
+installed consumer still rejects the successor instead of silently using a micro
+adapter until a compatible lab release is verified.
 
 Canonical17-member text evidence is committed under source54b09912:
 `artifact_e7406ada2aa94628b59bc4fe78397453` /
@@ -158,3 +158,40 @@ Canonical17-member text evidence is committed under source54b09912:
 `6d9737f73be836dbaa6b861087f069613c6faeecb4773e60c04a76105365d0f5`;
 all members re-resolved with typed hash checks. Source PNGs/PDFs/weights are not
 duplicated. Slack milestone SENT200, `devreport_44f6689c5a4d4fa28bf6098ea01201c7`.
+
+## Consumer source checkpoint
+
+Closed command/result codecs now map1.0 to reference1.0 and1.1 to reference1.2.
+One immutable selected-adapter value controls both Orchestrator staging and the
+paired worker. Reference admission retains its already validated native metadata
+closure, avoiding a second canonical-source traversal. Reserved staging adds only
+the hash-addressed native metadata: no TRAIN target PNGs, PDFs or copied weights
+outside the existing materialization boundary. The staged worker independently
+admits that bounded closure before any reserved pixels or model read.
+
+Native-only selection/document/PDF/group exclusion and shared authorization/basis
+are checked; existing reviewed sources may precede the native configuration but
+must precede their new comparison. Native result lineage hashes, exact family,
+ordered output prefix and historical numerical/resource policies are preserved.
+Command publication, result Artifact manifest and wheel resource checks follow
+the same codec rather than rewriting predecessor meanings. No DB migration,
+dependency, queue, service, privilege or production binding changes are introduced.
+
+Focused regression:169 PASS in79.64 seconds across the new24 native consumer tests,
+legacy reserved contract/worker, schema successor, native reference successor,
+complete native source admission and test-environment boundary. The new tests use
+a complete synthetic multi-batch native closure, not schema-only fake pointers.
+They cover the selected native manifest/revision, metadata-first failure, native-only
+leakage, staged tampering, lineage/family rejection, old-source chronology, paired
+success/failure replay without transforms/models/GPU/writes, canonical-admission
+reuse, publication CPU transform checks and absence of source/adapter duplication.
+Canonical missing/stale/permission failures are injected at the existing resolver;
+this does not replace its real RBAC/infrastructure acceptance.
+
+Ruff, formatter and diff checks are required on the touched files. Strict mypy
+passes seven changed core files with the explicit Python3.12 test interpreter and
+the three contract/provider files under Python3.11. Initial fixture timestamp/hash
+serialization and tuple-union typing failures were corrected before the final
+focused run. No new native reserved GPU dispatch or quality acceptance is claimed.
+Production activation, independent blind review, four-family coverage and the final
+Item Preview/HWPX canary remain separate pending gates.

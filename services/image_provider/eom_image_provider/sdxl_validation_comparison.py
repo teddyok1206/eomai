@@ -14,18 +14,35 @@ from typing import cast, get_args
 
 from eom_image_contracts.models import LocalImageRuntime, content_json_bytes, content_sha256
 from eom_image_contracts.sdxl_canny_reference import (
-    LocalImageSdxlCannyReferenceCommand,
     SdxlCannyReferenceTrace,
     parse_sdxl_canny_reference_predecessors,
 )
 from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonOutput
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
+from eom_image_contracts.sdxl_native_canny_reference import (
+    LocalImageSdxlNativeCannyReferenceCommand,
+    SdxlNativeCannyReferenceSources,
+    native_reference_evaluation,
+    native_reference_metadata_pointers,
+    parse_reference_command,
+    parse_reference_sources,
+)
+from eom_image_contracts.sdxl_native_lora_sources import (
+    NATIVE_LORA_MAX_METADATA_BYTES,
+    SdxlNativeLoraMetadataAdmission,
+    sdxl_native_lora_metadata_member_path,
+)
 from eom_image_contracts.sdxl_validation_comparison import (
     LocalImageSdxlValidationComparisonCommand,
     LocalImageSdxlValidationComparisonResult,
     SdxlValidationComparisonSources,
+    parse_sdxl_validation_command,
     parse_sdxl_validation_configuration,
     parse_sdxl_validation_crop_source,
+    parse_sdxl_validation_result,
+    sdxl_validation_adapter,
+    sdxl_validation_native_result_fields,
+    sdxl_validation_protocol,
     validate_sdxl_validation_result,
     validate_sdxl_validation_sources,
 )
@@ -79,7 +96,7 @@ def read_sdxl_validation_sources(
         maximum_bytes=256 * 1024,
         expected_sha256=command.configuration_anchor.sha256,
     )
-    anchor = LocalImageSdxlCannyReferenceCommand.model_validate_json(anchor_raw)
+    anchor = parse_reference_command(json.loads(anchor_raw))
     inherited = {}
     for name, pointer in (
         ("spatial-command", anchor.spatial_command),
@@ -95,6 +112,36 @@ def read_sdxl_validation_sources(
         anchor, inherited["inputs/spatial-command.json"], inherited["inputs/spatial-result.json"]
     )
     inherited.update(read_sdxl_canny_comparison_metadata(root, spatial))
+    if isinstance(anchor, LocalImageSdxlNativeCannyReferenceCommand):
+        raw = read_staged_member(
+            root,
+            "inputs/native-evaluation-command.json",
+            maximum_bytes=256 * 1024,
+            expected_sha256=anchor.native_evaluation_command.sha256,
+        )
+        evaluation = native_reference_evaluation(anchor, raw)
+        inherited["inputs/native-evaluation-command.json"] = raw
+        for name, pin in native_reference_metadata_pointers(anchor, evaluation).items():
+            if name not in inherited:
+                inherited[name] = read_staged_member(
+                    root, name, maximum_bytes=256 * 1024, expected_sha256=pin.sha256
+                )
+        native_sources = parse_reference_sources(anchor, inherited)
+        if not isinstance(native_sources, SdxlNativeCannyReferenceSources):
+            raise ValueError("SDXL_VALIDATION_NATIVE_CONFIGURATION_MISSING")
+        admission = SdxlNativeLoraMetadataAdmission(native_sources.native.training_command)
+        while pending := admission.pending_pointers():
+            for pointer in pending:
+                name = sdxl_native_lora_metadata_member_path(pointer)
+                raw = read_staged_member(
+                    root,
+                    name,
+                    maximum_bytes=NATIVE_LORA_MAX_METADATA_BYTES,
+                    expected_sha256=pointer.sha256,
+                )
+                admission.admit(pointer, raw)
+                inherited[name] = raw
+        admission.validated_sources()
     configuration = parse_sdxl_validation_configuration(command, anchor_raw, inherited)
     crops = tuple(
         parse_sdxl_validation_crop_source(
@@ -171,8 +218,7 @@ def validate_sdxl_validation_workspace_result(
                 maximum_bytes=256 * 1024,
                 expected_owner_uid=expected_owner_uid,
             )
-            validate_contract("sdxl-validation-comparison-result", json.loads(raw))
-            result = LocalImageSdxlValidationComparisonResult.model_validate_json(raw)
+            result = parse_sdxl_validation_result(json.loads(raw))
             validate_sdxl_validation_result(command, sources, result)
             if raw != content_json_bytes(result.model_dump(mode="json")):
                 raise ValueError("noncanonical reserved comparison result")
@@ -195,9 +241,7 @@ def run_sdxl_validation_comparison(
     expected_model_owner_uid: int = 0,
 ) -> LocalImageSdxlValidationComparisonResult:
     try:
-        command = LocalImageSdxlValidationComparisonCommand.model_validate_json(
-            command.model_dump_json()
-        )
+        command = parse_sdxl_validation_command(command.model_dump(mode="json"))
         if command.created_at > datetime.now(UTC):
             raise ValueError("reserved comparison command is dated in the future")
         with verified_directory(workspace, expected_owner_uid=os.geteuid()) as root:
@@ -287,10 +331,9 @@ def run_sdxl_validation_comparison(
                     sources.configuration.sources.spatial_command.controller,
                     expected_owner_uid=expected_model_owner_uid,
                 )
+                selected = sdxl_validation_adapter(sources.configuration)
                 material = load_sdxl_lora_material(
-                    root,
-                    spatial.targets.lora.manifest,
-                    strength=spatial.targets.evaluation.evaluation.adapter_strength,
+                    root, selected.manifest, strength=selected.strength
                 )
                 pair = run_sdxl_pair_inference(
                     root=root,
@@ -323,7 +366,7 @@ def run_sdxl_validation_comparison(
             except Exception:
                 error = "SDXL_PROBE_EXEC_FAILED"
             value = dict(
-                schema_version="local-image-sdxl-validation-comparison-result/1.0",
+                schema_version=sdxl_validation_protocol(command).result_version,
                 run_id=command.run_id,
                 command_sha256=command.command_sha256,
                 configuration_command_sha256=sources.configuration.command.command_sha256,
@@ -341,12 +384,15 @@ def run_sdxl_validation_comparison(
                 started_at=started_at.isoformat().replace("+00:00", "Z"),
                 completed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                 duration_ms=max(1, int((time.monotonic() - start) * 1000)),
+                **sdxl_validation_native_result_fields(sources),
             )
-            result = LocalImageSdxlValidationComparisonResult.model_validate(
+            result = sdxl_validation_protocol(command).result_model.model_validate(
                 {**value, "result_sha256": content_sha256(value)}
             )
             validate_sdxl_validation_result(command, sources, result)
-            validate_contract("sdxl-validation-comparison-result", result.model_dump(mode="json"))
+            validate_contract(
+                sdxl_validation_protocol(command).result_contract, result.model_dump(mode="json")
+            )
             write_staged_member(
                 root, "result.json", content_json_bytes(result.model_dump(mode="json"))
             )

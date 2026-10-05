@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
-from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
+from eom_image_contracts.sdxl_native_canny_reference import parse_reference_command
+from eom_image_contracts.sdxl_native_lora_sources import sdxl_native_lora_metadata_member_path
 from eom_image_contracts.sdxl_validation_comparison import (
     LocalImageSdxlValidationComparisonCommand,
+    LocalImageSdxlValidationComparisonCommandV2,
     SdxlValidationComparisonSources,
+    parse_sdxl_validation_command,
     parse_sdxl_validation_configuration,
     parse_sdxl_validation_crop_source,
+    sdxl_validation_adapter,
     validate_sdxl_validation_sources,
 )
-from eom_image_contracts.validation import validate_contract
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import (
@@ -52,20 +56,22 @@ class PreparedSdxlValidationInputs:
 def resolve_sdxl_validation_metadata(
     engine: Engine, command: LocalImageSdxlValidationComparisonCommand
 ) -> ResolvedSdxlValidationMetadata:
-    validate_contract("sdxl-validation-comparison-command", command.model_dump(mode="json"))
-    command = LocalImageSdxlValidationComparisonCommand.model_validate_json(
-        command.model_dump_json()
-    )
+    command = parse_sdxl_validation_command(command.model_dump(mode="json"))
     anchor_raw = resolve_control_artifact_member(
         engine, command.configuration_anchor, maximum_bytes=256 * 1024
     )
-    anchor = LocalImageSdxlCannyReferenceCommand.model_validate_json(anchor_raw)
+    anchor = parse_reference_command(json.loads(anchor_raw))
     configuration_metadata = resolve_sdxl_canny_reference_metadata(engine, anchor)
     inherited = {
         file.member_path: file.payload
         for file in configuration_metadata.files
         if file.member_path != "command.json"
     }
+    if isinstance(command, LocalImageSdxlValidationComparisonCommandV2):
+        native = configuration_metadata.native_admission
+        if native is None:
+            raise ValueError("SDXL_VALIDATION_NATIVE_SOURCE_ADMISSION_MISSING")
+        inherited.update({file.member_path: file.payload for file in native.metadata})
     configuration = parse_sdxl_validation_configuration(command, anchor_raw, inherited)
     metadata = {**inherited, "inputs/configuration-command.json": anchor_raw}
     crop_sources = []
@@ -130,13 +136,20 @@ def sdxl_validation_metadata_hashes(admitted: ResolvedSdxlValidationMetadata) ->
     for index, source in enumerate(command.crop_sources):
         expected[f"inputs/validation-sources/{index}/review.json"] = source.review.sha256
         expected[f"inputs/validation-sources/{index}/crop-set.json"] = source.crop_set.sha256
+    if configuration.native_training_sources is not None:
+        expected.update(
+            {
+                sdxl_native_lora_metadata_member_path(p): p.sha256
+                for p in configuration.native_training_sources.metadata_pointers
+            }
+        )
     return expected
 
 
 def sdxl_validation_input_hashes(prepared: PreparedSdxlValidationInputs) -> dict[str, str]:
     expected = sdxl_validation_metadata_hashes(prepared.metadata)
     sources = prepared.metadata.sources
-    pin = sources.configuration.sources.spatial_sources.targets.evaluation.evaluation
+    selected = sdxl_validation_adapter(sources.configuration)
     expected.update(
         {
             entry.case.staged_member_path: entry.case.reference_image.sha256
@@ -144,13 +157,8 @@ def sdxl_validation_input_hashes(prepared: PreparedSdxlValidationInputs) -> dict
         }
     )
     expected.update(
-        {
-            "inputs/adapter/" + file.relative_path: file.sha256
-            for file in sources.configuration.sources.spatial_sources.targets.lora.manifest.files
-        }
+        {"inputs/adapter/" + file.relative_path: file.sha256 for file in selected.manifest.files}
     )
-    if pin.training_result.artifact_revision_id != pin.adapter_manifest.artifact_revision_id:
-        raise ValueError("SDXL_VALIDATION_ADAPTER_REVISION_INVALID")
     return expected
 
 
@@ -164,15 +172,14 @@ def prepare_sdxl_validation_inputs(
     for entry, (_, member) in zip(admitted.command.cases, members, strict=True):
         reads.append(BoundedControlArtifactRead(entry.case.reference_image, member.size_bytes))
         paths.append(entry.case.staged_member_path)
-    spatial = admitted.sources.configuration.sources.spatial_sources
-    pin = spatial.targets.evaluation.evaluation
-    for file in spatial.targets.lora.manifest.files:
+    selected = sdxl_validation_adapter(admitted.sources.configuration)
+    for file in selected.manifest.files:
         bound = 64 * 1024 if file.relative_path.endswith(".json") else 64 * 1024**2
         if not 0 < file.size_bytes <= bound:
             raise ValueError("SDXL_VALIDATION_ADAPTER_SIZE_INVALID")
         pointer = ImageEvaluationArtifactMember(
-            artifact_id=pin.training_result.artifact_id,
-            artifact_revision_id=pin.training_result.artifact_revision_id,
+            artifact_id=selected.training_result.artifact_id,
+            artifact_revision_id=selected.training_result.artifact_revision_id,
             member_path="adapter/" + file.relative_path,
             schema_ref="eom://schemas/image-provider/local-image-lora-adapter-file/1.0",
             media_type="application/json"

@@ -61,6 +61,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/sdxl_validation_comparison.py",
         "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-command-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-result-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-command-v2.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-validation-comparison-result-v2.schema.json",
         "eom_image_contracts/source_page_crops.py",
         "eom_image_contracts/source_pdf_crops.py",
         "eom_image_contracts/schemas/local-image-science-source-pdf-render-request-v1.schema.json",

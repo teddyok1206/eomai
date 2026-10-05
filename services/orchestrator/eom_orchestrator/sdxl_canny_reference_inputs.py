@@ -38,7 +38,10 @@ from eom_orchestrator.sdxl_canny_comparison_inputs import (
     resolve_sdxl_canny_comparison_metadata,
     sdxl_canny_comparison_input_hashes,
 )
-from eom_orchestrator.sdxl_native_lora_inputs import resolve_sdxl_native_lora_sources
+from eom_orchestrator.sdxl_native_lora_inputs import (
+    AdmittedSdxlNativeLoraSources,
+    resolve_sdxl_native_lora_sources,
+)
 from eom_orchestrator.sdxl_probe_inputs import SdxlProbeInputMember
 
 
@@ -58,6 +61,7 @@ class ResolvedSdxlCannyReferenceMetadata:
     sources: SdxlCannyReferenceSources
     spatial_metadata: ResolvedSdxlCannyComparisonMetadata
     files: tuple[SdxlProbeInputMember, ...]
+    native_admission: AdmittedSdxlNativeLoraSources | None = None
 
 
 def sdxl_canny_reference_metadata_hashes(
@@ -164,6 +168,7 @@ def resolve_sdxl_canny_reference_metadata(
                     engine, pin, maximum_bytes=256 * 1024
                 )
     sources = parse_reference_sources(command, metadata)
+    native = None
     if isinstance(sources, SdxlNativeCannyReferenceSources):
         native = resolve_sdxl_native_lora_sources(engine, sources.native.training_command)
         old_training = sources.spatial_sources.targets.lora.training_command
@@ -186,6 +191,7 @@ def resolve_sdxl_canny_reference_metadata(
             SdxlProbeInputMember(name, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
             for name, raw in sorted(metadata.items())
         ),
+        native,
     )
 
 

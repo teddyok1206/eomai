@@ -88,7 +88,7 @@ def publish_sdxl_validation_comparison(
     if (
         created_at.tzinfo is None
         or created_at.utcoffset() != UTC.utcoffset(created_at)
-        or command_pointer.schema_ref != _PREFIX + "sdxl-validation-comparison-command/1.0"
+        or command_pointer.schema_ref != "eom://schemas/image-provider/" + command.schema_version
         or command_pointer.member_path != "manifests/sdxl-validation-comparison-command.json"
         or command_pointer.media_type != "application/json"
     ):
@@ -144,7 +144,9 @@ def publish_sdxl_validation_comparison(
             return raw
 
         primary = "manifests/sdxl-validation-comparison-result.json"
-        admit("result.json", "sdxl-validation-comparison-result/1.0", destination=primary)
+        admit(
+            "result.json", result.schema_version.removeprefix("local-image-"), destination=primary
+        )
         for trace in result.inputs:
             admit(
                 "conditionings/" + trace.case_id + ".png",
@@ -170,7 +172,9 @@ def publish_sdxl_validation_comparison(
         members=tuple(sorted(members, key=lambda member: member.file_name)),
         primary_file=primary,
         artifact_type="control_local_image_sdxl_validation_result",
-        manifest_version="sdxl-validation-comparison-result-artifact/1.0",
+        manifest_version=result.schema_version.removeprefix("local-image-").replace(
+            "-result/", "-result-artifact/"
+        ),
         idempotency_key="sdxl-validation-result:" + command.command_sha256[7:],
         source_commit=source_commit,
         created_at=created_at,

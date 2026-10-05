@@ -46,6 +46,7 @@ from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroC
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
 from eom_image_contracts.sdxl_validation_comparison import (
     LocalImageSdxlValidationComparisonCommand,
+    sdxl_validation_protocol,
 )
 from pydantic import BaseModel
 
@@ -400,11 +401,9 @@ class LocalImageTrainingControlArtifactPublisher:
     ) -> ImageEvaluationArtifactMember:
         return self._commit_document(
             value=command,
-            contract_name="sdxl-validation-comparison-command",
+            contract_name=sdxl_validation_protocol(command).command_contract,
             member="manifests/sdxl-validation-comparison-command.json",
-            schema_ref=(
-                "eom://schemas/image-provider/local-image-sdxl-validation-comparison-command/1.0"
-            ),
+            schema_ref="eom://schemas/image-provider/" + command.schema_version,
             artifact_type="control_local_image_sdxl_validation_comparison_command",
             idempotency_prefix="local-image-sdxl-validation-comparison-command",
             identity_sha256=command.command_sha256,

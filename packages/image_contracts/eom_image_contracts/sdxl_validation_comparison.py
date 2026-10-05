@@ -7,6 +7,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Literal, Self, TypeVar
 
 from pydantic import Field, field_validator, model_validator
@@ -23,7 +24,6 @@ from eom_image_contracts.sdxl_canny_reference import (
     LocalImageSdxlCannyReferenceCommand,
     SdxlCannyReferenceSources,
     SdxlCannyReferenceTrace,
-    parse_sdxl_canny_reference_sources,
     validate_sdxl_canny_reference_sources,
 )
 from eom_image_contracts.sdxl_learned_comparison import (
@@ -32,6 +32,17 @@ from eom_image_contracts.sdxl_learned_comparison import (
     SdxlLearnedComparisonOutput,
 )
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase, SdxlProbeErrorCode
+from eom_image_contracts.sdxl_lora_micro import LocalImageSdxlLoraMicroAdapterManifest
+from eom_image_contracts.sdxl_native_canny_reference import (
+    LocalImageSdxlNativeCannyReferenceCommandV2,
+    SdxlNativeCannyReferenceSources,
+    parse_reference_sources,
+)
+from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
+from eom_image_contracts.sdxl_native_lora_sources import (
+    SdxlNativeLoraSources,
+    parse_sdxl_native_lora_sources,
+)
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_contracts.source_page_crops import (
     SOURCE_PAGE_CROP_REVIEW_V3_SCHEMA_REF,
@@ -43,6 +54,7 @@ from eom_image_contracts.source_page_crops import (
     LocalImageScienceSourcePageCropSetV2,
     LocalImageScienceSourcePageCropSetV3,
     ScienceSourcePageCropMember,
+    ScienceSourcePageCropRegion,
     ScienceSourcePageRegionSelection,
     source_page_crop_pointer,
     validate_source_page_crop_set,
@@ -127,8 +139,9 @@ class LocalImageSdxlValidationComparisonCommand(FrozenModel):
     @model_validator(mode="after")
     def exact_command(self) -> Self:
         anchor = self.configuration_anchor
+        protocol = sdxl_validation_protocol(self)
         if (
-            anchor.schema_ref != _PREFIX + "sdxl-canny-reference-command/1.0"
+            anchor.schema_ref != protocol.anchor_schema_ref
             or anchor.member_path != "manifests/sdxl-canny-reference-command.json"
             or anchor.media_type != "application/json"
         ):
@@ -164,11 +177,38 @@ class LocalImageSdxlValidationComparisonCommand(FrozenModel):
         return self
 
 
+class LocalImageSdxlValidationComparisonCommandV2(LocalImageSdxlValidationComparisonCommand):
+    schema_version: Literal["local-image-sdxl-validation-comparison-command/1.1"]  # type: ignore[assignment]
+
+
 @dataclass(frozen=True, slots=True)
 class SdxlValidationConfiguration:
     command: LocalImageSdxlCannyReferenceCommand
     sources: SdxlCannyReferenceSources
     training_review: LocalImageScienceSourcePageCropReview
+    native_training_sources: SdxlNativeLoraSources | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlValidationAdapter:
+    training_result: ImageEvaluationArtifactMember
+    manifest: LocalImageSdxlLoraMicroAdapterManifest | LocalImageSdxlNativeLoraAdapterManifest
+    strength: float
+
+
+def sdxl_validation_adapter(configuration: SdxlValidationConfiguration) -> SdxlValidationAdapter:
+    """One rule owns the weights selected by canonical staging and numerical execution."""
+    sources = configuration.sources
+    if isinstance(sources, SdxlNativeCannyReferenceSources):
+        return SdxlValidationAdapter(
+            sources.evaluation.evaluation.training_result,
+            sources.native.manifest,
+            sources.evaluation.evaluation.adapter_strength,
+        )
+    pin = sources.spatial_sources.targets.evaluation.evaluation
+    return SdxlValidationAdapter(
+        pin.training_result, sources.spatial_sources.targets.lora.manifest, pin.adapter_strength
+    )
 
 
 def parse_sdxl_validation_configuration(
@@ -176,13 +216,14 @@ def parse_sdxl_validation_configuration(
     anchor_raw: bytes,
     metadata: Mapping[str, bytes],
 ) -> SdxlValidationConfiguration:
+    protocol = sdxl_validation_protocol(command)
     anchor = _document(
         command.configuration_anchor,
         anchor_raw,
-        "sdxl-canny-reference-command",
-        LocalImageSdxlCannyReferenceCommand,
+        protocol.anchor_contract,
+        protocol.anchor_model,
     )
-    sources = parse_sdxl_canny_reference_sources(anchor, metadata)
+    sources = parse_reference_sources(anchor, metadata)
     training = sources.spatial_sources.targets.lora.training_command
     if not isinstance(training, LocalImageSdxlReviewedMicroCommand):
         raise ValueError("reserved comparison requires admitted reviewed training history")
@@ -204,7 +245,20 @@ def parse_sdxl_validation_configuration(
         else LocalImageScienceSourcePageCropReview,
     )
     validate_source_page_crop_set(review, crop_set)
-    return SdxlValidationConfiguration(anchor, sources, review)
+    native_sources = None
+    if isinstance(command, LocalImageSdxlValidationComparisonCommandV2):
+        if not isinstance(sources, SdxlNativeCannyReferenceSources):
+            raise ValueError("SDXL_VALIDATION_NATIVE_CONFIGURATION_MISSING")
+        native_sources = parse_sdxl_native_lora_sources(
+            sources.native.training_command,
+            {name: raw for name, raw in metadata.items() if name.startswith("inputs/metadata/")},
+        )
+        if (
+            sources.native.training_command.training_authorization != review.training_authorization
+            or native_sources.batches[0].sources.review.basis_crop_set != review.basis_crop_set
+        ):
+            raise ValueError("SDXL_VALIDATION_NATIVE_SOURCE_BASIS_MISMATCH")
+    return SdxlValidationConfiguration(anchor, sources, review, native_sources)
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,7 +312,15 @@ def validate_sdxl_validation_sources(
     ):
         raise ValueError("reserved comparison configuration/seed/source order mismatch")
     training = {row.sample_id for row in spatial.targets.lora.training_command.training_samples}
-    training_rows = configuration.training_review.selections
+    training_rows: tuple[ScienceSourcePageRegionSelection | ScienceSourcePageCropRegion, ...] = (
+        configuration.training_review.selections
+    )
+    if isinstance(command, LocalImageSdxlValidationComparisonCommandV2):
+        if configuration.native_training_sources is None:
+            raise ValueError("SDXL_VALIDATION_NATIVE_SOURCE_CLOSURE_MISSING")
+        # The historical anchor cannot certify absence of native-only TRAIN leakage.
+        training_rows = (*training_rows, *configuration.native_training_sources.regions)
+        training.update(row.selection_id for row in configuration.native_training_sources.regions)
     training_documents = {row.document_id for row in training_rows}
     training_pdfs = {row.source_document.sha256 for row in training_rows}
     training_groups = {row.exam_group_sha256 for row in training_rows}
@@ -275,7 +337,11 @@ def validate_sdxl_validation_sources(
             or source.review.training_authorization
             != configuration.training_review.training_authorization
             or source.review.basis_crop_set != configuration.training_review.basis_crop_set
-            or source.review.created_at < configuration.command.created_at
+            or (
+                not isinstance(command, LocalImageSdxlValidationComparisonCommandV2)
+                and source.review.created_at < configuration.command.created_at
+            )
+            or source.review.created_at > command.created_at
             or source.crop_set.created_at > command.created_at
         ):
             raise ValueError("reserved comparison source authorization/temporal basis mismatch")
@@ -360,12 +426,112 @@ class LocalImageSdxlValidationComparisonResult(FrozenModel):
         return self
 
 
+class LocalImageSdxlValidationComparisonResultV2(LocalImageSdxlValidationComparisonResult):
+    schema_version: Literal["local-image-sdxl-validation-comparison-result/1.1"]  # type: ignore[assignment]
+    native_evaluation_command_sha256: Sha256
+    native_adapter_manifest_sha256: Sha256
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlValidationProtocol:
+    command_version: str
+    result_version: str
+    command_model: type[LocalImageSdxlValidationComparisonCommand]
+    result_model: type[LocalImageSdxlValidationComparisonResult]
+    command_contract: str
+    result_contract: str
+    anchor_model: type[LocalImageSdxlCannyReferenceCommand]
+    anchor_contract: str
+    anchor_schema_ref: str
+
+
+_PROTOCOLS = (
+    SdxlValidationProtocol(
+        "local-image-sdxl-validation-comparison-command/1.0",
+        "local-image-sdxl-validation-comparison-result/1.0",
+        LocalImageSdxlValidationComparisonCommand,
+        LocalImageSdxlValidationComparisonResult,
+        "sdxl-validation-comparison-command",
+        "sdxl-validation-comparison-result",
+        LocalImageSdxlCannyReferenceCommand,
+        "sdxl-canny-reference-command",
+        _PREFIX + "sdxl-canny-reference-command/1.0",
+    ),
+    SdxlValidationProtocol(
+        "local-image-sdxl-validation-comparison-command/1.1",
+        "local-image-sdxl-validation-comparison-result/1.1",
+        LocalImageSdxlValidationComparisonCommandV2,
+        LocalImageSdxlValidationComparisonResultV2,
+        "sdxl-validation-comparison-command-v2",
+        "sdxl-validation-comparison-result-v2",
+        LocalImageSdxlNativeCannyReferenceCommandV2,
+        "sdxl-canny-reference-command-v3",
+        _PREFIX + "sdxl-canny-reference-command/1.2",
+    ),
+)
+_COMMAND_PROTOCOLS = MappingProxyType({p.command_version: p for p in _PROTOCOLS})
+_RESULT_PROTOCOLS = MappingProxyType({p.result_version: p for p in _PROTOCOLS})
+
+
+def sdxl_validation_protocol(
+    command: LocalImageSdxlValidationComparisonCommand,
+) -> SdxlValidationProtocol:
+    protocol = _COMMAND_PROTOCOLS.get(command.schema_version)
+    if protocol is None or type(command) is not protocol.command_model:
+        raise ValueError("SDXL_VALIDATION_COMMAND_FAMILY_INVALID")
+    return protocol
+
+
+def parse_sdxl_validation_command(value: object) -> LocalImageSdxlValidationComparisonCommand:
+    from eom_image_contracts.validation import validate_contract
+
+    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), str):
+        raise ValueError("SDXL_VALIDATION_COMMAND_FAMILY_INVALID")
+    protocol = _COMMAND_PROTOCOLS.get(value["schema_version"])
+    if protocol is None:
+        raise ValueError("SDXL_VALIDATION_COMMAND_FAMILY_INVALID")
+    validate_contract(protocol.command_contract, value)
+    return protocol.command_model.model_validate(value)
+
+
+def parse_sdxl_validation_result(value: object) -> LocalImageSdxlValidationComparisonResult:
+    from eom_image_contracts.validation import validate_contract
+
+    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), str):
+        raise ValueError("SDXL_VALIDATION_RESULT_FAMILY_INVALID")
+    protocol = _RESULT_PROTOCOLS.get(value["schema_version"])
+    if protocol is None:
+        raise ValueError("SDXL_VALIDATION_RESULT_FAMILY_INVALID")
+    validate_contract(protocol.result_contract, value)
+    return protocol.result_model.model_validate(value)
+
+
+def sdxl_validation_native_result_fields(
+    sources: SdxlValidationComparisonSources,
+) -> dict[str, str]:
+    configuration = sources.configuration.sources
+    if isinstance(configuration, SdxlNativeCannyReferenceSources):
+        return {
+            "native_evaluation_command_sha256": configuration.evaluation.command_sha256,
+            "native_adapter_manifest_sha256": configuration.native.manifest.manifest_sha256,
+        }
+    return {}
+
+
 def validate_sdxl_validation_result(
     command: LocalImageSdxlValidationComparisonCommand,
     sources: SdxlValidationComparisonSources,
     result: LocalImageSdxlValidationComparisonResult,
 ) -> None:
+    if type(result) is not sdxl_validation_protocol(command).result_model:
+        raise ValueError("SDXL_VALIDATION_RESULT_FAMILY_INVALID")
     validate_sdxl_validation_sources(command, sources)
+    native_fields = sdxl_validation_native_result_fields(sources)
+    if isinstance(result, LocalImageSdxlValidationComparisonResultV2) and (
+        native_fields != {name: getattr(result, name) for name in native_fields}
+        or not isinstance(sources.configuration.sources, SdxlNativeCannyReferenceSources)
+    ):
+        raise ValueError("SDXL_VALIDATION_NATIVE_RESULT_LINEAGE_MISMATCH")
     expected = tuple(
         (arm, entry.case.case_id, command.seed)
         for arm in LEARNED_COMPARISON_ARMS
