@@ -427,3 +427,88 @@ Remaining next gate: quiescence/rollback review and isolated lab install/role
 verification, then one paired masked-control execution. Preserve original baseline
 outputs and training data; no new prompt/seed/control/adapter sweep. Goal remains
 ACTIVE and overall quality NOT_ACCEPTED.
+
+### Installed lab, actual masked pair and own review (2026-10-06 UTC)
+
+This successor closes the earlier not-installed/not-dispatched checkpoints;
+those historical assertions remain scoped to their own timestamps. At09:13:12UTC
+the protected operator installed only the two contract/provider wheels from
+source28324e85 into the isolated image-trainer environment. Wheel/raw RECORD,
+installed-role imports, pip-check and unchanged numerical dependency versions
+PASS. Trainer wheel, production provider environment, units and permissions
+were not changed. Existing source219b9d65 rollback wheels were verified before
+overwrite; numerical dependencies and production binding f96eda84 are unchanged.
+The initial local import-check invocation error was fixed before installation.
+
+One frozen command was registered:
+`imgsdxlvalcmprun_09ff5de94dfd583c438beac220877a01`, semantic SHA
+`69c4fa6c821b5db22db2e652f3332821d3fe99618790ddc712d8711eb9056dd3`;
+Artifact `artifact_5b07ce746fbd4d2db86831e9cd87147a` /
+`rev_11deaab5f55a4d078a460cd0a06ac467`, command1.6 raw SHA
+`85882297f9151afe22ae8fc03fd561527d3f8fc22cf1d307b590e0d2aacf5147`.
+The unchanged preparation plan admitted77 metadata members and83 total staged
+members. Actual installed UID984/-I CPU validation reproduced the prior Canny
+hash from the pinned photo/canvas and verified source/control/mask/candidate
+pixels, parent metadata and white initializer. CPU validation loaded no model,
+GPU, SQL or repository. Both offline tokenizers passed all4 actual capacity
+checks (positive62/negative37, maximum77); no truncation or prompt modification.
+
+Exactly one existing systemd/GPU-lease execution ran09:21:28.980681–
+09:21:49.243928UTC:20,263ms,2 actual BASE/LoRA outputs, peak10,763,033,600bytes
+on RTX5080. No training, sweep, automatic retry, new execution identity or
+production activation. Frozen source/original ink prompt/negative/seed/adapter/
+initializer/recipe/TRAIN100 were reused; only reviewed object support changed.
+GPU returned idle afterward. Prior outputs were resolved, not regenerated.
+
+Canonical result1.6: `artifact_9ce48c19683b42e08b87e892b4e1ce51` /
+`rev_6cdedfd124894eb0a9786bedcfa2bf53`, primary
+`manifests/sdxl-photo-style-result.json`, raw SHA
+`9f1f96860d1009bfda04851d3d7aef99028d99afeb98c5c18ff96a26a6d18ff4`;
+semantic SHA `aeebbe8c7d893b113d7d7b28c2425cdf41010c3f25e4976716f8ea1245fbd42c`.
+All6 result/initializer/raw/final members reread byte-equal. Existing canonical
+conditioning is referenced, not copied into another result Artifact. Actual
+installed-role terminal replay verified the same result with model/GPU lease/
+Canny/transform/write paths blocked, unchanged workspace files and no torch/SQL/
+repository imports. Owner publication independently verified staged pixels and
+result transforms on CPU before committing. All5 pinned source/old/new final
+images were read through the canonical resolver at the display boundary.
+
+Own inspection opened the labelled comparison and both new full-size final PNGs.
+The contact contains4 model outputs:2 historical above,2 newly generated below,
+zero source photographs. A separately exported source photograph is explicitly
+NOT a generated output. Trees/grass/rear vehicles visibly decrease; main-car
+orientation, placement and two visible wheel positions are broadly retained.
+This is promising single-case spatial-input improvement, not semantic proof.
+Gray body panels/reflections, multiple hatched contours and wheel/body halos
+remain. Masked LoRA's fine-detail metric77milli vs BASE206milli is descriptive,
+not an institutional-quality score. Own disposition: **NOT_ACCEPTED** for the
+requested crisp sparse exam-line style. Independent blind review, untouched
+HOLDOUT, population/four-family coverage and Item/HWPX canary remain open.
+
+Operation failures are preserved, not worker failures or repeated generation:
+the group-writable temporary preparation script was rejected before dispatch;
+its exact bytes were preserved and mode restricted0600, retaining the reader
+guard. A publication-only check mistakenly required a completed oneshot's
+in-memory start timestamp after systemd unloaded it. Exact persisted journal
+result equality now proves the observed execution instead. journalctl JSON
+omits long MESSAGE fields by default, so bounded --all reading was required.
+All those failures occurred before publication, with no second GPU dispatch.
+Temporary owner operators pass Ruff lint/format; no core source changed after
+the preceding443-test run, and that run is not claimed as newly repeated here.
+
+Own review, diagnostic contact, execution/install/replay evidence, exact operators
+and failed-preflight logs were committed through the existing Orchestrator:
+`artifact_64e559d7fcfc4eb4900603b7580f617a` /
+`rev_30c3f54d41a847c5b2867dd9ebe72afc`, primary `reports/own-review.json`,
+operations/plain-text-log/1.0, text/plain, SHA
+`a1b0ce1d59be81e7562dc556b694c7b50a3cc83cbee0ef9d43f0319106982726`.
+All23 members/625,906bytes reread byte-equal. Original source, historical and new
+individual PNGs are pointers, not duplicated in the evidence archive; the contact
+is an explicitly derived diagnostic. Local sample views:
+`/tmp/eom-photo-object-support-execution-20261006/{matched-contact,masked-base,masked-lora}.png`.
+
+Next: read the existing rejected global-blur/control-end and style-only/native
+training evaluations before choosing another bounded factor. Separate residual
+photographic interior control from learned sparse-ink style; this result does not
+authorize a parameter sweep, segmentation dependency, more training or activation.
+Overall goal ACTIVE. Production unchanged; five main services ACTIVE.
