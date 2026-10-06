@@ -14,7 +14,11 @@ from eom_image_contracts.models import (
     content_json_bytes,
 )
 from eom_image_contracts.science_corpus_visual import LocalImageScienceCorpusTrainingAuthorization
-from eom_image_contracts.sdxl_native_lora import NativeLoraCommand, native_lora_command_protocol
+from eom_image_contracts.sdxl_native_lora import (
+    LocalImageSdxlNativeLoraCommandV4,
+    NativeLoraCommand,
+    native_lora_command_protocol,
+)
 from eom_image_contracts.sdxl_native_training_targets import (
     SDXL_EXTERIOR_TARGET_COMMAND_SCHEMA_REF,
     SDXL_EXTERIOR_TARGET_RESULT_SCHEMA_REF,
@@ -204,6 +208,8 @@ class SdxlNativeLoraMetadataAdmission:
             *(p for batch in command.target_batches for p in (batch.command, batch.result)),
         ):
             self._require(pointer)
+        if isinstance(self.command, LocalImageSdxlNativeLoraCommandV4):
+            self._require(self.command.objective_evidence)
 
     def _require(self, pointer: ImageEvaluationArtifactMember) -> None:
         location = (pointer.artifact_id, pointer.artifact_revision_id, pointer.member_path)

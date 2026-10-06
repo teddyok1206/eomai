@@ -44,6 +44,7 @@ _PREFIX = "eom://schemas/image-provider/local-image-"
 SDXL_NATIVE_LORA_COMMAND_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.0"
 SDXL_NATIVE_LORA_COMMAND_V2_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.1"
 SDXL_NATIVE_LORA_COMMAND_V3_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.2"
+SDXL_NATIVE_LORA_COMMAND_V4_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.3"
 SDXL_NATIVE_LORA_RESULT_SCHEMA_REF = _PREFIX + "sdxl-native-lora-result/1.0"
 SDXL_NATIVE_LORA_ADAPTER_SCHEMA_REF = _PREFIX + "sdxl-native-lora-adapter-manifest/1.0"
 NativeLoraProfile = Literal["NATIVE_RESOLUTION_PILOT", "FULL_STYLE_TRAINING"]
@@ -317,10 +318,51 @@ class LocalImageSdxlNativeLoraCommandV3(_NativeLoraCommand):
         return self
 
 
+class SdxlNativeContourLossPolicy(FrozenModel):
+    """Closed experimental loss value; source pixels and old objectives stay intact."""
+
+    policy_version: Literal["SOURCE_DARK_CELL_WEIGHT_2_1/1.0"]
+    source_cell_size_px: Literal[8]
+    dark_luminance_threshold: Literal[96]
+    dark_cell_weight: Literal[2]
+    other_cell_weight: Literal[1]
+    normalization: Literal["BROADCAST_WEIGHT_SUM"]
+
+    @field_validator(
+        "source_cell_size_px",
+        "dark_luminance_threshold",
+        "dark_cell_weight",
+        "other_cell_weight",
+        mode="before",
+    )
+    @classmethod
+    def strict_integer_policy(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("SDXL_NATIVE_LORA_LOSS_POLICY_INTEGER_INVALID")
+        return value
+
+
+class LocalImageSdxlNativeLoraCommandV4(LocalImageSdxlNativeLoraCommandV3):
+    schema_version: Literal["local-image-sdxl-native-lora-command/1.3"]  # type: ignore[assignment]
+    loss_policy: SdxlNativeContourLossPolicy
+    objective_evidence: ImageEvaluationArtifactMember
+
+    @model_validator(mode="after")
+    def objective_review_pointer(self) -> Self:
+        if (
+            self.objective_evidence.schema_ref != "eom://schemas/operations/plain-text-log/1.0"
+            or self.objective_evidence.media_type != "text/plain"
+            or self.objective_evidence.member_path != "reports/own-review.json"
+        ):
+            raise ValueError("SDXL_NATIVE_LORA_OBJECTIVE_EVIDENCE_POINTER_INVALID")
+        return self
+
+
 NativeLoraCommand = (
     LocalImageSdxlNativeLoraCommand
     | LocalImageSdxlNativeLoraCommandV2
     | LocalImageSdxlNativeLoraCommandV3
+    | LocalImageSdxlNativeLoraCommandV4
 )
 
 
@@ -331,6 +373,7 @@ class NativeLoraCommandProtocol:
         type[LocalImageSdxlNativeLoraCommand]
         | type[LocalImageSdxlNativeLoraCommandV2]
         | type[LocalImageSdxlNativeLoraCommandV3]
+        | type[LocalImageSdxlNativeLoraCommandV4]
     )
 
 
@@ -347,6 +390,10 @@ _NATIVE_LORA_COMMAND_PROTOCOLS: Mapping[str, NativeLoraCommandProtocol] = Mappin
         "local-image-sdxl-native-lora-command/1.2": NativeLoraCommandProtocol(
             "sdxl-native-lora-command-v3",
             LocalImageSdxlNativeLoraCommandV3,
+        ),
+        "local-image-sdxl-native-lora-command/1.3": NativeLoraCommandProtocol(
+            "sdxl-native-lora-command-v4",
+            LocalImageSdxlNativeLoraCommandV4,
         ),
     }
 )

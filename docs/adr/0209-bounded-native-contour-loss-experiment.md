@@ -1,6 +1,6 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
-Status: PLANNED, NOT IMPLEMENTED OR TRAINED. 2026-10-06 UTC.
+Status: IMPLEMENTED IN SOURCE; NOT INSTALLED OR TRAINED. 2026-10-06 UTC.
 
 ## Evidence and decision
 
@@ -44,8 +44,8 @@ hatching too; evaluation must detect that risk.
    or binary DB/cache aggregate; no new dependency or index needed.
 7. Numerical rule: scalar cell weights2 for dark-containing,1 otherwise,
    broadcast across latent channels. Loss equals
-   `sum(weight * squared_error) / sum(broadcast_weight)` in float32. It remains
-   finite and positive, keeps every cell, and is identical to ordinary MSE when
+   `sum(weight * squared_error) / sum(broadcast_weight)` in float32. Weights remain
+   positive; loss is nonnegative, keeps every cell, and equals ordinary MSE when
    weights are uniform. Fixed bounded2:1 is the one change, not a sweep or an
    inverse-frequency rule. Do not turn source pixels into latent ground truth.
 8. Transaction/concurrency: reuse current command idempotency, exact owner ledger
@@ -92,5 +92,60 @@ hatching too; evaluation must detect that risk.
   before any broader quality claim. Any later production use still requires
   successor Item Preview/HWPX canary plus activation/rollback gates.
 
-There has been no weighted-loss training or new generated sample for this ADR.
-Implementation is the next authorized goal task, not a completed acceptance.
+## Source implementation and actual CPU verification
+
+Native command1.3 adds a closed `loss_policy` value and an immutable
+`objective_evidence` pointer to the completed operation review. JSON Schema was
+defined first; its canonical and wheel-package copies are byte-equal, raw SHA
+`4084b214375339f228053508cdac29f9cb25d073882b7a7c1906a3707a646c8d`.
+Earlier command1.0–1.2 schema bytes/hashes/meanings are unchanged. No new result
+schema is necessary: result/adapter1.0 already pin the exact command content hash
+and profile, rather than implicitly naming an objective. Existing inference
+protocols are not loosened to accept1.3 adapters; their successor evaluation
+admission remains future work, before generating the candidate samples.
+
+The existing metadata admission now requires and verifies the operation evidence
+as well as its original canonical source closure. The owner resolver/stager and
+isolated native CLI reuse their exact closed version dispatcher. No alternate
+publication or worker protocol was added. Only parsed1.3 commands route the
+explicit frozen loss value into the numerical recipe;1.2 retains uniform MSE.
+
+`eom_image_trainer/native_contour_loss.py` owns decoded-luminance pooling and
+float32 tensor accounting. The shared VAE input preparation decodes each PNG
+once, uses unchanged RGB for the VAE, and derives Pillow-luminance weights from
+that same decoded input only when1.3 asks for them. It returns a frozen encoded
+input value; weights are cached once, never reparsed per micro-step. The old
+`_latents` instrumentation interface still returns its original latent tuple.
+Sample/latent/weight counts fail explicitly before optimizer construction if
+inconsistent. Existing loss/gradient nonfinite and budget guards remain in force.
+
+Tests cover schema/model/canonical/wheel agreement, strict closed policy values,
+required/role/hash/duplicate evidence, exact result binding, immutable predecessor
+samples and exposure schedule, explicit native routing and cached sample-weight
+index use in the same800-update loop. That loop uses CPU fakes and is **not**
+training evidence. Regression fixtures retain ordinary MSE and fail if the1.3
+branch silently falls back to it.
+
+`tests/integration/test_native_contour_loss_cpu.py` separately runs actual torch
+arithmetic with CUDA initialization forbidden. Default source invocation skips
+all10 tests before importing torch. Explicit developer CPU invocation with the
+lab torch and source package paths executed **10 PASS** in1.069s: known weighted
+loss/gradients, uniform-MSE equivalence, fp16 overflow avoidance/gradient agreement,
+dark-threshold/cell order, retained gray/white and empty-dark inputs, invalid
+shape/weights/dtype/gradient rejection. Models0, GPU0, institution image reads0,
+optimizer0 and training0. This source CPU result is not an installed-wheel or
+CUDA training acceptance. No new numerical dependency is required.
+
+Broad native/micro/source/runner/checkpoint/geometry/photo-object-support regression
+gate: **527 PASS,10 explicit CPU opt-in SKIP** in126.71s. Ruff lint/format,
+strict mypy across six source/integration modules, shell syntax and diff checks
+PASS. The type checker uses the explicit source-test interpreter for Pillow
+resolution; using the API interpreter alone initially reported its absent Pillow
+dependency, not a source defect. No suppression or dependency installation was
+added to disguise that environment difference.
+
+Next: freeze a release commit, build/verify the
+compatible isolated lab wheels, and perform canonical full-cohort metadata
+preflight before any training dispatch. Preserve old installed artifacts and
+production binding. There has been no weighted-loss training or new generated
+sample for this ADR; full goal/quality gates remain ACTIVE/NOT_ACCEPTED.

@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.3",
+  "title": "Native LoRA bounded dark-source-cell weighted objective experiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "base_model",
+    "training_authorization",
+    "experiment_authorization",
+    "target_batches",
+    "review_scope",
+    "screening_evidence",
+    "reviewed_at",
+    "reviewed_by",
+    "caption_policy",
+    "preprocessing_policy",
+    "checkpoint_policy",
+    "dependencies",
+    "budget",
+    "seed",
+    "purpose",
+    "activation_policy",
+    "command_sha256",
+    "profile",
+    "training_samples",
+    "hyperparameters",
+    "exposure_policy",
+    "loss_policy",
+    "objective_evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-native-lora-command/1.3"
+    },
+    "training_run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/training_run_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/created_at"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/created_by"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/source_commit"
+    },
+    "base_model": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/base_model"
+    },
+    "training_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/training_authorization"
+    },
+    "experiment_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/experiment_authorization"
+    },
+    "target_batches": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/target_batches"
+    },
+    "review_scope": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/review_scope"
+    },
+    "screening_evidence": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/screening_evidence"
+    },
+    "reviewed_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/reviewed_at"
+    },
+    "reviewed_by": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/reviewed_by"
+    },
+    "caption_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/caption_policy"
+    },
+    "preprocessing_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/preprocessing_policy"
+    },
+    "checkpoint_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/checkpoint_policy"
+    },
+    "dependencies": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/dependencies"
+    },
+    "budget": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/budget"
+    },
+    "seed": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/seed"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/purpose"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/activation_policy"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/command_sha256"
+    },
+    "profile": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/profile"
+    },
+    "training_samples": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/training_samples"
+    },
+    "hyperparameters": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/hyperparameters"
+    },
+    "exposure_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/exposure_policy"
+    },
+    "loss_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "source_cell_size_px",
+        "dark_luminance_threshold",
+        "dark_cell_weight",
+        "other_cell_weight",
+        "normalization"
+      ],
+      "properties": {
+        "policy_version": {
+          "const": "SOURCE_DARK_CELL_WEIGHT_2_1/1.0"
+        },
+        "source_cell_size_px": {
+          "type": "integer",
+          "const": 8
+        },
+        "dark_luminance_threshold": {
+          "type": "integer",
+          "const": 96
+        },
+        "dark_cell_weight": {
+          "type": "integer",
+          "const": 2
+        },
+        "other_cell_weight": {
+          "type": "integer",
+          "const": 1
+        },
+        "normalization": {
+          "const": "BROADCAST_WEIGHT_SUM"
+        }
+      }
+    },
+    "objective_evidence": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2#/properties/screening_evidence"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "reports/own-review.json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

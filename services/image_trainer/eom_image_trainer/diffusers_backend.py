@@ -21,10 +21,14 @@ from eom_image_contracts import (
     LocalImageTrainerDependencies,
     LocalImageTrainingDatasetManifest,
 )
-from eom_image_contracts.sdxl_native_lora import SdxlNativeLoraHyperparameters
+from eom_image_contracts.sdxl_native_lora import (
+    SdxlNativeContourLossPolicy,
+    SdxlNativeLoraHyperparameters,
+)
 from eom_image_contracts.sdxl_native_training_targets import NATIVE_TARGET_CANVASES
 
 from eom_image_trainer.checkpoints import load_latest_checkpoint, save_checkpoint
+from eom_image_trainer.native_contour_loss import native_contour_weighted_mse, source_cell_weights
 from eom_image_trainer.runner import (
     TrainingBackendFailure,
     TrainingBackendResult,
@@ -70,6 +74,13 @@ class LoraTrainingRecipe:
     hyperparameters: LoraHyperparameters
     seed: int
     sample_schedule: tuple[int, ...] | None = None
+    loss_policy: SdxlNativeContourLossPolicy | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LoraEncodedInputs:
+    latents: tuple[Any, ...]
+    source_weights: tuple[Any, ...] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +400,19 @@ def _latents(
     seed: int,
     torch: Any,
 ) -> tuple[Any, ...]:
+    return _encoded_inputs(
+        vae_source=vae_source, samples=samples, seed=seed, torch=torch, loss_policy=None
+    ).latents
+
+
+def _encoded_inputs(
+    *,
+    vae_source: VaeWeightLocation,
+    samples: tuple[LoraTensorSample, ...],
+    seed: int,
+    torch: Any,
+    loss_policy: SdxlNativeContourLossPolicy | None,
+) -> LoraEncodedInputs:
     from diffusers import AutoencoderKL  # type: ignore[import-not-found]
     from PIL import Image
 
@@ -409,6 +433,7 @@ def _latents(
     vae.to("cuda")
     generator = torch.Generator(device="cuda").manual_seed(seed)
     values: list[Any] = []
+    weights: list[Any] = []
     try:
         with torch.no_grad():
             for sample in samples:
@@ -422,6 +447,16 @@ def _latents(
                     if source.size != (768, 512) and source.mode != "RGB":
                         raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
                     rgb = source if source.mode == "RGB" else source.convert("RGB")
+                    if loss_policy is not None:
+                        weights.append(
+                            source_cell_weights(
+                                luminance=rgb.convert("L").tobytes(),
+                                width=sample.width_px,
+                                height=sample.height_px,
+                                policy=loss_policy,
+                                torch=torch,
+                            )
+                        )
                     payload = bytearray(rgb.tobytes())
                 image = torch.frombuffer(payload, dtype=torch.uint8).reshape(
                     sample.height_px, sample.width_px, 3
@@ -438,7 +473,7 @@ def _latents(
         del vae
         gc.collect()
         torch.cuda.empty_cache()
-    return tuple(values)
+    return LoraEncodedInputs(tuple(values), tuple(weights) if loss_policy is not None else None)
 
 
 class DiffusersUnetLoraBackend:
@@ -507,12 +542,27 @@ class DiffusersUnetLoraBackend:
                 captions=captions,
                 torch=torch,
             )
-            latent_values = _latents(
-                vae_source=vae_source,
-                samples=samples,
-                seed=recipe.seed,
-                torch=torch,
-            )
+            source_weights = None
+            if recipe.loss_policy is None:
+                latent_values = _latents(
+                    vae_source=vae_source, samples=samples, seed=recipe.seed, torch=torch
+                )
+            else:
+                encoded = _encoded_inputs(
+                    vae_source=vae_source,
+                    samples=samples,
+                    seed=recipe.seed,
+                    torch=torch,
+                    loss_policy=recipe.loss_policy,
+                )
+                latent_values = encoded.latents
+                if (
+                    encoded.source_weights is None
+                    or len(encoded.source_weights) != len(samples)
+                    or len(latent_values) != len(samples)
+                ):
+                    raise TrainingBackendFailure("IMAGE_TRAINING_CONTOUR_WEIGHTS_INVALID")
+                source_weights = tuple(weight.to("cuda") for weight in encoded.source_weights)
             _require_training_budget(budget=budget, started=started, torch=torch)
             scheduler = DDPMScheduler.from_pretrained(
                 model_directory,
@@ -624,7 +674,16 @@ class DiffusersUnetLoraBackend:
                             "time_ids": time_ids_by_geometry[samples[index].sdxl_time_ids],
                         },
                     ).sample
-                    loss = functional.mse_loss(prediction.float(), target.float())
+                    loss = (
+                        functional.mse_loss(prediction.float(), target.float())
+                        if source_weights is None
+                        else native_contour_weighted_mse(
+                            prediction=prediction,
+                            target=target,
+                            weights=source_weights[index],
+                            torch=torch,
+                        )
+                    )
                     if not bool(torch.isfinite(loss).item()):
                         raise TrainingBackendFailure(
                             "IMAGE_TRAINING_LOSS_NONFINITE",

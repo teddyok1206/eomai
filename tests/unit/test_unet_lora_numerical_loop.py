@@ -207,7 +207,15 @@ def numerical_runtime(monkeypatch: pytest.MonkeyPatch):
     return command, state
 
 
-def _train(tmp_path: Path, command, *, checkpoint_policy=None, budget=None, sample_schedule=None):
+def _train(
+    tmp_path: Path,
+    command,
+    *,
+    checkpoint_policy=None,
+    budget=None,
+    sample_schedule=None,
+    loss_policy=None,
+):
     return numerical.DiffusersUnetLoraBackend().train(
         model_directory=tmp_path / "base",
         vae_source=numerical.VaeWeightLocation(tmp_path / "fixed-vae", None, None),
@@ -220,12 +228,89 @@ def _train(tmp_path: Path, command, *, checkpoint_policy=None, budget=None, samp
             for source in command.training_samples
         ),
         recipe=numerical.LoraTrainingRecipe(
-            command.dependencies, command.hyperparameters, command.seed, sample_schedule
+            command.dependencies,
+            command.hyperparameters,
+            command.seed,
+            sample_schedule,
+            loss_policy,
         ),
         output_root=tmp_path / "adapter",
         checkpoint_policy=checkpoint_policy,
         budget=budget,
     )
+
+
+def test_closed_weighted_loop_uses_cached_same_sample_cells_and_no_mse_fallback(
+    numerical_runtime, monkeypatch, tmp_path
+):
+    from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommandV4
+    from eom_image_trainer.style_exposure import native_style_exposure_schedule
+
+    from tests.unit.test_native_contour_loss_contracts import _weighted_value
+
+    _old, state = numerical_runtime
+    command = LocalImageSdxlNativeLoraCommandV4.model_validate(_weighted_value())
+    seen = []
+
+    def encode(**kwargs):
+        assert kwargs["loss_policy"] == command.loss_policy
+        count = len(kwargs["samples"])
+        return numerical.LoraEncodedInputs(
+            tuple(Tensor(i) for i in range(count)), tuple(Tensor(i) for i in range(count))
+        )
+
+    def weighted(**kwargs):
+        seen.append(kwargs["weights"].value)
+        return Tensor(state.loss)
+
+    monkeypatch.setattr(numerical, "_encoded_inputs", encode)
+    monkeypatch.setattr(
+        numerical, "_latents", lambda **kw: pytest.fail("weighted loop reparsed old latents")
+    )
+    monkeypatch.setattr(numerical, "native_contour_weighted_mse", weighted)
+    monkeypatch.setattr(
+        sys.modules["torch.nn.functional"],
+        "mse_loss",
+        lambda *a: pytest.fail("silent uniform MSE fallback"),
+    )
+    schedule = native_style_exposure_schedule(command)
+    result = _train(tmp_path, command, sample_schedule=schedule, loss_policy=command.loss_policy)
+    assert tuple(seen) == schedule == tuple(state.sampled_indices)
+    assert state.optimizer_steps == state.clipped == result.completed_steps == 800
+    assert state.backward == 3200 and not state.base.requires_grad
+
+
+@pytest.mark.parametrize("kind", ["missing", "short", "short_latents"])
+def test_weighted_preprocessing_mismatch_fails_before_optimizer(
+    numerical_runtime, monkeypatch, tmp_path, kind
+):
+    from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommandV4
+    from eom_image_trainer.style_exposure import native_style_exposure_schedule
+
+    from tests.unit.test_native_contour_loss_contracts import _weighted_value
+
+    _old, state = numerical_runtime
+    command = LocalImageSdxlNativeLoraCommandV4.model_validate(_weighted_value())
+    monkeypatch.setattr(
+        numerical,
+        "_encoded_inputs",
+        lambda **kw: numerical.LoraEncodedInputs(
+            tuple(Tensor(i) for i in range(99 if kind == "short_latents" else 100)),
+            None
+            if kind == "missing"
+            else tuple(Tensor(i) for i in range(100))
+            if kind == "short_latents"
+            else (Tensor(),),
+        ),
+    )
+    with pytest.raises(TrainingBackendFailure, match="CONTOUR_WEIGHTS_INVALID"):
+        _train(
+            tmp_path,
+            command,
+            sample_schedule=native_style_exposure_schedule(command),
+            loss_policy=command.loss_policy,
+        )
+    assert state.optimizer_steps == state.backward == 0 and not state.saved
 
 
 def test_one_shared_loop_keeps_base_frozen_and_counts_200_real_updates(

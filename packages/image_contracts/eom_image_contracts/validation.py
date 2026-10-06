@@ -24,6 +24,7 @@ SCHEMA_FILES = {
     "sdxl-photo-style-command-v6": "local-image-sdxl-photo-style-command-v6.schema.json",
     "sdxl-photo-style-result-v6": "local-image-sdxl-photo-style-result-v6.schema.json",
     "sdxl-native-lora-command-v3": "local-image-sdxl-native-lora-command-v3.schema.json",
+    "sdxl-native-lora-command-v4": "local-image-sdxl-native-lora-command-v4.schema.json",
     "sdxl-photo-style-plan-v5": "local-image-sdxl-photo-style-plan-v5.schema.json",
     "sdxl-photo-style-command-v5": "local-image-sdxl-photo-style-command-v5.schema.json",
     "sdxl-photo-style-result-v5": "local-image-sdxl-photo-style-result-v5.schema.json",
@@ -461,6 +462,9 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-native-lora-command-v3": (
         "sha256:9715f986d5dd6f5c4880ae2d26094c151ae9b7476618dfa896b6d606cf308d6a"
+    ),
+    "sdxl-native-lora-command-v4": (
+        "sha256:4084b214375339f228053508cdac29f9cb25d073882b7a7c1906a3707a646c8d"
     ),
     "sdxl-photo-style-plan-v5": (
         "sha256:96234b7d5d36f8ddf60f608efc743d6b8b72af1a8ad8b9e4504bff35c07d7c1a"

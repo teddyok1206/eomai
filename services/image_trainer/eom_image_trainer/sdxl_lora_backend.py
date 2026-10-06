@@ -8,6 +8,7 @@ from eom_image_contracts import LocalImageSdxlLoraMicroCommand
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartStackPointer
 from eom_image_contracts.sdxl_native_lora import (
     LocalImageSdxlNativeLoraCommandV3,
+    LocalImageSdxlNativeLoraCommandV4,
     NativeLoraCommand,
 )
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
@@ -80,6 +81,7 @@ class SdxlNativeLoraBackend:
         if actual != expected:
             raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
         _require_sdxl_stack(stack, command.base_model)
+        # V4 intentionally preserves the exact V3 exposure; only its explicit loss changes.
         schedule = (
             native_style_exposure_schedule(command)
             if isinstance(command, LocalImageSdxlNativeLoraCommandV3)
@@ -90,7 +92,13 @@ class SdxlNativeLoraBackend:
             vae_source=VaeWeightLocation(stack.component_roots["VAE"], None, None),
             samples=samples,
             recipe=LoraTrainingRecipe(
-                command.dependencies, command.hyperparameters, command.seed, schedule
+                command.dependencies,
+                command.hyperparameters,
+                command.seed,
+                schedule,
+                command.loss_policy
+                if isinstance(command, LocalImageSdxlNativeLoraCommandV4)
+                else None,
             ),
             output_root=output_root,
             checkpoint_policy=None,
