@@ -470,3 +470,8 @@ Scientific overlays remain typed/deterministic, not GPU text. Five services
 active, no active image unit, production binding unchanged. Independent/blind
 review, untouched HOLDOUT, final Item/HWPX canary and activation remain open;
 goal ACTIVE.
+
+The next actual read-only spatial audit and optional object-support diagnostic
+are recorded in [ADR0207](0207-reviewed-photo-object-support.md). Polarity and
+initializer are verified; rectangular interior background retention is observed,
+not a proved sole cause or a reinterpretation of historical protection semantics.
