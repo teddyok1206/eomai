@@ -339,3 +339,34 @@ reports/own-review.md SHAfdc903e1c98b9f929e6e845177ee2f0afaad5b9243c7985aea6399a
 Archive preserves the first metadata-only shard-order operator rejection and its
 correction without a core patch. Production binding unchanged,five services active;
 new GPU/training/reserved reads0. Full objective ACTIVE, not completion.
+
+### Exterior annotation repair without subject reconstruction
+
+At source72d3c08d, eleven native TRAIN drawings were actually viewed; nine passed
+the existing exterior1.3 recipe and own before/mask/after inspection. The monkey
+and two-student scene remain deferred for clearance/protected contact. Explicit
+refinement of two detached fringe boxes did not relax white250/ring3 or reconstruct
+pixels. Outside-mask/protected pixels and original bytes remained identical.
+Caption review removed guessed anatomical hand laterality and uncertain gender.
+Gray tones and primary subject composition remain; ordinal39 excludes neighboring
+and bottom text fragments through the declared frame. All nine final PNGs were
+actually viewed. These are original-derived data, NOT model-generated samples.
+
+Two isolated installed CPU units succeeded (four+five targets); terminal replays
+transforms/writes0, eleven target-result/PNG members reread byte-equal. Focused
+exterior/native tests62 PASS in10.58s. Two initial metadata-only operator errors
+are preserved, not reclassified as runtime/core defects; core source unchanged.
+
+Fresh metadata pool83 prepared IDs/50 documents/44 exam groups adds five documents,
+with thirteen preparation results,max4/doc,max6/group. This is NOT an admitted
+frozen cohort. Preserve <=8 selected batches/max3/doc/max4/group, actual subject
+dedup and FULL100–200 admission. Portrait-heavy additions do not justify portrait-
+heavy final sampling; prioritize new apparatus/object/nature groups and coherent
+batches. Same-ID uniqueness is not proof of distinct original subjects.
+
+Evidence artifact_764f92d8082b4d2ea0873f30ff60d271 /
+rev_4eeb6dea0b8246e289f546b77ec2fb35:45 members byte-equal;
+reports/own-review.md SHAdcbf3e66a79785475352bc8ce7a50489136d2b9490140f99f74eda0567e5a637.
+Production binding unchanged,five main services active; new GPU/training/PDF renders/
+reserved reads/production changes0. Independent blind quality and full model,
+Item/HWPX activation/rollback gates remain OPEN; goal ACTIVE.
