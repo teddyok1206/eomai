@@ -199,3 +199,14 @@ as well as broad toned/paper cells; it is not a perceptual quality metric.
 This is next work, NOT an executed GPU result or approval of weighted-loss training.
 Independent blind/HOLDOUT, population/fidelity/resource acceptance and successor
 Item Preview/HWPX activation/rollback remain required by the full objective.
+
+The diagnostic implementation is test-local in
+`tests/integration/test_sdxl_source_band_denoising.py`. Six model-free accounting
+tests cover cell ordering, thresholds, unequal counts, empty bands and invalid
+measurements. Its installed numerical test skips before importing torch unless
+explicitly opted in. The owner resolves the original canonical training command
+and the full source closure, stages only three unchanged PNGs and the frozen
+script, and uses the completed comparison metadata/adapter read-only. Numerical
+instrumentation of the trainer's normalization helpers is confined to this test;
+no runtime package or cross-service private import is added. No dependency,
+migration, inference policy or production activation changes are required.
