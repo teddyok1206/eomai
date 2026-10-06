@@ -4456,3 +4456,42 @@ finish CPU validation of the **same photo run/bytes/workspace**, then dispatch
 at most six photo plus four source-free matched outputs. No parameter sweep,
 production binding change, old comparison rerun or quality promotion. Details
 and canonical pointers are in ADR0206. Goal remains ACTIVE.
+
+### 2026-10-06 bounded comparison terminal and honest own-quality gate
+
+The isolated loader correction219b9d65 passed wheel/RECORD/role checks and the
+same staged photo preflight. No new photo identity or training restart.
+One six-photo dispatch and one four-source-free dispatch completed successfully
+(36,143ms /28,099ms). Canonical publication19/5 members and no-recompute worker
+replays PASS. Photo and source-free BASE RGB pixels match the prior uniform800
+results exactly; all prompts, cases and numerical recipes were kept matched.
+
+Own review: **NOT_ACCEPTED**. Photo pose survives but gray texture/shadows,
+background remnants and weak contours persist. Source-free apparatus still has
+composition/fixture errors and unwanted gray backgrounds. Neither lower loss
+nor nonzero LoRA pixel differences justify production promotion. Independent
+blind review, untouched HOLDOUT and a passing Item/HWPX canary remain open.
+
+Three original TRAIN targets were also checked via their canonical pointers.
+Mixed hatching/gradient and contour/gray-face examples make whole-cohort
+picture–caption–expression alignment the next CPU/data task. This is a
+hypothesis/audit need, not a reason to silently reclassify or discard data.
+Preserve the frozen100 target set and its full lineage; inspect100 targets and
+text capacity before another bounded trial. No additional training/inference
+sweep was submitted. Read3 TRAIN PNGs, zero HOLDOUTs; no canonical pixel edits.
+
+Own review and45 evidence members/2,608,414bytes were committed and reread in
+`artifact_1d79e594fe9a4d8aa7906cdf5a14ef67` /
+`rev_8687192e73ce4448bcc5d88245fe9af4`; primary `reports/own-review.json`,
+raw SHA `sha256:a8a2f9e9ea96f6bebb4e77b90d546e38799dc9be716a028a930aa54e000729cc`.
+Dataset/adapter/raw output binaries were not duplicated into the checkpoint.
+See ADR0206 for numerical result pointers and the preserved archive-preflight
+permission failure. All five production services active; no active image unit;
+production binding unchanged. Goal ACTIVE, no quality/activation claim.
+
+Viewing copies (not canonical identities):
+
+- `/tmp/eom-photo-balanced424-matched-views-20261006/matched-contact.png`:
+  original photo (not generated) | common BASE | uniform800 LoRA | balanced4:2:4 LoRA.
+- `/tmp/eom-native-balanced424-style-20261006/matched-contact.png`:
+  common BASE | uniform800 LoRA | balanced4:2:4 LoRA, all generated with no source image.

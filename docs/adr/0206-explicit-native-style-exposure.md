@@ -244,3 +244,68 @@ compatible lab-only loader correction, not a new timestamp, retry training,
 replacement plan, direct DB mutation or production activation. The original
 failure evidence remains preserved. Remaining matched diagnostics and own /
 independent visual review remain pending until actually executed and recorded.
+
+## 2026-10-06 matched outputs and own review (06:11 UTC)
+
+Correction219b9d65 was built and installed as three hash/RECORD-verified lab
+wheels only. Numerical dependencies, systemd templates, identities/permissions,
+production binding and five production services stayed unchanged. Previous
+45d1985 wheels remain verified rollback inputs. The same photo command bytes,
+run, plan and staged82 members were preserved. Installed-role CPU input
+inspection reproduced all three predecessor conditioning/initializer hashes;
+supported identical-key command publication replay recovered the existing pin.
+
+The bounded handoff then dispatched each remaining comparison **once**:
+
+- Photo1.5: six outputs,36,143ms; registered19 members in
+  `artifact_a759c8975e6146cfad36d345ac9468b3` /
+  `rev_c18fec600dac432882af20cdf2cca8af`, result raw SHA
+  `sha256:9a3ab990fce5eaa068ef5585df4e698b9d89be08ce8f364e50ed9ac29bb4ab30`.
+- Source-free geometry1.5: four raw outputs,28,099ms, peak9,217,375,744bytes;
+  run `imgsdxlloraevalrun_deca42178c2daf5dc25bd1714c08ffda`, five members in
+  `artifact_496cdf4c999b44e3b2f1c7a9dd4c6efa` /
+  `rev_bc01935da4ef4f34915506a5249219a0`, result raw SHA
+  `sha256:89d25bf0c33a1fd75e2bfc3ec2895398d148d594c3c2b2a1b395f50e781833fc`.
+
+Canonical result/output rereads and installed-role terminal replays PASS.
+Photo comparison checked27 members; source-free comparison checked four
+metadata/eight raw PNG members. Both BASE final/native RGB results match the
+uniform800 baseline exactly. LoRA pixel changes are measured, not quality
+proof. Photo grayscale MAEs are2.40612 /2.272015 /2.2553025 over255 for
+trilobite/wagon/ammonite respectively. Diagnostic resizes affect only viewing
+sheets, never canonical pixels or result hashes.
+
+Actual own view of both sheets and the full-size wagon comparison gives
+**NOT_ACCEPTED**: photographic outputs preserve pose but retain washed gray
+texture, shadows/background and weak contours. Source-free beaker outputs
+change apparatus topology, add unsupported fixtures/curved or circular features
+and retain large gray backgrounds. No institution-quality improvement is
+established by this fixed small diagnostic set. These are not HOLDOUT results;
+independent/blind review remains NOT_PERFORMED, and Item/HWPX canary/activation
+remain closed by unmet quality gates, not a new operational permission gate.
+
+Three canonically pinned TRAIN targets were materialized for direct inspection
+without pixel edits. The heated-beaker FINE_HATCHING target combines mesh detail
+with substantial gray gradients; the first sorted CLEAN_CONTOUR cart includes
+gray faces and an arrow; the first RESTRAINED_TONE apparatus contains a gray
+tabletop/hand scene. This motivates a whole-cohort visual/caption/style audit,
+**not** automatic relabeling, exclusion or a proven causal defect. No additional
+training run, inference sweep, HOLDOUT read, data deletion or production change.
+Next authorized work: inspect all100 frozen TRAIN targets and training text
+capacity/conditioning alignment, preserve all historical labels/pointers, and
+write a bounded successor hypothesis only from actual findings. Do not assume
+that more optimizer updates or different ratios are the next fix.
+
+Own review, two comparative viewing sheets, result pointers, logs and exact
+temporary operators are archived as **45 members/2,608,414bytes**, all rereads
+equal: `artifact_1d79e594fe9a4d8aa7906cdf5a14ef67` /
+`rev_8687192e73ce4448bcc5d88245fe9af4`, primary `reports/own-review.json`,
+schema `operations/plain-text-log/1.0`, text/plain, SHA
+`sha256:a8a2f9e9ea96f6bebb4e77b90d546e38799dc9be716a028a930aa54e000729cc`.
+This is an operations record, not a new worker contract. Dataset PNGs, adapter
+weights and raw model outputs are referenced, not recopied into the archive.
+The first archive preflight rejected three group-writable local pytest logs
+before publication/job creation; permissions were tightened only on those
+named evidence files and the unchanged report/key was published. The original
+failure is preserved in the45-member archive. Five services active, no active
+image unit, production binding SHA unchanged, whole goal ACTIVE.
