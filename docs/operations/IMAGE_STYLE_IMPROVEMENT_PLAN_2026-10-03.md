@@ -4762,3 +4762,51 @@ same-run terminal proof/result commit at the next scheduled observation; explici
 photo successor with old object-supported BASE equivalence and one LORA-only
 output; new adapter numerical diagnostic; one frozen five-output evaluation
 manifest before any generation. Independent blind/HOLDOUT/Item-HWPX remain open.
+
+## Recurring actual institutional-art direction review — user instruction 2026-10-06
+
+At each completed learning candidate and each fixed sample evaluation, actually
+open institutional TRAIN style references beside the generated candidate. Repeat
+after a material prompt/control/publication-policy change before accepting it;
+do not replace this with loss scores or a remembered impression. Reuse validated
+local own-view materializations; no repeated corpus download or reference PNG
+duplication in the evidence archive. Record original/candidate pinned identity,
+review time, observed differences and KEEP_DIRECTION / REVISE / REJECT decision.
+This own calibration is not independent/blind approval. Never inspect sealed
+HOLDOUT to choose a prompt, seed, weighting rule or model.
+
+The2026-10-06 11:49UTC reread opened the existing original11 contact sheet and
+four frozen TRAIN100 vehicle references (partial rear car, top-view sedan, compact
+car/driver scene, side-view dump truck). Original contact SHA
+`a7f6db80208d3777b554b1ff33f45b4b8079b6737cf0962f8984c00f73b20749`
+matches its original materialization log. Vehicle references retain their existing
+canonical identity evidence in ADR0208. No new image generation, pixel/label edit,
+data selection or HOLDOUT exposure occurred.
+
+Calibration decision: KEEP_DIRECTION_AS_BOUNDED_HYPOTHESIS, not quality PASS.
+Institutional art includes both sparse geometric diagrams and legitimately toned
+equipment, textured clouds, students, vehicles and meaningful scene backgrounds.
+Uniform black/white or blanket simplification is not the desired final state.
+Judge decisive primary contours, coherent geometry/viewpoint, proportion,
+controlled internal tone/hatching, exam-size legibility and meaningful information
+hierarchy. Reject duplicate/halo edges and accidental texture, not gray itself.
+The current2:1 dark-cell objective is still an unproven learning hypothesis: if
+it amplifies labels/hatching/noise rather than structural readability, reject it.
+Do not tighten acceptance after seeing outputs or discard valid institutional
+variation. Different car types/views are style references, not paired morphology
+ground truth. Source-free and photo-preserving fidelity gates remain separate.
+
+Native contour fit terminal checkpoint, **2026-10-06 11:50 UTC**:
+Same single c9bad421 execution SUCCEEDED,800/800 optimizer updates,100 realized
+native TRAIN samples;31.36minutes/peak6.17GB CUDA, within pinned one-hour/16GiB.
+Terminal systemd inactive/dead/MainPID0/success/exit0, GPU compute processes0.
+Installed92fed3a8 RECORD/role/dependencies unchanged. Existing owner committed
+four exact result/manifest/adapter members and reread them equal: artifact
+`artifact_ce997f29296c48588159b3ca4598509e` /
+`rev_4a1354605df5463bba42d059385c8b8a`. Installed-worker terminal replay PASS,
+147 files unchanged, no torch/model/pixel decoding/training/writes. No fit retry,
+resume, data edits, new real PNG or production change. First owner import failed
+before main; schedule verification was moved to the installed lab interpreter
+without adding API dependencies or altering core rules. Failure log preserved.
+Final weighted loss0.0881158113 is not a quality score or comparable old MSE.
+Goal ACTIVE; finish explicit photo successor and numerical/visual comparison next.

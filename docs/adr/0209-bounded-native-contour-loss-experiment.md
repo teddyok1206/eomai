@@ -1,5 +1,40 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
+## Terminal bounded fit — observed 2026-10-06 11:50 UTC
+
+The same single run c9bad421 is terminal SUCCEEDED,800/800 optimizer updates,
+100 realized native samples,1,881,789ms (31.36 minutes),peak CUDA6,172,083,712bytes.
+Final weighted objective0.0881158113 is not directly comparable to the old uniform
+MSE and is not a visual acceptance score. Process inactive/dead, MainPID0,
+systemdResultsuccess/exit0; GPU compute process absent. Installed lab92fed3a8
+RECORD/worker-role/dependency recheck PASS, no reinstall.
+
+Canonical result, adapter manifest and two adapter files were committed by the
+existing Orchestrator owner and reread equal: artifact
+`artifact_ce997f29296c48588159b3ca4598509e` / revision
+`rev_4a1354605df5463bba42d059385c8b8a`. Result member
+`manifests/sdxl-native-lora-result.json`, raw SHA
+`85c0d9a59f06d89b13cce4d543e006f6917cbcac5af1e718beb88a8a8237de4f`.
+Adapter weights SHA
+`fee500348e48342f67e0f7d4e5f67f54d734b159c6cea1e3278c7f1b56ed42df`.
+Actual installed-worker terminal replay PASS across147 workspace files with no
+torch import, model/pixel decoding/training/writes or file stat/hash change.
+Scheduled3,200 microsteps and fixed schedule hash were verified separately;
+they are not claimed as a recovered per-step journal. No dataset PNG copied to
+the result artifact. Publication receipt:
+`/tmp/eom-native-contour-execution-20261006/publication.json`.
+
+First terminal publication invocation failed on import before entering main:
+the API owner interpreter lacks Pillow imported by the trainer package root.
+No database/artifact operation or training retry occurred. Corrected the operator
+boundary: compute schedule/count/hash under the exact installed lab interpreter
+and return small metadata, rather than adding Pillow/torch to the API environment
+or copying the numerical implementation. Same run/result/idempotency identity
+then finished publication. Original import-failure log preserved. No core/runtime
+patch or dependency change was required. Quality/activation remain NOT_EVALUATED
+/FORBIDDEN; source-band diagnostic, fixed five new LoRA outputs and real visual
+comparison still pending. Independent blind/HOLDOUT/Item-HWPX gates stay open.
+
 ## Reuse-aware reference consumer design — 2026-10-06
 
 The existing reference codec, owner metadata admission and isolated provider own
