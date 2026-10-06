@@ -134,6 +134,38 @@ also caught out-of-order manifest entries from the preceding attachment change;
 the existing manifest was sorted before the final all-PASS run.
 These include synthetic GPU/pipeline fakes, not actual CUDA or model quality.
 
+### Actual matched tensor/RNG checkpoint — 2026-10-06 18:15 UTC
+
+Clean core `888bcf95b8622b0902885d229b8ddfd7e819fb97` built three wheels;
+all396 RECORD members (299 contracts/62 provider/35 trainer) verified. Offline
+non-editable imports used those wheels with repository paths removed. Actual
+Torch2.7.1/Diffusers0.35.2/NumPy2.4.6 CPU float32 and float16 casts preserved
+the frozen8192-byte CFG value, zero unconditional embedding and exact conditional
+cast. Two cast tensors were each reused across three OFF/ON/OFF calculations.
+
+Six actual CPU generators had equal initial state hashes and equal actual
+latent inputs within each matched precision case. Already-consumed generators
+were rejected as initial states. Six real random global-projection forwards and
+eight real attention forwards proved finite ON effects and exact OFF baseline
+parity/replay; in-place tensor mutation was rejected. Inputs/weights were
+synthetic, not the real style encoder or trained LoRA. This numerical helper
+proof is not the complete GPU reference backend, canonical source admission,
+ControlNet diffusion or combined-stack memory measurement.
+
+Report SHA `f150b203ed98e5addff2d9900bb77b77c09abf3edd03e75a24a8ef4df408167e`.
+No new image, pretrained/trained-LoRA/encoder read, GPU/network, registration,
+worker dispatch, runtime installation or VALIDATION/HOLDOUT exposure. Quality
+remains NOT_ACCEPTED; independent review not performed. The worker CLI remains
+closed pending existing-owner staging/result/commit integration and separate
+recorded model-acquisition/four-output authority. No prior budget was reset.
+
+Existing Orchestrator archived and reread three text members19,052bytes:
+`artifact_152d068699b54edd99ae3e2b8746fcde` /
+`rev_89dee56531794ba0984125072d950b7c`, primary `reports/matched-numerics.json`
+with the report hash above. No synthetic tensors, model weights or original PNGs
+were committed to this evidence artifact or Git. The CPU proof ran as normal
+user; only the existing-owner publication used protected credentials.
+
 ## Evidence and hypothesis
 
 The native1.3 candidate failed its fixed own visual comparison. The subsequent
