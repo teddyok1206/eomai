@@ -506,3 +506,53 @@ on an existing3.12 type-parameter syntax; its actual application target remains3
 not a new interpreter/dependency upgrade. Ruff/format/diff PASS. Actual two-case
 canonical metadata execution is still pending at this implementation checkpoint;
 pixel RGB hashes, installed model stack and quality are not proved by these units.
+
+## Actual selection checkpoint — 2026-10-06 16:10 UTC
+
+Source `6734f582228af38c290bbfa9f5ede092d2f5e979` then ran the bridge on the
+canonical photo1.5 parents and native1.3 style-source command. The closed two-case
+preparation selects enrolled trilobite with the earlier bacterium TRAIN style
+sample, and parked wagon with the inclined-cart TRAIN style sample. Each exact
+sample/PNG revision/document/group and conditioning/initializer hash matches the
+admitted source. Photo metadata77 and independent style metadata42 PASS; no
+PNG/PDF/model bytes or HOLDOUT read. Planned224px RGB hashes reference the earlier
+actual11.3.0 preparation report, not recomputation by this metadata probe.
+
+The held LoRA is still photo1.5's native training1.2 command SHA
+`f9335bee943558c7e9ef20a21909626b71453fde802a55c37d494bef32bfe869`.
+Native1.3 here supplies original style-source identity only, not its rejected
+weight candidate. The prospective style-model metadata is unacquired/unregistered;
+the two-case plan is an operations preparation value, not a published worker input
+or execution approval. Source checks do not validate pixel RGB/CLIP tensors,
+style embeddings, actual pretrained combined-stack behavior or output quality.
+
+The first read-only probe finished lineage resolution but failed its documentary
+module-hash read: the newly authored repository file had umask-derived664 mode.
+Only that newly created module was normalized to644; the safe reader was not
+relaxed. The original failure log is retained. With no prior output file or write
+side effect, a second read-only query produced the report; no GPU/model/publication
+retry, DB row edit or failed history rewrite. Actual API interpreter3.12.13 was
+confirmed read-only. Production binding SHA is unchanged from the earlier pin.
+
+The existing three-wheel builder/non-editable synthetic parse/refusal simulation
+also PASS from that clean source, all386 RECORD members (296/55/35). These wheels
+do not include the Orchestrator application package; the actual source-owned
+bridge query is not an installed Orchestrator release test. No runtime install.
+Contract/provider/trainer hashes:
+`62e928c43f41bb84e784a30599e1d28ebd8d92fb0e0d4a905a4bf7817fb4a8dc`,
+`55f69e00b9c261a698c5d9c844988a221885cf8410e852176bfdf96eb8ca2fe2`,
+`27f54b7da4ecc6613f3ec600d6aa8ef0041e296484ee65936528a253c0aa0b9d`.
+Build-only directory:
+`/tmp/eom-image-trainer-build/6734f582228af38c290bbfa9f5ede092d2f5e979.tSP1EO/dist`.
+
+Existing owner committed/reread all seven text members30,771bytes as
+`artifact_5945532222414379985d35d40e2c4592` /
+`rev_b7a549e40f0d4a23acda2dfe1f338f41`, primary
+`reports/selection-metadata.json`, SHA
+`043735c8f9d18c24a125b0ded897c808cb2e2b7c458dcabd4b039b07e91e3580`.
+The first failure, second read-only result, wheel simulation and exact operators
+are separate members; original source PNGs/weights are not duplicated. This is
+an evidence Artifact, not a registered IP model or worker-plan Artifact.
+Full quality remains NOT_ACCEPTED/goal ACTIVE, acquisition/four-output approval
+NOT_RECORDED and old budget12/12 exhausted. Next: pinned CLIP numerical preparation
+and comparison consumer isolation, then bounded actual outputs when authorized.
