@@ -4589,3 +4589,20 @@ successor before a single matched pair; no implicit reuse of photo-style1.5's
 protected-interior promise. Independent review, HOLDOUT, publication quality,
 Item/HWPX canary and activation/rollback remain open. Goal ACTIVE.
 See [ADR0207](../adr/0207-reviewed-photo-object-support.md).
+
+### 2026-10-06 canonical object-support review registered
+
+Actual owner metadata preflight found/corrected a normalized-source URI namespace
+defect repeated in the synthetic fixture.175 focused/legacy tests PASS; actual
+four canonical PNGs pass exact hashes/geometry/binary/edge-subset/count checks.
+Typed review registered as `artifact_7a5e4d24a7cb4b1d8b4782c06c668ad7` /
+`rev_46075d67ff834101b5047703d4285231`, raw SHA
+`sha256:7977a881c02d5db9d4bb249e0e955a2666687eef6731a74b9237da42bccb67e6`.
+Seven members/40,668bytes reread equal. The temporary publisher request was
+unsorted and refused before job creation; same-review/idempotency-key publication
+recovery performs no image/model work and preserves both failure operators/logs.
+Existing disposable publication suite:7 PASS. Binding unchanged/five services
+ACTIVE; model/GPU/training/production0. Owner CPU PASS is not installed-role or
+full source closure PASS. Next: explicit single-pair photo comparison successor
+with pinned review and prior plan/result, then handoff/installed guards before
+dispatch. No training/prompt sweep or historical output regeneration. Goal ACTIVE.

@@ -209,3 +209,48 @@ validate source/trace/context/chronology against them, including the unchanged
 full controller recipe. Do not infer latest parents, weaken this separation or
 hide parent hashes in a free-form log used as a worker instruction. Owner CPU
 verification is not installed-role verification or permission to dispatch.
+
+## Canonical typed review and actual owner CPU verification
+
+With the corrected source URI, four **registered** source/prior-control/mask/
+candidate PNGs pass the new pixel adapter: RGB800x504 source, RGB/L832x512
+controls/mask, exact hashes, binary tones, candidate=prior*mask and recomputed
+32,441/12,049/20,392/0 edge counts. The owner also matches physical source,
+case/control trace, context and chronology against the pinned photo plan/result.
+This development-owner check is not full native-source closure or installed-role
+worker admission. No binary is copied into the new review Artifact.
+
+The temporary registration operator then failed the existing publisher's sorted
+member guard **before** publication lock/job creation. Do not weaken that guard
+or rerun pixel/model work. A publication-only recovery uses the same prepared
+review bytes, ID, semantic hash, timestamp and idempotency key, verifies an indexed
+lookup finds zero preexisting jobs, sorts the members and names the primary member
+explicitly rather than assuming it is first. Seven members/40,668bytes committed
+and reread equal, including both exact failed operators/logs. Existing disposable
+SQLite publication recovery/idempotency/identity tests:7 PASS in1.87s.
+
+Canonical primary `manifests/photo-object-support-review.json`,
+`artifact_7a5e4d24a7cb4b1d8b4782c06c668ad7` /
+`rev_46075d67ff834101b5047703d4285231`, application/json,
+local-image-photo-object-support-review/1.0, raw SHA
+`sha256:7977a881c02d5db9d4bb249e0e955a2666687eef6731a74b9237da42bccb67e6`.
+Logical review `imgphotosupportreview_bf0d602a460ec29a5e840b0002f2cb90`, semantic SHA
+`sha256:c2bde052575db66ae68464a6856e36dafbd3a134bd8cdbee0857296715d0c8f1`.
+Source implementation `32046673373d88831cf50708eda4ee94782f8567`.
+Recovery adds zero binary reads/transforms/model calls; original owner check read
+four canonical PNGs. Five services ACTIVE, production binding unchanged, model/
+GPU/training/production changes0. The first metadata refusal and second publication
+refusal remain failures, not reinterpreted historical success.
+
+Next implementation: explicit photo-style1.6 plan/command/result successor through
+the existing owner/provider composition. Its single-case support binding must pin
+the typed review **and** prior photo plan/result; validate those parents and exact
+physical source/control relation before staged bytes. It must not inherit the
+retained-region protected-interior promise. Limit admission to one matched
+BASE/LoRA pair, unchanged original ink prompt/seed/adapter/initializer/full
+controller recipe, zero training/no auto retry. Compare with the existing original
+per-arm outputs, not the rejected cue-only outputs as a changed second factor.
+Schemas precede worker behavior; closed runtime codecs must not accept the new
+family until the full owner/worker handoff and installed-role guards are ready.
+No parent/latest inference, new queue/DB/dependency or production activation.
+Independent review, HOLDOUT, final quality and Item/HWPX canary remain open.
