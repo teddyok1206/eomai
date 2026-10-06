@@ -4810,3 +4810,21 @@ before main; schedule verification was moved to the installed lab interpreter
 without adding API dependencies or altering core rules. Failure log preserved.
 Final weighted loss0.0881158113 is not a quality score or comparable old MSE.
 Goal ACTIVE; finish explicit photo successor and numerical/visual comparison next.
+
+Contour candidate matched numerical diagnostic, **2026-10-06 UTC**:
+New terminal adapter admitted through full canonical TRAIN100 metadata closure,
+then isolated worker revalidated closure before the same3 source PNGs/weights.
+Shared unchanged prior kernel, seed104729/timesteps250,750/strength1,
+12 UNet forwards in13.486seconds, peak5.432GB CUDA; zero generation/training/
+optimizer/HOLDOUT. The existing BASE measurements reproduce exactly (global
+absolute difference0; regional counts/values checked), numerical package versions
+equal. Current vs previous adapter dark-cell MSE improves0.441–5.775% in all6
+pairs; nonwhite-only worsens0.354–8.531%, nearwhite-only worsens0.580–13.528%.
+This TRAIN trade-off does not establish clearer lines or exam-quality output.
+Keep the five-output visual comparison fixed; no extra fit/seed/prompt search.
+Canonical20-member evidence121,830bytes committed+reread PASS:
+artifact8095fd50/revc9ea711d, own-review SHA75652032. Terminal transient stopped
+after evidence, production binding and installed lab92fed3a8 unchanged. Original
+pre-main interpreter failure preserved; no API dependencies/core patch added.
+Full quality NOT_ACCEPTED/activationFORBIDDEN/goalACTIVE. Next photo1.7 consumer
+plus four geometry and one photo new LoRA outputs, with actual original-art review.

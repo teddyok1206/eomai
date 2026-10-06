@@ -25,6 +25,39 @@ fail closed. A simple training-loss comparison is insufficient because the new
 objective weights pixels differently; identical unweighted regional measurements
 are required. This TRAIN probe is not visual, blind or HOLDOUT acceptance.
 
+### Actual matched diagnostic terminal — 2026-10-06
+
+The single new diagnostic executed the shared unchanged numerical kernel:
+3 exact prior TRAIN PNGs/captions, seed104729, timesteps250/750, strength1.0,
+12 full UNet forwards. Actual13.486seconds/peak CUDA5,431,566,848bytes;
+generation/optimizer/training/HOLDOUT calls0. Same installed lab92fed3a8,
+no wheel update or production change. The prior BASE global measurements match
+exactly (maximum absolute difference0), with all regional counts and values also
+checked against the existing immutable previous diagnostic. A new adapter was
+loaded; old weights were not substituted. Its dark-containing source-cell MSE
+improves against the prior adapter in all6 sample/timestep pairs by0.441–5.775%.
+However, nonwhite-only MSE worsens0.354–8.531%, and nearwhite-only worsens
+0.580–13.528%. This is an observed TRAIN trade-off, not overall improvement or
+visual quality PASS. Source pixel bands include text/hatching and are not semantic
+contours. Do not select another seed, extend training or suppress tone to hide it;
+the precommitted five-output visual comparison must decide value and artifacts.
+
+Existing owner committed/reread20 exact evidence members,121,830bytes:
+`artifact_8095fd50553d4c2fb8edc8ea8d904cf3` /
+`rev_c9ea711d5c1b4c1dbaedcadb1881b32f`; primary own-review SHA
+`756520322ecbbfbc103ce3b0c877bdabe06679165b2b2204b71a62a4d1098f6e`.
+Completed transient unit stopped only after archive, history preserved.
+The first owner invocation failed on missing Pillow before main/staging/dispatch;
+the supported existing development owner interpreter eom-image-test supplied the
+already installed decoding dependencies. No API dependency/core workaround was
+added. Initial synthetic missing-manifest exception expectation and mypy invocation
+were corrected, with original failure logs preserved. Strict mypy2 files,
+Ruff/format/diff PASS. The old numerical body is text-identical after admission
+extraction; exact original1.2 fixture and historical executed bytes remain pinned.
+Both GPU fixtures remain explicit opt-in; final full scoped suite146PASS/2GPU
+skips (7.41seconds), final focused fixture suite14PASS/2GPU skips.
+Goal ACTIVE, full quality NOT_ACCEPTED; photo1.7 and fixed five actual outputs next.
+
 ## Terminal bounded fit — observed 2026-10-06 11:50 UTC
 
 The same single run c9bad421 is terminal SUCCEEDED,800/800 optimizer updates,
