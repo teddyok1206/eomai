@@ -4606,3 +4606,15 @@ ACTIVE; model/GPU/training/production0. Owner CPU PASS is not installed-role or
 full source closure PASS. Next: explicit single-pair photo comparison successor
 with pinned review and prior plan/result, then handoff/installed guards before
 dispatch. No training/prompt sweep or historical output regeneration. Goal ACTIVE.
+
+### 2026-10-06 single-factor support preparation implemented
+
+Photo plan1.6 preparation pins the registered review plus exact prior and baseline
+plan/result pairs. One case, two outputs maximum, unchanged prompts/seed/native
+configuration/white initializer/full control; no retained-interior inheritance.
+Pure lineage reuses the authoritative small plan/result relation also used by
+existing execution checks.47 new tests;339 combined focused/historical PASS,
+Ruff format/lint and strict typing PASS. Runtime codecs still reject1.6 until
+complete owner/worker integration. No numerical run, retraining, dependency or
+production activation. Actual canonical metadata preflight is next; own generation
+quality, independent blind review/HOLDOUT and Item/HWPX canary remain open.

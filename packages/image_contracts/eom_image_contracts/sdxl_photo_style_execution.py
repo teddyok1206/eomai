@@ -308,6 +308,23 @@ def validate_photo_style_result(
 ) -> None:
     validate_photo_style_execution_sources(command, sources)
     plan = sources.plan
+    native = sources.configuration_sources
+    if (
+        result.run_id != command.run_id
+        or result.command_sha256 != command.command_sha256
+        or result.configuration_command_sha256 != sources.configuration.command_sha256
+        or result.native_evaluation_command_sha256 != native.evaluation.command_sha256
+        or result.native_adapter_manifest_sha256 != native.native.manifest.manifest_sha256
+        or result.started_at < command.created_at
+    ):
+        raise ValueError("photo result differs from pinned plan/configuration/ordered prefix")
+    validate_photo_style_plan_result_relation(plan, result)
+
+
+def validate_photo_style_plan_result_relation(
+    plan: LocalImageSdxlPhotoStylePlan, result: LocalImageSdxlPhotoStyleResult
+) -> None:
+    """One authority for small plan/result relation, not full execution-source admission."""
     expected = tuple(
         (arm, entry.case.case_id, plan.seed)
         for arm in LEARNED_COMPARISON_ARMS
@@ -315,17 +332,11 @@ def validate_photo_style_result(
     )
     observed = tuple((row.arm, row.case_id, row.seed) for row in result.outputs)
     traces = {row.case_id: row for row in result.inputs}
-    native = sources.configuration_sources
     if (
-        photo_style_version(result.schema_version) != photo_style_version(command.schema_version)
-        or result.run_id != command.run_id
-        or result.command_sha256 != command.command_sha256
-        or result.plan_sha256 != command.plan_sha256
-        or result.configuration_command_sha256 != sources.configuration.command_sha256
-        or result.native_evaluation_command_sha256 != native.evaluation.command_sha256
-        or result.native_adapter_manifest_sha256 != native.native.manifest.manifest_sha256
+        photo_style_version(result.schema_version) != photo_style_version(plan.schema_version)
+        or result.plan_sha256 != plan.plan_sha256
         or result.initialization != plan.initialization
-        or result.started_at < command.created_at
+        or result.started_at < plan.created_at
         or tuple(traces) != tuple(entry.case.case_id for entry in plan.cases)
         or observed != expected[: len(observed)]
         or any(

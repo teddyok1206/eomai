@@ -254,3 +254,40 @@ Schemas precede worker behavior; closed runtime codecs must not accept the new
 family until the full owner/worker handoff and installed-role guards are ready.
 No parent/latest inference, new queue/DB/dependency or production activation.
 Independent review, HOLDOUT, final quality and Item/HWPX canary remain open.
+
+### Single-factor preparation contract
+
+The1.6 preparation plan pins five small metadata documents: support review,
+its prior photo plan/result, and the original-prompt baseline photo plan/result.
+The latter may contain several cases; select one exact immutable case and its
+two existing BASE/LoRA outputs by keyed identity, never regenerate them. Exact
+source, configuration, seed, full-white initializer, full control, native adapter
+and evaluation hashes must agree. The successor case equals the selected baseline
+case (including prompts); the support review may originate from another prompt
+case only when physical source/control hashes and parent identities agree.
+
+This is preparation-only, not runtime admission: keep existing plan/command/result
+codecs closed to1.6 until complete worker integration. One case, maximum two
+outputs/one dispatch/no retry; no retained-region protected-interior claim. Pure
+metadata lineage uses bounded canonical JSON reads and case/trace maps, O(B+C+O)
+time/space for bounded metadata bytes B, at most6 cases C and12 outputs O. It
+does not resolve access/lifecycle, decode pixels, prove full native-source closure
+or grant dispatch. Existing owners will combine those checks before staging.
+
+Implemented preparation-only plan1.6 and pure parent-lineage validation, with
+wheel-owned JSON Schema SHA
+`sha256:d57d3bdc2a8051efe230866162076c3458042a0189936f6aeb13ab40f1ea432f`.
+One shared plan/result relation function now protects both old execution validation
+and new preparation, rather than copying the business rule.47 new tests cover
+crossed/rehashed parents, altered prompts/seed/configuration, missing case,
+canonicality, timestamps, identity, budget, schema resources and dependency
+direction.339 focused/historical tests PASS in126.78s; Ruff lint/format, targeted
+strict mypy(3 modules) and diff checks PASS. An initial test invocation guessed a
+nonexistent subject-region filename and ran no tests; the corrected inventory
+uses `test_sdxl_canny_subject_region.py`. No environment/dependency workaround.
+
+Execution plan/command/result codecs deliberately still refuse1.6; tests assert
+that boundary. A source-only preparation parser/schema is not a deployed worker
+protocol. Next: actual five-document metadata preflight, followed by explicit
+command/result and owner-stage/provider/result integration, installed-role
+verification, then the bounded pair. Production model and frozen data unchanged.

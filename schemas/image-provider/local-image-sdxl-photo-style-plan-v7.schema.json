@@ -1,0 +1,592 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "LocalImageVisualReferencePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {
+          "pattern": "^imgrefbundle_[0-9a-f]{32}$",
+          "title": "Bundle Id",
+          "type": "string"
+        },
+        "bundle_manifest": {
+          "$ref": "#/$defs/VisualReferenceBundleManifestPointer"
+        },
+        "bundle_revision_id": {
+          "pattern": "^imgrefbundlerev_[0-9a-f]{32}$",
+          "title": "Bundle Revision Id",
+          "type": "string"
+        },
+        "primary_reference_id": {
+          "pattern": "^imgref_[0-9a-f]{32}$",
+          "title": "Primary Reference Id",
+          "type": "string"
+        },
+        "reference_member": {
+          "$ref": "#/$defs/VisualReferencePngArtifactPointer"
+        }
+      },
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_manifest",
+        "primary_reference_id",
+        "reference_member"
+      ],
+      "title": "LocalImageVisualReferencePointer",
+      "type": "object"
+    },
+    "PhotoObjectSupportBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "automatic_retry": {
+          "const": false,
+          "default": false,
+          "title": "Automatic Retry",
+          "type": "boolean"
+        },
+        "maximum_dispatches": {
+          "const": 1,
+          "default": 1,
+          "title": "Maximum Dispatches",
+          "type": "integer"
+        },
+        "maximum_duration_ms": {
+          "maximum": 600000,
+          "minimum": 1,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_outputs": {
+          "const": 2,
+          "default": 2,
+          "title": "Maximum Outputs",
+          "type": "integer"
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Maximum Peak Gpu Memory Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "title": "PhotoObjectSupportBudget",
+      "type": "object"
+    },
+    "PhotoObjectSupportParents": {
+      "additionalProperties": false,
+      "description": "Small immutable metadata pins, not loaded parent payloads or latest aliases.",
+      "properties": {
+        "baseline_plan": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "baseline_result": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "prior_plan": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "prior_result": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "review": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        }
+      },
+      "required": [
+        "review",
+        "prior_plan",
+        "prior_result",
+        "baseline_plan",
+        "baseline_result"
+      ],
+      "title": "PhotoObjectSupportParents",
+      "type": "object"
+    },
+    "SdxlCannyControlParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "conditioning_scale": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Conditioning Scale",
+          "type": "number"
+        },
+        "guidance_end": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Guidance End",
+          "type": "number"
+        },
+        "guidance_start": {
+          "default": 0.0,
+          "maximum": 0.0,
+          "minimum": 0.0,
+          "title": "Guidance Start",
+          "type": "number"
+        },
+        "resource_profile": {
+          "const": "ALL_GPU_FP16_NO_OFFLOAD",
+          "default": "ALL_GPU_FP16_NO_OFFLOAD",
+          "title": "Resource Profile",
+          "type": "string"
+        }
+      },
+      "title": "SdxlCannyControlParameters",
+      "type": "object"
+    },
+    "SdxlLineartProbeCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "depiction_key": {
+          "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+          "title": "Depiction Key",
+          "type": "string"
+        },
+        "negative_prompt_en": {
+          "maxLength": 1200,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Negative Prompt En",
+          "type": "string"
+        },
+        "negative_prompt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Negative Prompt Sha256",
+          "type": "string"
+        },
+        "prompt_en": {
+          "maxLength": 1200,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Prompt En",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "reference_height_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Reference Height Px",
+          "type": "integer"
+        },
+        "reference_image": {
+          "$ref": "#/$defs/ImageEvaluationArtifactMember"
+        },
+        "reference_width_px": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Reference Width Px",
+          "type": "integer"
+        },
+        "seeds": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Seeds",
+          "type": "array"
+        },
+        "staged_member_path": {
+          "pattern": "^inputs/imgsdxlcase_[0-9a-f]{32}\\.png$",
+          "title": "Staged Member Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "depiction_key",
+        "reference_image",
+        "reference_width_px",
+        "reference_height_px",
+        "staged_member_path",
+        "prompt_en",
+        "prompt_sha256",
+        "negative_prompt_en",
+        "negative_prompt_sha256",
+        "seeds"
+      ],
+      "title": "SdxlLineartProbeCase",
+      "type": "object"
+    },
+    "SdxlPhotoSourceReview": {
+      "additionalProperties": false,
+      "description": "Own visual observation, not an independent quality or license approval.",
+      "properties": {
+        "observation": {
+          "maxLength": 1000,
+          "minLength": 10,
+          "pattern": "^[ -~]+$",
+          "title": "Observation",
+          "type": "string"
+        },
+        "reference_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Reference Sha256",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "format": "date-time",
+          "title": "Reviewed At",
+          "type": "string"
+        },
+        "reviewed_by": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._:@-]+$",
+          "title": "Reviewed By",
+          "type": "string"
+        },
+        "source_kind": {
+          "const": "PHOTOGRAPH",
+          "title": "Source Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_kind",
+        "reviewed_at",
+        "reviewed_by",
+        "reference_sha256",
+        "observation"
+      ],
+      "title": "SdxlPhotoSourceReview",
+      "type": "object"
+    },
+    "SdxlPhotoStyleCase": {
+      "additionalProperties": false,
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/SdxlLineartProbeCase"
+        },
+        "source_review": {
+          "$ref": "#/$defs/SdxlPhotoSourceReview"
+        },
+        "visual_reference": {
+          "$ref": "#/$defs/LocalImageVisualReferencePointer"
+        }
+      },
+      "required": [
+        "visual_reference",
+        "source_review",
+        "case"
+      ],
+      "title": "SdxlPhotoStyleCase",
+      "type": "object"
+    },
+    "SdxlPhotoStyleFullDenoisingInitialization": {
+      "additionalProperties": false,
+      "description": "One numerical factor; identical white pixels and photo-derived spatial control.",
+      "properties": {
+        "denoising_strength": {
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Denoising Strength",
+          "type": "number"
+        },
+        "effective_denoising_steps": {
+          "const": 30,
+          "title": "Effective Denoising Steps",
+          "type": "integer"
+        },
+        "pillow_version": {
+          "const": "11.3.0",
+          "title": "Pillow Version",
+          "type": "string"
+        },
+        "policy": {
+          "const": "CONSTANT_WHITE_RGB_832X512_FULL_DENOISE/1.0",
+          "title": "Policy",
+          "type": "string"
+        },
+        "scheduler_steps": {
+          "const": 30,
+          "title": "Scheduler Steps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy",
+        "denoising_strength",
+        "scheduler_steps",
+        "effective_denoising_steps",
+        "pillow_version"
+      ],
+      "title": "SdxlPhotoStyleFullDenoisingInitialization",
+      "type": "object"
+    },
+    "VisualReferenceBundleManifestPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json",
+          "default": "application/json",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "const": "manifests/visual-reference-bundle.json",
+          "default": "manifests/visual-reference-bundle.json",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+          "default": "eom://schemas/image-provider/local-image-visual-reference-bundle/1.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "VisualReferenceBundleManifestPointer",
+      "type": "object"
+    },
+    "VisualReferencePngArtifactPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "image/png",
+          "default": "image/png",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "const": "references/primary.png",
+          "default": "references/primary.png",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/normalized-visual-reference/1.0",
+          "default": "eom://schemas/image-provider/normalized-visual-reference/1.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "VisualReferencePngArtifactPointer",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.6",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "No inheritance of old retained/protected-interior semantics.",
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "budget": {
+      "$ref": "#/$defs/PhotoObjectSupportBudget"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/SdxlPhotoStyleCase"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "title": "Cases",
+      "type": "array"
+    },
+    "comparison_policy": {
+      "const": "CHANGE_OBJECT_SUPPORT_ONLY_REUSE_PINNED_BASELINE",
+      "title": "Comparison Policy",
+      "type": "string"
+    },
+    "configuration_anchor": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "control": {
+      "$ref": "#/$defs/SdxlCannyControlParameters"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dispatch_policy": {
+      "const": "PREPARATION_ONLY_NOT_A_WORKER_COMMAND",
+      "title": "Dispatch Policy",
+      "type": "string"
+    },
+    "initialization": {
+      "$ref": "#/$defs/SdxlPhotoStyleFullDenoisingInitialization"
+    },
+    "plan_id": {
+      "pattern": "^imgsdxlphotoplan_[0-9a-f]{32}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Sha256",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_PHOTO_TO_EXAM_STYLE",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-plan/1.6",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "seed": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "source_population": {
+      "const": "LICENSED_MORPHOLOGY_REFERENCES_NOT_CORPUS_HOLDOUT",
+      "title": "Source Population",
+      "type": "string"
+    },
+    "support_parents": {
+      "$ref": "#/$defs/PhotoObjectSupportParents"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "dispatch_policy",
+    "activation_policy",
+    "source_population",
+    "configuration_anchor",
+    "cases",
+    "seed",
+    "initialization",
+    "budget",
+    "plan_sha256",
+    "control",
+    "support_parents",
+    "comparison_policy"
+  ],
+  "title": "LocalImageSdxlPhotoObjectSupportPlan",
+  "type": "object"
+}
