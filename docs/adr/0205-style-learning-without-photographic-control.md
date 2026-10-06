@@ -547,3 +547,30 @@ sampling successor is justified, define schema before behavior, reuse canonical
 targets with deterministic keyed selection and immutable IDs/pixels/captions;
 retain<=8 results,<=3 samples/document and<=4 samples/group. Do not repeat unchanged200 updates,
 blindly raise steps, sweep control/blur or activate a visually rejected adapter.
+
+### Next bounded diagnostic: actual adapter roundtrip, not another generation
+
+Before changing the sampling recipe, add an explicitly opt-in CPU integration
+test against the FULL100 adapter already staged by the Orchestrator. Re-admit the
+existing geometry1.4 command's complete native TRAIN/result/manifest lineage and
+verify the installed three-wheel RECORD before executing; do not redispatch its
+generation command. Read only its seven immutable input members and a hash-pinned
+staged test. Canonical authority remains the registered revisions, not that path.
+
+One actual pinned UNet is loaded on CPU in float32. Saved LoRA tensors are loaded
+through training-style PEFT and the actual provider function, with exact tensor
+and four synthetic denoising-prediction comparisons. Check rank/alpha scale1,
+explicit strength0.5, unchanged base parameter identities/versions and disabled-
+adapter baseline restoration. Indexed tensor maps and ordered fixed comparisons
+are O(tensors+one bounded model+four forwards); no new DB/index/cache/protocol or
+dependency. No full image synthesis, GPU, optimizer, dataset/reserved pixels,
+text encoders or VAE. Limit one execution/600s/two CPU threads/16GiB peak RSS;
+the owner retains the exact process handle and fail-closed timeout, with no retry.
+
+Only Orchestrator-owned evidence publication writes NAS. The existing numerical
+role reads staged local files/model revision and returns bounded stdout; it has
+no repository/DB/NAS privilege. Default test invocation SKIPs. A mismatch may
+justify a reproduced loader defect; a PASS establishes only CPU-float32 loading/
+scaling roundtrip, not CUDA-fp16 optimizer parity, correct morphology or style
+quality. Full actual-model verification is stronger than fake loader calls but
+does not replace independent quality review or change the activation decision.
