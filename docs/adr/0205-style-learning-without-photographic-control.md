@@ -278,3 +278,36 @@ new target admission/training/GPU/reserved reads0. Production binding unchanged,
 five main services active. Continue complete framing, coherent native target
 eligibility and independent TRAIN expansion; all full quality/activation gates
 above remain OPEN. Own inspection is not independent blind review. Goal ACTIVE.
+
+### Reviewed apparatus targets and current preparation pool
+
+At source d9fa3760823e6c7328c8d1a6d48e657298d03a8f, four corrected apparatus
+frames from two TRAIN documents were inspected on original pages before two
+native CPU requests. Existing target1.2 owners prepared three1024x768 PNGs;
+the coil remains deferred because a touching annotation cannot safely be removed.
+Complete principal bodies, intrinsic meter/polarity marks, gray fills and short
+original connection fragments were inspected and retained, not fabricated away.
+These are institution-original-derived TRAIN candidates, NOT generated samples or
+independent blind quality approvals. No new protocol, dependency or core patch.
+
+Target result artifact_b96e26a4518c4746bd07d5f1f80c1421 /
+rev_129901364ffc45918a3803667529abf3, manifest SHA
+8d8753ce290f34166fc9bc80b53b56a8de80556d422fb6deab24ae5fa19c4a5e.
+Actual installed numerical-role terminal replay returned the same result with
+zero transforms/writes; four committed members reread byte-equal.
+
+Metadata-only inventory now finds54 unique prepared samples from33 documents and
+30 exam groups, with nine preparation results and max6 targets/group. This pool
+is NOT a frozen training cohort:released selection limits remain <=8 batches and
+max4/group. Of the separate95-source selection,53 still lack prepared targets.
+Prioritize new exam groups and larger coherent batches; do not pad to100 or relax
+FULL100–200 admission, which remains NOT_ACHIEVED. Newly trained updates=0.
+
+Four focused suites actually passed in two bounded invocations(62+68=130).
+The initial combined invocation ended143 after partial progress, not PASS; its
+cause is unknown. Detailed own review, operators, results and contacts are in
+artifact_1dfec15fa3734a8787b909e6af2c9dae / rev_e83f2cc1a8b24d5a82cad170ae72e320:
+29 members reread byte-equal; reports/own-review.md SHA
+0f4b8feb75d355e0be9a3a2d01f1c44b9a4de77150353339785dc216d4f1a19c.
+GPU/reserved reads/production changes0; binding unchanged, five services active.
+Full learning, independent quality and Item/HWPX activation gates remain OPEN.
