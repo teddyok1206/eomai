@@ -4694,3 +4694,25 @@ no new model attempt or history rewriting. Production binding unchanged, five
 servicesACTIVE, GPUidle. Next actual task: isolated compatible install/rollback/
 installed admission, then one bounded fit of the same command. No live training
 unit, no new drawings, and quality/blind/HOLDOUT/Item-HWPX remain NOT_ACCEPTED.
+
+Installed lab and actual bounded fit dispatch, **2026-10-06 10:49 UTC**:
+[ADR0209](../adr/0209-bounded-native-contour-loss-experiment.md) now records
+isolated three-wheel92fed3a8 installation, full installed RECORD/hash and actual
+worker imports PASS; rollback wheels verified/pinned, dependencies unchanged.
+Actual installed CPU sandbox10PASS/zero skips, GPU/models/optimizer0. Terminal
+CPU proof preserved before stopping that completed unit. Production unchanged.
+
+Same frozen canonical command `imgsdxlnativetrainrun_c9bad421f3c0e65a81f01e7df4f2bf76`
+fully admitted/staged through the existing owner:100 unchanged native targets,
+42 metadata plus command,143 staged members. Exactly one dispatch after ledgers;
+actual worker/GPU observed, **not terminal training acceptance**. Original limits:
+800 updates/3,200 microsteps,one hour,16GiB peak CUDA,64MiB PNG. No auto retry,
+checkpoint/resume, seed/prompt/data edits, new dependencies or activation.
+
+Canonical install/CPU/dispatch evidence18members49,557bytes rereadPASS:
+`artifact_50816d797e3d47dd998c6c7373ef20b9` /
+`rev_eb8d85d863af4d7aabae980b30c0eb02`, `reports/own-review.json`, raw SHA
+`5ae504391cc56b305096e6ac7b1f4517a4cca94f28a56deaf824927ac4d0ebde`.
+Keep installed lab unchanged until terminal. Next: verify/commit the same-run
+result, explicit successor inference admission, fixed five new LoRA outputs
+against reusable BASE and actual visual inspection. Goal ACTIVE/NOT_ACCEPTED.

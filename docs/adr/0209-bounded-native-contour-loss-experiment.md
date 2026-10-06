@@ -1,6 +1,7 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
-Status: IMPLEMENTED IN SOURCE; NOT INSTALLED OR TRAINED. 2026-10-06 UTC.
+Status: SOURCE AND ISOLATED LAB VERIFIED; ONE BOUNDED FIT DISPATCHED.
+2026-10-06 UTC. No terminal training or perceptual acceptance yet.
 
 ## Evidence and decision
 
@@ -194,3 +195,52 @@ production binding is unchanged, five services ACTIVE, GPU idle2MiB/0%. Laborato
 installation/capability is still PENDING, not READY; there is no live training unit
 to wait on. No weighted training or new generated sample yet. Goal remains
 ACTIVE/NOT_ACCEPTED, including independent blind/HOLDOUT/Item-HWPX gates.
+
+## Installed lab and single training dispatch — 2026-10-06 10:49 UTC
+
+This later checkpoint supersedes installation/dispatch PENDING above. Earlier
+immutable preflight receipts remain honest pre-install snapshots. Only the three
+contracts/provider/trainer packages in `/srv/eom/conda/envs/eom-image-trainer`
+were installed from the exact92fed3a8 wheels. Installed RECORD/hash/direct URL
+and actual worker cold-import checks PASS. Dependencies remain unchanged;
+imports require neither torch, PostgreSQL nor repository access. Verified previous
+wheel artifacts are pinned in an exclusive pre-mutation install ledger. Install
+performed once; no automatic retry. Production uses its separate environment;
+binding/services/unit templates/activation remain unchanged.
+
+Actual installed-wheel numerical tests executed as `eom-image` in a separate
+systemd CPU sandbox: **10 PASS, zero skips**, no GPU/device/model/optimizer access.
+Unit success/exit0 and bounded journal were saved before stopping only that
+completed CPU unit. This is installed CPU arithmetic, not CUDA fit/quality PASS.
+
+Before dispatch the owner verified the native template, installed RECORD/role,
+forbidden groups, unchanged production binding/five services, idle GPU and GPU
+lock. It resolved the **same** canonical1.3 command and full source closure,
+materialized100 exact native PNGs at the existing workspace boundary and staged
+143 members:42 metadata,100 targets and command.66 PDFs/55 groups, captions,
+labels,pixels,seed20261005 and schedule4:2:4 remain unchanged. Schedule SHA:
+`3ac789b36344a877518919b0298d98812a935a9613a35f5a6c1f2ec79f2868b0`.
+
+Admission/staging ledgers preceded **one** supported Orchestrator dispatch of
+`eom-image-sdxl-native-lora@imgsdxlnativetrainrun_c9bad421f3c0e65a81f01e7df4f2bf76.service`.
+Actual worker PID631921/GPU process observed during initialization. Activating
+`Result=success` is not terminal success. Pinned budget:800 optimizer updates,
+3,200 accumulation microsteps,3,600,000ms,16GiB peak CUDA and64MiB input PNGs.
+These are limits, not measured outcomes. No checkpoint/resume, new training ID,
+automatic retry or activation. Unknown completion/failure uses this same run.
+
+Canonical install/CPU/staging/dispatch evidence:18 members/49,557bytes reread
+equal by the existing commit owner:
+`artifact_50816d797e3d47dd998c6c7373ef20b9` /
+`rev_eb8d85d863af4d7aabae980b30c0eb02`, `reports/own-review.json`,
+schema `eom://schemas/operations/plain-text-log/1.0`, raw SHA
+`5ae504391cc56b305096e6ac7b1f4517a4cca94f28a56deaf824927ac4d0ebde`.
+Local receipt `/tmp/eom-native-contour-execution-20261006/execution-publication.json`.
+No PNGs, weights or secrets duplicated into this operation evidence.
+
+Next: preserve terminal adapter/result or failure under the same identity,
+then run the pinned TRAIN diagnostic and five-case comparison through explicit
+successor inference contracts accepting training1.3. Keep the installed lab
+unchanged during this fit. Do not loosen old1.2 pins, regenerate compatible BASE
+or retune seed/prompt after observing outputs. Goal ACTIVE/quality NOT_ACCEPTED;
+blind/HOLDOUT/semantic/Item-HWPX gates remain open.
