@@ -24,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 # CPU Canny conditioning in the numerical lab only; no Qt/X11/contrib or model download.
 sdxl-canny = ["opencv-python-headless==4.11.0.86"]
+# Optional CPU CLIP input validation/canonical float32 bytes; matches the installed trainer.
+sdxl-ip-style = ["numpy==2.4.6"]
 
 [project.scripts]
 eom-local-image = "eom_image_provider.cli:main"

@@ -556,3 +556,57 @@ an evidence Artifact, not a registered IP model or worker-plan Artifact.
 Full quality remains NOT_ACCEPTED/goal ACTIVE, acquisition/four-output approval
 NOT_RECORDED and old budget12/12 exhausted. Next: pinned CLIP numerical preparation
 and comparison consumer isolation, then bounded actual outputs when authorized.
+
+## CLIP numerical input boundary
+
+The optional provider numerical adapter consumes already-admitted, whole-frame
+224px RGB pixels, the exact native sample and planned RGB hash. Revalidate small
+profile/source values and byte/hash bounds before importing numerical libraries.
+Use pinned slow `CLIPImageProcessor` directly with resize/central crop/RGB conversion
+disabled, explicit rescale/mean/std, channel-first output and NumPy return type.
+No `from_pretrained`, network, model weight, encoder, diffusion, CUDA or lifecycle
+operation belongs to this function. The existing manifest already specifies this
+processing; no new wire schema or worker command is introduced.
+
+Return a frozen internal record of source/profile/RGB hash and immutable little-
+endian float32 NCHW bytes/hash. Exactly one bounded1x3x224x224 numerical batch is
+an explicit encoder-input materialization, not another canonical image, Artifact
+or cross-service blob. A later encoder boundary converts it for its model device;
+metadata/results carry pointers and trace hashes only. This does not validate
+scientific geometry, independent source permission or learned style improvement.
+
+Dominant operation is one bounded linear CPU raster pass: O(224*224*3) time/space,
+one source lookup and one hash, no DB/index/cache/queue or global model state.
+Reject source/profile/plan hash, unavailable or mismatched versions, unexpected
+processor dtype/shape and nonfinite output before returning. No fallback to latest
+processor, fast preprocessing, changed normalization or automatic retry. The
+pure alternative of writing our own CLIP normalization would duplicate the public
+library's rounding/layout behavior; using its pinned slow processor is smaller
+and independently checked against the explicit arithmetic in a real lab smoke.
+
+NumPy2.4.6 already exists and is pinned by the isolated trainer; declare that same
+version as an optional provider `sdxl-ip-style` extra because this adapter validates
+the public processor array and emits canonical float32 bytes. No new package is
+installed and core/production dependency requirements remain unchanged when the
+optional extra is unused. Torch/Transformers/Pillow are existing numerical runtime
+dependencies. Unit fakes in the light test environment are not pinned processing
+acceptance; actual11.3.0/4.56.2/2.4.6 CPU execution must be reported separately.
+
+### Numerical implementation checkpoint — 2026-10-06 16:27 UTC
+
+Light-environment regression PASS:326 cases including23 new numerical-input
+cases; a separate214-case sweep covers the older image tests restored to the
+authoritative environment manifest. The first regression had325 PASS/one failure:
+manifest completeness exposed12 previously omitted direct image-runtime test
+modules plus this new module. Restore the sorted13 entries, do not weaken the
+completeness guard. The two final sweeps are disjoint; the23 new cases are a subset
+of326 and must not be counted again. No GPU or real encoder weights in either.
+
+Strict Python3.11 mypy, Ruff/format, shell syntax and diff checks PASS. The exact
+optional Transformers import uses only an import-not-found annotation because
+the light test environment intentionally has no Transformers/Torch; this is not
+a global type-check relaxation or package installation. Pillow12.3.0 test units
+mock the pinned version and public processor; they do not prove lab11.3.0/4.56.2
+execution. The next real CPU smoke imports built non-editable wheels, repeats
+normalization of the two already-selected TRAIN PNGs, checks exact independent
+arithmetic and inversion, and forbids network/CUDA. No embedding/quality claim.

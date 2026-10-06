@@ -18,6 +18,9 @@ tests/unit/test_local_image_micro_probe_runner.py
 tests/unit/test_local_image_provider.py
 tests/unit/test_local_image_training_checkpoints.py
 tests/unit/test_local_image_training_runner.py
+tests/unit/test_native_contour_loss_contracts.py
+tests/unit/test_native_style_exposure.py
+tests/unit/test_photo_object_support_pixels.py
 tests/unit/test_reference_composition.py
 tests/unit/test_reference_simplification.py
 tests/unit/test_science_campaign_micro_evaluation_runner.py
@@ -38,8 +41,15 @@ tests/unit/test_sdxl_canny_conditioning.py
 tests/unit/test_sdxl_canny_controller.py
 tests/unit/test_sdxl_canny_reference.py
 tests/unit/test_sdxl_canny_subject_region.py
+tests/unit/test_sdxl_comparison_command.py
+tests/unit/test_sdxl_contour_reference_consumer.py
 tests/unit/test_sdxl_exterior_lora_compatibility.py
 tests/unit/test_sdxl_exterior_training_targets.py
+tests/unit/test_sdxl_geometry_baseline_reuse.py
+tests/unit/test_sdxl_ip_style_comparison_plan.py
+tests/unit/test_sdxl_ip_style_encoder_input.py
+tests/unit/test_sdxl_ip_style_io.py
+tests/unit/test_sdxl_ip_style_pixels.py
 tests/unit/test_sdxl_learned_comparison.py
 tests/unit/test_sdxl_lineart_backend.py
 tests/unit/test_sdxl_lineart_probe.py
@@ -55,6 +65,8 @@ tests/unit/test_sdxl_native_geometry_successor.py
 tests/unit/test_sdxl_native_lora_runner.py
 tests/unit/test_sdxl_native_training_targets.py
 tests/unit/test_sdxl_native_validation.py
+tests/unit/test_sdxl_photo_baseline_reuse.py
+tests/unit/test_sdxl_photo_object_support_execution.py
 tests/unit/test_sdxl_photo_style.py
 tests/unit/test_sdxl_photo_style_control_window.py
 tests/unit/test_sdxl_photo_style_execution.py
@@ -70,6 +82,7 @@ tests/unit/test_sdxl_training_targets.py
 tests/unit/test_sdxl_vae_native_precision_input.py
 tests/unit/test_sdxl_validation_comparison.py
 tests/unit/test_sdxl_validation_worker.py
+tests/unit/test_style_exposure_consumers.py
 tests/unit/test_unet_lora_numerical_loop.py
 tests/unit/test_visual_reference_acquisition.py
 tests/unit/test_visual_reference_coordinator.py
