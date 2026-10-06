@@ -865,3 +865,48 @@ independent blind review, and has no new generated counterpart to qualify.
 Continue the established original-view cadence at trained-candidate, fixed-output
 comparison and major prompt/control/style/publication changes; unchanged idle
 training monitoring remains30 minutes, not repeated image rereading or polling.
+
+## Pinned CPU global-style encoder boundary
+
+Responsibility: the optional numerical provider consumes the existing verified
+model-open scope and already admitted TRAIN CLIP input; it is not a source owner,
+worker dispatch contract or GPU claim. Canonical source and pinned model/source
+revisions remain unchanged. Revalidate small pointer/sample/preprocessing values,
+input byte bounds/hash/finiteness before model loading. Load only the exact held
+encoder safetensors descriptor; no Hub, pickle, arbitrary factory/remote code,
+latest resolution, adapter load or original file reopen.
+
+Construct the explicit public CLIP vision architecture on Torch meta, compare
+the exact state key set and every shape/dtype against that model, reject nonfinite
+weights, then strict assign without allocating random full CPU weights first.
+Run this encoder on CPU float32 in eval/inference mode; accept stored float16 or
+float32 only and convert to float32 explicitly. Do not infer stored dtype from
+the config declaration. Recreate the small nonpersistent position-ID buffer on
+CPU; meta construction must not leave a forward-time meta buffer. Dispose the
+encoder within the verified scope before returning a frozen embedding value,
+so final model identity errors cannot return a successful embedding. No cache,
+global model registry, session reuse or random-seed reset is introduced.
+
+For this global ViT-H variant use projected `image_embeds`, not patch hidden
+states or CLIPModel's unit normalization. One-image CFG is frozen float32 little-
+endian shape2×1×1024, unconditional zeros first and conditional embedding second;
+never encode a zero image for the unconditional branch (that is a different Plus
+path). The8192byte internal immutable value pins model/source/preprocessing,
+input hash and result hash, not large cross-service blobs or persistent tensors.
+Reuse the exact value for both matched arms; later GPU materialization belongs
+to the existing bounded numerical execution owner.
+
+Dominant access is a key-set/map join and ordered tensor iteration, O(weight
+elements) validation plus one encoder forward, O(weights+largest finite mask)
+CPU memory. Float32 stored tensors can be assigned from the verified mapping;
+float16 conversion may need a separate float32 allocation. No DB/index/schema,
+dependency or new framework. This explicit CPU phase avoids overlapping encoder
+VRAM with diffusion but does not prove real peak RAM/VRAM or pretrained quality.
+Runtime versions remain pinned. Stable model/input/output/OOM errors, no retry,
+no publication on failure, no changes to old queue/idempotency/activation.
+The simpler random CPU model then copy-state load wastes another full weights
+allocation; arbitrary `from_pretrained` paths also lose the held-file boundary.
+Public Torch meta/assign behavior is documented at
+https://docs.pytorch.org/docs/2.7/meta.html and
+https://docs.pytorch.org/tutorials/recipes/recipes/module_load_state_dict_tips.html;
+implementation must also be checked against installed Torch2.7.1/TF4.56.2.
