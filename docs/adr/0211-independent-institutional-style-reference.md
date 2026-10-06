@@ -610,3 +610,47 @@ mock the pinned version and public processor; they do not prove lab11.3.0/4.56.2
 execution. The next real CPU smoke imports built non-editable wheels, repeats
 normalization of the two already-selected TRAIN PNGs, checks exact independent
 arithmetic and inversion, and forbids network/CUDA. No embedding/quality claim.
+
+### Actual CPU numerical checkpoint — 2026-10-06 16:28 UTC
+
+Built source `b3c52872984b2a1a9b9d3021e5ad67e119746532` then passed the
+repository-free pinned-wheel CPU smoke using actual Pillow11.3.0, Transformers
+4.56.2 and NumPy2.4.6. Exactly the earlier two TRAIN selections were reused: source
+PNG hash/document/group and224px RGB hashes match the frozen canonical selection.
+Two pixel preparations/four normalizations (two per source), exact float32
+arithmetic and byte-for-byte replay PASS. Shape1x3x224x224, immutable602112byte
+buffers, inverse error at most0.000030517578125 in0–255 units;7436/7316 mid-gray
+pixels remain in the two inputs. This verifies normalization, not preservation of
+fine features lost during the earlier224px resizing, learned embedding, geometry
+or institution-grade output. Original pixels/PNG and numerical buffers were not
+persisted or duplicated. Network/CUDA attempts, encoder/model weight reads,
+new outputs, VALIDATION/HOLDOUT and production changes all0.
+
+All387 wheel RECORD members (296/56/35) were checked. No runtime install. Wheel
+SHA-256s for contract/provider/trainer:
+`ad11d7c01501238d6575ecb8573129135afa38d2bbbab46db1bca2c67ce86ab5`,
+`d40bc573c593a03bd36f0d5eb6250a1290d612cff162d6873d12516473d4298f`,
+`7821980a55f2246db28b396a137aa5dcca27079dcca943df1c7ebf622e97ae39`.
+Build-only directory:
+`/tmp/eom-image-trainer-build/b3c52872984b2a1a9b9d3021e5ad67e119746532.pfmb5Y/dist`.
+
+The existing Orchestrator owner re-resolved the earlier canonical selection
+evidence, committed four text members18,885bytes and reread all members equal as
+`artifact_5e138eb71d684c748a1b8994b31e499e` /
+`rev_dc60a851848b4c07a155b5db3fd9bfc5`, primary
+`reports/clip-numerical-input.json`, SHA
+`0d3c8241d923dd4002437fc99c90fa9b603ca35b382a3ae37cc671842c483ae4`.
+The CPU operator, exact result/log and owner operator are retained; source PNGs
+continue to reference their earlier canonical revisions. No worker plan/model
+was registered, acquired, loaded or dispatched. Overall quality NOT_ACCEPTED,
+independent review NOT_PERFORMED, goal ACTIVE; old fallback budget12/12 remains
+exhausted and separate model-acquisition/four-output approval NOT_RECORDED.
+
+No additional own-view coverage is claimed in this numerical checkpoint: the
+unchanged source/224px pairs were already viewed and compared. At the next new
+output/prompt/control/style candidate, reopen institutional originals alongside
+matched outputs and record line economy, tone/hatching, frame/composition and
+scientific semantics separately. Do not let repeated views of unchanged sheets
+inflate coverage or stand in for independent blind/HOLDOUT review. Next safe
+implementation boundary is comparison consumer OFF/ON state isolation and exact
+encoder-load ownership, before bounded actual inference when authorized.
