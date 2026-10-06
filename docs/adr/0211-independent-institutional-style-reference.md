@@ -354,3 +354,84 @@ numerical GPU rerun or hidden recovery. Old histories/12-of12 budget are preserv
 Full quality remains NOT_ACCEPTED and goal ACTIVE; new acquisition/four-output
 approval is still NOT_RECORDED. Next safe work: closed comparison command/result
 and existing-owner staging/consumer, then actual bounded execution when authorized.
+
+## Matched preparation plan boundary
+
+Add one preparation-only IP-style comparison plan, not another released photo
+recipe or a worker dispatch command. Pin an existing balanced photo1.5 command
+and result, the exact native1.3 TRAIN source command, and the separate style-model
+manifest pointer. Select exactly two photo case IDs and their immutable
+conditioning/initializer hashes from that result; select style sample IDs and
+prepared RGB hashes separately. Prompts, seed, base, LoRA, control and geometry
+stay inherited from the pinned photo documents, with no override fields in this
+plan. Both new arms load identical stack/embedding; only IP scale0 versus1 differs.
+Do not reuse historical BASE/LORA arms as style OFF/ON or their consumed budget.
+
+The existing preparation/source metadata owners will resolve exact pointers and
+validate source status, time, schema/media, hashes, licensed photograph closure,
+TRAIN/document/group membership and pixel hashes before staging or GPU load.
+Plan schema/model validity alone does not prove those dereferences, membership,
+actual stack compatibility or execution authorization. In particular a self-sealed
+pointer or a sample ID is not independent source authority. The four-output budget
+is a proposed ceiling, not an approval record. No worker accepts this plan yet.
+
+Dominant accesses are key lookup and ordered fixed-matrix traversal: keyed maps
+for admitted photo traces/native samples; sets for case uniqueness; frozen tuple
+for two selections. O(photo/native metadata + two selections), bounded metadata
+memory, no DB/index/cache/queue or binary duplication. Existing immutable Artifact
+publisher owns any future registration; existing exclusive GPU lease and terminal
+same-key replay own eventual execution. No transaction/state change is introduced
+by this value. Missing/stale/hash/status errors stop resolution, never latest
+substitution. Simpler extension of BASE/LORA comparison is insufficient because
+it toggles LoRA weights and would conflate the factor under test. Preserved photo
+protocol bytes/semantics are not reinterpreted by the independent style plan.
+
+## Matched plan checkpoint — 2026-10-06 15:47 UTC
+
+The preparation-only schema/model/parser is implemented; it is deliberately not
+accepted by the existing worker command loader. New68 cases are included in365
+focused regression PASS/zero skips in76.05s. Strict Python3.11 mypy for three
+core modules, Ruff/format, shell syntax and diff checks PASS. Source/package and
+generated-schema parity plus registry hash are tested. Schema SHA
+`73cf671537019f9e9a9eb678d63a8c6bb4af14643d27fb533cc0ce3ed6c1255c`.
+These tests do not admit real source membership or authorize numerical execution.
+
+Existing Orchestrator metadata ownership resolved photo1.5 command
+`artifact_22cb3015474c41a4955fa33db8fbd2b0` /
+`rev_ec50b74bdb5543408fe6150c16275e48` and result
+`artifact_a759c8975e6146cfad36d345ac9468b3` /
+`rev_c18fec600dac432882af20cdf2cca8af`, checking canonical bytes, source lineage and successful numerical
+parent-result semantics. Its77 metadata members include100 native TRAIN samples
+and three eligible photo cases (enrolled trilobite, partially sectioned ammonite
+and parked wagon). No source PNG/PDF/weights were opened. Probe SHA
+`88476b0d71d0927bd26779cb7d884c6033108e8aab00e9dee0ebf089677810ec`.
+Production binding SHA remains
+`f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+This is a read-only parent check, not a registered two-case selection, approved
+IP model, consumer, staging, new output or visual acceptance. The earlier
+numerically successful photo result remains quality NOT_ACCEPTED.
+
+## Recurring actual-original calibration
+
+User requested actual institutional originals be reopened regularly. Perform this
+at completed training candidates, fixed output comparisons and major changes to
+prompt/control/style/publication policy. Do not replace opening the artwork with
+loss or pixel statistics. Idle training observation remains30-minute cadence;
+do not repeatedly reopen an unchanged sheet merely to claim more coverage.
+
+At this checkpoint the existing labelled six-source contact sheet was actually
+reopened. It contains original TRAIN extracts and224px preparations, not generated
+outputs; its canonical view remains in `artifact_b69c97f3a9aa4ce9ba86380aa8bbb891`
+/ `rev_db040fa388e04ae6994c48079e3e920b`. This is a repeated calibration view,
+not six new independent examples or a new blind-review result. Apparatus/heart
+use meaningful gray faces and bold directional marks; biological examples can
+contain dense internal structure or tonal backgrounds. Therefore retain contour
+hierarchy, necessary tone and scientific components while reducing unnecessary
+texture/echoes/exaggeration. Do not equate institutional style with universally
+thin, thresholded, detail-free black outlines. The224px style input visibly loses
+fine internal detail and cannot own scientific geometry.
+
+Full quality remains NOT_ACCEPTED. No new acquisition/four-output approval is
+recorded, no model/GPU/HOLDOUT or production change occurred, and the previous
+12/12 budget is not reset. Next safe work is the existing-owner source admission
+and numerical comparison consumer; a valid plan alone must never start a worker.

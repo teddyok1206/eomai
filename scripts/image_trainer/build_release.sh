@@ -50,6 +50,8 @@ with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
         "eom_image_contracts/sdxl_ip_style.py",
+        "eom_image_contracts/sdxl_ip_style_comparison.py",
+        "eom_image_contracts/schemas/local-image-sdxl-ip-style-comparison-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-ip-style-model-manifest-v1.schema.json",
         "eom_image_contracts/sdxl_native_evaluation.py",
         "eom_image_contracts/sdxl_native_canny_reference.py",

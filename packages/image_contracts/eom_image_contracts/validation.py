@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-ip-style-comparison-plan": "local-image-sdxl-ip-style-comparison-plan-v1.schema.json",
     "sdxl-ip-style-model-manifest": "local-image-sdxl-ip-style-model-manifest-v1.schema.json",
     "sdxl-photo-style-plan-v8": "local-image-sdxl-photo-style-plan-v8.schema.json",
     "sdxl-photo-style-command-v8": "local-image-sdxl-photo-style-command-v8.schema.json",
@@ -435,6 +436,9 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-ip-style-comparison-plan": (
+        "sha256:73cf671537019f9e9a9eb678d63a8c6bb4af14643d27fb533cc0ce3ed6c1255c"
+    ),
     "sdxl-ip-style-model-manifest": (
         "sha256:972d7dab906959d8041b939bee78b80cbb690dfe8026cb744567a521e2648d4a"
     ),

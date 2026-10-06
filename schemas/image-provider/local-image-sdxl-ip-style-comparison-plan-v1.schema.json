@@ -1,0 +1,320 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "SdxlIpStyleComparisonBudget": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_duration_ms": {
+          "maximum": 600000,
+          "minimum": 1,
+          "title": "Maximum Duration Ms",
+          "type": "integer"
+        },
+        "maximum_peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Maximum Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "maximum_outputs": {
+          "const": 4,
+          "default": 4,
+          "title": "Maximum Outputs",
+          "type": "integer"
+        },
+        "maximum_dispatches": {
+          "const": 1,
+          "default": 1,
+          "title": "Maximum Dispatches",
+          "type": "integer"
+        },
+        "automatic_retry": {
+          "const": false,
+          "default": false,
+          "title": "Automatic Retry",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "maximum_duration_ms",
+        "maximum_peak_gpu_memory_bytes"
+      ],
+      "title": "SdxlIpStyleComparisonBudget",
+      "type": "object"
+    },
+    "SdxlIpStyleModelPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "pattern": "^imgmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "diffusers-sdxl-ip-adapter-global-vit-h",
+          "default": "diffusers-sdxl-ip-adapter-global-vit-h",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "runtime_contract_version": {
+          "const": "eom-local-image-sdxl-ip-style-runner/1.0",
+          "default": "eom-local-image-sdxl-ip-style-runner/1.0",
+          "title": "Runtime Contract Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "manifest_sha256"
+      ],
+      "title": "SdxlIpStyleModelPointer",
+      "type": "object"
+    },
+    "SdxlIpStylePairSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "conditioning_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Conditioning Sha256",
+          "type": "string"
+        },
+        "initialization_rgb_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Initialization Rgb Sha256",
+          "type": "string"
+        },
+        "style_sample_id": {
+          "pattern": "^imgsourcecrop_[0-9a-f]{32}$",
+          "title": "Style Sample Id",
+          "type": "string"
+        },
+        "style_rgb_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Style Rgb Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "conditioning_sha256",
+        "initialization_rgb_sha256",
+        "style_sample_id",
+        "style_rgb_sha256"
+      ],
+      "title": "SdxlIpStylePairSelection",
+      "type": "object"
+    },
+    "SdxlIpStyleRouting": {
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "const": "UP_BLOCK0_ATTN1_ONLY/1.0",
+          "default": "UP_BLOCK0_ATTN1_ONLY/1.0",
+          "title": "Policy",
+          "type": "string"
+        },
+        "off_scale": {
+          "default": 0,
+          "maximum": 0,
+          "minimum": 0,
+          "title": "Off Scale",
+          "type": "number"
+        },
+        "on_scale": {
+          "default": 1,
+          "maximum": 1,
+          "minimum": 1,
+          "title": "On Scale",
+          "type": "number"
+        },
+        "other_ip_scales": {
+          "default": 0,
+          "maximum": 0,
+          "minimum": 0,
+          "title": "Other Ip Scales",
+          "type": "number"
+        },
+        "feature_subtraction": {
+          "const": false,
+          "default": false,
+          "title": "Feature Subtraction",
+          "type": "boolean"
+        },
+        "self_attention_policy": {
+          "const": "UNCHANGED",
+          "default": "UNCHANGED",
+          "title": "Self Attention Policy",
+          "type": "string"
+        },
+        "embedding_reuse": {
+          "const": "SAME_ENCODER_AND_SOURCE_FOR_BOTH_ARMS",
+          "default": "SAME_ENCODER_AND_SOURCE_FOR_BOTH_ARMS",
+          "title": "Embedding Reuse",
+          "type": "string"
+        }
+      },
+      "title": "SdxlIpStyleRouting",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-ip-style-comparison-plan/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "plan_id": {
+      "pattern": "^imgsdxlipstyleplan_[0-9a-f]{32}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_MATCHED_STYLE_REFERENCE",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "dispatch_policy": {
+      "const": "PREPARATION_ONLY_NOT_A_WORKER_COMMAND",
+      "title": "Dispatch Policy",
+      "type": "string"
+    },
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "comparison_policy": {
+      "const": "ONLY_IP_SCALE_0_VS_1_SAME_LORA_AND_STRUCTURE",
+      "title": "Comparison Policy",
+      "type": "string"
+    },
+    "photo_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "photo_result": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "style_training_command": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "style_model": {
+      "$ref": "#/$defs/SdxlIpStyleModelPointer"
+    },
+    "routing": {
+      "$ref": "#/$defs/SdxlIpStyleRouting"
+    },
+    "cases": {
+      "items": {
+        "$ref": "#/$defs/SdxlIpStylePairSelection"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Cases",
+      "type": "array"
+    },
+    "budget": {
+      "$ref": "#/$defs/SdxlIpStyleComparisonBudget"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "dispatch_policy",
+    "activation_policy",
+    "comparison_policy",
+    "photo_command",
+    "photo_result",
+    "style_training_command",
+    "style_model",
+    "routing",
+    "cases",
+    "budget",
+    "plan_sha256"
+  ],
+  "title": "LocalImageSdxlIpStyleComparisonPlan",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-plan/1.0"
+}
