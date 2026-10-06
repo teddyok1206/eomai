@@ -1,6 +1,6 @@
 # ADR0211: Separate institutional style reference from object geometry
 
-Status: research and executed CPU capability probes, 2026-10-06 UTC.
+Status: CPU capability probes and pure preparation contract, 2026-10-06 UTC.
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
@@ -62,6 +62,30 @@ and frozen before outputs, with source and derived-input hashes distinct.
 Weights, encoder, preprocessing and style reference are independent identities.
 
 ## Boundary and implementation procedure
+
+### Preparation contract decision (no acquisition authorization)
+
+One additive `local-image-sdxl-ip-style-model-manifest/1.0` describes only the
+optional global ViT-H adapter/encoder plus their exact six-file notices/config
+closure, not another copy of base/VAE/controller/LoRA. Logical identity is the
+provider/repository pair; revision identity includes source revision, whitelist,
+license provenance and explicit preprocessing. Manifest content hash additionally
+pins creator/time/state. Changing any of those is not a latest-revision lookup.
+
+Freeze whole-reference RGB bicubic fit into224x224 white letterboxing. Then use
+CLIP normalization/rescaling with processor resize and central crop disabled.
+This retains the full style-source framing, including meaningful gray; it does
+not binarize, erase tone, crop out components or mutate canonical source PNGs.
+Pillow11.3.0/Transformers4.56.2 and the exact CLIP mean/std/factor are contract
+values, not ambient defaults. Numerical preprocessing is still unimplemented.
+Both later OFF/ON arms must use the same resulting embedding and model stack.
+
+This manifest is an evaluation-only metadata contract; it neither approves a
+source image nor starts a worker. JSON Schema is defined before provider behavior.
+Pydantic adds exact whitelist, UTC, logical/revision/content-hash checks. Source
+and wheel-owned schema copies/hash are checked mechanically. Future file resolver
+must use existing descriptor-based I/O for missing/stale/hash/ownership/closure
+checks before model load. No downloader/installation is implied by schema PASS.
 
 1. Ownership: existing Orchestrator resolves/stages/commits; isolated provider
    consumes local input and returns local results. No direct worker/NAS/DB writes.
@@ -127,3 +151,27 @@ Temporary metadata string-wrapping lint corrections and pre-publication relative
 path error were retained; the latter was corrected before any publisher call,
 with the prior local review reused only after exact expected-value comparison.
 No repeated CPU model calculation, GPU inference or production mutation.
+
+## Preparation implementation checkpoint
+
+JSON Schema2020-12 was drafted before any new provider behavior; the closed
+Pydantic manifest, frozen file whitelist/preprocessor/notices and exact logical,
+revision and content hashes now implement the preparation value contract.
+Schema hash `972d7dab906959d8041b939bee78b80cbb690dfe8026cb744567a521e2648d4a`;
+source/package copies and generated-model parity are tested. Existing build
+owners require the new model module/schema in their wheels. No new worker,
+downloader, resolver, installer, dependency or production route was added.
+
+Focused manifest/controller/dependency regression:105 PASS in5.07s; existing
+lineart-stack/native-LoRA/contour/evaluation contracts:136 PASS in4.68s, total241.
+Strict mypy
+for all three touched core Python files/Python3.11, Ruff/format and diff PASS.
+Tests cover modified hashes/IDs/versions, malformed/extra/duplicate/unordered
+files, pickle/Plus substitution, timestamp/provenance/preprocessor expansion,
+immutability and pure dependency direction. These are protocol tests, not actual
+installed-file, CUDA, model-quality, claim/persistence or human acceptance tests.
+Wheel build/import simulation remains pending at this source checkpoint.
+The initial `python -m build` availability probe failed in the test environment;
+use the existing release script's explicit API `pip wheel` rather than add a
+dependency or mutate either environment. No build/install side effect occurred
+in that availability probe.

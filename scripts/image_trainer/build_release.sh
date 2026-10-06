@@ -49,6 +49,8 @@ contract, provider, trainer = sys.argv[1:]
 with zipfile.ZipFile(contract) as archive:
     names = set(archive.namelist())
     required = {
+        "eom_image_contracts/sdxl_ip_style.py",
+        "eom_image_contracts/schemas/local-image-sdxl-ip-style-model-manifest-v1.schema.json",
         "eom_image_contracts/sdxl_native_evaluation.py",
         "eom_image_contracts/sdxl_native_canny_reference.py",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-command-v2.schema.json",

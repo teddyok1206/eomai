@@ -1,0 +1,326 @@
+{
+  "$defs": {
+    "ModelFile": {
+      "additionalProperties": false,
+      "properties": {
+        "relative_path": {
+          "maxLength": 240,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._/-]+$",
+          "title": "Relative Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "size_bytes",
+        "sha256"
+      ],
+      "title": "ModelFile",
+      "type": "object"
+    },
+    "SdxlIpStyleLicense": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "const": "HUB_CARD_AND_DECLARED_ENCODER_ORIGIN",
+          "default": "HUB_CARD_AND_DECLARED_ENCODER_ORIGIN",
+          "title": "Basis",
+          "type": "string"
+        },
+        "code_license_id": {
+          "const": "Apache-2.0",
+          "default": "Apache-2.0",
+          "title": "Code License Id",
+          "type": "string"
+        },
+        "code_repo": {
+          "const": "tencent-ailab/IP-Adapter",
+          "default": "tencent-ailab/IP-Adapter",
+          "title": "Code Repo",
+          "type": "string"
+        },
+        "code_revision": {
+          "const": "62e4af9d0c1ac7d5f8dd386a0ccf2211346af1a2",
+          "default": "62e4af9d0c1ac7d5f8dd386a0ccf2211346af1a2",
+          "title": "Code Revision",
+          "type": "string"
+        },
+        "encoder_origin_license_id": {
+          "const": "MIT",
+          "default": "MIT",
+          "title": "Encoder Origin License Id",
+          "type": "string"
+        },
+        "encoder_origin_repo": {
+          "const": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+          "default": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+          "title": "Encoder Origin Repo",
+          "type": "string"
+        },
+        "encoder_origin_revision": {
+          "const": "1c2b8495b28150b8a4922ee1c8edee224c284c0c",
+          "default": "1c2b8495b28150b8a4922ee1c8edee224c284c0c",
+          "title": "Encoder Origin Revision",
+          "type": "string"
+        },
+        "hub_identifier": {
+          "const": "apache-2.0",
+          "default": "apache-2.0",
+          "title": "Hub Identifier",
+          "type": "string"
+        },
+        "hub_own_license_file": {
+          "const": false,
+          "default": false,
+          "title": "Hub Own License File",
+          "type": "boolean"
+        },
+        "repack_equivalence_verified": {
+          "const": false,
+          "default": false,
+          "title": "Repack Equivalence Verified",
+          "type": "boolean"
+        }
+      },
+      "title": "SdxlIpStyleLicense",
+      "type": "object"
+    },
+    "SdxlIpStylePreprocessing": {
+      "additionalProperties": false,
+      "properties": {
+        "height_px": {
+          "const": 224,
+          "default": 224,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "image_mean": {
+          "default": [
+            0.48145466,
+            0.4578275,
+            0.40821073
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "maximum": 0.48145466,
+              "minimum": 0.48145466,
+              "type": "number"
+            },
+            {
+              "maximum": 0.4578275,
+              "minimum": 0.4578275,
+              "type": "number"
+            },
+            {
+              "maximum": 0.40821073,
+              "minimum": 0.40821073,
+              "type": "number"
+            }
+          ],
+          "title": "Image Mean",
+          "type": "array"
+        },
+        "image_std": {
+          "default": [
+            0.26862954,
+            0.26130258,
+            0.27577711
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "maximum": 0.26862954,
+              "minimum": 0.26862954,
+              "type": "number"
+            },
+            {
+              "maximum": 0.26130258,
+              "minimum": 0.26130258,
+              "type": "number"
+            },
+            {
+              "maximum": 0.27577711,
+              "minimum": 0.27577711,
+              "type": "number"
+            }
+          ],
+          "title": "Image Std",
+          "type": "array"
+        },
+        "pillow_version": {
+          "const": "11.3.0",
+          "default": "11.3.0",
+          "title": "Pillow Version",
+          "type": "string"
+        },
+        "policy": {
+          "const": "WHOLE_REFERENCE_WHITE_FIT_RGB_224/1.0",
+          "default": "WHOLE_REFERENCE_WHITE_FIT_RGB_224/1.0",
+          "title": "Policy",
+          "type": "string"
+        },
+        "processor_center_crop": {
+          "const": false,
+          "default": false,
+          "title": "Processor Center Crop",
+          "type": "boolean"
+        },
+        "processor_resize": {
+          "const": false,
+          "default": false,
+          "title": "Processor Resize",
+          "type": "boolean"
+        },
+        "rescale_factor": {
+          "default": 0.00392156862745098,
+          "maximum": 0.00392156862745098,
+          "minimum": 0.00392156862745098,
+          "title": "Rescale Factor",
+          "type": "number"
+        },
+        "resize_interpolation": {
+          "const": "BICUBIC",
+          "default": "BICUBIC",
+          "title": "Resize Interpolation",
+          "type": "string"
+        },
+        "transformers_version": {
+          "const": "4.56.2",
+          "default": "4.56.2",
+          "title": "Transformers Version",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 224,
+          "default": 224,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "title": "SdxlIpStylePreprocessing",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-ip-style-model-manifest/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "created_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "title": "Created By",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ModelFile"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Files",
+      "type": "array"
+    },
+    "license": {
+      "$ref": "#/$defs/SdxlIpStyleLicense"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^imgmodel_[0-9a-f]{32}$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_revision_id": {
+      "pattern": "^imgmodelrev_[0-9a-f]{32}$",
+      "title": "Model Revision Id",
+      "type": "string"
+    },
+    "preprocessing": {
+      "$ref": "#/$defs/SdxlIpStylePreprocessing"
+    },
+    "provider_family": {
+      "const": "diffusers-sdxl-ip-adapter-global-vit-h",
+      "default": "diffusers-sdxl-ip-adapter-global-vit-h",
+      "title": "Provider Family",
+      "type": "string"
+    },
+    "runtime_contract_version": {
+      "const": "eom-local-image-sdxl-ip-style-runner/1.0",
+      "default": "eom-local-image-sdxl-ip-style-runner/1.0",
+      "title": "Runtime Contract Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-ip-style-model-manifest/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "state": {
+      "const": "EVALUATION_ONLY",
+      "title": "State",
+      "type": "string"
+    },
+    "supported_base_repo": {
+      "const": "stabilityai/stable-diffusion-xl-base-1.0",
+      "default": "stabilityai/stable-diffusion-xl-base-1.0",
+      "title": "Supported Base Repo",
+      "type": "string"
+    },
+    "upstream_repo": {
+      "const": "h94/IP-Adapter",
+      "title": "Upstream Repo",
+      "type": "string"
+    },
+    "upstream_revision": {
+      "const": "018e402774aeeddd60609b4ecdb7e298259dc729",
+      "title": "Upstream Revision",
+      "type": "string"
+    }
+  },
+  "required": [
+    "model_id",
+    "model_revision_id",
+    "manifest_sha256",
+    "schema_version",
+    "state",
+    "activation_policy",
+    "upstream_repo",
+    "upstream_revision",
+    "license",
+    "preprocessing",
+    "files",
+    "created_at",
+    "created_by"
+  ],
+  "title": "LocalImageSdxlIpStyleModelManifest",
+  "type": "object"
+}
