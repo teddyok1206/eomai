@@ -1,5 +1,41 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
+## Reuse-aware reference consumer design — 2026-10-06
+
+The existing reference codec, owner metadata admission and isolated provider own
+this boundary. Add command/result1.4 only to accept exact geometry1.6/native
+training1.3 lineage; released reference1.0–1.3 stay frozen. Canonical sources are
+the pinned spatial history, current native command/result/adapter, and the prior
+geometry command/result used for BASE reuse. Keep their identities, revisions,
+schemas and hashes distinct. No implicit latest, old-adapter weight reuse or PNG
+copy of BASE is allowed. Both borrowed metadata pointers are read, authenticated
+and checked for numerical/input equivalence before any media/model access.
+
+The same small keyed metadata map and ordered staged manifest serve owner and
+worker. Resolution is O(metadata members), bounded at256KiB per member; no DB,
+index, queue or cache change. Existing publication/dispatch idempotency, exclusive
+GPU lease, terminal replay and failure history remain authoritative. Contracts
+perform pure validation; Orchestrator resolves/stages and only the existing owner
+commits. The worker reads local files only. A missing/stale/forbidden/hash-mismatched
+borrowed parent fails before weights or pixels. No automatic retry, extra fit or
+generation is authorized by this source change. The simpler alternative—loosening
+the old evaluation-pin allowlist—would reinterpret released reference history and
+is therefore rejected. Photo execution remains a separately required successor.
+
+Implementation: reference command/result1.4 is a closed codec entry accepting only
+evaluation1.6. The existing native metadata pointer map includes two additional
+borrowed geometry parents. Existing owner resolution, handoff hashes and worker
+reads consume that one map; no parallel staging path. Pure source attachment
+checks native geometry and the exact prior BASE equivalence before full native
+source closure and before PNG/weights. Released schemas1.0–1.3 retain byte hashes.
+Focused synthetic reference tests17PASS, strict mypy4 modules PASS. Initial
+fixture failures concerned mixing frozen metadata timestamps with a live fixture
+clock (first historical chronology, then a future command); only fixture creation
+time was corrected. Failure logs remain preserved, runtime time guards unchanged.
+The reuse-aware source fe906f4b build's three wheel hashes/371 RECORD members and
+repository-free/model-free cold imports PASS. BUILD_ONLY, not installed. No new
+real reference generation, lab install, fit retry or production activation.
+
 Status: SOURCE AND ISOLATED LAB VERIFIED; ONE BOUNDED FIT DISPATCHED.
 2026-10-06 UTC. No terminal training or perceptual acceptance yet.
 

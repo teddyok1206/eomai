@@ -68,6 +68,8 @@ with zipfile.ZipFile(contract) as archive:
         "eom_image_contracts/schemas/local-image-sdxl-lora-evaluation-result-v6.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-command-v4.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-canny-reference-result-v4.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-canny-reference-command-v5.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-canny-reference-result-v5.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-photo-style-plan-v6.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-photo-style-command-v6.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-photo-style-result-v6.schema.json",

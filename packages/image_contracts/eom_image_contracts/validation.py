@@ -22,6 +22,8 @@ SCHEMA_FILES = {
     "sdxl-lora-evaluation-result-v6": "local-image-sdxl-lora-evaluation-result-v6.schema.json",
     "sdxl-canny-reference-command-v4": "local-image-sdxl-canny-reference-command-v4.schema.json",
     "sdxl-canny-reference-result-v4": "local-image-sdxl-canny-reference-result-v4.schema.json",
+    "sdxl-canny-reference-command-v5": "local-image-sdxl-canny-reference-command-v5.schema.json",
+    "sdxl-canny-reference-result-v5": "local-image-sdxl-canny-reference-result-v5.schema.json",
     "sdxl-photo-style-plan-v6": "local-image-sdxl-photo-style-plan-v6.schema.json",
     "sdxl-photo-style-command-v6": "local-image-sdxl-photo-style-command-v6.schema.json",
     "sdxl-photo-style-result-v6": "local-image-sdxl-photo-style-result-v6.schema.json",
@@ -458,6 +460,12 @@ SCHEMA_SHA256 = {
     ),
     "sdxl-canny-reference-result-v4": (
         "sha256:e29c52ff5bdcc5548f76009851d45955ccb24c12f6ca6749065e6001d999b912"
+    ),
+    "sdxl-canny-reference-command-v5": (
+        "sha256:f12dc70cfedbe3c07f36383331d37859243131057361aa1f51f226a847f69aaf"
+    ),
+    "sdxl-canny-reference-result-v5": (
+        "sha256:3624a6c6d2bb3c11da74e1af1bd62be6ae6e03021b9bad8c07a63db148befcc3"
     ),
     "sdxl-photo-style-plan-v6": (
         "sha256:857f0ea5eeab7f874fe7795842ead154b5f60a251ecca06a6eafb364cc577245"

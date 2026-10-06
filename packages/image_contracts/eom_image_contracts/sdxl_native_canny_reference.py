@@ -18,6 +18,10 @@ from eom_image_contracts.sdxl_canny_reference import (
     parse_sdxl_canny_reference_sources,
     validate_sdxl_canny_reference_result,
 )
+from eom_image_contracts.sdxl_geometry_baseline_reuse import (
+    LocalImageSdxlReusedGeometryCommand,
+    parse_reused_geometry_baseline,
+)
 from eom_image_contracts.sdxl_lora_micro import LocalImageSdxlLoraMicroAdapterManifest
 from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
@@ -95,6 +99,14 @@ class LocalImageSdxlNativeCannyReferenceResultV3(LocalImageSdxlNativeCannyRefere
     schema_version: Literal["local-image-sdxl-canny-reference-result/1.3"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlNativeCannyReferenceCommandV4(LocalImageSdxlNativeCannyReferenceCommandV3):
+    schema_version: Literal["local-image-sdxl-canny-reference-command/1.4"]  # type: ignore[assignment]
+
+
+class LocalImageSdxlNativeCannyReferenceResultV4(LocalImageSdxlNativeCannyReferenceResultV3):
+    schema_version: Literal["local-image-sdxl-canny-reference-result/1.4"]  # type: ignore[assignment]
+
+
 @dataclass(frozen=True, slots=True)
 class SdxlReferenceProtocol:
     command_version: str
@@ -151,6 +163,17 @@ _PROTOCOLS = (
         LocalImageSdxlNativeGeometryCommandV3,
         "sdxl-lora-evaluation-command-v6",
     ),
+    SdxlReferenceProtocol(
+        "local-image-sdxl-canny-reference-command/1.4",
+        "local-image-sdxl-canny-reference-result/1.4",
+        LocalImageSdxlNativeCannyReferenceCommandV4,
+        LocalImageSdxlNativeCannyReferenceResultV4,
+        "sdxl-canny-reference-command-v5",
+        "sdxl-canny-reference-result-v5",
+        "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.6",
+        LocalImageSdxlReusedGeometryCommand,
+        "sdxl-lora-evaluation-command-v7",
+    ),
 )
 _COMMAND_PROTOCOLS = MappingProxyType({p.command_version: p for p in _PROTOCOLS})
 _RESULT_PROTOCOLS = MappingProxyType({p.result_version: p for p in _PROTOCOLS})
@@ -193,13 +216,21 @@ def native_reference_metadata_pointers(
     evaluation: LocalImageSdxlNativeEvaluationCommand,
 ) -> dict[str, ImageEvaluationArtifactMember]:
     pin = evaluation.evaluation
-    return {
+    pointers = {
         "inputs/native-evaluation-command.json": command.native_evaluation_command,
         "inputs/native-baseline-command.json": pin.baseline_command,
         "inputs/native-training-command.json": pin.training_command,
         "inputs/native-training-result.json": pin.training_result,
         "inputs/native-adapter-manifest.json": pin.adapter_manifest,
     }
+    if isinstance(evaluation, LocalImageSdxlReusedGeometryCommand):
+        pointers.update(
+            {
+                "inputs/native-reuse-command.json": evaluation.baseline_reuse.prior_command,
+                "inputs/native-reuse-result.json": evaluation.baseline_reuse.prior_result,
+            }
+        )
+    return pointers
 
 
 def attach_native_reference_sources(
@@ -219,6 +250,13 @@ def attach_native_reference_sources(
     )
     if isinstance(evaluation, LocalImageSdxlNativeGeometryCommandV2):
         validate_sdxl_native_geometry_sources(evaluation, native)
+    if isinstance(evaluation, LocalImageSdxlReusedGeometryCommand):
+        parse_reused_geometry_baseline(
+            evaluation,
+            native,
+            prior_command_payload=metadata["inputs/native-reuse-command.json"],
+            prior_result_payload=metadata["inputs/native-reuse-result.json"],
+        )
     historical = inherited.spatial_sources.targets.lora
     if (
         evaluation.created_at > command.created_at

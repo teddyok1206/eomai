@@ -4737,3 +4737,28 @@ No dependency, schema, partition/selection policy, DB or production change there
 Training30-minute check at11:20UTC: same PID631921/unit/GPU still live. No terminal
 result or training-quality PASS; installed lab92fed3a8 untouched during fit.
 No new real PNG, activation, push or automatic retry. Goal ACTIVE/NOT_ACCEPTED.
+
+Reuse-aware reference consumer checkpoint, **2026-10-06 11:45 UTC**:
+Reference command/result1.4 is now SOURCE_VERIFIED, accepting exactly geometry1.6
+and therefore contour training1.3. Existing Orchestrator metadata resolution and
+worker reads share the same seven-member native pointer map, including both
+borrowed geometry parents. Their canonical hashes, successful old result and
+identical BASE recipe are checked before media/model access. No new resolver,
+worker channel, DB/queue, dependency or relaxed predecessor allowlist. Released
+reference1.0–1.3 schema hashes remain unchanged. Pure dependency ownership from
+ADR0210 remains protected by the original architecture gate, not a skip.
+
+New focused reference17PASS, complete scoped image/planning/architecture regression
+**1,167PASS/333.23s**, strict typing4 boundary modules and Ruff/format/shell/diff
+PASS. Synthetic clock errors in initial fixtures were corrected without changing
+runtime chronology guards; failure logs are preserved. The preceding fe906f4b
+geometry/pure-planner build's three wheels,371 RECORD members and isolated cold
+imports PASS. That build is BUILD_ONLY; this new reference consumer is not yet
+installed. Installed lab92fed3a8 remains untouched while its single fit runs.
+
+No terminal training result has been requeried since11:20UTC, respecting the
+30-minute observation interval. No new real PNG or production activation. Next:
+same-run terminal proof/result commit at the next scheduled observation; explicit
+photo successor with old object-supported BASE equivalence and one LORA-only
+output; new adapter numerical diagnostic; one frozen five-output evaluation
+manifest before any generation. Independent blind/HOLDOUT/Item-HWPX remain open.
