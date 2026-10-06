@@ -5,6 +5,40 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
+## Latest bounded lab trial — 2026-10-06 05:16 UTC
+
+[ADR0206](../adr/0206-explicit-native-style-exposure.md) is the current operational
+checkpoint. Older entries below remain immutable historical evidence, not the
+current installed wheel/version map. Uniform FULL100/800 completed numerically
+but failed own publication-quality review. A single successor keeps the exact100
+targets, pixels, captions, base/seed/dependencies and800-update budget, changing
+only explicit contour/hatching/tone exposure to4:2:4 after initial full coverage.
+No data padding, relabeling, tone erasure, composition-control claim or sweep.
+
+Source45d1985:581 regression PASS, focused typing/lint PASS; three lab-only wheels
+installed/RECORD/actual role PASS; legacy terminal replays unchanged. Actual100
+target metadata/41 members/66 PDFs/55 groups admission and schedule reproducibility
+PASS without pixel/weight/reserved reads. Training1.2 and exact geometry1.5 /
+reference1.3 /photo1.5 consumers are installed together. Production binding and
+five services remain unchanged. This is not a production release/activation.
+
+One native run `imgsdxlnativetrainrun_82a0f4c763243b7123d0fcf26dd5dde3` started
+05:16:12 UTC through existing staging/unit; actual GPU PID/worker identity confirmed.
+Command `artifact_1b3218bee2b744d28735d0a9d4068a0c` /
+`rev_56790c7b51544203b972294fd710b5e0` is immutable. Start/installed/replay evidence
+is canonical11-member `artifact_c096b03b2a3a44a2999e472f5171e08c` /
+`rev_d9c21055aaaf4ea69d9e376ef6a7b82d`, all36,450 bytes resolved equal. Full pointers,
+schema/media/raw-vs-semantic hashes and corrected pre-side-effect operator errors
+are recorded in ADR0206; do not overwrite earlier failures or re-submit training.
+
+Training terminal status, matched6-photo/4-source-free outputs, own quality and
+independent review are PENDING. A finite no-model/no-dispatch handoff is prepared
+for one terminal observation no earlier than05:50 UTC, then validated publication
+only if terminal. Seven CPU handoff guards PASS. Do not use frequent LLM progress
+polling, infer completed steps from scheduled counts, automatically retry or
+promote an adapter. Next is validated terminal evidence and the frozen matched
+diagnostic comparisons; no HOLDOUT/Item/HWPX/production step yet. Goal ACTIVE.
+
 ## Current inference-boundary audit — 2026-10-05
 
 ### Current native44 checkpoint and actual novel-photo diagnostic

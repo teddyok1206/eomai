@@ -1,6 +1,6 @@
 # ADR 0206 — Explicit native style exposure without changing the target cohort
 
-Status: implementation candidate; not deployed, not a quality acceptance.
+Status: implemented and installed in the isolated lab; one trial started, not a quality acceptance or production activation.
 Date: 2026-10-06 UTC.
 
 ## Evidence and hypothesis
@@ -131,3 +131,75 @@ No released schema bytes, numerical dependency pins, DB migration, model
 generation, training updates or production activation were changed by this
 checkpoint. Full-cohort canonical metadata and installed wheel/role validation
 remain required before the one bounded trial.
+
+## Actual lab admission and one dispatched trial — 2026-10-06 UTC
+
+Implementation source `45d198539554460aef722166faf7ebbcc07c49a7` was built from
+clean Git. Exactly three compatible contracts/provider/trainer wheels were
+installed in `/srv/eom/conda/envs/eom-image-trainer` only. Installed RECORD/direct
+wheel SHA and actual `eom-image` role imports PASS. Dependencies, systemd unit
+bytes, permissions, production binding and five active production services did
+not change; no service restart. The prior three wheels were hash-verified as
+rollback inputs. Installed old uniform1.1, geometry1.4 and photo1.4 terminal
+replays preserved all file SHA/stat without training, transforms, models or writes.
+
+Actual full-cohort metadata admission verified 100 unique frozen targets from
+eight preparation results, 66 PDFs and 55 exam groups, resolving 41 metadata
+members without PNG/weight/reserved reads. Source Python3.12 and installed-role
+Python3.11 schedules agree exactly. Scheduled counts are 1,257 contour /628
+hatching /1,315 tone; 707 authored-scene /2,493 isolated-on-white draws. Maximum
+draws per document/group are 231/296; these are exposures, not unique target
+counts. They cannot be compared to the unique-cohort limits3/4 as a violation,
+nor interpreted as composition-controlled sampling.
+
+The sole training command was admitted and dispatched through existing
+Orchestrator staging and the existing isolated native trainer unit:
+
+- run `imgsdxlnativetrainrun_82a0f4c763243b7123d0fcf26dd5dde3`;
+- canonical command `artifact_1b3218bee2b744d28735d0a9d4068a0c` /
+  `rev_56790c7b51544203b972294fd710b5e0`, member
+  `manifests/sdxl-native-lora-command.json`, schema1.2, application/json;
+- raw member SHA `sha256:283200c091348bb8c0098aefca6f33e024cddcc3c78457969d0ce7809bd17d54`;
+- command semantic SHA `sha256:f9335bee943558c7e9ef20a21909626b71453fde802a55c37d494bef32bfe869`;
+- schedule SHA `sha256:3ac789b36344a877518919b0298d98812a935a9613a35f5a6c1f2ec79f2868b0`;
+- systemd start **05:16:12 UTC**, actual worker UID984, PID470010 at observation;
+  the GPU process was present, not inferred from a dispatch return code;
+- 142 staged files, same pixels/captions/base/seed/numerical budget, requested
+  800 updates, maximum one dispatch, no retry/resume/extension or activation.
+
+Start checkpoint, installed/admission/replay receipts and exact operator audit
+texts are archived as **11 members/36,450 bytes**, all canonical rereads equal:
+`artifact_c096b03b2a3a44a2999e472f5171e08c` /
+`rev_d9c21055aaaf4ea69d9e376ef6a7b82d`, primary
+`reports/start-checkpoint.json`, schema `operations/plain-text-log/1.0`,
+text/plain, SHA `sha256:61ada668ea3d6d165bbe1410ceb5286a70986aefc6317a67bbd39c667bacf8a1`.
+The JSON-formatted report is an operations log, not a new wire contract. No
+command/dataset PNG/adapter binary was duplicated into the checkpoint. The
+checkpoint describes an observed RUNNING trial, not completed optimizer steps.
+
+Two read-only preflight invocation mistakes (metadata ownership and a nonexistent
+local result path) were corrected without model/DB/runtime mutation. The first
+archive invocation supplied a string instead of a datetime and failed inside
+`_request`, before job creation, publication lock or NAS commit. The finish
+operator reused the exact report bytes/idempotency key with a parsed UTC datetime;
+failed logs and the original local report remain preserved. These invocations
+are not extra training/model attempts or production implementation defects.
+
+A finite operator handoff is prepared to observe this same unit once, **not
+before05:50 UTC**. It does not poll progress using the language model, dispatch
+training/evaluation, change a pending unit, retry or extend the run. It may
+publish a validated terminal result using the existing owner once; if still
+running/missing it retains the same handle without a new attempt. Seven CPU
+guard scenarios PASS separately from the581 source tests. Post-implementation
+Git differences are restricted to these three documentation paths; numerical
+and worker source remain pinned to45d1985. The handoff is temporary operator
+materialization, not a new production scheduler or permanent queue.
+
+Numerical result, own visual quality and independent review remain **PENDING**.
+After successful terminal validation/publication only, perform the frozen six
+photographic and four source-free diagnostic comparisons through the new closed
+consumer chain. Do not count these TRAIN diagnostics as untouched HOLDOUT,
+infer quality from loss, rerun old exhausted comparisons or promote a model.
+Production binding SHA remains
+`sha256:f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
+Goal ACTIVE; Item/HWPX canary and activation gates remain open.
