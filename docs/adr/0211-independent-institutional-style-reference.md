@@ -910,3 +910,59 @@ Public Torch meta/assign behavior is documented at
 https://docs.pytorch.org/docs/2.7/meta.html and
 https://docs.pytorch.org/tutorials/recipes/recipes/module_load_state_dict_tips.html;
 implementation must also be checked against installed Torch2.7.1/TF4.56.2.
+
+### CPU encoder implementation and numerical checkpoint — 2026-10-06 17:22 UTC
+
+Core `bc7a2e9d0e03d3de96ebde525b6bc61721024344` adds the optional provider
+encoder,28 new light tests and the established wheel/test-manifest entries.
+409 focused PASS, including those28 (do not add them again); Python3.11 strict
+mypy, Ruff/format, shell syntax and diff PASS. No dependency/version/wire-schema,
+source-registration, runtime installation or production activation change.
+The light tests use numerical fakes plus actual verified file scopes; they do
+not prove real upstream encoder admission.
+
+Build-only wheels:
+`/tmp/eom-image-trainer-build/bc7a2e9d0e03d3de96ebde525b6bc61721024344.HjfPKM/dist`.
+Actual non-editable zip imports checked all389 RECORD members (296/58/35).
+Contract/provider/trainer wheel SHA-256s:
+`92540f91034be44e3c67f72f982c04112824d1e1e67c5284c83f998d6a418428`,
+`7cfebbf072aa40f9b6bd7123731b95754da70ff194b272143f8e2e248890f5db`,
+`4536b5ea6f7ffc0c9a9d08701fb79f8618461675f3d6d0402e75b422d9d9de7e`.
+
+Installed Torch2.7.1+cu128/TF4.56.2/safetensors0.6.2 actually constructed the full
+632,076,800-parameter CLIP architecture on meta without allocating pretrained
+weights or changing CPU RNG. A temporary tiny CLIP factory tested the real
+held-descriptor safetensors→strict assign→float32 CPU forward path, including the
+nonpersistent position-ID buffer. Float32/float16 success cases each replay
+bitwise; independent direct-model oracle maximum absolute errors were
+3.725290298461914e-09/0. Six missing/extra/shape/integer/NaN/Inf cases fail before
+forward. Factory restored, temporary tensor files removed, no CUDA initialization
+or network connection. This is synthetic API behavior, not pretrained semantics.
+
+Preserve the unsuccessful iterations honestly: first a report-path collision was
+refused before runtime work; preserve the older normalization report and use a
+distinct new report name. Initial and diagnostic tiny probes rejected an overly
+strict cross-allocation bitwise oracle comparison; replay itself was exact.
+Declare independent float32 oracle rtol/atol8×epsilon=9.5367431640625e-07 and
+retain measured errors; do not weaken same-loader replay or malformed-state
+checks. Final report counts6 tiny forwards; aggregate over these CPU iterations
+is12 (3+3+6), with3 full-architecture meta constructions, not real diffusion
+attempts. The evidence owner initially stopped before engine/publication because
+controlled scratch text inputs inherited0664; fix those exact paths to0600 and
+import spacing, without relaxing the file checker or rerunning the encoder.
+Iteration notes are documentary notes, not falsely described as raw logs.
+
+The existing Orchestrator owner committed/reread four text members20,360bytes:
+`artifact_01a2df6aaf69432fa9a28738313eccb9` /
+`rev_e05db67a8dbc45c78c850e7447db1913`, primary
+`reports/tiny-global-encoder.json`, SHA
+`84721b4d7a17a4e6a3f86b67db7efaaa45ed6d522f0250a3cb244a00689415b2`.
+Exact CPU/owner operators and iteration notes retained; no tensor/model/PNG copies.
+
+Pretrained weight acquisition/admission/forward, real CPU peak memory, combined
+GPU stack, actual matched outputs, independent blind/HOLDOUT and Item/HWPX gates
+remain unproved. No new original-view coverage is claimed for this numerical
+change. Full quality NOT_ACCEPTED, goal ACTIVE; new acquisition/four-output
+authorization NOT_RECORDED; old budget12/12 unchanged. Next: protocol-first
+matched execution/result ownership consuming this frozen embedding and the
+verified adapter file, before any newly authorized real-model experiment.
