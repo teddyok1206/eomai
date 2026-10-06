@@ -574,3 +574,75 @@ justify a reproduced loader defect; a PASS establishes only CPU-float32 loading/
 scaling roundtrip, not CUDA-fp16 optimizer parity, correct morphology or style
 quality. Full actual-model verification is stronger than fake loader calls but
 does not replace independent quality review or change the activation decision.
+
+### Actual CPU roundtrip and exposure diagnosis
+
+At source57ea92ce, one installed eom-image process PID419863 ran five actual tests
+03:27:42–03:27:59 UTC2026-10-06, returncode0. All1120 saved tensors/560 LoRA
+layers match both training-style PEFT and provider loading exactly. Four CPU
+float32 synthetic forwards have training/provider maximum delta0; base/adapter
+maximum delta0.07409074902534485 proves a numerical effect, not better pictures.
+Explicit strength1/0.5 scales every layer without weight mutation; disabling the
+adapter restores the exact base prediction and base parameter versions/identities
+are unchanged. Numerical section9.343s, test suite17.028s, peak RSS16,223,051,776
+bytes (<16GiB). One UNet load; no encoders/VAE/scheduler/GPU/images/optimizer.
+Do not expand CPU-float32 PASS into CUDA-fp16 optimizer or publication quality PASS.
+
+Fresh installed three-wheel RECORD/role and full native lineage checks PASS;
+seven staged inputs/test/prior terminal receipt remain unchanged. First owner
+attempt accessed a nonexistent manifest realized_samples field and failed before
+workspace/numerical execution. Corrected the temporary owner to check the typed
+training cohort/profile; no core state-machine/loader fix or model retry required.
+Default focused suites76 PASS/5 expected opt-in SKIP in15.71s; scoped mypy/Ruff PASS.
+
+Actual shared deterministic schedule for100 targets/200updates/accumulation4:
+800 microsteps/eight full epochs, exactly8 uses/target. Tone/contour/hatch exposures
+600/136/64; white-isolated/authored-scene584/216. Schedule SHA
+a5e599b912cacc12d57b1c634cdca3c8569468fcf0cb5b22c063ac3674863766.
+Equal-budget24-target arithmetic mean800/24≈33.33 is not a historical step log.
+Dataset breadth and exposure per target therefore changed together; this confound
+is established, but neither inadequate exposure nor style imbalance is proven as
+the failure cause. The4:2:4 balanced-sampling report remains an unimplemented
+proposal; do not introduce a sampling framework before this simpler comparison.
+
+Evidence artifact_d34036c2c8434106a70f36ed0406531b /
+rev_4f38247395034bd582a21339d0f6117e:11 members/53,662 bytes reread byte-equal;
+reports/own-review.md SHA18a988ee43800d9150f73629aae1a85ec57b5df454af87cb7b8343be8bb15d4d.
+Original exposure operator's E501 warnings/source retained separately; later
+lint-only string wrapping passed without rerun. No weights/dataset copies in NAS
+evidence; no reserved reads/production changes. Independent/full quality and
+Item/HWPX activation gates remain OPEN; goal ACTIVE.
+
+### One exposure-controlled successor using the existing native1.1 contract
+
+Responsibility/canonical source:existing Orchestrator admission/workspace/commit,
+the exact FULL100 native1.1 command and its100 immutable target pointers. Reuse
+the cohort/captions/expression/composition/canvases and8 result/3 per-document/
+4 per-group quotas unchanged. Preserve the200-update command/result/adapter.
+Create a new immutable command/run and scoped screening note that pin predecessor
+and roundtrip evidence; new timestamps/source/screening/command hashes are history,
+not an edited prior run. JSON Schema/Pydantic and installed trainer stay unchanged.
+
+Controlled numerical change:200→800 optimizer updates, within released FULL
+200–1000 bounds. Batch1/accumulation4/rank8/alpha8/lr1e-4/fp16/AdamW8bit/seed/base/
+dependencies/target bytes stay exact.3200 microsteps produce32 uses of each100
+target, near the predecessor24 arithmetic mean33.33. This is an exposure hypothesis,
+not a blind step sweep or a claimed style fix. No800→1000 automatic extension.
+The prior observed485182ms suggests about32minutes; enforce<=1hour/16GiB GPU/
+64MiB input independently of that estimate, no retry/resume/checkpoint.
+
+Use existing keyed source maps, immutable tuples, indexed Artifact resolution and
+O(metadata+100 target bytes) staging. No new DB/index/queue/cache/worker protocol,
+dependency, privilege or production service change. Read permission/schema/media/
+hash/lifecycle/provenance and metadata-only admission precede explicit workspace
+PNG materialization. Existing exclusive workspace/GPU lease and dispatch receipt
+own concurrency/idempotency; unknown dispatch is observed, not resubmitted.
+
+Only actual numerical terminal success permits bounded same-input six-output
+photo comparison. Freeze original references/control/initializer/negative/seed/
+30-step/CFG7 recipe and compare BASE pixels to existing acceptance before own
+quality review. No reserved selection or production activation. If style/fidelity
+still fails, preserve it and consider the separate sampling hypothesis; do not
+use lower loss to pass quality. The simpler alternative of repeating200 updates
+would reproduce the same exposure confound; implementing weighted sampling now
+would change more than the one measurable variable this existing contract permits.
