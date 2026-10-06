@@ -174,5 +174,10 @@ class InstalledContourSourceBandDenoising(_Probe):
         return material, training, tensors, masks, stack, reference.command_sha256
 
 
+# Pytest/unittest discover imported TestCase aliases as additional test suites.
+# Keep only this fixture's declared class in the entrypoint namespace.
+if not TYPE_CHECKING:
+    del _Probe
+
 if __name__ == "__main__":
     unittest.main()
