@@ -4841,3 +4841,12 @@ after evidence, production binding and installed lab92fed3a8 unchanged. Original
 pre-main interpreter failure preserved; no API dependencies/core patch added.
 Full quality NOT_ACCEPTED/activationFORBIDDEN/goalACTIVE. Next photo1.7 consumer
 plus four geometry and one photo new LoRA outputs, with actual original-art review.
+
+**2026-10-06 inventory correction (supersedes the preceding output count):** the
+actual prior geometry1.5 command/result contains one heated-beaker sample with
+two canvases and BASE/LORA: four historical images, only two new LoRA comparison
+outputs. Freeze those2 plus the existing object-supported wagon1 = **3 new PNGs**
+under the unchanged maximum5 ceiling. No seed/prompt/case substitution, BASE
+regeneration or another training run. Record both the planned-count error and
+actual canonical inventory. Diverse-subject/generalization/blind/HOLDOUT/canary
+work remains required by the full goal and is not waived or claimed complete.

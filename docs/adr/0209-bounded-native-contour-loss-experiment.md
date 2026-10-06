@@ -48,6 +48,27 @@ weakening source admission or modifying production contracts. Preserve those
 failed test logs. Old schema bytes and photo1.0–1.6 meaning remain unchanged.
 No lab installation, new real PNG, training or production activation yet.
 
+### Actual frozen-case inventory correction — 2026-10-06
+
+Before new generation, inspected the immutable previous execution inventory.
+The native1.2 matched geometry1.5 result `artifact_496cdf4c999b44e3b2f1c7a9dd4c6efa`
+ / `rev_bc01935da4ef4f34915506a5249219a0` has one heated-beaker sample
+`imgsourcecrop_a1727135d4042a8fd67e86e05609ec9f`, two canvases, and two arms:
+four historical images, but only **two** eligible new LoRA comparison outputs.
+Command pin `artifact_a35c86f8fabd4c2b8a06466409e28c84` /
+`rev_0ae80305867d4590a7cd7d7ccf87a9b9` is geometry1.5. The previous statement
+"four existing source-free geometry cases" conflated historical images with new
+LoRA outputs. Correct it before freezing or dispatching; do not invent another
+compatible sample or silently reinterpret a different training cohort as this
+single-objective comparison. Together with the existing object-supported wagon
+photo1.6, the exact next matched checkpoint is **three** new LoRa outputs, not
+five: beaker legacy/native2 plus photo1. The maximum5 ceiling is not increased;
+two ungrounded planned slots remain unused. BASE regeneration0, prompt/seed/source
+changes0. Full-goal diverse subject, independent/blind, held-out generalization
+and Item/HWPX acceptance remain OPEN, not satisfied by these three diagnostics.
+Those broader experiments must have their own declared comparison design and
+admission; this corrected checkpoint does not shrink the full quality objective.
+
 ## Same-recipe terminal-adapter diagnostic design — 2026-10-06
 
 This is an opt-in integration diagnostic, not a production worker protocol,
