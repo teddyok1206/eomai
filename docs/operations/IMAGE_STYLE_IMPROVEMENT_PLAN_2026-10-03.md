@@ -4918,3 +4918,57 @@ under the unchanged maximum5 ceiling. No seed/prompt/case substitution, BASE
 regeneration or another training run. Record both the planned-count error and
 actual canonical inventory. Diverse-subject/generalization/blind/HOLDOUT/canary
 work remains required by the full goal and is not waived or claimed complete.
+
+## Fixed three-output terminal evaluation and actual original-art review — 2026-10-06
+
+The frozen manifest was executed without changing source/prompt/seed or adding
+BASE generations. Source `d3c03751` installed into the isolated trainer lab only:
+three wheels, unchanged dependencies/units, installed-role CPU admission and both
+offline CLIP tokenizers PASS. Production binding remains SHA `f96eda843dbcbf9b…`.
+Two source-free beaker outputs completed in17.719s/peak9,217,375,744 CUDA bytes;
+one object-supported wagon completed in15.176s/peak10,763,033,600 bytes. Both
+existing units terminated inactive/dead/PID0/success/exit0. Installed terminal
+replay PASS with12/95 workspace files unchanged, no model/lease/write calls.
+Existing owners committed and reread both canonical results:
+
+- Geometry: `artifact_2ee671e2098741aa8208b59f8575bc96` /
+  `rev_9e24c203fa344e8c9ad63b19089f43a3` (result1.6).
+- Photo: `artifact_f14c85acf10f490593fb125ed0c3c3e1` /
+  `rev_1b34031c0798402aa0f21be9455224b6` (result1.7).
+
+At the13:47UTC review checkpoint, actually opened the relevant institutional
+TRAIN beaker original, new legacy/native beakers, and old/new wagon outputs;
+also inspected the previous beaker outputs. Original identity and every new
+view were canonically re-resolved and matched the local view hashes. This is
+own/nonblind calibration, not independent approval or sealed HOLDOUT evaluation.
+
+**Decision: REJECT_CURRENT_CONTOUR_OBJECTIVE_FOR_PROMOTION.** The original has
+decisive thin contours and meaningful gray liquid/metal/flame; beaker/gauze/
+tripod/lamp relationships are clear. Both new source-free beakers have excessively
+heavy contours, cropping and incorrect apparatus relationships; the native one
+places repeated rings/coils inside the vessel. The supported wagon retains broad
+pose/silhouette but still has faint photographic detail and duplicate/halo edges,
+without convincing improvement over the matched previous adapter. Historical
+BASE/old-adapter beakers already had semantic errors: do not attribute all of
+this failure to the new loss objective or claim that style learning alone can
+determine correct scientific composition.
+
+Existing raw descriptive metrics were computed without changing canonical PNGs
+or setting post-hoc acceptance thresholds. New legacy/native beaker foreground
+fractions are777/995 per mille versus217 for the original; dark fractions282/259
+versus37. Different compositions/canvas scaling limit those comparisons; these
+measurements describe excessive occupation/ink, not educational correctness.
+Reduced dark-cell denoising loss did not establish visual quality.
+
+Owner archived27 metadata/operator/log members,92,525bytes, no duplicate PNGs:
+`artifact_b0f316451ee447ba964a0eb3caf126e0` /
+`rev_315656d1a6a44b3a8c649ef146888ae4`, primary `reports/own-review.json`, SHA
+`ea277a0723afddfc19d0182b388b19661f1f882fe5589026bf1a044f6b0e550a`.
+All members committed/reread equal. Next: inspect the existing reference/control
+path and separate composition grounding from style learning before defining a
+bounded successor. No extra contour weighting, fit/seed search, production
+activation or Item/HWPX canary for this candidate. Preserve this negative result.
+Continue actual original/candidate review at each completed learning candidate,
+fixed sample evaluation and material prompt/control/policy change. Idle training
+observations remain30-minute apart. Full goal ACTIVE; quality NOT_ACCEPTED;
+independent/blind/HOLDOUT/diverse-subject/Item-HWPX gates remain OPEN.

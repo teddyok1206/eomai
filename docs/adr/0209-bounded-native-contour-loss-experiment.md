@@ -588,3 +588,22 @@ result/800-step claim. No retry/new seed/prompt, production activation or push.
 Next: preserve terminal fit result, finish explicit photo/canny consumer lineage
 and five-case manifest, then compatible isolated install/admission and exactly
 the bounded diagnostic/comparison. Full perceptual/blind/HOLDOUT gates remain open.
+
+## Actual fixed-output outcome — 2026-10-06
+
+The bounded candidate is **not promoted**. Exactly two source-free beaker outputs
+and one existing object-supported wagon were generated; original/prompt/seed pins
+were unchanged and prior BASE outputs reused without generation. Existing owner
+publication, canonical reread and installed terminal replay succeeded. Actual
+institutional-original comparison showed overly heavy/cropped beakers with
+incorrect apparatus relations and no convincing wagon improvement. Historical
+BASE/previous-adapter beakers also had semantic failures, so this is not evidence
+that the contour objective alone caused them. Dark-cell loss gains do not prove
+better line hierarchy or scientific fidelity.
+
+Retain the experiment and negative finding, production unchanged. The next
+hypothesis must distinguish composition/reference grounding from style learning,
+not intensify contour weighting or seed-search away this failure. This is an
+own/nonblind TRAIN review, not independent/blind/HOLDOUT acceptance. Full terminal
+provenance, recurring original-review policy and evidence pointers are recorded
+in the [operations plan](../operations/IMAGE_STYLE_IMPROVEMENT_PLAN_2026-10-03.md).
