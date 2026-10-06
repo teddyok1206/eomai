@@ -28,8 +28,8 @@ weights are referenced, not duplicated. CPU geometry guards:1 positive/5 negativ
 PASS. Existing subject-region, photo-style retained-region and white-initializer
 unit suites:97 PASS in53.81s using the explicit source-test Conda environment.
 Temporary diagnostic operators pass Ruff lint/format; documentation diff checks
-PASS. No model/GPU calls, training updates or production changes. This checkpoint
-adds documentation only, not a worker, mask schema or dependency installation.
+PASS. No model/GPU calls, training updates or production changes. That initial
+checkpoint added documentation only, not a worker or dependency installation.
 
 ## Boundary and design procedure
 
@@ -119,3 +119,68 @@ and manual support needs scaling. It is not a style-model replacement: LoRA owns
 exam style; the source reference owns structure; deterministic overlays own
 scientific text. Independent blind review, untouched HOLDOUT, semantic/quality
 and resource gates, Item/HWPX canary and activation/rollback remain unfinished.
+
+## Closed mask-review boundary before worker consumption
+
+The first CPU prototype is now actually inspected. It keeps the recognizable
+whole-car silhouette, orientation/placement, both visible wheels and roof
+protrusions while reducing exposed surrounding scene edges.32,441 prior edge
+pixels become12,049, with20,392 deleted/zero added. Interior reflection/detail
+edges remain. These are geometric counts, not semantic background or quality
+scores. Own decision: suitable **input support for one bounded comparison after
+protocol/admission**, not independent review or publication acceptance.
+
+Fourteen evidence members/676,169bytes were committed and reread equal:
+`artifact_e827d8e0f14342459fd3009499354b5a` /
+`rev_24c4387a44b54b3e91cebf4182902e26`, primary `reports/own-review.json`,
+operations/plain-text-log/1.0, text/plain, raw SHA
+`sha256:bc2732cc6d2abca43dc22eb3f4aacf5d999a1b6cde3fb5aa1cba413e97920b33`.
+New binary mask and candidate control are separate canonical derivations, not
+copies of existing PNGs. Two workspace input materializations were explicit;
+original source/control bytes were not duplicated in the archive. Synthetic
+support guards:1 positive/19 negative PASS. Model/GPU/training/activation0.
+
+Before implementing a consumer, freeze `photo-object-support-review/1.0` as an
+additive JSON Schema2020-12/Pydantic contract. Its single responsibility is
+binding this own input review to exact source, prior control, mask and candidate
+control Artifact members, binary geometry, measured counts and own-review
+provenance. Counts are immutable observations to **recompute against bytes**,
+not trusted substitutes for pixel validation. Derive review ID/content hash
+canonically; forbid implicit latest/paths/extra fields, mismatched schemas/media,
+duplicate binary identities and a publication or independent-approval claim.
+
+This contract is not a worker command and does not admit a GPU execution. Its
+pure parser checks bounded canonical metadata/hash; the existing Orchestrator
+must later resolve permissions/lifecycle/existence and an isolated pixel adapter
+must verify PNG modes/dimensions, exact source/control relation and edge subset.
+Keep that I/O out of contracts. No new DB/table/index/queue/cache or model
+dependency is required. Ordered feature tags and exact pointer lookup are small
+immutable values; validation is O(metadata bytes + feature tags). A plain-text
+log alone cannot enforce source/mask substitution or canonical replay, which is
+why this small closed contract precedes the comparison successor. Old schema
+bytes and photo-style1.5's protected-interior semantics remain unchanged.
+
+Implemented source-only boundary: public module `eom_image_contracts.photo_object_support`
+and frozen wheel-owned schema SHA
+`sha256:a872b6b5b855fcb72d00aa2fda5369d607a4b73f702af9957230718149ba6424`.
+It explicitly restricts the source to licensed morphology photographs, not
+corpus HOLDOUT. `eom_image_provider.photo_object_support_pixels` verifies four
+already-resolved bounded PNG members: exact hashes/modes/dimensions/single frame,
+binary tones, candidate=prior*mask, actual counts and non-noop deletion. It never
+repairs/re-encodes input and returns small frozen observations, not image bytes.
+No path/model/DB/storage operation or permission/lineage approval lives there.
+
+Final focused suite:174 PASS in54.30s (48 metadata +29 pixel +97 historical
+region/initializer tests). Ruff lint/format and targeted strict mypy PASS using
+the explicit image-test interpreter for Pillow types. Initial source fixture
+whitelist omitted `__future__`; the test was corrected. The first type invocation
+used API site packages without Pillow; selecting the proper existing interpreter
+fixed the invocation without a dependency install or error suppression. Schema
+draft patch-application errors caused no runtime or Artifact mutation; final two
+copies/generated model/registry SHA match. No released predecessor bytes changed.
+
+Still pending: canonical typed-review admission, installed-role verification and
+explicit photo-comparison successor with source/control/mask lineage; no model
+dispatch, production install, new execution command or acceptance follows from
+these source tests alone. The current mask is a single manually reviewed input
+candidate, not a general foreground model or institution-quality product.

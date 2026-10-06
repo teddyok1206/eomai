@@ -4565,3 +4565,27 @@ Five services remain active; production binding unchanged; goal ACTIVE.
 Viewing copy: `/tmp/eom-photo-nativecue-20261006/matched-contact.png`.
 Columns: original photo(not generated) | old BASE | old balanced LoRA | new
 BASE | new balanced LoRA. Independent review/HOLDOUT/Item/HWPX gates remain open.
+
+### 2026-10-06 spatial audit and reviewed object-support prototype
+
+Actual registered source/control/white-initializer CPU audit verified polarity,
+dimensions and hashes. Own view confirms irrelevant scene contours inside the
+retained/protected rectangles; this is a declared rectangular-policy limitation,
+not a proved sole cause of pale generated lines. Eight evidence members committed
+and reread equal; detailed pins are in ADR0207.
+
+One manual polygon-support CPU prototype actually inspected: car shape/placement,
+two visible wheels and roof protrusions remain recognizable while exposed scene
+edges are reduced.32,441->12,049 edges,20,392 removed/zero added. Geometric counts
+are not semantic labels or quality scores; interior detail/reflection remains.
+Fourteen members/676,169bytes committed and reread equal, including the separately
+derived binary mask and candidate control, not duplicated original PNG/weights.
+
+Closed own-input review schema/Pydantic plus pure provider pixel verification
+implemented;174 focused/legacy tests PASS, Ruff/mypy PASS. Existing contracts and
+production remain unchanged. GPU/model/training/HOLDOUT reads0 in this diagnostic.
+Next: canonical typed-review admission and explicit installed comparison
+successor before a single matched pair; no implicit reuse of photo-style1.5's
+protected-interior promise. Independent review, HOLDOUT, publication quality,
+Item/HWPX canary and activation/rollback remain open. Goal ACTIVE.
+See [ADR0207](../adr/0207-reviewed-photo-object-support.md).

@@ -1,0 +1,295 @@
+{
+  "$defs": {
+    "ImageEvaluationArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ImageEvaluationArtifactMember",
+      "type": "object"
+    },
+    "PhotoObjectSupportPixelObservation": {
+      "additionalProperties": false,
+      "description": "Small immutable claims; a future pixel consumer must recompute all counts.",
+      "properties": {
+        "added_edges": {
+          "const": 0,
+          "default": 0,
+          "title": "Added Edges",
+          "type": "integer"
+        },
+        "control_mode": {
+          "const": "RGB",
+          "default": "RGB",
+          "title": "Control Mode",
+          "type": "string"
+        },
+        "control_polarity": {
+          "const": "WHITE_EDGES_ON_BLACK_RGB",
+          "default": "WHITE_EDGES_ON_BLACK_RGB",
+          "title": "Control Polarity",
+          "type": "string"
+        },
+        "deleted_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Deleted Edges",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 512,
+          "default": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "mask_mode": {
+          "const": "L",
+          "default": "L",
+          "title": "Mask Mode",
+          "type": "string"
+        },
+        "mask_tones": {
+          "default": [
+            0,
+            255
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": 0,
+              "type": "integer"
+            },
+            {
+              "const": 255,
+              "type": "integer"
+            }
+          ],
+          "title": "Mask Tones",
+          "type": "array"
+        },
+        "original_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 2,
+          "title": "Original Edges",
+          "type": "integer"
+        },
+        "retained_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Retained Edges",
+          "type": "integer"
+        },
+        "support_area_pixels": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Support Area Pixels",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 832,
+          "default": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "support_area_pixels",
+        "original_edges",
+        "retained_edges",
+        "deleted_edges"
+      ],
+      "title": "PhotoObjectSupportPixelObservation",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-photo-object-support-review/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "candidate_control": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "context_policy": {
+      "const": "SUBJECT_MORPHOLOGY_ONLY_IRRELEVANT_BACKDROP",
+      "title": "Context Policy",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision": {
+      "const": "OWN_INPUT_ACCEPTED_FOR_BOUNDED_COMPARISON_NOT_PUBLICATION",
+      "title": "Decision",
+      "type": "string"
+    },
+    "mask_coordinate_system": {
+      "const": "CANNY_CANVAS_PIXELS_832X512",
+      "title": "Mask Coordinate System",
+      "type": "string"
+    },
+    "observation": {
+      "maxLength": 1000,
+      "minLength": 10,
+      "pattern": "^[ -~]+$",
+      "title": "Observation",
+      "type": "string"
+    },
+    "own_review_evidence": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "pixel_observation": {
+      "$ref": "#/$defs/PhotoObjectSupportPixelObservation"
+    },
+    "preserved_features": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 16,
+      "minItems": 2,
+      "title": "Preserved Features",
+      "type": "array"
+    },
+    "prior_control": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "purpose": {
+      "const": "EVALUATION_ONLY_OBJECT_SUPPORT",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "review_id": {
+      "pattern": "^imgphotosupportreview_[0-9a-f]{32}$",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "review_independence": {
+      "const": "OWN_NOT_BLIND",
+      "title": "Review Independence",
+      "type": "string"
+    },
+    "review_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Review Sha256",
+      "type": "string"
+    },
+    "reviewed_at": {
+      "format": "date-time",
+      "title": "Reviewed At",
+      "type": "string"
+    },
+    "reviewed_by": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:@-]+$",
+      "title": "Reviewed By",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "local-image-photo-object-support-review/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    },
+    "source_commit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "title": "Source Commit",
+      "type": "string"
+    },
+    "source_coordinate_system": {
+      "const": "NORMALIZED_PHOTO_PIXELS_800X504",
+      "title": "Source Coordinate System",
+      "type": "string"
+    },
+    "source_kind": {
+      "const": "PHOTOGRAPH",
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "source_population": {
+      "const": "LICENSED_MORPHOLOGY_REFERENCES_NOT_CORPUS_HOLDOUT",
+      "title": "Source Population",
+      "type": "string"
+    },
+    "support_mask": {
+      "$ref": "#/$defs/ImageEvaluationArtifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "review_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "activation_policy",
+    "context_policy",
+    "source_kind",
+    "source_population",
+    "source_coordinate_system",
+    "mask_coordinate_system",
+    "source",
+    "prior_control",
+    "support_mask",
+    "candidate_control",
+    "pixel_observation",
+    "own_review_evidence",
+    "reviewed_at",
+    "reviewed_by",
+    "decision",
+    "review_independence",
+    "preserved_features",
+    "observation",
+    "review_sha256"
+  ],
+  "title": "PhotoObjectSupportReview",
+  "type": "object"
+}
