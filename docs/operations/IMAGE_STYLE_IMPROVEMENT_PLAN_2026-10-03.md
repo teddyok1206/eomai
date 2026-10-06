@@ -5,7 +5,46 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest checkpoint — 2026-10-06 13:59 UTC
+## Latest checkpoint — 2026-10-06 14:17 UTC
+
+Recurring actual-original review is retained at completed learning candidates,
+fixed sample comparisons and material prompt/control/policy changes; idle
+training observations remain30-minute apart. At this checkpoint, canonical
+TRAIN100 lineage was revalidated through42 metadata members before binary
+reads; all100 native PNGs were inspected descriptively (18,674,240bytes), and
+six predetermined originals were actually opened. This is six own visual
+reviews, not100 visual reviews, a new paired-output test or independent approval.
+
+The six examples are inclined cart/track, boy with glasses, bacterium cutaway,
+burr fruit, hair-dryer/flask apparatus and heart cutaway. Originals legitimately
+contain selected gray planes, hatching, dense biological detail, arrows and
+authored tonal backgrounds. Their captions correctly describe the viewed
+content. White outer padding does not establish white interior backgrounds.
+Do not erase meaningful detail or discard legitimate originals to force a
+uniform binary style. Structure and exam-size readability remain separate from
+decorative photographic texture and accidental duplicate contours.
+
+Frozen schedule audit:17 contour sources receive1,257 draws (73–74/source),
+eight fine-hatching sources628 (78–79/source), and75 restrained-tone sources
+1,315 (17–18/source). These are scheduled counts, not an independently recovered
+per-step journal. Dark-cell weighting does not distinguish primary contours
+from hatching/arrows/biological detail; this is a confound hypothesis, not proof
+of a failure cause. The source-free beaker prompt already specifies its correct
+apparatus. Photo flat-unshaded intent differs from legitimate mixed TRAIN styles;
+no missing-caption bug was reproduced and no frozen prompt/source was edited.
+
+Decision: **KEEP_STYLE_AND_STRUCTURE_SEPARATION_REVISE_UNPROVED_OBJECTIVE**.
+The earlier matched candidate remains rejected for promotion. Archive uses
+the existing owner:five members175,917bytes committed/reread equal, no duplicate
+PNG/weights, `artifact_6f67e2b23d30450d88fe8dc322c6d92f` /
+`rev_a03900177e344c1f96793912fe2f51cc`, primary `reports/own-review.json`, SHA
+`ab639fb9bdb345a7d1af6db07d4502c6c80d8389b4fb4482ff9114069382dea5`.
+Operators Ruff/format PASS. New model/GPU/fit/HOLDOUT/production changes0;
+no core edits or new core-suite claim. Next compare relevant pinned originals
+beside each new fixed candidate and separate structural fidelity from style
+conditioning before another bounded trial. Goal ACTIVE; full quality NOT_ACCEPTED.
+
+## Historical structural-input checkpoint — 2026-10-06 13:59 UTC
 
 The native1.3 fit and fixed three-output comparison have finished; own comparison
 with actual institutional originals **rejects the candidate for promotion**.
