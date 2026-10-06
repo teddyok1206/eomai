@@ -50,6 +50,7 @@ tests/unit/test_sdxl_ip_style_comparison_plan.py
 tests/unit/test_sdxl_ip_style_encoder_input.py
 tests/unit/test_sdxl_ip_style_io.py
 tests/unit/test_sdxl_ip_style_pixels.py
+tests/unit/test_sdxl_ip_style_routing.py
 tests/unit/test_sdxl_learned_comparison.py
 tests/unit/test_sdxl_lineart_backend.py
 tests/unit/test_sdxl_lineart_probe.py

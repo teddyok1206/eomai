@@ -1,6 +1,6 @@
 # ADR0211: Separate institutional style reference from object geometry
 
-Status: CPU capability probes, preparation contract, tested resolver and pixels, 2026-10-06 UTC.
+Status: CPU capability/preprocessing, preparation contracts and tested scale scopes, 2026-10-06 UTC.
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
@@ -77,8 +77,8 @@ CLIP normalization/rescaling with processor resize and central crop disabled.
 This retains the full style-source framing, including meaningful gray; it does
 not binarize, erase tone, crop out components or mutate canonical source PNGs.
 Pillow11.3.0/Transformers4.56.2 and the exact CLIP mean/std/factor are contract
-values, not ambient defaults. Full-frame RGB pixel preparation is now tested
-(checkpoint below); normalized CLIP tensors/embeddings remain unimplemented.
+values, not ambient defaults. Full-frame RGB and normalized CLIP numerical input
+are tested (checkpoints below); pretrained style embeddings remain unimplemented.
 Both later OFF/ON arms must use the same resulting embedding and model stack.
 
 This manifest is an evaluation-only metadata contract; it neither approves a
@@ -654,3 +654,56 @@ scientific semantics separately. Do not let repeated views of unchanged sheets
 inflate coverage or stand in for independent blind/HOLDOUT review. Next safe
 implementation boundary is comparison consumer OFF/ON state isolation and exact
 encoder-load ownership, before bounded actual inference when authorized.
+
+## Matched-arm scale isolation boundary
+
+The optional numerical provider owns one already-loaded pipeline for the lifetime
+of a matched comparison. The Orchestrator/existing worker retains dispatch,
+exclusive GPU lease, source admission, fixed recipe, artifact and budget ownership.
+This helper neither loads weights nor executes inference and does not accept the
+preparation plan as a worker command. Existing schema-first routing values remain
+authoritative; revalidate them before mutation. No new wire/schema/queue/DB/model
+registry is needed to implement this existing numerical requirement.
+
+Use pinned Diffusers0.35.2 and its public `set_ip_adapter_scale`, not copied loader
+logic or arbitrary processor writes. Require a single global IP adapter in cross
+attention, a present style-block target and zero scales before each arm. Capture
+the processor map once, retain object identity and verify the entire map before,
+during and after a scope; self-attention must never become an IP processor. Only
+up-block0/attention1 cross-attention scales may be1 in ON; all scales are0 in OFF.
+Once the initial zero state is admitted, every normal or exceptional exit calls
+the public all-zero reset and verifies identity/scales. Invalid entry state is
+rejected without overwriting an unknown pipeline. Do not restore an entry scale
+of1: that would contaminate later
+cases. A failed scope is unusable for further arms; outer worker history/retry
+rules still decide recovery. A nonblocking instance lock rejects overlapping or
+reentrant calls without queueing another generation. This local guard does not
+replace the existing cross-process GPU lease or permit sharing a pipeline among
+separately constructed sessions.
+
+Dominant operations are keyed processor lookup/membership and ordered trace
+iteration: one map of existing object references, a style-key set, frozen sorted
+scale traces; O(P) time/space per arm for the bounded SDXL processor count. No
+weight/tensor copies, file reads, latest resolution, mutable global registry,
+framework or new dependency. The simpler bare setter is insufficient: it cannot
+detect leftover scales, a missing target, processor replacement or an exception
+between ON and OFF. This boundary does not prove scheduler/RNG/embedding equality,
+pretrained zero-scale parity, actual combined-stack memory or output quality.
+
+### Scope implementation checkpoint — 2026-10-06 16:40 UTC
+
+Focused regression364 PASS, including38 new scope cases (not added again to the
+total). Tests cover exact OFF/ON/zero cleanup, multiple style transformer targets,
+single-adapter scale shape/type, missing/unsupported processors, untouched self
+attention, partial setter failure, layout leakage, processor replacement, failed
+reset, body exceptions, between-arm contamination, invalid arm values, reentrancy
+and actual thread overlap. No source/worker schema bytes changed or compatibility
+relaxation; no inference, model acquisition, library install or new dependency.
+
+Light tests fake the public processor/setter and package version, not real
+Diffusers execution. Python3.11 strict mypy, Ruff/format, shell syntax and diff
+checks PASS. Initial test lint simplifications/import wrapping were corrected
+without changing requirements; one patch context missed already-formatted source
+and was reapplied after reading it, with no partial edit or runtime side effect.
+Actual built-wheel CPU/public Diffusers scope and attention parity are the next
+validation boundary, not covered by this unit result.
