@@ -244,3 +244,53 @@ successor inference contracts accepting training1.3. Keep the installed lab
 unchanged during this fit. Do not loosen old1.2 pins, regenerate compatible BASE
 or retune seed/prompt after observing outputs. Goal ACTIVE/quality NOT_ACCEPTED;
 blind/HOLDOUT/semantic/Item-HWPX gates remain open.
+
+### Next consumer design: exact BASE reuse, not a hidden generation flag
+
+Inspection of the released geometry worker confirms it always generates both
+BASE and LORA. Merely adding a training1.3 pin would therefore regenerate four
+BASE images and violate the frozen five-new-output budget. Do not dispatch that
+worker with the new adapter or pass an ambient skip-BASE switch. Implement an
+explicit reuse-aware successor before any new generation:
+
+1. Boundary/responsibility: current contract/source-admission/isolated evaluator,
+   no parallel experiment framework. Schema2020-12 first, frozen typed models
+   next; codec owns exact command/result-family selection.
+2. Canonical source: registered old geometry result and its BASE output pointers;
+   same caption, case/native canvas, negative prompt, seed, zero spatial control,
+   inference numerics and base-model revision. Current training1.3 command/result
+   and adapter are new pinned identities, not edits of old results.
+3. Revisions: explicit geometry successor; released1.3–1.5 consumers remain
+   unchanged. Result distinguishes newly generated LORA outputs from reused
+   canonical BASE evidence instead of claiming BASE model calls happened again.
+4. Resolution: authenticate prior result's schema/media/hash/lifecycle/permission
+   and exact old command/source lineage before any weight/PNG/GPU admission.
+   Reject missing, stale, mismatched case/caption/model/seed/numerics or nonterminal
+   prior results. Reused output is a canonical artifact-member pointer, not a
+   local path invented in the new result. Do not copy old PNGs into its artifact.
+5. Access/data structure: immutable ordered case/output tuples, keyed
+   `(sample_id,canvas,arm)` lookup and uniqueness sets. Reuse references are small
+   frozen values. No DB schema/index/cache or duplicate binary payload.
+6. Complexity: linear in the bounded two samples/four LORA outputs and prior
+   result metadata; no PNG parsing/hash loop per diffusion step.
+7. Transaction/concurrency: existing admitted command, one dispatch ledger,
+   physical GPU lease, terminal result/replay and owner artifact commit. Installed
+   runtime capability is checked after this fit, never updated while it runs.
+8. Dependency/ownership: domain/contract metadata validation remains pure;
+   Orchestrator resolves/stages; numerical worker consumes local staged inputs;
+   only owner commits. No worker NAS/DB/source dependency.
+9. Failure/idempotency: exact command/result hashes include prior result pointer;
+   unknown execution is observed under the same identity. No additional BASE
+   calls, fallback to old consumer, automatic seed change, retry or new key.
+10. Gates: old-byte compatibility, missing/stale/hash/duplicate/lineage negatives,
+    before-binary rejection, actual generated-call count, borrowed BASE provenance,
+    deterministic manifests and installed terminal replay with no model calls.
+11. Simpler alternative: loosen training pins in the old worker or add a boolean
+    skip flag. Neither can express external immutable BASE provenance and exact
+    new-generation accounting in its frozen result. An explicit successor is
+    necessary, but existing parsing/resolution/numerical ownership is reused.
+
+The photo case likewise needs explicit training1.3 lineage while retaining its
+pinned prior BASE result, source support and numerics. Any reusable BASE mismatch
+is a preparation error to report, not permission to generate extra images.
+This section is design intent, not implemented/installed consumer capability.
