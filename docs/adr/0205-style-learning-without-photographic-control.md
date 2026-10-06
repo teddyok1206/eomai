@@ -646,3 +646,15 @@ still fails, preserve it and consider the separate sampling hypothesis; do not
 use lower loss to pass quality. The simpler alternative of repeating200 updates
 would reproduce the same exposure confound; implementing weighted sampling now
 would change more than the one measurable variable this existing contract permits.
+
+The successor was actually metadata-admitted and dispatched at03:37:36.777690
+UTC2026-10-06 from source29c13dcb;142 staged files,100 identical targets/8 results/
+66 documents/55 groups. Run `imgsdxlnativetrainrun_cebee3d1a54236c793be06f586be88c7`;
+command artifact_b338b46b7e6249d7a4e3fd27fc932bb6 /
+rev_c6f1c473b5a846acadef60c25b1c482e, byte SHA
+a4a3e22a6f13f1d1f04b89117cbc7c000ab6f04d1e4f32baf52c6492dc8ca3d4.
+Fresh RECORD/role, exact systemd template, existing GPU lease, native authority
+and unchanged binding/five-service checks PASS. MainPID424177 confirmed executing
+as numerical UID984 at03:38:26 UTC. This is RUNNING evidence, NOT800-step completion
+or a new adapter/quality claim. Preserve the same unit/command identity on later
+observation and publish only actual terminal result; do not restart on timeout.
