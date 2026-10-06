@@ -170,8 +170,25 @@ Tests cover modified hashes/IDs/versions, malformed/extra/duplicate/unordered
 files, pickle/Plus substitution, timestamp/provenance/preprocessor expansion,
 immutability and pure dependency direction. These are protocol tests, not actual
 installed-file, CUDA, model-quality, claim/persistence or human acceptance tests.
-Wheel build/import simulation remains pending at this source checkpoint.
+Wheel build/import simulation was pending at that initial source checkpoint.
 The initial `python -m build` availability probe failed in the test environment;
 use the existing release script's explicit API `pip wheel` rather than add a
 dependency or mutate either environment. No build/install side effect occurred
 in that availability probe.
+
+The existing image-trainer release builder then completed from clean immutable
+source `b9f3534b879c797618f7ff415f75cbfcfdc1a115`. Three wheel RECORDs verify all
+382members (294 contracts,53 provider,35 trainer). Importing the contract wheel
+with repository paths removed validates schema/model/pointer without importing
+torch/diffusers; this is a pure non-editable contract simulation, not provider or
+trainer execution/installation. Contract wheel SHA
+`bb87607915e7f29a2b86fc50eaa435664c9ae2c49809460e761a033b2d8459f4`, provider
+`52a8ccbaea2f90bfb2e049afff33fe92c423d211abcb83cd8769285a9c0e8afe`, trainer
+`3b212ae74bc600425e2c05c2cd9a9edd1c028fb3d9b026053a85c494715997eb`.
+Build-only location:
+`/tmp/eom-image-trainer-build/b9f3534b879c797618f7ff415f75cbfcfdc1a115.c57FeZ/dist`.
+Installed lab remainsd3c03751; production is unchanged. No protected acquisition,
+GPU inference, new training, HOLDOUT exposure or independent review. Execution
+budget approval is still not recorded. Next: existing-owner file resolution and
+closed comparison preparation/consumer; do not submit old contracts or promote
+this optional metadata-only component as a ready new inference path.

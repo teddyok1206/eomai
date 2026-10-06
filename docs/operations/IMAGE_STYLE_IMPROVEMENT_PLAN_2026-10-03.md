@@ -5,7 +5,33 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest checkpoint — 2026-10-06 14:32 UTC
+## Latest checkpoint — 2026-10-06 14:51 UTC
+
+ADR0211's optional style-model preparation contract is implemented, not a new
+production image provider. JSON Schema2020-12 precedes worker behavior; Pydantic
+pins the exact six-file global ViT-H adapter/encoder/notices, preprocessing and
+distinct logical/revision/content hashes. Source/wheel schema parity/hash,
+immutability and explicit mismatch rejection are covered. No new DB, framework,
+numerical dependency, downloader or worker was added. Old contracts remain intact.
+
+Tests241 PASS (105 manifest/controller/dependency plus136 legacy SDXL/LoRA),
+strict mypy three touched core files/Python3.11 and Ruff/format/diff PASS.
+Existing release builder source `b9f3534b879c797618f7ff415f75cbfcfdc1a115` produces
+three wheels; all382 RECORD members verify. Repository-free contract-wheel import
+and schema/model/pointer smoke PASS, without torch/diffusers or weight reads.
+This is build-only/non-editable simulation, not installed-role execution.
+Exact wheel hashes and build location are in ADR0211. Installed lab remains
+d3c03751; production unchanged. The test environment lacks a usable `python -m
+build`; no dependency was added, and the existing explicit API pip-wheel builder
+was used. The failed availability check performed no build/install.
+
+Acquisition/four-output approval is still not recorded; old12/12 allowance stays
+exhausted. Next safe work: exact file resolver and closed comparison preparation
+through existing owners. No model download/GPU/fit/HOLDOUT/activation took place.
+Full institutional-quality, independent review and Item/HWPX gates remain OPEN.
+Goal ACTIVE, not complete or blocked.
+
+## Historical CPU style-routing checkpoint — 2026-10-06 14:32 UTC
 
 [ADR0211](../adr/0211-independent-institutional-style-reference.md) records the
 next distinct style/structure hypothesis, not another contour-loss sweep.
