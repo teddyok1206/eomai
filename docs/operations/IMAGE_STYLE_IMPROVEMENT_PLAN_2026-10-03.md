@@ -4716,3 +4716,24 @@ Canonical install/CPU/dispatch evidence18members49,557bytes rereadPASS:
 Keep installed lab unchanged until terminal. Next: verify/commit the same-run
 result, explicit successor inference admission, fixed five new LoRA outputs
 against reusable BASE and actual visual inspection. Goal ACTIVE/NOT_ACCEPTED.
+
+Reuse-aware evaluation source checkpoint, **2026-10-06 11:28 UTC**:
+Geometry command/result1.6 accepts only native contour training1.3 plus exact
+prior geometry1.5 BASE metadata. Legacy consumers remain unchanged. Owner and
+isolated worker authenticate borrowed evidence before weights/GPU; only LORA
+generations2/4 for1/2 samples are permitted. Borrowed BASE images remain in their
+canonical old artifact, not copied/restaged or presented as new model calls.
+Exact9-member handoff and no-side-effect terminal replay are tested. Photo/canny
+successors are still pending; this source checkpoint does not authorize five
+new outputs through a partially supported runtime.
+
+New26 tests PASS; final regression1,150PASS/323.25s, strict typing12 core modules,
+Ruff/format/shell/diff PASS. Existing architecture debt was found and fixed by
+moving one pure visual selection/admission implementation below Catalog and
+Orchestrator, keeping old service exports compatible and the dependency test
+unchanged ([ADR0210](../adr/0210-pure-science-visual-planning-boundary.md)).
+No dependency, schema, partition/selection policy, DB or production change there.
+
+Training30-minute check at11:20UTC: same PID631921/unit/GPU still live. No terminal
+result or training-quality PASS; installed lab92fed3a8 untouched during fit.
+No new real PNG, activation, push or automatic retry. Goal ACTIVE/NOT_ACCEPTED.

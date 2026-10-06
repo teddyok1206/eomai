@@ -57,6 +57,13 @@ class LocalImageSdxlNativeGeometryCommand(LocalImageSdxlNativeEvaluationCommand)
     numerics: SdxlNativeGeometryNumerics
     budget: SdxlNativeGeometryBudget
 
+    def generated_arms(self) -> tuple[GeometryArm, ...]:
+        return GEOMETRY_ARMS
+
+    def validate_result_lineage(self, result: LocalImageSdxlNativeGeometryResult) -> None:
+        """Released predecessors contain no borrowed-output lineage."""
+        return None
+
     @model_validator(mode="after")
     def bounded_cases(self) -> Self:
         ids = tuple(case.sample_id for case in self.cases)
@@ -186,7 +193,7 @@ def validate_sdxl_native_geometry_result(
     validate_sdxl_native_geometry_sources(command, sources)
     expected = tuple(
         (arm, case.sample_id, canvas)
-        for arm in GEOMETRY_ARMS
+        for arm in command.generated_arms()
         for case in command.cases
         for canvas in ("LEGACY_832X512", case.native_canvas)
     )
@@ -233,3 +240,5 @@ def validate_sdxl_native_geometry_result(
         )
     ):
         raise ValueError("SDXL_NATIVE_GEOMETRY_RESULT_COMMAND_MISMATCH")
+
+    command.validate_result_lineage(result)

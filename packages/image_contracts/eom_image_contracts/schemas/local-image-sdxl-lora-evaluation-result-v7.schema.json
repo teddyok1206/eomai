@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.6",
+  "title": "Contour-trained native LoRA geometry evaluation with immutable BASE reuse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "evaluation",
+    "baseline_command_sha256",
+    "model",
+    "case_relation",
+    "conditioning_policy",
+    "numerics",
+    "status",
+    "error_code",
+    "runtime",
+    "generation_calls",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256",
+    "baseline_reuse"
+  ],
+  "properties": {
+    "baseline_command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/baseline_command_sha256"
+    },
+    "case_relation": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/case_relation"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/command_sha256"
+    },
+    "completed_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/completed_at"
+    },
+    "conditioning_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/conditioning_policy"
+    },
+    "duration_ms": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/duration_ms"
+    },
+    "error_code": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/error_code"
+    },
+    "evaluation": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.6#/$defs/ContourEvaluationPin"
+    },
+    "generation_calls": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "model": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/model"
+    },
+    "numerics": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/numerics"
+    },
+    "outputs": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/$defs/SdxlNativeGeometryOutput"
+          },
+          {
+            "properties": {
+              "arm": {
+                "const": "LORA"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "result_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/result_sha256"
+    },
+    "run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/run_id"
+    },
+    "runtime": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/runtime"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-lora-evaluation-result/1.6"
+    },
+    "started_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/started_at"
+    },
+    "status": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-result/1.4#/properties/status"
+    },
+    "baseline_reuse": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.6#/$defs/GeometryBaselineReuse"
+    }
+  }
+}

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts import ScienceAssessmentCorpusDocument
-from eom_catalog_service import science_visual_pilot as planning
+from eom_catalog_contracts import science_visual_pilot_planning as planning
 from eom_catalog_service.science_visual_pilot import (
     ScienceVisualPilotPlanningError,
     build_science_visual_pilot_plan_v2,
@@ -21,6 +21,28 @@ from eom_image_contracts import (
 )
 
 from tests.unit.test_science_corpus_visual_contracts import _authorization_value, _plan_value
+
+
+def test_service_compatibility_exports_share_the_pure_contract_owner() -> None:
+    from eom_catalog_contracts import science_visual_expansion_planning as pure_expansion
+    from eom_catalog_service import science_visual_expansion_planning as service_expansion
+    from eom_catalog_service import science_visual_pilot as service_pilot
+
+    for name in (
+        "ScienceVisualPilotPlanningError",
+        "build_science_visual_pilot_plan",
+        "build_science_visual_pilot_plan_v2",
+        "build_science_visual_pilot_plan_v3",
+        "build_science_corpus_training_authorization",
+        "select_science_visual_pilot_sources",
+        "select_science_visual_campaign_shard_sources",
+    ):
+        assert getattr(service_pilot, name) is getattr(planning, name)
+    assert service_pilot._group_partitions is planning.science_visual_group_partitions
+    assert service_pilot._select_campaign_sources is planning.select_science_visual_campaign_sources
+    assert service_pilot._PARTITION_CYCLE is planning.SCIENCE_VISUAL_PARTITION_CYCLE
+    for name in service_expansion.__all__:
+        assert getattr(service_expansion, name) is getattr(pure_expansion, name)
 
 
 def _document(index: int) -> ScienceAssessmentCorpusDocument:

@@ -294,3 +294,58 @@ The photo case likewise needs explicit training1.3 lineage while retaining its
 pinned prior BASE result, source support and numerics. Any reusable BASE mismatch
 is a preparation error to report, not permission to generate extra images.
 This section is design intent, not implemented/installed consumer capability.
+
+## Reuse-aware geometry consumer implemented in source
+
+Geometry evaluation command/result1.6 now explicitly pins contour training1.3
+and a frozen `baseline_reuse` value containing prior geometry1.5 command/result
+pointers. Canonical and wheel schemas were defined first; raw SHA-256:
+
+| Schema | SHA-256 |
+|---|---|
+| Command1.6 | `36f1b3b75b0103e940e1d11ce876ad30637ec10f71d051052c51fb709c41898f` |
+| Result1.6 | `c93f3aa7684bc656b78a22fc2cbdf54e703bbe2918726a489116a4c8bcc1853d` |
+
+Old1.0–1.5 bytes/pins/dispatch meaning remain unchanged. The existing closed
+codec, owner admission/handoff and isolated geometry worker support this explicit
+successor. Pure baseline admission authenticates old command/result schema,
+canonical raw hash, successful terminal state/timestamps and old result relation.
+It verifies exact base-model/prompt-policy pointer, sample/caption/native canvas,
+negative prompt, conditioning and inference numerics against current admitted
+sources. The old LORA weights are not borrowed or reloaded. Only old BASE outputs
+are reusable; their original result remains their canonical source.
+
+Admission stages two small reuse metadata documents in addition to the current
+five command/training/adapter documents and two adapter members:9 files, no
+source or borrowed BASE PNGs. Invalid reuse fails before adapter binary/GPU I/O.
+The existing numerical generator iterates the command's typed arm sequence;
+legacy commands retain BASE+LORA and1.6 declares LORA only. Budget2/4 generations
+for1/2 samples, not4/8. New outputs cannot claim BASE or an unrelated borrowed
+result. Common validation calls the command-owned lineage rule without circular
+module imports. Result records exact borrowed pointers and only newly generated
+local LORA members; no nonexistent local BASE file or duplicated old image.
+
+New26 synthetic tests PASS: codec/schema/package/build/frozen predecessors,
+missing/hash/future/wrong case/negative/numerics/model/failed/mismatched identity/
+duplicate/caption metadata, before-binary rejection, exact9-file staging,
+LORA-only calls, partial failures and terminal replay without model/GPU/writes.
+These generated test images are synthetic CPU fixtures, not actual new samples.
+Initial fixture failures corrected canonical UTC serialization/default runtime
+fields and stable resolver-error expectations; production guards were unchanged.
+
+Full final functional and architecture regression: **1,150 PASS** in323.25s;
+strict mypy12 changed core modules, Ruff lint/format, shell syntax and diff PASS.
+During the broader gate an existing Orchestrator-to-Catalog service import was
+found, verified unchanged from source400f1c09, then repaired through one pure
+public contract-layer owner ([ADR0210](0210-pure-science-visual-planning-boundary.md)).
+The dependency test was not skipped/weakened. Original failure evidence stays in
+`/tmp/eom-contour-reuse-final-focused-20261006.log`; final result in
+`/tmp/eom-contour-reuse-complete-final-tests-20261006.log`.
+
+This is SOURCE_VERIFIED, not installed-worker acceptance or new PNG generation.
+Lab retains92fed3a8 throughout the active fit. At2026-10-06 11:20 UTC the same
+training unit/PID631921 was still activating and listed on GPU; no terminal
+result/800-step claim. No retry/new seed/prompt, production activation or push.
+Next: preserve terminal fit result, finish explicit photo/canny consumer lineage
+and five-case manifest, then compatible isolated install/admission and exactly
+the bounded diagnostic/comparison. Full perceptual/blind/HOLDOUT gates remain open.

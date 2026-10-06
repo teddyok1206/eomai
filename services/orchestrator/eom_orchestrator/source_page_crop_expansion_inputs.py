@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 
 from eom_catalog_contracts import ScienceAssessmentWebCorpusManifestV2
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
-from eom_catalog_service.science_visual_expansion_planning import (
+from eom_catalog_contracts.science_visual_expansion_planning import (
     validate_science_visual_expansion_plan_sources,
 )
-from eom_catalog_service.science_visual_pilot import ScienceVisualPilotPlanningError
+from eom_catalog_contracts.science_visual_pilot_planning import ScienceVisualPilotPlanningError
 from eom_image_contracts import (
     LocalImageScienceCorpusVisualPilotPlanV4,
     LocalImageScienceCorpusVisualPilotResult,

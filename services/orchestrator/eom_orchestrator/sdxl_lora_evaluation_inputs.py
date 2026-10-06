@@ -14,6 +14,10 @@ from eom_image_contracts import (
     validate_sdxl_lora_micro_sources,
 )
 from eom_image_contracts.sdxl_evaluation_codec import parse_sdxl_evaluation_command
+from eom_image_contracts.sdxl_geometry_baseline_reuse import (
+    LocalImageSdxlReusedGeometryCommand,
+    parse_reused_geometry_baseline,
+)
 from eom_image_contracts.sdxl_lora_evaluation import parse_sdxl_lora_evaluation_sources
 from eom_image_contracts.sdxl_native_evaluation import (
     LocalImageSdxlNativeEvaluationCommand,
@@ -78,6 +82,21 @@ def prepare_sdxl_lora_evaluation_inputs(
             raise ValueError("SDXL_EVALUATION_CROP_REVISION_MISMATCH")
         if isinstance(command, LocalImageSdxlNativeGeometryCommand):
             validate_sdxl_native_geometry_sources(command, native)
+        if isinstance(command, LocalImageSdxlReusedGeometryCommand):
+            reuse = command.baseline_reuse
+            for name, pointer in (
+                ("reuse-command", reuse.prior_command),
+                ("reuse-result", reuse.prior_result),
+            ):
+                metadata[name] = resolve_control_artifact_member(
+                    engine, pointer, maximum_bytes=256 * 1024
+                )
+            parse_reused_geometry_baseline(
+                command,
+                native,
+                prior_command_payload=metadata["reuse-command"],
+                prior_result_payload=metadata["reuse-result"],
+            )
     else:
         sources = parse_sdxl_lora_evaluation_sources(command, **payloads)
         baseline, manifest = sources.baseline, sources.manifest

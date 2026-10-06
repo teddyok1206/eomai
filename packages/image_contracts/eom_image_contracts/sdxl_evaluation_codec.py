@@ -5,6 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
+from eom_image_contracts.sdxl_geometry_baseline_reuse import (
+    LocalImageSdxlReusedGeometryCommand,
+    LocalImageSdxlReusedGeometryResult,
+)
 from eom_image_contracts.sdxl_lora_evaluation import (
     LocalImageSdxlLoraEvaluationCommand,
     LocalImageSdxlLoraEvaluationResult,
@@ -53,6 +57,10 @@ _COMMANDS: Mapping[str, tuple[str, type[LocalImageSdxlLoraEvaluationCommand]]] =
             "sdxl-lora-evaluation-command-v6",
             LocalImageSdxlNativeGeometryCommandV3,
         ),
+        "local-image-sdxl-lora-evaluation-command/1.6": (
+            "sdxl-lora-evaluation-command-v7",
+            LocalImageSdxlReusedGeometryCommand,
+        ),
     }
 )
 SdxlEvaluationResult = LocalImageSdxlLoraEvaluationResult | LocalImageSdxlNativeGeometryResult
@@ -82,6 +90,10 @@ _RESULTS: Mapping[str, tuple[str, type[SdxlEvaluationResult]]] = MappingProxyTyp
         "local-image-sdxl-lora-evaluation-result/1.5": (
             "sdxl-lora-evaluation-result-v6",
             LocalImageSdxlNativeGeometryResultV3,
+        ),
+        "local-image-sdxl-lora-evaluation-result/1.6": (
+            "sdxl-lora-evaluation-result-v7",
+            LocalImageSdxlReusedGeometryResult,
         ),
     }
 )

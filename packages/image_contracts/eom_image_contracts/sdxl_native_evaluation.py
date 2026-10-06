@@ -43,6 +43,13 @@ class SdxlNativeLoraEvaluationPinV3(SdxlNativeLoraEvaluationPinV2):
         return "1.2"
 
 
+class SdxlNativeLoraEvaluationPinV4(SdxlNativeLoraEvaluationPinV3):
+    """Exact contour-objective training1.3, preserving prior pin meanings."""
+
+    def training_contract_version(self) -> str:
+        return "1.3"
+
+
 class LocalImageSdxlNativeEvaluationCommand(LocalImageSdxlLoraEvaluationCommand):
     schema_version: Literal["local-image-sdxl-lora-evaluation-command/1.2"]  # type: ignore[assignment]
     evaluation: SdxlNativeLoraEvaluationPin

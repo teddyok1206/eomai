@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from eom_image_contracts import content_json_bytes
+from eom_image_contracts.sdxl_geometry_baseline_reuse import LocalImageSdxlReusedGeometryCommand
 from eom_image_contracts.sdxl_native_geometry import LocalImageSdxlNativeGeometryCommand
 
 from eom_orchestrator.informative_lineart_extraction_inputs import (
@@ -335,6 +336,13 @@ def stage_sdxl_lora_evaluation_inputs(
         "inputs/adapter-manifest.json": pin.adapter_manifest.sha256,
         **{"inputs/adapter/" + file.relative_path: file.sha256 for file in prepared.manifest.files},
     }
+    if isinstance(command, LocalImageSdxlReusedGeometryCommand):
+        expected.update(
+            {
+                "inputs/reuse-command.json": command.baseline_reuse.prior_command.sha256,
+                "inputs/reuse-result.json": command.baseline_reuse.prior_result.sha256,
+            }
+        )
     if not isinstance(command, LocalImageSdxlNativeGeometryCommand):
         expected.update(
             {

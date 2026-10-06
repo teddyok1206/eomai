@@ -21,13 +21,16 @@ from eom_image_contracts.sdxl_evaluation_codec import (
     parse_sdxl_evaluation_command,
     parse_sdxl_evaluation_result,
 )
+from eom_image_contracts.sdxl_geometry_baseline_reuse import (
+    LocalImageSdxlReusedGeometryCommand,
+    parse_reused_geometry_baseline,
+)
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_evaluation import (
     SdxlNativeEvaluationSources,
     parse_sdxl_native_evaluation_sources,
 )
 from eom_image_contracts.sdxl_native_geometry import (
-    GEOMETRY_ARMS,
     GeometryCanvas,
     LocalImageSdxlNativeGeometryCommand,
     LocalImageSdxlNativeGeometryResult,
@@ -119,6 +122,25 @@ def _read_sources(
         manifest_payload=payloads["adapter-manifest"],
     )
     validate_sdxl_native_geometry_sources(command, sources)
+    if isinstance(command, LocalImageSdxlReusedGeometryCommand):
+        payloads = {
+            name: read_staged_member(
+                root,
+                "inputs/" + name + ".json",
+                maximum_bytes=256 * 1024,
+                expected_sha256=pointer.sha256,
+            )
+            for name, pointer in (
+                ("reuse-command", command.baseline_reuse.prior_command),
+                ("reuse-result", command.baseline_reuse.prior_result),
+            )
+        }
+        parse_reused_geometry_baseline(
+            command,
+            sources,
+            prior_command_payload=payloads["reuse-command"],
+            prior_result_payload=payloads["reuse-result"],
+        )
     return sources
 
 
@@ -217,7 +239,7 @@ def run_sdxl_native_geometry(
             model_store_root, sources.baseline.model, expected_owner_uid=expected_model_owner_uid
         )
         with acquire_gpu_lease(gpu_lock):
-            for arm in GEOMETRY_ARMS:
+            for arm in command.generated_arms():
                 if (time.monotonic() - start) * 1000 >= command.budget.maximum_duration_ms:
                     raise ProviderError("SDXL_PROBE_BUDGET_EXCEEDED")
                 with backend.open(
@@ -312,6 +334,8 @@ def run_sdxl_native_geometry(
         "completed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "duration_ms": max(1, int((time.monotonic() - start) * 1000)),
     }
+    if isinstance(command, LocalImageSdxlReusedGeometryCommand):
+        value["baseline_reuse"] = command.baseline_reuse.model_dump(mode="json")
     value["result_sha256"] = content_sha256(value)
     result = parse_sdxl_evaluation_result(value)
     if not isinstance(result, LocalImageSdxlNativeGeometryResult):
