@@ -1,5 +1,30 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
+## Same-recipe terminal-adapter diagnostic design — 2026-10-06
+
+This is an opt-in integration diagnostic, not a production worker protocol,
+queue or activation feature. The canonical sources remain the exact native1.3
+command/result/adapter and their complete approved TRAIN metadata closure;
+the existing photo1.6 lineage only selects the unchanged installed BASE model.
+The owner resolves permission/lifecycle/schema/hash before staging three pinned
+TRAIN PNGs and the new adapter's two files. The isolated diagnostic admits the
+complete local native metadata closure again before any pixel/model operation.
+Logical, revision, artifact and content identities stay separate; no latest.
+The three indexed sample lookups and append-only twelve measurement rows are
+O(metadata + pixels), bounded to100 targets and3 decoded source images. No DB,
+schema/index, production dependency or worker communication changes occur.
+Use the previous seed104729, timesteps250/750, exact source/caption/latent recipe,
+BASE and LoRA predictions, five-minute/14GiB budget and one exclusive GPU lease.
+One diagnostic identity, no retry or extra generation/training, owner-only
+publication of its immutable evidence. A new admitted-input test fixture shares
+the existing numerical kernel rather than copying it or widening the old1.2
+fixture's pin. The previous executed script bytes/hash and receipt stay immutable
+in their historical artifact; current test source refactoring does not rerun or
+retroactively replace that acceptance. Missing/hash/stale/failed result inputs
+fail closed. A simple training-loss comparison is insufficient because the new
+objective weights pixels differently; identical unweighted regional measurements
+are required. This TRAIN probe is not visual, blind or HOLDOUT acceptance.
+
 ## Terminal bounded fit — observed 2026-10-06 11:50 UTC
 
 The same single run c9bad421 is terminal SUCCEEDED,800/800 optimizer updates,

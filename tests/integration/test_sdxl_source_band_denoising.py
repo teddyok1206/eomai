@@ -123,30 +123,23 @@ class SourceBandAccounting(unittest.TestCase):
     "explicit owner-admitted installed-GPU diagnostic opt-in required",
 )
 class InstalledSourceBandDenoising(unittest.TestCase):
-    def test_frozen_paired_noise_prediction(self) -> None:
+    def load_admitted_inputs(self) -> tuple[Any, Any, list[Any], list[Any], Any, str]:
+        """Historical1.2 fixture stays exact; successor overrides admission, not numerics."""
         import io
 
-        import torch  # type: ignore[import-not-found]
-        from diffusers import DDPMScheduler, UNet2DConditionModel  # type: ignore[import-not-found]
         from eom_image_contracts import content_json_bytes
         from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
         from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommandV3
         from eom_image_contracts.sdxl_photo_style_execution import parse_photo_style_command
-        from eom_image_provider.provider import acquire_gpu_lease
-        from eom_image_provider.sdxl_lora_material import apply_sdxl_lora, load_sdxl_lora_material
+        from eom_image_provider.sdxl_lora_material import load_sdxl_lora_material
         from eom_image_provider.sdxl_model_resolution import resolve_sdxl_stack
         from eom_image_provider.sdxl_photo_style_sources import read_sdxl_photo_style_sources
         from eom_image_provider.staged_file_io import read_staged_member, verified_directory
         from eom_image_trainer.diffusers_backend import (
             LoraTensorSample,
-            VaeWeightLocation,
-            _latents,
-            _prompt_embeddings,
         )
-        from PIL import Image  # type: ignore[import-not-found]
+        from PIL import Image
 
-        started = time.monotonic()
-        torch.set_num_threads(2)
         input_root = Path(os.environ["EOM_SOURCE_BAND_INPUT_ROOT"])
         prior_root = Path(os.environ["EOM_SOURCE_BAND_METADATA_ROOT"])
         with verified_directory(prior_root, expected_owner_uid=os.geteuid()) as root:
@@ -205,6 +198,22 @@ class InstalledSourceBandDenoising(unittest.TestCase):
         stack = resolve_sdxl_stack(
             Path(os.environ["EOM_SDXL_MODEL_STORE_ROOT"]), spatial.targets.lora.baseline.model
         )
+        return material, training, tensors, masks, stack, command.command_sha256
+
+    def test_frozen_paired_noise_prediction(self) -> None:
+        started = time.monotonic()
+        material, training, tensors, masks, stack, command_sha256 = self.load_admitted_inputs()
+        import torch  # type: ignore[import-not-found]
+        from diffusers import DDPMScheduler, UNet2DConditionModel  # type: ignore[import-not-found]
+        from eom_image_provider.provider import acquire_gpu_lease
+        from eom_image_provider.sdxl_lora_material import apply_sdxl_lora
+        from eom_image_trainer.diffusers_backend import (
+            VaeWeightLocation,
+            _latents,
+            _prompt_embeddings,
+        )
+
+        torch.set_num_threads(2)
         budget = 14 * 1024**3
 
         def guard() -> None:
@@ -300,7 +309,7 @@ class InstalledSourceBandDenoising(unittest.TestCase):
         self.assertEqual(len(rows), 12)
         evidence = dict(
             status="INSTALLED_SOURCE_BAND_DENOISING_PASS_NOT_QUALITY_ACCEPTANCE",
-            comparison_command_sha256=command.command_sha256,
+            comparison_command_sha256=command_sha256,
             training_command_sha256=training.command_sha256,
             adapter_manifest_sha256=material.manifest.manifest_sha256,
             strength=material.strength,
