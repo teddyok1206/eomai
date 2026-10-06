@@ -435,3 +435,26 @@ Full quality remains NOT_ACCEPTED. No new acquisition/four-output approval is
 recorded, no model/GPU/HOLDOUT or production change occurred, and the previous
 12/12 budget is not reset. Next safe work is the existing-owner source admission
 and numerical comparison consumer; a valid plan alone must never start a worker.
+
+The existing builder subsequently produced all three wheels from clean immutable
+source `c68f5009fa4e7ad5883912cf15cc68fb8f9f8ebb`. All386 RECORD members
+verify (296 contracts,55 provider,35 trainer). A repository-free synthetic plan
+round-trip and refusal by the legacy worker loader PASS, with no numerical-library
+imports. Synthetic pointers are not a registered plan or real source admission.
+Contract/provider/trainer wheel SHA respectively:
+`f6286dd0b6e2ba84c6f089880e35e3db2c98ecf4fd6671a60826674ca7dec731`,
+`460f65abcfe0a16e03aa56f27825359084989e53d8680fae4b965a3a26546f2b`,
+`d599fe994541cac790727e8cbbbdbe0d52e4f1052b8ef91a00489afbcfb879fb`.
+Build-only directory:
+`/tmp/eom-image-trainer-build/c68f5009fa4e7ad5883912cf15cc68fb8f9f8ebb.YtOtI3/dist`.
+No installation/dependency/model/runtime change. Core mypy/format/shell checks
+were reconfirmed; the68 plan tests were rerun PASS in2.03s, not added to365.
+
+The existing owner committed and reread all six text evidence members24,771bytes:
+`artifact_b4767ef823c446dea398f542beabc7a5` /
+`rev_cef812198293478c88106c3603338249`; primary `reports/own-review.json`, SHA
+`516100f305b5f089dc17186e72acb1a4cfc3a94f1213478d23f04722598e393d`.
+It references the earlier canonical diagnostic sheet instead of copying its PNGs.
+The temporary publication operator had an import-spacing Ruff warning, distinct
+from the passing core checks and executed owner/readback. Its archived bytes are
+preserved; no inference, publication retry or failed-history rewrite followed.
