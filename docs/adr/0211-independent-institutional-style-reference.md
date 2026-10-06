@@ -1041,3 +1041,40 @@ Next: held-adapter load and embedding consumption in the bounded matched backend
 then local workspace/result integration, before approved real-model execution.
 New acquisition/four-output authority NOT_RECORDED; old12/12 budget unchanged;
 full quality NOT_ACCEPTED, goal ACTIVE.
+
+### Actual wheel wire proof — 2026-10-06 17:42 UTC
+
+Source `08ff02f7c75b31edb24858fd73bb63cb546f29ec`; build-only directory
+`/tmp/eom-image-trainer-build/08ff02f7c75b31edb24858fd73bb63cb546f29ec.axXvXb/dist`.
+Non-editable Python3.11 zip import and all392 RECORD members (299/58/35) PASS.
+Contract/provider/trainer SHA-256s:
+`764107bca2f92f2fcf9ce143feb453c4a31007d65b2f2640ea998eb8fc7569f8`,
+`9680bf7a8ace463622b6eca8e2231ac79bd23b02288478df2d0fff6613e427fe`,
+`040fb8b21f0f41c45be14510bdceee3c32ea2f223fb128def63d28e345a25e6a`.
+An explicitly synthetic/unregistered command roundtrips the already frozen plan
+value; a synthetic failed receipt resolves the nullable shared-runtime reference.
+Wrong schema, boolean-zero and tensor payload are rejected. No source owner was
+called and no synthetic command/result/model was registered; this is codec proof,
+not a real worker failure, canonical source admission or dispatch. No Torch/TF/
+Diffusers imports, weights, GPU/network, images, HOLDOUT or runtime installation.
+
+Existing Orchestrator owner committed/reread three text members13,406bytes:
+`artifact_2d91a91ed0a243b0993b5db0c3201d33` /
+`rev_560155a44e3e43e18f199a57a90bef8a`, primary `reports/wire-codec.json`, SHA
+`ffc8480843613f80f28a19bbfb6710c6c42053cf5d39b4fef0af3243a522182a`.
+Only report/exact operators retained, no old source/report/model/PNG copies.
+
+### Institutional direction recheck — 2026-10-06 17:44 UTC
+
+Actually re-viewed admitted TRAIN originals
+`imgsourcecrop_04322a3cb1ce083b8b13c561f4cf9777` (dryer/flask experiment) and
+`imgsourcecrop_044ff424defc56b9e3ba2f10c5e0c8b8` (heart cutaway). Admission and
+original hashes still match their pinned earlier values. Flask/stand geometry and
+gray liquid/table support are legible without elaborate realism. Heart walls use
+gray fills and bold flow arrows distinct from thin anatomical outlines. Preserve
+meaningful tone and hierarchical line weight, not uniform thin-line binarization.
+These original arrows carry science, not generic style texture: later matched
+outputs must reject injected arrows/object morphology from the style-only source;
+authored scientific overlays remain controlled separately. Repeated views add no
+unique-source coverage or independent review; no generated counterpart exists in
+this checkpoint. Do not count source appearance as output acceptance.
