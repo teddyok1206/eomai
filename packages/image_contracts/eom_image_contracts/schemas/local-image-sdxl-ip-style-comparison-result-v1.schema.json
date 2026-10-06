@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-result/1.0",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "input": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^imgsdxlcase_[0-9a-f]{32}$"},
+        "style_sample_id": {"type": "string", "pattern": "^imgsourcecrop_[0-9a-f]{32}$"},
+        "style_source_sha256": {"$ref": "#/$defs/sha256"},
+        "style_rgb_sha256": {"$ref": "#/$defs/sha256"},
+        "encoder_input_sha256": {"$ref": "#/$defs/sha256"},
+        "cfg_embedding_sha256": {"$ref": "#/$defs/sha256"},
+        "reference_sha256": {"$ref": "#/$defs/sha256"},
+        "conditioning_sha256": {"$ref": "#/$defs/sha256"},
+        "initialization_rgb_sha256": {"$ref": "#/$defs/sha256"},
+        "prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "negative_prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295}
+      },
+      "required": ["case_id", "style_sample_id", "style_source_sha256", "style_rgb_sha256", "encoder_input_sha256", "cfg_embedding_sha256", "reference_sha256", "conditioning_sha256", "initialization_rgb_sha256", "prompt_sha256", "negative_prompt_sha256", "seed"]
+    },
+    "output": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "arm": {"enum": ["OFF", "ON"]},
+        "case_id": {"type": "string", "pattern": "^imgsdxlcase_[0-9a-f]{32}$"},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "cfg_embedding_sha256": {"$ref": "#/$defs/sha256"},
+        "initial_generator_state_sha256": {"$ref": "#/$defs/sha256"},
+        "prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "negative_prompt_sha256": {"$ref": "#/$defs/sha256"},
+        "member_path": {"type": "string", "pattern": "^outputs/(?:off|on)/final/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "raw_member_path": {"type": "string", "pattern": "^outputs/(?:off|on)/raw/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$"},
+        "raw_sha256": {"$ref": "#/$defs/sha256"},
+        "raw_size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "width_px": {"const": 800},
+        "height_px": {"const": 500},
+        "duration_ms": {"type": "integer", "minimum": 1, "maximum": 600000},
+        "peak_gpu_memory_bytes": {"type": "integer", "minimum": 1, "maximum": 17179869184}
+      },
+      "required": ["arm", "case_id", "seed", "cfg_embedding_sha256", "initial_generator_state_sha256", "prompt_sha256", "negative_prompt_sha256", "member_path", "sha256", "size_bytes", "raw_member_path", "raw_sha256", "raw_size_bytes", "width_px", "height_px", "duration_ms", "peak_gpu_memory_bytes"]
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "local-image-sdxl-ip-style-comparison-result/1.0"},
+    "run_id": {"type": "string", "pattern": "^imgsdxlipstylerun_[0-9a-f]{32}$"},
+    "command_sha256": {"$ref": "#/$defs/sha256"},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "photo_result_sha256": {"$ref": "#/$defs/sha256"},
+    "native_adapter_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "style_model": {"$ref": "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-plan/1.0#/$defs/SdxlIpStyleModelPointer"},
+    "encoder_policy": {"const": "CPU_FLOAT32_EAGER_GLOBAL_CFG/1.0"},
+    "routing_policy": {"const": "UP_BLOCK0_ATTN1_ONLY/1.0"},
+    "quality_acceptance": {"const": "NOT_REVIEWED"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "holdout_binary_reads": {"const": 0},
+    "training_steps": {"const": 0},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "error_code": {"enum": [null, "SDXL_PROBE_INPUT_INVALID", "SDXL_PROBE_MODEL_INVALID", "SDXL_PROBE_HASH_MISMATCH", "SDXL_PROBE_GPU_UNAVAILABLE", "SDXL_PROBE_OOM", "SDXL_PROBE_EXEC_FAILED", "SDXL_PROBE_OUTPUT_INVALID", "SDXL_PROBE_BUDGET_EXCEEDED", "SDXL_PROBE_PROMPT_TRUNCATED"]},
+    "runtime": {"$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.5#/properties/runtime"},
+    "peak_host_memory_bytes": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+    "inputs": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/input"}},
+    "outputs": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/output"}},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_ms": {"type": "integer", "minimum": 1, "maximum": 3600000},
+    "result_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "required": ["schema_version", "run_id", "command_sha256", "plan_sha256", "photo_result_sha256", "native_adapter_manifest_sha256", "style_model", "encoder_policy", "routing_policy", "quality_acceptance", "activation_policy", "holdout_binary_reads", "training_steps", "status", "error_code", "runtime", "peak_host_memory_bytes", "inputs", "outputs", "started_at", "completed_at", "duration_ms", "result_sha256"]
+}

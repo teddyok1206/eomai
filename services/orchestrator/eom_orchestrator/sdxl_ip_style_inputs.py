@@ -11,6 +11,11 @@ from eom_image_contracts.sdxl_ip_style_comparison import (
     SdxlIpStyleSelectedSource,
     select_sdxl_ip_style_sources,
 )
+from eom_image_contracts.sdxl_ip_style_execution import (
+    LocalImageSdxlIpStyleComparisonCommand,
+    parse_sdxl_ip_style_command,
+    parse_sdxl_ip_style_execution_plan,
+)
 from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommandV4
 from eom_image_contracts.sdxl_photo_style_execution import (
     parse_photo_style_command,
@@ -42,6 +47,28 @@ class ResolvedSdxlIpStyleSelectionMetadata:
     photo_result: LocalImageSdxlPhotoStyleResult
     style: AdmittedSdxlNativeLoraSources
     cases: tuple[SdxlIpStyleSelectedSource, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedSdxlIpStyleExecutionMetadata:
+    """Canonical metadata admission only, not pixels/models/lease/permission to dispatch."""
+
+    command: LocalImageSdxlIpStyleComparisonCommand
+    selection: ResolvedSdxlIpStyleSelectionMetadata
+
+
+def resolve_sdxl_ip_style_execution_metadata(
+    engine: Engine, command: LocalImageSdxlIpStyleComparisonCommand
+) -> ResolvedSdxlIpStyleExecutionMetadata:
+    command = parse_sdxl_ip_style_command(command.model_dump(mode="json"))
+    (raw,) = resolve_control_artifact_members(
+        engine, (BoundedControlArtifactRead(command.plan, 64 * 1024),)
+    )
+    plan = parse_sdxl_ip_style_execution_plan(command, raw)
+    selection = resolve_sdxl_ip_style_selection_metadata(engine, plan)
+    if selection.plan != plan:
+        raise ValueError("SDXL_IP_STYLE_EXECUTION_OWNER_PLAN_MISMATCH")
+    return ResolvedSdxlIpStyleExecutionMetadata(command, selection)
 
 
 def resolve_sdxl_ip_style_selection_metadata(

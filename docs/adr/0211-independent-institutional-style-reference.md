@@ -966,3 +966,78 @@ change. Full quality NOT_ACCEPTED, goal ACTIVE; new acquisition/four-output
 authorization NOT_RECORDED; old budget12/12 unchanged. Next: protocol-first
 matched execution/result ownership consuming this frozen embedding and the
 verified adapter file, before any newly authorized real-model experiment.
+
+## Matched style worker command/result contract
+
+Boundary: add one evaluation-only command/result family for the existing frozen
+style plan, not another production provider, queue, registry or plan version.
+The preparation plan stays preparation-only; a separately identified command
+pins its registered revision/raw hash and logical plan ID/semantic hash. Command
+creation alone is not operator approval or dispatch. The existing Orchestrator
+owns admission, staging, bounded claim/lease and validated Artifact commit; the
+worker reads only staged local inputs/root-owned model pointers and returns local
+results. JSON Schema2020-12 precedes Pydantic or worker behavior.
+
+Canonical sources are the immutable plan and its original photo/style source
+owners. Preserve photo1.5/native1.3 lineage and held native1.2 LoRA; do not alter
+released predecessors. Keep command/run/result IDs, semantic/raw hashes, Artifact
+revisions and filesystem members distinct. Small result traces pin measured CPU
+encoder input/embedding hashes and source identities, never tensor bytes. Command
+pins the CPU-host memory ceiling separately from the existing GPU/output/time
+plan limits; this does not silently change the preparation plan budget.
+
+Access: two ordered cases×OFF/ON; maps for case joins and sets for uniqueness.
+O(cases+outputs), bounded two inputs/four outputs, frozen tuples; no new DB/index.
+Successful result requires exact ordered closure, measured runtime/resource bounds,
+all traces and no error. Failed result preserves the actual produced prefix and
+error, including a possible final cleanup failure after four outputs. Never
+invent missing results, reinterpret failure as success or auto-retry. A result
+with no output may have no GPU runtime; any output requires measured runtime.
+Input and output traces must match source/control/initializer, seed, same compiled
+prompt hashes, same global-style embedding and initial generator-state hashes.
+Only the routed IP scale differs; LoRA and structure stay pinned. PNG paths are
+the established raw/final pair layout with OFF/ON identity, not arbitrary paths.
+
+Pure contract code owns identity/time/order/trace/budget rules; metadata adapter
+continues canonical owner checks; later workspace validator owns PNG media/hash
+and exact directory closure. Declared worker receipts cannot prove actual tensor
+behavior, approval, institutional quality or effective resource isolation. New
+schemas are additive; no CLI acceptance until the numerical/staging/commit owner
+supports the complete family. The simpler reuse of BASE/LORA result semantics is
+incorrect: both arms must keep LoRA active and differ only in IP style scale.
+
+### Matched wire implementation checkpoint — 2026-10-06 17:39 UTC
+
+New closed command/result schemas and Pydantic models,62 new tests, and one
+read-only Orchestrator execution-metadata entry point. Focused432 PASS (including
+those62, not added again). Contract Python3.11 and Orchestrator Python3.12 strict
+mypy separately PASS; Ruff/format, shell syntax and diff PASS. Initially applying
+Python3.11 checking to the existing Python3.12 Orchestrator dependency graph was
+an invocation error; correct component interpreter targets, not compatibility
+patches. Initial fixture lacked an existing required control resource profile;
+complete that synthetic fixture without changing predecessor contracts. Initial
+new runtime `$ref` incorrectly assumed a `$defs` entry in the photo1.5 alias;
+point to its existing `/properties/runtime` chain and verify both actual-runtime
+and null branches offline. This source iteration had no runtime side effect.
+
+Success requires exact two-case/four-output closure; failed receipts retain an
+ordered actual prefix, including failure after the fourth output. Reject changed
+parent raw/semantic hashes, command/model/source/seed/prompt/embedding identity,
+unmatched RNG states, swapped/duplicate/skipped cases, arbitrary paths, missing
+runtime, understated peak memory and boolean-as-zero counters. Shared style
+sources require one input/embedding trace. The result's host measurement can
+exceed the command ceiling (bounded int64) so failure is not clamped or hidden;
+an over-budget result cannot succeed, but preserves an actual first OOM/other
+failure rather than retrospectively changing its error identity.
+
+The metadata adapter resolves one registered plan revision at64KiB then calls
+the existing canonical photo/native source owners. No source clones or latest
+fallback, new storage/queue/DB/index, worker/NAS write, dispatch or GPU inference.
+The existing worker CLI deliberately still rejects this family until the full
+numerical/staging/workspace/commit path is implemented. This is a tested protocol
+and metadata boundary, not a claim that the four-output experiment can run now.
+No additional original-view/independent coverage, images or quality acceptance.
+Next: held-adapter load and embedding consumption in the bounded matched backend,
+then local workspace/result integration, before approved real-model execution.
+New acquisition/four-output authority NOT_RECORDED; old12/12 budget unchanged;
+full quality NOT_ACCEPTED, goal ACTIVE.

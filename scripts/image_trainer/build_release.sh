@@ -51,6 +51,9 @@ with zipfile.ZipFile(contract) as archive:
     required = {
         "eom_image_contracts/sdxl_ip_style.py",
         "eom_image_contracts/sdxl_ip_style_comparison.py",
+        "eom_image_contracts/sdxl_ip_style_execution.py",
+        "eom_image_contracts/schemas/local-image-sdxl-ip-style-comparison-command-v1.schema.json",
+        "eom_image_contracts/schemas/local-image-sdxl-ip-style-comparison-result-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-ip-style-comparison-plan-v1.schema.json",
         "eom_image_contracts/schemas/local-image-sdxl-ip-style-model-manifest-v1.schema.json",
         "eom_image_contracts/sdxl_native_evaluation.py",

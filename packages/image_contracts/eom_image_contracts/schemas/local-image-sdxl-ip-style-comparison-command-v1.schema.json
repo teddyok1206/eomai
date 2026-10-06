@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-command/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "local-image-sdxl-ip-style-comparison-command/1.0"},
+    "run_id": {"type": "string", "pattern": "^imgsdxlipstylerun_[0-9a-f]{32}$"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "purpose": {"const": "EVALUATION_ONLY_MATCHED_STYLE_REFERENCE"},
+    "activation_policy": {"const": "FORBIDDEN"},
+    "plan": {"$ref": "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-plan/1.0#/$defs/ImageEvaluationArtifactMember"},
+    "plan_id": {"type": "string", "pattern": "^imgsdxlipstyleplan_[0-9a-f]{32}$"},
+    "plan_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "encoder_policy": {"const": "CPU_FLOAT32_EAGER_GLOBAL_CFG/1.0"},
+    "maximum_peak_host_memory_bytes": {"type": "integer", "minimum": 1, "maximum": 68719476736},
+    "command_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "required": ["schema_version", "run_id", "source_commit", "created_at", "purpose", "activation_policy", "plan", "plan_id", "plan_sha256", "encoder_policy", "maximum_peak_host_memory_bytes", "command_sha256"]
+}
