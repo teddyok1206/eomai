@@ -5,7 +5,42 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest checkpoint — 2026-10-06 14:17 UTC
+## Latest checkpoint — 2026-10-06 14:32 UTC
+
+[ADR0211](../adr/0211-independent-institutional-style-reference.md) records the
+next distinct style/structure hypothesis, not another contour-loss sweep.
+Actual installed Diffusers0.35.2 CPU capability probe PASS:11 tiny random-UNet
+IP processors, only the designated style processor enabled, layout/mid scales0,
+self-attention identity preserved. Synthetic attention scale0 exactly matches
+text-only attention and returns identically after scale1. This is not actual
+pretrained SDXL output/LoRA compatibility or institutional-style acceptance.
+Existing ControlNet Img2Img accepts image/embedding inputs, and slow CLIP image
+processing works on a224x224 synthetic CPU image without a new dependency.
+
+Pinned official global ViT-H IP-Adapter/encoder candidate metadata:3,226,764,512
+prospective safetensor bytes; no binaries downloaded or installed. Model card,
+code license and declared encoder-origin notices were checked independently.
+There is no processor config in that folder, so preprocessing must be explicit
+and pinned before numerical use. RTX5080 has16,303MiB total; combined-stack
+peak memory remains unmeasured. No remote code, external LLM or image API.
+
+The old fallback12/12 remains exhausted. A separately proposed four-output
+OFF/ON comparison and protected acquisition were asked through the user question
+interface; answer is not yet recorded. No new GPU/model fit/HOLDOUT/production
+operation. Protocol preparation remains possible without treating that proposal
+as execution approval. Full quality/blind/Item-HWPX gates remain OPEN; goal ACTIVE.
+
+Existing owner archived seven text members28,073bytes and reread all equal:
+`artifact_fc9be1432efd474f911bd8afe1bec9cd` /
+`rev_5b439e63d76b44668fdb56d4358576f1`, primary `reports/own-review.json`, SHA
+`45505bc6920d04e8e6fa700a758c0f4f49202f668e4e542fdb3643c360b6ee73`.
+Operators Ruff/format PASS; no core edits/new core-suite claim. The first archive
+operator failed on a relative documentation path before publisher invocation;
+corrected absolute path and reused the unchanged local review after exact-value
+comparison. No model/GPU rerun or unknown publication resubmission occurred.
+The failed local trace remains preserved, not reclassified as successful.
+
+## Historical original-art calibration — 2026-10-06 14:17 UTC
 
 Recurring actual-original review is retained at completed learning candidates,
 fixed sample comparisons and material prompt/control/policy changes; idle
