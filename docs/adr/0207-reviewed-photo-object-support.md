@@ -396,3 +396,34 @@ read-only admission, immutable release wheels/RECORD and installed-role guards,
 then exactly one matched pair. Production bindingf96eda84 and frozen TRAIN100
 remain unchanged. Overall goal ACTIVE; blind review, HOLDOUT, final own quality,
 Item/HWPX canary and activation/rollback acceptance remain open.
+
+### Canonical native admission and built-wheel checkpoint
+
+At2026-10-06T09:07:08.974683Z, a read-only development-owner preflight on source
+`28324e853139af160d6d3451f5282cb600209a44` passed the real canonical full-native
+and support admission:100 targets,8 batches,41 native metadata members;
+77 total admitted metadata members/1,102,038bytes. The original preparation plan
+and its five parents were reused unchanged. No PNG staging, command registration,
+Artifact write, worker dispatch, model/GPU call, training or runtime installation.
+This closes the earlier missing real full-native metadata evidence; it does not
+claim installed-role, staged-pixel, GPU or quality acceptance. Production binding
+file SHA f96eda84 was checked unchanged by the operation. Exact operator
+`/tmp/eom-photo-object-support-native-preflight-20261006.py` raw SHA
+`sha256:59efd2d4b7db6bb0e9a712d2c9ab45710a22accf49673cb08291d78bf5381119`.
+
+The existing trainer release builder produced three immutable-source wheels;
+all three raw SHA/ZIP member uniqueness/bounds and every RECORD row's SHA/size
+were verified. New contract/schema/provider modules are required by both builder
+inventories. Temporary build directory (not installed or committed to Git):
+`/tmp/eom-image-trainer-build/28324e853139af160d6d3451f5282cb600209a44.IB3POO/dist`.
+
+| Distribution | Wheel SHA-256 | Verified members |
+| --- | --- | ---: |
+| eom_image_contracts0.1.0 | `00c7871c6c4348c5b847726eaeab40010d2a92eea220bec1cc925958f9032e0b` | 282 |
+| eom_local_image_provider0.1.0 | `8170158fc4a74926bd323996185d60e09e8f32817c6edfe822eecf2b3de8f44c` | 53 |
+| eom_local_image_trainer0.1.0 | `2dd1531698b30a87bd48f1384ae4102372492a5bb62bbccb94881b9ba1f256b3` | 34 |
+
+Remaining next gate: quiescence/rollback review and isolated lab install/role
+verification, then one paired masked-control execution. Preserve original baseline
+outputs and training data; no new prompt/seed/control/adapter sweep. Goal remains
+ACTIVE and overall quality NOT_ACCEPTED.
