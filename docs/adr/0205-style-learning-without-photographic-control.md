@@ -658,3 +658,96 @@ and unchanged binding/five-service checks PASS. MainPID424177 confirmed executin
 as numerical UID984 at03:38:26 UTC. This is RUNNING evidence, NOT800-step completion
 or a new adapter/quality claim. Preserve the same unit/command identity on later
 observation and publish only actual terminal result; do not restart on timeout.
+
+## Observed exposure32 terminal and matched diagnostics — 2026-10-06 UTC
+
+The scheduled30-minute observation at04:07:37 confirmed the same MainPID424177,
+UID984, `activating/start` and no exit timestamp. `ExecMainStatus=0`/`Result=success`
+were not interpreted as completion. A finite, hash-pinned Orchestrator operator
+handoff waited until04:12, then published only the actual terminal result. No
+training restart, polling retry, new queue/service or privilege change occurred.
+Its six mocked CPU STOP/one-dispatch scenarios PASS; they are not live acceptance.
+
+Actual FULL100 training SUCCEEDED800/800 in1875445ms (31min15.445s), peak GPU
+6166987776bytes, final stochastic loss0.12813031673431396. The final loss is neither
+an averaged learning curve, a divergence diagnosis nor a style score. All100 target
+pointers/captions/pixels,8 preparation results,66 documents and55 groups stay exact.
+32 scheduled exposures/target derives from the declared3200 microsteps and the
+existing seeded epoch schedule, not a recovered per-step journal.
+
+Canonical training result/manifest/adapter files:
+artifact_bff30e1f7b7a49f3899992e1db90b0b8 /
+rev_d15dcf40de404929b4ae69e8e74a50de;4 members byte-equal. Result byte SHA
+af6fb54085e73d7bf9156b051640d1d723907bda7b7cb5443f544b16424dc738;
+adapter byte SHAa01281b9c217e96c9f496774cb2e48ea5b7b4a66b1979b3c198926e62bf5d723.
+Installed terminal replay verified146 files/stat/SHA unchanged with0 models,
+pixel decodes, optimizer steps or writes; no Torch import. Fresh3-wheel RECORD/
+dependency/role audit PASS before each bounded numerical diagnostic, installs0.
+
+The frozen photo1.4 comparison actually generated6 outputs in36722ms, peak GPU
+10763033600bytes; run `imgsdxlvalcmprun_71314b9b708b02c8172e3a1915583bc5`.
+artifact_e13b5cd0cdd949159ba40326bde1bc8a /
+rev_f4eafc35965d46daaf775df4e3a924f1;19 members byte-equal; result byte SHA
+f59256c190a2c7d8c9feb24a29072299efabf1f1339ffeea98c6d1cd7c81bf56.
+The same3 references/region reviews/initializer pixels/control/prompts/negative/
+seed/recipe/runtime pins match the200-update predecessor. Batch canonical read of
+27 PNG members proved all3 BASE outputs identical at both native and final RGB
+pixels, not merely equal grayscale. Terminal replay verified101 files unchanged,
+0 models/GPU leases/transforms/writes. Five actual CPU pixel-guard checks reject
+equal-luminance/different-chroma inputs and accept different PNG encoding with
+identical pixels. Focused source tests:221 PASS/70.87s, no live generation there.
+
+OWN, non-blind actual views: three matched200/800 rows, six new-photo contact
+outputs and each new LoRA native/final PNG. Trilobite retains rolled silhouette
+but pale relief, grain and cast shadow; ammonite retains small partial framing
+with gray/patterned context (the BASE side-border artifact is reduced); wagon
+retains its right-facing shape/two wheels but gray body/ground/background texture.
+Reduced detail and small local improvements are not institutional-style PASS.
+Raw fossil tint is removed by the unchanged final conversion; do not claim final
+color leakage. All3 frozen photo prompts contain `eom exam line art, `, so an
+absent-trigger explanation is contradicted. Exact conditioning-phrase equivalence
+has not been established, and no prompt was patched for this comparison.
+
+After recording the photo failure, one separate bounded source-free successor
+reused the predecessor TRAIN heated-beaker caption/hash/negative/seed30-step CFG7
+strength1/control0 recipe and both832x512/768x1024 canvases. Maximum4 new outputs,
+one dispatch, no retry/sweep/training or source-photo/target PNG input. Geometry1.4
+and its existing7-file staging/authority were reused, not a new protocol.
+Actual4 generations SUCCEEDED28037ms, peak GPU9217375744bytes; run
+`imgsdxlloraevalrun_dfad298886d28c12e7ef353f8ae0b0aa`;
+artifact_a5820f314d184f7a8ce63a2272fa14cd /
+rev_00b82d4203c2446f87c1cd262d73c7ef;5 members byte-equal; result byte SHA
+99989ce17ea708b16943c4933b362f68c88dc907ad72eb85c03f0f392bd203e4.
+Canonical8-PNG comparison proves both BASE PNG bytes/RGB pixels identical to200;
+LoRA RGB MAE57.10/38.09 is difference evidence, not a quality score. Installed
+terminal replay verifies12 files unchanged,0 model/GPU/weight/write calls.
+
+OWN actual views of all4 raw source-free PNGs, including both full-size LoRA
+images: landscape produces cropped oversized multi-vessel/hotplate-like geometry,
+thick lines, gradients/steam/gray backdrop; portrait recovers a more recognizable
+spouted-beaker contour but intrusive flame/tube-like marks and missing/misplaced
+tripod/lamp layout remain. Neither is publication-ready. This one TRAIN caption/
+seed/two-canvas diagnostic is not a general benchmark or holdout result. It
+contradicts Canny being the sole cause, not all possible conditioning failures.
+
+Preserved own evidence: artifact_6be9a6752ea34cf2bc9c62c86e85b2db /
+rev_fb8972b50ff34aac87cfff92eb51f743;primary `reports/own-review.json`, byte SHA
+cf24c7eb357c27cb494cd6fe09d698fd0f5f9f11893a6b999f10dc0b7e42b592.
+59 members/5949010bytes verified byte-equal. Display contacts are explicitly
+derived review materializations: source-photo columns are NOT generated; BASE
+columns repeated across experiments are marked and proved identical. No canonical
+dataset/weights/raw-output duplicate members. The original129 pool/17-sheet screen
+and prior200 adapter/evidence remain pinned, not re-reviewed or overwritten.
+
+Checkpoint totals:800 new training updates,6 photo+4 source-free actual generations;
+0 reserved reads/production changes. All5 main services active and no active image
+units. Bindingf96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845
+unchanged. Technical execution/provenance PASS; OWN quality NOT_ACCEPTED;
+independent review NOT_PERFORMED; reserved/Item/HWPX/activation/rollback OPEN.
+
+Next: audit the smallest schema-first explicit style-exposure successor. Current
+100-target mix17 CLEAN/8 HATCH/75 TONE suggests a sampling hypothesis, not a proven
+cause or implemented fix. Preserve all unique targets and their expression/scene
+labels; no padding, PILOT relabel, source erasure, hidden weights or automatic
+800→1000 extension. Determine actual pointer/version dependencies before choosing
+an extension; do not build a parallel sampling framework. Goal remains ACTIVE.
