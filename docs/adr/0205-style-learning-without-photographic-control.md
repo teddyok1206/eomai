@@ -456,3 +456,94 @@ f11cdd8d7a24eee5e09c56102371302070474b9b1c06b4d3ab637546ff5e4bfb.
 GPU/training/reserved reads/production changes0; binding unchanged,five services
 active. Independent blind, full model quality/resource, Item/HWPX and activation/
 rollback gates remain OPEN. Complete goal stays ACTIVE.
+
+### Native FULL100 completion and rejected generation quality — 2026-10-06 UTC
+
+At source7b67d6af,96 later TRAIN pages/60 documents/47 groups were actually
+inspected, followed by26 coordinate guides. Thirty-one regions from16 PDFs/14
+groups were rendered at576DPI in16 bounded CPU requests. All31 native crops were
+viewed;26 targets prepared,5 deferred, all26 final targets viewed. Native1.2 keeps
+literal source pixels and composition: no erasure, reconstruction or inpainting.
+Canonical source result artifact_06b529dfc0904897b5af19d7ec786de5 /
+rev_1ebd55b8948f435eb02541ca73c227db; target result
+artifact_3ac0d4e07d6c4086954e6d75035cfe6d / rev_0f4ae083e53a4c6db1dc98e7ec7efb51.
+Installed terminal replays render/transform/write0;27 target/result members
+reread byte-equal. These sources/targets are institution derivatives, NOT generated
+quality samples.
+
+Pool129 targets/16 results/78 documents/62 groups has no sample-ID or exact-PNG
+duplicates. Actual frozen selection is100 targets/8 results/66 documents/55 groups,
+max3/document and4/group; old cell and redundant dense coal-pile remain held.
+All100 canonical targets were viewed in17 sheets,18,674,240 input PNG bytes.
+Seventeen CLEAN_CONTOUR/eight FINE_HATCHING/75 RESTRAINED_TONE and73 white-isolated/
+27 authored-scene captions remain honest source descriptions, not pure-lineart
+claims. No batch wrapping, duplicated padding, reseeding or PILOT relabeling.
+
+Existing native-LoRA1.1 metadata-only FULL admission PASS:41 metadata members,
+PNG/PDF/model opens0. One actual run
+`imgsdxlnativetrainrun_db651bef64d13506e7d61f1145defeb8` completed200/200 updates,
+100 realized targets in485182ms, peak6166987776 GPU bytes, loss0.02568770945072174.
+Native24 base/rank8/alpha8/lr1e-4/batch1/accumulation4/fp16/AdamW8bit/seed20261005
+remain unchanged; cohort/profile and declared input-byte budget differ. No retry,
+resume or sweep. Loss is not a quality score or an across-cohort comparison.
+Command artifact_ce2fdc55836b4ca98990c577a9dbc89e /
+rev_532f3077acdb4e1394936c127e13e611; result
+artifact_0f26b35a42ef494689837f1b0120a5ee / rev_c20167c096864ffeb5fec288df47c53a,
+result byte SHA88fc8fd1a84bdad90be675a7202ed4b15ae338cd5a8dd3e2b3706785931fee82,
+adapter byte SHAccac0eaa25cc7c73da4be78acb4d95c1fc137b11fbb6e6c9fc887ffd0a3148af.
+All four result/manifest/adapter members reread byte-equal; installed replay checks
+146 workspace files, new GPU/model/training/pixel-decode/write calls0.
+
+| Actual experiment | Numerical result | Own visual disposition |
+|---|---|---|
+| Frozen reference-photo BASE/LORA, three cases/six new outputs | SUCCEEDED36720ms;19 canonical members byte-equal | PHOTO_STYLE_NOT_ACCEPTED: pale contours, texture, unwanted borders/background |
+| Source-free trained-beaker caption, BASE/LORA at832x512 and768x1024, four outputs | SUCCEEDED28024ms;five canonical members byte-equal | NOT_ACCEPTED: wrong apparatus topology, gray background, thick/sketch-like strokes |
+
+Actual photo cases are enrolled trilobite, polished ammonite partial section and
+passenger wagon, NOT fan/beaker/bus. Initial commentary names were corrected;
+reference photographs are not model-generated or institution-original samples.
+Same photo/control/initializer/prompts/seed/recipe matched native24 exactly: all
+three new BASE outputs equal preserved BASE pixels (changed fraction0, MAE0).
+LORA pixel differences prove an effect, not an improvement. Photo result
+artifact_45e005f36c4b48159ee7fae1a2c314ee / rev_e9566e1186b54b0598d9e4e92a16c791;
+installed replay101 files unchanged, model/GPU/transform/write calls0.
+The beaker diagnostic uses no source PNG/PDF, image initializer or postprocessing;
+all four displayed images are genuinely generated. Result
+artifact_612ea404a8124ee5b5a12ebcdd058c66 / rev_470178dbd49c4465b369bbbad46b2805;
+installed replay12 files unchanged, model/GPU/weight/write calls0. Compare BASE/LORA
+within each size; aspect/noise/time-ID changes preclude treating sizes as one fixed
+geometry experiment. One TRAIN caption/seed is not a general quality benchmark.
+Failure without a photograph means photographic control is not a proven sole cause.
+
+Focused native-target/LoRA contract/source/workspace tests160 PASS in13.52s,
+terminal exit0 observed; no retained pytest log claimed. Operators format/Ruff PASS.
+Fresh three-wheel RECORD/installed-role audits PASS, but installed numerical
+packages are earlier pinned builds, not current-HEAD deployment. No core code,
+schema, migration, dependency or production release was changed.
+
+Evidence artifact_9f150b8b6a204dea952f27c2cdb8b77e /
+rev_6a87e958c5014ed9a47c4c646fe38b42:114 members/18,010,926 bytes reread byte-equal;
+reports/own-review.md SHA40816328d0c9746eb22d22573f03e3132c11e04f84e7d18c648baf49a2524824.
+Only pointers/small reports and explicit display derivatives are archived; canonical
+dataset PNG/adapter bytes are not duplicated. First archive invocation rejected a
+new own-contact log's mode664 before publication; only that exact log tightened
+to600 with unchanged SHA. Failed evidence preserved, corrected operator archived,
+no numerical retry or canonical permission widening.
+
+This checkpoint used one training run/200 updates and ten image generations
+(six matched photo plus four source-free), reserved reads0, production changes0.
+Production binding remains
+f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845;
+five main services active at archive time. FULL numerical training is complete,
+but full goal stays ACTIVE. Own review is not independent acceptance; blind review,
+reserved four-family/32-depiction quality/fidelity/resource evaluation, successor
+Item Preview/HWPX canary and activation/rollback remain OPEN.
+
+Next: verify existing train-to-inference adapter application before changing
+training, then test whether style/composition balance is the supported hypothesis.
+The75 tone/17 contour/eight hatch and27 authored-scene counts are observations,
+not a proven cause. Preserve useful originals and released recipes. If an explicit
+sampling successor is justified, define schema before behavior, reuse canonical
+targets with deterministic keyed selection and immutable IDs/pixels/captions;
+retain<=8 results,<=3 samples/document and<=4 samples/group. Do not repeat unchanged200 updates,
+blindly raise steps, sweep control/blur or activate a visually rejected adapter.
