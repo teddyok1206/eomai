@@ -4495,3 +4495,38 @@ Viewing copies (not canonical identities):
   original photo (not generated) | common BASE | uniform800 LoRA | balanced4:2:4 LoRA.
 - `/tmp/eom-native-balanced424-style-20261006/matched-contact.png`:
   common BASE | uniform800 LoRA | balanced4:2:4 LoRA, all generated with no source image.
+
+### 2026-10-06 frozen100 audit complete; next bounded factor
+
+All100 frozen TRAIN targets were actually read in ten bounded owner-resolution
+batches and viewed on ten derived sheets labelled as **registered source data,
+not generated outputs**. Two installed/offline slow tokenizers checked200
+captions:31–54 tokens including special tokens, capacity77, overflow0. Existing
+training already refuses truncation/over-capacity; no missing guard was inferred.
+No GPU/model/training call or HOLDOUT read in this phase.
+
+Institutional references legitimately include gray fills, gradients and scenes.
+17 contour/8 hatching/75 tone and73 white-object/27 scene counts describe the
+frozen cohort, not a proven cause or automatic quality labels. Coarse expression
+tags and retained annotation/page cues require explicit generation intent, not
+blanket removal. All source pixels/captions/labels were preserved. Own screening
+is not independent blind review or educational accuracy approval.
+
+Audit, separate own record, ten derived sheets, operators/tests and preserved
+permission-preflight logs:22 members/4,370,987bytes, canonical rereads all equal,
+`artifact_19bd6ca591b74eec9f100e4caf702a14` /
+`rev_e036d30a73bd4721a5d3769f9451506a`; primary `reports/own-review.json`, SHA
+`sha256:416dd0927dd9a3db13ea784969d9dea9e04268b5ec8d0bd4393eef90261067cc`.
+Original PNGs and adapter weights are pointers, not duplicate archive members.
+Five services active, no active image unit, production binding unchanged.
+
+Next authorized task: the ADR0206 **proposed, not executed** prompt-only successor.
+One licensed wagon photo, exact native contour/white-background cue instead of
+the generic positive style sentence, otherwise same input/seed/control/adapter.
+Existing plan/command1.5, fresh immutable identities, both actual tokenizer
+checks and matched installed-role CPU hashes required. One dispatch, two new
+BASE/LoRA outputs, zero training, no retry/sweep/production change. Compare with
+existing per-variant outputs and reject if form or contour clarity fails.
+Do not claim a successful LoRA fix from data screening or prompt gains alone.
+Independent/blind review, untouched HOLDOUT and a passing Item/HWPX canary are
+still pending. Goal ACTIVE.

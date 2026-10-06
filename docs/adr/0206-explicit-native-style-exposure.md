@@ -1,6 +1,7 @@
 # ADR 0206 — Explicit native style exposure without changing the target cohort
 
-Status: implemented and installed in the isolated lab; one trial started, not a quality acceptance or production activation.
+Status: implemented in the isolated lab; one trial and matched outputs completed,
+own quality NOT_ACCEPTED; frozen100 data audit completed, no production activation.
 Date: 2026-10-06 UTC.
 
 ## Evidence and hypothesis
@@ -309,3 +310,93 @@ before publication/job creation; permissions were tightened only on those
 named evidence files and the unchanged report/key was published. The original
 failure is preserved in the45-member archive. Five services active, no active
 image unit, production binding SHA unchanged, whole goal ACTIVE.
+
+## 2026-10-06 whole-cohort visual/caption audit (06:31 UTC)
+
+The follow-up actually read all100 frozen TRAIN PNGs through ten existing
+bounded, indexed Orchestrator resolution calls. Ten explicitly headed contact
+sheets are derived viewing assets, not model outputs or a replacement image
+store. Root viewed all100; scientific correctness of every example is **not**
+established by that screening. Existing measurement rows keep their original
+`PENDING_OWN_VIEW` value; a separate own-review operations record records the
+subsequent completed view, rather than rewriting that measurement snapshot.
+
+Two actual installed slow AutoTokenizers performed200 CPU/offline checks:
+31–54 tokens including special tokens, capacity77, overflow0. No tensor or
+pipeline loads, training, inference, GPU call or HOLDOUT read. Protected model
+stack file hashes were validated; this is not a claim that no weight-file bytes
+were read. The current training `_prompt_embeddings` already uses
+`truncation=False` and rejects overflow with `IMAGE_TRAINING_CAPTION_TOO_LONG`.
+Silent caption truncation is not a reproduced defect; no redundant guard added.
+
+The frozen cohort is17 contour /8 hatching /75 tone, with73 isolated-object /
+27 authored-scene targets. Actual institutional images include flat gray,
+gradients and meaningful backgrounds. CLEAN_CONTOUR does not guarantee binary
+interiors; hatching examples can combine ink texture, solid details and tone.
+Some preserved sources also contain leaders, arrows, lettering or a page cue;
+captions often acknowledge them. The heated-beaker source/caption includes all
+apparatus components, so the observed free-generation topology failure is not
+explained by a visibly missing component in that target. These are reviewer
+observations and selected examples, **not** an exhaustive annotation-count
+inventory, automatic relabeling, exclusion or scientific-content approval.
+Histogram bins only describe pixels; they are not rejection/quality thresholds.
+
+All100 targets, labels, captions and pixels remain unchanged. The audit does
+not prove that tone exposure is the unique cause of weak generated lines.
+Balanced exposure also changed scene exposure. Photo control retains interior
+texture, so another training run or wholesale binarization is not the next
+evidence-backed action.
+
+Evidence:22 members/4,370,987bytes, every canonical reread byte-equal:
+`artifact_19bd6ca591b74eec9f100e4caf702a14` /
+`rev_e036d30a73bd4721a5d3769f9451506a`, primary `reports/own-review.json`,
+operations/plain-text-log/1.0, text/plain, raw SHA
+`sha256:416dd0927dd9a3db13ea784969d9dea9e04268b5ec8d0bd4393eef90261067cc`.
+No original PNG or adapter weights were duplicated into the archive. CPU
+histogram/tokenizer harness guards and one positive/six negative own-record
+guards PASS; these synthetic checks are distinct from the200 real token checks
+and the100 actual views. Two local archive permission preflights stopped
+**before publisher/job creation**: first a group-writable test log, then new
+operator/test source files. Only named local evidence permissions were tightened;
+the same frozen review bytes/key were published. Both failure logs are retained
+in the22-member archive. No state/DB edits or relaxed security guard.
+
+### Bounded prompt-only successor design — not prepared or executed
+
+Use the existing photo-style plan/command1.5 with one licensed wagon case
+`imgsdxlcase_b5ebe1d385727ab5f16a59bd56fda90e`. It is not a reserved corpus
+example. Replace only the generic positive style sentence with the exact native
+training cues `clean contour lines, plain white background`; retain the subject
+instruction, negative prompt, reference revision, retained region, initializer,
+control tensors/window/scale, seed, balanced adapter and numerical recipe.
+This tests the **positive style prompt package**, not the causal effect of one
+individual token, and is not a new training exposure/parameter sweep.
+
+Ownership remains Orchestrator plan resolution/publication/staging -> isolated
+comparison worker -> Orchestrator result validation/commit. Old plan/result/
+adapter pins remain canonical and immutable; new prompt bytes require new
+content-derived plan/command identities and hashes, never mutation or replay
+under the old identity. Resolve exact existence, lifecycle, permission, media,
+schema and hashes with existing typed readers. Dominant operations are exact
+key lookup and ordered two-output manifests: O(1) lookup, O(input bytes) staging,
+bounded O(2) output iteration. No queue/cache/DB/index/dependency/schema change.
+Existing idempotent publication and GPU lease own concurrency/side effects.
+
+Before dispatch, validate existing JSON Schema2020-12/Pydantic/canonical bytes,
+actual positive/negative tokens with both installed tokenizers, and reproduce
+unchanged conditioning/initializer/source hashes in installed-role CPU preflight.
+One command, one seed, one dispatch, two new outputs (BASE and balanced LoRA),
+zero training updates, no automatic retry. The protocol ceiling remains12;
+this finite one-case execution admits only2 and must assert that count. Prior
+canonical BASE/LoRA outputs are comparison inputs, not regenerated baselines.
+Failure preserves history and stops; do not create another key to bypass it.
+
+Compare each new variant against its own prior variant: clearer structural
+contours and reduced irrelevant texture must not worsen silhouette, visible
+wheels, proportions or position. Improvement in both BASE and LoRA is a prompt
+effect, not proof that LoRA alone learned better style. No improvement means
+reject this hypothesis, not blindly train longer or change several controls.
+Simpler alternative: do not retrain. The two-output check is cheaper and avoids
+discarding useful institutional images. Production binding stays unchanged;
+own quality, independent review, HOLDOUT, Item/HWPX canary and activation gates
+remain open. Goal ACTIVE.
