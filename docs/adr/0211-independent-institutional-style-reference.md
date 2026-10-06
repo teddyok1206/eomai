@@ -295,3 +295,61 @@ Synthetic geometry/gray/edge tests and direct own views of existing TRAIN source
 plus their224-pixel derivatives are preparation evidence only, not generated
 institutional-quality examples or blind/model acceptance. Do not promote the
 previously rejected LoRA, count derivatives as GPU outputs, or alter HOLDOUT.
+
+## Executed pixel checkpoint — 2026-10-06 15:27 UTC
+
+Source `01a3d85bb6d6b76930524e03dd9a23f8933284e1` implements only this
+preparation function, not the planned numerical comparison consumer. New21 unit
+cases are included in364 focused regression PASS/zero skips in9.47s. Strict mypy
+for the new core module/Python3.11, Ruff/format, shell syntax and diff PASS.
+The first four unit failures identified the test environment's actual Pillow12.3.0
+versus the recipe's11.3.0. Synthetic units explicitly substitute distribution
+metadata and are not pinned numerical acceptance; no environment/dependency was
+changed to hide that mismatch. A separate actual11.3.0 lab execution follows.
+
+The current Orchestrator owner read the exact existing native TRAIN command
+`artifact_8c7a653efe0e446e8d5e904aa6941162` /
+`rev_2398f9eb27d6436eb534e1cf08181164`, command bytes SHA
+`fdf230a6f836c16094f3c0cfb602b3e68b5c2743e3df3bb80fccdc21c00f47d0`,
+and admitted its42 metadata members. Six existing first-two-per-expression
+calibration examples were selected, each with exact TRAIN partition, source
+document/group and source PNG hash checked. No VALIDATION/HOLDOUT reads and
+no second copy of canonical source PNGs. This does not authorize future worker
+input by a source path or sample's self-declared membership.
+
+The pinned11.3.0 lab interpreter imported the new contract/provider wheels with
+repository paths removed. All384 RECORD members validate (294/55/35). Six sources
+were prepared twice, exact repeat equality PASS; six224px diagnostic derivatives,
+zero embeddings/models/GPU/training or activation. Whole-frame geometry placement
+is preserved; no central crop or threshold. Final normalized CLIP tensor/embedding
+and combined pretrained stack have NOT been executed. No runtime wheel install.
+Wheel hashes contract/provider/trainer respectively:
+`a689ad61ab75ea980b3c3be9bf06686cffecf1161a39555afffa42a33d15de0f`,
+`0aaaefa007dd95114158cb5937495a7ab71150ab5b142cd617bd11a3d1e6d475`,
+`554c787ed66f9c16f07efcf7d47d9d3c5e8a2a0e18dccd0909c3c99f3e825403`.
+Build-only location:
+`/tmp/eom-image-trainer-build/01a3d85bb6d6b76930524e03dd9a23f8933284e1.KFvC82/dist`.
+
+Actual own views opened three source/derivative pairs: inclined cart/track,
+bacterium cutaway and heart cutaway. Complete framing and meaningful gray remain;
+fine biological strands visibly merge at224px. **Keep whole-frame style prep,
+but do not use this low-resolution style input to guarantee scientific detail.**
+Geometry/control/labels retain their separate ownership; future OFF/ON comparison
+must still test content leakage and actual style improvement. Three own views are
+not six visual verdicts, blind review, generation or educational-quality acceptance.
+
+Existing owner committed/reread all9 evidence members510,373bytes as
+`artifact_b69c97f3a9aa4ce9ba86380aa8bbb891` /
+`rev_db040fa388e04ae6994c48079e3e920b`; primary `reports/own-review.json`, SHA
+`82e0818514055bc9284b23474f0925f072f2331ddd7a490cd6e92ca0bbf28343`.
+One labelled1200x2400 RGB diagnostic contact sheet uses the existing operations
+image-comparison-contact-sheet/1.0 value format, not a new worker input/schema.
+It clearly labels sources versus224px preparations, **none model-generated**;
+view-fit contact rendering is documentary and separate from pinned preprocessing.
+Temporary six individual derivatives are scratch, not independently registered
+canonical sources; reconstruct from the pinned source/profile/RGB trace if needed.
+Temporary script string/comment lint corrections happened before archive; no
+numerical GPU rerun or hidden recovery. Old histories/12-of12 budget are preserved.
+Full quality remains NOT_ACCEPTED and goal ACTIVE; new acquisition/four-output
+approval is still NOT_RECORDED. Next safe work: closed comparison command/result
+and existing-owner staging/consumer, then actual bounded execution when authorized.

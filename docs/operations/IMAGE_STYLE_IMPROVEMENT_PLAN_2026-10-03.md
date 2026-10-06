@@ -5,7 +5,36 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest checkpoint — 2026-10-06 15:08 UTC
+## Latest checkpoint — 2026-10-06 15:27 UTC
+
+Source01a3d85b implements the already-defined full-frame224px style reference
+preprocessing, not a new model/inference path. Preserve RGB/gray, bicubic fit and
+white padding; reject media/hash/geometry/frame/recipe/Pillow-version mismatch.
+Its caller still owns canonical TRAIN/source lineage admission; pixels do not
+self-authorize themselves. No new schema/DB/queue/dependency or production route.
+
+Tests364 PASS/zero skips include21 new synthetic pixel cases. Test Pillow12.3.0
+is explicitly distinguished from the recipe11.3.0; no environment was changed.
+Separate actual11.3.0 lab execution from built wheels validates all384 RECORD
+members and six admitted TRAIN sources, each prepared twice/repeat equal. The
+existing native metadata owner admitted42 canonical metadata members; frozen
+six examples reuse prior local source materializations with exact hashes.
+Zero models/embedding/GPU/new fit/VALIDATION/HOLDOUT/activation/runtime installs.
+
+Three source/224px derivative pairs were actually opened: inclined cart, bacterium,
+heart. Full frame/selected gray remain; fine bacterial detail visibly merges. This
+supports keeping full-frame preparation, **not** scientific-detail or generated
+style acceptance. Structural fidelity remains separate from style conditioning.
+Existing owner archive9 members510,373bytes committed/reread as
+`artifact_b69c97f3a9aa4ce9ba86380aa8bbb891` /
+`rev_db040fa388e04ae6994c48079e3e920b`. Contact sheet explicitly labels source
+versus preparation, none model-generated; full pins/hashes/scope are in ADR0211.
+
+New acquisition/four-output approval remains NOT_RECORDED, old12/12 exhausted.
+Quality NOT_ACCEPTED; goal ACTIVE; comparison command/result, consumer, actual
+bounded outputs, independent/blind/diverse/HOLDOUT and Preview/HWPX gates OPEN.
+
+## Historical resolver checkpoint — 2026-10-06 15:08 UTC
 
 The existing provider now has a tested read-only resolver for ADR0211's pinned
 six-file style component. Exact nested closure, no-link/owner/mode checks,
