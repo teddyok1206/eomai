@@ -270,3 +270,28 @@ Build-only location:
 `/tmp/eom-image-trainer-build/8402ce9a44690e7050235c107df7d3ec517ec0a0.3LCnEW/dist`.
 No wheel installation, model-weight acquisition, GPU, training, HOLDOUT or
 production activation. Do not reuse this as a numeric or visual-quality PASS.
+
+## Pixel preparation boundary
+
+The existing provider pixel adapter implements the already-defined preprocessing
+policy, not an execution command or authorization. Its caller must first admit the
+style sample's exact TRAIN/source-document lineage through the existing native
+metadata owner. The pixel function accepts one frozen native sample and pinned
+preprocessor, checks the PNG hash and exact native geometry before decoding, and
+fits the complete RGB image into224x224 with bicubic interpolation and white
+letterboxing. No central crop, threshold, tone erasure, morphology/control input,
+canonical write or network/model load belongs to this boundary.
+
+The returned frozen internal value carries source pointer, profile, placement and
+RGB byte hash; the small224x224 RGB materialization is an explicit numerical input,
+not a new independently persisted Artifact or cross-service payload. Later worker
+results reference trace hashes, not these bytes. One prepared value per source is
+shared by the matched OFF/ON arms. Linear pixel work and bounded native image
+memory need no cache/DB/queue. File/metadata admission and CLIP embedding creation
+remain separate owners. Native samples have at most1024x1024 pixels; reject media,
+mode, frame, dimensions, byte-bound, hash or pinned Pillow-version mismatch.
+
+Synthetic geometry/gray/edge tests and direct own views of existing TRAIN sources
+plus their224-pixel derivatives are preparation evidence only, not generated
+institutional-quality examples or blind/model acceptance. Do not promote the
+previously rejected LoRA, count derivatives as GPU outputs, or alter HOLDOUT.

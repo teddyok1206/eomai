@@ -212,6 +212,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/sdxl_model_resolution.py",
         "eom_image_provider/staged_file_io.py",
         "eom_image_provider/sdxl_ip_style_io.py",
+        "eom_image_provider/sdxl_ip_style_pixels.py",
         "eom_image_provider/informative_lineart_acquisition.py",
         "eom_image_provider/informative_lineart_backend.py",
         "eom_image_provider/informative_lineart_extraction.py",
