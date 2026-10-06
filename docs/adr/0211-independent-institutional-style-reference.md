@@ -1,6 +1,6 @@
 # ADR0211: Separate institutional style reference from object geometry
 
-Status: CPU capability probes, preparation contract and tested local resolver, 2026-10-06 UTC.
+Status: CPU capability probes, preparation contract, tested resolver and pixels, 2026-10-06 UTC.
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
@@ -77,7 +77,8 @@ CLIP normalization/rescaling with processor resize and central crop disabled.
 This retains the full style-source framing, including meaningful gray; it does
 not binarize, erase tone, crop out components or mutate canonical source PNGs.
 Pillow11.3.0/Transformers4.56.2 and the exact CLIP mean/std/factor are contract
-values, not ambient defaults. Numerical preprocessing is still unimplemented.
+values, not ambient defaults. Full-frame RGB pixel preparation is now tested
+(checkpoint below); normalized CLIP tensors/embeddings remain unimplemented.
 Both later OFF/ON arms must use the same resulting embedding and model stack.
 
 This manifest is an evaluation-only metadata contract; it neither approves a
