@@ -291,3 +291,31 @@ that boundary. A source-only preparation parser/schema is not a deployed worker
 protocol. Next: actual five-document metadata preflight, followed by explicit
 command/result and owner-stage/provider/result integration, installed-role
 verification, then the bounded pair. Production model and frozen data unchanged.
+
+### Actual canonical preparation preflight
+
+The development owner resolved exactly five canonical metadata members/32,120bytes
+and passed the new lineage check. Selected the original ink wagon case from the
+existing three-case baseline; both prior BASE/LoRA output members are preserved,
+not generated again. The separately reviewed control-provenance case can retain
+its different prompt because exact physical source/control/native recipe agrees;
+the proposed execution case itself keeps the original baseline prompt unchanged.
+
+Preparation plan `imgsdxlphotoplan_a248d8257eb96f04b248da7bfe190a75`, semantic SHA
+`sha256:54257672afc322dd99a61e43efc9b1b158e7feb20c8235c3418d2d64da4418a9`.
+Primary `manifests/sdxl-photo-style-plan.json`, application/json, plan1.6,
+`artifact_e3cb7fe89d484e2cb425715197fb91b4` /
+`rev_2e03e871e9ab4a01a6a0a19b2c61624d`, raw SHA
+`sha256:e3ae8834b9b1a49ff2947927171ceab7044615e17c5cdff18e6438b15f730346`.
+Three members/17,410bytes were published by the existing owner and reread equal,
+including the exact operator and small verification report. Source66f1cac9;
+operator raw SHA
+`sha256:97012174c95f82d84d480a000e3ba6addd53b8d8d6c5dbf266b3d614127b3a25`.
+
+Status: `CANONICAL_PREPARATION_METADATA_LINEAGE_PASS_NOT_DISPATCH_ADMISSION`.
+This check read no PNG, did no transform/inference/training and installed nothing.
+It does not establish full native-source closure or installed-role/staging
+admission. Five services ACTIVE and production bindingf96eda84 unchanged.
+Runtime1.6 remains refused; command/result/owner-stage/provider integration and
+installed verification precede the first pair. Overall quality NOT_ACCEPTED;
+independent review/HOLDOUT/Item-HWPX canary/activation remain open. Goal ACTIVE.

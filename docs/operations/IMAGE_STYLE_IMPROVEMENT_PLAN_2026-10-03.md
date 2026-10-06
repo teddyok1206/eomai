@@ -4618,3 +4618,15 @@ Ruff format/lint and strict typing PASS. Runtime codecs still reject1.6 until
 complete owner/worker integration. No numerical run, retraining, dependency or
 production activation. Actual canonical metadata preflight is next; own generation
 quality, independent blind review/HOLDOUT and Item/HWPX canary remain open.
+
+Actual five-member canonical metadata preflight PASS(32,120bytes), original ink
+wagon baseline selected with both old per-arm outputs preserved. Preparation-only
+plan1.6 `artifact_e3cb7fe89d484e2cb425715197fb91b4` /
+`rev_2e03e871e9ab4a01a6a0a19b2c61624d`, raw SHA
+`sha256:e3ae8834b9b1a49ff2947927171ceab7044615e17c5cdff18e6438b15f730346`.
+Three members/17,410bytes committed/reread equal, source66f1cac9; operator and
+small report preserved. This is metadata lineage only, not full native-source
+closure/installed worker admission. No additional PNG read/transform/model/GPU/
+training/production changes. Five services ACTIVE, binding unchanged. Next:
+command/result + owner-stage/provider integration and installed guards, then
+one pair. Goal ACTIVE; quality NOT_ACCEPTED.
