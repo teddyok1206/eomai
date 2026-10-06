@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.5",
+  "title": "Retained-region photo comparison with style-balanced native adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "source_commit",
+    "created_at",
+    "purpose",
+    "dispatch_policy",
+    "activation_policy",
+    "source_population",
+    "configuration_anchor",
+    "cases",
+    "seed",
+    "initialization",
+    "budget",
+    "plan_sha256",
+    "control",
+    "region_reviews",
+    "region_review_evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-plan/1.5"
+    },
+    "plan_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/plan_id"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/source_commit"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/created_at"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/purpose"
+    },
+    "dispatch_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/dispatch_policy"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/activation_policy"
+    },
+    "source_population": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/source_population"
+    },
+    "configuration_anchor": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0#/$defs/pointer"
+        },
+        {
+          "properties": {
+            "schema_ref": {
+              "const": "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.3"
+            },
+            "member_path": {
+              "const": "manifests/sdxl-canny-reference-command.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "cases": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/cases"
+    },
+    "seed": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/seed"
+    },
+    "initialization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/initialization"
+    },
+    "budget": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/budget"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/plan_sha256"
+    },
+    "control": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/control"
+    },
+    "region_reviews": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/region_reviews"
+    },
+    "region_review_evidence": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.4#/properties/region_review_evidence"
+    }
+  }
+}

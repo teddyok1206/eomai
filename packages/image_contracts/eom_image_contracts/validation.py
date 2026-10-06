@@ -12,6 +12,14 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-lora-evaluation-command-v6": "local-image-sdxl-lora-evaluation-command-v6.schema.json",
+    "sdxl-lora-evaluation-result-v6": "local-image-sdxl-lora-evaluation-result-v6.schema.json",
+    "sdxl-canny-reference-command-v4": "local-image-sdxl-canny-reference-command-v4.schema.json",
+    "sdxl-canny-reference-result-v4": "local-image-sdxl-canny-reference-result-v4.schema.json",
+    "sdxl-photo-style-plan-v6": "local-image-sdxl-photo-style-plan-v6.schema.json",
+    "sdxl-photo-style-command-v6": "local-image-sdxl-photo-style-command-v6.schema.json",
+    "sdxl-photo-style-result-v6": "local-image-sdxl-photo-style-result-v6.schema.json",
+    "sdxl-native-lora-command-v3": "local-image-sdxl-native-lora-command-v3.schema.json",
     "sdxl-photo-style-plan-v5": "local-image-sdxl-photo-style-plan-v5.schema.json",
     "sdxl-photo-style-command-v5": "local-image-sdxl-photo-style-command-v5.schema.json",
     "sdxl-photo-style-result-v5": "local-image-sdxl-photo-style-result-v5.schema.json",
@@ -414,6 +422,30 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-lora-evaluation-command-v6": (
+        "sha256:8c393fdd9eb15892fb7ddc5029e4345efe3b6a4a2c0eff282cf97d4082eb95b4"
+    ),
+    "sdxl-lora-evaluation-result-v6": (
+        "sha256:bbe0dc5ee65367d5edd01d253713a5ec8be465dbe7a2fb7870c44f0a0c834fff"
+    ),
+    "sdxl-canny-reference-command-v4": (
+        "sha256:27fb8078901923f4f6fb6a1db304f8182bd7a7bf328c1d03214b14904e888121"
+    ),
+    "sdxl-canny-reference-result-v4": (
+        "sha256:e29c52ff5bdcc5548f76009851d45955ccb24c12f6ca6749065e6001d999b912"
+    ),
+    "sdxl-photo-style-plan-v6": (
+        "sha256:857f0ea5eeab7f874fe7795842ead154b5f60a251ecca06a6eafb364cc577245"
+    ),
+    "sdxl-photo-style-command-v6": (
+        "sha256:1d107828f1f99da815922b7c725d029a61811300a07afe45bf34449a4dcc6d37"
+    ),
+    "sdxl-photo-style-result-v6": (
+        "sha256:e17aba7f3230f42628771bdceb9977b6decd2fc95d794e2b9ddb006a34964e7f"
+    ),
+    "sdxl-native-lora-command-v3": (
+        "sha256:9715f986d5dd6f5c4880ae2d26094c151ae9b7476618dfa896b6d606cf308d6a"
+    ),
     "sdxl-photo-style-plan-v5": (
         "sha256:96234b7d5d36f8ddf60f608efc743d6b8b72af1a8ad8b9e4504bff35c07d7c1a"
     ),

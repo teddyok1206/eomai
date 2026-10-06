@@ -16,8 +16,10 @@ from eom_image_contracts.sdxl_native_evaluation import (
 from eom_image_contracts.sdxl_native_geometry import (
     LocalImageSdxlNativeGeometryCommand,
     LocalImageSdxlNativeGeometryCommandV2,
+    LocalImageSdxlNativeGeometryCommandV3,
     LocalImageSdxlNativeGeometryResult,
     LocalImageSdxlNativeGeometryResultV2,
+    LocalImageSdxlNativeGeometryResultV3,
 )
 from eom_image_contracts.sdxl_reviewed_evaluation import (
     LocalImageSdxlReviewedEvaluationCommand,
@@ -47,6 +49,10 @@ _COMMANDS: Mapping[str, tuple[str, type[LocalImageSdxlLoraEvaluationCommand]]] =
             "sdxl-lora-evaluation-command-v5",
             LocalImageSdxlNativeGeometryCommandV2,
         ),
+        "local-image-sdxl-lora-evaluation-command/1.5": (
+            "sdxl-lora-evaluation-command-v6",
+            LocalImageSdxlNativeGeometryCommandV3,
+        ),
     }
 )
 SdxlEvaluationResult = LocalImageSdxlLoraEvaluationResult | LocalImageSdxlNativeGeometryResult
@@ -72,6 +78,10 @@ _RESULTS: Mapping[str, tuple[str, type[SdxlEvaluationResult]]] = MappingProxyTyp
         "local-image-sdxl-lora-evaluation-result/1.4": (
             "sdxl-lora-evaluation-result-v5",
             LocalImageSdxlNativeGeometryResultV2,
+        ),
+        "local-image-sdxl-lora-evaluation-result/1.5": (
+            "sdxl-lora-evaluation-result-v6",
+            LocalImageSdxlNativeGeometryResultV3,
         ),
     }
 )

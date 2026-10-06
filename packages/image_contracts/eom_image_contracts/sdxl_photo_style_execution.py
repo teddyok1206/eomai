@@ -30,11 +30,13 @@ from eom_image_contracts.sdxl_learned_comparison import (
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
+    LocalImageSdxlNativeCannyReferenceCommandV3,
     SdxlNativeCannyReferenceSources,
 )
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.sdxl_photo_style import (
     SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
+    LocalImageSdxlPhotoStyleBalancedExposurePlan,
     LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStylePlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
@@ -108,6 +110,10 @@ class LocalImageSdxlPhotoStyleRetainedRegionCommand(LocalImageSdxlPhotoStyleComm
     schema_version: Literal["local-image-sdxl-photo-style-command/1.4"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoStyleBalancedExposureCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.5"]  # type: ignore[assignment]
+
+
 def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
     if not isinstance(value, dict):
         raise ValueError("photo execution command object required")
@@ -118,6 +124,7 @@ def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
         "local-image-sdxl-photo-style-command/1.2": LocalImageSdxlPhotoStyleFullDenoisingCommand,
         "local-image-sdxl-photo-style-command/1.3": LocalImageSdxlPhotoStyleControlWindowCommand,
         "local-image-sdxl-photo-style-command/1.4": LocalImageSdxlPhotoStyleRetainedRegionCommand,
+        "local-image-sdxl-photo-style-command/1.5": LocalImageSdxlPhotoStyleBalancedExposureCommand,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo command family")
@@ -160,8 +167,13 @@ def validate_photo_style_execution_sources(
     plan = sources.plan
     parse_photo_style_plan(command, content_json_bytes(plan.model_dump(mode="json")))
     configuration = sources.configuration
+    expected_model = (
+        LocalImageSdxlNativeCannyReferenceCommandV3
+        if isinstance(plan, LocalImageSdxlPhotoStyleBalancedExposurePlan)
+        else LocalImageSdxlNativeCannyReferenceCommandV2
+    )
     if (
-        type(configuration) is not LocalImageSdxlNativeCannyReferenceCommandV2
+        type(configuration) is not expected_model
         or "sha256:"
         + hashlib.sha256(content_json_bytes(configuration.model_dump(mode="json"))).hexdigest()
         != plan.configuration_anchor.sha256
@@ -256,6 +268,10 @@ class LocalImageSdxlPhotoStyleRetainedRegionResult(LocalImageSdxlPhotoStyleFullD
     region_reviews_sha256: Sha256
 
 
+class LocalImageSdxlPhotoStyleBalancedExposureResult(LocalImageSdxlPhotoStyleRetainedRegionResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.5"]  # type: ignore[assignment]
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
@@ -266,6 +282,7 @@ def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
         "local-image-sdxl-photo-style-result/1.2": LocalImageSdxlPhotoStyleFullDenoisingResult,
         "local-image-sdxl-photo-style-result/1.3": LocalImageSdxlPhotoStyleControlWindowResult,
         "local-image-sdxl-photo-style-result/1.4": LocalImageSdxlPhotoStyleRetainedRegionResult,
+        "local-image-sdxl-photo-style-result/1.5": LocalImageSdxlPhotoStyleBalancedExposureResult,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo result family")

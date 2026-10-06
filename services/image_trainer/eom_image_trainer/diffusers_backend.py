@@ -69,6 +69,7 @@ class LoraTrainingRecipe:
     dependencies: LocalImageTrainerDependencies
     hyperparameters: LoraHyperparameters
     seed: int
+    sample_schedule: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +169,27 @@ def _sample_order(*, epoch: int, count: int, seed: int) -> tuple[int, ...]:
     values = list(range(count))
     random.Random(seed + epoch).shuffle(values)
     return tuple(values)
+
+
+def _require_sample_schedule(
+    *, recipe: LoraTrainingRecipe, sample_count: int, checkpoint_policy: LoraCheckpointPolicy | None
+) -> None:
+    schedule = recipe.sample_schedule
+    if schedule is None:
+        return
+    if checkpoint_policy is not None:
+        raise TrainingBackendFailure("IMAGE_TRAINING_CHECKPOINT_POLICY_INVALID")
+    expected = (
+        recipe.hyperparameters.max_train_steps * recipe.hyperparameters.gradient_accumulation_steps
+    )
+    if (
+        type(schedule) is not tuple
+        or sample_count < 1
+        or len(schedule) != expected
+        or any(type(index) is not int or not 0 <= index < sample_count for index in schedule)
+        or set(schedule[:sample_count]) != set(range(sample_count))
+    ):
+        raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_SCHEDULE_INVALID")
 
 
 def _versions() -> dict[str, str]:
@@ -442,6 +464,9 @@ class DiffusersUnetLoraBackend:
         unet: Any | None = None
         if checkpoint_policy is not None and hyperparameters.checkpointing_steps == 0:
             raise TrainingBackendFailure("IMAGE_TRAINING_CHECKPOINT_POLICY_INVALID")
+        _require_sample_schedule(
+            recipe=recipe, sample_count=len(samples), checkpoint_policy=checkpoint_policy
+        )
         try:
             import bitsandbytes as bnb  # type: ignore[import-not-found]
             import torch  # type: ignore[import-not-found]
@@ -553,15 +578,20 @@ class DiffusersUnetLoraBackend:
             order: tuple[int, ...] = ()
             while completed_steps < hyperparameters.max_train_steps:
                 _require_training_budget(budget=budget, started=started, torch=torch)
-                epoch, offset = divmod(micro_step, len(samples))
-                if epoch != current_epoch:
-                    order = _sample_order(
-                        epoch=epoch,
-                        count=len(samples),
-                        seed=recipe.seed,
-                    )
-                    current_epoch = epoch
-                index = order[offset]
+                if recipe.sample_schedule is not None:
+                    if micro_step >= len(recipe.sample_schedule):
+                        raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_SCHEDULE_INVALID")
+                    index = recipe.sample_schedule[micro_step]
+                else:
+                    epoch, offset = divmod(micro_step, len(samples))
+                    if epoch != current_epoch:
+                        order = _sample_order(
+                            epoch=epoch,
+                            count=len(samples),
+                            seed=recipe.seed,
+                        )
+                        current_epoch = epoch
+                    index = order[offset]
                 latent = latent_values[index].to(accelerator.device, dtype=torch.float16)
                 prompt_embeds, pooled = prompts[index]
                 prompt_embeds = prompt_embeds.to(accelerator.device, dtype=torch.float16)
@@ -627,6 +657,8 @@ class DiffusersUnetLoraBackend:
                         micro_steps=micro_step,
                         torch=torch,
                     )
+            if recipe.sample_schedule is not None and micro_step != len(recipe.sample_schedule):
+                raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_SCHEDULE_INVALID")
             _require_training_budget(budget=budget, started=started, torch=torch)
             accelerator.wait_for_everyone()
             if accelerator.is_main_process:

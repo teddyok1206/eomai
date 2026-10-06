@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2",
+  "title": "Full native LoRA with explicit cohort-preserving 4:2:4 style exposure",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "training_run_id",
+    "created_at",
+    "created_by",
+    "source_commit",
+    "base_model",
+    "training_authorization",
+    "experiment_authorization",
+    "target_batches",
+    "review_scope",
+    "screening_evidence",
+    "reviewed_at",
+    "reviewed_by",
+    "caption_policy",
+    "preprocessing_policy",
+    "checkpoint_policy",
+    "dependencies",
+    "budget",
+    "seed",
+    "purpose",
+    "activation_policy",
+    "command_sha256",
+    "profile",
+    "training_samples",
+    "hyperparameters",
+    "exposure_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-image-sdxl-native-lora-command/1.2"
+    },
+    "training_run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/training_run_id"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/created_at"
+    },
+    "created_by": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/created_by"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/source_commit"
+    },
+    "base_model": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/base_model"
+    },
+    "training_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/training_authorization"
+    },
+    "experiment_authorization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/experiment_authorization"
+    },
+    "target_batches": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/target_batches"
+    },
+    "review_scope": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/review_scope"
+    },
+    "screening_evidence": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/screening_evidence"
+    },
+    "reviewed_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/reviewed_at"
+    },
+    "reviewed_by": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/reviewed_by"
+    },
+    "caption_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/caption_policy"
+    },
+    "preprocessing_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/preprocessing_policy"
+    },
+    "checkpoint_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/checkpoint_policy"
+    },
+    "dependencies": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/dependencies"
+    },
+    "budget": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/budget"
+    },
+    "seed": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/seed"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/purpose"
+    },
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/activation_policy"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/properties/command_sha256"
+    },
+    "profile": {
+      "const": "FULL_STYLE_TRAINING"
+    },
+    "training_samples": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 200,
+      "items": {
+        "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/$defs/NativeSample"
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "conditioning"
+            ],
+            "properties": {
+              "conditioning": {
+                "type": "object",
+                "required": [
+                  "expression"
+                ],
+                "properties": {
+                  "expression": {
+                    "const": "CLEAN_CONTOUR"
+                  }
+                }
+              }
+            }
+          },
+          "minContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "conditioning"
+            ],
+            "properties": {
+              "conditioning": {
+                "type": "object",
+                "required": [
+                  "expression"
+                ],
+                "properties": {
+                  "expression": {
+                    "const": "FINE_HATCHING"
+                  }
+                }
+              }
+            }
+          },
+          "minContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "conditioning"
+            ],
+            "properties": {
+              "conditioning": {
+                "type": "object",
+                "required": [
+                  "expression"
+                ],
+                "properties": {
+                  "expression": {
+                    "const": "RESTRAINED_TONE"
+                  }
+                }
+              }
+            }
+          },
+          "minContains": 1
+        }
+      ]
+    },
+    "hyperparameters": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.1#/$defs/NativeHyperparameters"
+        },
+        {
+          "properties": {
+            "max_train_steps": {
+              "minimum": 200
+            }
+          }
+        }
+      ]
+    },
+    "exposure_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "clean_contour_weight",
+        "fine_hatching_weight",
+        "restrained_tone_weight"
+      ],
+      "properties": {
+        "policy_version": {
+          "const": "ALL_TARGETS_ONCE_THEN_STYLE_STRATIFIED_4_2_4/1.0"
+        },
+        "clean_contour_weight": {
+          "type": "integer",
+          "const": 4
+        },
+        "fine_hatching_weight": {
+          "type": "integer",
+          "const": 2
+        },
+        "restrained_tone_weight": {
+          "type": "integer",
+          "const": 4
+        }
+      }
+    }
+  }
+}

@@ -26,6 +26,7 @@ from eom_image_contracts.sdxl_native_evaluation import (
 )
 from eom_image_contracts.sdxl_native_geometry import (
     LocalImageSdxlNativeGeometryCommandV2,
+    LocalImageSdxlNativeGeometryCommandV3,
     validate_sdxl_native_geometry_sources,
 )
 from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraAdapterManifest
@@ -86,6 +87,14 @@ class LocalImageSdxlNativeCannyReferenceResultV2(LocalImageSdxlNativeCannyRefere
     schema_version: Literal["local-image-sdxl-canny-reference-result/1.2"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlNativeCannyReferenceCommandV3(LocalImageSdxlNativeCannyReferenceCommandV2):
+    schema_version: Literal["local-image-sdxl-canny-reference-command/1.3"]  # type: ignore[assignment]
+
+
+class LocalImageSdxlNativeCannyReferenceResultV3(LocalImageSdxlNativeCannyReferenceResultV2):
+    schema_version: Literal["local-image-sdxl-canny-reference-result/1.3"]  # type: ignore[assignment]
+
+
 @dataclass(frozen=True, slots=True)
 class SdxlReferenceProtocol:
     command_version: str
@@ -130,6 +139,17 @@ _PROTOCOLS = (
         "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4",
         LocalImageSdxlNativeGeometryCommandV2,
         "sdxl-lora-evaluation-command-v5",
+    ),
+    SdxlReferenceProtocol(
+        "local-image-sdxl-canny-reference-command/1.3",
+        "local-image-sdxl-canny-reference-result/1.3",
+        LocalImageSdxlNativeCannyReferenceCommandV3,
+        LocalImageSdxlNativeCannyReferenceResultV3,
+        "sdxl-canny-reference-command-v4",
+        "sdxl-canny-reference-result-v4",
+        "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.5",
+        LocalImageSdxlNativeGeometryCommandV3,
+        "sdxl-lora-evaluation-command-v6",
     ),
 )
 _COMMAND_PROTOCOLS = MappingProxyType({p.command_version: p for p in _PROTOCOLS})

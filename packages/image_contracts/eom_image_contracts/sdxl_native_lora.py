@@ -43,6 +43,7 @@ from eom_image_contracts.validation import validate_contract
 _PREFIX = "eom://schemas/image-provider/local-image-"
 SDXL_NATIVE_LORA_COMMAND_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.0"
 SDXL_NATIVE_LORA_COMMAND_V2_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.1"
+SDXL_NATIVE_LORA_COMMAND_V3_SCHEMA_REF = _PREFIX + "sdxl-native-lora-command/1.2"
 SDXL_NATIVE_LORA_RESULT_SCHEMA_REF = _PREFIX + "sdxl-native-lora-result/1.0"
 SDXL_NATIVE_LORA_ADAPTER_SCHEMA_REF = _PREFIX + "sdxl-native-lora-adapter-manifest/1.0"
 NativeLoraProfile = Literal["NATIVE_RESOLUTION_PILOT", "FULL_STYLE_TRAINING"]
@@ -279,13 +280,58 @@ class LocalImageSdxlNativeLoraCommandV2(_NativeLoraCommand):
     target_batches: tuple[SdxlNativeLoraTargetBatchV2, ...] = Field(min_length=1, max_length=8)
 
 
-NativeLoraCommand = LocalImageSdxlNativeLoraCommand | LocalImageSdxlNativeLoraCommandV2
+class SdxlNativeStyleExposurePolicy(FrozenModel):
+    policy_version: Literal["ALL_TARGETS_ONCE_THEN_STYLE_STRATIFIED_4_2_4/1.0"]
+    clean_contour_weight: Literal[4]
+    fine_hatching_weight: Literal[2]
+    restrained_tone_weight: Literal[4]
+
+    @property
+    def expression_weights(self) -> tuple[tuple[TargetExpression, int], ...]:
+        # This order also resolves largest-remainder ties; it is part of the policy.
+        return (
+            ("CLEAN_CONTOUR", self.clean_contour_weight),
+            ("FINE_HATCHING", self.fine_hatching_weight),
+            ("RESTRAINED_TONE", self.restrained_tone_weight),
+        )
+
+
+class LocalImageSdxlNativeLoraCommandV3(_NativeLoraCommand):
+    schema_version: Literal["local-image-sdxl-native-lora-command/1.2"]
+    target_batches: tuple[SdxlNativeLoraTargetBatchV2, ...] = Field(min_length=1, max_length=8)
+    profile: Literal["FULL_STYLE_TRAINING"]
+    exposure_policy: SdxlNativeStyleExposurePolicy
+
+    @field_validator("seed", mode="before")
+    @classmethod
+    def strict_seed(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("SDXL_NATIVE_LORA_STYLE_EXPOSURE_SEED_INVALID")
+        return value
+
+    @model_validator(mode="after")
+    def all_expressions_present(self) -> Self:
+        expressions = {s.conditioning.expression for s in self.training_samples}
+        if expressions != {expression for expression, _ in self.exposure_policy.expression_weights}:
+            raise ValueError("SDXL_NATIVE_LORA_STYLE_EXPOSURE_COVERAGE_INVALID")
+        return self
+
+
+NativeLoraCommand = (
+    LocalImageSdxlNativeLoraCommand
+    | LocalImageSdxlNativeLoraCommandV2
+    | LocalImageSdxlNativeLoraCommandV3
+)
 
 
 @dataclass(frozen=True, slots=True)
 class NativeLoraCommandProtocol:
     contract: str
-    model: type[LocalImageSdxlNativeLoraCommand] | type[LocalImageSdxlNativeLoraCommandV2]
+    model: (
+        type[LocalImageSdxlNativeLoraCommand]
+        | type[LocalImageSdxlNativeLoraCommandV2]
+        | type[LocalImageSdxlNativeLoraCommandV3]
+    )
 
 
 _NATIVE_LORA_COMMAND_PROTOCOLS: Mapping[str, NativeLoraCommandProtocol] = MappingProxyType(
@@ -297,6 +343,10 @@ _NATIVE_LORA_COMMAND_PROTOCOLS: Mapping[str, NativeLoraCommandProtocol] = Mappin
         "local-image-sdxl-native-lora-command/1.1": NativeLoraCommandProtocol(
             "sdxl-native-lora-command-v2",
             LocalImageSdxlNativeLoraCommandV2,
+        ),
+        "local-image-sdxl-native-lora-command/1.2": NativeLoraCommandProtocol(
+            "sdxl-native-lora-command-v3",
+            LocalImageSdxlNativeLoraCommandV3,
         ),
     }
 )

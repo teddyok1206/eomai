@@ -6,7 +6,10 @@ from pathlib import Path
 
 from eom_image_contracts import LocalImageSdxlLoraMicroCommand
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartStackPointer
-from eom_image_contracts.sdxl_native_lora import NativeLoraCommand
+from eom_image_contracts.sdxl_native_lora import (
+    LocalImageSdxlNativeLoraCommandV3,
+    NativeLoraCommand,
+)
 from eom_image_contracts.sdxl_reviewed_micro import LocalImageSdxlReviewedMicroCommand
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 
@@ -18,6 +21,7 @@ from eom_image_trainer.diffusers_backend import (
     VaeWeightLocation,
 )
 from eom_image_trainer.runner import TrainingBackendFailure, TrainingBackendResult
+from eom_image_trainer.style_exposure import native_style_exposure_schedule
 
 
 def _require_sdxl_stack(stack: ResolvedSdxlStack, pointer: SdxlLineartStackPointer) -> None:
@@ -76,11 +80,18 @@ class SdxlNativeLoraBackend:
         if actual != expected:
             raise TrainingBackendFailure("IMAGE_TRAINING_SAMPLE_INVALID")
         _require_sdxl_stack(stack, command.base_model)
+        schedule = (
+            native_style_exposure_schedule(command)
+            if isinstance(command, LocalImageSdxlNativeLoraCommandV3)
+            else None
+        )
         return DiffusersUnetLoraBackend().train(
             model_directory=stack.component_roots["BASE"],
             vae_source=VaeWeightLocation(stack.component_roots["VAE"], None, None),
             samples=samples,
-            recipe=LoraTrainingRecipe(command.dependencies, command.hyperparameters, command.seed),
+            recipe=LoraTrainingRecipe(
+                command.dependencies, command.hyperparameters, command.seed, schedule
+            ),
             output_root=output_root,
             checkpoint_policy=None,
             budget=LoraTrainingBudget(

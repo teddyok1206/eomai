@@ -56,6 +56,7 @@ def numerical_runtime(monkeypatch: pytest.MonkeyPatch):
         devices=[],
         seeds=[],
         sample_orders=[],
+        sampled_indices=[],
         base=Tensor(),
         lora=Tensor(),
         accumulator=None,
@@ -160,7 +161,7 @@ def numerical_runtime(monkeypatch: pytest.MonkeyPatch):
             cudnn=SimpleNamespace(allow_tf32=True),
         ),
         tensor=lambda *_args, **_kwargs: Tensor(),
-        randn_like=lambda _tensor: Tensor(),
+        randn_like=lambda tensor: (state.sampled_indices.append(tensor.value), Tensor())[1],
         randint=lambda *_args, **_kwargs: Tensor(),
         isfinite=lambda tensor: Tensor(math.isfinite(tensor.item())),
     )
@@ -188,7 +189,9 @@ def numerical_runtime(monkeypatch: pytest.MonkeyPatch):
         lambda **kwargs: tuple((Tensor(), Tensor()) for _ in kwargs["captions"]),
     )
     monkeypatch.setattr(
-        numerical, "_latents", lambda **kwargs: tuple(Tensor() for _ in kwargs["samples"])
+        numerical,
+        "_latents",
+        lambda **kwargs: tuple(Tensor(i) for i, _ in enumerate(kwargs["samples"])),
     )
     monkeypatch.setattr(
         numerical, "_save_final_adapter", lambda **kwargs: state.saved.append(kwargs)
@@ -204,18 +207,20 @@ def numerical_runtime(monkeypatch: pytest.MonkeyPatch):
     return command, state
 
 
-def _train(tmp_path: Path, command, *, checkpoint_policy=None, budget=None):
+def _train(tmp_path: Path, command, *, checkpoint_policy=None, budget=None, sample_schedule=None):
     return numerical.DiffusersUnetLoraBackend().train(
         model_directory=tmp_path / "base",
         vae_source=numerical.VaeWeightLocation(tmp_path / "fixed-vae", None, None),
         samples=tuple(
             numerical.LoraTensorSample(
-                source.training_caption_en, tmp_path / (source.sample_id + ".png")
+                source.training_caption_en,
+                tmp_path / (source.sample_id + ".png"),
+                *getattr(source, "width_height", (768, 512)),
             )
             for source in command.training_samples
         ),
         recipe=numerical.LoraTrainingRecipe(
-            command.dependencies, command.hyperparameters, command.seed
+            command.dependencies, command.hyperparameters, command.seed, sample_schedule
         ),
         output_root=tmp_path / "adapter",
         checkpoint_policy=checkpoint_policy,
@@ -236,6 +241,76 @@ def test_one_shared_loop_keeps_base_frozen_and_counts_200_real_updates(
     assert len(state.saved) == 1 and state.saved[0]["hyperparameters"] == command.hyperparameters
     assert [epoch for epoch, _ in state.sample_orders] == list(range(50))
     assert all(set(order) == set(range(16)) for _, order in state.sample_orders)
+    assert state.sampled_indices == [i for _, order in state.sample_orders for i in order]
+
+
+def test_real_shared_loop_consumes_all_3200_balanced_indices_without_uniform_fallback(
+    numerical_runtime, tmp_path: Path
+):
+    from eom_image_contracts.sdxl_native_lora import LocalImageSdxlNativeLoraCommandV3
+    from eom_image_trainer.style_exposure import native_style_exposure_schedule
+
+    from tests.unit.test_native_style_exposure import _actual_distribution_value
+
+    _old_command, state = numerical_runtime
+    command = LocalImageSdxlNativeLoraCommandV3.model_validate(_actual_distribution_value())
+    schedule = native_style_exposure_schedule(command)
+    result = _train(tmp_path, command, sample_schedule=schedule)
+    assert result.completed_steps == state.optimizer_steps == state.clipped == state.clears == 800
+    assert state.backward == 3200 and tuple(state.sampled_indices) == schedule
+    assert state.sample_orders == [] and len(state.saved) == 1
+
+
+@pytest.mark.parametrize(
+    "fault", ["short", "long", "range", "bool", "float", "mutable", "coverage", "checkpoint"]
+)
+def test_invalid_schedule_fails_before_dependency_or_tensor_work(
+    numerical_runtime, tmp_path, fault
+):
+    command, state = numerical_runtime
+    schedule = tuple(range(16)) * 50
+    checkpoint = None
+    if fault == "short":
+        schedule = schedule[:-1]
+    elif fault == "long":
+        schedule = (*schedule, 0)
+    elif fault == "range":
+        schedule = (*schedule[:-1], 16)
+    elif fault == "bool":
+        schedule = (*schedule[:-1], True)
+    elif fault == "float":
+        schedule = (*schedule[:-1], 1.0)
+    elif fault == "mutable":
+        schedule = list(schedule)
+    elif fault == "coverage":
+        schedule = (0,) * len(schedule)
+    else:
+        checkpoint = SimpleNamespace()
+    with pytest.raises(
+        TrainingBackendFailure, match=r"SAMPLE_SCHEDULE_INVALID|CHECKPOINT_POLICY_INVALID"
+    ):
+        _train(tmp_path, command, sample_schedule=schedule, checkpoint_policy=checkpoint)
+    assert not state.seeds and not state.saved and not state.sampled_indices
+
+
+@pytest.mark.parametrize("actual_accumulation", [2, 8])
+def test_accumulation_drift_cannot_save_a_partially_or_excessively_consumed_schedule(
+    numerical_runtime, tmp_path, monkeypatch, actual_accumulation
+):
+    command, state = numerical_runtime
+    original = sys.modules["accelerate"].Accelerator
+
+    class DriftedAccelerator(original):
+        @contextmanager
+        def accumulate(self, _model):
+            self.micro_steps += 1
+            self.sync_gradients = self.micro_steps % actual_accumulation == 0
+            yield
+
+    monkeypatch.setattr(sys.modules["accelerate"], "Accelerator", DriftedAccelerator)
+    with pytest.raises(TrainingBackendFailure, match="SAMPLE_SCHEDULE_INVALID"):
+        _train(tmp_path, command, sample_schedule=tuple(range(16)) * 50)
+    assert not state.saved
 
 
 @pytest.mark.parametrize(

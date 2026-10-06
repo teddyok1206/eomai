@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -105,6 +105,9 @@ class SdxlPhotoStyleBudget(SdxlLearnedComparisonBudget):
 
 
 class LocalImageSdxlPhotoStylePlan(FrozenModel):
+    _configuration_schema_ref: ClassVar[str] = (
+        "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.2"
+    )
     schema_version: Literal["local-image-sdxl-photo-style-plan/1.0"]
     plan_id: str = Field(pattern=r"^imgsdxlphotoplan_[0-9a-f]{32}$")
     source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -126,12 +129,11 @@ class LocalImageSdxlPhotoStylePlan(FrozenModel):
     def exact_plan(self) -> Self:
         anchor = self.configuration_anchor
         if (
-            anchor.schema_ref
-            != "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.2"
+            anchor.schema_ref != self._configuration_schema_ref
             or anchor.member_path != "manifests/sdxl-canny-reference-command.json"
             or anchor.media_type != "application/json"
         ):
-            raise ValueError("photo style requires the pinned native1.2 configuration")
+            raise ValueError("photo style requires its exact pinned native configuration")
         ids = tuple(row.case.case_id for row in self.cases)
         if ids != tuple(sorted(set(ids))):
             raise ValueError("photo style cases must be uniquely sorted")
@@ -208,6 +210,13 @@ class LocalImageSdxlPhotoStyleRetainedRegionPlan(LocalImageSdxlPhotoStyleFullDen
         return self
 
 
+class LocalImageSdxlPhotoStyleBalancedExposurePlan(LocalImageSdxlPhotoStyleRetainedRegionPlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.5"]  # type: ignore[assignment]
+    _configuration_schema_ref: ClassVar[str] = (
+        "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.3"
+    )
+
+
 def photo_style_region_reviews_sha256(plan: LocalImageSdxlPhotoStyleRetainedRegionPlan) -> str:
     return content_sha256([r.model_dump(mode="json") for r in plan.region_reviews])
 
@@ -253,6 +262,9 @@ _PHOTO_STYLE_CONTRACTS = MappingProxyType(
         "local-image-sdxl-photo-style-plan/1.4": "sdxl-photo-style-plan-v5",
         "local-image-sdxl-photo-style-command/1.4": "sdxl-photo-style-command-v5",
         "local-image-sdxl-photo-style-result/1.4": "sdxl-photo-style-result-v5",
+        "local-image-sdxl-photo-style-plan/1.5": "sdxl-photo-style-plan-v6",
+        "local-image-sdxl-photo-style-command/1.5": "sdxl-photo-style-command-v6",
+        "local-image-sdxl-photo-style-result/1.5": "sdxl-photo-style-result-v6",
     }
 )
 
@@ -282,6 +294,7 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
         "local-image-sdxl-photo-style-plan/1.2": LocalImageSdxlPhotoStyleFullDenoisingPlan,
         "local-image-sdxl-photo-style-plan/1.3": LocalImageSdxlPhotoStyleControlWindowPlan,
         "local-image-sdxl-photo-style-plan/1.4": LocalImageSdxlPhotoStyleRetainedRegionPlan,
+        "local-image-sdxl-photo-style-plan/1.5": LocalImageSdxlPhotoStyleBalancedExposurePlan,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")

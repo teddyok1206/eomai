@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.5",
+  "title": "Native geometry diagnostic with explicitly style-balanced training1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "created_at",
+    "source_commit",
+    "evaluation",
+    "purpose",
+    "activation_policy",
+    "command_sha256",
+    "case_relation",
+    "conditioning_policy",
+    "cases",
+    "negative_prompt_sha256",
+    "numerics",
+    "budget"
+  ],
+  "properties": {
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/activation_policy"
+    },
+    "budget": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/budget"
+    },
+    "case_relation": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/case_relation"
+    },
+    "cases": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/cases"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/command_sha256"
+    },
+    "conditioning_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/conditioning_policy"
+    },
+    "created_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/created_at"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/BalancedEvaluationPin"
+    },
+    "negative_prompt_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/negative_prompt_sha256"
+    },
+    "numerics": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/numerics"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/purpose"
+    },
+    "run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/run_id"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-lora-evaluation-command/1.5"
+    },
+    "source_commit": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/properties/source_commit"
+    }
+  },
+  "$defs": {
+    "BalancedEvaluationPin": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter_id": {
+          "pattern": "^imgadapter_[0-9a-f]{32}$",
+          "title": "Adapter Id",
+          "type": "string"
+        },
+        "adapter_manifest": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-native-lora-adapter-manifest/1.0"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-native-lora-adapter-manifest.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "adapter_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Adapter Manifest Sha256",
+          "type": "string"
+        },
+        "adapter_revision_id": {
+          "pattern": "^imgadapterrev_[0-9a-f]{32}$",
+          "title": "Adapter Revision Id",
+          "type": "string"
+        },
+        "adapter_strength": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Adapter Strength",
+          "type": "number"
+        },
+        "baseline_command": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-lineart-probe-command/1.0"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-lineart-probe-command.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "training_command": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.2"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-native-lora-command.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "training_result": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-lora-evaluation-command/1.4#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-native-lora-result/1.0"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-native-lora-result.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "baseline_command",
+        "training_command",
+        "training_result",
+        "adapter_manifest",
+        "adapter_id",
+        "adapter_revision_id",
+        "adapter_manifest_sha256",
+        "adapter_strength"
+      ],
+      "title": "SdxlNativeLoraEvaluationPinV2",
+      "type": "object"
+    }
+  }
+}

@@ -14,6 +14,7 @@ from eom_image_contracts.sdxl_native_evaluation import (
     SdxlNativeEvaluationSources,
     SdxlNativeLoraEvaluationPin,
     SdxlNativeLoraEvaluationPinV2,
+    SdxlNativeLoraEvaluationPinV3,
 )
 from eom_image_contracts.sdxl_native_training_targets import NATIVE_TARGET_CANVASES
 
@@ -71,6 +72,11 @@ class LocalImageSdxlNativeGeometryCommand(LocalImageSdxlNativeEvaluationCommand)
 class LocalImageSdxlNativeGeometryCommandV2(LocalImageSdxlNativeGeometryCommand):
     schema_version: Literal["local-image-sdxl-lora-evaluation-command/1.4"]  # type: ignore[assignment]
     evaluation: SdxlNativeLoraEvaluationPinV2
+
+
+class LocalImageSdxlNativeGeometryCommandV3(LocalImageSdxlNativeGeometryCommandV2):
+    schema_version: Literal["local-image-sdxl-lora-evaluation-command/1.5"]  # type: ignore[assignment]
+    evaluation: SdxlNativeLoraEvaluationPinV3
 
 
 def validate_sdxl_native_geometry_sources(
@@ -165,6 +171,11 @@ class LocalImageSdxlNativeGeometryResult(FrozenModel):
 class LocalImageSdxlNativeGeometryResultV2(LocalImageSdxlNativeGeometryResult):
     schema_version: Literal["local-image-sdxl-lora-evaluation-result/1.4"]  # type: ignore[assignment]
     evaluation: SdxlNativeLoraEvaluationPinV2
+
+
+class LocalImageSdxlNativeGeometryResultV3(LocalImageSdxlNativeGeometryResultV2):
+    schema_version: Literal["local-image-sdxl-lora-evaluation-result/1.5"]  # type: ignore[assignment]
+    evaluation: SdxlNativeLoraEvaluationPinV3
 
 
 def validate_sdxl_native_geometry_result(

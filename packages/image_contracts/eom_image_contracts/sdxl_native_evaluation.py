@@ -36,6 +36,13 @@ class SdxlNativeLoraEvaluationPinV2(SdxlNativeLoraEvaluationPin):
         return "1.0"
 
 
+class SdxlNativeLoraEvaluationPinV3(SdxlNativeLoraEvaluationPinV2):
+    """Exact training1.2 pin; exposure is never inferred from adapter filenames."""
+
+    def training_contract_version(self) -> str:
+        return "1.2"
+
+
 class LocalImageSdxlNativeEvaluationCommand(LocalImageSdxlLoraEvaluationCommand):
     schema_version: Literal["local-image-sdxl-lora-evaluation-command/1.2"]  # type: ignore[assignment]
     evaluation: SdxlNativeLoraEvaluationPin
