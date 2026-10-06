@@ -56,7 +56,7 @@ hatching too; evaluation must detect that risk.
    owns RGB/luminance decoding and tensor reductions. CLI only constructs/validates
    commands. No domain filesystem/torch imports or inference-policy duplication.
 10. Failure/retry: reject bad dimensions/weights, mismatched source hashes,
-    nonfinite loss, missing bands or runtime/version drift explicitly. Preserve
+    nonfinite loss, invalid band geometry or runtime/version drift explicitly. Preserve
     failure artifacts; no automatic offload, auto-retry or extra steps. Objective
     cannot be enabled by ambient environment or silently affect earlier commands.
 11. Simpler alternative: keep old uniform MSE and run longer. It is simpler but
