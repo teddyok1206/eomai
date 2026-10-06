@@ -254,3 +254,19 @@ Acquisition/four-output approval is still NOT_RECORDED; old12/12 is unchanged.
 Installed lab staysd3c03751; production binding remains unchanged. Full goal
 quality is NOT_ACCEPTED. Next safe work is closed comparison preparation; actual
 OFF/ON outputs require the pending explicit budget/acquisition approval.
+
+The existing three-wheel builder then completed from clean source
+`8402ce9a44690e7050235c107df7d3ec517ec0a0`. All383 RECORD members verify
+(294 contracts,54 provider,35 trainer). Repository-free contract/resolver imports
+and missing pinned revision refusal PASS without torch/diffusers/transformers
+imports. This is build-only import/refusal simulation, not a successful real
+weight resolution or installed-role execution. The temporary smoke operator's
+overlong description was wrapped to pass lint; no behavior changed.
+Contract/provider/trainer wheel hashes respectively:
+`07c1612f504c68c5f245de6785146a0745e5b2de50efbfbd29c8334a9ce009aa`,
+`d85749b0884c518f109b7cdb71100a1ed20b61a9f93039a3daf7d2cc7267ebb2`,
+`00a0dc2bc4d4ce2eee93aa85611de311015328ba819d7161d685827f6336464d`.
+Build-only location:
+`/tmp/eom-image-trainer-build/8402ce9a44690e7050235c107df7d3ec517ec0a0.3LCnEW/dist`.
+No wheel installation, model-weight acquisition, GPU, training, HOLDOUT or
+production activation. Do not reuse this as a numeric or visual-quality PASS.

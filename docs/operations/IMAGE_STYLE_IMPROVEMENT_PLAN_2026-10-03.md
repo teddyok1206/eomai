@@ -17,8 +17,10 @@ New resolver88 tests are included in343 focused regression PASS/zero skips in
 8.59s. Strict mypy four core modules/Python3.11, Ruff/format, shell syntax and
 diff checks PASS. Actual pinned official metadata (four members23,217bytes) also
 passed its exact hashes/semantic validator; weight bytes0, GPU calls0. Build-only
-resolver simulation is pending at this checkpoint; previous382-member wheel
-evidence belongs to the previous contract-only source, not this resolver.
+three-wheel source8402ce9a then verified all383 RECORD members and repository-free
+contract/resolver import plus missing pinned revision refusal, without numerical
+libraries. This is not actual weight loading or installed-role execution; previous
+382-member wheel evidence belongs to the previous contract-only source.
 
 Installed lab remainsd3c03751; production unchanged. Acquisition/four-output
 approval remains NOT_RECORDED; old12/12 stays exhausted. Full quality remains
