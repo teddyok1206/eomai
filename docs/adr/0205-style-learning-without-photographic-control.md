@@ -370,3 +370,39 @@ reports/own-review.md SHAdcbf3e66a79785475352bc8ce7a50489136d2b9490140f99f74eda0
 Production binding unchanged,five main services active; new GPU/training/PDF renders/
 reserved reads/production changes0. Independent blind quality and full model,
 Item/HWPX activation/rollback gates remain OPEN; goal ACTIVE.
+
+### New-document inspection and separate pixel-quality dispositions
+
+At source46379fd4, 32 previously unprepared TRAIN document pages (28 exam groups,
+six science families) were actually inspected in eight separately viewed diagnostic
+sheets. The 116 extraction rectangles are not 116 training approvals. Existing PNG
+reads16.6MB, no repeated corpus extraction. Seven literal regions from four PDFs
+were natively rendered at576DPI in four bounded CPU requests (12.9MB PDFs,
+2.39M pixels); canonical terminal replay0 renders.
+
+Own source-pixel inspection rejected one manually misframed solar-panel selection:
+the original selected coordinates themselves contain header text, not a demonstrated
+renderer defect. Preserve that source history and DEFER it. Native inspection also
+found an athlete above the high-jump mat; the typed target caption now includes the
+athlete/crossbar/mat/supports without rewriting the historical source caption.
+
+One isolated installed CPU target run prepared six originals and deferred one;
+terminal replay writes/transforms0, seven committed members byte-equal. Final own
+pixel review finds five usable new candidates and one cell variant held for a small
+foreign edge fragment. Preparation SUCCEEDED is not pixel-quality approval. The
+partial car corner remains explicitly partial; no pixels were reconstructed.
+Focused source-expansion/native-PDF/native-target suites110 PASS in14.71s.
+
+Fresh metadata pool89 prepared IDs/53 documents/47 groups has fourteen preparation
+results,max4/doc,max6/group. This is NOT a frozen or admitted full-training cohort;
+keep <=8 selected batches/max3/doc/max4/group, subject-level deduplication and held
+variant exclusion. FULL100–200 remains NOT_ACHIEVED. Prioritize clean contours and
+moderate hatching rather than graph/table-heavy highest-candidate-count pages.
+
+Evidence artifact_33752938bed94f458c771e8c2daaf0e8 /
+rev_2d97e8a20f064ef6b4633910ed952f8e:34 members reread byte-equal;
+reports/own-review.md SHA
+f6cd083513539d7eda578710ed1602be2f5da9dea787f35deafff7b90632c06c.
+All shown additions are institution-original derivatives, NOT model-generated.
+GPU/training/reserved reads/production changes0; binding unchanged,five services
+active. Independent blind and full model/Item/HWPX gates remain OPEN; goal ACTIVE.
