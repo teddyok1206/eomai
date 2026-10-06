@@ -106,16 +106,20 @@ class PhotoObjectSupportReview(FrozenModel):
     @model_validator(mode="after")
     def exact_review(self) -> Self:
         expected = (
-            (self.source, "normalized-visual-reference/1.0", "references/primary.png"),
-            (self.support_mask, "photo-object-support-mask/1.0", "masks/foreground.png"),
+            (
+                self.source,
+                "eom://schemas/image-provider/normalized-visual-reference/1.0",
+                "references/primary.png",
+            ),
+            (self.support_mask, PREFIX + "photo-object-support-mask/1.0", "masks/foreground.png"),
             (
                 self.candidate_control,
-                "photo-object-support-conditioning/1.0",
+                PREFIX + "photo-object-support-conditioning/1.0",
                 "conditionings/candidate.png",
             ),
         )
         if any(
-            p.schema_ref != PREFIX + schema or p.media_type != "image/png" or p.member_path != path
+            p.schema_ref != schema or p.media_type != "image/png" or p.member_path != path
             for p, schema, path in expected
         ) or (
             self.prior_control.schema_ref != PREFIX + "sdxl-canny-conditioning-output/1.0"

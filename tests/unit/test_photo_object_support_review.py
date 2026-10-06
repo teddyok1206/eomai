@@ -21,6 +21,7 @@ from eom_image_contracts.photo_object_support import (
     parse_photo_object_support_review,
 )
 from eom_image_contracts.validation import SCHEMA_FILES, SCHEMA_SHA256, validate_contract
+from eom_image_contracts.visual_reference import VisualReferencePngArtifactPointer
 from jsonschema import ValidationError as SchemaError
 from pydantic import ValidationError
 
@@ -48,6 +49,12 @@ def _seal(value):
 def _value():
     evidence = _pin("5", "unused", "reports/own-review.json", "text/plain")
     evidence["schema_ref"] = "eom://schemas/operations/plain-text-log/1.0"
+    source = VisualReferencePngArtifactPointer(
+        artifact_id="artifact_" + "1" * 32,
+        artifact_revision_id="rev_" + "1" * 32,
+        sha256="sha256:" + "1" * 64,
+        size_bytes=1,  # Synthetic pointer only; not an existence/size assertion.
+    )
     return _seal(
         dict(
             schema_version="local-image-photo-object-support-review/1.0",
@@ -60,7 +67,7 @@ def _value():
             source_population="LICENSED_MORPHOLOGY_REFERENCES_NOT_CORPUS_HOLDOUT",
             source_coordinate_system="NORMALIZED_PHOTO_PIXELS_800X504",
             mask_coordinate_system="CANNY_CANVAS_PIXELS_832X512",
-            source=_pin("1", "normalized-visual-reference/1.0", "references/primary.png"),
+            source=source.model_dump(mode="json", exclude={"size_bytes"}),
             prior_control=_pin(
                 "2",
                 "sdxl-canny-conditioning-output/1.0",
@@ -124,6 +131,7 @@ def test_review_schema_canonical_roundtrip_and_frozen():
     "path,replacement",
     [
         (("source", "schema_ref"), PREFIX + "normalized-visual-reference/2.0"),
+        (("source", "schema_ref"), PREFIX + "normalized-visual-reference/1.0"),
         (("source", "member_path"), "references/latest.png"),
         (("source", "media_type"), "image/jpeg"),
         (("support_mask", "schema_ref"), PREFIX + "sdxl-canny-conditioning-output/1.0"),

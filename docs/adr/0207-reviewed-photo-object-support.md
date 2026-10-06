@@ -184,3 +184,28 @@ explicit photo-comparison successor with source/control/mask lineage; no model
 dispatch, production install, new execution command or acceptance follows from
 these source tests alone. The current mask is a single manually reviewed input
 candidate, not a general foreground model or institution-quality product.
+
+## Actual registered-source preflight found a namespace defect
+
+The first development-owner typed-review preflight resolved canonical metadata,
+then refused the real normalized source before workspace creation/publication or
+model calls. `PhotoObjectSupportReview` incorrectly added `local-image-` to the
+normalized-reference schema URI; its synthetic fixture repeated that error.
+The authoritative public `VisualReferencePngArtifactPointer` uses
+`eom://schemas/image-provider/normalized-visual-reference/1.0`.
+
+Correct the implementation to require that exact canonical URI, not an alias or
+fallback. Build the positive test pointer through the existing public model and
+explicitly refuse the formerly mistaken namespace. Frozen review JSON Schema
+bytes/hash remain unchanged; no accepted review or runtime activation existed
+under the defective validator.175 focused/legacy tests PASS in54.36s, Ruff and
+strict image-interpreter mypy PASS. Preserve the failed preflight's exact operator
+and log; no failed execution is reinterpreted as success.
+
+The primitive review1.0 pins four binary members and own-review provenance; it
+does **not** assert full prior-plan/result or permission admission. Its future
+comparison plan must separately pin the exact prior photo plan and result and
+validate source/trace/context/chronology against them, including the unchanged
+full controller recipe. Do not infer latest parents, weaken this separation or
+hide parent hashes in a free-form log used as a worker instruction. Owner CPU
+verification is not installed-role verification or permission to dispatch.
