@@ -87,6 +87,53 @@ authored, never an unrequested addition. Neither example's face/spines/backgroun
 may leak into an unrelated target through style routing. These were repeated
 own calibration views, not new unique coverage, paired new outputs or blind PASS.
 
+### Matched numerical pipeline connection — design before implementation
+
+Extend the existing reference-Img2Img provider/ControlNet pipeline owner. Retain
+one pipeline with the same required native LoRA and attached global style model
+for both arms. The existing closed execution wire already records the frozen
+CPU CFG embedding hash and initial generator-state hash; no schema/revision,
+registry, worker dispatch or installation change is needed here.
+
+Materialize each of at most two admitted CPU embeddings once on that pipeline's
+device/dtype. The original8192-byte float32 CFG value/hash remains separate from
+the internal cast tensor and its small verification hash. Require shape
+`[2,1,1024]`, finite values and zero unconditional embedding, reject half-precision
+overflow, and verify that the fixed tensor did not change before/after each arm.
+No encoding per arm, GPU image encoder, hidden-state/Plus substitution or mutable
+global cache. The caller owns these internal temporary tensors, never DB/NAS.
+
+For every arm create a fresh seeded generator. Pin and recheck its actual bounded
+initial state before passing it to the shared Canny generation function; do not
+recreate a different generator inside that function. The new internal typed
+random-state argument is optional for existing callers, whose behavior remains
+unchanged. Record actual state hash instead of inferring equality from seed.
+
+An explicit IP-style reference backend uses the existing PNG/canvas admission,
+prompt-capacity check, model loader, GPU lease owner and finite RGB serializer.
+Case membership is a maximum-two-key map by immutable conditioning hash, O(1)
+lookup; preparation/cleanup are O(cases), one cast tensor per source input. The
+scale session's lock serializes generation and poisons failed scopes. Cleanup
+must invalidate the returned session and clear GPU tensor/pipeline references.
+No retry/repair after attachment or inference failure; original histories remain.
+The simpler per-arm encoding/generator recreation would invalidate the matched
+comparison. CPU/fake tests do not prove actual pretrained quality or peak VRAM.
+
+Source implementation: `sdxl_ip_style_embedding`, `sdxl_matched_random_state`
+and `sdxl_ip_style_reference_backend`; the existing Canny generation function
+accepts the optional typed generator while preserving its prior default.
+Reference image admission is shared, not copied into the style backend.42 new
+unit cases are included in396 focused PASS in9.77s. They cover one cast per case,
+same tensor/control/initializer/LoRA and actual initial-state hash forwarding,
+half overflow/nonfinite/zero-CFG/hash/device/gradient failures, consumed RNG
+rejection, unknown/bounded case maps, preparation/body/inference cleanup and
+failed-session poisoning. Strict mypy/Python3.11, Ruff/format and diff PASS.
+Initial fixture errors (PNG keyword size, strict30/21 initializer and resealed
+probe hash) were fixed without weakening contracts. The test-environment gate
+also caught out-of-order manifest entries from the preceding attachment change;
+the existing manifest was sorted before the final all-PASS run.
+These include synthetic GPU/pipeline fakes, not actual CUDA or model quality.
+
 ## Evidence and hypothesis
 
 The native1.3 candidate failed its fixed own visual comparison. The subsequent

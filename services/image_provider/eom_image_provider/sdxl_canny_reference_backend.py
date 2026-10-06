@@ -32,6 +32,24 @@ class SdxlCannyReferencePixels:
     conditioning_png: bytes
 
 
+def sdxl_canny_reference_image_arguments(pixels: SdxlCannyReferencePixels) -> dict[str, Any]:
+    """Shared bounded source/control pixel admission; style conditioning remains separate."""
+    if len(pixels.canvas_rgb) != 832 * 512 * 3:
+        raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+    with Image.open(io.BytesIO(pixels.conditioning_png)) as source:
+        if (
+            source.format != "PNG"
+            or source.mode != "RGB"
+            or source.size != (832, 512)
+            or getattr(source, "n_frames", 1) != 1
+        ):
+            raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+        control_image = source.copy()
+    return dict(
+        image=Image.frombytes("RGB", (832, 512), pixels.canvas_rgb), control_image=control_image
+    )
+
+
 class SdxlCannyReferenceSession:
     def __init__(
         self,
@@ -57,26 +75,13 @@ class SdxlCannyReferenceSession:
         if key not in self.inputs or command.inference_steps != self.initialization.scheduler_steps:
             raise ProviderError("SDXL_PROBE_INPUT_INVALID")
         pixels = self.inputs[key]
-        if len(pixels.canvas_rgb) != 832 * 512 * 3:
-            raise ProviderError("SDXL_PROBE_INPUT_INVALID")
-        with Image.open(io.BytesIO(pixels.conditioning_png)) as source:
-            if (
-                source.format != "PNG"
-                or source.mode != "RGB"
-                or source.size != (832, 512)
-                or getattr(source, "n_frames", 1) != 1
-            ):
-                raise ProviderError("SDXL_PROBE_INPUT_INVALID")
-            control_image = source.copy()
+        image_arguments = sdxl_canny_reference_image_arguments(pixels)
+        image_arguments["strength"] = self.initialization.denoising_strength
         generated = generate_sdxl_canny_background(
             self.pipeline,
             self.torch,
             self.control,
-            image_arguments=dict(
-                image=Image.frombytes("RGB", (832, 512), pixels.canvas_rgb),
-                control_image=control_image,
-                strength=self.initialization.denoising_strength,
-            ),
+            image_arguments=image_arguments,
             prompt=prompt,
             negative_prompt=negative_prompt,
             seed=seed,

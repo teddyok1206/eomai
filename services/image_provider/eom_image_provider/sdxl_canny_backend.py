@@ -18,6 +18,10 @@ from eom_image_provider.prompt_capacity import require_prompt_capacity
 from eom_image_provider.provider import GeneratedBackground, ProviderError
 from eom_image_provider.sdxl_canny_controller_io import ResolvedSdxlCannyController
 from eom_image_provider.sdxl_lora_material import SdxlLoraAdapterMaterial, apply_sdxl_lora
+from eom_image_provider.sdxl_matched_random_state import (
+    PreparedSdxlGenerator,
+    validate_sdxl_generator,
+)
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
 
 
@@ -67,6 +71,7 @@ def generate_sdxl_canny_background(
     negative_prompt: str,
     seed: int,
     command: LocalImageSdxlLineartProbeCommand,
+    random_state: PreparedSdxlGenerator | None = None,
 ) -> GeneratedBackground:
     """Shared finite RGB serialization/runtime evidence for two explicit numerical modes."""
     import numpy as np
@@ -78,13 +83,22 @@ def generate_sdxl_canny_background(
         overflow_error="SDXL_PROBE_PROMPT_TRUNCATED",
     )
     try:
+        if random_state is not None:
+            validate_sdxl_generator(torch, random_state, seed=seed)
+            if random_state.generator.device.type != "cuda":
+                raise ProviderError("SDXL_PROBE_MODEL_INVALID")
+        generator = (
+            random_state.generator
+            if random_state is not None
+            else torch.Generator(device="cuda").manual_seed(seed)
+        )
         response = pipeline(
             prompt=prompt,
             negative_prompt=negative_prompt,
             **image_arguments,
             width=832,
             height=512,
-            generator=torch.Generator(device="cuda").manual_seed(seed),
+            generator=generator,
             num_inference_steps=command.inference_steps,
             guidance_scale=command.guidance_scale,
             controlnet_conditioning_scale=control.conditioning_scale,
