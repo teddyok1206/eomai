@@ -311,3 +311,31 @@ artifact_1dfec15fa3734a8787b909e6af2c9dae / rev_e83f2cc1a8b24d5a82cad170ae72e320
 0f4b8feb75d355e0be9a3a2d01f1c44b9a4de77150353339785dc216d4f1a19c.
 GPU/reserved reads/production changes0; binding unchanged, five services active.
 Full learning, independent quality and Item/HWPX activation gates remain OPEN.
+
+### Remaining-source expansion and caption semantics
+
+At bb37bf00, all53 pending source candidates were actually inspected on original
+contexts and native576-DPI outputs:38 unique document requests, two <=32-region
+commands, canonical replay0 renders. Existing CPU owners prepared20 targets and
+deferred33; two installed role units terminal success, both real terminal replays
+writes/transforms0,22 committed members byte-equal. Actual focused suites110 PASS.
+
+Literal source inspection corrected current target captions:the historical
+BOXING_GLOVE and BOXER images are a baseball glove and catcher. Historical source
+keys/artifacts stay immutable; use reviewed captions, not names alone as truth.
+Gray fills, natural portrait/scene frames, original raster limitations and intrinsic
+marks remain explicit. Detached annotation removal is a separate supported exterior
+recipe, not automatic erasure or categorical source rejection.
+
+Fresh metadata pool74 prepared IDs/45 documents/40 exam groups includes12 new
+documents,11 preparation results,max4/doc,max6/group. It is NOT a frozen cohort;
+retain <=8 batches/max3/doc/max4/group and deduplicate actual overlapping subjects,
+not merely IDs/hashes. FULL100–200 admission and independent quality remain OPEN.
+Next:26 supported annotation-repair candidates plus new TRAIN object/nature groups.
+
+Evidence artifact_55d29ac253fb4c26835411b871b89265 /
+rev_6eb5ef9d095d448587d09a5f3c668188,63 members byte-equal;
+reports/own-review.md SHAfdc903e1c98b9f929e6e845177ee2f0afaad5b9243c7985aea6399aff3967837.
+Archive preserves the first metadata-only shard-order operator rejection and its
+correction without a core patch. Production binding unchanged,five services active;
+new GPU/training/reserved reads0. Full objective ACTIVE, not completion.
