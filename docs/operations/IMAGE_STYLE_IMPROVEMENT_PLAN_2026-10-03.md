@@ -5,7 +5,41 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest bounded lab trial — 2026-10-06 05:16 UTC
+## Latest checkpoint — 2026-10-06 13:59 UTC
+
+The native1.3 fit and fixed three-output comparison have finished; own comparison
+with actual institutional originals **rejects the candidate for promotion**.
+Source-free beakers have incorrect apparatus relations/heavy strokes; the
+object-supported wagon has no convincing matched style improvement. Existing
+owner result publication/reread and installed terminal replay PASS, lab-only
+source `d3c03751`; production unchanged. Full quality/blind/HOLDOUT/Item-HWPX
+gates are OPEN. The earlier entries below are historical, not current status.
+
+A new CPU-only structural-detail input diagnosis resolved the exact existing
+licensed wagon/support review and four canonical binaries, then validated old
+pixel relationships before derivation. One frozen seven-polygon prototype
+retains11,487 of12,049 input edges (562 removed, zero added); both wheels, roof,
+handles and protected silhouette/window-frame pixels are unchanged. Actually
+viewed old/new controls, source and institutional partial-car style reference.
+The silhouette remains recognizable, but internal fine/double edges remain and
+4.66% reduction does not prove a better final image. The photo itself has roof
+protrusions; a corresponding bump is not automatically a model invention.
+
+Disposition: **INPUT_HYPOTHESIS_ONLY_NOT_READY_FOR_GPU_OR_PROMOTION**. This
+interior-detail selection is not the old irrelevant-backdrop review semantics;
+no old review/command is reused to admit it. Existing binary formats only
+describe diagnostic PNGs, not an approved policy. No new GPU/model/training,
+HOLDOUT/production operation or sweep. Owner archived seven members34,331bytes
+including two new diagnostic derivatives, no copied original PNGs, and reread
+all equal: `artifact_b94f4b7b92b94a4689c495e9fcc0b8da` /
+`rev_6e5f31d84d5b47f0ae997e20aa448a9e`, `reports/own-review.json`, SHA
+`e9f8125bd951f128449aede6be78a228838a3b5a8d34bcc07b141f0b75f86e8e`.
+Operators Ruff/format PASS; no core edits or new core-suite claim. Next: audit
+actual native TRAIN style distribution and inference conditioning jointly before
+another bounded learning/control hypothesis. Retain negative results and distinct
+composition/style gates; goal ACTIVE, full quality NOT_ACCEPTED.
+
+## Historical bounded lab trial — 2026-10-06 05:16 UTC
 
 [ADR0206](../adr/0206-explicit-native-style-exposure.md) is the current operational
 checkpoint. Older entries below remain immutable historical evidence, not the
