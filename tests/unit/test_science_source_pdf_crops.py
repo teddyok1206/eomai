@@ -59,7 +59,7 @@ def _seal_command(value):
     return value
 
 
-def _command(review, renderer=None):
+def _command(review, renderer=None, *, selection_ids=None):
     raw = content_json_bytes(review.model_dump(mode="json"))
     return LocalImageScienceSourcePdfCropCommand.model_validate(
         _seal_command(
@@ -73,7 +73,11 @@ def _command(review, renderer=None):
                     source_page_crop_protocol(review).review_schema_ref,
                     "science-source-page-crop-review",
                 ).model_dump(mode="json"),
-                "selection_ids": [selection.selection_id for selection in review.selections],
+                "selection_ids": (
+                    [selection.selection_id for selection in review.selections]
+                    if selection_ids is None
+                    else list(selection_ids)
+                ),
                 "render_dpi": 576,
                 "renderer": renderer
                 or {
@@ -114,6 +118,7 @@ def _set(command, review):
                 "perceptual_hash": "0" * 16,
             }
             for selection in review.selections
+            if selection.selection_id in command.selection_ids
         ],
         "state": "RENDERED_SOURCE_DERIVATIVES_PENDING_TARGET_REVIEW",
         "activation_policy": "FORBIDDEN",

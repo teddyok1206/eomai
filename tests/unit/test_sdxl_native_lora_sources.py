@@ -15,6 +15,7 @@ from eom_image_contracts import (
 from eom_image_contracts.sdxl_native_lora import (
     LocalImageSdxlNativeLoraCommand,
     LocalImageSdxlNativeLoraCommandV2,
+    LocalImageSdxlNativeLoraCommandV3,
     SdxlNativeLoraConditioning,
 )
 from eom_image_contracts.sdxl_native_lora_sources import (
@@ -59,8 +60,12 @@ from tests.unit.test_sdxl_native_lora_contracts import _command_value, _seal_com
 from tests.unit.test_sdxl_training_targets import _seal as _seal_target_command
 
 
-def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=False):
-    review, basis, reader = _fixture_review(monkeypatch, count=12)
+def _fixture(
+    monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=False, review_fixture=None
+):
+    review, basis, reader = (
+        _fixture_review(monkeypatch, count=12) if review_fixture is None else review_fixture
+    )
     special_ids = None
     if variant is not None:
         value = review.model_dump(mode="json")
@@ -89,6 +94,8 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=Fa
             tuple(sorted((special_ids[0], *rest[:5]))),
             tuple(sorted((special_ids[1], *rest[5:]))),
         )
+    elif len(ordered) > 64:
+        chunks = tuple(ordered[index : index + 16] for index in range(0, len(ordered), 16))
     else:
         chunks = (ordered[:6], ordered[6:])
     records = {review.training_authorization: basis.authorization_payload}
@@ -102,7 +109,7 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=Fa
         return pointer
 
     for batch_index, ids in enumerate(chunks):
-        source_command_value = _command(review).model_dump(mode="json")
+        source_command_value = _command(review, selection_ids=ids).model_dump(mode="json")
         source_command_value["selection_ids"] = list(ids)
         source_command = LocalImageScienceSourcePdfCropCommand.model_validate(
             _seal_pdf_command(source_command_value)
@@ -114,7 +121,7 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=Fa
             "science-source-pdf-crop-command",
             100 + batch_index,
         )
-        crop_value = _set(_command(review), review)[0].model_dump(mode="json")
+        crop_value = _set(source_command, review)[0].model_dump(mode="json")
         crop_value.update(
             command=source_pointer.model_dump(mode="json"),
             command_sha256=source_command.command_sha256,
@@ -286,7 +293,10 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=Fa
                     "training_caption_sha256": text_sha256(conditioning.training_caption_en),
                 }
             )
-    value = _command_value()
+    balanced = len(ordered) >= 100
+    value = (
+        _command_value(len(ordered), "FULL_STYLE_TRAINING", 800) if balanced else _command_value()
+    )
     value.update(
         target_batches=batches,
         training_samples=sorted(training_samples, key=lambda s: s["sample_id"]),
@@ -297,6 +307,15 @@ def _fixture(monkeypatch, variant=None, *, pixel_factory=None, exterior_batch=Fa
     model = LocalImageSdxlNativeLoraCommandV2 if exterior_batch else LocalImageSdxlNativeLoraCommand
     if exterior_batch:
         value["schema_version"] = "local-image-sdxl-native-lora-command/1.1"
+    if balanced:
+        model = LocalImageSdxlNativeLoraCommandV3
+        value["schema_version"] = "local-image-sdxl-native-lora-command/1.2"
+        value["exposure_policy"] = {
+            "policy_version": "ALL_TARGETS_ONCE_THEN_STYLE_STRATIFIED_4_2_4/1.0",
+            "clean_contour_weight": 4,
+            "fine_hatching_weight": 2,
+            "restrained_tone_weight": 4,
+        }
     command = model.model_validate(_seal_command(value))
     screening = b"Own synthetic full-cohort review; not independent review."
     value["screening_evidence"]["sha256"] = text_sha256(screening.decode())

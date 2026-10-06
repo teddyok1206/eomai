@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
+from eom_image_contracts.photo_object_support import PhotoObjectSupportParentDocuments
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
     SdxlNativeCannyReferenceSources,
@@ -17,7 +18,14 @@ from eom_image_contracts.sdxl_native_lora_sources import (
     parse_sdxl_native_lora_sources,
     sdxl_native_lora_metadata_member_path,
 )
+from eom_image_contracts.sdxl_photo_object_support_lineage import (
+    photo_object_support_metadata_members,
+    photo_object_support_parent_documents,
+    photo_object_support_pixel_members,
+    validate_photo_object_support_lineage,
+)
 from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoObjectSupportPlan,
     LocalImageSdxlPhotoStylePlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     SdxlPhotoStyleSource,
@@ -57,6 +65,7 @@ class ResolvedSdxlPhotoStyleMetadata:
     configuration: ResolvedSdxlCannyReferenceMetadata
     sources: tuple[SdxlPhotoStyleSource, ...]
     files: tuple[SdxlProbeInputMember, ...]
+    object_support: PhotoObjectSupportParentDocuments | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +108,7 @@ def resolve_sdxl_photo_style_execution_metadata(
         admitted.configuration.sources,
         native.sources,
         admitted.sources,
+        admitted.object_support,
     )
     validate_photo_style_execution_sources(command, sources)
     files = tuple(
@@ -150,6 +160,7 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
         or admitted.configuration.native_admission is None
         or sources.native_training_sources != admitted.configuration.native_admission.sources
         or sources.photos != admitted.sources
+        or sources.object_support != admitted.object_support
     ):
         raise ValueError("PHOTO_STYLE_HANDOFF_SOURCES_INVALID")
     expected = sdxl_canny_reference_metadata_hashes(admitted.configuration)
@@ -167,6 +178,20 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
             sources.plan, metadata["inputs/photo-region-review.txt"]
         )
         expected["inputs/photo-region-review.txt"] = sources.plan.region_review_evidence.sha256
+    if isinstance(sources.plan, LocalImageSdxlPhotoObjectSupportPlan):
+        support = photo_object_support_parent_documents(sources.plan, metadata)
+        if support != sources.object_support:
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_HANDOFF_INVALID")
+        review = validate_photo_object_support_lineage(sources.plan, support).review
+        expected.update(
+            dict(
+                (path, pin.sha256)
+                for path, pin in photo_object_support_metadata_members(sources.plan)
+            )
+        )
+        expected.update(
+            dict((path, pin.sha256) for path, pin in photo_object_support_pixel_members(review))
+        )
     expected.update(
         {
             sdxl_native_lora_metadata_member_path(p): p.sha256
@@ -218,10 +243,22 @@ def prepare_sdxl_photo_style_inputs(
             )
         )
         paths.append("inputs/adapter/" + file.relative_path)
+    exact_paths = frozenset(paths)
+    if isinstance(admitted.sources.plan, LocalImageSdxlPhotoObjectSupportPlan):
+        if admitted.sources.object_support is None:
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_METADATA_MISSING")
+        review = validate_photo_object_support_lineage(
+            admitted.sources.plan, admitted.sources.object_support
+        ).review
+        for path, pin in photo_object_support_pixel_members(review):
+            paths.append(path)
+            reads.append(BoundedControlArtifactRead(pin, 16 * 1024**2))
     payloads = resolve_control_artifact_members(engine, tuple(reads))
     files = list(admitted.files)
     for path, read, raw in zip(paths, reads, payloads, strict=True):
-        if len(raw) != read.maximum_bytes:
+        if not 0 < len(raw) <= read.maximum_bytes or (
+            path in exact_paths and len(raw) != read.maximum_bytes
+        ):
             raise ValueError("PHOTO_STYLE_INPUT_SIZE_INVALID")
         files.append(SdxlProbeInputMember(path, read.pointer.sha256, raw))
     prepared = PreparedSdxlPhotoStyleInputs(
@@ -291,6 +328,17 @@ def resolve_sdxl_photo_style_metadata(
     metadata.update({member.member_path: member.payload for member in native.metadata})
     metadata["inputs/configuration-command.json"] = anchor_raw
     metadata["plan.json"] = content_json_bytes(plan.model_dump(mode="json"))
+    support_documents = None
+    if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
+        members = photo_object_support_metadata_members(plan)
+        pins = tuple(dict.fromkeys(pin for _, pin in members))
+        payloads = resolve_control_artifact_members(
+            engine, tuple(BoundedControlArtifactRead(pin, 256 * 1024) for pin in pins)
+        )
+        support_payloads = dict(zip(pins, payloads, strict=True))
+        metadata.update({path: support_payloads[pin] for path, pin in members})
+        support_documents = photo_object_support_parent_documents(plan, metadata)
+        validate_photo_object_support_lineage(plan, support_documents)
     if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
         review_raw = resolve_control_artifact_member(
             engine, plan.region_review_evidence, maximum_bytes=64 * 1024
@@ -309,4 +357,5 @@ def resolve_sdxl_photo_style_metadata(
             SdxlProbeInputMember(path, "sha256:" + hashlib.sha256(raw).hexdigest(), raw)
             for path, raw in sorted(metadata.items())
         ),
+        support_documents,
     )

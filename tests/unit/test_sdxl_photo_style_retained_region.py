@@ -357,7 +357,7 @@ def test_pair_gets_exact_retained_pixels_full_control_and_terminal_replay_pure(
         "prepare_sdxl_reference_pixels",
         "create_sdxl_pair_directories",
         "write_staged_member",
-        "photo_style_conditioner",
+        "staged_photo_style_conditioning",
     ):
         monkeypatch.setattr(worker, name, forbidden)
     assert legacy._run(prepared, root, _Backend()) == result

@@ -7,7 +7,12 @@ from eom_image_contracts.sdxl_native_canny_reference import (
     SdxlNativeCannyReferenceSources,
     parse_reference_sources,
 )
+from eom_image_contracts.sdxl_photo_object_support_lineage import (
+    photo_object_support_metadata_members,
+    photo_object_support_parent_documents,
+)
 from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoObjectSupportPlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     parse_photo_style_bundle,
     parse_photo_style_source,
@@ -72,8 +77,17 @@ def read_sdxl_photo_style_sources(
         photos.append(
             parse_photo_style_source(reference, bundle_raw=bundle_raw, intent_raw=intent_raw)
         )
+    support = None
+    if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
+        payloads = {
+            path: read_staged_member(
+                root, path, maximum_bytes=256 * 1024, expected_sha256=pin.sha256
+            )
+            for path, pin in photo_object_support_metadata_members(plan)
+        }
+        support = photo_object_support_parent_documents(plan, payloads)
     sources = SdxlPhotoStyleExecutionSources(
-        plan, metadata.command, native, metadata.native_training_sources, tuple(photos)
+        plan, metadata.command, native, metadata.native_training_sources, tuple(photos), support
     )
     validate_photo_style_execution_sources(command, sources)
     return sources

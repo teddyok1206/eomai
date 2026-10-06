@@ -257,6 +257,10 @@ Independent review, HOLDOUT, final quality and Item/HWPX canary remain open.
 
 ### Single-factor preparation contract
 
+The preparation-only status and test counts below record the earlier checkpoint;
+the subsequent execution-integration checkpoint supersedes its source-codec
+status, but does not imply installation, dispatch or quality acceptance.
+
 The1.6 preparation plan pins five small metadata documents: support review,
 its prior photo plan/result, and the original-prompt baseline photo plan/result.
 The latter may contain several cases; select one exact immutable case and its
@@ -319,3 +323,76 @@ admission. Five services ACTIVE and production bindingf96eda84 unchanged.
 Runtime1.6 remains refused; command/result/owner-stage/provider integration and
 installed verification precede the first pair. Overall quality NOT_ACCEPTED;
 independent review/HOLDOUT/Item-HWPX canary/activation remain open. Goal ACTIVE.
+
+### Execution integration ownership
+
+Use the existing photo command/staging/provider/result lifecycle for1.6; no new
+service, queue, DB schema/index, model dependency or scheduler. Canonical input
+is the unchanged photo and five pinned preparation documents. Orchestrator
+resolves their permissions/lifecycle/schema/hash before staging three additional
+bounded PNG members (prior control, mask, candidate); the photo is staged once by
+the existing boundary. The provider revalidates staged metadata, all four PNG
+identities/geometry/counts and reconstructs the previous retained Canny control
+from the unchanged source before applying the exact candidate. No latest lookup,
+inpainting, regeneration of baseline outputs or mask-based semantic inference.
+
+Keep the dependency DAG explicit: primitive support values -> photo plans ->
+photo result contracts -> pure parent-lineage -> execution/source admission ->
+owner/provider adapters. Preserve prior public result imports via re-exports.
+Move coherent result contracts into their own module rather than introducing
+local circular imports. Frozen plan1.6/review schema bytes must remain identical.
+Execution results pin the support-parent digest, review/mask/control hashes and
+recomputed small pixel observations; no image bytes or new lifecycle in DB.
+
+Dominant operations are bounded indexed pointer resolution, batched reads,
+five metadata parses/keyed case/trace lookup and linear image scans. One case,
+two generated outputs/one existing GPU lease, no retry; no algorithmic change to
+old families. Result/replay validation uses existing immutable hashes/output
+closure. Invalid support fails before model resolution/GPU; terminal replay never
+repeats inference or Canny transformation. Installed-wheel and role/transform
+verification precede live dispatch. Source family support is not evidence of
+installed or activated runtime support. Rollback selects existing lab wheels;
+production binding remains untouched. The preparation-only alternative cannot
+execute the reviewed mask, so these existing boundaries must now be extended.
+
+### Source execution-integration checkpoint (2026-10-06 UTC)
+
+Implemented the explicit1.6 command/result and existing owner-stage/provider/
+validation/publication path. Frozen preparation-plan and review1.0 schema bytes
+are unchanged. New command SHA
+`sha256:6d03a685cd63a98d7a5adf2160bfdd92d07c7a026d7c060dc3ee77e753731556`;
+result SHA
+`sha256:e1b8611ac178696ce57bbec830ed7b85b7bb6f21d64ffca330eaa40429419152`.
+The five parent documents must not only agree with each other: their configuration,
+native evaluation and adapter semantic hashes must match this execution's admitted
+native source. The source is staged once; three additional PNG inputs are bounded
+and revalidated. Publication references the existing canonical candidate instead
+of publishing its local conditioning materialization again. Previous photo families
+and public result imports remain supported without a circular dependency.
+
+Final combined source run:443 focused/historical cases PASS in190.92s, including
+26 new mock-lifecycle cases. Ruff lint/format, strict mypy(11 source modules), both
+release-script syntax checks and diff checks PASS. New cases cover succeeded and
+failed/partial terminal replay without GPU/model/transform/write side effects;
+altered metadata/pixels and incorrect prior-control reproduction rejected before
+model/GPU; resealed misleading result observations/native-parent hashes; and
+CPU-before-commit publication without duplicated canonical inputs. No GPU/model,
+training or canonical Artifact mutation occurs in these tests.
+
+Fixture corrections are not production guard bypasses: the old balanced fixture
+declared100 TRAIN pointers without their dependency documents, and could not satisfy
+full staged native metadata parsing. Added a complete synthetic100-target,
+seven-batch closure and bounded source-crop commands; relative terminal timestamps
+bind adapter creation to training completion. This synthetic canonical-store
+adapter still does not establish real frozen-corpus permissions or independent
+quality. Also corrected moved private monkeypatch targets and the expected existing
+metadata hash-error code; no weakening of input/pixel/hash/budget guards. These
+development failures were corrected before the final combined PASS.
+
+Status: `SOURCE_EXECUTION_INTEGRATION_PASS_NOT_INSTALLED_OR_QUALITY_ACCEPTED`.
+Installed lab release219b9d65 still differs; no deployment, real staging or dispatch
+has been performed by this checkpoint. Next: actual canonical full-native metadata
+read-only admission, immutable release wheels/RECORD and installed-role guards,
+then exactly one matched pair. Production bindingf96eda84 and frozen TRAIN100
+remain unchanged. Overall goal ACTIVE; blind review, HOLDOUT, final own quality,
+Item/HWPX canary and activation/rollback acceptance remain open.

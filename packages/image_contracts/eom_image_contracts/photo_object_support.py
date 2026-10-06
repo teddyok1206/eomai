@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, Self
 
@@ -175,3 +176,59 @@ def parse_photo_object_support_review(
     if raw != content_json_bytes(review.model_dump(mode="json")):
         raise ValueError("OBJECT_SUPPORT_REVIEW_NONCANONICAL")
     return review
+
+
+class PhotoObjectSupportParents(FrozenModel):
+    """Small immutable metadata pins, not loaded parent payloads or latest aliases."""
+
+    review: ImageEvaluationArtifactMember
+    prior_plan: ImageEvaluationArtifactMember
+    prior_result: ImageEvaluationArtifactMember
+    baseline_plan: ImageEvaluationArtifactMember
+    baseline_result: ImageEvaluationArtifactMember
+
+    @model_validator(mode="after")
+    def exact_kinds(self) -> Self:
+        pins = (
+            (self.review, REVIEW_SCHEMA, "photo-object-support-review"),
+            *(
+                (
+                    pin,
+                    "eom://schemas/image-provider/local-image-sdxl-photo-style-" + family + "/1.5",
+                    "sdxl-photo-style-" + family,
+                )
+                for pin, family in (
+                    (self.prior_plan, "plan"),
+                    (self.prior_result, "result"),
+                    (self.baseline_plan, "plan"),
+                    (self.baseline_result, "result"),
+                )
+            ),
+        )
+        if any(
+            pin.schema_ref != schema
+            or pin.member_path != "manifests/" + filename + ".json"
+            or pin.media_type != "application/json"
+            for pin, schema, filename in pins
+        ):
+            raise ValueError("OBJECT_SUPPORT_PARENT_POINTER_KIND_INVALID")
+        # The same parent can legitimately be both control provenance and baseline;
+        # conflicting claims about one immutable member cannot.
+        claims: dict[tuple[str, str, str], ImageEvaluationArtifactMember] = {}
+        for pin, _, _ in pins:
+            identity = (pin.artifact_id, pin.artifact_revision_id, pin.member_path)
+            if identity in claims and claims[identity] != pin:
+                raise ValueError("OBJECT_SUPPORT_PARENT_IDENTITY_CONFLICT")
+            claims[identity] = pin
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class PhotoObjectSupportParentDocuments:
+    """One bounded input materialization; no binary PNG payloads in this value."""
+
+    review: bytes
+    prior_plan: bytes
+    prior_result: bytes
+    baseline_plan: bytes
+    baseline_result: bytes

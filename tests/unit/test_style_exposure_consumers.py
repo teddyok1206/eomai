@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -57,16 +58,36 @@ from tests.unit.test_sdxl_native_lora_contracts import _result_value, _seal_resu
 from tests.unit.test_sdxl_photo_style_retained_region import _fixture as retained_photo_fixture
 
 
-def _balanced_geometry_fixture():
+def _balanced_geometry_fixture(training_fixture=None):
     old, records, old_sources = _successor_fixture()
-    training = LocalImageSdxlNativeLoraCommandV3.model_validate(_balanced_value())
+    training = (
+        LocalImageSdxlNativeLoraCommandV3.model_validate(_balanced_value())
+        if training_fixture is None
+        else training_fixture[0]
+    )
+    if training_fixture is not None:
+        records.update(training_fixture[1])
     result_value = _result_value(training)
+    if training_fixture is not None:
+        result_value.update(
+            started_at=training.created_at.isoformat().replace("+00:00", "Z"),
+            completed_at=(training.created_at + timedelta(seconds=1))
+            .isoformat()
+            .replace("+00:00", "Z"),
+        )
+        result_value["adapter_manifest"]["created_at"] = result_value["completed_at"]
     result_value["adapter_manifest"]["files"] = old_sources.manifest.model_dump(mode="json")[
         "files"
     ]
     result = LocalImageSdxlNativeLoraResult.model_validate(_seal_result(result_value))
     manifest = result.adapter_manifest
     value = old.model_dump(mode="json")
+    if training_fixture is not None:
+        value["created_at"] = (
+            max(old.created_at, result.completed_at + timedelta(seconds=1))
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     value["schema_version"] = "local-image-sdxl-lora-evaluation-command/1.5"
     value["cases"] = [
         dict(
@@ -116,9 +137,9 @@ def _balanced_geometry_fixture():
     return command, records, sources
 
 
-def _balanced_reference(tmp_path, monkeypatch):
+def _balanced_reference(tmp_path, monkeypatch, training_fixture=None):
     old, reader, trace, leases = reference_fixture(tmp_path, monkeypatch)
-    evaluation, records, sources = _balanced_geometry_fixture()
+    evaluation, records, sources = _balanced_geometry_fixture(training_fixture)
     reader.records.update(records)
     raw = content_json_bytes(evaluation.model_dump(mode="json"))
     pin = old.native_evaluation_command.model_copy(
@@ -134,6 +155,12 @@ def _balanced_reference(tmp_path, monkeypatch):
         schema_version="local-image-sdxl-canny-reference-command/1.3",
         native_evaluation_command=pin.model_dump(mode="json"),
     )
+    if training_fixture is not None:
+        value["created_at"] = (
+            max(old.created_at, evaluation.created_at + timedelta(seconds=1))
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     return parse_reference_command(seal_reference(value)), reader, sources, trace, leases
 
 

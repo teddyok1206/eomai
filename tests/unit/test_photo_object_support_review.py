@@ -270,6 +270,7 @@ def test_frozen_schema_resources_match_model_and_no_infrastructure_import():
         "json",
         "re",
         "datetime",
+        "dataclasses",
         "typing",
         "pydantic",
     }

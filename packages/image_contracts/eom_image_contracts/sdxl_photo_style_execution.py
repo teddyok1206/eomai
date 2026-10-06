@@ -15,46 +15,71 @@ from pydantic import Field, field_validator, model_validator
 from eom_image_contracts.models import (
     FrozenModel,
     ImageEvaluationArtifactMember,
-    LocalImageRuntime,
     Sha256,
     content_json_bytes,
     content_sha256,
 )
-from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
+from eom_image_contracts.photo_object_support import PhotoObjectSupportParentDocuments
 from eom_image_contracts.sdxl_canny_reference import (
-    SdxlCannyReferenceTrace,
     validate_sdxl_canny_reference_sources,
 )
-from eom_image_contracts.sdxl_learned_comparison import (
-    LEARNED_COMPARISON_ARMS,
-    SdxlLearnedComparisonOutput,
-)
-from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
     LocalImageSdxlNativeCannyReferenceCommandV3,
     SdxlNativeCannyReferenceSources,
 )
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
+from eom_image_contracts.sdxl_photo_object_support_lineage import (
+    validate_photo_object_support_lineage,
+)
 from eom_image_contracts.sdxl_photo_style import (
-    SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
+    LocalImageSdxlPhotoObjectSupportPlan,
     LocalImageSdxlPhotoStyleBalancedExposurePlan,
-    LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStylePlan,
-    LocalImageSdxlPhotoStyleRetainedRegionPlan,
-    SdxlPhotoStyleControlWindow,
-    SdxlPhotoStyleFullDenoisingInitialization,
-    SdxlPhotoStyleInitialization,
     SdxlPhotoStyleSource,
-    SdxlPhotoStyleWhiteInitialization,
     parse_photo_style_plan_value,
     photo_style_contract_name,
-    photo_style_region_reviews_sha256,
     photo_style_training_image_hashes,
     photo_style_version,
     validate_photo_style_sources,
 )
+from eom_image_contracts.sdxl_photo_style_result import (
+    LocalImageSdxlPhotoObjectSupportResult,
+    LocalImageSdxlPhotoStyleBalancedExposureResult,
+    LocalImageSdxlPhotoStyleControlWindowResult,
+    LocalImageSdxlPhotoStyleFullDenoisingResult,
+    LocalImageSdxlPhotoStyleResult,
+    LocalImageSdxlPhotoStyleRetainedRegionResult,
+    LocalImageSdxlPhotoStyleWhiteResult,
+    parse_photo_style_result,
+    validate_photo_style_plan_result_relation,
+)
 from eom_image_contracts.validation import validate_contract
+
+__all__ = (
+    "LocalImageSdxlPhotoObjectSupportCommand",
+    "LocalImageSdxlPhotoObjectSupportResult",
+    "LocalImageSdxlPhotoStyleBalancedExposureCommand",
+    "LocalImageSdxlPhotoStyleBalancedExposureResult",
+    "LocalImageSdxlPhotoStyleCommand",
+    "LocalImageSdxlPhotoStyleControlWindowCommand",
+    "LocalImageSdxlPhotoStyleControlWindowResult",
+    "LocalImageSdxlPhotoStyleFullDenoisingCommand",
+    "LocalImageSdxlPhotoStyleFullDenoisingResult",
+    "LocalImageSdxlPhotoStyleResult",
+    "LocalImageSdxlPhotoStyleRetainedRegionCommand",
+    "LocalImageSdxlPhotoStyleRetainedRegionResult",
+    "LocalImageSdxlPhotoStyleWhiteCommand",
+    "LocalImageSdxlPhotoStyleWhiteResult",
+    "SdxlPhotoStyleExecutionSources",
+    "is_photo_style_command_schema",
+    "parse_photo_style_command",
+    "parse_photo_style_plan",
+    "parse_photo_style_result",
+    "validate_photo_style_execution_sources",
+    "validate_photo_style_plan_result_relation",
+    "validate_photo_style_result",
+)
 
 
 def _utc(value: datetime) -> datetime:
@@ -116,6 +141,10 @@ class LocalImageSdxlPhotoStyleBalancedExposureCommand(LocalImageSdxlPhotoStyleCo
     schema_version: Literal["local-image-sdxl-photo-style-command/1.5"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoObjectSupportCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.6"]  # type: ignore[assignment]
+
+
 _COMMAND_MODELS: Mapping[str, type[LocalImageSdxlPhotoStyleCommand]] = MappingProxyType(
     {
         "local-image-sdxl-photo-style-command/1.0": LocalImageSdxlPhotoStyleCommand,
@@ -124,6 +153,7 @@ _COMMAND_MODELS: Mapping[str, type[LocalImageSdxlPhotoStyleCommand]] = MappingPr
         "local-image-sdxl-photo-style-command/1.3": LocalImageSdxlPhotoStyleControlWindowCommand,
         "local-image-sdxl-photo-style-command/1.4": LocalImageSdxlPhotoStyleRetainedRegionCommand,
         "local-image-sdxl-photo-style-command/1.5": LocalImageSdxlPhotoStyleBalancedExposureCommand,
+        "local-image-sdxl-photo-style-command/1.6": LocalImageSdxlPhotoObjectSupportCommand,
     }
 )
 
@@ -170,6 +200,7 @@ class SdxlPhotoStyleExecutionSources:
     configuration_sources: SdxlNativeCannyReferenceSources
     native_training_sources: SdxlNativeLoraSources
     photos: tuple[SdxlPhotoStyleSource, ...]
+    object_support: PhotoObjectSupportParentDocuments | None = None
 
 
 def validate_photo_style_execution_sources(
@@ -180,7 +211,10 @@ def validate_photo_style_execution_sources(
     configuration = sources.configuration
     expected_model = (
         LocalImageSdxlNativeCannyReferenceCommandV3
-        if isinstance(plan, LocalImageSdxlPhotoStyleBalancedExposurePlan)
+        if isinstance(
+            plan,
+            (LocalImageSdxlPhotoStyleBalancedExposurePlan, LocalImageSdxlPhotoObjectSupportPlan),
+        )
         else LocalImageSdxlNativeCannyReferenceCommandV2
     )
     if (
@@ -198,107 +232,20 @@ def validate_photo_style_execution_sources(
         sources.photos,
         training_image_hashes=photo_style_training_image_hashes(sources.native_training_sources),
     )
-
-
-class LocalImageSdxlPhotoStyleResult(FrozenModel):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.0"]
-    run_id: str = Field(pattern=r"^imgsdxlvalcmprun_[0-9a-f]{32}$")
-    command_sha256: Sha256
-    plan_sha256: Sha256
-    configuration_command_sha256: Sha256
-    native_evaluation_command_sha256: Sha256
-    native_adapter_manifest_sha256: Sha256
-    case_relation: Literal["LICENSED_PHOTO_REFERENCES_NOT_CORPUS_HOLDOUT"]
-    native_fit_policy: Literal["NATIVE_FIT_800X500_CENTER_832X512_OPENCV_CANNY/1.0"]
-    initialization: SdxlPhotoStyleInitialization
-    quality_acceptance: Literal["NOT_REVIEWED"]
-    activation_policy: Literal["FORBIDDEN"]
-    training_steps: Literal[0]
-    holdout_binary_reads: Literal[0]
-    status: Literal["SUCCEEDED", "FAILED"]
-    error_code: SdxlProbeErrorCode | None
-    runtime: LocalImageRuntime | None
-    inputs: tuple[SdxlCannyReferenceTrace, ...] = Field(min_length=1, max_length=6)
-    outputs: tuple[SdxlLearnedComparisonOutput, ...] = Field(max_length=12)
-    started_at: datetime
-    completed_at: datetime
-    duration_ms: int = Field(ge=1, le=3_600_000)
-    result_sha256: Sha256
-
-    _timestamp_utc = field_validator("started_at", "completed_at")(_utc)
-
-    @model_validator(mode="after")
-    def exact_result(self) -> Self:
-        ids = tuple(row.case_id for row in self.inputs)
-        keys = tuple((row.arm, row.case_id, row.seed) for row in self.outputs)
-        if (
-            ids != tuple(sorted(set(ids)))
-            or keys != tuple(sorted(set(keys)))
-            or self.completed_at < self.started_at
-            or (self.status == "SUCCEEDED") != (self.error_code is None)
-            or self.result_sha256
-            != content_sha256(self.model_dump(mode="json", exclude={"result_sha256"}))
-        ):
-            raise ValueError("photo result order/status/time/hash mismatch")
-        if self.outputs and (
-            self.runtime is None
-            or self.runtime.peak_gpu_memory_bytes
-            < max(row.peak_gpu_memory_bytes for row in self.outputs)
-        ):
-            raise ValueError("photo result lacks measured runtime")
-        return self
-
-
-class LocalImageSdxlPhotoStyleWhiteResult(LocalImageSdxlPhotoStyleResult):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.1"]  # type: ignore[assignment]
-    initialization: SdxlPhotoStyleWhiteInitialization
-
-    @model_validator(mode="after")
-    def exact_white_initializer(self) -> Self:
+    if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
+        if sources.object_support is None:
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_METADATA_MISSING")
+        lineage = validate_photo_object_support_lineage(plan, sources.object_support)
+        native = sources.configuration_sources
         if any(
-            trace.initialization_rgb_sha256 != SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256
-            for trace in self.inputs
+            parent.configuration_command_sha256 != configuration.command_sha256
+            or parent.native_evaluation_command_sha256 != native.evaluation.command_sha256
+            or parent.native_adapter_manifest_sha256 != native.native.manifest.manifest_sha256
+            for parent in (lineage.prior_result, lineage.baseline_result)
         ):
-            raise ValueError("white photo result contains a nonwhite initializer")
-        return self
-
-
-class LocalImageSdxlPhotoStyleFullDenoisingResult(LocalImageSdxlPhotoStyleWhiteResult):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.2"]  # type: ignore[assignment]
-    initialization: SdxlPhotoStyleFullDenoisingInitialization
-
-
-class LocalImageSdxlPhotoStyleControlWindowResult(LocalImageSdxlPhotoStyleFullDenoisingResult):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.3"]  # type: ignore[assignment]
-    control_window: SdxlPhotoStyleControlWindow
-
-
-class LocalImageSdxlPhotoStyleRetainedRegionResult(LocalImageSdxlPhotoStyleFullDenoisingResult):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.4"]  # type: ignore[assignment]
-    control: SdxlCannyControlParameters
-    region_reviews_sha256: Sha256
-
-
-class LocalImageSdxlPhotoStyleBalancedExposureResult(LocalImageSdxlPhotoStyleRetainedRegionResult):
-    schema_version: Literal["local-image-sdxl-photo-style-result/1.5"]  # type: ignore[assignment]
-
-
-def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
-    if not isinstance(value, dict):
-        raise ValueError("photo result object required")
-    schema = value.get("schema_version")
-    models: dict[str, type[LocalImageSdxlPhotoStyleResult]] = {
-        "local-image-sdxl-photo-style-result/1.0": LocalImageSdxlPhotoStyleResult,
-        "local-image-sdxl-photo-style-result/1.1": LocalImageSdxlPhotoStyleWhiteResult,
-        "local-image-sdxl-photo-style-result/1.2": LocalImageSdxlPhotoStyleFullDenoisingResult,
-        "local-image-sdxl-photo-style-result/1.3": LocalImageSdxlPhotoStyleControlWindowResult,
-        "local-image-sdxl-photo-style-result/1.4": LocalImageSdxlPhotoStyleRetainedRegionResult,
-        "local-image-sdxl-photo-style-result/1.5": LocalImageSdxlPhotoStyleBalancedExposureResult,
-    }
-    if not isinstance(schema, str) or schema not in models:
-        raise ValueError("unsupported photo result family")
-    validate_contract(photo_style_contract_name(schema), value)
-    return models[schema].model_validate(value)
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_NATIVE_PARENT_MISMATCH")
+    elif sources.object_support is not None:
+        raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_UNDECLARED")
 
 
 def validate_photo_style_result(
@@ -319,52 +266,20 @@ def validate_photo_style_result(
     ):
         raise ValueError("photo result differs from pinned plan/configuration/ordered prefix")
     validate_photo_style_plan_result_relation(plan, result)
-
-
-def validate_photo_style_plan_result_relation(
-    plan: LocalImageSdxlPhotoStylePlan, result: LocalImageSdxlPhotoStyleResult
-) -> None:
-    """One authority for small plan/result relation, not full execution-source admission."""
-    expected = tuple(
-        (arm, entry.case.case_id, plan.seed)
-        for arm in LEARNED_COMPARISON_ARMS
-        for entry in plan.cases
-    )
-    observed = tuple((row.arm, row.case_id, row.seed) for row in result.outputs)
-    traces = {row.case_id: row for row in result.inputs}
-    if (
-        photo_style_version(result.schema_version) != photo_style_version(plan.schema_version)
-        or result.plan_sha256 != plan.plan_sha256
-        or result.initialization != plan.initialization
-        or result.started_at < plan.created_at
-        or tuple(traces) != tuple(entry.case.case_id for entry in plan.cases)
-        or observed != expected[: len(observed)]
-        or any(
-            traces[entry.case.case_id].source_sha256 != entry.case.reference_image.sha256
-            for entry in plan.cases
-        )
-        or any(
-            row.reference_sha256 != traces[row.case_id].source_sha256
-            or row.conditioning_sha256 != traces[row.case_id].conditioning_sha256
-            for row in result.outputs
-        )
-    ):
-        raise ValueError("photo result differs from pinned plan/configuration/ordered prefix")
-    if result.status == "SUCCEEDED" and (
-        observed != expected
-        or result.runtime is None
-        or result.duration_ms > plan.budget.maximum_duration_ms
-        or result.runtime.peak_gpu_memory_bytes > plan.budget.maximum_peak_gpu_memory_bytes
-    ):
-        raise ValueError("photo success coverage/resource budget mismatch")
-    if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan) and (
-        not isinstance(result, LocalImageSdxlPhotoStyleControlWindowResult)
-        or result.control_window != plan.control_window
-    ):
-        raise ValueError("photo result differs from declared spatial-control window")
-    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan) and (
-        not isinstance(result, LocalImageSdxlPhotoStyleRetainedRegionResult)
-        or result.control != plan.control
-        or result.region_reviews_sha256 != photo_style_region_reviews_sha256(plan)
-    ):
-        raise ValueError("photo result differs from declared retained-region review/control")
+    if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
+        if (
+            not isinstance(result, LocalImageSdxlPhotoObjectSupportResult)
+            or sources.object_support is None
+        ):
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_RESULT_MISSING")
+        review = validate_photo_object_support_lineage(plan, sources.object_support).review
+        trace = result.object_support
+        if (
+            trace.review_sha256 != review.review_sha256
+            or trace.source_sha256 != review.source.sha256
+            or trace.prior_control_sha256 != review.prior_control.sha256
+            or trace.support_mask_sha256 != review.support_mask.sha256
+            or trace.candidate_control_sha256 != review.candidate_control.sha256
+            or trace.pixel_observation != review.pixel_observation
+        ):
+            raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_RESULT_INVALID")

@@ -16,6 +16,7 @@ from eom_image_contracts.models import content_json_bytes, content_sha256
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
 from eom_image_contracts.sdxl_photo_style import (
+    LocalImageSdxlPhotoObjectSupportPlan,
     LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     photo_style_control_parameters,
@@ -23,6 +24,7 @@ from eom_image_contracts.sdxl_photo_style import (
     photo_style_version,
 )
 from eom_image_contracts.sdxl_photo_style_execution import (
+    LocalImageSdxlPhotoObjectSupportResult,
     LocalImageSdxlPhotoStyleCommand,
     LocalImageSdxlPhotoStyleResult,
     SdxlPhotoStyleExecutionSources,
@@ -33,6 +35,7 @@ from eom_image_contracts.sdxl_photo_style_execution import (
 from jsonschema import ValidationError as SchemaError
 from PIL import Image
 
+from eom_image_provider.photo_object_support_conditioning import staged_photo_style_conditioning
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.sdxl_canny_controller_io import resolve_sdxl_canny_controller
 from eom_image_provider.sdxl_canny_pixels import (
@@ -51,7 +54,6 @@ from eom_image_provider.sdxl_pair_inference import (
     run_sdxl_pair_inference,
 )
 from eom_image_provider.sdxl_pair_output_validation import validate_sdxl_pair_output_members
-from eom_image_provider.sdxl_photo_conditioning import photo_style_conditioner
 from eom_image_provider.sdxl_photo_style_sources import read_sdxl_photo_style_sources
 from eom_image_provider.sdxl_reference_pixels import (
     REFERENCE_PIXEL_DIRECTORIES,
@@ -119,6 +121,18 @@ def validate_sdxl_photo_style_workspace_result(
             validate_sdxl_pair_output_members(
                 root, workspace, result.outputs, expected_owner_uid=expected_owner_uid
             )
+            if isinstance(sources.plan, LocalImageSdxlPhotoObjectSupportPlan):
+                support = staged_photo_style_conditioning(
+                    root,
+                    sources,
+                    _read_originals(root, sources),
+                    canny=canny_conditioning_canvas_png,
+                )
+                if (
+                    not isinstance(result, LocalImageSdxlPhotoObjectSupportResult)
+                    or result.object_support != support.object_support
+                ):
+                    raise ValueError("photo object support pixel result mismatch")
             return result
     except (ProviderError, ValueError, TypeError, OSError, SchemaError) as exc:
         raise ProviderError("SDXL_PROBE_OUTPUT_INVALID") from exc
@@ -154,6 +168,9 @@ def run_sdxl_photo_style(
                 for name in ("outputs", *REFERENCE_PIXEL_DIRECTORIES)
             ):
                 raise ProviderError("SDXL_PROBE_OUTPUT_INVALID")
+            conditioning = staged_photo_style_conditioning(
+                root, sources, originals, canny=canny_conditioning_canvas_png
+            )
             spatial = sources.configuration_sources.spatial_sources
             plan = sources.plan
             control = photo_style_control_parameters(
@@ -170,7 +187,7 @@ def run_sdxl_photo_style(
                 tuple(row.case for row in plan.cases),
                 originals,
                 policy=spatial.preparation.policy,
-                conditioner=photo_style_conditioner(plan, canny=canny_conditioning_canvas_png),
+                conditioner=conditioning.conditioner,
                 initialization=plan.initialization,
             )
             create_sdxl_pair_directories(root, workspace)
@@ -249,6 +266,14 @@ def run_sdxl_photo_style(
             if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
                 value["control"] = plan.control.model_dump(mode="json")
                 value["region_reviews_sha256"] = photo_style_region_reviews_sha256(plan)
+            if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
+                if conditioning.object_support is None:
+                    raise ValueError("photo object support pixel trace missing")
+                value["control"] = plan.control.model_dump(mode="json")
+                value["support_parents_sha256"] = content_sha256(
+                    plan.support_parents.model_dump(mode="json")
+                )
+                value["object_support"] = conditioning.object_support.model_dump(mode="json")
             result = parse_photo_style_result({**value, "result_sha256": content_sha256(value)})
             validate_photo_style_result(command, sources, result)
             write_staged_member(
@@ -282,7 +307,9 @@ def verify_sdxl_photo_style_transforms(workspace: Path) -> LocalImageSdxlPhotoSt
         )
         traces = {row.case_id: row for row in result.inputs}
         originals = _read_originals(root, sources)
-        conditioner = photo_style_conditioner(sources.plan, canny=canny_conditioning_canvas_png)
+        conditioner = staged_photo_style_conditioning(
+            root, sources, originals, canny=canny_conditioning_canvas_png
+        ).conditioner
         for entry in sources.plan.cases:
             case = entry.case
             original = originals[case.case_id]

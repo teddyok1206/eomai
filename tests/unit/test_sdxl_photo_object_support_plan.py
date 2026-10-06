@@ -239,16 +239,16 @@ def test_preparation_roundtrip_boundaries_and_selected_existing_pair():
 
 
 @pytest.mark.parametrize("family", ["plan", "command", "result"])
-def test_execution_codecs_stay_closed_until_full_integration(family):
+def test_execution_codecs_never_guess_undeclared_successor(family):
     plan, _ = _fixture()
-    assert not is_photo_style_command_schema("local-image-sdxl-photo-style-command/1.6")
+    assert not is_photo_style_command_schema("local-image-sdxl-photo-style-command/1.7")
     parser = {
         "plan": parse_photo_style_plan_value,
         "command": parse_photo_style_command,
         "result": parse_photo_style_result,
     }[family]
     value = plan.model_dump(mode="json")
-    value["schema_version"] = "local-image-sdxl-photo-style-" + family + "/1.6"
+    value["schema_version"] = "local-image-sdxl-photo-style-" + family + "/1.7"
     with pytest.raises(ValueError, match="unsupported photo"):
         parser(value)
 
@@ -372,6 +372,7 @@ def test_canonical_schema_copies_pins_and_dependency_direction():
             "hashlib",
             "json",
             "dataclasses",
+            "collections",
             "typing",
             "pydantic",
             "eom_image_contracts",

@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
+from eom_image_contracts.photo_object_support import (
+    PhotoObjectSupportParentDocuments as PhotoObjectSupportParentDocuments,
+)
 from eom_image_contracts.photo_object_support import (
     PhotoObjectSupportReview,
     parse_photo_object_support_review,
@@ -20,22 +24,11 @@ from eom_image_contracts.sdxl_photo_style import (
     parse_photo_style_plan_value,
     photo_style_artifact_pointer,
 )
-from eom_image_contracts.sdxl_photo_style_execution import (
+from eom_image_contracts.sdxl_photo_style_result import (
     LocalImageSdxlPhotoStyleBalancedExposureResult,
     parse_photo_style_result,
     validate_photo_style_plan_result_relation,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class PhotoObjectSupportParentDocuments:
-    """One bounded input materialization; no binary PNG payloads in this value."""
-
-    review: bytes
-    prior_plan: bytes
-    prior_result: bytes
-    baseline_plan: bytes
-    baseline_result: bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +39,42 @@ class PhotoObjectSupportLineage:
     baseline_plan: LocalImageSdxlPhotoStyleBalancedExposurePlan
     baseline_result: LocalImageSdxlPhotoStyleBalancedExposureResult
     baseline_outputs: tuple[SdxlLearnedComparisonOutput, ...]
+
+
+def photo_object_support_metadata_members(
+    plan: LocalImageSdxlPhotoObjectSupportPlan,
+) -> tuple[tuple[str, ImageEvaluationArtifactMember], ...]:
+    """Authoritative small staged-metadata layout, not another registry/cache."""
+    return tuple(
+        ("inputs/object-support/" + field.replace("_", "-") + ".json", pointer)
+        for field, pointer in (
+            ("review", plan.support_parents.review),
+            ("prior_plan", plan.support_parents.prior_plan),
+            ("prior_result", plan.support_parents.prior_result),
+            ("baseline_plan", plan.support_parents.baseline_plan),
+            ("baseline_result", plan.support_parents.baseline_result),
+        )
+    )
+
+
+def photo_object_support_parent_documents(
+    plan: LocalImageSdxlPhotoObjectSupportPlan, metadata: Mapping[str, bytes]
+) -> PhotoObjectSupportParentDocuments:
+    """Five named bounded metadata members from an existing input materialization."""
+    return PhotoObjectSupportParentDocuments(
+        *(metadata[path] for path, _ in photo_object_support_metadata_members(plan))
+    )
+
+
+def photo_object_support_pixel_members(
+    review: PhotoObjectSupportReview,
+) -> tuple[tuple[str, ImageEvaluationArtifactMember], ...]:
+    """The source already has its existing photo member; never stage a second copy."""
+    return (
+        ("inputs/object-support/prior-control.png", review.prior_control),
+        ("inputs/object-support/mask.png", review.support_mask),
+        ("inputs/object-support/candidate-control.png", review.candidate_control),
+    )
 
 
 def _parent_pair(

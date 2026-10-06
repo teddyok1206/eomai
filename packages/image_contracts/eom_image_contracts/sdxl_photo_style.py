@@ -18,6 +18,7 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
+from eom_image_contracts.photo_object_support import PhotoObjectSupportParents
 from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonBudget
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
@@ -217,6 +218,24 @@ class LocalImageSdxlPhotoStyleBalancedExposurePlan(LocalImageSdxlPhotoStyleRetai
     )
 
 
+class PhotoObjectSupportBudget(SdxlPhotoStyleBudget):
+    maximum_outputs: Literal[2] = 2  # type: ignore[assignment]
+
+
+class LocalImageSdxlPhotoObjectSupportPlan(LocalImageSdxlPhotoStyleFullDenoisingPlan):
+    """No inheritance of old retained/protected-interior semantics."""
+
+    _configuration_schema_ref: ClassVar[str] = (
+        "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.3"
+    )
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.6"]  # type: ignore[assignment]
+    cases: tuple[SdxlPhotoStyleCase, ...] = Field(min_length=1, max_length=1)
+    budget: PhotoObjectSupportBudget
+    control: SdxlCannyControlParameters
+    support_parents: PhotoObjectSupportParents
+    comparison_policy: Literal["CHANGE_OBJECT_SUPPORT_ONLY_REUSE_PINNED_BASELINE"]
+
+
 def photo_style_region_reviews_sha256(plan: LocalImageSdxlPhotoStyleRetainedRegionPlan) -> str:
     return content_sha256([r.model_dump(mode="json") for r in plan.region_reviews])
 
@@ -238,7 +257,9 @@ def photo_style_control_parameters(
     """Released plans inherit full control; only1.3 owns an explicit window value."""
     if isinstance(plan, LocalImageSdxlPhotoStyleControlWindowPlan):
         return plan.control_window
-    if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
+    if isinstance(
+        plan, (LocalImageSdxlPhotoStyleRetainedRegionPlan, LocalImageSdxlPhotoObjectSupportPlan)
+    ):
         if plan.control != inherited:
             raise ValueError("photo retained region must keep inherited full spatial control")
         return plan.control
@@ -265,6 +286,9 @@ _PHOTO_STYLE_CONTRACTS = MappingProxyType(
         "local-image-sdxl-photo-style-plan/1.5": "sdxl-photo-style-plan-v6",
         "local-image-sdxl-photo-style-command/1.5": "sdxl-photo-style-command-v6",
         "local-image-sdxl-photo-style-result/1.5": "sdxl-photo-style-result-v6",
+        "local-image-sdxl-photo-style-plan/1.6": "sdxl-photo-style-plan-v7",
+        "local-image-sdxl-photo-style-command/1.6": "sdxl-photo-style-command-v7",
+        "local-image-sdxl-photo-style-result/1.6": "sdxl-photo-style-result-v7",
     }
 )
 
@@ -295,6 +319,7 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
         "local-image-sdxl-photo-style-plan/1.3": LocalImageSdxlPhotoStyleControlWindowPlan,
         "local-image-sdxl-photo-style-plan/1.4": LocalImageSdxlPhotoStyleRetainedRegionPlan,
         "local-image-sdxl-photo-style-plan/1.5": LocalImageSdxlPhotoStyleBalancedExposurePlan,
+        "local-image-sdxl-photo-style-plan/1.6": LocalImageSdxlPhotoObjectSupportPlan,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")

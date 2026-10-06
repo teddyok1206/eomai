@@ -1,0 +1,630 @@
+{
+  "$defs": {
+    "LocalImageRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "compute_capability": {
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "title": "Compute Capability",
+          "type": "string"
+        },
+        "cuda_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Cuda Version",
+          "type": "string"
+        },
+        "diffusers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Diffusers Version",
+          "type": "string"
+        },
+        "gpu_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Gpu Name",
+          "type": "string"
+        },
+        "peak_gpu_memory_bytes": {
+          "minimum": 1,
+          "title": "Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "provider_version": {
+          "const": "eom-local-image-provider/1.0",
+          "default": "eom-local-image-provider/1.0",
+          "title": "Provider Version",
+          "type": "string"
+        },
+        "python_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Python Version",
+          "type": "string"
+        },
+        "torch_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Torch Version",
+          "type": "string"
+        },
+        "transformers_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Transformers Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "python_version",
+        "torch_version",
+        "diffusers_version",
+        "transformers_version",
+        "cuda_version",
+        "gpu_name",
+        "compute_capability",
+        "peak_gpu_memory_bytes"
+      ],
+      "title": "LocalImageRuntime",
+      "type": "object"
+    },
+    "PhotoObjectSupportExecutionTrace": {
+      "additionalProperties": false,
+      "description": "Recomputed bounded observations, not a semantic/quality acceptance flag.",
+      "properties": {
+        "candidate_control_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Candidate Control Sha256",
+          "type": "string"
+        },
+        "pixel_observation": {
+          "$ref": "#/$defs/PhotoObjectSupportPixelObservation"
+        },
+        "prior_control_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Prior Control Sha256",
+          "type": "string"
+        },
+        "review_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Review Sha256",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "support_mask_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Support Mask Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "review_sha256",
+        "source_sha256",
+        "prior_control_sha256",
+        "support_mask_sha256",
+        "candidate_control_sha256",
+        "pixel_observation"
+      ],
+      "title": "PhotoObjectSupportExecutionTrace",
+      "type": "object"
+    },
+    "PhotoObjectSupportPixelObservation": {
+      "additionalProperties": false,
+      "description": "Small immutable claims; a future pixel consumer must recompute all counts.",
+      "properties": {
+        "added_edges": {
+          "const": 0,
+          "default": 0,
+          "title": "Added Edges",
+          "type": "integer"
+        },
+        "control_mode": {
+          "const": "RGB",
+          "default": "RGB",
+          "title": "Control Mode",
+          "type": "string"
+        },
+        "control_polarity": {
+          "const": "WHITE_EDGES_ON_BLACK_RGB",
+          "default": "WHITE_EDGES_ON_BLACK_RGB",
+          "title": "Control Polarity",
+          "type": "string"
+        },
+        "deleted_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Deleted Edges",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 512,
+          "default": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "mask_mode": {
+          "const": "L",
+          "default": "L",
+          "title": "Mask Mode",
+          "type": "string"
+        },
+        "mask_tones": {
+          "default": [
+            0,
+            255
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": 0,
+              "type": "integer"
+            },
+            {
+              "const": 255,
+              "type": "integer"
+            }
+          ],
+          "title": "Mask Tones",
+          "type": "array"
+        },
+        "original_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 2,
+          "title": "Original Edges",
+          "type": "integer"
+        },
+        "retained_edges": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Retained Edges",
+          "type": "integer"
+        },
+        "support_area_pixels": {
+          "exclusiveMaximum": 425984,
+          "minimum": 1,
+          "title": "Support Area Pixels",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 832,
+          "default": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "support_area_pixels",
+        "original_edges",
+        "retained_edges",
+        "deleted_edges"
+      ],
+      "title": "PhotoObjectSupportPixelObservation",
+      "type": "object"
+    },
+    "SdxlCannyControlParameters": {
+      "additionalProperties": false,
+      "properties": {
+        "conditioning_scale": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Conditioning Scale",
+          "type": "number"
+        },
+        "guidance_end": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Guidance End",
+          "type": "number"
+        },
+        "guidance_start": {
+          "default": 0.0,
+          "maximum": 0.0,
+          "minimum": 0.0,
+          "title": "Guidance Start",
+          "type": "number"
+        },
+        "resource_profile": {
+          "const": "ALL_GPU_FP16_NO_OFFLOAD",
+          "default": "ALL_GPU_FP16_NO_OFFLOAD",
+          "title": "Resource Profile",
+          "type": "string"
+        }
+      },
+      "title": "SdxlCannyControlParameters",
+      "type": "object"
+    },
+    "SdxlCannyReferenceTrace": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "conditioning_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Conditioning Sha256",
+          "type": "string"
+        },
+        "height_px": {
+          "const": 512,
+          "default": 512,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "initialization_rgb_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Initialization Rgb Sha256",
+          "type": "string"
+        },
+        "source_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "width_px": {
+          "const": 832,
+          "default": 832,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "case_id",
+        "source_sha256",
+        "conditioning_sha256",
+        "initialization_rgb_sha256"
+      ],
+      "title": "SdxlCannyReferenceTrace",
+      "type": "object"
+    },
+    "SdxlLearnedComparisonOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "arm": {
+          "enum": [
+            "BASE",
+            "LORA"
+          ],
+          "title": "Arm",
+          "type": "string"
+        },
+        "case_id": {
+          "pattern": "^imgsdxlcase_[0-9a-f]{32}$",
+          "title": "Case Id",
+          "type": "string"
+        },
+        "conditioning_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Conditioning Sha256",
+          "type": "string"
+        },
+        "duration_ms": {
+          "maximum": 1800000,
+          "minimum": 1,
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "height_px": {
+          "const": 500,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^outputs/(?:base|lora)/final/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "peak_gpu_memory_bytes": {
+          "maximum": 17179869184,
+          "minimum": 1,
+          "title": "Peak Gpu Memory Bytes",
+          "type": "integer"
+        },
+        "raw_member_path": {
+          "pattern": "^outputs/(?:base|lora)/raw/imgsdxlcase_[0-9a-f]{32}-[0-9]{10}\\.png$",
+          "title": "Raw Member Path",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "raw_size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Raw Size Bytes",
+          "type": "integer"
+        },
+        "reference_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Reference Sha256",
+          "type": "string"
+        },
+        "seed": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "width_px": {
+          "const": 800,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "arm",
+        "case_id",
+        "seed",
+        "reference_sha256",
+        "conditioning_sha256",
+        "member_path",
+        "sha256",
+        "size_bytes",
+        "raw_member_path",
+        "raw_sha256",
+        "raw_size_bytes",
+        "width_px",
+        "height_px",
+        "duration_ms",
+        "peak_gpu_memory_bytes"
+      ],
+      "title": "SdxlLearnedComparisonOutput",
+      "type": "object"
+    },
+    "SdxlPhotoStyleFullDenoisingInitialization": {
+      "additionalProperties": false,
+      "description": "One numerical factor; identical white pixels and photo-derived spatial control.",
+      "properties": {
+        "denoising_strength": {
+          "maximum": 1.0,
+          "minimum": 1.0,
+          "title": "Denoising Strength",
+          "type": "number"
+        },
+        "effective_denoising_steps": {
+          "const": 30,
+          "title": "Effective Denoising Steps",
+          "type": "integer"
+        },
+        "pillow_version": {
+          "const": "11.3.0",
+          "title": "Pillow Version",
+          "type": "string"
+        },
+        "policy": {
+          "const": "CONSTANT_WHITE_RGB_832X512_FULL_DENOISE/1.0",
+          "title": "Policy",
+          "type": "string"
+        },
+        "scheduler_steps": {
+          "const": 30,
+          "title": "Scheduler Steps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policy",
+        "denoising_strength",
+        "scheduler_steps",
+        "effective_denoising_steps",
+        "pillow_version"
+      ],
+      "title": "SdxlPhotoStyleFullDenoisingInitialization",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "activation_policy": {
+      "const": "FORBIDDEN",
+      "title": "Activation Policy",
+      "type": "string"
+    },
+    "case_relation": {
+      "const": "LICENSED_PHOTO_REFERENCES_NOT_CORPUS_HOLDOUT",
+      "title": "Case Relation",
+      "type": "string"
+    },
+    "command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Command Sha256",
+      "type": "string"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "title": "Completed At",
+      "type": "string"
+    },
+    "configuration_command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Configuration Command Sha256",
+      "type": "string"
+    },
+    "control": {
+      "$ref": "#/$defs/SdxlCannyControlParameters"
+    },
+    "duration_ms": {
+      "maximum": 3600000,
+      "minimum": 1,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "SDXL_PROBE_INPUT_INVALID",
+            "SDXL_PROBE_MODEL_INVALID",
+            "SDXL_PROBE_HASH_MISMATCH",
+            "SDXL_PROBE_GPU_UNAVAILABLE",
+            "SDXL_PROBE_OOM",
+            "SDXL_PROBE_EXEC_FAILED",
+            "SDXL_PROBE_OUTPUT_INVALID",
+            "SDXL_PROBE_BUDGET_EXCEEDED",
+            "SDXL_PROBE_PROMPT_TRUNCATED"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Error Code"
+    },
+    "holdout_binary_reads": {
+      "const": 0,
+      "title": "Holdout Binary Reads",
+      "type": "integer"
+    },
+    "initialization": {
+      "$ref": "#/$defs/SdxlPhotoStyleFullDenoisingInitialization"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/SdxlCannyReferenceTrace"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "native_adapter_manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Native Adapter Manifest Sha256",
+      "type": "string"
+    },
+    "native_evaluation_command_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Native Evaluation Command Sha256",
+      "type": "string"
+    },
+    "native_fit_policy": {
+      "const": "NATIVE_FIT_800X500_CENTER_832X512_OPENCV_CANNY/1.0",
+      "title": "Native Fit Policy",
+      "type": "string"
+    },
+    "object_support": {
+      "$ref": "#/$defs/PhotoObjectSupportExecutionTrace"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/SdxlLearnedComparisonOutput"
+      },
+      "maxItems": 2,
+      "title": "Outputs",
+      "type": "array"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Sha256",
+      "type": "string"
+    },
+    "quality_acceptance": {
+      "const": "NOT_REVIEWED",
+      "title": "Quality Acceptance",
+      "type": "string"
+    },
+    "result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Result Sha256",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^imgsdxlvalcmprun_[0-9a-f]{32}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runtime": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalImageRuntime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-result/1.6",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "support_parents_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Support Parents Sha256",
+      "type": "string"
+    },
+    "training_steps": {
+      "const": 0,
+      "title": "Training Steps",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "plan_sha256",
+    "configuration_command_sha256",
+    "native_evaluation_command_sha256",
+    "native_adapter_manifest_sha256",
+    "case_relation",
+    "native_fit_policy",
+    "initialization",
+    "quality_acceptance",
+    "activation_policy",
+    "training_steps",
+    "holdout_binary_reads",
+    "status",
+    "error_code",
+    "runtime",
+    "inputs",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256",
+    "control",
+    "support_parents_sha256",
+    "object_support"
+  ],
+  "title": "LocalImageSdxlPhotoObjectSupportResult",
+  "type": "object"
+}

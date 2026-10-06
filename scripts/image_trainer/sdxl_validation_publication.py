@@ -9,6 +9,7 @@ from pathlib import Path
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
 from eom_image_contracts.sdxl_photo_style_execution import (
+    LocalImageSdxlPhotoObjectSupportResult,
     LocalImageSdxlPhotoStyleCommand,
     LocalImageSdxlPhotoStyleResult,
 )
@@ -218,11 +219,14 @@ def _publish_initialized_reference_comparison(
             "result.json", result.schema_version.removeprefix("local-image-"), destination=primary
         )
         for trace in result.inputs:
-            admit(
-                "conditionings/" + trace.case_id + ".png",
-                "sdxl-canny-conditioning-output/1.0",
-                sha=trace.conditioning_sha256,
-            )
+            # 1.6 consumes an existing canonical candidate. The local conditioning
+            # file is a validation/workspace materialization, not a second Artifact.
+            if not isinstance(result, LocalImageSdxlPhotoObjectSupportResult):
+                admit(
+                    "conditionings/" + trace.case_id + ".png",
+                    "sdxl-canny-conditioning-output/1.0",
+                    sha=trace.conditioning_sha256,
+                )
             admit("initializers/" + trace.case_id + ".png", "sdxl-validation-initializer/1.0")
         for output in result.outputs:
             admit(
