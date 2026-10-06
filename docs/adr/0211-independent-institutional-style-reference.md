@@ -818,3 +818,50 @@ Formatting/patch-context misses had no runtime side effect. Python3.11 strict
 mypy for both adapters, Ruff/format and diff PASS. The light environment lacks
 safetensors; no dependency install. Built-wheel numerical FD handoff testing uses
 the already installed lab0.6.2 with synthetic tiny tensors, not real encoder load.
+
+### Actual held-file numerical smoke — 2026-10-06 17:03 UTC
+
+Built source `1c118a0baf91c6483a4abf7d067eea266decbcaa` as non-editable wheels;
+all388 RECORD members (296/57/35) verified. No installation. The existing lab
+safetensors0.6.2/NumPy2.4.6 performed three actual Rust tensor reads from held
+read-only descriptors in two disposable tiny synthetic six-file trees. Both
+weights read exactly in the intact case; same-byte pathname replacement left
+the held inode readable but was rejected at scope exit. All handles closed.
+The test-only whitelist was restored; no synthetic model was registered.
+Torch/Transformers/Diffusers, pretrained weights, encoder, GPU, network,
+VALIDATION/HOLDOUT, new images and production changes were all unused.
+
+Two initial operator fixture failures are retained as documentary notes, not
+claimed raw logs: a timestamp `+00:00`/canonical `Z` hash mismatch, then an
+intermediate fixture directory inheriting group-write permissions. Fix only the
+operator timestamp and explicitly create every disposable directory with0700;
+do not relax production canonicalization/permission checks. These are fixture
+iterations, not retries of real model inference or publication.
+
+The existing Orchestrator owner committed/reread five text members19,542bytes:
+`artifact_700c5ed84e764f14a0f1c31bdfd8ade6` /
+`rev_ee6e3d0bbd334c3d8870c06f61f97ce2`, primary
+`reports/synthetic-held-fd.json`, SHA
+`d8dac234dff2b1a33e5246d40c93a2acaac98de7253e10227e2a8ba1921633bb`.
+Exact operators and fixture-failure notes are retained without model/PNG copies.
+This proves the held-file→Rust reader boundary only, not admission of upstream
+weights, actual encoder loading, embeddings or institutional output quality.
+Next is pinned encoder loading/global-style embedding ownership. Full quality
+NOT_ACCEPTED; goal ACTIVE; old output budget12/12 remains exhausted; new model
+acquisition/four-output authorization remains NOT_RECORDED.
+
+### Institutional direction recheck — 2026-10-06 17:09 UTC
+
+Actually viewed the already admitted TRAIN original crops again:
+`imgsourcecrop_007c95f669aa255b393c4b92e0e710b3` (inclined cart) and
+`imgsourcecrop_4792b267d666a8b771f1538690c74024` (bacterium). The cart uses
+simple outlines and restrained gray face separation; the bacterium retains
+necessary internal strands, small marks and surface structures. This supports
+subject-dependent simplification, not indiscriminate removal of fine biological
+structure or legitimate grayscale. Preserve structure/composition while reducing
+unnecessary rendering detail; scientific labels remain separate controlled
+overlays. This repeated own-view adds neither unique-source coverage nor
+independent blind review, and has no new generated counterpart to qualify.
+Continue the established original-view cadence at trained-candidate, fixed-output
+comparison and major prompt/control/style/publication changes; unchanged idle
+training monitoring remains30 minutes, not repeated image rereading or polling.
