@@ -210,3 +210,67 @@ script, and uses the completed comparison metadata/adapter read-only. Numerical
 instrumentation of the trainer's normalization helpers is confined to this test;
 no runtime package or cross-service private import is added. No dependency,
 migration, inference policy or production activation changes are required.
+
+## Executed source-band diagnostic — 2026-10-06 10:05 UTC
+
+Source `2133f844258a6e7d97fc01a726d0df729271add1`, script raw SHA
+`84c64d51f946a091b179b22930d3cbc34a1f8efeddb89673630b8caeb91527d2`.
+Default invocation: six accounting tests PASS, one installed-model test SKIP;
+Ruff/format/strict mypy PASS. The installed isolated role actually ran all seven
+tests PASS in13.733s; numerical body11.111497s, peak CUDA allocation5,431,566,848
+bytes. Twelve full-UNet forwards; two text encoders, one VAE, one UNet and one
+adapter loaded. Generated images0, optimizer0, training updates0, HOLDOUT reads0.
+The native1024x768 cart/car and768x1024 beaker, seed104729, timesteps250/750 and original
+training captions/pixels were unchanged between arms. No image denoising loop.
+
+Paired relative MSE reduction `(BASE - LORA) / BASE`, percent (larger is better):
+
+| Original TRAIN specimen | timestep | Global | Dark-source cells | Nonwhite-only | Nearwhite-only |
+|---|---:|---:|---:|---:|---:|
+| Laboratory cart | 250 | 9.416 | 7.661 | 6.628 | 16.661 |
+| Laboratory cart | 750 | 30.304 | 11.559 | 16.533 | 66.940 |
+| Heated beaker | 250 | 14.307 | 13.052 | 11.950 | 21.277 |
+| Heated beaker | 750 | 21.781 | 8.056 | 22.160 | 56.936 |
+| Partial rear car | 250 | 3.252 | 3.244 | 2.382 | 6.099 |
+| Partial rear car | 750 | 8.490 | 0.222 | 6.058 | 38.225 |
+
+All regional counts reconstruct the global MSE. Empty bands would remain
+NOT_APPLICABLE; all three bands exist in these three actual samples. The models
+share the same sampled native latent/noise tensors. This subset posterior is not
+an exact replay of the original100-target stochastic training sequence.
+
+Inference: adapter learning is measurable, but the toned car's dark-source
+response is weak in this probe. Whitespace has a larger *relative improvement*;
+that does **not** prove whitespace dominates training loss. BASE nearwhite loss
+contributions were15.93–30.98%, whereas dark-source contributions were28.65–53.20%
+across these six measurements. Pixel-count majority and loss contribution are
+different. No loader/normalization/optimizer bug is established, and this is
+TRAIN diagnostic evidence, not perceptual quality or generalization acceptance.
+The next single learning hypothesis is specified in [ADR0209](0209-bounded-native-contour-loss-experiment.md).
+
+Owner admission revalidated the full canonical TRAIN100 closure, exact training
+command and77 metadata members against the completed comparison workspace;
+only three selected PNGs and the frozen diagnostic script were staged once.
+The old comparison workspace/weights remained read-only. Contracts/provider
+installed wheel RECORD proof remains28324e85; the installed numerical trainer
+helpers were used, not falsely claimed to be the diagnostic source commit.
+
+Canonical11-member/90,744-byte operation evidence, all members re-resolved:
+`artifact_97d28379a0424bd5b0df89bf78ca6ac9` /
+`rev_d15625f14881426cb09f90cd6d5de1e9`, `reports/own-review.json`,
+operations/plain-text-log/1.0, SHA
+`9b970c642b6f225c7f0e7d565d69ac1413abfa1532859eefe0aa3519e9687505`.
+Local review: `/tmp/eom-source-band-denoising-20261006/own-review.json`.
+The terminal transient was stopped only after canonical receipt/readback; unit
+is now not-found/inactive and GPU idle2MiB/0%. Five main services remained ACTIVE,
+production binding SHA unchanged. No new activation, source PNG duplication in
+evidence, DB binary values or history changes.
+
+Archive note: dispatch log's `gpu_calls=0` was a pre-result placeholder, **not**
+an executed-model count; the immutable own-review explicitly corrects it to one
+GPU run/twelve UNet forwards plus text/VAE loads. Do not propagate that placeholder.
+No numerical retry was needed. Source lint/type fixes were completed before
+execution; archive operator lint/format was corrected before publication.
+
+Full objective remains ACTIVE/NOT_ACCEPTED; no independent blind/HOLDOUT or new
+Item/HWPX acceptance has been claimed from this diagnostic.

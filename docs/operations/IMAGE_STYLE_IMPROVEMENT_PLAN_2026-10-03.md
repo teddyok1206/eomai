@@ -4630,3 +4630,33 @@ closure/installed worker admission. No additional PNG read/transform/model/GPU/
 training/production changes. Five services ACTIVE, binding unchanged. Next:
 command/result + owner-stage/provider integration and installed guards, then
 one pair. Goal ACTIVE; quality NOT_ACCEPTED.
+
+Paired native TRAIN noise-prediction diagnostic, **2026-10-06 10:05 UTC**:
+[ADR0208](../adr/0208-installed-native-lora-loading-parity.md) now records an
+actual isolated GPU run, not another picture-generation or training acceptance.
+Source2133f844: six model-free tests PASS/one explicit opt-in SKIP; Ruff/format/
+strict mypy PASS. Installed execution seven tests PASS, twelve full-UNet forwards
+on three unchanged native TRAIN targets at timestep250/750, one fixed seed,
+shared tensors between BASE/LoRA. Numerical body11.111497s, peak CUDA allocation
+5,431,566,848bytes; model loads CLIP2/VAE1/UNet1/adapter1. New PNG generation0,
+training/optimizer0, HOLDOUT0; frozen100 source/caption/label changes0.
+
+All paired regional losses improve, but dark-source relative reduction is
+0.222–13.052%, nearwhite16.661–66.940% on cart/beaker and6.099–38.225% on car.
+Whiteness is **not** proven to dominate the objective: original nearwhite loss
+contribution15.93–30.98%, dark28.65–53.20%. This supports one bounded learning
+hypothesis, not a normalization/loader defect, perceptual PASS or dataset edits.
+[ADR0209](../adr/0209-bounded-native-contour-loss-experiment.md) freezes the next
+implementation direction: successor protocol first, bounded2:1 native dark-cell
+loss weighting, identical100-target/800-step schedule, no threshold/seed sweep.
+That weighted training has **not** been implemented/executed; production unchanged.
+
+Canonical evidence11members/90,744bytes re-resolved equal:
+`artifact_97d28379a0424bd5b0df89bf78ca6ac9` /
+`rev_d15625f14881426cb09f90cd6d5de1e9`, `reports/own-review.json`, raw SHA
+`9b970c642b6f225c7f0e7d565d69ac1413abfa1532859eefe0aa3519e9687505`.
+Completed transient stopped after receipt; GPU idle2MiB/0%, five services ACTIVE,
+production binding unchanged. Dispatch's pre-result `gpu_calls=0` placeholder is
+explicitly corrected in canonical review to the actual GPU/model counts above.
+No numerical retry or source PNG/weight duplication in evidence. Independent
+blind/HOLDOUT/fidelity/Item-HWPX/activation gates remain open; goal ACTIVE.
