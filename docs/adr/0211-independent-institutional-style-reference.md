@@ -1,6 +1,6 @@
 # ADR0211: Separate institutional style reference from object geometry
 
-Status: CPU capability probes and pure preparation contract, 2026-10-06 UTC.
+Status: CPU capability probes, preparation contract and tested local resolver, 2026-10-06 UTC.
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
@@ -192,3 +192,65 @@ GPU inference, new training, HOLDOUT exposure or independent review. Execution
 budget approval is still not recorded. Next: existing-owner file resolution and
 closed comparison preparation/consumer; do not submit old contracts or promote
 this optional metadata-only component as a ready new inference path.
+
+## Resolver design: six-file descriptor snapshot
+
+The existing provider filesystem adapter owns local resolution; contracts remain
+pure. Resolve one exact model/revision/manifest pointer, never scan for another
+revision. Build a keyed directory-entry map from the fixed six-file manifest and
+open nested directories relative to verified descriptors with no symlink traversal.
+Check owner/non-writable modes and exact directory closure, including empty/hidden
+extra directories. Read/hash the four bounded metadata files once, validate them,
+then stream/hash the two weights once without materializing tensors/weight bytes.
+Return a frozen manifest/root result for the protected immutable model store.
+
+Access is one indexed path lookup and ordered six-member traversal. Structure:
+directory map/set plus ExitStack-owned descriptors; O(files*path-depth + bytes)
+time, O(metadata + 4MiB streaming buffer + directory entries) space. No cache,
+new DB/index/registry or duplicate large files. Existing staged-file I/O supplies
+safe bounded reads and streaming hashes; exact closure checks are this component's
+responsibility, not a second generic filesystem framework.
+
+Metadata admission precedes weight reads. Recheck file/directory identity and
+closure before returning to catch replacement during validation. Immutable
+root-owned/non-writable runtime storage remains required; this does not grant
+numerical libraries a capability to open arbitrary worker-supplied paths.
+Reuse stable existing MODEL_INVALID/HASH_MISMATCH provider codes; missing/stale
+locations fail explicitly, no latest substitution or recovery. No write, model
+download, tensor load, lease, job/worker execution or lifecycle transition occurs.
+Tests use tiny bytes with a test-only replaced whitelist; they cannot establish
+actual pretrained/safetensor validity or installed-role acceptance. Acquisition,
+installation, comparison contracts and runtime behavior remain separate gates.
+
+## Resolver implementation checkpoint — 2026-10-06 15:08 UTC
+
+The provider's `sdxl_ip_style_io` adapter now implements this read-only boundary.
+No consumer, acquisition/installer or numerical worker route is implied. Tests
+first exposed five missed mutation cases (manifest replacement/permissions and
+revision/model/store permissions); they now fail closed. Initial fixture failures
+were separately caused by parent-directory umask, not model or production faults;
+the fixture explicitly fixes its own modes. No production rows/files were changed.
+
+Before opening files, reject special files, links, writable modes and wrong owner;
+then validate/hash once using the existing I/O owner. Manifest and six member
+snapshots include inode, size, mtime, ctime, owner, mode and link count. Descriptor
+and pinned location checks cover directory substitution, exact nested closure and
+permission changes during reads, while allowing unrelated sibling revisions.
+No protected store is allowed to be worker-writable. This is a validated snapshot,
+not a guarantee against an authorized owner later changing storage or a numerical
+library reopening paths; the later model-load boundary remains to be implemented.
+
+New tiny-file tests88 PASS; combined focused manifest/controller/resolution,
+legacy SDXL/LoRA contracts and dependency regressions343 PASS in8.59s (the88
+are included, not added again). Python3.11 strict mypy four core modules PASS;
+Ruff/format, shell syntax and diff checks PASS. Both existing release builders
+require the new provider module in their wheels. Official pinned config/card/code
+license/encoder notice were reread (four members23,217bytes), matching every
+existing size/hash and the new metadata validator. No weight bytes were acquired.
+These are not real safetensor loading, installed-role, CUDA or quality tests.
+
+Build/non-editable resolver simulation remains pending at this source checkpoint.
+Acquisition/four-output approval is still NOT_RECORDED; old12/12 is unchanged.
+Installed lab staysd3c03751; production binding remains unchanged. Full goal
+quality is NOT_ACCEPTED. Next safe work is closed comparison preparation; actual
+OFF/ON outputs require the pending explicit budget/acquisition approval.

@@ -5,7 +5,29 @@ object shape and composition; LoRA supplies examination-style strokes and restra
 Scientific labels, axes, units and exact geometry remain Python/SVG/native HWPX responsibilities.
 Success requires semantic accuracy as well as style, not merely passing edge-density measurements.
 
-## Latest checkpoint — 2026-10-06 14:51 UTC
+## Latest checkpoint — 2026-10-06 15:08 UTC
+
+The existing provider now has a tested read-only resolver for ADR0211's pinned
+six-file style component. Exact nested closure, no-link/owner/mode checks,
+metadata-before-weights and single-pass streaming hashes preserve the existing
+staging owner. Mutation tests exposed and fixed missing manifest/ancestor checks;
+no new filesystem framework, DB, dependency, worker or numerical route was added.
+
+New resolver88 tests are included in343 focused regression PASS/zero skips in
+8.59s. Strict mypy four core modules/Python3.11, Ruff/format, shell syntax and
+diff checks PASS. Actual pinned official metadata (four members23,217bytes) also
+passed its exact hashes/semantic validator; weight bytes0, GPU calls0. Build-only
+resolver simulation is pending at this checkpoint; previous382-member wheel
+evidence belongs to the previous contract-only source, not this resolver.
+
+Installed lab remainsd3c03751; production unchanged. Acquisition/four-output
+approval remains NOT_RECORDED; old12/12 stays exhausted. Full quality remains
+NOT_ACCEPTED; comparison consumer, actual OFF/ON outputs, independent review,
+HOLDOUT and Item Preview/HWPX gates are OPEN. Periodic actual-original own
+calibration remains tied to completed candidates, fixed comparisons and major
+settings changes, without treating CPU/file tests as visual improvements.
+
+## Historical preparation checkpoint — 2026-10-06 14:51 UTC
 
 ADR0211's optional style-model preparation contract is implemented, not a new
 production image provider. JSON Schema2020-12 precedes worker behavior; Pydantic
