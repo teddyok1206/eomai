@@ -690,7 +690,7 @@ detect leftover scales, a missing target, processor replacement or an exception
 between ON and OFF. This boundary does not prove scheduler/RNG/embedding equality,
 pretrained zero-scale parity, actual combined-stack memory or output quality.
 
-### Scope implementation checkpoint — 2026-10-06 16:40 UTC
+### Scope implementation checkpoint — 2026-10-06 16:39 UTC
 
 Focused regression364 PASS, including38 new scope cases (not added again to the
 total). Tests cover exact OFF/ON/zero cleanup, multiple style transformer targets,
@@ -707,3 +707,44 @@ without changing requirements; one patch context missed already-formatted source
 and was reapplied after reading it, with no partial edit or runtime side effect.
 Actual built-wheel CPU/public Diffusers scope and attention parity are the next
 validation boundary, not covered by this unit result.
+
+### Actual scale-scope checkpoint — 2026-10-06 16:41 UTC
+
+Built source `87a5edcdb69f2e34931b2e01c7d6242ec29f5346` passed a repository-free
+CPU invocation of the new session using installed Diffusers0.35.2/torch2.7.1+cu128.
+A random tiny UNet with11 actual IP processors/11 self-attention processors is
+only a public-interface fixture, not pretrained SDXL/LoRA. OFF/ON/OFF used the
+same random text/style tensors and attention weights: exact text-only parity at
+zero, finite nonzero effect at ON and exact zero replay. Only the designated
+style processor became1; all processor objects, including self-attention, stayed
+identical. A deliberate CPU body exception was preserved after successful zero
+reset; reuse of that failed session was rejected. Four numerical attention
+forwards and one scope-failure probe are not diffusion/model-output attempts.
+
+All388 wheel RECORD members (296/57/35) PASS, no runtime install. Contract/provider/
+trainer SHA-256s:
+`d0cc6bdad05c6f462847d6bd2b78bd64448cad5af8ab9842574a963037dea77f`,
+`97d7e903cee0db27a1aad88865c90a4588f3283ea522182e51b6358701ae4511`,
+`2065cbf3e9ef1a0913e4ef05bb11ba58282fe4f0b0f34e2a3003bbb60fd9d6a6`.
+Build-only directory:
+`/tmp/eom-image-trainer-build/87a5edcdb69f2e34931b2e01c7d6242ec29f5346.jUCA1j/dist`.
+The CPU import emitted an existing optional8-bit optimizer/CUDA availability
+notice; no optimizer, CUDA initialization or fallback was used. Network/CUDA
+attempts, pretrained weights/encoder, diffusion, PNG/VALIDATION/HOLDOUT reads,
+new images and production changes all0.
+
+The existing Orchestrator owner committed/reread four text members17,998bytes as
+`artifact_f1f8994fa802489ebcea6dd205873ade` /
+`rev_bc626c76178a4c3e8c5b135da4f596ef`, primary
+`reports/style-scale-scope.json`, SHA
+`d4aef930a6892123f66f9b73d2421418b508fd2cee7ac3fa6f1c51b7640a00e8`.
+Exact operator, output, log and owner are retained without source/model copies.
+Initial unused operator import was removed before execution; no runtime retry.
+
+This is scale-scope acceptance only. Scheduler/RNG/embedding pair equality, exact
+encoder weight opening, actual pretrained combined stack/VRAM/zero-scale parity,
+institutional output comparison, independent blind review and Item Preview/HWPX
+remain unproved. No additional original own-view coverage is claimed for unchanged
+source pairs. Full quality NOT_ACCEPTED, goal ACTIVE, old budget12/12 exhausted,
+new acquisition/four-output authorization NOT_RECORDED. Next: pinned local encoder
+load/embedding ownership and then matched actual outputs in the authorized scope.
