@@ -10,8 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 import unittest
+from importlib import metadata
 from pathlib import Path
 from typing import Any, ClassVar
 from unittest.mock import patch
@@ -187,6 +189,11 @@ class InstalledNativeLoraLoadingParity(unittest.TestCase):
             dataset_png_reads=0,
             cpu_unet_loads=1,
             cpu_adapter_loads=1,
+            runtime={
+                name: metadata.version(name)
+                for name in ("torch", "diffusers", "peft", "safetensors")
+            },
+            python_version=sys.version.split()[0],
             quality_acceptance="NOT_EVALUATED",
             generalization="NOT_EVALUATED",
         )
