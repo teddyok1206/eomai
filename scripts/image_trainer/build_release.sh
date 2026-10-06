@@ -284,6 +284,7 @@ with zipfile.ZipFile(provider) as archive:
         "eom_image_provider/sdxl_ip_style_pixels.py",
         "eom_image_provider/sdxl_ip_style_encoder_input.py",
         "eom_image_provider/sdxl_ip_style_encoder.py",
+        "eom_image_provider/sdxl_ip_style_adapter.py",
         "eom_image_provider/sdxl_ip_style_routing.py",
         "eom_image_provider/sdxl_canny_backend.py",
         "eom_image_provider/sdxl_canny_reference.py",

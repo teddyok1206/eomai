@@ -4,6 +4,46 @@ Status: CPU capability/preprocessing, preparation contracts and tested scale sco
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
+## Adapter attachment boundary — planned implementation, no dispatch
+
+Extend the existing provider, not the worker protocol or pipeline owner. The
+caller owns a fresh SDXL/ControlNet pipeline with the pinned native LoRA already
+attached. A read-only attachment function accepts only the exact model pointer
+and routing value. Resolve the held safetensors descriptor through the existing
+six-file model scope; no pathname/Hub loader, pickle, encoder acquisition or
+worker-supplied URL. Canonical identity remains the registered revision and hash.
+
+Before mutating the pipeline, derive a keyed expected tensor-shape map from its
+ordered public cross-attention modules and the fixed global projection (four
+image tokens,1024 encoder dimensions). Reject all missing/extra/Plus/FaceID keys,
+wrong shapes/dtypes/devices and nonfinite tensors. Use the pinned Diffusers public
+`load_ip_adapter` with an in-memory state dictionary, `image_encoder_folder=None`
+and local-only loading. Its replacement of self-attention processor *instances*
+during loading is expected; frozen processor identity begins after attachment,
+not before. Existing base/LoRA parameter identities must remain unchanged.
+
+Return a zero-scale routing session only after the held-file scope's final
+identity/closure checks succeed. Partial loader failure or final file mutation
+requires the caller to discard its entire owned pipeline; do not unload, repair,
+retry or reuse it. Existing external GPU lease and pipeline cleanup retain their
+ownership. No new registry, persistent tensor, dependency or DB schema.
+
+Access is one bounded model resolution and ordered tensor traversal, O(parameters
++ adapter bytes) time and one temporary adapter state dictionary. CPU weights
+exist only at this explicit load boundary and are cleared in `finally`. The
+public path-based loader is simpler but would reopen an unverified path and may
+fetch an image encoder. This attachment alone neither materializes the frozen
+CFG embedding nor runs diffusion, registers a plan or opens the worker CLI.
+
+The source implementation now lives in `sdxl_ip_style_adapter`.39 new tests
+cover the held descriptor, exact global-state keys/shapes/finite CPU float16/32,
+base/native-LoRA identity preservation, partial failure without repair/retry,
+final same-byte file replacement, fresh pipeline admission and runtime drift.
+Focused adapter/wire/routing/model-I/O/encoder/Canny/dependency regression352 PASS
+in8.61s, including those39. Ruff/format, strict mypy/Python3.11, diff and release
+shell syntax PASS. These tests use fakes/tiny files; actual public-loader numeric
+proof, built-wheel integrity and pretrained/GPU memory gates are still separate.
+
 ## Evidence and hypothesis
 
 The native1.3 candidate failed its fixed own visual comparison. The subsequent

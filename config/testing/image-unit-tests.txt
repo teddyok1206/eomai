@@ -48,6 +48,7 @@ tests/unit/test_sdxl_exterior_training_targets.py
 tests/unit/test_sdxl_geometry_baseline_reuse.py
 tests/unit/test_sdxl_ip_style_comparison_plan.py
 tests/unit/test_sdxl_ip_style_encoder.py
+tests/unit/test_sdxl_ip_style_adapter.py
 tests/unit/test_sdxl_ip_style_encoder_input.py
 tests/unit/test_sdxl_ip_style_execution.py
 tests/unit/test_sdxl_ip_style_io.py
