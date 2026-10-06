@@ -4845,6 +4845,38 @@ No schema bytes, old1.0–1.6 meaning, historical output, dependency, queue or
 production policy changes. Frozen next output inventory remains beaker2 + wagon1,
 not five new images; BASE regeneration0 and full diverse-subject goal unchanged.
 
+Correction checkpoint: source `d3c03751c1ee23cd01e537d32a15c270b2f33013`;
+fresh relevant regression1217PASS/415.24s, including31 photo1.7 synthetic cases,
+strict mypy13 modules and Ruff/format/shell/diff PASS. Three built wheels and377
+RECORD members pass repository/model/DB-free cold imports. BUILD_ONLY; the
+installed isolated lab remains92fed3a8 and the production binding is unchanged.
+Owner archived/reread11 proof members,21,874bytes at
+`artifact_66538513909e44fe8c93e6ffbeba8eaa` /
+`rev_a116a8bc4de64655959a09381d6707f4`; own-review SHA
+`d0e79eb3f82ad71eaac2e8e93d29a3ca239c981216d8e7ed586fcfb4e3cf6872`.
+The archive operator initially supplied unsorted members; supported owner rejected
+the request before lock/job/staging. Corrected only operator ordering and resumed
+the exact saved report/key; original failure is archived, core guards unchanged.
+
+Actual canonical metadata admission now PASS for the frozen next three outputs:
+native100 targets/66PDF/55groups, exact prior photo/configured geometry and exact
+executed source-free BASE history independently resolved before pixels/weights.
+Evaluation manifest `artifact_ce1b24b7fbfb4f268d129688830cd378` /
+`rev_e856c809c18844eebee7184749b7105a`, member
+`reports/evaluation-manifest.json`, SHA
+`0a6baf1d91a7fcf538ae344fe08eafdac09929ca5e3b90bfbbe07244692f9708`.
+Geometry1.6 command `artifact_cae57299e9784bf0940c61c1efef0328` /
+`rev_35d0f0961be74bfeb2e8eefca64f74b1`; photo1.7 command
+`artifact_aa3a79d022cc43c1a71639df8a774fb5` /
+`rev_29150151d8b74a02853380f2d839b8ba`. Their exact hashes/old/new pins are in
+the manifest, not implicit latest. GPU/model/PNG/dispatch/install calls0.
+Next is compatible bounded isolated lab installation, installed-role admission,
+then exactly2 source-free beaker canvases +1 existing object-supported wagon.
+No fresh BASE, source/seed/prompt change or training retry. Reopen relevant
+institutional originals beside those actual outputs and record specific
+KEEP/REVISE/REJECT observations. Full quality/independent/blind/HOLDOUT/diverse
+subjects/Item-HWPX/activation remain OPEN; goal ACTIVE, quality NOT_ACCEPTED.
+
 Native contour fit terminal checkpoint, **2026-10-06 11:50 UTC**:
 Same single c9bad421 execution SUCCEEDED,800/800 optimizer updates,100 realized
 native TRAIN samples;31.36minutes/peak6.17GB CUDA, within pinned one-hour/16GiB.
