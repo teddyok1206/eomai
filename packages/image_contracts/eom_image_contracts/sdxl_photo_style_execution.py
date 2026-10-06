@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
@@ -114,11 +116,8 @@ class LocalImageSdxlPhotoStyleBalancedExposureCommand(LocalImageSdxlPhotoStyleCo
     schema_version: Literal["local-image-sdxl-photo-style-command/1.5"]  # type: ignore[assignment]
 
 
-def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
-    if not isinstance(value, dict):
-        raise ValueError("photo execution command object required")
-    schema = value.get("schema_version")
-    models: dict[str, type[LocalImageSdxlPhotoStyleCommand]] = {
+_COMMAND_MODELS: Mapping[str, type[LocalImageSdxlPhotoStyleCommand]] = MappingProxyType(
+    {
         "local-image-sdxl-photo-style-command/1.0": LocalImageSdxlPhotoStyleCommand,
         "local-image-sdxl-photo-style-command/1.1": LocalImageSdxlPhotoStyleWhiteCommand,
         "local-image-sdxl-photo-style-command/1.2": LocalImageSdxlPhotoStyleFullDenoisingCommand,
@@ -126,10 +125,22 @@ def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
         "local-image-sdxl-photo-style-command/1.4": LocalImageSdxlPhotoStyleRetainedRegionCommand,
         "local-image-sdxl-photo-style-command/1.5": LocalImageSdxlPhotoStyleBalancedExposureCommand,
     }
-    if not isinstance(schema, str) or schema not in models:
+)
+
+
+def is_photo_style_command_schema(value: object) -> bool:
+    """File adapters select only families supported by the authoritative closed codec."""
+    return isinstance(value, str) and value in _COMMAND_MODELS
+
+
+def parse_photo_style_command(value: object) -> LocalImageSdxlPhotoStyleCommand:
+    if not isinstance(value, dict):
+        raise ValueError("photo execution command object required")
+    schema = value.get("schema_version")
+    if not isinstance(schema, str) or not is_photo_style_command_schema(schema):
         raise ValueError("unsupported photo command family")
     validate_contract(photo_style_contract_name(schema), value)
-    return models[schema].model_validate(value)
+    return _COMMAND_MODELS[schema].model_validate(value)
 
 
 def parse_photo_style_plan(

@@ -10,9 +10,13 @@ from eom_image_contracts.models import content_json_bytes
 from eom_image_contracts.sdxl_canny_comparison import LocalImageSdxlCannyComparisonCommand
 from eom_image_contracts.sdxl_canny_reference import LocalImageSdxlCannyReferenceCommand
 from eom_image_contracts.sdxl_learned_comparison import LocalImageSdxlLearnedComparisonCommand
-from eom_image_contracts.sdxl_native_canny_reference import parse_reference_command
+from eom_image_contracts.sdxl_native_canny_reference import (
+    is_reference_command_schema,
+    parse_reference_command,
+)
 from eom_image_contracts.sdxl_photo_style_execution import (
     LocalImageSdxlPhotoStyleCommand,
+    is_photo_style_command_schema,
     parse_photo_style_command,
 )
 from eom_image_contracts.sdxl_target_comparison import LocalImageSdxlTargetComparisonCommand
@@ -62,24 +66,14 @@ def load_sdxl_comparison_command(
         elif schema == "local-image-sdxl-canny-comparison-command/1.0":
             validate_contract("sdxl-canny-comparison-command", value)
             parsed = LocalImageSdxlCannyComparisonCommand.model_validate(value)
-        elif schema in (
-            "local-image-sdxl-canny-reference-command/1.0",
-            "local-image-sdxl-canny-reference-command/1.1",
-            "local-image-sdxl-canny-reference-command/1.2",
-        ):
+        elif is_reference_command_schema(schema):
             parsed = parse_reference_command(value)
         elif schema in (
             "local-image-sdxl-validation-comparison-command/1.0",
             "local-image-sdxl-validation-comparison-command/1.1",
         ):
             parsed = parse_sdxl_validation_command(value)
-        elif schema in (
-            "local-image-sdxl-photo-style-command/1.0",
-            "local-image-sdxl-photo-style-command/1.1",
-            "local-image-sdxl-photo-style-command/1.2",
-            "local-image-sdxl-photo-style-command/1.3",
-            "local-image-sdxl-photo-style-command/1.4",
-        ):
+        elif is_photo_style_command_schema(schema):
             parsed = parse_photo_style_command(value)
         else:
             raise ValueError("unsupported paired comparison command family")

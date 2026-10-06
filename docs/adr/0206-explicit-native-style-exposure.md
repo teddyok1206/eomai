@@ -203,3 +203,44 @@ infer quality from loss, rerun old exhausted comparisons or promote a model.
 Production binding SHA remains
 `sha256:f96eda843dbcbf9bd4ba0b22e5da7ca7e4485b00cbbfb353f8631f6028eb5845`.
 Goal ACTIVE; Item/HWPX canary and activation gates remain open.
+
+## 2026-10-06 terminal result and file-entry-point routing correction
+
+The same bounded balanced4:2:4 run completed **800/800 updates over100 frozen
+targets** in1,866,798ms with6,166,987,776 measured peak GPU bytes. The terminal
+result and adapter were committed as four members to
+`artifact_e0da019b8fbe4d059c1095d99caf6cfe` /
+`rev_5ce77a79d1bb4c4d8952806ec333f7a2`; raw result member SHA
+`sha256:642466ac728423d282d031a164056dac9106fec1915f316562539e26f0914d0b`,
+adapter weight SHA
+`sha256:617a45b5a92ecefc80903cf778d753e41d2e94b861373cbceb5a87e6a81e89c2`.
+All canonical rereads matched. Installed-role terminal replay preserved146
+file SHA/stat identities with no model, transform, training, GPU lease or write.
+Numerical completion and the final stochastic loss are **not quality acceptance**.
+
+The first actual installed-role photo CPU preflight then rejected photo
+command1.5 before model/GPU execution. The contracts already supported it, but
+`sdxl_comparison_command` duplicated stale version tuples (photo through1.4,
+reference through1.2). A file-loader regression reproduced exactly two failures
+(photo1.5/reference1.3) while eight historical routes passed. Synthetic codec
+construction and direct-worker tests had not covered this entry boundary.
+
+Correction: the existing closed contract codecs own immutable version-to-model
+maps; the filesystem adapter queries their public support predicates, then
+performs the same JSON Schema/Pydantic/canonical-byte validation. No permissive
+prefix matching, latest fallback, schema-byte change, dependency, numerical
+recipe or protocol version is introduced. Dominant access is exact key lookup:
+O(1) membership in a fixed immutable mapping (six photo/four reference entries),
+with no new lifecycle, cache, persistence, queue or concurrency boundary.
+The dependency remains provider adapter -> contracts, never the reverse.
+
+The staged photo command remains pinned to source45d1985, run
+`imgsdxlvalcmprun_471da2effb7da9cd4326ca60674f8350`, semantic SHA
+`sha256:a455244f6a5fa4e078c43aff497a2e870afca21dc9ad0d67d04f80b83c7ec6ab`.
+Its plan is `artifact_0de095cae0e64e5b92c0cef190fdd203` /
+`rev_5ae6802b77734563a6262feeb034a336`; no model dispatch occurred at the
+failed preflight. Recovery uses the same bytes/identity/workspace with the
+compatible lab-only loader correction, not a new timestamp, retry training,
+replacement plan, direct DB mutation or production activation. The original
+failure evidence remains preserved. Remaining matched diagnostics and own /
+independent visual review remain pending until actually executed and recorded.

@@ -4431,3 +4431,28 @@ Own review and fourteen bounded evidence members are archived independently as A
 `sha256:94fe966600600999585404c8e98690d782c7ee0c9dd107dc90a2c1148cfadead`.
 No PNG was copied into this evidence archive. Five production services remained active,
 the V6 binding raw SHA remained unchanged, and persisted result/view hashes passed.
+
+### 2026-10-06 balanced exposure terminal / matched-comparison entry correction
+
+The sole frozen100 balanced4:2:4 run completed800/800 in1,866,798ms,
+peak6,166,987,776bytes; four result/adapter members were committed under
+`artifact_e0da019b8fbe4d059c1095d99caf6cfe` /
+`rev_5ce77a79d1bb4c4d8952806ec333f7a2` and reread exactly.
+No-recompute installed-worker replay verified146 file SHA/stat identities.
+This closes numerical training only, not own/independent quality review.
+
+Actual photo CPU preflight exposed a separately maintained entry-point version
+tuple missing photo1.5/reference1.3. The same staged request was retained;
+no inference dispatch or retraining occurred. Two regression failures were
+reproduced alongside eight passing historical routes, then the filesystem
+adapter was changed to consult existing immutable contract-codec membership.
+Focused122 tests, Ruff check/format and strict typing of the three changed
+source modules PASS. Initial test invocation lacked explicit source PYTHONPATH;
+the first reference fixture omitted required resource-budget values. Both are
+test-harness corrections, preserved in local logs, not extra model attempts.
+
+Next: verify/install the compatible loader correction in the isolated lab only,
+finish CPU validation of the **same photo run/bytes/workspace**, then dispatch
+at most six photo plus four source-free matched outputs. No parameter sweep,
+production binding change, old comparison rerun or quality promotion. Details
+and canonical pointers are in ADR0206. Goal remains ACTIVE.

@@ -156,6 +156,11 @@ _COMMAND_PROTOCOLS = MappingProxyType({p.command_version: p for p in _PROTOCOLS}
 _RESULT_PROTOCOLS = MappingProxyType({p.result_version: p for p in _PROTOCOLS})
 
 
+def is_reference_command_schema(value: object) -> bool:
+    """Share codec support with file adapters without duplicating a version allowlist."""
+    return isinstance(value, str) and value in _COMMAND_PROTOCOLS
+
+
 def reference_protocol(command: LocalImageSdxlCannyReferenceCommand) -> SdxlReferenceProtocol:
     protocol = _COMMAND_PROTOCOLS.get(command.schema_version)
     if protocol is None or type(command) is not protocol.command_model:
