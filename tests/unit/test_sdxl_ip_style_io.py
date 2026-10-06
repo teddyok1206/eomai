@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from types import MappingProxyType
 
@@ -219,7 +221,7 @@ def test_unvalidated_model_copy_rejected_before_any_directory_read(tmp_path, mon
     def forbidden(*args, **kwargs):
         pytest.fail("invalid pointer reached filesystem")
 
-    monkeypatch.setattr(resolution, "verified_directory", forbidden)
+    monkeypatch.setattr(resolution, "open_verified_directory", forbidden)
     _denied(store, pointer)
 
 
@@ -320,7 +322,7 @@ def test_directory_replaced_during_verification_rejected(tmp_path, monkeypatch, 
         nonlocal replaced
         original(*args, **kwargs)
         if not replaced:
-            directory = root / target
+            directory = (root / target).resolve()
             directory.rename(tmp_path / "removed-directory")
             directory.mkdir(mode=0o700)
             replaced = True
@@ -374,3 +376,180 @@ def test_adapter_imports_no_tensor_backend_or_runtime_git():
         if isinstance(node, ast.ImportFrom) and node.module
     }
     assert not modules.intersection({"torch", "diffusers", "transformers", "git", "subprocess"})
+
+
+def _open_load_inputs(store, pointer):
+    return resolution.open_sdxl_ip_style_load_inputs(store, pointer, expected_owner_uid=os.getuid())
+
+
+def _assert_closed(inputs):
+    for fd in (inputs.encoder_weights_fd, inputs.adapter_weights_fd):
+        with pytest.raises(OSError):
+            os.fstat(fd)
+
+
+def test_load_inputs_keep_verified_readonly_inode_open_then_close_without_second_hash(
+    tmp_path, monkeypatch
+):
+    store, root, manifest, pointer = _stage(tmp_path, monkeypatch)
+    streams = []
+    verify = resolution.verify_staged_member
+
+    def observe(*args, **kwargs):
+        streams.append(args[1])
+        return verify(*args, **kwargs)
+
+    monkeypatch.setattr(resolution, "verify_staged_member", observe)
+    with _open_load_inputs(store, pointer) as inputs:
+        assert inputs.manifest == manifest
+        assert inputs.encoder_config == _payloads()["models/image_encoder/config.json"]
+        for fd, name in (
+            (inputs.encoder_weights_fd, "models/image_encoder/model.safetensors"),
+            (inputs.adapter_weights_fd, "sdxl_models/ip-adapter_sdxl_vit-h.safetensors"),
+        ):
+            opened, current = os.fstat(fd), (root / name).stat()
+            assert (opened.st_dev, opened.st_ino) == (current.st_dev, current.st_ino)
+            assert os.pread(fd, current.st_size, 0) == _payloads()[name]
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            assert flags & os.O_ACCMODE == os.O_RDONLY and flags & os.O_NONBLOCK
+            assert fcntl.fcntl(fd, fcntl.F_GETFD) & fcntl.FD_CLOEXEC
+            with pytest.raises(OSError):
+                os.write(fd, b"x")
+        with pytest.raises(FrozenInstanceError):
+            inputs.encoder_weights_fd = 99
+        assert streams == ["model.safetensors", "ip-adapter_sdxl_vit-h.safetensors"]
+    _assert_closed(inputs)
+    assert streams == ["model.safetensors", "ip-adapter_sdxl_vit-h.safetensors"]
+
+
+@pytest.mark.parametrize("member", (*_payloads(), "manifest.json"))
+@pytest.mark.parametrize("fault", ["replace", "modify", "mode-restore", "delete"])
+def test_successful_body_cannot_escape_member_mutation_during_model_open(
+    tmp_path, monkeypatch, member, fault
+):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer) as inputs:
+        target = root / member
+        if fault == "replace":
+            candidate = tmp_path / "replacement"
+            candidate.write_bytes(target.read_bytes())
+            candidate.chmod(0o600)
+            candidate.replace(target)
+            # Loader reads the same held inode, not the replacement path.
+            if member.endswith("model.safetensors"):
+                assert os.pread(inputs.encoder_weights_fd, 128, 0) == _payloads()[member]
+        elif fault == "modify":
+            raw = target.read_bytes()
+            target.write_bytes(bytes([raw[0] ^ 1]) + raw[1:])
+        elif fault == "mode-restore":
+            target.chmod(0o620)
+            target.chmod(0o600)
+        else:
+            target.unlink()
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID"
+    _assert_closed(inputs)
+
+
+@pytest.mark.parametrize(
+    "directory", ["", "models", "models/image_encoder", "sdxl_models", "..", "../.."]
+)
+@pytest.mark.parametrize("fault", ["replace", "writable"])
+def test_successful_body_cannot_escape_directory_mutation(tmp_path, monkeypatch, directory, fault):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer) as inputs:
+        target = (root / directory).resolve()
+        if fault == "replace":
+            target.rename(tmp_path / "removed-tree")
+            target.mkdir(mode=0o700)
+        else:
+            target.chmod(0o770)
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID"
+    _assert_closed(inputs)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError("consumer"),
+        ValueError("consumer"),
+        OSError("consumer"),
+        ProviderError("SDXL_PROBE_OOM"),
+        KeyboardInterrupt(),
+    ],
+)
+def test_consumer_failure_not_reclassified_and_all_handles_closed(tmp_path, monkeypatch, error):
+    store, _, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(type(error)) as caught, _open_load_inputs(store, pointer) as inputs:
+        raise error
+    assert caught.value is error
+    _assert_closed(inputs)
+
+
+def test_changed_model_does_not_hide_behind_a_consumer_failure(tmp_path, monkeypatch):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer) as inputs:
+        (root / "models/image_encoder/model.safetensors").chmod(0o620)
+        raise ProviderError("SDXL_PROBE_OOM")
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID"
+    _assert_closed(inputs)
+
+
+def test_tree_closure_change_during_load_fails(tmp_path, monkeypatch):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError), _open_load_inputs(store, pointer) as inputs:
+        (root / "sdxl_models/extra.bin").write_bytes(b"untrusted")
+    _assert_closed(inputs)
+
+
+def test_fifo_open_race_is_nonblocking_and_cannot_leak_handles(tmp_path, monkeypatch):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    original_open = os.open
+    opened = []
+
+    def change_before_handoff_open(name, flags, *args, **kwargs):
+        if name == "model.safetensors" and flags & os.O_NONBLOCK:
+            target = root / "models/image_encoder/model.safetensors"
+            target.unlink()
+            os.mkfifo(target, 0o600)
+            fd = original_open(name, flags, *args, **kwargs)
+            opened.append(fd)
+            return fd
+        return original_open(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(resolution.os, "open", change_before_handoff_open)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer):
+        pytest.fail("FIFO handoff admitted")
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID" and len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+
+
+@pytest.mark.parametrize("attribute", ["encoder_weights_fd", "adapter_weights_fd"])
+def test_premature_handle_close_rejects_scope_and_closes_remaining_handles(
+    tmp_path, monkeypatch, attribute
+):
+    store, _, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer) as inputs:
+        os.close(getattr(inputs, attribute))
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID"
+    _assert_closed(inputs)
+
+
+@pytest.mark.parametrize("fault", ["manifest", "extra", "directory", "revision"])
+def test_changed_metadata_or_namespace_checked_even_on_consumer_failure(
+    tmp_path, monkeypatch, fault
+):
+    store, root, _, pointer = _stage(tmp_path, monkeypatch)
+    with pytest.raises(ProviderError) as caught, _open_load_inputs(store, pointer) as inputs:
+        if fault == "manifest":
+            (root / "manifest.json").chmod(0o620)
+        elif fault == "extra":
+            (root / "sdxl_models/extra.bin").write_bytes(b"untrusted")
+        elif fault == "directory":
+            (root / "models").chmod(0o770)
+        else:
+            root.rename(tmp_path / "removed-revision")
+            root.mkdir(mode=0o700)
+        raise OSError("numerical consumer failure")
+    assert caught.value.code == "SDXL_PROBE_MODEL_INVALID"
+    _assert_closed(inputs)

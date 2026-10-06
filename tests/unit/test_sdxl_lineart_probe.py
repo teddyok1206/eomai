@@ -23,7 +23,11 @@ from eom_image_contracts import (
 from eom_image_provider import sdxl_lineart_probe as probe
 from eom_image_provider.provider import GeneratedBackground, ProviderError
 from eom_image_provider.sdxl_model_resolution import ResolvedSdxlStack
-from eom_image_provider.staged_file_io import read_staged_member, verified_directory
+from eom_image_provider.staged_file_io import (
+    open_verified_directory,
+    read_staged_member,
+    verified_directory,
+)
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from PIL import Image, ImageDraw
 from pydantic import ValidationError
@@ -48,6 +52,95 @@ def test_verified_directory_preserves_execute_only_ancestor_permissions(tmp_path
         assert ancestor.stat().st_mode & 0o777 == 0o111
     finally:
         ancestor.chmod(0o700)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OSError("numerical consumer"),
+        RuntimeError("consumer"),
+        ProviderError("SDXL_PROBE_OOM"),
+        KeyboardInterrupt(),
+    ],
+)
+def test_open_verified_directory_preserves_consumer_error_and_closes_handle(tmp_path, error):
+    import os
+
+    tmp_path.chmod(0o700)
+    with (
+        pytest.raises(type(error)) as caught,
+        open_verified_directory(tmp_path, expected_owner_uid=os.geteuid()) as descriptor,
+    ):
+        raise error
+    assert caught.value is error
+    with pytest.raises(OSError):
+        os.fstat(descriptor)
+
+
+def test_verified_directory_keeps_existing_staged_io_oserror_policy(tmp_path):
+    import os
+
+    tmp_path.chmod(0o700)
+    error = OSError("staged consumer")
+    with (
+        pytest.raises(ProviderError) as caught,
+        verified_directory(tmp_path, expected_owner_uid=os.geteuid()) as descriptor,
+    ):
+        raise error
+    assert caught.value.code == "SDXL_PROBE_INPUT_INVALID" and caught.value.__cause__ is error
+    with pytest.raises(OSError):
+        os.fstat(descriptor)
+
+
+@pytest.mark.parametrize("fault", ["missing", "wrong-owner", "writable", "symlink"])
+def test_open_verified_directory_still_rejects_invalid_admission(tmp_path, fault):
+    import os
+
+    path = tmp_path / "workspace"
+    path.mkdir(mode=0o700)
+    uid = os.geteuid()
+    if fault == "missing":
+        path = tmp_path / "missing"
+    elif fault == "wrong-owner":
+        uid += 1
+    elif fault == "writable":
+        path.chmod(0o770)
+    else:
+        link = tmp_path / "link"
+        link.symlink_to(path)
+        path = link
+    with (
+        pytest.raises(ProviderError) as caught,
+        open_verified_directory(path, expected_owner_uid=uid),
+    ):
+        pytest.fail("invalid directory admitted")
+    assert caught.value.code == "SDXL_PROBE_INPUT_INVALID"
+
+
+def test_directory_cleanup_attempts_every_handle_after_premature_consumer_close(
+    tmp_path, monkeypatch
+):
+    import os
+
+    tmp_path.chmod(0o700)
+    original_open = os.open
+    opened = []
+
+    def observe(*args, **kwargs):
+        fd = original_open(*args, **kwargs)
+        opened.append(fd)
+        return fd
+
+    monkeypatch.setattr(os, "open", observe)
+    with (
+        pytest.raises(OSError),
+        open_verified_directory(tmp_path, expected_owner_uid=os.geteuid()) as descriptor,
+    ):
+        os.close(descriptor)
+    assert len(opened) >= 2
+    for fd in opened:
+        with pytest.raises(OSError):
+            os.fstat(fd)
 
 
 def _png(*, size: tuple[int, int] = (40, 20), mode: str = "RGB") -> bytes:

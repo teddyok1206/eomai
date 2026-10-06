@@ -748,3 +748,73 @@ remain unproved. No additional original own-view coverage is claimed for unchang
 source pairs. Full quality NOT_ACCEPTED, goal ACTIVE, old budget12/12 exhausted,
 new acquisition/four-output authorization NOT_RECORDED. Next: pinned local encoder
 load/embedding ownership and then matched actual outputs in the authorized scope.
+
+## Verified model-open handoff
+
+Extend the existing optional style-component resolver, not a parallel loader.
+The prior resolver's path/manifest value proves resolution at that instant; it
+does not authorize a later weight open after the verified handles are closed.
+Keep the verified six-member tree and two weight file descriptors open over the
+numerical loading boundary. The caller receives a frozen internal load-input
+record with the exact manifest, small verified encoder config and read-only OS
+file descriptors. These descriptors are temporary I/O handles, not logical IDs,
+cross-service pointers, persistent capabilities or NAS identities; never serialize
+or persist them. A trusted numerical consumer may read the existing held inode
+via `/proc/self/fd/<fd>` inside this scope without reopening a user-supplied path.
+No worker may provide an arbitrary FD/path or use this scope as dispatch approval.
+
+Canonical source remains the root-owned pinned model revision/manifest/whitelist.
+Validate pointer/schema/media/hash/closure/permissions through the existing owner;
+hash each weight once before handoff, then compare captured descriptor and member
+fingerprints and root/revision directory identities before/after use. Same-byte
+inode replacement, metadata/permission changes, changed or extra members fail.
+Keep existing `resolve_sdxl_ip_style_model` API as a snapshot-only wrapper; existing
+callers gain no encoder/inference route. Exceptions close every descriptor. A
+successful model load is not returned from its outer context if final checks fail;
+the numerical owner must dispose its candidate and not publish an embedding.
+
+The existing staged-directory scope previously maps an `OSError` from any body
+to input-invalid; that is still its established policy. Extract its one canonical
+descriptor walk/cleanup into `open_verified_directory`, which owns admission
+errors only; retain `verified_directory` as the compatible staged-I/O wrapper.
+The style-load scope uses the explicit numerical-consumer boundary, preserving
+that consumer's exception when the model stays intact. File/tree/manifest/root
+final checks also run on body failure, so detected model mutation is reported
+instead of hidden behind a numerical error. No cloned path-walker, global error
+patch or boolean policy parameter. FIFO replacement races use nonblocking opens
+and fail the captured regular-file identity before a consumer can receive them.
+The canonical walk uses a standard-library ExitStack so a prematurely closed
+consumer handle cannot interrupt cleanup and leak the remaining ancestor handles.
+
+Dominant operations: indexed/small-map member lookup, exact closure membership,
+one streaming hash per weight and linear fingerprint comparison. O(total model
+bytes+members) admission, O(members) final checking and bounded metadata/FD storage;
+no duplicate binaries, DB/index/cache/queue, registry, new schema or dependency.
+This keeps the existing domain→contract and infrastructure ownership direction.
+Holding descriptors closes path-reopen identity races; it is not protection from
+privileged in-place modification that is later fully concealed. Root ownership,
+unwritable worker access and before/after fingerprints remain required. No latest
+substitution, failed-history rewrite, automatic retry or new model acquisition.
+
+### Model-open implementation checkpoint — 2026-10-06 16:59 UTC
+
+Focused518 PASS plus separate established backend/lifecycle157 PASS. The65 new
+cases (55 held-model inputs/10 directory boundary) are included in518, not counted
+again. Tests use tiny synthetic local model trees; they are not upstream weights
+or canonical model admission. Existing snapshot API/whitelist/schema remain intact.
+Tests cover one hash pass, read-only/non-inheritable/nonblocking handles, matching
+inode reads, member/manifest/tree/root replacement and permission/closure changes,
+consumer error preservation, mutation plus consumer error, premature close,
+cleanup, FIFO replacement race and legacy staged-I/O error behavior.
+
+Initial scope tests exposed the previously implicit body-OSError mapping. The
+new numerical context fixes ownership without changing the legacy wrapper policy.
+Two ancestor replacement fixtures used literal trailing`..` paths and raised
+EBUSY before replacing any directory, so those old negative checks were indirect;
+normalize only these controlled disposable fixture paths and perform the real
+replacement before checking rejection. Production never resolves untrusted input
+through `Path.resolve`. Error checks were not weakened to accommodate the fixture.
+Formatting/patch-context misses had no runtime side effect. Python3.11 strict
+mypy for both adapters, Ruff/format and diff PASS. The light environment lacks
+safetensors; no dependency install. Built-wheel numerical FD handoff testing uses
+the already installed lab0.6.2 with synthetic tiny tensors, not real encoder load.

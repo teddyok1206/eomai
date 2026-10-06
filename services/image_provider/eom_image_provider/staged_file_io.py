@@ -6,41 +6,48 @@ import hashlib
 import os
 import stat
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 
 from eom_image_provider.provider import ProviderError
 
 
 @contextmanager
-def verified_directory(path: Path, *, expected_owner_uid: int) -> Iterator[int]:
+def open_verified_directory(path: Path, *, expected_owner_uid: int) -> Iterator[int]:
+    """Own directory admission/cleanup, not errors from a numerical consumer inside the scope."""
     if not path.is_absolute():
         raise ProviderError("SDXL_PROBE_INPUT_INVALID")
-    descriptors = []
-    try:
-        # Protected ancestors may deliberately grant traversal but not listing (for example
-        # /srv/eom is 0711). O_PATH preserves descriptor-relative no-link traversal without
-        # requiring broader directory privileges. The actual target is opened for bounded I/O.
-        current = os.open(path.root, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
-        descriptors.append(current)
-        for part in path.parts[1:]:
-            if part in {"", ".", ".."}:
+    with ExitStack() as handles:
+        try:
+            # Protected ancestors may grant traversal without listing. O_PATH keeps this
+            # descriptor-relative no-link walk without broadening their permissions.
+            current = os.open(path.root, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
+            handles.callback(os.close, current)
+            for part in path.parts[1:]:
+                if part in {"", ".", ".."}:
+                    raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+                current = os.open(
+                    part, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=current
+                )
+                handles.callback(os.close, current)
+            current = os.open(".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=current)
+            handles.callback(os.close, current)
+            metadata = os.fstat(current)
+            if metadata.st_uid != expected_owner_uid or stat.S_IMODE(metadata.st_mode) & 0o022:
                 raise ProviderError("SDXL_PROBE_INPUT_INVALID")
-            current = os.open(
-                part, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=current
-            )
-            descriptors.append(current)
-        current = os.open(".", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=current)
-        descriptors.append(current)
-        metadata = os.fstat(current)
-        if metadata.st_uid != expected_owner_uid or stat.S_IMODE(metadata.st_mode) & 0o022:
-            raise ProviderError("SDXL_PROBE_INPUT_INVALID")
+        except OSError as exc:
+            raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc
         yield current
+
+
+@contextmanager
+def verified_directory(path: Path, *, expected_owner_uid: int) -> Iterator[int]:
+    """Retain the established staged-I/O scope error policy for existing callers."""
+    try:
+        with open_verified_directory(path, expected_owner_uid=expected_owner_uid) as descriptor:
+            yield descriptor
     except OSError as exc:
         raise ProviderError("SDXL_PROBE_INPUT_INVALID") from exc
-    finally:
-        for descriptor in reversed(descriptors):
-            os.close(descriptor)
 
 
 @contextmanager

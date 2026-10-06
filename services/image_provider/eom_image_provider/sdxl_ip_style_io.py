@@ -22,8 +22,8 @@ from jsonschema import ValidationError as SchemaError
 
 from eom_image_provider.provider import ProviderError
 from eom_image_provider.staged_file_io import (
+    open_verified_directory,
     read_staged_member,
-    verified_directory,
     verify_staged_member,
 )
 
@@ -32,6 +32,16 @@ from eom_image_provider.staged_file_io import (
 class ResolvedSdxlIpStyleModel:
     manifest: LocalImageSdxlIpStyleModelManifest
     root: Path
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedSdxlIpStyleLoadInputs:
+    """Read-only handles live only inside the verified model-open context, never on the wire."""
+
+    manifest: LocalImageSdxlIpStyleModelManifest
+    encoder_config: bytes
+    encoder_weights_fd: int
+    adapter_weights_fd: int
 
 
 def validate_sdxl_ip_style_metadata(
@@ -124,28 +134,34 @@ def _model_tree(
                 descriptors[directory] = descriptor
             if set(os.listdir(descriptors[directory])) != entries[directory]:
                 raise ValueError("SDXL_IP_STYLE_DIRECTORY_CLOSURE_MISMATCH")
-        yield descriptors
-        for directory, descriptor in descriptors.items():
-            opened = os.fstat(descriptor)
-            if opened.st_uid != owner_uid or stat.S_IMODE(opened.st_mode) & 0o022:
-                raise ValueError("SDXL_IP_STYLE_DIRECTORY_UNSAFE")
-            if set(os.listdir(descriptor)) != entries[directory]:
-                raise ValueError("SDXL_IP_STYLE_DIRECTORY_CLOSURE_CHANGED")
-            if directory:
-                parent, _, leaf = directory.rpartition("/")
-                current = os.stat(leaf, dir_fd=descriptors[parent], follow_symlinks=False)
-                if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
-                    raise ValueError("SDXL_IP_STYLE_DIRECTORY_IDENTITY_CHANGED")
-                if current.st_uid != owner_uid or stat.S_IMODE(current.st_mode) & 0o022:
+        try:
+            yield descriptors
+        finally:
+            for directory, descriptor in descriptors.items():
+                opened = os.fstat(descriptor)
+                if opened.st_uid != owner_uid or stat.S_IMODE(opened.st_mode) & 0o022:
                     raise ValueError("SDXL_IP_STYLE_DIRECTORY_UNSAFE")
+                if set(os.listdir(descriptor)) != entries[directory]:
+                    raise ValueError("SDXL_IP_STYLE_DIRECTORY_CLOSURE_CHANGED")
+                if directory:
+                    parent, _, leaf = directory.rpartition("/")
+                    current = os.stat(leaf, dir_fd=descriptors[parent], follow_symlinks=False)
+                    if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+                        raise ValueError("SDXL_IP_STYLE_DIRECTORY_IDENTITY_CHANGED")
+                    if current.st_uid != owner_uid or stat.S_IMODE(current.st_mode) & 0o022:
+                        raise ValueError("SDXL_IP_STYLE_DIRECTORY_UNSAFE")
 
 
-def _verify_members(
+@contextmanager
+def _open_verified_members(
     root: int,
     manifest: LocalImageSdxlIpStyleModelManifest,
     owner_uid: int,
-) -> None:
-    with _model_tree(root, manifest.files, owner_uid) as descriptors:
+) -> Iterator[VerifiedSdxlIpStyleLoadInputs]:
+    with (
+        _model_tree(root, manifest.files, owner_uid) as descriptors,
+        ExitStack() as weight_handles,
+    ):
         snapshots = {}
         for file in manifest.files:
             parent, _, leaf = file.relative_path.rpartition("/")
@@ -187,22 +203,60 @@ def _verify_members(
             current = os.stat(leaf, dir_fd=descriptors[parent], follow_symlinks=False)
             if snapshots[file.relative_path] != _fingerprint(current):
                 raise ValueError("SDXL_IP_STYLE_FILE_IDENTITY_CHANGED")
+        weights = {}
+        for file in manifest.files:
+            if file.relative_path.endswith(".safetensors"):
+                parent, _, leaf = file.relative_path.rpartition("/")
+                descriptor = os.open(
+                    leaf,
+                    os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                    dir_fd=descriptors[parent],
+                )
+                weight_handles.callback(os.close, descriptor)
+                if _fingerprint(os.fstat(descriptor)) != snapshots[file.relative_path]:
+                    raise ValueError("SDXL_IP_STYLE_LOAD_FILE_CHANGED")
+                weights[file.relative_path] = descriptor
+        try:
+            yield VerifiedSdxlIpStyleLoadInputs(
+                manifest,
+                metadata["models/image_encoder/config.json"],
+                weights["models/image_encoder/model.safetensors"],
+                weights["sdxl_models/ip-adapter_sdxl_vit-h.safetensors"],
+            )
+        finally:
+            for file in manifest.files:
+                parent, _, leaf = file.relative_path.rpartition("/")
+                current = os.stat(leaf, dir_fd=descriptors[parent], follow_symlinks=False)
+                if snapshots[file.relative_path] != _fingerprint(current):
+                    raise ValueError("SDXL_IP_STYLE_LOAD_FILE_CHANGED")
+                if (
+                    file.relative_path in weights
+                    and _fingerprint(os.fstat(weights[file.relative_path]))
+                    != snapshots[file.relative_path]
+                ):
+                    raise ValueError("SDXL_IP_STYLE_LOAD_DESCRIPTOR_CHANGED")
 
 
-def resolve_sdxl_ip_style_model(
+@contextmanager
+def open_sdxl_ip_style_load_inputs(
     model_store_root: Path,
     pointer: SdxlIpStyleModelPointer,
     *,
     expected_owner_uid: int = 0,
-) -> ResolvedSdxlIpStyleModel:
+) -> Iterator[VerifiedSdxlIpStyleLoadInputs]:
+    consumer_error: BaseException | None = None
     try:
         # Public adapter input is revalidated before it can select a filesystem location.
         pointer = SdxlIpStyleModelPointer.model_validate(pointer.model_dump(mode="json"))
         revision = model_store_root / pointer.model_id / pointer.model_revision_id
         with (
-            verified_directory(model_store_root, expected_owner_uid=expected_owner_uid) as store,
-            verified_directory(revision.parent, expected_owner_uid=expected_owner_uid) as parent,
-            verified_directory(revision, expected_owner_uid=expected_owner_uid) as root,
+            open_verified_directory(
+                model_store_root, expected_owner_uid=expected_owner_uid
+            ) as store,
+            open_verified_directory(
+                revision.parent, expected_owner_uid=expected_owner_uid
+            ) as parent,
+            open_verified_directory(revision, expected_owner_uid=expected_owner_uid) as root,
         ):
             manifest_before = _file_snapshot(root, "manifest.json", expected_owner_uid, 64 * 1024)
             raw = read_staged_member(
@@ -219,25 +273,53 @@ def resolve_sdxl_ip_style_model(
                 validate_sdxl_ip_style_model_pointer(pointer, manifest)
             except ValueError as exc:
                 raise ProviderError("SDXL_PROBE_HASH_MISMATCH") from exc
-            _verify_members(root, manifest, expected_owner_uid)
-            if manifest_before != _fingerprint(
-                os.stat("manifest.json", dir_fd=root, follow_symlinks=False)
-            ):
-                raise ValueError("SDXL_IP_STYLE_MANIFEST_IDENTITY_CHANGED")
-            # Check both descriptor ownership and the pinned location after streamed verification.
-            # Sibling revisions may legitimately be installed; their contents are not scanned.
-            for descriptor, location in (
-                (store, os.stat(model_store_root, follow_symlinks=False)),
-                (parent, os.stat(pointer.model_id, dir_fd=store, follow_symlinks=False)),
-                (root, os.stat(pointer.model_revision_id, dir_fd=parent, follow_symlinks=False)),
-            ):
-                opened = os.fstat(descriptor)
-                if (location.st_dev, location.st_ino) != (opened.st_dev, opened.st_ino):
-                    raise ValueError("SDXL_IP_STYLE_REVISION_LOCATION_CHANGED")
-                if opened.st_uid != expected_owner_uid or stat.S_IMODE(opened.st_mode) & 0o022:
-                    raise ValueError("SDXL_IP_STYLE_DIRECTORY_UNSAFE")
-            return ResolvedSdxlIpStyleModel(manifest, revision)
+            try:
+                with _open_verified_members(root, manifest, expected_owner_uid) as inputs:
+                    try:
+                        yield inputs
+                    except BaseException as exc:
+                        consumer_error = exc
+                        raise
+            finally:
+                if manifest_before != _fingerprint(
+                    os.stat("manifest.json", dir_fd=root, follow_symlinks=False)
+                ):
+                    raise ValueError("SDXL_IP_STYLE_MANIFEST_IDENTITY_CHANGED")
+                # Sibling revisions may be installed; check only this pinned location.
+                for descriptor, location in (
+                    (store, os.stat(model_store_root, follow_symlinks=False)),
+                    (parent, os.stat(pointer.model_id, dir_fd=store, follow_symlinks=False)),
+                    (
+                        root,
+                        os.stat(pointer.model_revision_id, dir_fd=parent, follow_symlinks=False),
+                    ),
+                ):
+                    opened = os.fstat(descriptor)
+                    if (location.st_dev, location.st_ino) != (opened.st_dev, opened.st_ino):
+                        raise ValueError("SDXL_IP_STYLE_REVISION_LOCATION_CHANGED")
+                    if opened.st_uid != expected_owner_uid or stat.S_IMODE(opened.st_mode) & 0o022:
+                        raise ValueError("SDXL_IP_STYLE_DIRECTORY_UNSAFE")
     except (ProviderError, OSError, ValueError, TypeError, KeyError, SchemaError) as exc:
+        if exc is consumer_error:
+            raise
         if isinstance(exc, ProviderError) and exc.code == "SDXL_PROBE_HASH_MISMATCH":
             raise
         raise ProviderError("SDXL_PROBE_MODEL_INVALID") from exc
+
+
+def resolve_sdxl_ip_style_model(
+    model_store_root: Path,
+    pointer: SdxlIpStyleModelPointer,
+    *,
+    expected_owner_uid: int = 0,
+) -> ResolvedSdxlIpStyleModel:
+    """A resolution snapshot is not a later model-open capability."""
+    with open_sdxl_ip_style_load_inputs(
+        model_store_root,
+        pointer,
+        expected_owner_uid=expected_owner_uid,
+    ) as inputs:
+        return ResolvedSdxlIpStyleModel(
+            inputs.manifest,
+            model_store_root / inputs.manifest.model_id / inputs.manifest.model_revision_id,
+        )
