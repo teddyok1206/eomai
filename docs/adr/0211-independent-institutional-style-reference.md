@@ -44,6 +44,49 @@ in8.61s, including those39. Ruff/format, strict mypy/Python3.11, diff and releas
 shell syntax PASS. These tests use fakes/tiny files; actual public-loader numeric
 proof, built-wheel integrity and pretrained/GPU memory gates are still separate.
 
+### Executed attachment checkpoint — 2026-10-06 17:57 UTC
+
+Clean source `b377fa4232fb3342b1075a749676c3effea17cc6` built three wheels;
+all393 RECORD members (299 contracts/59 provider/35 trainer) were verified before
+repository-free/offline CPU import. The actual Diffusers0.35.2 public loader
+loaded26 synthetic global-adapter tensors into a random tiny UNet that already
+had synthetic PEFT0.17.1 `exam_style` LoRA active at0.7. All original base/LoRA
+parameter identities and the active adapter survived. The loader replaced
+processor instances as expected, but their identities stayed fixed across arms.
+
+Four tiny UNet forwards (pre-attachment baseline plus OFF/ON/OFF) established
+exact baseline+LoRA parity at scale0, a finite nonzero style effect at scale1,
+exact return-to-zero replay, and final zero scales. This exercised the numerical
+helper on one temporary safetensors file, NOT canonical full-model admission.
+No pretrained/trained-LoRA/encoder reads, GPU/network, diffusion output, new PNG,
+runtime installation, model registration, VALIDATION/HOLDOUT or activation.
+Report SHA `7f91521c30c8f16b399aefe386a8e67e3210c7533425d19157848b86992a67aa`.
+Independent review not performed; output-quality remains NOT_ACCEPTED.
+Frozen real encoder embedding/pipeline integration and resource measurement remain
+open. Source/test proof does not open the closed experimental worker CLI.
+
+Existing Orchestrator evidence publication committed and reread all three text
+members19,441bytes: `artifact_bfdd80ff348d41d6a7a447ab0898a7b1` /
+`rev_2cb17316d72c41e192f378620623136b`, primary `reports/tiny-adapter.json` with
+the report hash above. Operators are preserved; temporary synthetic weights and
+original PNGs were not copied into this artifact. The prototype ran as normal
+user/offline CPU; only this existing-owner evidence publication needed protected
+credentials. No new experimental execution budget or model acquisition approval.
+
+At this checkpoint two already admitted TRAIN originals were actually re-viewed:
+boy portrait `imgsourcecrop_0fe95b53f1779ed996e301f4d55a5896`, SHA
+`f0f38c4a6924fb8225160238018146c75e5e82aa137f27e5824429d2630a86ef`, and
+burr fruit `imgsourcecrop_5c3b70ed4dd45229010f33ef12a37a02`, SHA
+`d3c135d9c9e17ca03a62ea33ad7f71a22a111ef8d34aa88347465ad079852d15`.
+Their pinned source-admission report hash remained
+`70fd6b3bffb3561e8fd10e2289153b74e5bf4906073f0abb83316cb007aaee52`.
+The portrait needs restrained expressive contours, not realistic skin texture;
+the fruit needs its distinctive hooked-spine geometry and useful gray shading,
+not indiscriminate deletion of internal detail. A person is legitimate when
+authored, never an unrequested addition. Neither example's face/spines/background
+may leak into an unrelated target through style routing. These were repeated
+own calibration views, not new unique coverage, paired new outputs or blind PASS.
+
 ## Evidence and hypothesis
 
 The native1.3 candidate failed its fixed own visual comparison. The subsequent
