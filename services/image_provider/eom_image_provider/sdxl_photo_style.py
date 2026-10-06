@@ -17,6 +17,7 @@ from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_native_canny_reference import sdxl_reference_adapter
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoObjectSupportPlan,
+    LocalImageSdxlPhotoReusedBaselinePlan,
     LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     photo_style_control_parameters,
@@ -119,7 +120,11 @@ def validate_sdxl_photo_style_workspace_result(
                 root, workspace, result.inputs, owner=expected_owner_uid
             )
             validate_sdxl_pair_output_members(
-                root, workspace, result.outputs, expected_owner_uid=expected_owner_uid
+                root,
+                workspace,
+                result.outputs,
+                expected_owner_uid=expected_owner_uid,
+                arms=sources.plan.generated_arms(),
             )
             if isinstance(sources.plan, LocalImageSdxlPhotoObjectSupportPlan):
                 support = staged_photo_style_conditioning(
@@ -190,7 +195,7 @@ def run_sdxl_photo_style(
                 conditioner=conditioning.conditioner,
                 initialization=plan.initialization,
             )
-            create_sdxl_pair_directories(root, workspace)
+            create_sdxl_pair_directories(root, workspace, arms=plan.generated_arms())
             try:
                 stack = resolve_sdxl_stack(
                     model_store_root,
@@ -226,6 +231,7 @@ def run_sdxl_photo_style(
                         plan.initialization,
                         pixels.initializations,
                     ),
+                    arms=plan.generated_arms(),
                 )
             except ProviderError as exc:
                 code = (
@@ -274,6 +280,8 @@ def run_sdxl_photo_style(
                     plan.support_parents.model_dump(mode="json")
                 )
                 value["object_support"] = conditioning.object_support.model_dump(mode="json")
+            if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan):
+                value["baseline_reuse"] = plan.baseline_reuse.model_dump(mode="json")
             result = parse_photo_style_result({**value, "result_sha256": content_sha256(value)})
             validate_photo_style_result(command, sources, result)
             write_staged_member(

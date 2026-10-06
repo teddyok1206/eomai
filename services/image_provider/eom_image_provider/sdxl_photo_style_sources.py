@@ -7,12 +7,17 @@ from eom_image_contracts.sdxl_native_canny_reference import (
     SdxlNativeCannyReferenceSources,
     parse_reference_sources,
 )
+from eom_image_contracts.sdxl_photo_baseline_reuse import (
+    photo_baseline_reuse_documents,
+    photo_baseline_reuse_metadata_members,
+)
 from eom_image_contracts.sdxl_photo_object_support_lineage import (
     photo_object_support_metadata_members,
     photo_object_support_parent_documents,
 )
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoObjectSupportPlan,
+    LocalImageSdxlPhotoReusedBaselinePlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     parse_photo_style_bundle,
     parse_photo_style_source,
@@ -86,8 +91,26 @@ def read_sdxl_photo_style_sources(
             for path, pin in photo_object_support_metadata_members(plan)
         }
         support = photo_object_support_parent_documents(plan, payloads)
+    reused = None
+    if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan):
+        payloads = dict(metadata.inherited)
+        payloads.update(
+            {
+                path: read_staged_member(
+                    root, path, maximum_bytes=256 * 1024, expected_sha256=pin.sha256
+                )
+                for path, pin in photo_baseline_reuse_metadata_members(plan)
+            }
+        )
+        reused = photo_baseline_reuse_documents(plan, payloads)
     sources = SdxlPhotoStyleExecutionSources(
-        plan, metadata.command, native, metadata.native_training_sources, tuple(photos), support
+        plan,
+        metadata.command,
+        native,
+        metadata.native_training_sources,
+        tuple(photos),
+        support,
+        reused,
     )
     validate_photo_style_execution_sources(command, sources)
     return sources

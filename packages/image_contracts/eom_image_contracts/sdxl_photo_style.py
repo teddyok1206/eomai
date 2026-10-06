@@ -18,9 +18,13 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
-from eom_image_contracts.photo_object_support import PhotoObjectSupportParents
+from eom_image_contracts.photo_object_support import PhotoBaselineReuse, PhotoObjectSupportParents
 from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
-from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonBudget
+from eom_image_contracts.sdxl_learned_comparison import (
+    LEARNED_COMPARISON_ARMS,
+    LearnedComparisonArm,
+    SdxlLearnedComparisonBudget,
+)
 from eom_image_contracts.sdxl_lineart_probe import SdxlLineartProbeCase
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
 from eom_image_contracts.sdxl_photo_region_review import SdxlPhotoRetainedRegionReview
@@ -125,6 +129,9 @@ class LocalImageSdxlPhotoStylePlan(FrozenModel):
     plan_sha256: Sha256
 
     _created_utc = field_validator("created_at")(_utc)
+
+    def generated_arms(self) -> tuple[LearnedComparisonArm, ...]:
+        return LEARNED_COMPARISON_ARMS
 
     @model_validator(mode="after")
     def exact_plan(self) -> Self:
@@ -235,6 +242,29 @@ class LocalImageSdxlPhotoObjectSupportPlan(LocalImageSdxlPhotoStyleFullDenoising
     support_parents: PhotoObjectSupportParents
     comparison_policy: Literal["CHANGE_OBJECT_SUPPORT_ONLY_REUSE_PINNED_BASELINE"]
 
+    def support_configuration_anchor(self) -> ImageEvaluationArtifactMember:
+        return self.configuration_anchor
+
+
+class PhotoReusedBaselineBudget(PhotoObjectSupportBudget):
+    maximum_outputs: Literal[1] = 1  # type: ignore[assignment]
+
+
+class LocalImageSdxlPhotoReusedBaselinePlan(LocalImageSdxlPhotoObjectSupportPlan):
+    schema_version: Literal["local-image-sdxl-photo-style-plan/1.7"]  # type: ignore[assignment]
+    _configuration_schema_ref: ClassVar[str] = (
+        "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.4"
+    )
+    baseline_reuse: PhotoBaselineReuse
+    budget: PhotoReusedBaselineBudget
+    comparison_policy: Literal["CHANGE_NATIVE_ADAPTER_ONLY_REUSE_OBJECT_SUPPORTED_BASE"]  # type: ignore[assignment]
+
+    def generated_arms(self) -> tuple[LearnedComparisonArm, ...]:
+        return ("LORA",)
+
+    def support_configuration_anchor(self) -> ImageEvaluationArtifactMember:
+        return self.baseline_reuse.prior_configuration
+
 
 def photo_style_region_reviews_sha256(plan: LocalImageSdxlPhotoStyleRetainedRegionPlan) -> str:
     return content_sha256([r.model_dump(mode="json") for r in plan.region_reviews])
@@ -289,6 +319,9 @@ _PHOTO_STYLE_CONTRACTS = MappingProxyType(
         "local-image-sdxl-photo-style-plan/1.6": "sdxl-photo-style-plan-v7",
         "local-image-sdxl-photo-style-command/1.6": "sdxl-photo-style-command-v7",
         "local-image-sdxl-photo-style-result/1.6": "sdxl-photo-style-result-v7",
+        "local-image-sdxl-photo-style-plan/1.7": "sdxl-photo-style-plan-v8",
+        "local-image-sdxl-photo-style-command/1.7": "sdxl-photo-style-command-v8",
+        "local-image-sdxl-photo-style-result/1.7": "sdxl-photo-style-result-v8",
     }
 )
 
@@ -320,6 +353,7 @@ def parse_photo_style_plan_value(value: object) -> LocalImageSdxlPhotoStylePlan:
         "local-image-sdxl-photo-style-plan/1.4": LocalImageSdxlPhotoStyleRetainedRegionPlan,
         "local-image-sdxl-photo-style-plan/1.5": LocalImageSdxlPhotoStyleBalancedExposurePlan,
         "local-image-sdxl-photo-style-plan/1.6": LocalImageSdxlPhotoObjectSupportPlan,
+        "local-image-sdxl-photo-style-plan/1.7": LocalImageSdxlPhotoReusedBaselinePlan,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo plan family")

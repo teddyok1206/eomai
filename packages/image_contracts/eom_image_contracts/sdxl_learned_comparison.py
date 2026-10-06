@@ -47,6 +47,12 @@ LearnedComparisonArm = Literal["BASE", "LORA"]
 LEARNED_COMPARISON_ARMS: tuple[LearnedComparisonArm, ...] = ("BASE", "LORA")
 
 
+def validate_inference_arms(arms: tuple[LearnedComparisonArm, ...]) -> None:
+    """Internal closed dispatch choices; released pair contracts remain fixed pairs."""
+    if type(arms) is not tuple or arms not in (LEARNED_COMPARISON_ARMS, ("LORA",)):
+        raise ValueError("SDXL_COMPARISON_ARM_SELECTION_INVALID")
+
+
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
         raise ValueError("learned comparison timestamp must use UTC")

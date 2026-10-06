@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.7",
+  "additionalProperties": false,
+  "type": "object",
+  "properties": {
+    "activation_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/activation_policy"
+    },
+    "case_relation": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/case_relation"
+    },
+    "command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/command_sha256"
+    },
+    "completed_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/completed_at"
+    },
+    "configuration_command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/configuration_command_sha256"
+    },
+    "control": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/control"
+    },
+    "duration_ms": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/duration_ms"
+    },
+    "error_code": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/error_code"
+    },
+    "holdout_binary_reads": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/holdout_binary_reads"
+    },
+    "initialization": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/initialization"
+    },
+    "inputs": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/inputs"
+    },
+    "native_adapter_manifest_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/native_adapter_manifest_sha256"
+    },
+    "native_evaluation_command_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/native_evaluation_command_sha256"
+    },
+    "native_fit_policy": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/native_fit_policy"
+    },
+    "object_support": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/object_support"
+    },
+    "outputs": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "allOf": [
+          {
+            "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/$defs/SdxlLearnedComparisonOutput"
+          },
+          {
+            "properties": {
+              "arm": {
+                "const": "LORA"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/plan_sha256"
+    },
+    "quality_acceptance": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/quality_acceptance"
+    },
+    "result_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/result_sha256"
+    },
+    "run_id": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/run_id"
+    },
+    "runtime": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/runtime"
+    },
+    "schema_version": {
+      "const": "local-image-sdxl-photo-style-result/1.7"
+    },
+    "started_at": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/started_at"
+    },
+    "status": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/status"
+    },
+    "support_parents_sha256": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/support_parents_sha256"
+    },
+    "training_steps": {
+      "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6#/properties/training_steps"
+    },
+    "baseline_reuse": {
+      "$ref": "#/$defs/PhotoBaselineReuse"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "command_sha256",
+    "plan_sha256",
+    "configuration_command_sha256",
+    "native_evaluation_command_sha256",
+    "native_adapter_manifest_sha256",
+    "case_relation",
+    "native_fit_policy",
+    "initialization",
+    "quality_acceptance",
+    "activation_policy",
+    "training_steps",
+    "holdout_binary_reads",
+    "status",
+    "error_code",
+    "runtime",
+    "inputs",
+    "outputs",
+    "started_at",
+    "completed_at",
+    "duration_ms",
+    "result_sha256",
+    "control",
+    "support_parents_sha256",
+    "object_support",
+    "baseline_reuse"
+  ],
+  "$defs": {
+    "PhotoBaselineReuse": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "prior_plan": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.6#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.6"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-photo-style-plan.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "prior_result": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.6#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-photo-style-result/1.6"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-photo-style-result.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "prior_configuration": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/image-provider/local-image-sdxl-photo-style-plan/1.6#/$defs/ImageEvaluationArtifactMember"
+            },
+            {
+              "properties": {
+                "schema_ref": {
+                  "const": "eom://schemas/image-provider/local-image-sdxl-canny-reference-command/1.3"
+                },
+                "member_path": {
+                  "const": "manifests/sdxl-canny-reference-command.json"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "prior_plan",
+        "prior_result",
+        "prior_configuration"
+      ]
+    }
+  }
+}

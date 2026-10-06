@@ -7,9 +7,13 @@ import json
 from dataclasses import dataclass
 
 from eom_image_contracts.models import ImageEvaluationArtifactMember, content_json_bytes
-from eom_image_contracts.photo_object_support import PhotoObjectSupportParentDocuments
+from eom_image_contracts.photo_object_support import (
+    PhotoBaselineReuseDocuments,
+    PhotoObjectSupportParentDocuments,
+)
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
+    LocalImageSdxlNativeCannyReferenceCommandV4,
     SdxlNativeCannyReferenceSources,
     parse_reference_command,
     sdxl_reference_adapter,
@@ -17,6 +21,11 @@ from eom_image_contracts.sdxl_native_canny_reference import (
 from eom_image_contracts.sdxl_native_lora_sources import (
     parse_sdxl_native_lora_sources,
     sdxl_native_lora_metadata_member_path,
+)
+from eom_image_contracts.sdxl_photo_baseline_reuse import (
+    parse_reused_photo_baseline,
+    photo_baseline_reuse_documents,
+    photo_baseline_reuse_metadata_members,
 )
 from eom_image_contracts.sdxl_photo_object_support_lineage import (
     photo_object_support_metadata_members,
@@ -26,6 +35,7 @@ from eom_image_contracts.sdxl_photo_object_support_lineage import (
 )
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoObjectSupportPlan,
+    LocalImageSdxlPhotoReusedBaselinePlan,
     LocalImageSdxlPhotoStylePlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
     SdxlPhotoStyleSource,
@@ -66,6 +76,7 @@ class ResolvedSdxlPhotoStyleMetadata:
     sources: tuple[SdxlPhotoStyleSource, ...]
     files: tuple[SdxlProbeInputMember, ...]
     object_support: PhotoObjectSupportParentDocuments | None = None
+    baseline_reuse: PhotoBaselineReuseDocuments | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +120,7 @@ def resolve_sdxl_photo_style_execution_metadata(
         native.sources,
         admitted.sources,
         admitted.object_support,
+        admitted.baseline_reuse,
     )
     validate_photo_style_execution_sources(command, sources)
     files = tuple(
@@ -161,6 +173,7 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
         or sources.native_training_sources != admitted.configuration.native_admission.sources
         or sources.photos != admitted.sources
         or sources.object_support != admitted.object_support
+        or sources.baseline_reuse != admitted.baseline_reuse
     ):
         raise ValueError("PHOTO_STYLE_HANDOFF_SOURCES_INVALID")
     expected = sdxl_canny_reference_metadata_hashes(admitted.configuration)
@@ -198,6 +211,12 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
             for p in sources.native_training_sources.metadata_pointers
         }
     )
+    if isinstance(sources.plan, LocalImageSdxlPhotoReusedBaselinePlan):
+        if photo_baseline_reuse_documents(sources.plan, metadata) != sources.baseline_reuse:
+            raise ValueError("PHOTO_STYLE_BASELINE_REUSE_HANDOFF_INVALID")
+        expected.update(
+            {path: pin.sha256 for path, pin in photo_baseline_reuse_metadata_members(sources.plan)}
+        )
     for entry, source in zip(sources.plan.cases, sources.photos, strict=True):
         prefix = "inputs/photo-sources/" + entry.case.case_id + "/"
         expected[prefix + "bundle.json"] = source.reference.bundle_manifest.sha256
@@ -329,6 +348,7 @@ def resolve_sdxl_photo_style_metadata(
     metadata["inputs/configuration-command.json"] = anchor_raw
     metadata["plan.json"] = content_json_bytes(plan.model_dump(mode="json"))
     support_documents = None
+    baseline_documents = None
     if isinstance(plan, LocalImageSdxlPhotoObjectSupportPlan):
         members = photo_object_support_metadata_members(plan)
         pins = tuple(dict.fromkeys(pin for _, pin in members))
@@ -339,6 +359,16 @@ def resolve_sdxl_photo_style_metadata(
         metadata.update({path: support_payloads[pin] for path, pin in members})
         support_documents = photo_object_support_parent_documents(plan, metadata)
         validate_photo_object_support_lineage(plan, support_documents)
+    if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan):
+        members = photo_baseline_reuse_metadata_members(plan)
+        raw_reused = resolve_control_artifact_members(
+            engine, tuple(BoundedControlArtifactRead(pin, 256 * 1024) for _, pin in members)
+        )
+        metadata.update({path: raw for (path, _), raw in zip(members, raw_reused, strict=True)})
+        baseline_documents = photo_baseline_reuse_documents(plan, metadata)
+        if not isinstance(anchor, LocalImageSdxlNativeCannyReferenceCommandV4):
+            raise ValueError("PHOTO_STYLE_BASELINE_REUSE_CONFIGURATION_INVALID")
+        parse_reused_photo_baseline(plan, anchor, admitted.sources, baseline_documents)
     if isinstance(plan, LocalImageSdxlPhotoStyleRetainedRegionPlan):
         review_raw = resolve_control_artifact_member(
             engine, plan.region_review_evidence, maximum_bytes=64 * 1024
@@ -358,4 +388,5 @@ def resolve_sdxl_photo_style_metadata(
             for path, raw in sorted(metadata.items())
         ),
         support_documents,
+        baseline_documents,
     )

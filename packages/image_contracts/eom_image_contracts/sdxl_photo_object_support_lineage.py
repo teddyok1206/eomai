@@ -155,7 +155,7 @@ def validate_photo_object_support_lineage(
         or prior_regions[prior_id].context_policy != review.context_policy
         or baseline_regions[entry.case.case_id].context_policy != review.context_policy
         or prior.configuration_anchor != baseline.configuration_anchor
-        or plan.configuration_anchor != baseline.configuration_anchor
+        or plan.support_configuration_anchor() != baseline.configuration_anchor
         or prior.seed != baseline.seed
         or plan.seed != baseline.seed
         or prior.control != baseline.control

@@ -13,8 +13,10 @@ from typing import cast, get_args
 from eom_image_contracts.models import LocalImageRuntime
 from eom_image_contracts.sdxl_learned_comparison import (
     LEARNED_COMPARISON_ARMS,
+    LearnedComparisonArm,
     SdxlLearnedComparisonBudget,
     SdxlLearnedComparisonOutput,
+    validate_inference_arms,
 )
 from eom_image_contracts.sdxl_lineart_probe import (
     LocalImageSdxlLineartProbeCommand,
@@ -39,10 +41,13 @@ def _sha(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def create_sdxl_pair_directories(root: int, workspace: Path) -> None:
+def create_sdxl_pair_directories(
+    root: int, workspace: Path, *, arms: tuple[LearnedComparisonArm, ...] = LEARNED_COMPARISON_ARMS
+) -> None:
+    validate_inference_arms(arms)
     create_staged_directory(root, "outputs")
     with verified_directory(workspace / "outputs", expected_owner_uid=os.geteuid()) as out:
-        for arm in LEARNED_COMPARISON_ARMS:
+        for arm in arms:
             create_staged_directory(out, arm.lower())
             with verified_directory(
                 workspace / "outputs" / arm.lower(), expected_owner_uid=os.geteuid()
@@ -72,13 +77,15 @@ def run_sdxl_pair_inference(
     start: float,
     gpu_lock: Path,
     backend: SdxlProbeBackend,
+    arms: tuple[LearnedComparisonArm, ...] = LEARNED_COMPARISON_ARMS,
 ) -> SdxlPairInferenceEvidence:
+    validate_inference_arms(arms)
     produced: list[SdxlLearnedComparisonOutput] = []
     runtime: LocalImageRuntime | None = None
     error: SdxlProbeErrorCode | None = None
     try:
         with acquire_gpu_lease(gpu_lock):
-            for arm in LEARNED_COMPARISON_ARMS:
+            for arm in arms:
                 if (time.monotonic() - start) * 1000 >= budget.maximum_duration_ms:
                     raise ProviderError("SDXL_PROBE_BUDGET_EXCEEDED")
                 # A new pipeline avoids contaminating BASE with a previously loaded LoRA.

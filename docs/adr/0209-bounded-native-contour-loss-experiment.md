@@ -1,5 +1,53 @@
 # ADR0209: One bounded native contour-loss learning hypothesis
 
+## Photo1.7 adapter-only comparison design — 2026-10-06
+
+1. Existing photo owner/isolated provider own resolution, staging and execution;
+   extend them, not a new queue/worker or generic experiment framework.
+2. Canonical input is the licensed source, reviewed object-support evidence,
+   current native1.3 adapter and authenticated previous photo1.6 BASE result.
+3. New plan/command/result1.7 have independent immutable identities; photo1.0–1.6
+   and all prior artifacts retain their bytes and meaning.
+4. Require three small pins: prior1.6 plan/result and its exact reference1.3
+   configuration. Current reference1.4 pins geometry1.6/native1.3; its borrowed
+   geometry command must equal the prior configuration's geometry1.5 command.
+   Check schema/media/hash/canonical/status/time, source/caption/seed/control/
+   initializer/numerics equality before any current weights or photo pixels.
+5. Access is bounded keyed metadata lookup and stable ordered iteration, not
+   scans or latest resolution. One photo case and one new LoRA output only.
+6. Frozen three-pin DTO and staged metadata map; no BASE PNG copy, old-adapter
+   loading, DB schema/index or dependency changes. O(metadata + one photo).
+7. Full native admission still validates100 targets before media/model use;
+   reference and support metadata are tiny immutable values, not binary DB blobs.
+8. Existing owner commit/idempotency and exclusive GPU lease remain authoritative;
+   one dispatch, no automatic retry or duplicate output after terminal replay.
+9. Contracts stay pure; filesystem/CUDA/DB behavior remain adapter-owned.
+10. Missing/failed/stale/hash/equivalence errors fail closed. Old1.6 source checks
+    remain exact; new1.7 explicitly authenticates the old support parents against
+    their prior configuration, not against the new adapter.
+11. Simply changing the old configuration pin would invalidate its single-factor
+    meaning. Regenerating BASE wastes GPU and obscures comparison. The successor
+    declares only LoRA generation and preserves composed object-support pixels.
+
+This contract is not visual acceptance or runtime activation. The completed TRAIN
+diagnostic's tone/white trade-off must be judged by fixed visual outputs, original
+institutional references and the independent/HOLDOUT/Item-HWPX gates.
+
+Source checkpoint2026-10-06: complete relevant legacy/native/reference/photo/
+shared-pair/dependency regression1208PASS in384.56seconds, including22 new
+photo1.7 synthetic admission/lifecycle/replay/negative cases. Strict mypy13 changed
+source modules PASS; Ruff/format/shell syntax/diff checks PASS. Tests use the
+existing eom-image-test interpreter; fake inference is not actual image quality.
+Borrowed missing/hash/denied metadata fails before weights/PNG materialization;
+rehashed prompt/seed/budget/support changes fail equivalence; false BASE claims,
+another baseline revision and undeclared BASE directories fail. Success and
+failure terminal replay is read-only and does not reopen models or generate.
+Fixture errors (UTC serialization, objective-evidence closure, synthetic adapter
+reader/identity and test assertions) were corrected in the fixture, without
+weakening source admission or modifying production contracts. Preserve those
+failed test logs. Old schema bytes and photo1.0–1.6 meaning remain unchanged.
+No lab installation, new real PNG, training or production activation yet.
+
 ## Same-recipe terminal-adapter diagnostic design — 2026-10-06
 
 This is an opt-in integration diagnostic, not a production worker protocol,

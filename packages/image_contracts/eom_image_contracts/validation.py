@@ -12,6 +12,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "sdxl-photo-style-plan-v8": "local-image-sdxl-photo-style-plan-v8.schema.json",
+    "sdxl-photo-style-command-v8": "local-image-sdxl-photo-style-command-v8.schema.json",
+    "sdxl-photo-style-result-v8": "local-image-sdxl-photo-style-result-v8.schema.json",
     "sdxl-lora-evaluation-command-v7": "local-image-sdxl-lora-evaluation-command-v7.schema.json",
     "sdxl-lora-evaluation-result-v7": "local-image-sdxl-lora-evaluation-result-v7.schema.json",
     "sdxl-photo-style-command-v7": "local-image-sdxl-photo-style-command-v7.schema.json",
@@ -431,6 +434,15 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "sdxl-photo-style-plan-v8": (
+        "sha256:817b3079fcde911bd234d0386c5a363b1d4d7053c3647b114ab366a10b4bdba6"
+    ),
+    "sdxl-photo-style-command-v8": (
+        "sha256:bc611bf63baead946a293d59785ebcade342c3bbd3aa3ad7bb5b5b481349d18e"
+    ),
+    "sdxl-photo-style-result-v8": (
+        "sha256:28957274af735166d6da7c3596a577625cff247648ba1f356c22fa093d6d1030"
+    ),
     "sdxl-lora-evaluation-command-v7": (
         "sha256:36f1b3b75b0103e940e1d11ce876ad30637ec10f71d051052c51fb709c41898f"
     ),

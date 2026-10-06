@@ -4796,6 +4796,19 @@ Do not tighten acceptance after seeing outputs or discard valid institutional
 variation. Different car types/views are style references, not paired morphology
 ground truth. Source-free and photo-preserving fidelity gates remain separate.
 
+User reiterated this recurring review requirement on2026-10-06. At12:40–12:45UTC,
+actually reopened the pinned TRAIN dump-truck reference and original11 contact
+sheet (equipment, bus/observer, cloud, students and tree). KEEP_DIRECTION remains
+conditional: equipment uses clean geometric edges with selected gray faces;
+clouds legitimately use soft tone; student/tree scenes retain explanatory detail;
+the truck retains wheel/bed detail while the outer silhouette stays readable.
+Do not force every subject into one binary contour or erase authored scene
+information. No new candidate raster was available at this source-test checkpoint,
+so this is original-reference calibration only, not a paired candidate review or
+visual PASS. Reopen relevant originals beside the next actual fixed outputs and
+record candidate-specific differences then. This cadence is milestone-based,
+not high-frequency polling; idle training observations remain30-minute apart.
+
 Native contour fit terminal checkpoint, **2026-10-06 11:50 UTC**:
 Same single c9bad421 execution SUCCEEDED,800/800 optimizer updates,100 realized
 native TRAIN samples;31.36minutes/peak6.17GB CUDA, within pinned one-hour/16GiB.

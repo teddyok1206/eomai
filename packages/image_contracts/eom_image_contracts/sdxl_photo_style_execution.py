@@ -19,21 +19,27 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
-from eom_image_contracts.photo_object_support import PhotoObjectSupportParentDocuments
+from eom_image_contracts.photo_object_support import (
+    PhotoBaselineReuseDocuments,
+    PhotoObjectSupportParentDocuments,
+)
 from eom_image_contracts.sdxl_canny_reference import (
     validate_sdxl_canny_reference_sources,
 )
 from eom_image_contracts.sdxl_native_canny_reference import (
     LocalImageSdxlNativeCannyReferenceCommandV2,
     LocalImageSdxlNativeCannyReferenceCommandV3,
+    LocalImageSdxlNativeCannyReferenceCommandV4,
     SdxlNativeCannyReferenceSources,
 )
 from eom_image_contracts.sdxl_native_lora_sources import SdxlNativeLoraSources
+from eom_image_contracts.sdxl_photo_baseline_reuse import parse_reused_photo_baseline
 from eom_image_contracts.sdxl_photo_object_support_lineage import (
     validate_photo_object_support_lineage,
 )
 from eom_image_contracts.sdxl_photo_style import (
     LocalImageSdxlPhotoObjectSupportPlan,
+    LocalImageSdxlPhotoReusedBaselinePlan,
     LocalImageSdxlPhotoStyleBalancedExposurePlan,
     LocalImageSdxlPhotoStylePlan,
     SdxlPhotoStyleSource,
@@ -59,6 +65,7 @@ from eom_image_contracts.validation import validate_contract
 __all__ = (
     "LocalImageSdxlPhotoObjectSupportCommand",
     "LocalImageSdxlPhotoObjectSupportResult",
+    "LocalImageSdxlPhotoReusedBaselineCommand",
     "LocalImageSdxlPhotoStyleBalancedExposureCommand",
     "LocalImageSdxlPhotoStyleBalancedExposureResult",
     "LocalImageSdxlPhotoStyleCommand",
@@ -145,6 +152,10 @@ class LocalImageSdxlPhotoObjectSupportCommand(LocalImageSdxlPhotoStyleCommand):
     schema_version: Literal["local-image-sdxl-photo-style-command/1.6"]  # type: ignore[assignment]
 
 
+class LocalImageSdxlPhotoReusedBaselineCommand(LocalImageSdxlPhotoStyleCommand):
+    schema_version: Literal["local-image-sdxl-photo-style-command/1.7"]  # type: ignore[assignment]
+
+
 _COMMAND_MODELS: Mapping[str, type[LocalImageSdxlPhotoStyleCommand]] = MappingProxyType(
     {
         "local-image-sdxl-photo-style-command/1.0": LocalImageSdxlPhotoStyleCommand,
@@ -154,6 +165,7 @@ _COMMAND_MODELS: Mapping[str, type[LocalImageSdxlPhotoStyleCommand]] = MappingPr
         "local-image-sdxl-photo-style-command/1.4": LocalImageSdxlPhotoStyleRetainedRegionCommand,
         "local-image-sdxl-photo-style-command/1.5": LocalImageSdxlPhotoStyleBalancedExposureCommand,
         "local-image-sdxl-photo-style-command/1.6": LocalImageSdxlPhotoObjectSupportCommand,
+        "local-image-sdxl-photo-style-command/1.7": LocalImageSdxlPhotoReusedBaselineCommand,
     }
 )
 
@@ -201,6 +213,7 @@ class SdxlPhotoStyleExecutionSources:
     native_training_sources: SdxlNativeLoraSources
     photos: tuple[SdxlPhotoStyleSource, ...]
     object_support: PhotoObjectSupportParentDocuments | None = None
+    baseline_reuse: PhotoBaselineReuseDocuments | None = None
 
 
 def validate_photo_style_execution_sources(
@@ -210,7 +223,9 @@ def validate_photo_style_execution_sources(
     parse_photo_style_plan(command, content_json_bytes(plan.model_dump(mode="json")))
     configuration = sources.configuration
     expected_model = (
-        LocalImageSdxlNativeCannyReferenceCommandV3
+        LocalImageSdxlNativeCannyReferenceCommandV4
+        if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan)
+        else LocalImageSdxlNativeCannyReferenceCommandV3
         if isinstance(
             plan,
             (LocalImageSdxlPhotoStyleBalancedExposurePlan, LocalImageSdxlPhotoObjectSupportPlan),
@@ -227,6 +242,17 @@ def validate_photo_style_execution_sources(
     ):
         raise ValueError("photo execution configuration family/hash/seed/time mismatch")
     validate_sdxl_canny_reference_sources(configuration, sources.configuration_sources)
+    reused = None
+    if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan):
+        if sources.baseline_reuse is None or not isinstance(
+            configuration, LocalImageSdxlNativeCannyReferenceCommandV4
+        ):
+            raise ValueError("PHOTO_STYLE_BASELINE_REUSE_METADATA_MISSING")
+        reused = parse_reused_photo_baseline(
+            plan, configuration, sources.configuration_sources, sources.baseline_reuse
+        )
+    elif sources.baseline_reuse is not None:
+        raise ValueError("PHOTO_STYLE_BASELINE_REUSE_UNDECLARED")
     validate_photo_style_sources(
         plan,
         sources.photos,
@@ -237,13 +263,35 @@ def validate_photo_style_execution_sources(
             raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_METADATA_MISSING")
         lineage = validate_photo_object_support_lineage(plan, sources.object_support)
         native = sources.configuration_sources
+        parent_configuration = (
+            reused.configuration.command_sha256 if reused else configuration.command_sha256
+        )
+        parent_evaluation = (
+            reused.geometry.command_sha256 if reused else native.evaluation.command_sha256
+        )
+        parent_adapter = (
+            reused.geometry.evaluation.adapter_manifest_sha256
+            if reused
+            else native.native.manifest.manifest_sha256
+        )
         if any(
-            parent.configuration_command_sha256 != configuration.command_sha256
-            or parent.native_evaluation_command_sha256 != native.evaluation.command_sha256
-            or parent.native_adapter_manifest_sha256 != native.native.manifest.manifest_sha256
+            parent.configuration_command_sha256 != parent_configuration
+            or parent.native_evaluation_command_sha256 != parent_evaluation
+            or parent.native_adapter_manifest_sha256 != parent_adapter
             for parent in (lineage.prior_result, lineage.baseline_result)
         ):
             raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_NATIVE_PARENT_MISMATCH")
+        if reused is not None:
+            review, trace = lineage.review, reused.result.object_support
+            if (
+                trace.review_sha256 != review.review_sha256
+                or trace.source_sha256 != review.source.sha256
+                or trace.prior_control_sha256 != review.prior_control.sha256
+                or trace.support_mask_sha256 != review.support_mask.sha256
+                or trace.candidate_control_sha256 != review.candidate_control.sha256
+                or trace.pixel_observation != review.pixel_observation
+            ):
+                raise ValueError("PHOTO_STYLE_BASELINE_REUSE_TRACE_MISMATCH")
     elif sources.object_support is not None:
         raise ValueError("PHOTO_STYLE_OBJECT_SUPPORT_UNDECLARED")
 

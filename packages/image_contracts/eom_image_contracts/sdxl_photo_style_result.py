@@ -13,17 +13,20 @@ from eom_image_contracts.models import (
     Sha256,
     content_sha256,
 )
-from eom_image_contracts.photo_object_support import PhotoObjectSupportPixelObservation
+from eom_image_contracts.photo_object_support import (
+    PhotoBaselineReuse,
+    PhotoObjectSupportPixelObservation,
+)
 from eom_image_contracts.sdxl_canny_comparison import SdxlCannyControlParameters
 from eom_image_contracts.sdxl_canny_reference import SdxlCannyReferenceTrace
 from eom_image_contracts.sdxl_learned_comparison import (
-    LEARNED_COMPARISON_ARMS,
     SdxlLearnedComparisonOutput,
 )
 from eom_image_contracts.sdxl_lineart_probe import SdxlProbeErrorCode
 from eom_image_contracts.sdxl_photo_style import (
     SDXL_PHOTO_WHITE_INITIALIZER_RGB_SHA256,
     LocalImageSdxlPhotoObjectSupportPlan,
+    LocalImageSdxlPhotoReusedBaselinePlan,
     LocalImageSdxlPhotoStyleControlWindowPlan,
     LocalImageSdxlPhotoStylePlan,
     LocalImageSdxlPhotoStyleRetainedRegionPlan,
@@ -147,6 +150,18 @@ class LocalImageSdxlPhotoObjectSupportResult(LocalImageSdxlPhotoStyleFullDenoisi
     outputs: tuple[SdxlLearnedComparisonOutput, ...] = Field(max_length=2)
 
 
+class LocalImageSdxlPhotoReusedBaselineResult(LocalImageSdxlPhotoObjectSupportResult):
+    schema_version: Literal["local-image-sdxl-photo-style-result/1.7"]  # type: ignore[assignment]
+    baseline_reuse: PhotoBaselineReuse
+    outputs: tuple[SdxlLearnedComparisonOutput, ...] = Field(max_length=1)
+
+    @model_validator(mode="after")
+    def lora_only(self) -> Self:
+        if any(row.arm != "LORA" for row in self.outputs):
+            raise ValueError("PHOTO_BASE_GENERATION_FORBIDDEN")
+        return self
+
+
 def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
     if not isinstance(value, dict):
         raise ValueError("photo result object required")
@@ -159,6 +174,7 @@ def parse_photo_style_result(value: object) -> LocalImageSdxlPhotoStyleResult:
         "local-image-sdxl-photo-style-result/1.4": LocalImageSdxlPhotoStyleRetainedRegionResult,
         "local-image-sdxl-photo-style-result/1.5": LocalImageSdxlPhotoStyleBalancedExposureResult,
         "local-image-sdxl-photo-style-result/1.6": LocalImageSdxlPhotoObjectSupportResult,
+        "local-image-sdxl-photo-style-result/1.7": LocalImageSdxlPhotoReusedBaselineResult,
     }
     if not isinstance(schema, str) or schema not in models:
         raise ValueError("unsupported photo result family")
@@ -172,7 +188,7 @@ def validate_photo_style_plan_result_relation(
     """One authority for small plan/result relation, not full execution-source admission."""
     expected = tuple(
         (arm, entry.case.case_id, plan.seed)
-        for arm in LEARNED_COMPARISON_ARMS
+        for arm in plan.generated_arms()
         for entry in plan.cases
     )
     observed = tuple((row.arm, row.case_id, row.seed) for row in result.outputs)
@@ -222,3 +238,8 @@ def validate_photo_style_plan_result_relation(
         or result.object_support.candidate_control_sha256 != result.inputs[0].conditioning_sha256
     ):
         raise ValueError("photo result differs from declared object support/control")
+    if isinstance(plan, LocalImageSdxlPhotoReusedBaselinePlan) and (
+        not isinstance(result, LocalImageSdxlPhotoReusedBaselineResult)
+        or result.baseline_reuse != plan.baseline_reuse
+    ):
+        raise ValueError("PHOTO_BASELINE_REUSE_RESULT_MISMATCH")

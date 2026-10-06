@@ -6,7 +6,12 @@ import io
 import os
 from pathlib import Path
 
-from eom_image_contracts.sdxl_learned_comparison import SdxlLearnedComparisonOutput
+from eom_image_contracts.sdxl_learned_comparison import (
+    LEARNED_COMPARISON_ARMS,
+    LearnedComparisonArm,
+    SdxlLearnedComparisonOutput,
+    validate_inference_arms,
+)
 from PIL import Image
 
 from eom_image_provider.staged_file_io import read_staged_member, verified_directory
@@ -18,13 +23,15 @@ def validate_sdxl_pair_output_members(
     outputs: tuple[SdxlLearnedComparisonOutput, ...],
     *,
     expected_owner_uid: int | None = None,
+    arms: tuple[LearnedComparisonArm, ...] = LEARNED_COMPARISON_ARMS,
 ) -> None:
+    validate_inference_arms(arms)
     owner = os.geteuid() if expected_owner_uid is None else expected_owner_uid
     expected = {path for row in outputs for path in (row.raw_member_path, row.member_path)}
     allowed = {
         "outputs",
-        *("outputs/" + arm for arm in ("base", "lora")),
-        *("outputs/" + arm + "/" + kind for arm in ("base", "lora") for kind in ("raw", "final")),
+        *("outputs/" + arm.lower() for arm in arms),
+        *("outputs/" + arm.lower() + "/" + kind for arm in arms for kind in ("raw", "final")),
     }
     observed: set[str] = set()
     directories: set[str] = set()

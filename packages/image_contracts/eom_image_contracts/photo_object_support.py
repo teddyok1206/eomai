@@ -232,3 +232,34 @@ class PhotoObjectSupportParentDocuments:
     prior_result: bytes
     baseline_plan: bytes
     baseline_result: bytes
+
+
+class PhotoBaselineReuse(FrozenModel):
+    """Explicit previous object-supported BASE, not its old adapter or image bytes."""
+
+    prior_plan: ImageEvaluationArtifactMember
+    prior_result: ImageEvaluationArtifactMember
+    prior_configuration: ImageEvaluationArtifactMember
+
+    @model_validator(mode="after")
+    def exact_roles(self) -> Self:
+        for pin, family, version in (
+            (self.prior_plan, "sdxl-photo-style-plan", "1.6"),
+            (self.prior_result, "sdxl-photo-style-result", "1.6"),
+            (self.prior_configuration, "sdxl-canny-reference-command", "1.3"),
+        ):
+            if (
+                pin.schema_ref != PREFIX + family + "/" + version
+                or pin.member_path != "manifests/" + family + ".json"
+                or pin.media_type != "application/json"
+            ):
+                raise ValueError("PHOTO_BASELINE_REUSE_POINTER_KIND_INVALID")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class PhotoBaselineReuseDocuments:
+    prior_plan: bytes
+    prior_result: bytes
+    prior_configuration: bytes
+    prior_geometry: bytes
