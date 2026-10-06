@@ -4530,3 +4530,38 @@ existing per-variant outputs and reject if form or contour clarity fails.
 Do not claim a successful LoRA fix from data screening or prompt gains alone.
 Independent/blind review, untouched HOLDOUT and a passing Item/HWPX canary are
 still pending. Goal ACTIVE.
+
+### 2026-10-06 exact native style cue comparison terminal
+
+The previously proposed one-wagon prompt-only successor actually completed:
+one new command/case identity, two outputs,20,359ms, peak10,763,033,600bytes,
+training0/retry0/HOLDOUT0/production0. Installed wheels/role,76 staged inputs,
+four actual token checks(55/37,capacity77), unchanged source/control/initializer
+hashes and seven committed members PASS. Canonical result:
+`artifact_35b6a9a3403f49cfad78a86fa8d2abc2` /
+`rev_b1e55ed1b08c45abbc3dcf84b375b3ed`, raw SHA
+`sha256:fc798bf0c619f9252ffc2edfed8ab9ad6ca64491f05608bc023d9895c384678a`.
+Nine image rereads include old/new final/raw outputs and the original photo.
+Installed terminal replay preserves83 files with zero model/lease/transform/write.
+
+Own actual visual review **NOT_ACCEPTED**: vehicle form is roughly retained,
+but the new LoRA is even paler and photographic ground/background texture
+remains. Exact native style wording is not a sufficient fix for this fixed
+case. Numerical differences are not improvement; no source/data/control
+factor is declared the unique cause. No automatic next training/sweep.
+
+Own review and22 evidence members/664,453bytes, all reread equal:
+`artifact_59b556e92b8b4f10becbac1d76c4ef98` /
+`rev_0502ebe022934068b02c70a45b585923`, primary `reports/own-review.json`, SHA
+`sha256:ee60b12e07e32c029e3c753eb65f11f2084ce8bffd5e9aaf4f977dc76f36e83d`.
+Fixture timestamp/hash failure, missing local publication handoff and exact
+temporary operator bytes are accounted for in that own record; no core patch
+or second model dispatch. See ADR0206 for the detailed interpretation.
+
+Next: CPU-only view/trace of the already registered control edge image and
+retained region against source morphology/background. Resolve exact pointers;
+do not change model/data or invent a foreground mask before examining evidence.
+Five services remain active; production binding unchanged; goal ACTIVE.
+Viewing copy: `/tmp/eom-photo-nativecue-20261006/matched-contact.png`.
+Columns: original photo(not generated) | old BASE | old balanced LoRA | new
+BASE | new balanced LoRA. Independent review/HOLDOUT/Item/HWPX gates remain open.

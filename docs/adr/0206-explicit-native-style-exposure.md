@@ -361,7 +361,7 @@ operator/test source files. Only named local evidence permissions were tightened
 the same frozen review bytes/key were published. Both failure logs are retained
 in the22-member archive. No state/DB edits or relaxed security guard.
 
-### Bounded prompt-only successor design — not prepared or executed
+### Initial bounded prompt-only successor design
 
 Use the existing photo-style plan/command1.5 with one licensed wagon case
 `imgsdxlcase_b5ebe1d385727ab5f16a59bd56fda90e`. It is not a reserved corpus
@@ -400,3 +400,73 @@ Simpler alternative: do not retrain. The two-output check is cheaper and avoids
 discarding useful institutional images. Production binding stays unchanged;
 own quality, independent review, HOLDOUT, Item/HWPX canary and activation gates
 remain open. Goal ACTIVE.
+
+## 2026-10-06 prompt-only successor executed and rejected (06:46 UTC)
+
+The preceding design was actually executed, without changing core source,
+dependencies, schema bytes, training data, numerical recipe or production.
+Plan/command1.5 admit one case with fresh content-derived identities. Because
+prompt bytes contribute to case identity, the wagon case became
+`imgsdxlcase_108a56b944f518d9836938b8d98e1e72`. Its physical source and region
+are unchanged; the successor own-review evidence explicitly carries the old
+case/source review forward, not a new independent review. Configuration
+anchor/adapter remains exactly the previous balanced trial.
+
+Installed lab RECORD/role verification PASS;76 staged members were checked.
+Both actual offline tokenizers read positive55/negative37 tokens, capacity77.
+Installed-role CPU source/conditioning/white-initializer hashes match the old
+wagon exactly. One dispatch, no retries or training, run
+`imgsdxlvalcmprun_d9020837b6fc45afec18efb4afed73bf`, semantic command SHA
+`sha256:5103b33dc2b602d561e787373d16e22f061b3d018a1caffdd68a1d056a9b0df4`.
+Two outputs SUCCEEDED in20,359ms, peak10,763,033,600bytes. Result was committed
+as seven members, all reread equal, `artifact_35b6a9a3403f49cfad78a86fa8d2abc2`
+/ `rev_b1e55ed1b08c45abbc3dcf84b375b3ed`; result raw SHA
+`sha256:fc798bf0c619f9252ffc2edfed8ab9ad6ca64491f05608bc023d9895c384678a`,
+semantic SHA
+`sha256:175747c1e3450948bc1a75eb024863ed7a8c61d0794662e9ee18b8e4e47d048d`.
+
+Nine canonical image rereads cover one source photo, two historical final/two
+raw results and two new final/two raw results. Comparison labels explicitly
+separate the photograph from generated images. Source, control trace, adapter,
+seed and negative instruction match; only the positive style sentence changed.
+Installed-role terminal replay preserves83 file SHA/mtime identities with no
+model call, GPU lease, source transform or write.
+
+Actual own visual decision: **NOT_ACCEPTED**. The approximate right-facing
+silhouette/two-wheel form remains recognizable, but new LoRA is paler and still
+retains photographic ground/background texture. New BASE is not good exam ink
+either. Dark-fraction milli BASE8->3 / LoRA4->1 and grayscale MAE4.639605 /
+3.83109 are descriptive measurements, not quality scores. White outer borders
+do not prove a clean internal background. Exact native style wording is not
+a sufficient fix in this case; neither global quality nor LoRA-alone improvement
+is established. No next sweep/training restart automatically follows.
+
+Two positive/four negative pure fixture checks PASS. The first fixture used
+`+00:00` instead of canonical `Z`, causing identity/hash mismatch; corrected
+fixture passes, while the actual producer used `Z` from the first plan. The
+first publication handoff lacked its saved local command value, so no publisher
+ran; the same terminal run was then published, with no model redispatch.
+An unused temporary dispatch-operator import was removed only **after** its
+exact executed bytes were canonically archived. No worker/core workaround.
+
+Own review, derived comparison view, exact execution operators, typed pointer
+reports and logs:22 members/664,453bytes, every canonical reread equal,
+`artifact_59b556e92b8b4f10becbac1d76c4ef98` /
+`rev_0502ebe022934068b02c70a45b585923`, primary `reports/own-review.json`,
+operations/plain-text-log/1.0, text/plain, raw SHA
+`sha256:ee60b12e07e32c029e3c753eb65f11f2084ce8bffd5e9aaf4f977dc76f36e83d`.
+Original source PNGs, adapter weights and raw generated outputs are referenced,
+not duplicated into this operations archive.
+
+Next authorized task is **read-only CPU spatial-input route inspection**: resolve
+the existing source/conditioning/initializer pointers, view the actual control
+edge map and reviewed region boundaries, and trace which interior details or
+background cues survive rectangular retention. Check polarity/recipe against
+the pinned controller configuration and preserved historical alternatives
+before proposing a new bounded hypothesis. No new mask, automatic exclusion,
+relabeling, training or inference is authorized by this diagnostic record.
+The observed gray texture does not prove control or data tone is the sole cause.
+Scientific overlays remain typed/deterministic, not GPU text. Five services
+active, no active image unit, production binding unchanged. Independent/blind
+review, untouched HOLDOUT, final Item/HWPX canary and activation remain open;
+goal ACTIVE.
