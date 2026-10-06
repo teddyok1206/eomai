@@ -406,3 +406,53 @@ f6cd083513539d7eda578710ed1602be2f5da9dea787f35deafff7b90632c06c.
 All shown additions are institution-original derivatives, NOT model-generated.
 GPU/training/reserved reads/production changes0; binding unchanged,five services
 active. Independent blind and full model/Item/HWPX gates remain OPEN; goal ACTIVE.
+
+### Broader original inspection and exact cohort-capacity bounds
+
+At source7dfb510d, fresh canonical89-target metadata closure and exhaustive
+14-choose6/8 subset enumeration proved concentration upper bounds61/71;
+the raw top-eight bound73 does not authorize FULL training. Known held cell
+excluded; actual artwork deduplication may lower the bound further. No binary
+reads, command submissions, queue/schema or production changes in this diagnostic.
+
+All96 new original TRAIN pages from72 previously unprepared documents/55 groups
+were actually viewed in twelve separate sheets: existing PNG bytes50.4MB,
+six science families, at most two early pages/document rather than highest region
+counts. Coordinate-expanded review corrected provisional small-page subject
+guesses before source publication. A smaller-page bounds rejection remained a
+local operator diagnostic, not a runtime/core defect or permission relaxation.
+
+Own body inspection withheld nine of24 candidate frames for actual annotations/
+panel background. Fifteen literal regions from ten new PDFs/ten groups were
+natively rendered at576DPI in ten isolated CPU requests:12.5MB PDFs/4.12M pixels.
+Installed RECORD/role audit PASS, canonical replay0 renders. All fifteen native
+outputs were viewed; the trees/worker frame remains DEFER for a detached edge tick.
+Historical source key/caption/bytes remain immutable, no reconstruction/inpainting.
+
+One installed CPU run prepared14 and deferred1 (2230ms); Orchestrator committed
+15 result/PNG members, all reread byte-equal. Terminal role replay writes/transforms0.
+All fourteen final targets were actually viewed. Current typed captions mention
+retained leader/level/motion marks; partial portraits remain explicitly partial.
+Raster gray nature sources do not become vector/sharper by native PDF rendering.
+These are institution-original derivatives, NOT model-generated quality samples.
+
+Fresh pool103 prepared IDs/63 documents/53 groups spans15 preparation results,
+zero sample-ID/exact-PNG duplicates. It is NOT a frozen/admitted cohort: pool
+max4/doc and7/group exceed selected cohort3/doc and4/group ceilings. Exhaustive
+current five/six/seven/eight-result upper bounds61/69/74/79 keep FULL100–200
+NOT_ACHIEVED. At least26 additional non-concentrating usable originals in one
+coherent <=32-result would be needed with the best existing seven; this is a
+lower-bound planning scenario, not a subject-dedup/pixel-quality guarantee.
+Preserve <=8 selected results; do not wrap batches, pad, reseed or relabel PILOT.
+Next: coherent additional apparatus/object/nature sources, actual final selection.
+
+Focused source-expansion/native-PDF/native-target suites110 PASS in14.91s,
+terminal exit0 earlier in this turn; operator format/lint PASS before current
+dispatch. No core schema, migration, dependency, release or activation changed.
+Evidence artifact_2eed539b37eb4a0c982f621c32301590 /
+rev_06624e268dc14498b59eb37ada96484d:56 members reread byte-equal;
+reports/own-review.md SHA
+f11cdd8d7a24eee5e09c56102371302070474b9b1c06b4d3ab637546ff5e4bfb.
+GPU/training/reserved reads/production changes0; binding unchanged,five services
+active. Independent blind, full model quality/resource, Item/HWPX and activation/
+rollback gates remain OPEN. Complete goal stays ACTIVE.
