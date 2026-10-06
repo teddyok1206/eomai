@@ -1,5 +1,48 @@
 # ADR0207: Reviewed object support before another style experiment
 
+## Next CPU-only structural-detail diagnosis — 2026-10-06
+
+The later native1.3 matched result was own-rejected for promotion (operations
+plan records the actual originals/candidates). Existing object support removes
+the exterior scene but retains photographic reflections/seat texture inside the
+vehicle. This is not a proven sole cause of weak strokes. Before any new fit or
+controller/model sweep, prepare one **CPU-only input prototype**, preserving the
+same licensed photograph and previous control, to determine whether reviewed
+interior detail selection can retain essential geometry. This is not a final
+image, accepted support review, worker command or authorization for diffusion.
+
+1. Owner/boundary: existing Orchestrator resolves/publishes; bounded optional
+   Pillow pixel work in an operations diagnostic. No new queue/service/DB.
+2. Source: the exact existing licensed wagon, original object-support review,
+   prior control/mask/candidate and hashes; no TRAIN/VALIDATION/HOLDOUT changes.
+3. Identity: new diagnostic mask/control derivatives, not edited old artifacts
+   or an implicitly current reference; preserve original and rejected outputs.
+4. Resolution: verify typed review and four canonical binaries, then existing
+   hash/mode/dimension/edge-subset validation before deriving anything.
+5. Access: one immutable source set, ordered bounded polygons, keyed feature
+   regions; no corpus scan or automatic semantic classification.
+6. Structure: binary mask intersection, fixed polygon cuts and protected-feature
+   union; O(pixels + height*vertices), bounded832x512, existing Pillow only.
+7. Scope: one prototype, no threshold/seed/model/fit search, GPU calls0. Keep
+   both wheel regions, roof, handles, window boundaries and silhouette band.
+8. Concurrency: exclusive new local output directory; existing owner publication
+   and exact pinned reread. Unknown publication state is inspected, not retried.
+9. Direction: contracts remain pure; pixel/filesystem behavior stays outside
+   them. No core/runtime/dependency change for this diagnostic.
+10. Failure: retain failed/rejected prototypes. Recompute subset/count/feature
+    equality; never add edges, move components or reinterpret this as approval.
+11. Alternative: global blur or another denoising/control strength sweep already
+    failed. Reviewed local detail selection is a distinct input hypothesis;
+    it still requires actual source comparison, not a counts-only acceptance.
+
+Deleting interior detail is not the released review's irrelevant-backdrop
+promise. Do not submit this prototype using old review/worker identities. Any
+future numerical consumer needs explicit semantic approval and protocol-first
+lineage, not a boolean bypass. Binary PNG formats can be reused as diagnostics;
+their registration alone does not establish a reviewed conditioning policy.
+Retain meaningful interior geometry and gray in final illustrations; this
+prototype tests control information, not a blanket binary publication style.
+
 2026-10-06 UTC. Status: diagnostic design; no production activation or
 institutional-quality acceptance. Overall illustration goal ACTIVE.
 
