@@ -144,8 +144,53 @@ resolution; using the API interpreter alone initially reported its absent Pillow
 dependency, not a source defect. No suppression or dependency installation was
 added to disguise that environment difference.
 
-Next: freeze a release commit, build/verify the
-compatible isolated lab wheels, and perform canonical full-cohort metadata
-preflight before any training dispatch. Preserve old installed artifacts and
-production binding. There has been no weighted-loss training or new generated
-sample for this ADR; full goal/quality gates remain ACTIVE/NOT_ACCEPTED.
+## Frozen build and real canonical metadata preflight
+
+Source/release candidate `92fed3a86a6a2423b604170eb36993004b32f57f` is committed.
+The immutable archive build/required-wheel-member inspection PASS; three outputs
+in `/tmp/eom-image-trainer-build/92fed3a86a6a2423b604170eb36993004b32f57f.aToYaT/dist`:
+
+| Component | Wheel SHA-256 |
+|---|---|
+| Contracts | `701ba948604ec687c4374a7a22440ea33573f600c33b4bbd0672a8591b18c637` |
+| Provider | `10be9e8f4cbc8fa145ce357236bc9af7449dd73d5fe6f8ac4555497083de924f` |
+| Trainer | `b59416ef059e7ad88e2c6d79be1a72b346d0fb4c287596c7ba222792654107cc` |
+
+This is BUILD_ONLY: no claim of newly installed wheel RECORD/runtime acceptance.
+The final-source actual CPU test run also passed10/10 in1.047s, separately from
+the first1.069s development run. Neither CPU invocation loads models or trains.
+
+At2026-10-06T10:28:44.952417UTC the real owner admitted native TRAIN100 across
+66 PDF documents/55 exam groups/eight prepared target batches. It re-resolved the
+old full source closure and the new objective receipt,42 metadata members/579,444
+bytes. All original target pointers/pixels/conditioning/seed/exposure/optimizer/
+dependency/budget/base-stack/screening fields remained equal to the1.2 command.
+PNG reads0, models0, training dispatch0, HOLDOUT0. The exact prepared identity is
+`imgsdxlnativetrainrun_c9bad421f3c0e65a81f01e7df4f2bf76`, semantic command SHA
+`5d51baeb901a90ccf5bf35dc9d33ca44f49b9d4d066486b8f3279fd7b7626a35`.
+
+Initial archive listing was unsorted and the authoritative file-set validator
+rejected it in pure `_request` **before** publication lock/job/staging. This was
+an operator manifest-order error, not a source/trainer defect; the correct guard
+was not changed. The exact prepared command/run/hash/timestamp was retained.
+A separate finish operator revalidated that same source closure and published
+the sorted file-set, including the original failed operator/log. No new command
+identity, training retry, direct DB row change or failed-history success rewrite.
+
+Canonical eight members/147,003bytes committed and re-resolved equal:
+`artifact_8c7a653efe0e446e8d5e904aa6941162` /
+`rev_2398f9eb27d6436eb534e1cf08181164`,
+`manifests/sdxl-native-lora-command.json`,
+schema `eom://schemas/image-provider/local-image-sdxl-native-lora-command/1.3`,
+raw SHA `fdf230a6f836c16094f3c0cfb602b3e68b5c2743e3df3bb80fccdc21c00f47d0`.
+Publication receipt:
+`/tmp/eom-native-contour-preflight-20261006/publication.json`.
+No PNG/weights/source PDFs copied to this evidence artifact.
+
+Next: verify required compatible wheels and rollback, install only the isolated
+lab environment, validate installed1.3 capability and actual numerical inputs,
+then stage/dispatch the **same pinned** prepared training command once. Existing
+production binding is unchanged, five services ACTIVE, GPU idle2MiB/0%. Laboratory
+installation/capability is still PENDING, not READY; there is no live training unit
+to wait on. No weighted training or new generated sample yet. Goal remains
+ACTIVE/NOT_ACCEPTED, including independent blind/HOLDOUT/Item-HWPX gates.

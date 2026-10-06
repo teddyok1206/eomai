@@ -4660,3 +4660,37 @@ production binding unchanged. Dispatch's pre-result `gpu_calls=0` placeholder is
 explicitly corrected in canonical review to the actual GPU/model counts above.
 No numerical retry or source PNG/weight duplication in evidence. Independent
 blind/HOLDOUT/fidelity/Item-HWPX/activation gates remain open; goal ACTIVE.
+
+Native contour-loss implementation checkpoint, **2026-10-06 10:30 UTC**:
+[ADR0209](../adr/0209-bounded-native-contour-loss-experiment.md) is now implemented
+in source, not trained. Core92fed3a8 adds successor native training command1.3
+with explicit bounded2:1 dark-cell objective and immutable diagnostic receipt;
+predecessor1.0–1.2 schemas/semantics remain unchanged. Original pixels/captions/
+cohort/schedule are retained. Shared VAE preparation decodes each PNG once and
+caches its scalar weights, rather than rereading/resampling per training step.
+Only the explicit successor uses weighting; old commands retain ordinary MSE.
+No new dependency/DB/queue or production change. Existing output1.0 can represent
+the exact command hash, so no unnecessary output version was created. Inference
+successors are not yet loosened/implemented for this new training identity.
+
+Broad native/micro/runner/source/checkpoint/geometry/photo-support527PASS/10
+explicit CPU opt-inSKIP; actual source/lab-torch CPU arithmetic/gradient10PASS
+(final1.047s, earlier development1.069s). Those are not800 real LoRA updates.
+Ruff/format/strict typing/shell/diffPASS. Immutable three-wheel buildPASS; installed
+RECORD/capability remain PENDING. Actual canonical metadata preflight admits
+100 targets/66 PDFs/55 groups/eight batches,42metadata579,444bytes; PNG/model/
+HOLDOUT reads and training dispatch0. Complete source closure, not just health.
+
+Prepared run `imgsdxlnativetrainrun_c9bad421f3c0e65a81f01e7df4f2bf76`, command
+semantic SHA `5d51baeb901a90ccf5bf35dc9d33ca44f49b9d4d066486b8f3279fd7b7626a35`.
+Canonical `artifact_8c7a653efe0e446e8d5e904aa6941162` /
+`rev_2398f9eb27d6436eb534e1cf08181164`, primary
+`manifests/sdxl-native-lora-command.json`, raw SHA
+`fdf230a6f836c16094f3c0cfb602b3e68b5c2743e3df3bb80fccdc21c00f47d0`.
+Eight archived members147,003bytes rereadPASS. Initial unsorted archive listing
+was rejected before lock/job/staging; same command/run/hash preserved, separate
+finish sorted only the listing, original failure archived. Core guard unchanged;
+no new model attempt or history rewriting. Production binding unchanged, five
+servicesACTIVE, GPUidle. Next actual task: isolated compatible install/rollback/
+installed admission, then one bounded fit of the same command. No live training
+unit, no new drawings, and quality/blind/HOLDOUT/Item-HWPX remain NOT_ACCEPTED.
