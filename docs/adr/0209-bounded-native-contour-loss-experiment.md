@@ -27,7 +27,48 @@
     their prior configuration, not against the new adapter.
 11. Simply changing the old configuration pin would invalidate its single-factor
     meaning. Regenerating BASE wastes GPU and obscures comparison. The successor
-    declares only LoRA generation and preserves composed object-support pixels.
+   declares only LoRA generation and preserves composed object-support pixels.
+
+### Configured geometry versus executed BASE — pre-activation correction
+
+Canonical read-only admission found that the photo1.6 configuration pins a
+configuration-only geometry1.5 command (`ff37eaa1`), while the historical geometry
+BASE execution uses another geometry1.5 command (`deca4217`). Their evaluation
+values agree, but their command identities are distinct and must not be aliased.
+No photo1.7 artifact, installation or dispatch occurred before this discovery.
+Correct its internal consumer without changing the already defined schema bytes,
+three direct reuse pins, any historical contract or old artifact.
+
+The existing prior-configuration pointer already contains the exact nested
+geometry pin. Authenticate that bounded configuration, derive its nested pin,
+and resolve schema/media/permission/lifecycle/hash before current weights/pixels.
+Stage `inputs/photo-reuse/prior-geometry.json` only when that pin differs from the
+geometry-reuse execution command; otherwise reuse the existing staged metadata.
+Both owner and isolated consumer use one pure member-selection rule. The prior
+photo result is checked against its own configured geometry; the current native
+BASE is independently checked against its exact executed command/result.
+Recipe equivalence remains required. Equal values never imply equal identities.
+
+This adds at most one bounded metadata lookup/file, O(1) work and at most256KiB,
+not an additional wire pin, binary copy, dependency, DB/index/queue or worker
+protocol. Existing commit/claim/lease/idempotency and terminal replay stay intact.
+Missing/denied/hash-mismatched nested history and rehashed numerical changes fail
+closed before media. Tests must cover both identical and distinct nested pins,
+actual-like forked CPU lifecycle/replay and negative resolution. Regenerating
+BASE or rewriting the prior configuration would erase the comparison; a fourth
+direct wire pin would duplicate identity already owned by the configuration.
+
+The earlier assumption in point4 above is superseded by this observed correction:
+configured and executed geometry pointers need not be identical, while their
+declared matched recipe must remain equivalent. Historical evidence is preserved.
+
+Correction verification: fresh complete relevant regression **1217PASS/415.24s**,
+including31 photo1.7 synthetic cases. Both identical/forked nested pins pass CPU
+single-LoRA lifecycle and success/failure read-only replay. Missing, forbidden
+and hash-mismatched forked metadata fail before binary materialization; modified
+staged metadata fails owner handoff and isolated local reads. Strict mypy13
+source modules, Ruff/format/shell syntax/diff checks PASS. Old schema hashes and
+legacy behavior remain covered. Still source-only: no installation/new PNG/GPU.
 
 This contract is not visual acceptance or runtime activation. The completed TRAIN
 diagnostic's tone/white trade-off must be judged by fixed visual outputs, original

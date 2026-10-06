@@ -25,6 +25,7 @@ from eom_image_contracts.sdxl_native_lora_sources import (
 from eom_image_contracts.sdxl_photo_baseline_reuse import (
     parse_reused_photo_baseline,
     photo_baseline_reuse_documents,
+    photo_baseline_reuse_geometry_member,
     photo_baseline_reuse_metadata_members,
 )
 from eom_image_contracts.sdxl_photo_object_support_lineage import (
@@ -212,11 +213,20 @@ def sdxl_photo_style_input_hashes(prepared: PreparedSdxlPhotoStyleInputs) -> dic
         }
     )
     if isinstance(sources.plan, LocalImageSdxlPhotoReusedBaselinePlan):
-        if photo_baseline_reuse_documents(sources.plan, metadata) != sources.baseline_reuse:
+        if (
+            photo_baseline_reuse_documents(sources.plan, metadata, sources.configuration_sources)
+            != sources.baseline_reuse
+        ):
             raise ValueError("PHOTO_STYLE_BASELINE_REUSE_HANDOFF_INVALID")
         expected.update(
             {path: pin.sha256 for path, pin in photo_baseline_reuse_metadata_members(sources.plan)}
         )
+        path, pin = photo_baseline_reuse_geometry_member(
+            sources.plan,
+            metadata["inputs/photo-reuse/prior-configuration.json"],
+            sources.configuration_sources,
+        )
+        expected[path] = pin.sha256
     for entry, source in zip(sources.plan.cases, sources.photos, strict=True):
         prefix = "inputs/photo-sources/" + entry.case.case_id + "/"
         expected[prefix + "bundle.json"] = source.reference.bundle_manifest.sha256
@@ -365,7 +375,12 @@ def resolve_sdxl_photo_style_metadata(
             engine, tuple(BoundedControlArtifactRead(pin, 256 * 1024) for _, pin in members)
         )
         metadata.update({path: raw for (path, _), raw in zip(members, raw_reused, strict=True)})
-        baseline_documents = photo_baseline_reuse_documents(plan, metadata)
+        path, pin = photo_baseline_reuse_geometry_member(
+            plan, metadata["inputs/photo-reuse/prior-configuration.json"], admitted.sources
+        )
+        if path not in metadata:
+            metadata[path] = resolve_control_artifact_member(engine, pin, maximum_bytes=256 * 1024)
+        baseline_documents = photo_baseline_reuse_documents(plan, metadata, admitted.sources)
         if not isinstance(anchor, LocalImageSdxlNativeCannyReferenceCommandV4):
             raise ValueError("PHOTO_STYLE_BASELINE_REUSE_CONFIGURATION_INVALID")
         parse_reused_photo_baseline(plan, anchor, admitted.sources, baseline_documents)

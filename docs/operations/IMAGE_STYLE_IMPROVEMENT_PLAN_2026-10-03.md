@@ -4809,6 +4809,42 @@ visual PASS. Reopen relevant originals beside the next actual fixed outputs and
 record candidate-specific differences then. This cadence is milestone-based,
 not high-frequency polling; idle training observations remain30-minute apart.
 
+At13:13–13:14UTC, actually reopened the institutional compact-car/driver/city
+scene and the existing object-supported photo1.6 generated wagon. The original
+is pinned to artifact `artifact_03b80b78bcab4803bb946139fec15349` / revision
+`rev_d8226c6336fe4e29bb5ebdd986557a26`, target member
+`targets/imgsdxltarget_10ee0d7dfb00975acbed22601c194316.png`, SHA
+`6116307908d584390605f7edaed5c7073ebb5b47177db6d72b032fff65807a76`.
+The existing generated member belongs to `artifact_9ce48c19683b42e08b87e892b4e1ce51`
+/ `rev_6cdedfd124894eb0a9786bedcfa2bf53`, SHA
+`49da19245bb3152dc7063446b94590b0ef6eecda55ab50d9fa51e7b2c9b65c77`.
+Both local views match their pinned hashes. They are different vehicles/views,
+so this is style calibration, not paired morphology/fidelity ground truth.
+The institutional original uses gray gradients and a detailed authored scene,
+but its primary contour hierarchy is decisive. The old generated wagon retains
+faint duplicate/halo edges around the body/wheels and photographic window detail;
+its roof bump needs source-based semantic verification. KEEP_DIRECTION as a
+bounded hypothesis: retain legitimate tone/detail/scene, reduce unintended
+contour echoes rather than impose a globally sparse binary style. This is an
+old1.2-adapter output, not evidence that the new1.3 objective improved visually.
+New generation0, HOLDOUT reads0; independent/blind/quality gates stay OPEN.
+
+### Matched-history source correction — 2026-10-06
+
+Before metadata preparation could publish anything, the existing geometry
+result validator rejected a configuration command incorrectly paired with a
+different execution result. The first and diagnostic invocations failed before
+workspace creation/publication/installation/GPU. Preserve their logs. Canonical
+records confirm that photo1.6's configured geometry and the actual source-free
+BASE command have distinct identities despite equal evaluation values.
+ADR0209 records the ownership/design correction: photo1.7 derives and resolves
+its exact nested prior geometry from its existing prior-configuration pin;
+current geometry BASE keeps its separate exact executed-command/result pins.
+Conditional staged metadata reuse avoids duplicate copies when the pins match.
+No schema bytes, old1.0–1.6 meaning, historical output, dependency, queue or
+production policy changes. Frozen next output inventory remains beaker2 + wagon1,
+not five new images; BASE regeneration0 and full diverse-subject goal unchanged.
+
 Native contour fit terminal checkpoint, **2026-10-06 11:50 UTC**:
 Same single c9bad421 execution SUCCEEDED,800/800 optimizer updates,100 realized
 native TRAIN samples;31.36minutes/peak6.17GB CUDA, within pinned one-hour/16GiB.

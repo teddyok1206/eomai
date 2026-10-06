@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ from eom_image_contracts.sdxl_native_lora_sources import (
 )
 from eom_image_contracts.sdxl_photo_baseline_reuse import (
     parse_reused_photo_baseline,
+    photo_baseline_reuse_geometry_member,
     photo_baseline_reuse_metadata_members,
 )
 from eom_image_contracts.sdxl_photo_style import parse_photo_style_plan_value
@@ -39,6 +41,7 @@ from eom_image_contracts.sdxl_photo_style_execution import (
 )
 from eom_image_contracts.validation import SCHEMA_FILES, SCHEMA_SHA256, load_schema
 from eom_image_provider import sdxl_photo_style as worker
+from eom_image_provider.sdxl_photo_style_sources import read_sdxl_photo_style_sources
 from eom_orchestrator import sdxl_canny_reference_inputs as reference_owner
 from eom_orchestrator import sdxl_photo_style_inputs as owner
 from eom_orchestrator.control_artifact_resolution import ControlArtifactResolutionError
@@ -59,7 +62,7 @@ from tests.unit.test_sdxl_native_lora_contracts import _seal_command, _seal_resu
 from tests.unit.test_sdxl_photo_style import _seal_plan
 
 
-def _fixture(tmp_path, monkeypatch):
+def _fixture(tmp_path, monkeypatch, *, forked_geometry=False):
     # The existing full synthetic100 source closure remains real admission code.
     prior_root = tmp_path / "prior"
     prior_root.mkdir()
@@ -79,6 +82,15 @@ def _fixture(tmp_path, monkeypatch):
         ),
     )
     prior_geometry = old.configuration_sources.evaluation
+    executed_geometry_pin = old.configuration.native_evaluation_command
+    if forked_geometry:
+        # Real history can configure and execute identical recipes under different
+        # source/command identities. Neither historical pointer may be rewritten.
+        body = prior_geometry.model_dump(mode="json")
+        body["source_commit"] = "e" * 40
+        prior_geometry = parse_sdxl_evaluation_command(seal_geometry(body))
+        executed_geometry_pin, raw = _pin(prior_geometry, "sdxl-lora-evaluation-command", "e")
+        records[executed_geometry_pin] = raw
     original = old.configuration_sources.native
     body = original.training_command.model_dump(mode="json")
     rationale = _weighted_value()
@@ -145,7 +157,7 @@ def _fixture(tmp_path, monkeypatch):
         .isoformat()
         .replace("+00:00", "Z"),
         baseline_reuse=dict(
-            prior_command=old.configuration.native_evaluation_command.model_dump(mode="json"),
+            prior_command=executed_geometry_pin.model_dump(mode="json"),
             prior_result=geometry_result_pin.model_dump(mode="json"),
         ),
     )
@@ -241,8 +253,11 @@ def _fixture(tmp_path, monkeypatch):
     return command, reader, prepared, old_result
 
 
-def test_schema_codec_and_three_small_pins_without_old_pixels(tmp_path, monkeypatch):
-    command, _reader, _, _ = _fixture(tmp_path, monkeypatch)
+@pytest.mark.parametrize("forked_geometry", [False, True])
+def test_schema_codec_and_three_small_pins_without_old_pixels(
+    tmp_path, monkeypatch, forked_geometry
+):
+    command, _reader, _, _ = _fixture(tmp_path, monkeypatch, forked_geometry=forked_geometry)
     metadata = owner.resolve_sdxl_photo_style_execution_metadata(object(), command)
     plan = metadata.sources.plan
     assert plan.generated_arms() == ("LORA",) and plan.budget.maximum_outputs == 1
@@ -250,6 +265,28 @@ def test_schema_codec_and_three_small_pins_without_old_pixels(tmp_path, monkeypa
     assert len(metadata.sources.native_training_sources.targets) == 100
     assert all("outputs/" not in file.member_path for file in metadata.files)
     assert metadata.sources.baseline_reuse is not None
+    path, pin = photo_baseline_reuse_geometry_member(
+        plan,
+        metadata.sources.baseline_reuse.prior_configuration,
+        metadata.sources.configuration_sources,
+    )
+    assert path == (
+        "inputs/photo-reuse/prior-geometry.json"
+        if forked_geometry
+        else "inputs/native-reuse-command.json"
+    )
+    files = {file.member_path: file for file in metadata.files}
+    assert files[path].sha256 == pin.sha256
+    assert ("inputs/photo-reuse/prior-geometry.json" in files) == forked_geometry
+    if forked_geometry:
+        assert files[path].sha256 != files["inputs/native-reuse-command.json"].sha256
+    borrowed = parse_reused_photo_baseline(
+        plan,
+        metadata.sources.configuration,
+        metadata.sources.configuration_sources,
+        metadata.sources.baseline_reuse,
+    )
+    assert borrowed.geometry.command_sha256 == borrowed.result.native_evaluation_command_sha256
     for family in ("plan", "command", "result"):
         key = "sdxl-photo-style-" + family + "-v8"
         Draft202012Validator.check_schema(load_schema(key))
@@ -269,8 +306,11 @@ def test_schema_codec_and_three_small_pins_without_old_pixels(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("fault", [None, "second", "oom", "unexpected"])
-def test_current_lora_only_cpu_lifecycle_and_terminal_replay(tmp_path, monkeypatch, fault):
-    command, reader, _, _ = _fixture(tmp_path, monkeypatch)
+@pytest.mark.parametrize("forked_geometry", [False, True])
+def test_current_lora_only_cpu_lifecycle_and_terminal_replay(
+    tmp_path, monkeypatch, fault, forked_geometry
+):
+    command, reader, _, _ = _fixture(tmp_path, monkeypatch, forked_geometry=forked_geometry)
     successor = tmp_path / "successor"
     successor.mkdir()
     monkeypatch.setattr(lifecycle, "_fixture", lambda *_: (command, reader, []))
@@ -338,6 +378,57 @@ def test_reused_result_resolution_fails_before_binary_materialization(tmp_path, 
         owner.prepare_sdxl_photo_style_inputs(object(), command)
     assert all(p.media_type not in ("image/png", "application/octet-stream") for p in reader.calls)
     assert all(not p.member_path.startswith("adapter/") for p in reader.calls)
+
+
+@pytest.mark.parametrize("fault", ["missing", "hash", "denied"])
+def test_forked_nested_geometry_fails_before_binary_materialization(tmp_path, monkeypatch, fault):
+    command, reader, prior, _ = _fixture(tmp_path, monkeypatch, forked_geometry=True)
+    pin = prior.metadata.sources.configuration.native_evaluation_command
+    reader.calls.clear()
+    if fault == "missing":
+        del reader.records[pin]
+    elif fault == "hash":
+        reader.records[pin] += b" "
+    else:
+
+        def denied(engine, pointer, *, maximum_bytes):
+            if pointer == pin:
+                raise ControlArtifactResolutionError("CONTROL_ARTIFACT_POINTER_INVALID")
+            return reader(engine, pointer, maximum_bytes=maximum_bytes)
+
+        monkeypatch.setattr(owner, "resolve_control_artifact_member", denied)
+    with pytest.raises(ControlArtifactResolutionError):
+        owner.prepare_sdxl_photo_style_inputs(object(), command)
+    assert all(p.media_type not in ("image/png", "application/octet-stream") for p in reader.calls)
+    assert all(not p.member_path.startswith("adapter/") for p in reader.calls)
+
+
+def test_worker_authenticates_forked_nested_geometry_from_local_staging(tmp_path, monkeypatch):
+    command, reader, _, _ = _fixture(tmp_path, monkeypatch, forked_geometry=True)
+    successor = tmp_path / "successor"
+    successor.mkdir()
+    monkeypatch.setattr(lifecycle, "_fixture", lambda *_: (command, reader, []))
+    prepared, root, _ = lifecycle._stage(successor, monkeypatch)
+    path = "inputs/photo-reuse/prior-geometry.json"
+    selected = next(file for file in prepared.files if file.member_path == path)
+    changed = replace(selected, payload=selected.payload + b" ")
+    bad_metadata = replace(
+        prepared.metadata,
+        files=tuple(
+            changed if file.member_path == path else file for file in prepared.metadata.files
+        ),
+    )
+    with pytest.raises(ValueError):
+        owner.sdxl_photo_style_input_hashes(replace(prepared, metadata=bad_metadata))
+    # Only this disposable fixture is changed; canonical history is never edited.
+    with (root / path).open("ab") as out:
+        out.write(b" ")
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        with pytest.raises(lifecycle.ProviderError, match="SDXL_PROBE_HASH_MISMATCH"):
+            read_sdxl_photo_style_sources(descriptor, prepared.command)
+    finally:
+        os.close(descriptor)
 
 
 @pytest.mark.parametrize("field", ["prompt", "seed", "budget", "support_parent"])

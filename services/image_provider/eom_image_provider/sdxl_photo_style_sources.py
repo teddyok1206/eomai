@@ -9,6 +9,7 @@ from eom_image_contracts.sdxl_native_canny_reference import (
 )
 from eom_image_contracts.sdxl_photo_baseline_reuse import (
     photo_baseline_reuse_documents,
+    photo_baseline_reuse_geometry_member,
     photo_baseline_reuse_metadata_members,
 )
 from eom_image_contracts.sdxl_photo_object_support_lineage import (
@@ -102,7 +103,14 @@ def read_sdxl_photo_style_sources(
                 for path, pin in photo_baseline_reuse_metadata_members(plan)
             }
         )
-        reused = photo_baseline_reuse_documents(plan, payloads)
+        path, pin = photo_baseline_reuse_geometry_member(
+            plan, payloads["inputs/photo-reuse/prior-configuration.json"], native
+        )
+        if path not in payloads:
+            payloads[path] = read_staged_member(
+                root, path, maximum_bytes=256 * 1024, expected_sha256=pin.sha256
+            )
+        reused = photo_baseline_reuse_documents(plan, payloads, native)
     sources = SdxlPhotoStyleExecutionSources(
         plan,
         metadata.command,

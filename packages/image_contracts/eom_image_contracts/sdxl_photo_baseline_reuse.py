@@ -34,7 +34,7 @@ from eom_image_contracts.sdxl_photo_style_result import (
 def photo_baseline_reuse_metadata_members(
     plan: LocalImageSdxlPhotoReusedBaselinePlan,
 ) -> tuple[tuple[str, ImageEvaluationArtifactMember], ...]:
-    """Only three additional metadata members; geometry was staged by native admission."""
+    """Three direct pins; the prior configuration owns its nested geometry pin."""
     return tuple(
         ("inputs/photo-reuse/" + key.replace("_", "-") + ".json", pin)
         for key, pin in (
@@ -45,18 +45,44 @@ def photo_baseline_reuse_metadata_members(
     )
 
 
+def photo_baseline_reuse_geometry_member(
+    plan: LocalImageSdxlPhotoReusedBaselinePlan,
+    prior_configuration_raw: bytes,
+    sources: SdxlNativeCannyReferenceSources,
+) -> tuple[str, ImageEvaluationArtifactMember]:
+    """Select an exact nested pin; equal recipes need not have equal identities."""
+    configuration = parse_sdxl_evaluation_metadata(
+        plan.baseline_reuse.prior_configuration,
+        prior_configuration_raw,
+        "sdxl-canny-reference-command-v4",
+        LocalImageSdxlNativeCannyReferenceCommandV3,
+    )
+    geometry = sources.evaluation
+    if not isinstance(geometry, LocalImageSdxlReusedGeometryCommand):
+        raise ValueError("PHOTO_BASELINE_REUSE_NATIVE_FAMILY_INVALID")
+    pin = configuration.native_evaluation_command
+    path = (
+        "inputs/native-reuse-command.json"
+        if pin == geometry.baseline_reuse.prior_command
+        else "inputs/photo-reuse/prior-geometry.json"
+    )
+    return path, pin
+
+
 def photo_baseline_reuse_documents(
     plan: LocalImageSdxlPhotoReusedBaselinePlan,
     metadata: Mapping[str, bytes],
+    sources: SdxlNativeCannyReferenceSources,
 ) -> PhotoBaselineReuseDocuments:
     prior_plan, prior_result, prior_configuration = (
         metadata[path] for path, _ in photo_baseline_reuse_metadata_members(plan)
     )
+    geometry_path, _ = photo_baseline_reuse_geometry_member(plan, prior_configuration, sources)
     return PhotoBaselineReuseDocuments(
         prior_plan,
         prior_result,
         prior_configuration,
-        metadata["inputs/native-reuse-command.json"],
+        metadata[geometry_path],
     )
 
 
@@ -118,7 +144,7 @@ def parse_reused_photo_baseline(
     if not isinstance(geometry, LocalImageSdxlReusedGeometryCommand):
         raise ValueError("PHOTO_BASELINE_REUSE_NATIVE_FAMILY_INVALID")
     old_geometry = parse_sdxl_evaluation_metadata(
-        geometry.baseline_reuse.prior_command,
+        old_configuration.native_evaluation_command,
         documents.prior_geometry,
         "sdxl-lora-evaluation-command-v6",
         LocalImageSdxlNativeGeometryCommandV3,
@@ -128,7 +154,6 @@ def parse_reused_photo_baseline(
         or result.completed_at > plan.created_at
         or old_configuration.created_at > prior.created_at
         or prior.configuration_anchor != pins.prior_configuration
-        or old_configuration.native_evaluation_command != geometry.baseline_reuse.prior_command
         or result.configuration_command_sha256 != old_configuration.command_sha256
         or result.native_evaluation_command_sha256 != old_geometry.command_sha256
         or result.native_adapter_manifest_sha256 != old_geometry.evaluation.adapter_manifest_sha256
