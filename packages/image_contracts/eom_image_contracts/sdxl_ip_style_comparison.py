@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, Self
 
@@ -16,7 +17,15 @@ from eom_image_contracts.models import (
     content_json_bytes,
     content_sha256,
 )
+from eom_image_contracts.sdxl_canny_reference import SdxlCannyReferenceTrace
 from eom_image_contracts.sdxl_ip_style import SdxlIpStyleModelPointer
+from eom_image_contracts.sdxl_native_lora import SdxlNativeLoraSample
+from eom_image_contracts.sdxl_photo_style import SdxlPhotoStyleCase
+from eom_image_contracts.source_page_crops import (
+    ScienceSourcePageCropRegion,
+    ScienceSourcePageCropSelection,
+    ScienceSourcePageRegionSelection,
+)
 
 SDXL_IP_STYLE_PLAN_SCHEMA_REF = (
     "eom://schemas/image-provider/local-image-sdxl-ip-style-comparison-plan/1.0"
@@ -134,3 +143,70 @@ def parse_sdxl_ip_style_comparison_plan(
     if raw != content_json_bytes(plan.model_dump(mode="json")):
         raise ValueError("SDXL_IP_STYLE_PLAN_DOCUMENT_NONCANONICAL")
     return plan
+
+
+@dataclass(frozen=True, slots=True)
+class SdxlIpStyleSelectedSource:
+    selection: SdxlIpStylePairSelection
+    photo: SdxlPhotoStyleCase
+    trace: SdxlCannyReferenceTrace
+    style_sample: SdxlNativeLoraSample
+    style_region: ScienceSourcePageCropRegion
+
+
+def select_sdxl_ip_style_sources(
+    plan: LocalImageSdxlIpStyleComparisonPlan,
+    *,
+    photo_cases: tuple[SdxlPhotoStyleCase, ...],
+    photo_traces: tuple[SdxlCannyReferenceTrace, ...],
+    style_samples: tuple[SdxlNativeLoraSample, ...],
+    style_regions: tuple[ScienceSourcePageCropRegion, ...],
+) -> tuple[SdxlIpStyleSelectedSource, ...]:
+    """Join already-admitted source metadata; neither pixels nor permission can be inferred."""
+    plan = LocalImageSdxlIpStyleComparisonPlan.model_validate(plan.model_dump(mode="json"))
+    photos = {p.case.case_id: p for p in photo_cases}
+    traces = {t.case_id: t for t in photo_traces}
+    samples = {s.sample_id: s for s in style_samples}
+    regions = {r.selection_id: r for r in style_regions}
+    if (
+        len(photos) != len(photo_cases)
+        or len(traces) != len(photo_traces)
+        or len(samples) != len(style_samples)
+        or len(regions) != len(style_regions)
+        or photos.keys() != traces.keys()
+        or samples.keys() != regions.keys()
+    ):
+        raise ValueError("SDXL_IP_STYLE_SOURCE_DUPLICATE_OR_CLOSURE_INVALID")
+    selected = []
+    for row in plan.cases:
+        photo = photos.get(row.case_id)
+        trace = traces.get(row.case_id)
+        sample = samples.get(row.style_sample_id)
+        region = regions.get(row.style_sample_id)
+        if photo is None or trace is None or sample is None or region is None:
+            raise ValueError("SDXL_IP_STYLE_SELECTED_SOURCE_MISSING")
+        # Revalidate small untrusted value objects, including model_copy bypasses.
+        photo = SdxlPhotoStyleCase.model_validate(photo.model_dump(mode="json"))
+        trace = SdxlCannyReferenceTrace.model_validate(trace.model_dump(mode="json"))
+        sample = SdxlNativeLoraSample.model_validate(sample.model_dump(mode="json"))
+        if type(region) not in (
+            ScienceSourcePageCropRegion,
+            ScienceSourcePageCropSelection,
+            ScienceSourcePageRegionSelection,
+        ):
+            raise ValueError("SDXL_IP_STYLE_SELECTED_REGION_FAMILY_INVALID")
+        region = type(region).model_validate(region.model_dump(mode="json"))
+        if (
+            trace.source_sha256 != photo.case.reference_image.sha256
+            or row.conditioning_sha256 != trace.conditioning_sha256
+            or row.initialization_rgb_sha256 != trace.initialization_rgb_sha256
+        ):
+            raise ValueError("SDXL_IP_STYLE_SELECTED_PHOTO_TRACE_MISMATCH")
+        if (
+            region.partition != "TRAIN"
+            or region.document_id != sample.source_document_id
+            or region.exam_group_sha256 != sample.exam_group_sha256
+        ):
+            raise ValueError("SDXL_IP_STYLE_SELECTED_TRAIN_LINEAGE_MISMATCH")
+        selected.append(SdxlIpStyleSelectedSource(row, photo, trace, sample, region))
+    return tuple(selected)

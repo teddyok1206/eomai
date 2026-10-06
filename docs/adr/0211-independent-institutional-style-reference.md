@@ -458,3 +458,51 @@ It references the earlier canonical diagnostic sheet instead of copying its PNGs
 The temporary publication operator had an import-spacing Ruff warning, distinct
 from the passing core checks and executed owner/readback. Its archived bytes are
 preserved; no inference, publication retry or failed-history rewrite followed.
+
+## Selection metadata ownership
+
+Implement a read-only bridge in the existing Orchestrator input adapters. Resolve
+the three pinned parent documents with the existing bounded Artifact resolver;
+check schema/version, canonical bytes and chronology before lineage traversal.
+Require the exact successful photo1.5 result, then call existing photo/native
+source owners for licensed morphology and canonical TRAIN/document/group checks.
+Native1.3 supplies approved style source PNG pointers only: its rejected trained
+weights are not selected. The held LoRA remains the exact photo1.5 parent stack.
+
+A pure contract selector joins case/trace and sample/region by immutable IDs,
+checks missing/duplicate references and selected conditioning/initializer hashes,
+and returns two frozen rows. It cannot claim that the planned224px RGB hashes
+match actual pixels; that requires pinned preprocessing after source admission.
+Style model resolution, embedding, GPU admission and execution approval also
+remain separate. Nothing writes, registers, queues, claims or dispatches here.
+
+Canonical sources are the three immutable Artifact revisions and their validated
+source closures, not self-declared sample IDs. Keyed maps/set uniqueness and
+ordered tuples give O(parent metadata + cases + TRAIN samples) time/space at
+bounded photo<=6 and TRAIN<=200. No new DB/index/queue/cache or binary payload.
+The two existing source owners independently validate distinct parent histories;
+bounded metadata rereads are preferable to a new shared authorization cache.
+Contracts remain pure; infrastructure adapters alone own DB/NAS reads. Missing,
+stale, hash, chronology or membership errors fail explicitly with no latest
+fallback/retry/mutation. Existing resolver permission/lifecycle rules are reused,
+not reimplemented. A successful parent is numeric history, not quality approval.
+The simpler sample-ID-only lookup is insufficient because it permits unrelated
+or non-TRAIN inputs and silently changes the matched comparison factor.
+
+The read-only bridge and pure selector are now implemented. New33 tests are
+included in224 focused regression PASS/zero skips in41.56s. Source-selector tests
+use concrete synthetic TRAIN provenance; owner-order units deliberately stub the
+legacy source owners/selector and are not real canonical admission. The initial
+failures exposed revalidation against only the base region model, rejecting valid
+candidate-backed region fields; revalidation now explicitly preserves the two
+supported selection families and rejects unknown subclass extensions. A fixture
+result-hash failure was separately caused by omitted default trace dimensions,
+not numerical or runtime failure; the fixture now includes its canonical values.
+No old source/released schema bytes were changed to make tests pass.
+
+Strict mypy is PASS for two contract modules at Python3.11 and the new Orchestrator
+adapter at Python3.12. The initial attempt to check the adapter graph as3.11 failed
+on an existing3.12 type-parameter syntax; its actual application target remains3.12,
+not a new interpreter/dependency upgrade. Ruff/format/diff PASS. Actual two-case
+canonical metadata execution is still pending at this implementation checkpoint;
+pixel RGB hashes, installed model stack and quality are not proved by these units.

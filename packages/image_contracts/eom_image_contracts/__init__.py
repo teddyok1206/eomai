@@ -307,7 +307,9 @@ from eom_image_contracts.sdxl_ip_style_comparison import (
     SdxlIpStyleComparisonBudget,
     SdxlIpStylePairSelection,
     SdxlIpStyleRouting,
+    SdxlIpStyleSelectedSource,
     parse_sdxl_ip_style_comparison_plan,
+    select_sdxl_ip_style_sources,
 )
 from eom_image_contracts.sdxl_learned_comparison import (
     LEARNED_COMPARISON_ARMS,
@@ -891,6 +893,7 @@ __all__ = [
     "SdxlIpStylePairSelection",
     "SdxlIpStylePreprocessing",
     "SdxlIpStyleRouting",
+    "SdxlIpStyleSelectedSource",
     "SdxlLearnedComparisonBudget",
     "SdxlLearnedComparisonOutput",
     "SdxlLearnedComparisonSources",
@@ -948,6 +951,7 @@ __all__ = [
     "sdxl_target_id",
     "sdxl_target_placement",
     "select_informative_lineart_cases",
+    "select_sdxl_ip_style_sources",
     "select_sdxl_learned_cases",
     "source_page_crop_pointer",
     "source_page_crop_protocol",
