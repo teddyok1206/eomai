@@ -12,10 +12,10 @@ fail() {
 
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
-    "$1" != "pdf-review-tests" && "$1" != "quality-review-tests" && \
+    "$1" != "pdf-review-tests" && "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -97,7 +97,7 @@ SOURCE_PATHS=(
   packages/protocol packages/identifiers packages/workflow services/orchestrator
   services/workflow_runner packages/hwpx_contracts services/hwpx_manager
   packages/content_intake packages/content_pack packages/item_registry
-  packages/operator_identity services/identity_service packages/api_contracts
+  packages/operator_identity services/identity_service packages/api_contracts packages/image_contracts
   apps/application_api packages/catalog_contracts services/catalog_service apps/eomctl
   tools/dev_reporter
 )
@@ -153,6 +153,14 @@ PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"
+  exit 0
+fi
+
+if [[ "${action}" == "chat-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_general_chat_persistence.py
+  printf 'Disposable general-chat persistence integration tests passed.\n'
   exit 0
 fi
 

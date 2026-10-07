@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import cast
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from eom_api.pdf_document_review_models import (
     DocumentReviewHwpxCorrectionRecord,
     DocumentReviewPdfAnnotationOutputRecord,
@@ -55,7 +58,10 @@ def test_pdf_review_upload_intent_identifier_and_migration_head_are_exact() -> N
     value = new_pdf_review_upload_intent_id()
     assert value.startswith("pdfreviewintent_")
     assert len(value) == 48
-    assert CURRENT_MIGRATION_REVISION == "20261003_0046"
+    repository = Path(__file__).resolve().parents[2]
+    config = Config(str(repository / "alembic.ini"))
+    config.set_main_option("script_location", str(repository / "migrations"))
+    assert ScriptDirectory.from_config(config).get_current_head() == CURRENT_MIGRATION_REVISION
 
 
 def test_document_review_correction_persists_only_small_indexed_pointers() -> None:

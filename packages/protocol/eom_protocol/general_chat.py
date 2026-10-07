@@ -12,6 +12,11 @@ from eom_identifiers import canonical_json_bytes
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+CHAT_MEMBER = "chat/evidence.json"
+CHAT_MESSAGE_SCHEMA = "eom://schemas/general-chat/message/1.0"
+CHAT_INPUT_SCHEMA = "eom://schemas/general-chat/turn-input/1.0"
+CHAT_RESULT_SCHEMA = "eom://schemas/general-chat/turn-result/1.0"
+
 
 class ChatBoundaryValue(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -26,6 +31,38 @@ class ChatContextMessage(ChatBoundaryValue):
         if "\x00" in self.text:
             raise ValueError("invalid chat context")
         return self
+
+
+class StoredChatMessage(ChatContextMessage):
+    schema_version: Literal["general-chat-message/1.0"] = "general-chat-message/1.0"
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+    turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
+
+    @model_validator(mode="after")
+    def bounded_user_message(self) -> StoredChatMessage:
+        if self.role == "user" and len(self.text) > 16000:
+            raise ValueError("user message exceeds submission bound")
+        return self
+
+
+def read_stored_chat_message(payload: bytes) -> StoredChatMessage:
+    if not 0 < len(payload) <= 256000:
+        raise ValueError("stored chat message exceeds bound")
+    schema = _stored_message_validator()
+    document = json.loads(payload)
+    schema.validate(document)
+    return StoredChatMessage.model_validate(document)
+
+
+@lru_cache(maxsize=1)
+def _stored_message_validator() -> Draft202012Validator:
+    schema = json.loads(
+        files("eom_protocol")
+        .joinpath("schemas", "general-chat-message.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
 
 
 class ChatTurnIdentity(ChatBoundaryValue):
@@ -94,9 +131,13 @@ def read_chat_turn_input(document: object) -> ChatTurnInput:
     return ChatTurnInput.model_validate(document)
 
 
-def read_chat_turn_result(document: object, *, request: ChatTurnInput) -> ChatTurnResult:
+def read_chat_turn_result_document(document: object) -> ChatTurnResult:
     _validator("result").validate(document)
-    result = ChatTurnResult.model_validate(document)
+    return ChatTurnResult.model_validate(document)
+
+
+def read_chat_turn_result(document: object, *, request: ChatTurnInput) -> ChatTurnResult:
+    result = read_chat_turn_result_document(document)
     for field in ("conversation_id", "turn_id", "claim_id", "prompt_revision"):
         if getattr(result, field) != getattr(request, field):
             raise ValueError("chat result identity/claim mismatch")

@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_INTERFACE_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_PERSISTENCE_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 This is not a completion or live acceptance report.
 
@@ -49,16 +49,47 @@ runtime changes were performed. The paused image goal remains paused.
 
 ## Required next work — not yet delivered
 
-1. Orchestrator-owned persistent conversation/turn metadata, canonical transcript
-   pointers and owner-scoped receipts; indexed claims, uniqueness and fair serialization.
-2. Disposable PostgreSQL owner/isolation/idempotency/concurrent-claim tests.
-3. Isolated dedicated identity and resident execution adapter, exact installed Codex
+1. Isolated dedicated identity and resident execution adapter, exact installed Codex
    capability admission, authentication enrollment and forbidden-access negatives.
-4. API composition binding and coordinated compatible deployment, including migration.
-5. Real answer + follow-up, two user sessions, restart/unknown-turn handling, and
+2. API composition binding through a typed private Orchestrator port (not an API
+   process that writes NAS), and coordinated compatible deployment, including migration.
+3. Real answer + follow-up, two user sessions, restart/unknown-turn handling, and
    existing-six-slot regression. Actual streaming only from native model events.
 
 No dedicated Linux identity/service has been created yet. No existing slot is reused.
 No inference calls or model-credit consumption were made for this first slice.
 Only read-only native CLI version/feature/schema introspection was performed.
 See [ADR0212](../adr/0212-general-chat-dedicated-capacity.md) for scope and exit gates.
+
+## Verified persistence slice
+
+- Additive migration `20261007_0048`: owner conversations, immutable turn receipts
+  and a separate singleton `chat` capacity. Production migration is **not** applied.
+- Metadata contains pinned user/request/result Artifact identities, revisions and
+  hashes; no transcript/reply bodies in DB. Publication reuses the Orchestrator's
+  resumable control-evidence commit owner. Batched resolution checks schema, media,
+  lifecycle, exact member/hash and conversation/turn/claim identity.
+- Owner-scoped intent locks, one active turn per conversation, indexed FIFO claims,
+  cursor snapshots, version guards, exact-claim completion and immutable terminal
+  history. Every success/failure result hash is journaled before publication.
+- Independent bounded publication pool prevents deadlock when concurrent submit
+  transactions fill the metadata pool; tested with20 simultaneous distinct intents.
+- Heartbeat expiry/unknown execution is UNAVAILABLE and cannot take over a claim.
+  Unavailable runtime rejects fresh submissions; historical replay remains readable.
+
+Guarded disposable DB migration upgrade/downgrade/re-upgrade: **PASS**, head0048.
+PostgreSQL persistence suite: **18 PASS**, synthetic worker results only; no inference.
+API/Web/worker+stored-contract/migration/resolver source suites: **983 PASS,18 SKIP**.
+Shared publication, batched-resolution and dependency-boundary regressions: **52 PASS**.
+Ruff check/format, strict mypy (11 modules), shell syntax and unchanged deterministic
+OpenAPI SHA `af90b60e80a39c50b26119ac74a434f4159d54e9fdbf22b296265fadb20ba15e`: **PASS**.
+One pre-existing Starlette test-client warning remains, not a runtime failure.
+
+Initial verification found a missing temporary Artifact root in the test fixture
+and stale hardcoded migration/inventory assertions. Fix the fixture/semantic
+assertions and rerun; these failures are not erased or claimed as first-run PASS.
+Review also closed a competing success/failure publication race before final PASS.
+The test DB is retained only for subsequent goal development, isolated from production.
+Existing slots01–06 and their lease rows were unchanged in the dedicated-claim test.
+This proves **source/disposable metadata isolation**, not live worker/tool isolation
+or an always-resident operational service. Runtime enrollment/activation remain pending.

@@ -96,3 +96,51 @@ First-slice tests do **not** demonstrate persisted user isolation, model generat
 resident execution, live availability, streaming or migration deployment. Those
 are separate required exit checks in steps2–4. Native schema generation from the
 installed `codex-cli0.160.0` is read-only capability research, not a model run.
+
+## Persistence implementation decision (step2)
+
+Orchestrator owns three metadata tables: conversations, turns and the singleton
+dedicated capacity record. The turn table is the indexed FIFO work queue, not a
+second generic queue framework. Operators are tombstoned by Identity; owner FK
+uses RESTRICT. API presentation contracts re-export neutral protocol models, so
+Orchestrator does not depend on the API implementation or its distribution.
+
+Canonical message bodies are immutable control-owned execution evidence JSON,
+published with the existing resumable ControlArtifactPublisher. This reuses its
+Job/Artifact commit boundary; no chat adapter writes NAS independently. DB stores
+only pinned member identity/revision/schema/media/hash and bounded context pointer
+lists. User and assistant bodies never enter conversation/turn rows. Materialize
+one bounded history page/context through the shared indexed snapshot resolver.
+
+Create and submit use scoped advisory intent locks plus uniqueness constraints.
+Replay is checked before resource-version guards. Submission locks its owner-
+verified conversation, reserves two monotonic sequences, publishes the user
+evidence idempotently, then atomically stores the pointer and QUEUED receipt.
+Publication recovery reuses the same deterministic intent/turn identity; an
+orphan registered Artifact after interruption is evidence, not runnable work.
+One partial unique index admits one active turn per conversation. FIFO claim
+locks capacity before a queued turn; completion locks capacity, then turn and
+conversation. Submission never acquires capacity while holding conversation.
+
+Capacity heartbeat/identity admission is separate from claim expiry. Expired or
+unknown execution stays unavailable until explicit reconciliation: no automatic
+new inference or lease takeover. COMMITTING represents validated final output
+being published; replay pins the same request/result hash. Completion checks the
+exact runtime/turn/claim and increments the conversation revision. Terminal turn
+history, input identity and accepted output pointers are DB-trigger protected.
+
+Expected scale: thousands of per-user conversations/turns. PK/member lookup and
+cursor pages use B-tree indexes, O(log N + page); work selection uses a partial
+FIFO index; history/context bounded to 50 turns/40 messages. Transcripts remain
+linear in selected bytes, with one batched metadata query, no N+1 or persistent
+byte cache. Failure codes are bounded, not raw worker output. No dependency or
+existing six-slot policy/schema change is required. A JSONB transcript in DB or
+using slots01..06 would be simpler but violates storage and capacity ownership.
+
+Use one injected chat evidence adapter per resident owner process, with an
+independent two-connection publication pool and an instance-local publication
+lock. A publisher holds an advisory connection while committing on a second
+connection. Sharing the metadata pool would let concurrent submit transactions
+consume every connection and block the publication needed to release them.
+The 20-intent saturation test covers this resource deadlock boundary. These are
+two pools to the same canonical DB, not another database, cache or queue.

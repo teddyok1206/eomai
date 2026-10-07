@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/message/1.0",
+  "title": "StoredChatMessage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "conversation_id",
+    "turn_id",
+    "role",
+    "text"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "general-chat-message/1.0"
+    },
+    "conversation_id": {
+      "type": "string",
+      "pattern": "^chat_[0-9a-f]{32}$"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^chatturn_[0-9a-f]{32}$"
+    },
+    "role": {
+      "enum": [
+        "user",
+        "assistant"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32000,
+      "pattern": "\\S",
+      "not": {
+        "pattern": "\\u0000"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "role": {
+            "const": "user"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "text": {
+            "maxLength": 16000
+          }
+        }
+      }
+    }
+  ]
+}

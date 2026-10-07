@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import cast
 
 from eom_image_contracts import ImageEvaluationArtifactMember
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, text
 
 
@@ -22,7 +23,7 @@ class ControlArtifactResolutionError(RuntimeError):
 class BoundedControlArtifactRead:
     """A temporary materialization request, not a new persistent Artifact identity."""
 
-    pointer: ImageEvaluationArtifactMember
+    pointer: ArtifactMemberPointer | ImageEvaluationArtifactMember
     maximum_bytes: int
 
 
@@ -101,7 +102,7 @@ def _safe_read_beneath(root: Path, member_path: str, *, maximum_bytes: int) -> b
 
 def resolve_control_artifact_member(
     engine: Engine,
-    pointer: ImageEvaluationArtifactMember,
+    pointer: ArtifactMemberPointer | ImageEvaluationArtifactMember,
     *,
     maximum_bytes: int,
 ) -> bytes:
@@ -144,7 +145,7 @@ def _read_verified_member(
     *,
     root: Path,
     member: Mapping[str, object],
-    pointer: ImageEvaluationArtifactMember,
+    pointer: ArtifactMemberPointer | ImageEvaluationArtifactMember,
     maximum_bytes: int,
 ) -> bytes:
     if (
@@ -174,7 +175,7 @@ def resolve_control_artifact_members(
         raise ControlArtifactResolutionError("CONTROL_ARTIFACT_BATCH_INVALID")
     try:
         pointers = tuple(
-            ImageEvaluationArtifactMember.model_validate_json(read.pointer.model_dump_json())
+            ArtifactMemberPointer.model_validate_json(read.pointer.model_dump_json())
             for read in reads
         )
     except ValueError as exc:
