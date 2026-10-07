@@ -365,3 +365,20 @@ follow-up/two-user browser acceptance. Read-only recovery is implemented; automa
 expired-claim takeover is not. Sudo preflight required authentication; no privileged
 mutation or login restart was attempted, and authentication remains NOT_VERIFIED.
 The earlier official auth/deployment eligibility question is not declared waived.
+
+### Pinned package verification after the handoff commit
+
+Source commit `c2d59aebbfdf84cd53765fd2318278d8137121bb` was built from a clean
+tree using the existing build-only release path. Actual three-wheel RECORD and
+canonical packaged-module/resource inspection: **PASS**. Candidate directory:
+`/tmp/eom-api-build/c2d59aebbfdf84cd53765fd2318278d8137121bb.zwJIU4/dist`.
+This candidate has not been installed or activated.
+
+An isolated `python -I` process imported the new protocol, private handoff and
+worker RPC directly from those wheels, with no repository path/import. Actual
+private Unix-socket admission, synthetic execution, exact-result replay and
+read-only lookup: **PASS**; one synthetic adapter invocation, zero native model
+calls. Its bounded temporary handoff directory was automatically removed after
+the test; no canonical Artifact/history or production data was deleted.
+Final Ruff checks passed for all11 changed Python files; working tree was clean
+at the source build. This is package/offline evidence, not live model acceptance.
