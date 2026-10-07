@@ -19,6 +19,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSubmission,
 )
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
+from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
     ChatCreate,
@@ -174,6 +175,58 @@ def test_permission_denied_before_owner_resolution():
                 == 403
             )
         assert not owner.actors
+    finally:
+        services.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "code, status",
+    [
+        (ChatOwnerErrorCode.FORBIDDEN, 403),
+        (ChatOwnerErrorCode.NOT_FOUND, 404),
+        (ChatOwnerErrorCode.IDEMPOTENCY_INVALID, 400),
+        (ChatOwnerErrorCode.IDEMPOTENCY_CONFLICT, 409),
+        (ChatOwnerErrorCode.STALE_REVISION, 409),
+        (ChatOwnerErrorCode.TURN_IN_PROGRESS, 409),
+        (ChatOwnerErrorCode.CURSOR_INVALID, 400),
+        (ChatOwnerErrorCode.POINTER_INVALID, 503),
+        (ChatOwnerErrorCode.UNAVAILABLE, 503),
+        (ChatOwnerErrorCode.PROTOCOL_INVALID, 503),
+        (ChatOwnerErrorCode.NOT_READY, 503),
+    ],
+)
+def test_private_owner_faults_keep_stable_http_meaning_without_internal_details(
+    monkeypatch, code, status
+):
+    value, services, owner = client(enabled=True)
+
+    def fault(**_):
+        raise ChatOwnerFault(code)
+
+    monkeypatch.setattr(owner, "conversations", fault)
+    try:
+        with value:
+            response = value.get("/api/v1/general-chat/conversations")
+            assert response.status_code == status
+            assert response.json()["error_code"] == code.value
+            assert "Traceback" not in response.text
+    finally:
+        services.engine.dispose()
+
+
+def test_disconnected_private_owner_does_not_make_the_dedicated_slot_look_ready(monkeypatch):
+    value, services, owner = client(enabled=True)
+
+    def fault():
+        raise ChatOwnerFault(ChatOwnerErrorCode.UNAVAILABLE)
+
+    monkeypatch.setattr(owner, "slot", fault)
+    try:
+        with value:
+            response = value.get("/api/v1/general-chat/slot")
+            assert response.status_code == 200
+            assert response.json()["state"] == "UNAVAILABLE"
+            assert response.json()["unavailable_reason"]
     finally:
         services.engine.dispose()
 

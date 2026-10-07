@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/owner-request/1.0",
+  "title": "Private general chat owner request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "command"],
+  "properties": {
+    "schema_version": {"const": "general-chat-owner-request/1.0"},
+    "request_id": {"type": "string", "pattern": "^chatrpc_[0-9a-f]{32}$"},
+    "command": {"oneOf": [
+      {"$ref": "#/$defs/Slot"}, {"$ref": "#/$defs/List"},
+      {"$ref": "#/$defs/Create"}, {"$ref": "#/$defs/Read"}, {"$ref": "#/$defs/Submit"}
+    ]}
+  },
+  "$defs": {
+    "Actor": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "Conversation": {"type": "string", "pattern": "^chat_[0-9a-f]{32}$"},
+    "Cursor": {"type": ["string", "null"], "minLength": 1, "maxLength": 1024},
+    "Idempotency": {"type": "string", "pattern": "^[!-~]{16,128}$"},
+    "Slot": {
+      "type": "object", "additionalProperties": false, "required": ["action"],
+      "properties": {"action": {"const": "SLOT"}}
+    },
+    "List": {
+      "type": "object", "additionalProperties": false, "required": ["action", "actor_id"],
+      "properties": {"action": {"const": "LIST"}, "actor_id": {"$ref": "#/$defs/Actor"}, "cursor": {"$ref": "#/$defs/Cursor"}}
+    },
+    "Create": {
+      "type": "object", "additionalProperties": false, "required": ["action", "actor_id", "request", "idempotency_key"],
+      "properties": {"action": {"const": "CREATE"}, "actor_id": {"$ref": "#/$defs/Actor"}, "idempotency_key": {"$ref": "#/$defs/Idempotency"}, "request": {"$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatCreate"}}
+    },
+    "Read": {
+      "type": "object", "additionalProperties": false, "required": ["action", "actor_id", "conversation_id"],
+      "properties": {"action": {"const": "READ"}, "actor_id": {"$ref": "#/$defs/Actor"}, "conversation_id": {"$ref": "#/$defs/Conversation"}, "cursor": {"$ref": "#/$defs/Cursor"}}
+    },
+    "Submit": {
+      "type": "object", "additionalProperties": false, "required": ["action", "actor_id", "conversation_id", "request", "idempotency_key"],
+      "properties": {"action": {"const": "SUBMIT"}, "actor_id": {"$ref": "#/$defs/Actor"}, "conversation_id": {"$ref": "#/$defs/Conversation"}, "idempotency_key": {"$ref": "#/$defs/Idempotency"}, "request": {"$ref": "eom://schemas/api/v1/general-chat/1.0#/$defs/GeneralChatSubmission"}}
+    }
+  }
+}

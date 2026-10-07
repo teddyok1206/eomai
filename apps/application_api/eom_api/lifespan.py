@@ -15,6 +15,7 @@ from eom_identity_service.auth_service import AuthService, LoginPolicy
 from eom_identity_service.service import OperatorService
 from eom_identity_service.tokens import SessionTokenService, TokenCodec, TokenPolicy
 from eom_orchestrator.database import build_engine
+from eom_orchestrator.general_chat_client import GeneralChatOwnerClient
 from fastapi import FastAPI
 from sqlalchemy import Engine
 
@@ -113,7 +114,7 @@ class AppServices:
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
-        self.general_chat = GeneralChatApplicationService()
+        self.general_chat = GeneralChatApplicationService(GeneralChatOwnerClient())
         self.hwpx_item_revisions = CatalogBackedHwpxItemRevisionResolver(
             self.registry,
             self.catalog_application,

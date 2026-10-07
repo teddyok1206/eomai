@@ -559,3 +559,20 @@ def test_identity_preparation_is_pinned_and_does_not_activate_or_copy_auth():
     assert subprocess.run(["bash", "-n", str(script)], capture_output=True).returncode == 0
     result = subprocess.run(["bash", str(script), "a" * 40], capture_output=True)
     assert result.returncode != 0 and b"requires root" in result.stderr
+
+
+def test_enrollment_is_fixed_identity_interactive_and_never_replaces_or_borrows_auth():
+    root = Path(__file__).resolve().parents[2]
+    script = root / "scripts/chat/enroll_worker_account.sh"
+    source = script.read_text()
+    assert "enrollment requires the operator's terminal" in source
+    assert "working tree is not clean" in source and "source commit mismatch" in source
+    assert "do not replace an enrolled account" in source
+    assert "runuser -u" in source and "/usr/bin/env -i" in source
+    assert 'forced_login_method="chatgpt"' in source and "login --device-auth" in source
+    assert "15m" in source and "--kill-after=10s" in source
+    assert "--with-api-key" not in source and "systemctl" not in source
+    assert "eom-cdx-01" not in source and "cp " not in source
+    assert subprocess.run(["bash", "-n", str(script)], capture_output=True).returncode == 0
+    result = subprocess.run(["bash", str(script), "a" * 40], capture_output=True)
+    assert result.returncode != 0 and b"requires root" in result.stderr

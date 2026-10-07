@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_NATIVE_ADAPTER_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_OWNER_RPC_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 This is not a completion or live acceptance report.
 
@@ -51,12 +51,13 @@ runtime changes were performed. The paused image goal remains paused.
 
 1. Isolated dedicated identity and resident execution adapter, exact installed Codex
    capability admission, authentication enrollment and forbidden-access negatives.
-2. API composition binding through a typed private Orchestrator port (not an API
-   process that writes NAS), and coordinated compatible deployment, including migration.
+2. Resident owner/worker composition, protected model/prompt provenance and restart
+   reconciliation; coordinated compatible deployment, including migration.
 3. Real answer + follow-up, two user sessions, restart/unknown-turn handling, and
    existing-six-slot regression. Actual streaming only from native model events.
 
-No dedicated Linux identity/service has been created yet. No existing slot is reused.
+At this first-slice checkpoint, no dedicated Linux identity/service had been created.
+See the later verified owner-RPC checkpoint below for identity preparation. No existing slot is reused.
 No inference calls or model-credit consumption were made for this first slice.
 Only read-only native CLI version/feature/schema introspection was performed.
 See [ADR0212](../adr/0212-general-chat-dedicated-capacity.md) for scope and exit gates.
@@ -122,10 +123,47 @@ Model inference calls: **0**. No production DB migration, API binding or service
 The initial oversized test frame fixture exceeded the OS argument limit; construct its
 bytes inside the synthetic subprocess instead. Final regression passes after that fix.
 
-The pinned identity preparation helper is source-verified only: it creates no service,
-copies no authentication, modifies no existing slots and overwrites no conflicting config.
-It has **not been run as root**. The prior sudo credential used for the disposable DB
-is no longer available noninteractively. Dedicated identity/enrollment/service-isolation,
-runtime/model policy provenance, private owner/worker RPC, restart reconciliation, API
-composition and compatible deployment remain required work. Actual browser streaming
-and a real answer/follow-up/two-owner test are not yet demonstrated. Goal stays active.
+At the native-adapter checkpoint the identity preparation helper was source-verified
+only and had not run as root. The verified provisioning state is recorded below.
+It creates no service, copies no authentication, modifies no existing slots and
+overwrites no conflicting config. Actual browser streaming and a real answer/
+follow-up/two-owner test are not yet demonstrated. Goal stays active.
+
+## Verified private owner RPC slice — still not live
+
+- JSON Schema2020-12 request/reply contracts and frozen discriminated commands.
+  Public conversation views are reused through an offline schema reference; packaged
+  schema bytes equal their canonical sources. Exact correlation/action/value checks
+  reject malformed, caller-selected native/storage identity and conflicting replies.
+- The API composition binds a lazy private Unix-socket client. The client has no
+  DB/NAS/model side effects; the Orchestrator server delegates to existing transcript
+  owner use cases and authoritative operator/ownership/idempotency rules.
+- Exact socket/parent ownership/modes and connected peer credentials, bounded
+  concurrency/deadlines/frames, duplicate/nonfinite JSON rejection, sanitized stable
+  error mapping. No hidden mutation replay after an uncertain socket outcome.
+- Missing or invalid owner connection keeps the dedicated slot UNAVAILABLE and does
+  not break other API startup. Existing public OpenAPI bytes remain unchanged.
+- Real socket + guarded disposable PostgreSQL tests cover concurrent identical
+  create/submit, single queue claim, completed replay, two-owner history separation,
+  expired heartbeat and stale/conflicting intent failures. Synthetic answers only.
+
+Focused API/Web/native/protocol/dependency/release-inventory regressions: **243 PASS**.
+Guarded disposable PostgreSQL regression including private socket path: **22 PASS**.
+Ruff check/format, strict mypy for six changed core modules, shell syntax and
+deterministic OpenAPI SHA `af90b60e80a39c50b26119ac74a434f4159d54e9fdbf22b296265fadb20ba15e`: **PASS**.
+Initial DB-RPC setup failed because the guarded runner's umask077 changed the
+fixture's intended750 directory to700. Set the exact fixture mode explicitly;
+retain production permission checks and rerun all22 cases. No DB repair occurred.
+
+The operator's queued pinned provisioning command completed for source `9d078c7e`.
+Read-only identity checks confirm `eom-cdx-chat`, UID981/GID978, its own private group,
+fixed home and locked-login shell. Its credentials were not copied. This is identity
+preparation, not authentication, native service-isolation admission or availability.
+The interactive enrollment helper uses only its own cleared-environment device login,
+refuses existing cached credentials, and neither runs inference nor activates services.
+
+Remaining runtime gates: dedicated enrollment, owner/worker resident service
+composition, pinned policy evidence, restart reconciliation, live forbidden-access
+checks, production migrations/compatible installation, real answer/follow-up and
+two-owner/existing-six-slot regression. Production DB migration and service activation:
+**NOT_PERFORMED**. API binding above exists in source only. Inference calls: **0**.

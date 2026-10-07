@@ -201,3 +201,50 @@ existing workers, or claim readiness. Existing conflicting paths/configuration f
 explicitly. Resident worker/owner RPC, service isolation, enrollment, API composition
 and coordinated deployment remain required successor work, not fulfilled by this
 provisioning helper or adapter source tests.
+
+## Private owner RPC and resident composition
+
+The API's existing GeneralChatOwner port is implemented by a private Unix-socket
+client; only authenticated API calls may supply an actor ID. The resident
+Orchestrator owns the existing conversation/turn/capacity tables and Artifact
+adapter. Its worker port is separate, never reachable by the browser/API. An API
+process that directly constructs the DB/NAS transcript owner would be simpler but
+would cross the established persistence/commit responsibility boundary.
+
+Define JSON Schema2020-12 request/reply envelopes before adapters. Reuse the
+canonical public view definitions through an offline schema registry rather than
+inventing different conversation shapes. Requests carry a correlation ID and a
+discriminated typed command; replies preserve the exact ID/action and bounded
+typed projection or stable error. Conversation/turn/revision/hash remain the
+canonical identities, not socket paths or correlation IDs. The authoritative
+operator and conversation owner checks remain in their existing services.
+
+Access patterns are one indexed owner query/command per connection, cursor history
+pages and the existing indexed FIFO queue. Single-connection framing and bounded
+concurrency avoid unbounded threads/JSON/logs. Requests<=256KiB and projected
+replies<=16MiB accommodate existing bounded views without duplicating binary data.
+The server uses fixed peer UIDs; clients check socket/parent metadata and connected
+peer credentials. Each side uses a deadline and validates both schema and model.
+There is no native generation, DB transaction or new queue inside the API client.
+
+Business transactions and idempotency remain in the conversation owner. Socket
+disconnect/timeout does not prove a write was unprocessed; clients never issue a
+second mutation with a new key or hide a failure as success. Unknown/malformed
+replies fail explicitly. General chat is optional until its dedicated runtime is
+admitted, and absence of its socket must not break other product workflows.
+
+Resident composition has separate trusted-owner and unprivileged-worker identities.
+Only the owner can commit validated evidence; the worker reads staged input and
+returns local results. Runtime/model/prompt policy evidence must be pinned for each
+claim before inference. Owner restart must reconcile persisted worker/result evidence
+and never re-run uncertain generation. DB/schema changes are not needed for this
+owner RPC slice; service setup, protected policy provenance and recovery remain
+distinct required runtime gates before availability or completion is claimed.
+
+Operator enrollment uses the documented [device-code authentication](https://learn.chatgpt.com/docs/auth)
+through `scripts/chat/enroll_worker_account.sh COMMIT`, in an interactive terminal
+under the dedicated worker UID and cleared environment. Existing credentials are
+not overwritten, imported or printed; the browser challenge stays in the operator
+terminal and is never captured as development evidence. Enrollment is a bounded
+login operation, not model execution or service activation. Unavailable device
+login requires an explicit operator decision; no credential-copy/API-key fallback.

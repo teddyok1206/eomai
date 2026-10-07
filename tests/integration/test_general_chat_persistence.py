@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Thread
 from typing import Any
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
@@ -18,6 +18,7 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.general_chat_artifacts import GeneralChatArtifactStore
+from eom_orchestrator.general_chat_client import GeneralChatOwnerClient
 from eom_orchestrator.general_chat_execution import ChatClaim, GeneralChatExecutionService
 from eom_orchestrator.general_chat_models import (
     GeneralChatCapacityRecord,
@@ -25,11 +26,14 @@ from eom_orchestrator.general_chat_models import (
     GeneralChatTurnRecord,
 )
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
+from eom_orchestrator.general_chat_owner_server import GeneralChatOwnerRpcServer
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
+from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_orchestrator.settings import Settings
 from eom_protocol.general_chat import CHAT_RESULT_SCHEMA, ChatTurnInput, ChatTurnResult
+from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_protocol.general_chat_views import GeneralChatCreate, GeneralChatSubmission
 from sqlalchemy import Engine, create_engine, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -191,6 +195,153 @@ def test_chat_migration_matches_authoritative_metadata(chat: ChatFixture) -> Non
             connection.scalar(text("SELECT version_num FROM app.alembic_version"))
             == "20261007_0048"
         )
+
+
+@pytest.fixture
+def chat_rpc(chat: ChatFixture, tmp_path: Path):
+    directory = tmp_path / "rpc"
+    directory.mkdir(mode=0o750)
+    # The guarded DB runner uses umask077; the RPC parent has its own exact mode.
+    directory.chmod(0o750)
+    endpoint = ChatSocketEndpoint(directory / "owner.sock", os.getuid(), os.getgid())
+    with GeneralChatOwnerRpcServer(
+        chat.owner, endpoint=endpoint, allowed_uids=frozenset({os.getuid()})
+    ) as server:
+        thread = Thread(target=server.serve)
+        thread.start()
+        try:
+            yield GeneralChatOwnerClient(endpoint)
+        finally:
+            server.stop()
+            thread.join(timeout=5)
+            assert not thread.is_alive()
+
+
+def test_private_rpc_concurrent_replay_preserves_one_database_intent_and_claim(
+    chat: ChatFixture, chat_rpc: GeneralChatOwnerClient
+) -> None:
+    request = GeneralChatCreate(title="RPC 동시 요청")
+    key = "create-rpc-" + uuid4().hex
+
+    def create(_):
+        return chat_rpc.create(actor_id=chat.actors[0], request=request, idempotency_key=key)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        values = tuple(pool.map(create, range(8)))
+    assert len({value.conversation_id for value in values}) == 1
+    conversation = values[0]
+    submission = GeneralChatSubmission(text="동일한 질문", expected_version=1)
+    submit_key = "submit-rpc-" + uuid4().hex
+
+    def submit(_):
+        return chat_rpc.submit(
+            actor_id=chat.actors[0],
+            conversation_id=conversation.conversation_id,
+            request=submission,
+            idempotency_key=submit_key,
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = tuple(pool.map(submit, range(8)))
+    assert len({message.turn_id for value in responses for message in value.messages}) == 1
+    claim = chat.claim()
+    assert chat.execution.claim_next(runtime_id=RUNTIME) is None
+    prepared = chat.execution.prepare(claim)
+    chat.answer(claim, prepared)
+    replay = submit(None)
+    assert tuple(value.role for value in replay.messages) == ("user", "assistant")
+    assert replay.messages[-1].state == "COMPLETED"
+    assert chat.execution.claim_next(runtime_id=RUNTIME) is None
+
+
+def test_private_rpc_two_owners_use_separate_history_and_same_intent_scope(
+    chat: ChatFixture, chat_rpc: GeneralChatOwnerClient
+) -> None:
+    key = "owner-rpc-" + uuid4().hex
+    request = GeneralChatCreate(title="동일 제목")
+    a, b = tuple(
+        chat_rpc.create(actor_id=actor, request=request, idempotency_key=key)
+        for actor in chat.actors
+    )
+    assert a.conversation_id != b.conversation_id
+    for actor, own, foreign in ((chat.actors[0], a, b), (chat.actors[1], b, a)):
+        listing = chat_rpc.conversations(actor_id=actor, cursor=None)
+        assert {value.conversation_id for value in listing.values} == {own.conversation_id}
+        with pytest.raises(ChatOwnerFault) as failure:
+            chat_rpc.conversation(
+                actor_id=actor, conversation_id=foreign.conversation_id, cursor=None
+            )
+        assert failure.value.code == ChatOwnerErrorCode.NOT_FOUND
+
+
+def test_private_rpc_expired_heartbeat_blocks_fresh_submit_but_retains_history_and_replay(
+    chat: ChatFixture, chat_rpc: GeneralChatOwnerClient
+) -> None:
+    conversation = chat.create()
+    request = GeneralChatSubmission(text="확정된 질문", expected_version=1)
+    key = "expire-rpc-" + uuid4().hex
+    queued = chat_rpc.submit(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        request=request,
+        idempotency_key=key,
+    )
+    chat.now += timedelta(minutes=1)
+    assert chat_rpc.slot().state == "UNAVAILABLE"
+    assert (
+        chat_rpc.submit(
+            actor_id=chat.actors[0],
+            conversation_id=conversation.conversation_id,
+            request=request,
+            idempotency_key=key,
+        )
+        == queued
+    )
+    fresh = chat.create(actor=1)
+    with pytest.raises(ChatOwnerFault) as failure:
+        chat_rpc.submit(
+            actor_id=chat.actors[1],
+            conversation_id=fresh.conversation_id,
+            request=request,
+            idempotency_key="fresh-rpc-" + uuid4().hex,
+        )
+    assert failure.value.code == ChatOwnerErrorCode.NOT_READY
+    assert (
+        chat_rpc.conversation(
+            actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+        ).messages
+        == queued.messages
+    )
+
+
+def test_private_rpc_stale_version_and_conflicting_intent_remain_explicit_failures(
+    chat: ChatFixture, chat_rpc: GeneralChatOwnerClient
+) -> None:
+    conversation = chat.create()
+    request = GeneralChatSubmission(text="원 질문", expected_version=1)
+    key = "conflict-rpc-" + uuid4().hex
+    chat_rpc.submit(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        request=request,
+        idempotency_key=key,
+    )
+    for failure_key, body, code in (
+        (
+            key,
+            GeneralChatSubmission(text="다른 질문", expected_version=1),
+            ChatOwnerErrorCode.IDEMPOTENCY_CONFLICT,
+        ),
+        ("stale-rpc-" + uuid4().hex, request, ChatOwnerErrorCode.STALE_REVISION),
+    ):
+        with pytest.raises(ChatOwnerFault) as failure:
+            chat_rpc.submit(
+                actor_id=chat.actors[0],
+                conversation_id=conversation.conversation_id,
+                request=body,
+                idempotency_key=failure_key,
+            )
+        assert failure.value.code == code
 
 
 def test_concurrent_create_is_single_owner_scoped_receipt(chat: ChatFixture) -> None:

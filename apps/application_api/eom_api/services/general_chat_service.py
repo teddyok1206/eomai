@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Callable
+from types import MappingProxyType
+from typing import TypeVar
 
 from eom_api_contracts.general_chat import (
     GeneralChatConversation,
@@ -11,33 +13,28 @@ from eom_api_contracts.general_chat import (
     GeneralChatSlot,
     GeneralChatSubmission,
 )
+from eom_protocol.general_chat_owner_messages import (
+    ChatOwnerErrorCode,
+    ChatOwnerFault,
+)
+from eom_protocol.general_chat_owner_messages import (
+    ChatOwnerPort as GeneralChatOwner,
+)
 
 from eom_api.errors import ApiError
 
-
-class GeneralChatOwner(Protocol):
-    """Execution and canonical history boundary, never a browser-selected worker."""
-
-    def slot(self) -> GeneralChatSlot: ...
-
-    def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList: ...
-
-    def create(
-        self, *, actor_id: str, request: GeneralChatCreate, idempotency_key: str
-    ) -> GeneralChatConversation: ...
-
-    def conversation(
-        self, *, actor_id: str, conversation_id: str, cursor: str | None
-    ) -> GeneralChatConversation: ...
-
-    def submit(
-        self,
-        *,
-        actor_id: str,
-        conversation_id: str,
-        request: GeneralChatSubmission,
-        idempotency_key: str,
-    ) -> GeneralChatConversation: ...
+T = TypeVar("T")
+CHAT_HTTP_STATUSES = MappingProxyType(
+    {
+        ChatOwnerErrorCode.FORBIDDEN: 403,
+        ChatOwnerErrorCode.NOT_FOUND: 404,
+        ChatOwnerErrorCode.IDEMPOTENCY_INVALID: 400,
+        ChatOwnerErrorCode.IDEMPOTENCY_CONFLICT: 409,
+        ChatOwnerErrorCode.STALE_REVISION: 409,
+        ChatOwnerErrorCode.TURN_IN_PROGRESS: 409,
+        ChatOwnerErrorCode.CURSOR_INVALID: 400,
+    }
+)
 
 
 class GeneralChatApplicationService:
@@ -52,9 +49,19 @@ class GeneralChatApplicationService:
                 state="UNAVAILABLE",
                 unavailable_reason="전용 대화 서비스를 준비 중입니다.",
             )
-        return self.owner.slot()
+        try:
+            return self.owner.slot()
+        except ChatOwnerFault:
+            return GeneralChatSlot(
+                state="UNAVAILABLE",
+                unavailable_reason="전용 대화 서비스의 연결 상태를 확인 중입니다.",
+            )
 
     def require_owner(self) -> GeneralChatOwner:
+        self._owner()
+        return self
+
+    def _owner(self) -> GeneralChatOwner:
         if self.owner is None:
             raise ApiError(
                 503,
@@ -63,3 +70,52 @@ class GeneralChatApplicationService:
                 "The dedicated conversation owner has not been activated.",
             )
         return self.owner
+
+    def _call(self, action: Callable[[GeneralChatOwner], T]) -> T:
+        try:
+            return action(self._owner())
+        except ChatOwnerFault as exc:
+            raise ApiError(
+                CHAT_HTTP_STATUSES.get(exc.code, 503),
+                exc.code.value,
+                "General chat request failed",
+                "The dedicated conversation owner could not complete this request.",
+            ) from None
+
+    def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList:
+        return self._call(lambda owner: owner.conversations(actor_id=actor_id, cursor=cursor))
+
+    def create(
+        self, *, actor_id: str, request: GeneralChatCreate, idempotency_key: str
+    ) -> GeneralChatConversation:
+        return self._call(
+            lambda owner: owner.create(
+                actor_id=actor_id, request=request, idempotency_key=idempotency_key
+            )
+        )
+
+    def conversation(
+        self, *, actor_id: str, conversation_id: str, cursor: str | None
+    ) -> GeneralChatConversation:
+        return self._call(
+            lambda owner: owner.conversation(
+                actor_id=actor_id, conversation_id=conversation_id, cursor=cursor
+            )
+        )
+
+    def submit(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatSubmission,
+        idempotency_key: str,
+    ) -> GeneralChatConversation:
+        return self._call(
+            lambda owner: owner.submit(
+                actor_id=actor_id,
+                conversation_id=conversation_id,
+                request=request,
+                idempotency_key=idempotency_key,
+            )
+        )

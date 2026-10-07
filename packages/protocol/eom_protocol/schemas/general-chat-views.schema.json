@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/general-chat/1.0",
+  "title": "General chat public contract",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/GeneralChatCreate"
+    },
+    {
+      "$ref": "#/$defs/GeneralChatSubmission"
+    },
+    {
+      "$ref": "#/$defs/GeneralChatSlot"
+    },
+    {
+      "$ref": "#/$defs/GeneralChatConversation"
+    },
+    {
+      "$ref": "#/$defs/GeneralChatList"
+    }
+  ],
+  "$defs": {
+    "GeneralChatCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "GeneralChatSubmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "expected_version"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S",
+          "not": {
+            "pattern": "\\u0000"
+          }
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "GeneralChatSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot_key",
+        "state",
+        "dedicated",
+        "resident",
+        "unavailable_reason"
+      ],
+      "properties": {
+        "slot_key": {
+          "const": "chat"
+        },
+        "state": {
+          "enum": [
+            "READY",
+            "BUSY",
+            "UNAVAILABLE"
+          ]
+        },
+        "dedicated": {
+          "const": true
+        },
+        "resident": {
+          "const": true
+        },
+        "unavailable_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNAVAILABLE"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "unavailable_reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "unavailable_reason": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GeneralChatMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turn_id",
+        "sequence",
+        "role",
+        "text",
+        "state",
+        "created_at"
+      ],
+      "properties": {
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 32000
+        },
+        "state": {
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "user"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "minLength": 1,
+                "maxLength": 16000,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "assistant"
+              },
+              "state": {
+                "const": "COMPLETED"
+              }
+            },
+            "required": [
+              "role",
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "assistant"
+              },
+              "state": {
+                "not": {
+                  "const": "COMPLETED"
+                }
+              }
+            },
+            "required": [
+              "role",
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "text": {
+                "const": ""
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GeneralChatConversation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversation_id",
+        "title",
+        "resource_version",
+        "messages",
+        "updated_at",
+        "has_more",
+        "next_cursor"
+      ],
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/GeneralChatMessage"
+          }
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 1024
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "has_more": {
+                "const": true
+              }
+            },
+            "required": [
+              "has_more"
+            ]
+          },
+          "then": {
+            "properties": {
+              "next_cursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "next_cursor": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "GeneralChatSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conversation_id",
+        "title",
+        "resource_version",
+        "updated_at"
+      ],
+      "properties": {
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "resource_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "GeneralChatList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "values",
+        "has_more",
+        "next_cursor"
+      ],
+      "properties": {
+        "values": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/GeneralChatSummary"
+          }
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "has_more": {
+                "const": true
+              }
+            },
+            "required": [
+              "has_more"
+            ]
+          },
+          "then": {
+            "properties": {
+              "next_cursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "next_cursor": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
