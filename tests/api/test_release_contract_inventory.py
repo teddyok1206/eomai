@@ -126,6 +126,39 @@ def test_wheel_catalog_resource_inventory_matches_canonical_contracts() -> None:
     assert actual == expected
 
 
+def test_wheel_api_schema_inventory_has_one_canonical_source(tmp_path: Path) -> None:
+    source = release_inspector_source()
+    tree = ast.parse(source)
+    assignment = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "expected_api_schemas"
+    )
+    assert isinstance(assignment.value, ast.SetComp)
+    expression = compile(ast.Expression(assignment.value), "API schema inventory", "eval")
+    actual = eval(
+        expression,
+        {"canonical_api_root": ROOT / "schemas/api/v1"},
+    )
+    packaged = ROOT / "packages/api_contracts/eom_api_contracts/schemas"
+    assert actual == {
+        "eom_api_contracts/schemas/" + path.name
+        for path in (ROOT / "schemas/api/v1").glob("*.schema.json")
+    }
+    assert "eom_api_contracts/schemas/general-chat-v1.schema.json" in actual
+    for path in packaged.glob("*.schema.json"):
+        assert "eom_api_contracts/schemas/" + path.name in actual
+        assert path.read_bytes() == (ROOT / "schemas/api/v1" / path.name).read_bytes()
+    # The builder stages all canonical files, including base contracts that are
+    # not checked in twice. New files must not require editing a second list.
+    (tmp_path / "successor.schema.json").write_bytes(b"{}")
+    assert eval(expression, {"canonical_api_root": tmp_path}) == {
+        "eom_api_contracts/schemas/successor.schema.json"
+    }
+
+
 def test_privileged_migration_preflight_is_read_only_for_git_index(tmp_path: Path) -> None:
     source = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert 'git --no-optional-locks -C "${REPOSITORY_ROOT}" status --porcelain' in source

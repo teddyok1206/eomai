@@ -167,3 +167,16 @@ composition, pinned policy evidence, restart reconciliation, live forbidden-acce
 checks, production migrations/compatible installation, real answer/follow-up and
 two-owner/existing-six-slot regression. Production DB migration and service activation:
 **NOT_PERFORMED**. API binding above exists in source only. Inference calls: **0**.
+
+### Build-gate discovery and correction
+
+The first build-only attempt verified wheel RECORDs but then rejected the new public
+chat schema: an older duplicate59-schema release whitelist had not been updated in
+the UI slice. Production was not installed. Use the existing canonical API schema
+directory as the single release inventory (currently60), retaining exact missing/
+unexpected member, source-byte and RECORD checks. Add chat runtime and private
+schema members to the existing platform inspection boundary. Inventory tests
+evaluate the actual script expression and ensure a successor canonical resource
+does not require another manual version list. Replace the stale59-count test with
+the semantic inventory invariant. Full build-only reinspection is the next check;
+this correction itself is not a claim of installed runtime acceptance.

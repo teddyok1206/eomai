@@ -1051,6 +1051,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/runtime_isolation_verifier.py",
         "eom_api/routers/control_plane.py",
         "eom_api/routers/educational_quality_reviews.py",
+        "eom_api/routers/general_chat.py",
         "eom_api/routers/knowledge_analysis.py",
         "eom_api/routers/assessment_assemblies.py",
         "eom_api/routers/item_bank.py",
@@ -1068,6 +1069,7 @@ with zipfile.ZipFile(by_prefix["eom_application_api"]) as archive:
         "eom_api/services/document_review_correction_service.py",
         "eom_api/services/document_review_annotation_service.py",
         "eom_api/services/educational_quality_service.py",
+        "eom_api/services/general_chat_service.py",
         "eom_api/services/pdf_document_review_service.py",
         "eom_api/services/paired_document_review_service.py",
         "eom_api/services/pdf_upload_stager.py",
@@ -1178,72 +1180,16 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         for name in names
         if name.startswith("eom_api_contracts/schemas/") and name.endswith(".schema.json")
     }
+    canonical_api_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/api/v1"
     expected_api_schemas = {
-        "eom_api_contracts/schemas/api-release-build-info-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-corpus-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-corpus-v2.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-exam-v2.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-page-v1.schema.json",
-        "eom_api_contracts/schemas/assessment-learning-page-v2.schema.json",
-        "eom_api_contracts/schemas/auth.schema.json",
-        "eom_api_contracts/schemas/common.schema.json",
-        "eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json",
-        "eom_api_contracts/schemas/customer-support-v1.schema.json",
-        "eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json",
-        "eom_api_contracts/schemas/document-review-annotation-v1.schema.json",
-        "eom_api_contracts/schemas/document-review-annotation-v2.schema.json",
-        "eom_api_contracts/schemas/document-review-set-create-v1.schema.json",
-        "eom_api_contracts/schemas/document-review-set-view-v1.schema.json",
-        "eom_api_contracts/schemas/document-review-upload-v2.schema.json",
-        "eom_api_contracts/schemas/educational-quality-review-command-v1.schema.json",
-        "eom_api_contracts/schemas/educational-quality-review-workbench-v1.schema.json",
-        "eom_api_contracts/schemas/errors.schema.json",
-        "eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json",
-        "eom_api_contracts/schemas/hwpx.schema.json",
-        "eom_api_contracts/schemas/hwpx-v2.schema.json",
-        "eom_api_contracts/schemas/item-bank-entry-v1.schema.json",
-        "eom_api_contracts/schemas/item-approval-view-v1.schema.json",
-        "eom_api_contracts/schemas/item-revision-approval-request-v1.schema.json",
-        "eom_api_contracts/schemas/items.schema.json",
-        "eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json",
-        "eom_api_contracts/schemas/mock-exam-assembly-policy-view-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-explicit-analysis-review-set-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-explicit-rating-set-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-graph-publication-input-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-execution-v4.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-execution-v5.schema.json",
-        "eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json",
-        "eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json",
-        "eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json",
-        "eom_api_contracts/schemas/operators.schema.json",
-        "eom_api_contracts/schemas/pdf-document-review-v1.schema.json",
-        "eom_api_contracts/schemas/pdf-document-review-result-view-v1.schema.json",
-        "eom_api_contracts/schemas/paired-document-review-view-v1.schema.json",
-        "eom_api_contracts/schemas/paired-document-review-view-v2.schema.json",
-        "eom_api_contracts/schemas/production-item-candidate-v1.schema.json",
-        "eom_api_contracts/schemas/production-item-candidate-v2.schema.json",
-        "eom_api_contracts/schemas/resources.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v1.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v2.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v3.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v4.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v5.schema.json",
-        "eom_api_contracts/schemas/workflow-start-v6.schema.json",
+        "eom_api_contracts/schemas/" + path.name
+        for path in canonical_api_root.glob("*.schema.json")
     }
+    if not expected_api_schemas:
+        raise SystemExit("canonical API schema inventory is unavailable")
     if schemas != expected_api_schemas:
         raise SystemExit(
-            "expected exactly 59 packaged API schemas including educational quality review, Item approval, paired document review, PDF annotation, customer support, Office document review, release identity, Workflow-start, "
-            "and mock-exam "
-            "production execution/review/retirement contracts, "
+            "packaged API schemas differ from the canonical release inventory, "
             f"missing={sorted(expected_api_schemas - schemas)} "
             f"unexpected={sorted(schemas - expected_api_schemas)}"
         )
@@ -1253,6 +1199,7 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
         "eom_api_contracts/customer_support.py",
         "eom_api_contracts/document_review.py",
         "eom_api_contracts/educational_quality.py",
+        "eom_api_contracts/general_chat.py",
         "eom_api_contracts/item_bank.py",
         "eom_api_contracts/mock_exam_execution.py",
         "eom_api_contracts/mock_exam_retirement.py",
@@ -1261,7 +1208,6 @@ with zipfile.ZipFile(by_prefix["eom_api_contracts"]) as archive:
     }
     if missing := required_contract_runtime - names:
         raise SystemExit(f"mock-exam API contract runtime missing from wheel: {sorted(missing)}")
-    canonical_api_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/api/v1"
     record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
     record = archive.read(record_name).decode("utf-8")
     for member in sorted(expected_api_schemas):
@@ -1281,6 +1227,24 @@ workflow_resources = {
     for path in canonical_workflow_root.rglob("*.schema.json")
 }
 platform_wheel = by_prefix["eom_platform"]
+chat_schema_root = Path(os.environ["REPOSITORY_ROOT"]) / "schemas/general-chat"
+chat_resources = {
+    "eom_protocol/schemas/" + path.name: path
+    for path in chat_schema_root.glob("*.schema.json")
+}
+chat_resources["eom_protocol/schemas/general-chat-views.schema.json"] = (
+    canonical_api_root / "general-chat-v1.schema.json"
+)
+chat_source_root = (
+    Path(os.environ["REPOSITORY_ROOT"]) / "services/orchestrator/eom_orchestrator"
+)
+chat_runtime = {
+    "eom_orchestrator/" + path.name for path in chat_source_root.glob("general_chat*.py")
+} | {
+    "eom_protocol/general_chat.py",
+    "eom_protocol/general_chat_views.py",
+    "eom_protocol/general_chat_owner_messages.py",
+}
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())
     worker_runtime = {
@@ -1468,6 +1432,8 @@ with zipfile.ZipFile(platform_wheel) as archive:
         | control_plane_runtime
         | catalog_staging_runtime
         | hwpx_application_runtime
+        | chat_runtime
+        | chat_resources.keys()
     ) - names:
         raise SystemExit(f"platform runtime missing from wheel: {sorted(missing)}")
     settings_source = archive.read("eom_orchestrator/settings.py")
@@ -1514,6 +1480,12 @@ with zipfile.ZipFile(platform_wheel) as archive:
         )
     record_name = next(name for name in names if name.endswith(".dist-info/RECORD"))
     record = archive.read(record_name).decode("utf-8")
+    for member in sorted(chat_runtime | chat_resources.keys()):
+        if member not in record:
+            raise SystemExit(f"general chat runtime missing from RECORD: {member}")
+    for member, canonical in chat_resources.items():
+        if archive.read(member) != canonical.read_bytes():
+            raise SystemExit(f"general chat schema resource drift: {canonical.name}")
     for member in sorted(worker_runtime):
         if member not in record:
             raise SystemExit(f"fixed worker runtime missing from RECORD: {member}")
