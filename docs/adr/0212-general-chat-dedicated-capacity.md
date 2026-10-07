@@ -1,11 +1,15 @@
 # ADR0212: General chat with dedicated, resident capacity
 
 Status: implementation in progress, 2026-10-07 UTC. No runtime activation yet.
+Activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 
 ## Boundary and canonical source
 
-Scientific Studio adds `일반 → ChatGPT`. This is an EOM conversation surface
-powered through Codex, not an embedded ChatGPT website or a new billed LLM API.
+Scientific Studio adds `일반 → ChatGPT`. This is an EOM conversation surface,
+not an embedded ChatGPT website. The initially investigated Codex-managed
+ChatGPT authentication route is an unactivated candidate, not authorization
+for a shared hosted product; see the authentication gate below. Do not replace
+it with an external LLM API or billed API key without an explicit scope decision.
 OpenAI Docs' [App Server](https://learn.chatgpt.com/docs/app-server) documents
 threads, turns and message events. Reuse the existing isolated Codex execution
 and authentication adapters; do not copy the operator's/root's credentials.
@@ -74,6 +78,11 @@ No new dependency is required for the first implementation slice.
 
 ## Incremental delivery plan (not a runtime completion claim)
 
+0. Establish a supported authentication route for the actual deployment and user
+   scope before inference or runtime activation. UI/persistence/private owner RPC
+   verification is independent of this vendor eligibility gate; enrollment alone
+   cannot close it. Do not silently substitute a personal-only prototype for the
+   requested multi-user company feature.
 1. Public JSON Schema2020-12, frozen API/Web mirrors, independent read/write RBAC,
    authenticated CSRF-protected BFF, closed OpenAPI/package inventory and chat UI.
    No inference during this slice; absence of an admitted owner returns503.
@@ -248,3 +257,36 @@ not overwritten, imported or printed; the browser challenge stays in the operato
 terminal and is never captured as development evidence. Enrollment is a bounded
 login operation, not model execution or service activation. Unavailable device
 login requires an explicit operator decision; no credential-copy/API-key fallback.
+
+## Authentication deployment gate — official documentation discovery
+
+As of2026-10-07 13:45 UTC, the official
+[App Server authentication guidance](https://learn.chatgpt.com/docs/app-server)
+states that existing authentication may continue for local/open-source apps,
+but has not been permitted for commercial or hosted services. EOM's intended
+shared company-server chat is not demonstrated to qualify for the local-app
+case. This is a deployment-classification uncertainty, not evidence that current
+EOM production performed an unauthorized chat inference: none has occurred.
+
+The official [Sign in with ChatGPT documentation](https://developers.openai.com/siwc/token-sharing-open-source)
+describes optional access to an eligible user's own plan, user/workspace-bound
+registration and host identity. It directs paid/remotely hosted applications to
+an interest form; documentation availability does not prove EOM's eligibility.
+Its [self-hosted VM guide](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms)
+preserves the same user/workspace in local enrollment and VM operation. It does
+not establish permission to expose one operator's plan to all company accounts.
+The [SIWC native App Server guide](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
+uses an OAuth token-backed Responses provider and different authentication/
+renewal configuration from the source-verified managed-login profile above.
+
+Therefore shared-service activation and real model calls remain on hold pending
+deployment eligibility and an explicit user decision about scope/authentication.
+Do not treat dedicated Linux identity, sudo authorization, browser device login,
+or existing native adapter tests as that decision. Do not register an OAuth app,
+submit a partner form, transfer credentials, introduce an external inference API,
+or share one plan between company users as an implicit implementation step.
+
+Preserve existing source tests, transcripts/contracts and independent capacity
+design. A supported successor authentication adapter, if authorized, must pin its
+own runtime profile and owner/renewal boundary; never relabel managed-auth test
+evidence as SIWC/live eligibility. GPU work and production slots01–06 stay untouched.

@@ -2,6 +2,7 @@
 
 Status: `SOURCE_OWNER_RPC_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
+Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 This is not a completion or live acceptance report.
 
 ## Verified first slice
@@ -49,6 +50,8 @@ runtime changes were performed. The paused image goal remains paused.
 
 ## Required next work — not yet delivered
 
+0. Resolve supported authentication/deployment eligibility and user scope before
+   any real inference or shared-service activation; see the later discovery below.
 1. Isolated dedicated identity and resident execution adapter, exact installed Codex
    capability admission, authentication enrollment and forbidden-access negatives.
 2. Resident owner/worker composition, protected model/prompt provenance and restart
@@ -196,3 +199,35 @@ command; the replacement passed pinned-source/identity preflight before starting
 Only the latest operator-terminal challenge is valid. Authentication completion,
 account admission and resident service availability are **NOT_YET_VERIFIED**.
 No challenge, login logs or credential contents were captured in evidence or Slack.
+
+## Authentication route discovery — activation held
+
+Read-only official documentation review on2026-10-07 13:45 UTC identified an
+unclosed deployment gate. [Codex App Server](https://learn.chatgpt.com/docs/app-server)
+limits its existing authentication route to local/open-source applications and
+states it has not been permitted for commercial/hosted services. The requested
+company-server, multiple-EOM-user feature cannot be assumed to qualify.
+
+[Sign in with ChatGPT](https://developers.openai.com/siwc/token-sharing-open-source)
+documents eligible users' own plan access, user/workspace registration and host
+identity; paid/remotely hosted apps are directed to an interest form. Supported
+eligibility for this EOM deployment has **not** been established. The
+[self-hosted VM](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms)
+case preserves the same user/workspace, not shared use of one operator's plan.
+
+`AUTH_ROUTE_REVIEW_REQUIRED`; shared-service activation and actual model calls:
+**HOLD**. No production installation/migration or model inference was performed.
+Source/disposable-DB/wheel PASS evidence remains valid for the boundaries it
+actually tested; none proves vendor authorization or live availability.
+
+No OAuth registration, partner-form submission, token transfer, billed API-key
+fallback or inference API adoption is authorized by the earlier sudo response.
+Do not cancel/overwrite the operator's enrollment or capture its challenge while
+reviewing this route. Successful enrollment, if later verified, would not close
+the shared-service eligibility gate. The company multi-user scope remains the
+requested end state unless the user explicitly chooses a different scope.
+
+Next: obtain the scope/authentication direction and supported deployment path;
+only then resume auth-dependent resident composition and live acceptance.
+Maintain the existing UI, canonical Artifact history, owner RPC and separate
+chat capacity without manufacturing readiness. See ADR0212 for the decision.
