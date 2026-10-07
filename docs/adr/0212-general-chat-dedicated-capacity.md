@@ -144,3 +144,60 @@ connection. Sharing the metadata pool would let concurrent submit transactions
 consume every connection and block the publication needed to release them.
 The 20-intent saturation test covers this resource deadlock boundary. These are
 two pools to the same canonical DB, not another database, cache or queue.
+
+## Native execution adapter decision (step3)
+
+The dedicated worker adapter implements the already released staged turn input /
+result contracts. Codex JSON-RPC is a vendor adapter, not another public EOM queue
+or registry. Pinned profile `codex-app-server/0.160.0/environment-free/1.0` uses the
+installed CLI's actual experimental schema for explicit empty environments. No
+external LLM API, added dependency or six-slot protocol change is introduced.
+
+Canonical context remains the Orchestrator's validated Artifact snapshot. Each
+turn starts an ephemeral native thread, injects preceding user/assistant messages
+with their original roles, then submits only the newest user message. Native IDs
+are local handles, never owner/Conversation IDs or persisted history pointers.
+Thread/turn identity and empty native history are checked before accepting output.
+This adapter neither queries DB, dispatches another worker nor writes NAS.
+
+Actual v0.160 normalizes `unified_exec` back to true despite a user-config false
+override. The matching official implementation gates shell registration on
+`shell_tool` and environment availability; applying a patch also requires an
+environment. Therefore do not pretend that the backend flag itself is disabled.
+Use supported `environments=[]` on both thread and turn, empty runtime roots and
+dynamic tools, disabled shell/browser/image/plugin/MCP/agent/goal features, and
+fixed read-only/no-network/never-approve policy. Never alter system-wide Codex
+requirements or the existing slots to achieve a private chat policy. References:
+[managed feature normalization](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/core/src/config/managed_features.rs),
+[tool registration](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/core/src/tools/spec_plan.rs),
+[explicit environment selection](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/app-server-protocol/src/protocol/v2/thread.rs).
+
+The subprocess adapter permits only UID/GID `eom-cdx-chat`, its own700-mode home,
+root-installed640-mode empty configuration, fixed environment/CLI and a root-owned
+empty workspace. A read-only config mount is mandatory: root ownership alone does
+not prevent rename in a worker-owned directory. Effective CLI version/features,
+native config and ChatGPT account type must pass admission. Existing worker or
+operator authentication is never borrowed. UID/config checks are not a substitute
+for the **still-required live service isolation negatives** before activation.
+
+Access is serial JSON-RPC with exact integer request IDs, bounded FIFO pre-response
+events, O(1) handle/item lookups and <=32MiB/50,000 events per turn; one line<=1MiB.
+Stdio reads/writes are nonblocking with deadlines, rejecting duplicate JSON keys,
+nonfinite values, invalid encoding and EOF. Retired handles are bounded to256;
+renew the native process between turns when that bound is reached. Late housekeeping
+for a known retired handle is ignored; late message content is never accepted.
+
+Only exact-thread/turn `final_answer` items and a successful native terminal event
+produce SUCCEEDED. Commentary, reasoning, deltas, failed/interrupted turns and
+tool events are not completed answers. Actual model deltas are validated but are
+not yet exposed as browser streaming; the UI currently shows pending→completion.
+Any uncertain/error/tool boundary closes the process and produces pinned FAILED
+evidence, never an automatic generation retry or partial-answer promotion.
+
+`scripts/chat/provision_worker_identity.sh COMMIT` prepares only the dedicated
+locked Linux account/home/root-owned configuration after clean pinned-source
+checks. It does not copy credentials, start a service, migrate DB, amend groups of
+existing workers, or claim readiness. Existing conflicting paths/configuration fail
+explicitly. Resident worker/owner RPC, service isolation, enrollment, API composition
+and coordinated deployment remain required successor work, not fulfilled by this
+provisioning helper or adapter source tests.

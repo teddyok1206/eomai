@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_PERSISTENCE_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_NATIVE_ADAPTER_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 This is not a completion or live acceptance report.
 
@@ -93,3 +93,39 @@ The test DB is retained only for subsequent goal development, isolated from prod
 Existing slots01–06 and their lease rows were unchanged in the dedicated-claim test.
 This proves **source/disposable metadata isolation**, not live worker/tool isolation
 or an always-resident operational service. Runtime enrollment/activation remain pending.
+
+## Verified native adapter slice — still not live
+
+- Dedicated text-only App Server adapter implements the existing pinned input/result
+  contracts. It creates a fresh ephemeral thread per turn, preserves prior message
+  roles and validates native thread/turn identity and successful final-answer events.
+- Reject commentary/reasoning/partial answers, wrong owner-thread handles, unexpected
+  tool/approval requests, failed/interrupted turns and conflicting final item text.
+  Failures close the native process with a stable code; no automatic generation retry.
+- Bounded nonblocking JSON-lines transport handles large contexts, deadlines/EOF,
+  malformed/duplicate/nonfinite JSON, oversized frames and late retired-thread events.
+  No model reasoning or raw native error bodies are exported to the UI or Slack.
+- Fixed dedicated UID/home/environment, immutable CLI profile, root-owned empty config
+  and mandatory read-only config mount. Effective feature/config and ChatGPT-account
+  checks must pass before admission; operator or existing-slot credentials are not used.
+- Native v0.160 ignores a user `unified_exec=false` override. Matching official source
+  confirms normalization. Use its supported explicit empty environment selection on
+  both thread/turn, empty runtime roots/dynamic tools and actual disabled shell/other
+  features. Do not label the normalized backend flag as disabled or alter global policy.
+
+Focused native/input-result/persistence-contract/dependency tests: **150 PASS**.
+Guarded disposable PostgreSQL persistence regression: **18 PASS** (no schema change).
+Ruff check/format, strict mypy for both new adapter modules and shell syntax: **PASS**.
+Installed CLI probe in an empty temporary credential home: **40 effective feature
+disables PASS**, initialization/config PASS, absent account correctly rejected.
+Model inference calls: **0**. No production DB migration, API binding or service activation.
+The initial oversized test frame fixture exceeded the OS argument limit; construct its
+bytes inside the synthetic subprocess instead. Final regression passes after that fix.
+
+The pinned identity preparation helper is source-verified only: it creates no service,
+copies no authentication, modifies no existing slots and overwrites no conflicting config.
+It has **not been run as root**. The prior sudo credential used for the disposable DB
+is no longer available noninteractively. Dedicated identity/enrollment/service-isolation,
+runtime/model policy provenance, private owner/worker RPC, restart reconciliation, API
+composition and compatible deployment remain required work. Actual browser streaming
+and a real answer/follow-up/two-owner test are not yet demonstrated. Goal stays active.
