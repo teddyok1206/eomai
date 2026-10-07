@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/turn-input/1.0",
+  "title": "General chat staged turn input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "conversation_id",
+    "turn_id",
+    "claim_id",
+    "prompt_revision",
+    "context_sha256",
+    "messages"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "general-chat-turn/1.0"
+    },
+    "conversation_id": {
+      "type": "string",
+      "pattern": "^chat_[0-9a-f]{32}$"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^chatturn_[0-9a-f]{32}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^chatclaim_[0-9a-f]{32}$"
+    },
+    "prompt_revision": {
+      "const": "general-chat/1.0.0"
+    },
+    "context_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "text"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S",
+            "not": {
+              "pattern": "\\u0000"
+            }
+          }
+        }
+      }
+    }
+  }
+}

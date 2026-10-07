@@ -10,6 +10,7 @@ const REQUIRED_PERMISSION_BY_ELEMENT_ID = Object.freeze({
   "quality-session-finalize": "workflow:approve",
   "pdf-review-submit": "workflow:start",
   "support-submit": "customer_support:create",
+  "chat-send": "general_chat:write",
 });
 
 export function effectivePermissions(operator) {

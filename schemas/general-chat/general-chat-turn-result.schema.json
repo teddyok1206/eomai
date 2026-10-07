@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/turn-result/1.0",
+  "title": "General chat local turn result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "conversation_id",
+    "turn_id",
+    "claim_id",
+    "prompt_revision",
+    "request_sha256",
+    "status",
+    "reply",
+    "failure_code"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "general-chat-turn/1.0"
+    },
+    "conversation_id": {
+      "type": "string",
+      "pattern": "^chat_[0-9a-f]{32}$"
+    },
+    "turn_id": {
+      "type": "string",
+      "pattern": "^chatturn_[0-9a-f]{32}$"
+    },
+    "claim_id": {
+      "type": "string",
+      "pattern": "^chatclaim_[0-9a-f]{32}$"
+    },
+    "prompt_revision": {
+      "const": "general-chat/1.0.0"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "reply": {
+      "type": "string",
+      "maxLength": 32000
+    },
+    "failure_code": {
+      "enum": [
+        null,
+        "CODEX_UNAVAILABLE",
+        "CODEX_AUTH_REQUIRED",
+        "CODEX_TIMEOUT",
+        "CODEX_PROTOCOL_INVALID",
+        "CODEX_TURN_FAILED",
+        "CHAT_ISOLATION_NOT_READY"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32000,
+            "pattern": "\\S"
+          },
+          "failure_code": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reply": {
+            "const": ""
+          },
+          "failure_code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

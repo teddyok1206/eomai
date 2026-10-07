@@ -1,7 +1,7 @@
 const VIEW_NAMES = new Set([
   "dashboard", "workflow", "request", "item", "item-bank", "hwpx",
   "pdf-review", "quality-review", "control", "admin-settings", "learning",
-  "knowledge", "explorer", "support", "account",
+  "knowledge", "explorer", "support", "account", "chat",
 ]);
 
 const POINTERS = Object.freeze({

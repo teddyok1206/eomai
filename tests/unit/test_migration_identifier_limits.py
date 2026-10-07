@@ -28,6 +28,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20260925_0044_content_intake_source_sha",
     "migrations.versions.20261002_0045_educational_quality_reviews",
     "migrations.versions.20261003_0046_operator_account_deletion",
+    "migrations.versions.20261007_0047_general_chat_rbac",
 )
 
 

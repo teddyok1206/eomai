@@ -72,6 +72,13 @@ from eom_web_gui.contracts import (
     StudioWorkbenchItem,
     StudioWorkbenchOverview,
 )
+from eom_web_gui.general_chat_contracts import (
+    ChatConversation,
+    ChatCreateSubmission,
+    ChatList,
+    ChatSlot,
+    ChatTurnSubmission,
+)
 from eom_web_gui.item_preview_projection import (
     project_item_content,
     resolve_content_capability,
@@ -335,6 +342,21 @@ class ItemBankPage:
 
 
 class ApplicationGateway(Protocol):
+    async def general_chat_slot(self, session: WebSession) -> ChatSlot: ...
+
+    async def general_chat_list(self, session: WebSession, cursor: str | None) -> ChatList: ...
+
+    async def general_chat_create(
+        self, session: WebSession, value: ChatCreateSubmission
+    ) -> ChatConversation: ...
+
+    async def general_chat_get(
+        self, session: WebSession, conversation_id: str, cursor: str | None
+    ) -> ChatConversation: ...
+
+    async def general_chat_submit(
+        self, session: WebSession, conversation_id: str, value: ChatTurnSubmission
+    ) -> ChatConversation: ...
     async def health(self) -> dict[str, str]: ...
 
     async def login(self, username: str, password: str) -> LoginResult: ...
@@ -812,6 +834,66 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def general_chat_slot(self, session: WebSession) -> ChatSlot:
+        response = await self._authorized(session, "GET", "/api/v1/general-chat/slot")
+        try:
+            return ChatSlot.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_list(self, session: WebSession, cursor: str | None) -> ChatList:
+        response = await self._authorized(
+            session, "GET", "/api/v1/general-chat/conversations", params={"cursor": cursor}
+        )
+        try:
+            return ChatList.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_create(
+        self, session: WebSession, value: ChatCreateSubmission
+    ) -> ChatConversation:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/general-chat/conversations",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        try:
+            return ChatConversation.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_get(
+        self, session: WebSession, conversation_id: str, cursor: str | None
+    ) -> ChatConversation:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/general-chat/conversations/{conversation_id}",
+            params={"cursor": cursor},
+        )
+        try:
+            return ChatConversation.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_submit(
+        self, session: WebSession, conversation_id: str, value: ChatTurnSubmission
+    ) -> ChatConversation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/general-chat/conversations/{conversation_id}/turns",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        try:
+            return ChatConversation.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
     def __init__(
         self,
         *,

@@ -32,6 +32,7 @@ from eom_api.services.document_review_correction_service import (
 from eom_api.services.educational_quality_service import (
     EducationalQualityReviewApplicationService,
 )
+from eom_api.services.general_chat_service import GeneralChatApplicationService
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.hwpx_item_revision_resolver import (
     CatalogBackedHwpxItemRevisionResolver,
@@ -112,6 +113,7 @@ class AppServices:
         self.control_plane = ControlPlaneAdapter(engine)
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
+        self.general_chat = GeneralChatApplicationService()
         self.hwpx_item_revisions = CatalogBackedHwpxItemRevisionResolver(
             self.registry,
             self.catalog_application,

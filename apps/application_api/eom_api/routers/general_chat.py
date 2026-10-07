@@ -1,0 +1,115 @@
+"""Owner-scoped general chat; no caller-supplied operator or native Codex thread ID."""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+from eom_api_contracts.general_chat import (
+    GeneralChatConversation,
+    GeneralChatCreate,
+    GeneralChatList,
+    GeneralChatSlot,
+    GeneralChatSubmission,
+)
+from eom_operator_identity import PermissionKey
+from fastapi import APIRouter, Depends, Path, Query, Request
+
+from eom_api.dependencies import Auth, IdempotencyKey, get_services, require_permission
+
+router = APIRouter(prefix="/general-chat", tags=["general-chat"])
+
+
+@router.get(
+    "/slot",
+    operation_id="general_chat_slot",
+    response_model=GeneralChatSlot,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
+)
+def slot(request: Request, authentication: Auth) -> GeneralChatSlot:
+    del authentication
+    return get_services(request).general_chat.slot()
+
+
+@router.get(
+    "/conversations",
+    operation_id="general_chat_list",
+    response_model=GeneralChatList,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
+)
+def conversations(
+    request: Request,
+    authentication: Auth,
+    cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+) -> GeneralChatList:
+    owner = get_services(request).general_chat.require_owner()
+    return owner.conversations(actor_id=authentication.operator.operator_id, cursor=cursor)
+
+
+@router.post(
+    "/conversations",
+    operation_id="general_chat_create",
+    status_code=201,
+    response_model=GeneralChatConversation,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_WRITE))],
+)
+def create(
+    request: Request, body: GeneralChatCreate, authentication: Auth, idempotency_key: IdempotencyKey
+) -> GeneralChatConversation:
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .create(
+            actor_id=authentication.operator.operator_id,
+            request=body,
+            idempotency_key=idempotency_key,
+        )
+    )
+
+
+@router.get(
+    "/conversations/{conversation_id}",
+    operation_id="general_chat_get",
+    response_model=GeneralChatConversation,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
+)
+def conversation(
+    request: Request,
+    conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+    authentication: Auth,
+    cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+) -> GeneralChatConversation:
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .conversation(
+            actor_id=authentication.operator.operator_id,
+            conversation_id=conversation_id,
+            cursor=cursor,
+        )
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/turns",
+    operation_id="general_chat_submit",
+    status_code=202,
+    response_model=GeneralChatConversation,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_WRITE))],
+)
+def submit(
+    request: Request,
+    conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+    body: GeneralChatSubmission,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> GeneralChatConversation:
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .submit(
+            actor_id=authentication.operator.operator_id,
+            conversation_id=conversation_id,
+            request=body,
+            idempotency_key=idempotency_key,
+        )
+    )

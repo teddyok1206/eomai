@@ -1,3 +1,4 @@
+import {createGeneralChat} from "./general-chat.js";
 import {
   curriculumAncestors,
   curriculumOptionsForSelection,
@@ -128,7 +129,13 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const generalChat = createGeneralChat({
+  document, api,
+  errorMessage: (error) => error instanceof StudioApiError
+    ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
+});
 const UI_MODE_BY_VIEW = Object.freeze({
+  chat: "human",
   workflow: "engine",
   request: "human",
   item: "human",
@@ -346,6 +353,8 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
     historyRoute = {...historyRoute, support_origin_route: state.lastNonSupportRoute};
   }
   state.currentView = name;
+  if (name === "chat") generalChat.open();
+  else generalChat.close();
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
@@ -436,6 +445,7 @@ async function initializeSession() {
   const session = await api("/session");
   state.csrf = session.csrf_token;
   state.operator = session.operator;
+  generalChat.setOwner(session.operator.operator_id);
   $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
@@ -5662,6 +5672,7 @@ function installPdfDocumentReview() {
 }
 
 async function logout() {
+  generalChat.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
 
@@ -5683,6 +5694,7 @@ async function boot() {
   installKnowledgeQuality();
   installExplorer();
   installCustomerSupport();
+  generalChat.install();
   installEducationalQualityReview();
   installPdfDocumentReview();
   $("#logout").addEventListener("click", logout);

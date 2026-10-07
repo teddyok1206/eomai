@@ -16,6 +16,8 @@
           <strong>EOM Studio</strong>
         </button>
         <nav class="navigation">
+          <p class="nav-group-label">일반</p>
+          <button type="button" class="nav-item" data-view-target="chat" data-required-permission="general_chat:read"><span aria-hidden="true">◌</span> ChatGPT</button>
           <p class="nav-group-label">문항 제작</p>
           <button type="button" class="nav-item" data-view-target="workflow"><span aria-hidden="true">▤</span> 문항 제작 진행</button>
           <button type="button" class="nav-item" data-view-target="request"><span aria-hidden="true">＋</span> 새 문항 요청</button>
@@ -55,6 +57,27 @@
         </header>
 
         <main class="main-area">
+          <section class="view chat-view" data-view="chat" aria-labelledby="chat-title">
+            <div class="page-heading"><h1 id="chat-title">ChatGPT</h1><span id="chat-slot" class="status-badge tone-neutral" role="status">전용 슬롯 확인 중</span></div>
+            <div class="chat-workspace">
+              <aside class="chat-history panel" aria-label="대화 목록">
+                <button id="chat-new" class="button primary" type="button">＋ 새 대화</button>
+                <div id="chat-conversations" class="chat-conversations"></div>
+                <button id="chat-more-conversations" class="button quiet" type="button" hidden>이전 대화 더 보기</button>
+              </aside>
+              <div class="chat-main panel">
+                <div class="chat-toolbar"><strong id="chat-conversation-title">새 대화</strong><button id="chat-refresh" class="button quiet" type="button">새로고침</button></div>
+                <button id="chat-more-messages" class="button quiet" type="button" hidden>이전 메시지 더 보기</button>
+                <div id="chat-messages" class="chat-messages" role="log" aria-label="대화 메시지" aria-live="polite"></div>
+                <p id="chat-error" class="chat-error" role="alert" hidden></p>
+                <form id="chat-form" class="chat-composer">
+                  <label class="sr-only" for="chat-input">메시지</label>
+                  <textarea id="chat-input" rows="3" maxlength="16000" placeholder="무엇이든 물어보세요" autocomplete="off"></textarea>
+                  <button id="chat-send" class="button primary" type="submit" aria-label="메시지 보내기">↑ 보내기</button>
+                </form>
+              </div>
+            </div>
+          </section>
           <section class="view" data-view="workflow" aria-labelledby="workflow-title">
             <div class="page-heading">
               <h1 id="workflow-title">문항 제작 진행</h1>

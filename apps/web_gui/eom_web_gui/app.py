@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -53,6 +53,7 @@ from eom_web_gui.contracts import (
     StudioWorkbenchOverview,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
+from eom_web_gui.general_chat_contracts import ChatCreateSubmission, ChatTurnSubmission
 from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
@@ -337,6 +338,46 @@ def create_app(
     ) -> dict[str, Any]:
         draft = actual.create_draft(session, value)
         return draft.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/general-chat/slot")
+    async def general_chat_slot(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, Any]:
+        return (await actual.gateway.general_chat_slot(session)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/general-chat/conversations")
+    async def general_chat_list(
+        session: Annotated[WebSession, Depends(require_session)],
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, Any]:
+        return (await actual.gateway.general_chat_list(session, cursor)).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/general-chat/conversations", status_code=201)
+    async def general_chat_create(
+        value: ChatCreateSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (await actual.gateway.general_chat_create(session, value)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/general-chat/conversations/{{conversation_id}}")
+    async def general_chat_get(
+        conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+        session: Annotated[WebSession, Depends(require_session)],
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, Any]:
+        return (await actual.gateway.general_chat_get(session, conversation_id, cursor)).model_dump(
+            mode="json"
+        )
+
+    @app.post(f"{API_PREFIX}/general-chat/conversations/{{conversation_id}}/turns", status_code=202)
+    async def general_chat_submit(
+        conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+        value: ChatTurnSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.general_chat_submit(session, conversation_id, value)
+        ).model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/customer-support/cases")
     async def customer_support_cases(

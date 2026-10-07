@@ -23,6 +23,7 @@ from eom_api.routers import (
     deliverables,
     educational_quality_reviews,
     events,
+    general_chat,
     health,
     hwpx,
     item_bank,
@@ -73,6 +74,7 @@ def create_app(services: AppServices | None = None) -> FastAPI:
     )
     app.state.services = actual
     for module in (
+        general_chat,
         health,
         assessment_assemblies,
         assessment_learning,
