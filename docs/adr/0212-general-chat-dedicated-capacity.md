@@ -2,6 +2,9 @@
 
 Status: implementation in progress, 2026-10-07 UTC. No runtime activation yet.
 Activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
+Current user-authorized access scope: **all authenticated EOM users**. The later
+instruction `그렇게 하지말고 그냥 다 쓸 수 있게 해` supersedes the interim
+personal-only answer. No selected-login binding is required or implemented.
 
 ## Boundary and canonical source
 
@@ -75,6 +78,45 @@ Existing support behavior/protocols and production slots remain unchanged.
 ChatGPT parity for search, uploads, voice, image generation and native tools is
 not implied by a text-chat surface; each requires its own authorized boundary.
 No new dependency is required for the first implementation slice.
+
+## Scope correction and resident-loop design
+
+The latest instruction preserves per-user transcript privacy but allows every
+active authenticated operator to submit to the one dedicated FIFO. Do not add a
+personal-operator allowlist, first-caller binding or administrator-only exception.
+The interim personal-access implementation was uncommitted and withdrawn; its
+test counts do not certify the current source. This user access decision does not
+claim new vendor eligibility, change billing or authorize credential copying.
+Source/runtime integration development continues independently of that question.
+
+The resident application coordinates the existing execution service and a bounded
+worker port using the already defined turn-input/result1.0 contracts. It does not
+spawn Codex inside the trusted Artifact owner or introduce a second queue. DB turn
+metadata and pinned transcript Artifacts remain canonical; logical conversation,
+turn and claim IDs and exact request SHA are validated before dispatch/admission.
+
+Primary operations are singleton capacity lookup, indexed FIFO claim and ordered
+immutable context. One execution loop and one heartbeat monitor use O(1) runtime
+state; one bounded request/result is materialized at the existing worker boundary.
+The existing singleton lock/lease and per-conversation unique active-turn index
+retain cross-user concurrency control. No schema, index or migration is added.
+
+Only admitted worker capacity is announced. Heartbeats continue while a known
+claimed turn drains during shutdown; shutdown stops new claims, not publication
+of an already known result. Withdrawal expires only this runtime's heartbeat,
+never its active claim, lease, turn, historical result or another runtime. Unknown
+worker/transport outcomes stop dispatch and require reconciliation: neither a
+fabricated failed/successful result nor automatic model retry is permitted.
+
+Dependency direction remains resident application → execution/worker ports →
+existing contracts; storage and isolated native execution remain adapters. Every
+claimed request/result is schema/hash/claim validated. The simpler synchronous
+poll loop cannot maintain truthful availability during a long answer, while a
+generic scheduler/retry framework would duplicate existing ownership. Worker
+admission and DB operations must be bounded by their adapters; the heartbeat
+monitor does not invoke or retry generation. Installed composition, worker RPC,
+durable recovery, policy provenance, isolation and real inference remain separate
+uncompleted gates, not claims made by this source slice.
 
 ## Incremental delivery plan (not a runtime completion claim)
 

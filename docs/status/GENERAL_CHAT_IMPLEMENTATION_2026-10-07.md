@@ -1,8 +1,11 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_OWNER_RPC_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_RESIDENT_LOOP_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
+Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
+instruction supersedes the interim personal-only reply. Per-user history remains
+private, and one dedicated FIFO slot remains separate from slots01..06.
 This is not a completion or live acceptance report.
 
 ## Verified first slice
@@ -255,3 +258,54 @@ Required input: current ChatGPT plan/workspace and whether the originally
 requested company-shared deployment remains the intended use. Credentials and
 passwords must not be supplied in chat. Official hosted eligibility remains a
 distinct gate even after the user confirms that direction.
+
+## Latest user scope correction
+
+`그렇게 하지말고 그냥 다 쓸 수 있게 해` explicitly rejects choosing one GUI
+login. The uncommitted personal-only guards/composition/tests were withdrawn.
+Their210/29 experimental PASS counts are not current-source acceptance. Existing
+active-actor authorization, conversation ownership, all-owner indexed FIFO,
+owner-scoped replay and independent capacity are retained. No real user's login
+is guessed and no administrator-only chat restriction is added. This records
+the requested software access scope, not a claim about vendor hosted eligibility.
+
+The next source slice connects a resident application loop to the existing
+execution/worker contracts with bounded heartbeat monitoring, exact identity/hash
+admission, graceful drain and availability withdrawal. It does not create a new
+queue, change released schema bytes, perform production DB writes or run a model.
+The goal card's prior BLOCKED status is not claimed resumed by source work.
+
+## Resident application checkpoint — 2026-10-07 17:20 UTC
+
+The source application consumes the existing all-owner indexed queue through
+execution/worker ports, one claimed turn at a time. Worker admission precedes
+availability and every new claim. A separate bounded heartbeat monitor keeps a
+long answer admitted; known-lost admission withdraws availability immediately.
+Graceful stop drains a claimed known result without starting another turn.
+
+Requests and replies are validated using the unchanged input/result1.0 JSON
+Schemas and frozen models, then compared against exact conversation/turn/claim
+and request SHA. Unknown worker or publication outcomes stop dispatch without
+automatic inference replay, fabricated completion or historical-state repair.
+Withdrawal expires only the matching runtime's heartbeat, preserving its active
+claim, lease, request pointer and result history; another runtime cannot revoke
+it. No wire revision, DB migration, dependency or old-six-slot policy change.
+
+Current source/API/contract/native/RPC/dependency/release tests: **301 PASS**.
+Guarded disposable PostgreSQL suite: **26 PASS**, including two authenticated
+owners processed through the resident loop with private histories, withdrawal
+with an active unknown turn, foreign-runtime withdrawal rejection and restart
+refusal without regeneration. All answers were synthetic; model/GPU calls: **0**.
+Ruff check/format, strict mypy (four modules) and `git diff --check`: **PASS**.
+
+The initial new FIFO assertion failed because the fixture assigned equal UTC
+timestamps, for which the existing contract sorts by turn ID. Give chronological
+FIFO assertions distinct fixture instants; do not change queue semantics to make
+the test pass. The failed run remains evidence, followed by26/26 PASS. One existing
+FastAPI/Starlette TestClient deprecation warning remains; no dependency changed.
+
+This is source/disposable acceptance, not installed service or actual model
+readiness. Private worker dispatch, durable recovery, protected model/prompt
+provenance, installed isolation, resident composition and production deployment
+remain unfinished. Existing historical evidence and prior auth discovery are
+preserved; no personal-user allowlist or selected-login prerequisite remains.

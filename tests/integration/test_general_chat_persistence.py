@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from threading import Barrier, Thread
+from threading import Barrier, Event, Thread
 from typing import Any
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
@@ -28,6 +28,7 @@ from eom_orchestrator.general_chat_models import (
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
 from eom_orchestrator.general_chat_owner_server import GeneralChatOwnerRpcServer
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
+from eom_orchestrator.general_chat_resident import GeneralChatResident
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
 from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.models import WorkerSlotRecord
@@ -272,6 +273,147 @@ def test_private_rpc_two_owners_use_separate_history_and_same_intent_scope(
                 actor_id=actor, conversation_id=foreign.conversation_id, cursor=None
             )
         assert failure.value.code == ChatOwnerErrorCode.NOT_FOUND
+
+
+def test_resident_processes_two_authenticated_owners_without_shared_history(
+    chat: ChatFixture, chat_rpc: GeneralChatOwnerClient
+) -> None:
+    conversations = (chat.create(), chat.create(actor=1))
+    for index, conversation in enumerate(conversations):
+        chat.submit(conversation, actor=index, message=f"owner-{index}-private-question")
+        # Equal timestamps intentionally sort by turn ID; use distinct instants
+        # when asserting chronological FIFO rather than random identity order.
+        chat.now += timedelta(microseconds=1)
+    stop = Event()
+
+    class SyntheticWorker:
+        def __init__(self) -> None:
+            self.requests: list[ChatTurnInput] = []
+
+        def check_admission(self) -> None:
+            pass
+
+        def answer(self, request: ChatTurnInput) -> ChatTurnResult:
+            self.requests.append(request)
+            if len(self.requests) == 2:
+                stop.set()
+            return ChatTurnResult(
+                conversation_id=request.conversation_id,
+                turn_id=request.turn_id,
+                claim_id=request.claim_id,
+                request_sha256=sha256_bytes(canonical_json_bytes(request.model_dump(mode="json"))),
+                status="SUCCEEDED",
+                reply=f"synthetic reply to {request.messages[-1].text}",
+                failure_code=None,
+            )
+
+    worker = SyntheticWorker()
+    GeneralChatResident(chat.execution, worker, runtime_id=RUNTIME).run(stop)
+    assert len(worker.requests) == 2
+    assert all(len(request.messages) == 1 for request in worker.requests)
+    assert tuple(request.messages[0].text for request in worker.requests) == (
+        "owner-0-private-question",
+        "owner-1-private-question",
+    )
+    for index, conversation in enumerate(conversations):
+        view = chat_rpc.conversation(
+            actor_id=chat.actors[index], conversation_id=conversation.conversation_id, cursor=None
+        )
+        assert tuple(message.role for message in view.messages) == ("user", "assistant")
+        assert all(f"owner-{index}-private-question" in message.text for message in view.messages)
+        with pytest.raises(ChatOwnerFault) as failure:
+            chat_rpc.conversation(
+                actor_id=chat.actors[1 - index],
+                conversation_id=conversation.conversation_id,
+                cursor=None,
+            )
+        assert failure.value.code == ChatOwnerErrorCode.NOT_FOUND
+    assert chat.owner.slot().state == "UNAVAILABLE"
+    with chat.repository.sessions.begin() as session:
+        assert chat.repository.capacity(session).active_turn_id is None
+
+
+def test_withdrawal_preserves_unknown_active_claim_and_request_evidence(chat: ChatFixture) -> None:
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    with chat.repository.sessions.begin() as session:
+        capacity = chat.repository.capacity(session)
+        expected = (
+            capacity.runtime_id,
+            capacity.active_turn_id,
+            capacity.claim_id,
+            capacity.expires_at,
+        )
+        turn = chat.repository.turn(session, claim.turn_id)
+        request_pointer = (turn.request_artifact_id, turn.request_revision_id, turn.request_sha256)
+    assert chat.execution.withdraw(runtime_id=RUNTIME)
+    assert chat.owner.slot().state == "UNAVAILABLE"
+    with chat.repository.sessions.begin() as session:
+        capacity = chat.repository.capacity(session)
+        assert (
+            capacity.runtime_id,
+            capacity.active_turn_id,
+            capacity.claim_id,
+            capacity.expires_at,
+        ) == expected
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "RUNNING" and turn.output_artifact_id is None
+        assert (
+            turn.request_artifact_id,
+            turn.request_revision_id,
+            turn.request_sha256,
+        ) == request_pointer
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_READY"):
+        chat.execution.claim_next(runtime_id=RUNTIME)
+    # Exact known-result admission is still possible; withdrawal did not release the lease.
+    chat.answer(claim, request)
+    assert (
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+        )
+        .messages[-1]
+        .state
+        == "COMPLETED"
+    )
+
+
+def test_another_runtime_cannot_withdraw_current_capacity(chat: ChatFixture) -> None:
+    assert not chat.execution.withdraw(runtime_id="chatrt_" + "b" * 32)
+    assert chat.owner.slot().state == "READY"
+    with chat.repository.sessions.begin() as session:
+        capacity = chat.repository.capacity(session)
+        assert capacity.runtime_id == RUNTIME and capacity.heartbeat_at == chat.now
+    with pytest.raises(ChatError, match="GENERAL_CHAT_RUNTIME_INVALID"):
+        chat.execution.withdraw(runtime_id="caller supplied invalid identity")
+
+
+def test_new_resident_does_not_reclaim_or_regenerate_existing_unknown_turn(
+    chat: ChatFixture,
+) -> None:
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    assert chat.execution.withdraw(runtime_id=RUNTIME)
+
+    class NeverDispatch:
+        def check_admission(self) -> None:
+            pass
+
+        def answer(self, request: ChatTurnInput) -> ChatTurnResult:
+            raise AssertionError("reconciliation must not run a model")
+
+    with pytest.raises(ChatError, match="GENERAL_CHAT_RECONCILIATION_REQUIRED"):
+        GeneralChatResident(chat.execution, NeverDispatch(), runtime_id="chatrt_" + "b" * 32).run(
+            Event()
+        )
+    with chat.repository.sessions.begin() as session:
+        capacity = chat.repository.capacity(session)
+        assert capacity.runtime_id == RUNTIME and capacity.active_turn_id == claim.turn_id
+        assert chat.repository.turn(session, claim.turn_id).state == "RUNNING"
+    chat.answer(claim, request)
 
 
 def test_private_rpc_expired_heartbeat_blocks_fresh_submit_but_retains_history_and_replay(

@@ -75,6 +75,19 @@ class GeneralChatExecutionService:
             capacity.runtime_id = runtime_id
             capacity.heartbeat_at = now
 
+    def withdraw(self, *, runtime_id: str) -> bool:
+        """Revoke availability, preserving any exact claim and unknown execution."""
+        if re.fullmatch(r"chatrt_[0-9a-f]{32}", runtime_id) is None:
+            raise ChatError("GENERAL_CHAT_RUNTIME_INVALID")
+        with self.repository.sessions.begin() as session:
+            capacity = self.repository.capacity(session, lock=True)
+            if capacity.runtime_id != runtime_id:
+                return False
+            # The existing capacity invariant pairs runtime/heartbeat presence.
+            # Expire availability without erasing the runtime behind an active claim.
+            capacity.heartbeat_at = self.clock() - CHAT_HEARTBEAT_TTL - timedelta(seconds=1)
+            return True
+
     def claim_next(self, *, runtime_id: str) -> ChatClaim | None:
         now = self.clock()
         with self.repository.sessions.begin() as session:
