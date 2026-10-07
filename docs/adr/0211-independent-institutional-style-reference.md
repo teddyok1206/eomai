@@ -4,6 +4,113 @@ Status: CPU capability/preprocessing, preparation contracts and tested scale sco
 No new model installation, pretrained inference, experimental-budget approval,
 production activation or visual-quality acceptance is recorded by this ADR.
 
+## Current priority reset — faint automobile output, 2026-10-06 UTC
+
+The user's identified sample is the LORA final PNG in
+`artifact_f14c85acf10f490593fb125ed0c3c3e1` /
+`rev_1b34031c0798402aa0f21be9455224b6`, case
+`imgsdxlcase_b5ebe1d385727ab5f16a59bd56fda90e`, seed104729.
+Final SHA `f7c345dc22ef4393934d08624ace3eeaecb8f832a6bd2a16f43f8f3139200ca9`;
+raw SHA `423cdeddec70184c17eac5d0a82536bc7f19138e8d472916c48b768685f87325`.
+Both match the result/Artifact manifest member hashes. The raw PNG is RGB832x512;
+final is L800x500. Neither has an alpha band or PNG transparency metadata.
+Actual source/raw/final inspection shows the pale rendering already in the raw
+model output. Applying the existing publication crop `(16,6,816,506)` and
+grayscale conversion to raw gives exact final-pixel equality. No publication
+opacity blend or finalization-induced fading explains this sample.
+
+Own visual judgment: preserve the recognizable car silhouette, orientation and
+two visible wheels; reject the current faint contours, residual exterior hatch/
+halo and low ink hierarchy for institutional-style promotion. This is our own
+review, not an independent blind assessment. The immutable result remains
+`SUCCEEDED`, `quality_acceptance=NOT_REVIEWED`, `activation_policy=FORBIDDEN`;
+numeric success must not be rewritten as visual acceptance or failure. The exact
+generation-side cause (conditioning, learned style, prompt or their interaction)
+is not isolated by the raw/final comparison.
+
+The next priority is visible quality, not finishing experimental worker wiring.
+Existing CPU/protocol work remains preserved but is not evidence of good art.
+Regroup in this order:
+
+1. Fix a small reference board: this car, a beaker/apparatus and one organic
+   object, beside actual admitted institutional originals. Re-view at the
+   intended Preview/HWPX physical size, not only enlarged. Repeated originals
+   are calibration, not additional independent coverage.
+2. Inspect the existing training/preprocessing examples for faint scans,
+   inappropriate background hatching and inconsistent contour weight. Record
+   observations before proposing data changes or more training. Do not delete
+   scientifically useful gray fills, anatomy or surface features indiscriminately.
+3. Specify the visual target: continuous readable main contours, restrained
+   secondary lines, clean irrelevant background and preserved object geometry.
+   Numeric ink ratios are diagnostics, not substitutes for this visual judgment.
+4. Plan the smallest controlled generation-side comparison based on that audit;
+   keep object input, seed, composition and non-tested settings fixed. Do not
+   start another adapter, larger training run or threshold sweep by default.
+   Any contrast-only derivative must be clearly labeled and reviewed for lost
+   detail; it cannot count as improved model generation or new GPU output.
+5. Advance integration/canary only after the bounded samples are visibly better
+   at publication size. Preserve rejected samples and their immutable lineage.
+
+This reset runs no GPU inference, training, acquisition, model registration,
+runtime deployment or activation and does not grant a new output budget. Previous
+12/12 usage is unchanged. No external image service or binary copy is introduced.
+
+### Closing checkpoint and user-requested pause — 2026-10-07 UTC
+
+The user requested a break from GPU illustration work. Finish this read-only
+audit and preserve a restart point; no additional GPU inference/training,
+acquisition, integration rollout or activation. The persistent goal is paused,
+not completed. At this checkpoint no `eom-image-*.service` was active/activating;
+RTX5080 reported2MiB used/0% utilization. This is a point-in-time observation,
+not a promise about unrelated later production requests.
+
+All100 cached prepared TRAIN PNGs were hashed again and matched both screening
+target pointers and the canonical native1.3 command's source-image pointers.
+All17 existing contact sheets were actually re-viewed. This is own review of the
+same cohort, not new unique data, renewed DB/lifecycle admission or blind review.
+Source command: `artifact_8c7a653efe0e446e8d5e904aa6941162` /
+`rev_2398f9eb27d6436eb534e1cf08181164`, member
+`manifests/sdxl-native-lora-command.json`, byte SHA
+`fdf230a6f836c16094f3c0cfb602b3e68b5c2743e3df3bb80fccdc21c00f47d0`.
+
+Observed cohort:17 contour/8 hatch/75 tone;73 isolated/27 authored-scene.
+Sixteen targets have less than1% full-canvas pixels below luminance96; thirteen
+have over50% of nonwhite pixels in224..249. These are inspection flags, NOT
+sixteen bad sources or thirteen rejection decisions. Globes, gray silhouettes,
+liquid fills and anatomy can legitimately satisfy those flags. Conversely,
+white-canvas percentages cannot determine contour strength. Useful strong
+examples exist in every relevant material family; globally darkening all
+training PNGs would destroy useful information and is not justified.
+
+Do not repeat the simplistic75%-tone explanation as a proven cause: native1.2
+already scheduled1257 contour/628 hatch/1315 tone draws over3200 microsteps
+(4:2:4 exposure), and native1.3 added source dark-cell weighting. Existing failed
+diagnostics preserve those hypotheses; no new run was performed here. The
+training input boundary encodes admitted RGB without another crop/resize,
+using the ordinary `pixel/127.5 - 1` VAE range. Neither that source inspection
+nor correct numeric range establishes a trained-model quality diagnosis.
+
+Three fixed style anchors for restart (institutional originals, NOT new outputs):
+
+| Family | Sample | Intended visual lesson |
+|---|---|---|
+| Vehicle | `imgsourcecrop_4730ed28b9b4e0011d03d051e76c060f` | Readable body contours even with useful gray body fills |
+| Apparatus | `imgsourcecrop_a1727135d4042a8fd67e86e05609ec9f` | Clear vessel/support/burner relationships and restrained tones |
+| Organic | `imgsourcecrop_887483c7b0d84c653658584d6a73643c` | Continuous outer boundary plus distinct meaningful internal lines |
+
+Their original pointers/hashes remain in the frozen100 cohort, not copied to a
+new image artifact. A read-only in-memory800/400/200px shrink diagnostic confirmed
+that the rejected car's dark share of nonwhite drops7.45%→6.81%→2.30%. This is
+not line-width measurement, same-geometry matching, actual physical print proof
+or Hancom acceptance. Actual publication-size layout review remains open.
+
+Restart: compare the frozen rejected car and these originals first, isolate ONE
+generation-side change using an explicitly bounded new comparison, and require
+visible contour/geometry improvement before further infrastructure work. Do not
+restart larger training, broaden data blindly, acquire an adapter by default,
+silently edit old recipes, or reset exhausted output budgets. Current overall
+quality remains NOT_ACCEPTED; experimental outputs remain non-production.
+
 ## Adapter attachment boundary — planned implementation, no dispatch
 
 Extend the existing provider, not the worker protocol or pipeline owner. The
