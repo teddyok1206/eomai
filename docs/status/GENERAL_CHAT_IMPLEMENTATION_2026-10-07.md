@@ -180,3 +180,19 @@ evaluate the actual script expression and ensure a successor canonical resource
 does not require another manual version list. Replace the stale59-count test with
 the semantic inventory invariant. Full build-only reinspection is the next check;
 this correction itself is not a claim of installed runtime acceptance.
+
+Reinspection as of2026-10-07 13:35 UTC: **PASS** for source
+`deb28c88167ca1da8bab571f9e12b3e3097df58c`; wheel RECORD, all60 canonical API
+schemas, private chat schema byte parity and runtime resource checks passed.
+Release-inventory/RECORD/build-identity source regressions: **50 PASS**.
+An isolated `python -I` process imported the three release wheels (no source/Git
+path) and verified offline private-schema resolution, the lazy API owner binding,
+and truthful UNAVAILABLE without an owner service: **PASS**, inference calls0.
+The wheel candidate was built and inspected only; production remains unchanged.
+
+Dedicated interactive device enrollment is now running in tmux `EOM:4 general-chat`.
+The first device attempt was explicitly cancelled while refreshing the operator
+command; the replacement passed pinned-source/identity preflight before starting.
+Only the latest operator-terminal challenge is valid. Authentication completion,
+account admission and resident service availability are **NOT_YET_VERIFIED**.
+No challenge, login logs or credential contents were captured in evidence or Slack.
