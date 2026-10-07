@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/worker-request/1.0",
+  "title": "Private Orchestrator to isolated general-chat worker request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "policy_sha256", "command"],
+  "properties": {
+    "schema_version": {"const": "general-chat-worker-request/1.0"},
+    "request_id": {"type": "string", "pattern": "^chatwrpc_[0-9a-f]{32}$"},
+    "policy_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "command": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["action"],
+          "properties": {"action": {"const": "PROBE"}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["action", "boot_id", "turn"],
+          "properties": {
+            "action": {"const": "EXECUTE"},
+            "boot_id": {"type": "string", "pattern": "^chatboot_[0-9a-f]{32}$"},
+            "turn": {"$ref": "eom://schemas/general-chat/turn-input/1.0"}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["action", "ticket"],
+          "properties": {
+            "action": {"const": "RESULT"},
+            "ticket": {"$ref": "eom://schemas/general-chat/worker-ticket/1.0"}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -120,6 +120,47 @@ uncompleted gates, not claims made by this source slice.
 
 ## Incremental delivery plan (not a runtime completion claim)
 
+### Private worker handoff design (source integration after resident loop)
+
+Responsibility: Orchestrator is the only worker caller and canonical commit owner.
+A private worker endpoint accepts admission probes, one exact turn execution and
+read-only result recovery. No worker-to-worker, API-to-worker, DB or NAS access.
+Native handles/account details are never on this protocol. The canonical source
+remains the registered input/result Artifact; local worker handoff files are
+bounded staging, not a second transcript store or an authoritative queue.
+
+Conversation/turn/claim identities and canonical request SHA are pinned separately
+from worker boot identity and the small immutable execution-policy value (model,
+native profile, prompt revision/SHA). An admission change cannot silently select
+another model/process. JSON Schema2020-12 precedes the new strict frozen messages;
+existing public/owner/turn1.0 schema bytes remain unchanged. Owner-side canonical
+policy provenance is still required before runtime activation; wire attestation
+alone is not historical provenance or hosted-auth eligibility.
+
+Access is O(1) exact-claim filename lookup; a process lock plus exclusive marker
+creation prevents duplicate execution. Bounded inputs/results use O(context+reply)
+materialization only at the existing worker boundary. No queue scan, new DB table,
+index, framework or dependency. A private700 local directory is opened no-follow;
+all leaves are validated IDs, file identity/ownership/type/mode/size are checked,
+pending metadata is immutable and final output is published without overwriting.
+
+The immutable pending marker precedes model invocation. A completed exact result
+may be replayed/read without inference. A pending marker without a valid result
+means UNKNOWN and requires reconciliation, never permission to regenerate. Crash
+or fsync/transport ambiguity does not erase the marker, change historical status,
+fabricate an answer or allocate another claim. Hash/claim/policy conflicts fail
+explicitly. Local outputs do not contain user transcript copies, credentials,
+native reasoning or raw errors. The result response is validated by Orchestrator
+before canonical publication.
+
+Dependency direction: protocol values → application handoff → worker/local-file
+and Unix-socket adapters. Reuse the existing strict bounded socket framing and
+SO_PEERCRED/mode checks. The endpoint permits only the trusted owner UID. Probes
+and lookups remain possible during execution; one bounded execution lock admits
+only one model turn. An unverified reboot/policy change stops new dispatch.
+The simpler blind synchronous socket retry can generate twice after timeout;
+another persistent scheduler duplicates the existing indexed claim owner.
+
 0. Establish a supported authentication route for the actual deployment and user
    scope before inference or runtime activation. UI/persistence/private owner RPC
    verification is independent of this vendor eligibility gate; enrollment alone

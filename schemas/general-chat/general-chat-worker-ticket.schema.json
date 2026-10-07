@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/worker-ticket/1.0",
+  "title": "Immutable local handoff identity, not conversation content",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "conversation_id", "turn_id", "claim_id", "request_sha256", "policy_sha256"],
+  "properties": {
+    "schema_version": {"const": "general-chat-worker-ticket/1.0"},
+    "conversation_id": {"type": "string", "pattern": "^chat_[0-9a-f]{32}$"},
+    "turn_id": {"type": "string", "pattern": "^chatturn_[0-9a-f]{32}$"},
+    "claim_id": {"type": "string", "pattern": "^chatclaim_[0-9a-f]{32}$"},
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "policy_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

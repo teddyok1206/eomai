@@ -159,6 +159,43 @@ def test_wheel_api_schema_inventory_has_one_canonical_source(tmp_path: Path) -> 
     }
 
 
+def test_chat_wheel_runtime_inventory_uses_canonical_module_roots(tmp_path: Path) -> None:
+    tree = ast.parse(release_inspector_source())
+    assignment = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "chat_runtime"
+    )
+    expression = compile(ast.Expression(assignment.value), "chat runtime inventory", "eval")
+    context = {
+        "chat_source_root": ROOT / "services/orchestrator/eom_orchestrator",
+        "chat_protocol_root": ROOT / "packages/protocol/eom_protocol",
+    }
+    expected = {
+        prefix + path.name
+        for key, prefix in (
+            ("chat_source_root", "eom_orchestrator/"),
+            ("chat_protocol_root", "eom_protocol/"),
+        )
+        for path in context[key].glob("general_chat*.py")
+    }
+    actual = eval(expression, context)
+    assert actual == expected
+    assert "eom_protocol/general_chat_worker_messages.py" in actual
+    assert "eom_orchestrator/general_chat_worker_client.py" in actual
+    source, protocol = tmp_path / "source", tmp_path / "protocol"
+    source.mkdir()
+    protocol.mkdir()
+    (source / "general_chat_successor.py").write_text("# synthetic successor\n")
+    (protocol / "general_chat_successor.py").write_text("# synthetic successor\n")
+    assert eval(expression, {"chat_source_root": source, "chat_protocol_root": protocol}) == {
+        "eom_orchestrator/general_chat_successor.py",
+        "eom_protocol/general_chat_successor.py",
+    }
+
+
 def test_privileged_migration_preflight_is_read_only_for_git_index(tmp_path: Path) -> None:
     source = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert 'git --no-optional-locks -C "${REPOSITORY_ROOT}" status --porcelain' in source

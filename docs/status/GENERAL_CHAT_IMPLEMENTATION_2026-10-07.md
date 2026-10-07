@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_RESIDENT_LOOP_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_PRIVATE_WORKER_HANDOFF_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -309,3 +309,59 @@ readiness. Private worker dispatch, durable recovery, protected model/prompt
 provenance, installed isolation, resident composition and production deployment
 remain unfinished. Existing historical evidence and prior auth discovery are
 preserved; no personal-user allowlist or selected-login prerequisite remains.
+
+## Private worker handoff checkpoint — 2026-10-07 18:12 UTC
+
+User text requested resumption. Development continued; the goal tool still
+returned BLOCKED, so automatic card resumption is not claimed. A non-blocking UI
+resumption request was sent while source work continued. All-authenticated-user
+scope remains unchanged; no personal-account binding or administrator-only guard.
+
+New private request/reply/ticket/policy1.0 contracts were defined in JSON
+Schema2020-12 before implementation, mirrored byte-for-byte and validated with
+strict frozen models plus offline schema references. Existing public, owner RPC,
+turn-input/result1.0 schema bytes and production migrations remain unchanged.
+
+Worker application and private socket server/client support admission probes,
+one exact turn execution and read-only known-result recovery. Boot identity,
+actual policy SHA, conversation/turn/claim and canonical request SHA are checked.
+Only the trusted owner peer UID is admitted; probes/lookups remain possible
+during generation, with bounded transport/concurrency. Unknown EXECUTE transport
+outcomes are never automatically replayed.
+
+Private local handoff stores only immutable pending identity/hash metadata and
+bounded local results, not transcript copies, DB rows, NAS or credentials. The
+durable exclusive marker precedes inference. Missing output after a marker means
+UNKNOWN; a result without its marker is an explicit recovery error. Exact ticket
+identity is checked before result-byte materialization. No-follow FD/ownership/
+mode/type/size/stability checks reject symlinks, FIFOs, corrupted or oversized
+files. Atomic no-replace publication retains the first immutable result.
+
+The native worker port reuses the existing fixed-identity v0.160 stdio and
+ephemeral-thread adapter. The requested model, native profile and actual source
+prompt SHA must agree before startup. Admission/liveness checks do not make
+model calls or share the stdio RPC channel with in-flight generation. Startup
+failure closes the started process and exports only a stable code. No enrollment,
+credential transfer, root/other-slot fallback or external inference API is added.
+
+Focused source/API/contract/native/private-RPC/dependency/release tests: **341 PASS**.
+Guarded disposable PostgreSQL suite: **28 PASS**, including full two-owner queue →
+private worker → canonical Artifact → private history integration and an unknown
+worker-reply outcome recovered through exact known-result lookup/commit without
+another model call. Ruff check/format, strict mypy (eight modules), shell syntax
+and diff checks: **PASS**. All answers synthetic; model/GPU calls **0**. One existing
+Starlette TestClient deprecation warning remains; dependencies unchanged.
+
+The release inspector derives both Orchestrator and neutral chat module inventories
+from their canonical roots, preventing another manually duplicated module list.
+The executable inventory test covers successor modules and new offline resources.
+This checkpoint does not claim an installed wheel, privileged OS-isolation PASS
+or actual inference; build-only package inspection follows the source commit.
+
+Remaining work: canonical owner-side policy provenance, supported expired-claim
+reconciliation/native renewal, protected resident composition/identities/services,
+installed isolation, coordinated production migration/release and real answer/
+follow-up/two-user browser acceptance. Read-only recovery is implemented; automatic
+expired-claim takeover is not. Sudo preflight required authentication; no privileged
+mutation or login restart was attempted, and authentication remains NOT_VERIFIED.
+The earlier official auth/deployment eligibility question is not declared waived.

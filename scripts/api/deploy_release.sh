@@ -1238,12 +1238,13 @@ chat_resources["eom_protocol/schemas/general-chat-views.schema.json"] = (
 chat_source_root = (
     Path(os.environ["REPOSITORY_ROOT"]) / "services/orchestrator/eom_orchestrator"
 )
+chat_protocol_root = (
+    Path(os.environ["REPOSITORY_ROOT"]) / "packages/protocol/eom_protocol"
+)
 chat_runtime = {
     "eom_orchestrator/" + path.name for path in chat_source_root.glob("general_chat*.py")
 } | {
-    "eom_protocol/general_chat.py",
-    "eom_protocol/general_chat_views.py",
-    "eom_protocol/general_chat_owner_messages.py",
+    "eom_protocol/" + path.name for path in chat_protocol_root.glob("general_chat*.py")
 }
 with zipfile.ZipFile(platform_wheel) as archive:
     names = set(archive.namelist())

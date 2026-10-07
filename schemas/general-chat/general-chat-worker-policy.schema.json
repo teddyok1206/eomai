@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/worker-policy/1.0",
+  "title": "Small immutable dedicated worker execution policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model", "native_profile", "prompt_revision", "prompt_sha256"],
+  "properties": {
+    "schema_version": {"const": "general-chat-worker-policy/1.0"},
+    "model": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9._-]+$"},
+    "native_profile": {"const": "codex-app-server/0.160.0/environment-free/1.0"},
+    "prompt_revision": {"const": "general-chat/1.0.0"},
+    "prompt_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -20,6 +20,7 @@ from eom_orchestrator.database import build_engine
 from eom_orchestrator.general_chat_artifacts import GeneralChatArtifactStore
 from eom_orchestrator.general_chat_client import GeneralChatOwnerClient
 from eom_orchestrator.general_chat_execution import ChatClaim, GeneralChatExecutionService
+from eom_orchestrator.general_chat_handoff import ChatLocalHandoff
 from eom_orchestrator.general_chat_models import (
     GeneralChatCapacityRecord,
     GeneralChatConversationRecord,
@@ -29,18 +30,23 @@ from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
 from eom_orchestrator.general_chat_owner_server import GeneralChatOwnerRpcServer
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_resident import GeneralChatResident
-from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
+from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, ChatTransportError
 from eom_orchestrator.general_chat_state import ChatError
+from eom_orchestrator.general_chat_worker import ChatWorkerApplication
+from eom_orchestrator.general_chat_worker_client import ChatWorkerClient
+from eom_orchestrator.general_chat_worker_server import ChatWorkerRpcServer
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_orchestrator.settings import Settings
 from eom_protocol.general_chat import CHAT_RESULT_SCHEMA, ChatTurnInput, ChatTurnResult
 from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_protocol.general_chat_views import GeneralChatCreate, GeneralChatSubmission
+from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 from sqlalchemy import Engine, create_engine, func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableDatabaseManifest
 from scripts.api.testdb_guard import validate_state_directory
+from tests.unit.test_general_chat_worker_handoff import BOOT, SyntheticNative, policy
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 NOW = datetime(2026, 10, 7, 12, tzinfo=UTC)
@@ -331,6 +337,103 @@ def test_resident_processes_two_authenticated_owners_without_shared_history(
     assert chat.owner.slot().state == "UNAVAILABLE"
     with chat.repository.sessions.begin() as session:
         assert chat.repository.capacity(session).active_turn_id is None
+
+
+@pytest.fixture
+def chat_worker_rpc(chat: ChatFixture, tmp_path: Path):
+    workspace, runtime = tmp_path / "worker-local-handoff", tmp_path / "worker-rpc"
+    workspace.mkdir(mode=0o700)
+    workspace.chmod(0o700)
+    runtime.mkdir(mode=0o750)
+    runtime.chmod(0o750)
+    native = SyntheticNative()
+    endpoint = ChatSocketEndpoint(runtime / "worker.sock", os.getuid(), os.getgid())
+    with ChatLocalHandoff(workspace, worker_uid=os.getuid()) as local:
+        application = ChatWorkerApplication(native, local, policy=policy(), boot_id=BOOT)
+        with ChatWorkerRpcServer(application, endpoint=endpoint, owner_uid=os.getuid()) as server:
+            thread = Thread(target=server.serve)
+            thread.start()
+            try:
+                yield ChatWorkerClient(endpoint=endpoint, policy=policy()), native, local
+            finally:
+                server.stop()
+                thread.join(2)
+                assert not thread.is_alive()
+
+
+def test_resident_database_private_worker_and_artifact_commit_are_owner_separated(
+    chat: ChatFixture, chat_worker_rpc
+) -> None:
+    worker, native, local = chat_worker_rpc
+    a, b = chat.create(), chat.create(actor=1)
+    chat.submit(a, message="private-a")
+    chat.now += timedelta(microseconds=1)
+    chat.submit(b, actor=1, message="private-b")
+    stop = Event()
+    original = native.answer
+
+    def synthetic_answer(request):
+        result = original(request)
+        if len(native.calls) == 2:
+            stop.set()
+        return result
+
+    native.answer = synthetic_answer
+    GeneralChatResident(chat.execution, worker, runtime_id=RUNTIME).run(stop)
+    assert len(native.calls) == 2
+    assert tuple(request.messages[0].text for request in native.calls) == ("private-a", "private-b")
+    assert all(len(request.messages) == 1 for request in native.calls)
+    for index, conversation in enumerate((a, b)):
+        view = chat.owner.conversation(
+            actor_id=chat.actors[index], conversation_id=conversation.conversation_id, cursor=None
+        )
+        assert tuple(message.role for message in view.messages) == ("user", "assistant")
+        assert view.messages[-1].state == "COMPLETED"
+        ticket = chat_worker_ticket(native.calls[index], policy_sha256=policy().sha256)
+        assert local.lookup(ticket).state == "KNOWN"
+    assert chat.owner.slot().state == "UNAVAILABLE"
+    with chat.repository.sessions.begin() as session:
+        assert chat.repository.capacity(session).active_turn_id is None
+
+
+def test_lost_worker_reply_recovers_exact_known_result_without_another_model_call(
+    chat: ChatFixture, chat_worker_rpc, monkeypatch
+) -> None:
+    worker, native, local = chat_worker_rpc
+    conversation = chat.create()
+    chat.submit(conversation)
+    from eom_orchestrator import general_chat_worker_client as transport
+
+    original = transport.exchange_chat_frame
+
+    def lose_reply(endpoint, document, **kwargs):
+        reply = original(endpoint, document, **kwargs)
+        if document["command"]["action"] == "EXECUTE":
+            raise ChatTransportError("UNAVAILABLE")
+        return reply
+
+    monkeypatch.setattr(transport, "exchange_chat_frame", lose_reply)
+    with pytest.raises(ChatError, match="GENERAL_CHAT_RECONCILIATION_REQUIRED"):
+        GeneralChatResident(chat.execution, worker, runtime_id=RUNTIME).run(Event())
+    assert len(native.calls) == 1 and chat.owner.slot().state == "UNAVAILABLE"
+    with chat.repository.sessions.begin() as session:
+        capacity = chat.repository.capacity(session)
+        turn = chat.repository.turn(session, capacity.active_turn_id)
+        assert turn.state == "RUNNING" and turn.output_artifact_id is None
+        claim = ChatClaim(RUNTIME, turn.conversation_id, turn.turn_id, turn.claim_id)
+    request = chat.execution.prepare(claim)
+    ticket = chat_worker_ticket(request, policy_sha256=policy().sha256)
+    output = worker.lookup(ticket)
+    assert output == local.lookup(ticket) and output.result is not None
+    # Supported exact-claim admission while the original lease is still valid;
+    # this does not claim automatic expired-claim takeover or policy provenance.
+    chat.execution.complete(claim, output.result)
+    chat.execution.complete(claim, output.result)
+    assert len(native.calls) == 1
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].state == "COMPLETED"
 
 
 def test_withdrawal_preserves_unknown_active_claim_and_request_evidence(chat: ChatFixture) -> None:
