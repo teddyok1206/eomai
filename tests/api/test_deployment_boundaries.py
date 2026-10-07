@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ast
 import os
 import re
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +14,18 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 def _source(relative: str) -> str:
     return (REPOSITORY_ROOT / relative).read_text(encoding="utf-8")
+
+
+def _image_resource_inventory(source: str) -> dict[str, str]:
+    start = source.index("image_resources = {")
+    end = source.index("\nwith zipfile.ZipFile(platform_wheel)", start)
+    assignment = ast.parse(source[start:end]).body[0]
+    assert isinstance(assignment, ast.Assign) and isinstance(assignment.value, ast.DictComp)
+    # Only the reviewed, side-effect-free expression runs; deployment does not.
+    return eval(
+        compile(ast.Expression(assignment.value), "<image-resource-inventory>", "eval"),
+        {"Path": Path, "os": SimpleNamespace(environ={"REPOSITORY_ROOT": str(REPOSITORY_ROOT)})},
+    )
 
 
 def _shell_commands(source: str) -> tuple[str, ...]:
@@ -93,8 +107,18 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     ):
         assert f'"legacy-assessment/{resource}": ' in source
         assert f'"schemas/legacy-assessment/{resource}"' in source
-    for schema in sorted((REPOSITORY_ROOT / "schemas/image-provider").glob("*.schema.json")):
-        assert f'"{schema.name}": "schemas/image-provider/{schema.name}"' in source
+    # Run only the build-time, side-effect-free resource expression. This checks
+    # the actual inventory rather than requiring duplicated literal map entries.
+    inventory = _image_resource_inventory(source)
+    expected = {
+        schema.name: schema.relative_to(REPOSITORY_ROOT).as_posix()
+        for schema in (REPOSITORY_ROOT / "schemas/image-provider").glob("*.schema.json")
+    }
+    assert inventory == expected
+    packaged = REPOSITORY_ROOT / "packages/image_contracts/eom_image_contracts/schemas"
+    assert set(inventory) == {path.name for path in packaged.glob("*.schema.json")}
+    for name, canonical in inventory.items():
+        assert (REPOSITORY_ROOT / canonical).read_bytes() == (packaged / name).read_bytes()
     assert 'scripts/api/bootstrap_runtime_role.sh"' in source
     assert 'scripts/catalog/bootstrap_runtime_role.py"' in source
     assert 'scripts/hwpx/bootstrap_manager_runtime_role.py"' in source
@@ -397,7 +421,10 @@ def test_api_release_verifies_local_image_runtime_and_contract_resources() -> No
         "Image Contract schema wheel resources mismatch",
         "Image Contract schema resource drift",
     ):
-        assert required in source
+        if required.endswith(".schema.json"):
+            assert required in _image_resource_inventory(source)
+        else:
+            assert required in source
 
 
 def test_api_release_verifies_content_team_contract_runtime() -> None:
@@ -956,7 +983,10 @@ def test_release_verifies_content_team_v3_installed_wheel_boundary() -> None:
         "hwpx-content-team-exam-render-request-v3.schema.json",
         "hwpx-content-team-exam-build-result-v3.schema.json",
     ):
-        assert runtime in deployment
+        if runtime == "svg-label-layout-validation-receipt-v1.schema.json":
+            assert runtime in _image_resource_inventory(deployment)
+        else:
+            assert runtime in deployment
     assert '"eom_hwpx_builder/cli.py"' in hwpx_deployment
     assert 'installed_builder / "content_team_renderer.py"' in hwpx_deployment
     assert (
