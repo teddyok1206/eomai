@@ -231,3 +231,27 @@ Next: obtain the scope/authentication direction and supported deployment path;
 only then resume auth-dependent resident composition and live acceptance.
 Maintain the existing UI, canonical Artifact history, owner RPC and separate
 chat capacity without manufacturing readiness. See ADR0212 for the decision.
+
+### Revalidation and remaining operator input
+
+The same authentication/deployment gate remained unresolved across three goal
+turns. The requested multi-user scope was not reduced; no real answer, resident
+service or production migration is claimed complete. Source remains verified and
+unactivated. The goal is eligible for BLOCKED pending user/external direction,
+not COMPLETE or an automatically requested pause.
+
+Read-only process/pane inspection confirmed the earlier device-enrollment process
+handles are now absent and the dedicated pane has returned to bash. Enrollment
+success/failure is **NOT_VERIFIED**; process exit is not authentication acceptance.
+No challenge or credential contents were read, no login restarted, and no service
+activated as a consequence.
+
+The official [access-token alternative](https://learn.chatgpt.com/docs/enterprise/access-tokens)
+is workspace-bound trusted local automation on Business/Enterprise. The
+[non-human service-account alternative](https://learn.chatgpt.com/docs/enterprise/service-accounts)
+requires a pay-as-you-go plan. Neither establishes eligibility for EOM's shared
+chatbot or authorizes a billing/credential change. No alternative was installed.
+Required input: current ChatGPT plan/workspace and whether the originally
+requested company-shared deployment remains the intended use. Credentials and
+passwords must not be supplied in chat. Official hosted eligibility remains a
+distinct gate even after the user confirms that direction.

@@ -290,3 +290,18 @@ Preserve existing source tests, transcripts/contracts and independent capacity
 design. A supported successor authentication adapter, if authorized, must pin its
 own runtime profile and owner/renewal boundary; never relabel managed-auth test
 evidence as SIWC/live eligibility. GPU work and production slots01–06 stay untouched.
+
+### Alternative credentials reviewed, not adopted
+
+The official [Codex access-token guide](https://learn.chatgpt.com/docs/enterprise/access-tokens)
+also describes workspace-bound credentials for trusted local CLI/App Server
+automation, currently supported in Business/Enterprise workspaces. It is not
+proof that this EOM shared chatbot qualifies or that the operator has such a
+workspace. Do not inspect another account's credentials or enroll a new plan to
+resolve that unknown. Ask for the current plan/workspace and deployment scope.
+
+The official [service-account guide](https://learn.chatgpt.com/docs/enterprise/service-accounts)
+describes separate non-human identities for organizational automation, available
+only on pay-as-you-go plans. This is not an implicit substitute for the requested
+subscription-capacity route. Account creation, plan changes, costs and related
+credential setup require a separate explicit decision; none was performed.
