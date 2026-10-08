@@ -511,3 +511,22 @@ protected environment installation, OS negatives, coordinated deployment and
 first-answer/follow-up/two-user browser acceptance remain uncompleted live gates.
 The existing auth/deployment eligibility gate has not been waived. Build-only
 verification follows the clean source commit; this status is not live acceptance.
+
+### Pinned resident-composition package verification — 2026-10-08 02:19 UTC
+
+Source `4c0005d50cac16586116eea15750397cab47f817` was built from a clean tree.
+Actual three-wheel RECORD/canonical-module inspection: **PASS**. Candidate:
+`/tmp/eom-api-build/4c0005d50cac16586116eea15750397cab47f817.VYsIPc/dist`.
+An isolated `python -I` process loaded the new owner/worker entrypoints,
+coordinator, configuration and lifecycle solely from those wheels, with no
+repository import/path. Real private Unix RPC exercised synthetic admission,
+one answer, drained exit75 and exact durable-result lookup after reopening the
+handoff: **PASS**. Native model calls and production mutations: **0**. The probe's
+bounded temporary directory was automatically removed; no canonical production
+Artifact or history was removed. Source unit syntax passed systemd-analyze verify.
+
+Fresh systemd inspection still reports both chat services not-found/inactive.
+This candidate is not installed or activated. Next required work remains the
+protected owner/least-privilege role, actual service isolation negatives, supported
+authentication-route decision, coordinated deployment and live acceptance. Goal
+remains ACTIVE/unfinished; this checkpoint made concrete implementation progress.
