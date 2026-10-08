@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `DISPOSABLE_DEDICATED_PRIVILEGES_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `PREACTIVATION_OS_BOUNDARIES_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -667,3 +667,35 @@ format/type-check feedback was resolved before these results; native/production
 code and dependencies were unchanged. No real namespace outcome is inferred
 from mocked/source tests. In-pane sudo probe is valid; actual privileged namespace
 execution follows the clean source commit. Services remain not-found/inactive.
+
+### Actual pre-activation namespace acceptance — 2026-10-08 03:26 UTC
+
+Clean pinned source `832b7c6666ebc7f93ac4e1148f57d37778aa6b4d` executed the
+root verifier through the already-authenticated EOM:4 terminal. Actual transient
+owner and worker namespaces passed **52 assertions** (owner20/worker32), both
+namespace attestations and the overall verifier. No host-absent skips occurred.
+Identity/groups, NoNewPrivs/empty effective and bounding capabilities, protected
+file/directory and Docker denial, private local storage, worker read-only
+config/workspace and config-write denial were exercised. Owner NAS writer
+permission passed without NAS mutation. Network policy was inherited from source
+but no remote-network or native inference acceptance is claimed from this probe.
+
+Transient units were collected and their managed RuntimeDirectories removed.
+The worker's source-pinned eom-cdx-chat:eom-cdx-chat700 StateDirectory was prepared
+for the future host; only exclusively created temporary local probe files were
+written/removed. The owner's state remains eom-general-chat:eom-api700. No
+canonical handoff, transcript, DB row, auth bytes or production unit changed.
+Both real chat services remain not-found/inactive; native/GPU calls are zero.
+
+OpenAI Docs was rechecked at03:25 UTC. The
+[native App Server guidance](https://learn.chatgpt.com/docs/app-server) distinguishes
+local/open-source clients from hosted/commercial use. The
+[official subscription-token route](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
+uses a user's authorized OAuth token with an external Responses endpoint. That
+route is not an API-key billing fallback, but adopting it would change the current
+external-LLM-API prohibition and requires explicit user direction plus actual
+account/application eligibility verification. Neither route was enrolled or
+activated. All-authenticated-user GUI/private-history/dedicated-capacity scope is
+preserved; no personal-only or administrator-only allowlist was added. Goal is
+not complete: supported auth, compatible release and actual first-answer/follow-up/
+two-user browser gates are still outstanding.
