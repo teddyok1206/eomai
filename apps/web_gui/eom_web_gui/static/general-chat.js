@@ -32,6 +32,9 @@ export function createGeneralChat({document, api, errorMessage}) {
   const intents = new Map();
   const drafts = new Map();
   const summaries = new Map();
+  // Owner-scoped bounded DOM memo: polling must not parse unchanged immutable
+  // replies again. A changed source invalidates the entry; logout clears it.
+  const replyBodies = new Map();
   const stopTimer = () => { clearTimeout(timer); timer = null; };
   const key = () => `studio:chat:${crypto.randomUUID()}`;
   const current = (token) => visible && owner !== null && token === epoch;
@@ -48,37 +51,6 @@ export function createGeneralChat({document, api, errorMessage}) {
     $("chat-send").disabled = $("chat-send").hidden || !slot || slot.state === "UNAVAILABLE" || sending || loading || active;
     $("chat-input").readOnly = sending || loading;
     $("chat-send").textContent = sending ? "전송 중…" : active ? "답변 중…" : "↑ 보내기";
-  }
-
-  function bodyText(container, text) {
-    // Model output is always text. Code fences create DOM nodes, never HTML.
-    const sections = text.split(/```[^\n]*\n([\s\S]*?)```/g);
-    sections.forEach((section, index) => {
-      if (!section) return;
-      if (index % 2 === 0) {
-        const paragraph = document.createElement("div");
-        paragraph.className = "chat-text";
-        paragraph.textContent = section;
-        container.append(paragraph);
-      } else {
-        const block = document.createElement("div");
-        block.className = "chat-code";
-        const copy = document.createElement("button");
-        copy.type = "button";
-        copy.className = "button quiet";
-        copy.textContent = "코드 복사";
-        copy.addEventListener("click", async () => {
-          try { await navigator.clipboard.writeText(section); copy.textContent = "복사됨"; }
-          catch (_) { copy.textContent = "복사하지 못했습니다"; }
-        });
-        const pre = document.createElement("pre");
-        const code = document.createElement("code");
-        code.textContent = section;
-        pre.append(code);
-        block.append(copy, pre);
-        container.append(block);
-      }
-    });
   }
 
   function render() {
@@ -100,7 +72,22 @@ export function createGeneralChat({document, api, errorMessage}) {
       name.className = "chat-speaker";
       name.textContent = message.role === "user" ? "나" : "ChatGPT";
       bubble.append(name);
-      if (message.text) bodyText(bubble, message.text);
+      if (message.text && message.role === "assistant") {
+        const key = `${selected.conversation_id}:${message.turn_id}`;
+        const cached = replyBodies.get(key);
+        if (cached?.text === message.text) bubble.append(cached.node);
+        else {
+          const node = renderChatMarkdown(document, bubble, message.text);
+          replyBodies.set(key, {text: message.text, node});
+          if (replyBodies.size > 100) replyBodies.delete(replyBodies.keys().next().value);
+        }
+      }
+      else if (message.text) {
+        const text = document.createElement("div");
+        text.className = "chat-text";
+        text.textContent = message.text;
+        bubble.append(text);
+      }
       else {
         const status = document.createElement("span");
         status.className = "chat-pending";
@@ -276,7 +263,7 @@ export function createGeneralChat({document, api, errorMessage}) {
     slot = null;
     loading = false;
     createIntent = null;
-    intents.clear(); drafts.clear(); summaries.clear();
+    intents.clear(); drafts.clear(); summaries.clear(); replyBodies.clear();
     conversationCursor = null;
     $("chat-input").value = "";
     $("chat-error").hidden = true;
@@ -317,3 +304,4 @@ export function createGeneralChat({document, api, errorMessage}) {
 
   return Object.freeze({install, open, close, setOwner});
 }
+import {renderChatMarkdown} from "./chat-markdown.js";

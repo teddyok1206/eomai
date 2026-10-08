@@ -1,8 +1,8 @@
 # ADR0212: General chat with dedicated, resident capacity
 
-Status: implementation in progress; production API/migrations installed.
-Activation gate: `NATIVE_STARTUP_REVALIDATION_PENDING` (2026-10-08 UTC).
-Dedicated device enrollment completed; first activation failed before inference.
+Status: production chat/browser acceptance PASS; Markdown presentation extension in progress.
+Remaining gate: `MARKDOWN_WEB_RELEASE_PENDING` (2026-10-08 UTC).
+Historical activation failures are retained, not relabeled as successful runs.
 External LLM APIs remain prohibited by the latest explicit user decision.
 Current user-authorized access scope: **all authenticated EOM users**. The later
 instruction `그렇게 하지말고 그냥 다 쓸 수 있게 해` supersedes the interim
@@ -131,6 +131,41 @@ Existing support behavior/protocols and production slots remain unchanged.
 ChatGPT parity for search, uploads, voice, image generation and native tools is
 not implied by a text-chat surface; each requires its own authorized boundary.
 No new dependency is required for the first implementation slice.
+
+### Markdown presentation extension — 2026-10-08 UTC
+
+After the user confirmed `잘된다`, they requested Markdown rendering. This is a
+Web-only presentation change: canonical assistant text, Artifact hashes, claims,
+worker instructions and API contracts remain unchanged. User messages stay literal.
+
+Use pinned Marked18.1.0's lexer, not its HTML renderer, then construct permitted
+DOM elements/text nodes for headings, emphasis, lists, tables, quotes and code.
+Raw HTML remains visible text. Only absolute HTTP(S) links without credentials
+are clickable, with noopener/noreferrer and no-referrer. External images are
+alt-text only; no tracker fetch, CDN or dynamic script loader. Never insert model
+text into an HTML sink. Unsupported/pathologically nested input falls back to
+its original plain text rather than crashing the conversation screen.
+
+Dependency justification: nested Markdown/GFM tokenization is an existing real
+use case; a maintained standalone parser is simpler and safer to maintain than
+extending regex-based fence handling into a second Markdown implementation.
+No npm runtime, new Python dependency or UI framework is added. Reviewed upstream
+[release18.1.0](https://github.com/markedjs/marked/releases/tag/v18.1.0) and
+[lexer guidance](https://marked.js.org/using_pro); vendor the MIT-licensed ESM
+bundle and complete license with wheel/RECORD verification. Published npm tarball
+SHA512 verified as `3da9985d65968369dba06de85f915fce9cb71056513aa6492bd85294c9949de929ed3c4fb390dc4fde6fc1de3a9bbdff7b17ca09154cb605e83cc23814424beb`.
+Bundle SHA256 `054d73b676031dc8e60e247ef228044fbeebe10af14bac1a6e53852f80f826e5`;
+license SHA256 `8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c`.
+Earlier18.0.14 raw-GitHub bundle paths were unavailable; no dependency bytes from
+those failed downloads were installed. Do not relabel them as verified inputs.
+
+Access is ordered token traversal plus keyed display-node lookup. Bound input to
+32000 Unicode characters,4096 DOM nodes and48 nesting levels; parser/DOM failure
+uses plain text. A controller-local map retains at most100 rendered replies,
+keyed by conversation/turn and invalidated by changed text or owner reset. Reuse
+the same DOM node instead of cloning it or reparsing immutable replies on polling.
+This removes repeated O(text+token) work by an obvious indexed lookup; no persistent
+cache, derived DB value or new concurrency boundary is introduced.
 
 ## Scope correction and resident-loop design
 

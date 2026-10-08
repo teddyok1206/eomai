@@ -25,6 +25,14 @@ CHAT_ID = "chat_" + "a" * 32
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def chat_module(tmp_path: Path) -> Path:
+    static = ROOT / "apps/web_gui/eom_web_gui/static"
+    for name in ("general-chat.js", "chat-markdown.js", "vendor-marked-18.1.0.js"):
+        (tmp_path / name).write_bytes((static / name).read_bytes())
+    (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+    return tmp_path / "general-chat.js"
+
+
 def conversation() -> ChatConversation:
     return ChatConversation(
         conversation_id=CHAT_ID, title="새 대화", resource_version=1, updated_at=NOW
@@ -143,8 +151,7 @@ def test_chat_module_safe_text_and_ordered_state_updates(tmp_path):
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable")
-    module = tmp_path / "general-chat.mjs"
-    module.write_bytes((ROOT / "apps/web_gui/eom_web_gui/static/general-chat.js").read_bytes())
+    module = chat_module(tmp_path)
     script = f"""
 import assert from 'node:assert/strict';
 import {{mergeChatMessages, chatIsActive}} from {json.dumps(module.as_uri())};
@@ -179,8 +186,7 @@ def test_chat_browser_races_and_uncertain_send_replay(tmp_path):
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node unavailable")
-    module = tmp_path / "general-chat.mjs"
-    module.write_bytes((ROOT / "apps/web_gui/eom_web_gui/static/general-chat.js").read_bytes())
+    module = chat_module(tmp_path)
     script = ROOT / "tests/web_gui/general_chat_browser_checks.mjs"
     result = subprocess.run(
         [node, str(script), module.as_uri()], text=True, capture_output=True, timeout=15

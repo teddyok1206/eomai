@@ -1,9 +1,9 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `NATIVE_STARTUP_REPAIR_VERIFIED`; overall feature `IN_PROGRESS`.
-Production API and chat migrations are installed; dedicated activation has not
-yet passed native readiness. Web chat release and real answers remain pending.
-Current activation gate: `NATIVE_STARTUP_REVALIDATION_PENDING` (2026-10-08 UTC).
+Status: `CHAT_CORE_LIVE_PASS_MARKDOWN_IN_PROGRESS`; overall feature `IN_PROGRESS`.
+Production API/Web, chat migrations and dedicated resident capacity are active.
+Three actual model answers and user browser confirmation passed.
+Current gate: `MARKDOWN_WEB_RELEASE_PENDING` (2026-10-08 UTC).
 Latest user decision: `EXTERNAL_LLM_API_PROHIBITION=RETAINED`; the proposed
 dedicated-chat SIWC/Responses exception is `NOT_AUTHORIZED`.
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -12,6 +12,51 @@ private, and one dedicated FIFO slot remains separate from slots01..06.
 This is not a completion or live acceptance report.
 
 ## Latest operational checkpoint — 2026-10-08 UTC
+
+Current compatible release set: API/owner/worker
+`aead8a5840c2b5aa61a1a0bd281c0ff32746429e`; Web
+`3927898c1996f0959572a56c11f6178a9a8d3836`; migration `20261008_0049`.
+Web/API-contract/protocol/schema bytes are identical between these source pins.
+Both dedicated units are active/enabled; worker NRestarts=0 after the final
+canary. No external API client, root-auth copying or old-slot auth mutation.
+
+Final source suites: **728 PASS**; Ruff format/check, mypy and diff: **PASS**.
+Actual application canary (private owner client under API UID): **3 answers PASS**,
+two real generic-admin identities, owner-crossed read denied, exact create/submit
+idempotency replay preserved one turn, follow-up recalled only its own context,
+and canonical history reread passed. This is not an authenticated browser test.
+The user's browser recheck after the repair explicitly passed (`잘된다!`).
+Actual idle restart of only the two chat units passed native readiness and
+preserved all six accepted message identities/states/text hashes. Restart probe
+submitted no model questions. Existing platform services remained active.
+
+The user additionally requested Markdown display. Its Web-only renderer is now
+implemented with safe DOM nodes, a pinned locally packaged parser, code copy,
+plain user messages and owner-cleared bounded reply memoization. Release tests
+cover semantic markup, scripts/unsafe links/tracking-image rejection, task lists,
+Korean/astral Unicode, code copying and bounded fallback. Web rollout remains
+pending at this checkpoint; API/owner/worker do not need another reinstall.
+
+Markdown-inclusive source suite: **731 PASS** (chat units/API/all Web/migration
+identifiers), including Node semantic/security/cache/Unicode checks. Ruff and
+mypy for changed Python presentation/release code passed. The extension used
+no model calls and added no DB schema or wire-contract changes.
+
+Accepted canary conversations: `chat_16e5577c89e723aad40031e3c85ad3a0` and
+`chat_9920d6015b41e6a0178cb2f0bd281177`. Completed turns:
+`chatturn_db69e023e0f213057bd4510dd0e71521`,
+`chatturn_ed08b649c199171ace3c15594f1431af`,
+`chatturn_c2842b05072d69a5d24612fd2e54331b`.
+No transcript contents, credentials or generated files are committed here.
+
+The final causal fix accepts the documented recoverable runtime `warning`
+notification, including before the turn-start response, as metadata rather than
+an executable event. Prior startup/rate-limit/failure receipts remain historical
+evidence, not successful model results. Four earlier application canary turns
+failed; they were not automatically retried or rewritten. The final successful
+run used three new explicit application intents after the corrected release.
+
+### Earlier deployment/repair evidence (preserved)
 
 Dedicated interactive enrollment completed with exit0 after the user's `완료`.
 Production migration upgraded to `20261008_0049`; API installed from

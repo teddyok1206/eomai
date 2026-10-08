@@ -5,7 +5,9 @@ globalThis.crypto = webcrypto;
 const {createGeneralChat} = await import(process.argv[2]);
 
 class Element {
-  constructor() {
+  constructor(tagName = "div") {
+    this.tagName = tagName;
+    this.style = {};
     this.children = [];
     this.handlers = new Map();
     this.value = "";
@@ -37,7 +39,8 @@ const createDocument = () => {
       if (!elements.has(id)) elements.set(id, new Element());
       return elements.get(id);
     },
-    createElement() { return new Element(); },
+    createElement(tag) { return new Element(tag); },
+    createTextNode(text) { const node = new Element("#text"); node.textContent = text; return node; },
   };
 };
 
@@ -109,4 +112,28 @@ const createDocument = () => {
   controller.close();
 }
 
-console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/stale-selection/owner-reset/unavailable");
+// Display-only Markdown and cached bodies cannot change user text or cross owners.
+{
+  const document = createDocument();
+  const view = {...conversation(first, "첫 번째"), messages: [
+    {turn_id: "turn-one", sequence: 1, role: "user", state: "COMPLETED", text: "**내 질문**"},
+    {turn_id: "turn-one", sequence: 2, role: "assistant", state: "COMPLETED", text: "**답변**"},
+  ]};
+  const api = async (path) => path.endsWith("/slot") ? {state: "READY"} : path.endsWith(first) ? view : {values: summaries, next_cursor: null};
+  const controller = createGeneralChat({document, api, errorMessage: (error) => error.message});
+  controller.install(); controller.setOwner("owner-one"); await controller.open();
+  await document.getElementById("chat-conversations").children[0].fire("click");
+  const messages = document.getElementById("chat-messages").children;
+  assert.equal(messages[0].children[1].textContent, "**내 질문**");
+  const body = messages[1].children[1];
+  assert.equal(body.className, "chat-markdown");
+  assert.equal(body.children[0].children[0].tagName, "strong");
+  await document.getElementById("chat-conversations").children[0].fire("click");
+  assert.equal(document.getElementById("chat-messages").children[1].children[1], body);
+  controller.setOwner("owner-two"); await controller.open();
+  await document.getElementById("chat-conversations").children[0].fire("click");
+  assert.notEqual(document.getElementById("chat-messages").children[1].children[1], body);
+  controller.close();
+}
+
+console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/stale-selection/owner-reset/unavailable/markdown-cache");

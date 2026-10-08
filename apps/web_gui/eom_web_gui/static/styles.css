@@ -743,8 +743,29 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .chat-message-user { background: #f1f2f6; width: fit-content; max-width: min(820px, 90%); margin-right: 0; }
 .chat-speaker { display: block; font-size: 13px; margin-bottom: 6px; }
 .chat-text { white-space: pre-wrap; }
+.chat-markdown { line-height: 1.75; }
+.chat-markdown > :first-child { margin-top: 0; }
+.chat-markdown > :last-child { margin-bottom: 0; }
+.chat-markdown p { margin: 0.6em 0; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3,
+.chat-markdown h4, .chat-markdown h5, .chat-markdown h6 { line-height: 1.4; margin: 1.2em 0 0.5em; }
+.chat-markdown h1 { font-size: 1.5em; }
+.chat-markdown h2 { font-size: 1.3em; }
+.chat-markdown h3 { font-size: 1.15em; }
+.chat-markdown h4, .chat-markdown h5, .chat-markdown h6 { font-size: 1em; }
+.chat-markdown ul, .chat-markdown ol { padding-left: 1.5em; margin: 0.6em 0; }
+.chat-markdown li > p { margin: 0.2em 0; }
+.chat-markdown blockquote { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid #c9cfd9; color: #505967; }
+.chat-markdown hr { border: 0; border-top: 1px solid #e1e4eb; margin: 1.2em 0; }
+.chat-markdown a { color: #245edb; text-decoration: underline; text-underline-offset: 3px; }
+.chat-markdown :not(pre) > code { border-radius: 5px; background: #eef0f4; padding: 0.12em 0.35em; font-size: 0.9em; }
+.chat-table { max-width: 100%; overflow-x: auto; margin: 1em 0; }
+.chat-table table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+.chat-table th, .chat-table td { padding: 8px 12px; border: 1px solid #dfe3eb; text-align: left; min-width: 60px; }
+.chat-table th { background: #f3f5f8; font-weight: 600; }
 .chat-code { border: 1px solid #e1e4eb; border-radius: 12px; margin: 12px 0; overflow: hidden; }
-.chat-code > button { display: block; margin: 4px 4px 4px auto; }
+.chat-code-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 10px; background: #f3f5f8; }
+.chat-code-toolbar > span { font-size: 0.8em; color: #687280; }
 .chat-code pre { margin: 0; padding: 16px; background: #f8f9fb; overflow-x: auto; white-space: pre; }
 .chat-composer { display: flex; align-items: flex-end; gap: 12px; border: 1px solid #d8dce6; border-radius: 20px; padding: 12px; box-shadow: 0 4px 18px #17274a08; }
 .chat-composer:focus-within { border-color: #7770dc; }

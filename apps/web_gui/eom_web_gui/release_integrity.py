@@ -33,6 +33,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "sessions.py",
         "settings.py",
         "static/app.js",
+        "static/chat-markdown.js",
         "static/curriculum-selector.js",
         "static/eom-mark.svg",
         "static/execution-preset-editor.js",
@@ -47,6 +48,8 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/studio-route.js",
         "static/studio-workbench.js",
         "static/styles.css",
+        "static/vendor-marked-18.1.0.js",
+        "static/vendor-marked-LICENSE.txt",
         "timeline.py",
     }
 )
