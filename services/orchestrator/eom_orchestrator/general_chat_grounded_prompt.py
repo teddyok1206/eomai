@@ -7,6 +7,7 @@ from importlib.resources import files
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.general_chat_grounding import (
+    AgentChatTurnInput,
     ChatGroundedAnswer,
     GroundedChatTurnInput,
     GroundedChatTurnResult,
@@ -66,7 +67,7 @@ def _unique_answer_fields(fields: list[tuple[str, object]]) -> dict[str, object]
     return result
 
 
-def grounded_chat_text(request: GroundedChatTurnInput) -> str:
+def grounded_chat_text(request: GroundedChatTurnInput | AgentChatTurnInput) -> str:
     """One explicit materialization boundary; no duplicated full conversation or files."""
     return canonical_json_bytes(
         {
@@ -81,7 +82,9 @@ def grounded_chat_text(request: GroundedChatTurnInput) -> str:
     ).decode("utf-8")
 
 
-def grounded_chat_output_schema(request: GroundedChatTurnInput) -> dict[str, object]:
+def grounded_chat_output_schema(
+    request: GroundedChatTurnInput | AgentChatTurnInput,
+) -> dict[str, object]:
     """Native shape projection; full semantics are enforced by the canonical reader.
 
     The native structured-output dialect need not implement JSON Schema conditionals.
@@ -96,7 +99,9 @@ def grounded_chat_output_schema(request: GroundedChatTurnInput) -> dict[str, obj
     section["properties"]["citation_keys"].pop("uniqueItems")
     answer = canonical["$defs"]["Answer"]
     answer["properties"]["limitations"].pop("uniqueItems")
-    if request.knowledge is None:
+    if isinstance(request, AgentChatTurnInput):
+        section["properties"]["citation_keys"]["items"]["enum"] = [f"S{i}" for i in range(1, 10)]
+    elif request.knowledge is None:
         section["properties"]["citation_keys"]["maxItems"] = 0
         section["properties"]["citation_keys"]["items"] = {"type": "string"}
     else:

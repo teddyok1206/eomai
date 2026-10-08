@@ -18,8 +18,11 @@ from eom_protocol.general_chat import (
 )
 from eom_protocol.general_chat_grounding import (
     GROUNDED_MESSAGE_SCHEMA,
+    AgentChatTurnInput,
+    AgentChatTurnResult,
     ChatGroundingViews,
     ChatInputContract,
+    ChatKnowledgeContext,
     ChatKnowledgeItem,
     ChatKnowledgeSelection,
     ChatKnowledgeSnapshot,
@@ -32,6 +35,7 @@ from eom_protocol.general_chat_grounding import (
     StoredGroundedChatMessage,
     read_chat_result,
     read_grounding,
+    validate_agent_citations,
     validate_chat_citations,
 )
 from eom_protocol.general_chat_views import (
@@ -61,6 +65,14 @@ from eom_orchestrator.general_chat_models import (
 )
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_state import ChatError, chat_runtime_available, public_chat_state
+from eom_orchestrator.general_chat_tool_broker import agent_tool_knowledge
+
+type ResolvedChatTurn = tuple[
+    StoredChatMessage | StoredGroundedChatMessage,
+    ChatInputContract | None,
+    ChatResultContract | None,
+    ChatKnowledgeContext | None,
+]
 
 
 def chat_now() -> datetime:
@@ -358,14 +370,7 @@ class GeneralChatConversationOwner:
         turns: tuple[GeneralChatTurnRecord, ...],
         *,
         actor_id: str | None,
-    ) -> dict[
-        str,
-        tuple[
-            StoredChatMessage | StoredGroundedChatMessage,
-            ChatInputContract | None,
-            ChatResultContract | None,
-        ],
-    ]:
+    ) -> dict[str, ResolvedChatTurn]:
         hints = []
         for turn in turns:
             hints.append(
@@ -431,7 +436,10 @@ class GeneralChatConversationOwner:
                     expected_status="SUCCEEDED",
                 )
                 read_chat_result(answer.model_dump(mode="json"), request=request)
-                if isinstance(request, GroundedChatTurnInput) and request.knowledge is not None:
+                if (
+                    isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
+                    and request.knowledge is not None
+                ):
                     selections.append(request.knowledge.selection)
             for selection in selections:
                 group = groups.setdefault(selection.snapshot, {})
@@ -440,9 +448,42 @@ class GeneralChatConversationOwner:
                     if existing is not None and existing != ref:
                         raise ChatError("GENERAL_CHAT_POINTER_INVALID")
                     group[ref.item_revision_id] = ref
-            result[turn.turn_id] = (user, request, answer)
+            result[turn.turn_id] = (
+                user,
+                request,
+                answer,
+                request.knowledge
+                if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
+                else None,
+            )
         if next(payloads, None) is not None:
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+        # Resolve all tool pointers in one bounded batch, not one DB/NAS query per turn.
+        tool_pointers = tuple(
+            dict.fromkeys(
+                p
+                for _, _, answer, _ in result.values()
+                if isinstance(answer, AgentChatTurnResult)
+                for p in answer.tool_records
+            )
+        )
+        tool_payloads = dict(zip(tool_pointers, self.evidence.read(tool_pointers), strict=True))
+        for turn_id, (user, request, answer, _prepared) in tuple(result.items()):
+            if isinstance(request, AgentChatTurnInput) and isinstance(answer, AgentChatTurnResult):
+                resolved = agent_tool_knowledge(
+                    request,
+                    answer,
+                    self.evidence,
+                    payloads=tuple(tool_payloads[p] for p in answer.tool_records),
+                )
+                result[turn_id] = (user, request, answer, resolved.context)
+                for selection in resolved.selections:
+                    group = groups.setdefault(selection.snapshot, {})
+                    for ref in selection.references:
+                        prior = group.get(ref.item_revision_id)
+                        if prior is not None and prior != ref:
+                            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                        group[ref.item_revision_id] = ref
         for snapshot, group in groups.items():
             if self.knowledge is None or actor_id is None:
                 raise ChatError("GENERAL_CHAT_FORBIDDEN")
@@ -463,11 +504,16 @@ class GeneralChatConversationOwner:
         turns: tuple[GeneralChatTurnRecord, ...],
         *,
         actor_id: str | None = None,
+        resolved: dict[str, ResolvedChatTurn] | None = None,
     ) -> tuple[GeneralChatMessage, ...]:
-        resolved = self.resolved_turns(conversation_id, turns, actor_id=actor_id)
+        resolved = (
+            self.resolved_turns(conversation_id, turns, actor_id=actor_id)
+            if resolved is None
+            else resolved
+        )
         messages = []
         for turn in turns:
-            user, _, answer = resolved[turn.turn_id]
+            user, _, answer, _ = resolved[turn.turn_id]
             state = public_chat_state(turn.state)
             messages.append(
                 GeneralChatMessage(
@@ -516,16 +562,20 @@ class GeneralChatConversationOwner:
         resolved = self.resolved_turns(conversation_id, rows, actor_id=actor_id)
         values = []
         for row in rows:
-            _, request, answer = resolved[row.turn_id]
+            _, request, answer, knowledge = resolved[row.turn_id]
             sources: tuple[ChatKnowledgeSourceCard, ...] = ()
             receipt = None
             observed = None
-            if isinstance(request, GroundedChatTurnInput) and isinstance(
+            if isinstance(request, AgentChatTurnInput) and isinstance(answer, AgentChatTurnResult):
+                receipt = validate_agent_citations(request, answer, knowledge)
+            elif isinstance(request, GroundedChatTurnInput) and isinstance(
                 answer, GroundedChatTurnResult
             ):
                 receipt = validate_chat_citations(request, answer)
+            if receipt is not None:
+                assert isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
                 observed = None if request.agent_state is None else request.agent_state.observed_at
-                if request.knowledge is not None:
+                if knowledge is not None:
                     sources = tuple(
                         ChatKnowledgeSourceCard.model_validate(
                             source.model_dump(
@@ -540,7 +590,7 @@ class GeneralChatConversationOwner:
                                 },
                             )
                         )
-                        for source in request.knowledge.sources
+                        for source in knowledge.sources
                         if source.key in receipt.used_source_keys
                     )
             values.append(

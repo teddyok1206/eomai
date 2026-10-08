@@ -22,8 +22,12 @@ from eom_protocol.general_chat_dispatch import (
     read_chat_dispatch,
 )
 from eom_protocol.general_chat_grounding import (
+    AGENT_INPUT_SCHEMA,
+    AGENT_RESULT_SCHEMA,
     GROUNDED_INPUT_SCHEMA,
     GROUNDED_RESULT_SCHEMA,
+    AgentChatTurnInput,
+    AgentChatTurnResult,
     ChatInputContract,
     ChatResultContract,
     GroundedChatTurnInput,
@@ -31,7 +35,11 @@ from eom_protocol.general_chat_grounding import (
     read_chat_input,
     read_chat_result,
 )
-from eom_protocol.general_chat_worker_messages import chat_worker_ticket
+from eom_protocol.general_chat_worker_messages import (
+    ChatWorkerExecute,
+    ChatWorkerRequest,
+    chat_worker_ticket,
+)
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
@@ -52,6 +60,7 @@ from eom_orchestrator.general_chat_state import (
     ChatTurnState,
     require_chat_transition,
 )
+from eom_orchestrator.general_chat_tool_broker import ChatToolBroker, agent_tool_knowledge
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +88,47 @@ class GeneralChatExecutionService:
         self.evidence = evidence
         self.clock = clock
         self.knowledge = knowledge
+
+    def tool_broker(self, command: ChatWorkerRequest) -> ChatToolBroker:
+        if (
+            not isinstance(command.command, ChatWorkerExecute)
+            or not isinstance(command.command.turn, AgentChatTurnInput)
+            or self.knowledge is None
+        ):
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
+        prepared = command.command.turn
+        ticket = chat_worker_ticket(prepared, policy_sha256=command.policy_sha256)
+
+        def require_scope() -> str:
+            with self.repository.sessions.begin() as session:
+                capacity = self.repository.capacity(session)
+                if capacity.runtime_id is None:
+                    raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+                _, turn = self._live_claim(
+                    session,
+                    ChatClaim(
+                        capacity.runtime_id,
+                        prepared.conversation_id,
+                        prepared.turn_id,
+                        prepared.claim_id,
+                    ),
+                )
+                if turn.state != "RUNNING" or turn.request_sha256 != ticket.request_sha256:
+                    raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+                conversation = self.repository.conversation_record(
+                    session, prepared.conversation_id
+                )
+                self.repository.require_actor(session, conversation.owner_id)
+                return conversation.owner_id
+
+        require_scope()
+        return ChatToolBroker(
+            rpc_request_id=command.request_id,
+            ticket=ticket,
+            actor_guard=require_scope,
+            knowledge=self.knowledge,
+            evidence=self.evidence,
+        )
 
     def heartbeat(self, *, runtime_id: str) -> None:
         """Only the resident owner, after its isolated-worker admission, calls this."""
@@ -308,7 +358,10 @@ class GeneralChatExecutionService:
         owner = GeneralChatConversationOwner(
             self.repository, self.evidence, clock=self.clock, knowledge=self.knowledge
         )
-        projected = owner.project_messages(claim.conversation_id, context, actor_id=actor_id)
+        resolved_turns = owner.resolved_turns(claim.conversation_id, context, actor_id=actor_id)
+        projected = owner.project_messages(
+            claim.conversation_id, context, actor_id=actor_id, resolved=resolved_turns
+        )
         messages = tuple(
             ChatContextMessage(role=value.role, text=value.text)
             for value in projected
@@ -324,7 +377,10 @@ class GeneralChatExecutionService:
         )
         input_schema = CHAT_INPUT_SCHEMA
         dispatch_schema = CHAT_DISPATCH_SCHEMA
-        if identity.policy.schema_version == "general-chat-worker-policy/2.0":
+        if identity.policy.schema_version in {
+            "general-chat-worker-policy/2.0",
+            "general-chat-worker-policy/3.0",
+        }:
             if self.knowledge is None:
                 raise ChatError("GENERAL_CHAT_NOT_READY")
             user_pointer = self.evidence.resolve_family(
@@ -343,6 +399,12 @@ class GeneralChatExecutionService:
                 turn_id=claim.turn_id,
             )
             selection = user.selection if isinstance(user, StoredGroundedChatMessage) else None
+            if selection is None and identity.policy.schema_version.endswith("/3.0"):
+                for previous in reversed(context[:-1]):
+                    prepared_knowledge = resolved_turns[previous.turn_id][3]
+                    if prepared_knowledge is not None:
+                        selection = prepared_knowledge.selection
+                        break
             # Follow-up questions reuse the last explicit pinned selection, never latest.
             if selection is None and not isinstance(user, StoredGroundedChatMessage):
                 hints = self.evidence.resolve_family(
@@ -367,7 +429,12 @@ class GeneralChatExecutionService:
             resolved_knowledge = self.knowledge.resolve(
                 actor_id=actor_id, selection=selection, purpose="MATERIALIZE"
             )
-            request = GroundedChatTurnInput(
+            input_type = (
+                AgentChatTurnInput
+                if identity.policy.schema_version.endswith("/3.0")
+                else GroundedChatTurnInput
+            )
+            request = input_type(
                 conversation_id=claim.conversation_id,
                 turn_id=claim.turn_id,
                 claim_id=claim.claim_id,
@@ -376,8 +443,16 @@ class GeneralChatExecutionService:
                 knowledge=resolved_knowledge.context,
                 agent_state=resolved_knowledge.agent_state,
             )
-            input_schema = GROUNDED_INPUT_SCHEMA
-            dispatch_schema = "eom://schemas/general-chat/dispatch/2.0"
+            input_schema = (
+                AGENT_INPUT_SCHEMA
+                if isinstance(request, AgentChatTurnInput)
+                else GROUNDED_INPUT_SCHEMA
+            )
+            dispatch_schema = (
+                "eom://schemas/general-chat/dispatch/3.0"
+                if isinstance(request, AgentChatTurnInput)
+                else "eom://schemas/general-chat/dispatch/2.0"
+            )
         else:
             request = ChatTurnInput(
                 conversation_id=claim.conversation_id,
@@ -397,7 +472,9 @@ class GeneralChatExecutionService:
         require_evidence(pointer, payload, schema_ref=input_schema)
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
-                schema_version="general-chat-dispatch/2.0"
+                schema_version="general-chat-dispatch/3.0"
+                if isinstance(request, AgentChatTurnInput)
+                else "general-chat-dispatch/2.0"
                 if isinstance(request, GroundedChatTurnInput)
                 else "general-chat-dispatch/1.0",
                 runtime_id=claim.runtime_id,
@@ -456,8 +533,12 @@ class GeneralChatExecutionService:
                 raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
         request, _ = self._execution(turn, claim)
         read_chat_result(result.model_dump(mode="json"), request=request)
+        if isinstance(request, AgentChatTurnInput) and isinstance(result, AgentChatTurnResult):
+            agent_tool_knowledge(request, result, self.evidence)
         result_schema = (
-            GROUNDED_RESULT_SCHEMA
+            AGENT_RESULT_SCHEMA
+            if isinstance(request, AgentChatTurnInput)
+            else GROUNDED_RESULT_SCHEMA
             if isinstance(request, GroundedChatTurnInput)
             else CHAT_RESULT_SCHEMA
         )

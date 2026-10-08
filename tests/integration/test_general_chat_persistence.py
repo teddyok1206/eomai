@@ -65,12 +65,120 @@ class SyntheticKnowledge:
         )
 
 
-def grounded_identity():
-    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+class AgentKnowledge(SyntheticKnowledge):
+    def __init__(self):
+        self.selections = []
 
-    return ChatExecutionIdentity(
+    def search(self, **values):
+        from tests.unit.test_general_chat_agent_search import Knowledge
+
+        if self.denied:
+            raise ChatError("GENERAL_CHAT_FORBIDDEN")
+        return Knowledge().outcome
+
+    def resolve(self, *, actor_id, selection, purpose):
+        self.selections.append((purpose, selection))
+        return super().resolve(actor_id=actor_id, selection=selection, purpose=purpose)
+
+
+def test_agent_tools_persist_once_and_followup_reuses_exact_pinned_context(chat):
+    from eom_orchestrator.general_chat_agent_native import NativeChatTools
+    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+    from eom_protocol.general_chat_grounding import AgentChatTurnInput, validate_agent_citations
+    from eom_protocol.general_chat_tools import ChatToolRequest
+    from eom_protocol.general_chat_worker_messages import ChatWorkerExecute, ChatWorkerRequest
+
+    from tests.unit.test_general_chat_agent_search import arguments, read_command
+    from tests.unit.test_general_chat_grounding_contract import context, result
+
+    knowledge = AgentKnowledge()
+    chat.owner.knowledge = chat.execution.knowledge = knowledge
+    identity = ChatExecutionIdentity(
         boot_id=BOOT, policy=source_chat_worker_policy(model="synthetic-model")
     )
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    prepared = chat.execution.prepare(claim, identity=identity)
+    assert isinstance(prepared, AgentChatTurnInput) and prepared.knowledge is None
+    envelope = ChatWorkerRequest(
+        schema_version="general-chat-worker-request/3.0",
+        request_id="chatwrpc_" + uuid4().hex,
+        policy_sha256=identity.policy.sha256,
+        command=ChatWorkerExecute(boot_id=identity.boot_id, turn=prepared),
+    )
+    broker = chat.execution.tool_broker(envelope)
+
+    class Port:
+        sequence = 0
+
+        def call(self, command):
+            self.sequence += 1
+            return broker.execute(
+                ChatToolRequest(
+                    rpc_request_id=envelope.request_id,
+                    ticket=chat_worker_ticket(prepared, policy_sha256=identity.policy.sha256),
+                    sequence=self.sequence,
+                    command=command,
+                )
+            )
+
+    tools = NativeChatTools(prepared, Port())
+    tools.call("search_eom_items", arguments().model_dump(mode="json"))
+    tools.call("read_eom_items", read_command().arguments.model_dump(mode="json"))
+    answer = tools.result(
+        reply=canonical_json_bytes(result().answer.model_dump(mode="json")).decode(), failure=None
+    )
+    assert len(answer.tool_records) == 2
+    chat.execution.complete(claim, answer)
+    chat.execution.complete(claim, answer)
+    assert chat.execution.active_claim() is None
+    assert chat.execution.execution_receipt(claim).schema_version == "general-chat-dispatch/3.0"
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].text == answer.reply
+    grounding = chat.owner.grounding(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        turn_ids=(claim.turn_id,),
+    )
+    assert grounding.values[0].receipt.used_source_keys == ("S1",)
+    assert grounding.values[0].sources[0].item == context().sources[0].item
+    assert any(purpose == "AUTHORIZE" for purpose, _ in knowledge.selections)
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.conversation(
+            actor_id=chat.actors[1], conversation_id=conversation.conversation_id, cursor=None
+        )
+    chat.submit(view, message="그 문항의 후속 질문")
+    next_claim = chat.claim()
+    following = chat.execution.prepare(next_claim, identity=identity)
+    assert isinstance(following, AgentChatTurnInput)
+    assert following.knowledge.selection == context().selection
+    assert any(message.text == answer.reply for message in following.messages)
+    no_new_tools = NativeChatTools(following, Port())
+    next_answer = no_new_tools.result(
+        reply=canonical_json_bytes(result().answer.model_dump(mode="json")).decode(), failure=None
+    )
+    assert next_answer.tool_records == ()
+    validate_agent_citations(following, next_answer, following.knowledge)
+    chat.execution.complete(next_claim, next_answer)
+    knowledge.denied = True
+    with pytest.raises(ChatError, match="GENERAL_CHAT_FORBIDDEN"):
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+        )
+
+
+def grounded_identity():
+    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+    from eom_protocol.general_chat_worker_messages import read_chat_worker_policy
+
+    historical = source_chat_worker_policy(model="synthetic-model").model_dump(
+        mode="json", exclude={"agent_prompt_sha256"}
+    )
+    historical["schema_version"] = "general-chat-worker-policy/2.0"
+    return ChatExecutionIdentity(boot_id=BOOT, policy=read_chat_worker_policy(historical))
 
 
 def finish_grounded(chat, claim, request):

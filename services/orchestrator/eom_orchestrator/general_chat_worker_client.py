@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import socket
+from collections.abc import Callable
 from threading import Lock
+from time import monotonic
 from uuid import uuid4
 
 from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
 from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
 from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
+from eom_protocol.general_chat_grounding import read_agent
+from eom_protocol.general_chat_tools import ChatToolRequest
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerCommand,
@@ -32,21 +37,67 @@ from eom_orchestrator.general_chat_socket import (
     WORKER_PROBE_TIMEOUT,
     ChatSocketEndpoint,
     ChatTransportError,
+    chat_peer_uid,
     exchange_chat_frame,
+    receive_chat_stream,
+    send_chat_stream,
 )
 from eom_orchestrator.general_chat_state import ChatError
+from eom_orchestrator.general_chat_tool_broker import ChatToolBroker
 
 
 class ChatWorkerClient:
-    def __init__(self, *, endpoint: ChatSocketEndpoint, policy: ChatWorkerPolicy) -> None:
+    def __init__(
+        self,
+        *,
+        endpoint: ChatSocketEndpoint,
+        policy: ChatWorkerPolicy,
+        tools: Callable[[ChatWorkerRequest], ChatToolBroker] | None = None,
+    ) -> None:
         self.endpoint = endpoint
         self.policy = read_chat_worker_policy(policy.model_dump(mode="json"))
         self._boot_id: str | None = None
         self._admission_lock = Lock()
+        self.tools = tools
+
+    def _stream(self, request: ChatWorkerRequest) -> dict[str, object]:
+        self.endpoint.require_socket()
+        timeout = (
+            WORKER_EXECUTE_TIMEOUT
+            if isinstance(request.command, ChatWorkerExecute)
+            else WORKER_PROBE_TIMEOUT
+        )
+        deadline = monotonic() + timeout
+        broker = (
+            self.tools(request)
+            if isinstance(request.command, ChatWorkerExecute) and self.tools is not None
+            else None
+        )
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(timeout)
+                connection.connect(str(self.endpoint.path))
+                if chat_peer_uid(connection) != self.endpoint.owner_uid:
+                    raise ChatTransportError("INVALID")
+                send_chat_stream(connection, request.model_dump(mode="json"), deadline=deadline)
+                for _ in range(6):
+                    document = receive_chat_stream(connection, deadline=deadline)
+                    if document.get("schema_version") != "general-chat-tool-request/1.0":
+                        return document
+                    if broker is None:
+                        raise ChatTransportError("INVALID")
+                    intent = read_agent("Request", document, ChatToolRequest)
+                    reply = broker.execute(intent)
+                    send_chat_stream(connection, reply.model_dump(mode="json"), deadline=deadline)
+                raise ChatTransportError("INVALID")
+        except OSError:
+            raise ChatTransportError("UNAVAILABLE") from None
 
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
         request = ChatWorkerRequest(
-            schema_version="general-chat-worker-request/2.0"
+            schema_version="general-chat-worker-request/3.0"
+            if self.policy.schema_version.endswith("/3.0")
+            else "general-chat-worker-request/2.0"
             if self.policy.schema_version.endswith("/2.0")
             else "general-chat-worker-request/1.0",
             request_id="chatwrpc_" + uuid4().hex,
@@ -58,14 +109,18 @@ class ChatWorkerClient:
         document = request.model_dump(mode="json")
         read_chat_worker_request(document)
         try:
-            reply_document = exchange_chat_frame(
-                self.endpoint,
-                document,
-                request_limit=WORKER_FRAME_LIMIT,
-                reply_limit=WORKER_FRAME_LIMIT,
-                timeout=WORKER_EXECUTE_TIMEOUT
-                if isinstance(command, ChatWorkerExecute)
-                else WORKER_PROBE_TIMEOUT,
+            reply_document = (
+                self._stream(request)
+                if request.schema_version.endswith("/3.0")
+                else exchange_chat_frame(
+                    self.endpoint,
+                    document,
+                    request_limit=WORKER_FRAME_LIMIT,
+                    reply_limit=WORKER_FRAME_LIMIT,
+                    timeout=WORKER_EXECUTE_TIMEOUT
+                    if isinstance(command, ChatWorkerExecute)
+                    else WORKER_PROBE_TIMEOUT,
+                )
             )
             reply = read_chat_worker_reply(reply_document, request=request)
         except (ChatTransportError, ValueError, SchemaError):

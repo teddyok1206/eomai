@@ -19,7 +19,7 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
         "dispatch",
         "owner-request",
         "owner-reply",
-    } or version not in {1, 2}:
+    } or version not in {1, 2, 3}:
         raise ValueError("unsupported chat envelope")
     root = files("eom_protocol").joinpath("schemas")
     registry: Registry = Registry()
@@ -34,12 +34,16 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
         "general-chat-grounding",
         "general-chat-turn-input-v2",
         "general-chat-turn-result-v2",
+        "general-chat-agent-search",
+        "general-chat-worker-policy-v3",
+        "general-chat-turn-input-v3",
+        "general-chat-turn-result-v3",
     ):
         schema = json.loads(root.joinpath(name + ".schema.json").read_bytes())
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     document = json.loads(
         root.joinpath(
-            "general-chat-" + leaf + ("-v2" if version == 2 else "") + ".schema.json"
+            "general-chat-" + leaf + (f"-v{version}" if version > 1 else "") + ".schema.json"
         ).read_bytes()
     )
     Draft202012Validator.check_schema(document)
@@ -47,10 +51,13 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
 
 
 def validate_chat_envelope(leaf: str, document: object) -> None:
-    version = (
-        2
-        if isinstance(document, dict)
-        and document.get("schema_version") == "general-chat-" + leaf + "/2.0"
-        else 1
+    version = next(
+        (
+            v
+            for v in (3, 2, 1)
+            if isinstance(document, dict)
+            and document.get("schema_version") == f"general-chat-{leaf}/{v}.0"
+        ),
+        1,
     )
     chat_family_validator(leaf, version).validate(document)

@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/worker-reply/3.0",
+  "title": "Private isolated general-chat worker reply without native handles",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "boot_id",
+    "policy_sha256",
+    "action",
+    "status",
+    "value",
+    "error_code"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "general-chat-worker-reply/3.0"
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^chatwrpc_[0-9a-f]{32}$"
+    },
+    "boot_id": {
+      "type": "string",
+      "pattern": "^chatboot_[0-9a-f]{32}$"
+    },
+    "policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "action": {
+      "enum": [
+        "PROBE",
+        "EXECUTE",
+        "RESULT"
+      ]
+    },
+    "status": {
+      "enum": [
+        "SUCCEEDED",
+        "FAILED"
+      ]
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ready"
+          ],
+          "properties": {
+            "ready": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "result"
+          ],
+          "properties": {
+            "state": {
+              "enum": [
+                "KNOWN",
+                "UNKNOWN",
+                "ABSENT"
+              ]
+            },
+            "result": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "oneOf": [
+                    {
+                      "$ref": "eom://schemas/general-chat/turn-result/1.0"
+                    },
+                    {
+                      "$ref": "eom://schemas/general-chat/turn-result/3.0"
+                    },
+                    {
+                      "$ref": "eom://schemas/general-chat/turn-result/2.0"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "state": {
+                    "const": "KNOWN"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "result": {
+                    "oneOf": [
+                      {
+                        "$ref": "eom://schemas/general-chat/turn-result/1.0"
+                      },
+                      {
+                        "$ref": "eom://schemas/general-chat/turn-result/3.0"
+                      },
+                      {
+                        "$ref": "eom://schemas/general-chat/turn-result/2.0"
+                      }
+                    ]
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "result": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "error_code": {
+      "enum": [
+        null,
+        "GENERAL_CHAT_WORKER_NOT_READY",
+        "GENERAL_CHAT_WORKER_BUSY",
+        "GENERAL_CHAT_WORKER_PROTOCOL_INVALID",
+        "GENERAL_CHAT_RECONCILIATION_REQUIRED"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "type": "null"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "value": {
+            "type": "object"
+          },
+          "error_code": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "const": "PROBE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "required": [
+              "ready"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "enum": [
+              "EXECUTE",
+              "RESULT"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "required": [
+              "state",
+              "result"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "SUCCEEDED"
+          },
+          "action": {
+            "const": "EXECUTE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "value": {
+            "properties": {
+              "state": {
+                "const": "KNOWN"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

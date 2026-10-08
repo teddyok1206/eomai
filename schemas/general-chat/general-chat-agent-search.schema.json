@@ -1,0 +1,611 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/agent-search/1.0",
+  "$defs": {
+    "Input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "context_sha256",
+        "messages",
+        "knowledge",
+        "agent_state"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/3.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-agent/1.0.0"
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "text"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32000,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        "knowledge": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agent_state": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/AgentState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "request_sha256",
+        "knowledge_sha256",
+        "status",
+        "answer",
+        "failure_code",
+        "agent_state_sha256",
+        "tool_records"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/3.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-agent/1.0.0"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "knowledge_sha256": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Hash"
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "answer": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Answer"
+            }
+          ]
+        },
+        "failure_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "CODEX_UNAVAILABLE",
+            "CODEX_AUTH_REQUIRED",
+            "CODEX_TIMEOUT",
+            "CODEX_PROTOCOL_INVALID",
+            "CODEX_TURN_FAILED",
+            "CHAT_ISOLATION_NOT_READY"
+          ]
+        },
+        "agent_state_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "tool_records": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/artifact-member/1.0"
+          },
+          "maxItems": 5
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "answer": {
+                "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Answer"
+              },
+              "failure_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "answer": {
+                "type": "null"
+              },
+              "failure_code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SearchArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "TOPIC",
+            "RECENT",
+            "EXAM"
+          ]
+        },
+        "source": {
+          "enum": [
+            "ALL",
+            "PAST_EXAM",
+            "GENERATED"
+          ]
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9가-힣_]+$"
+          },
+          "maxItems": 8
+        },
+        "administration_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 2200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "administration_month": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_school_level": {
+          "anyOf": [
+            {
+              "enum": [
+                "ELEMENTARY",
+                "MIDDLE_SCHOOL",
+                "HIGH_SCHOOL"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_grade": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subject_key": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160,
+              "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "item_number": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "terms",
+        "administration_year",
+        "administration_month",
+        "target_school_level",
+        "target_grade",
+        "subject_key",
+        "item_number"
+      ]
+    },
+    "ReadArguments": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Item"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "references"
+      ]
+    },
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-request/1.0"
+        },
+        "rpc_request_id": {
+          "type": "string",
+          "pattern": "^chatwrpc_[0-9a-f]{32}$"
+        },
+        "ticket": {
+          "$ref": "eom://schemas/general-chat/worker-ticket/1.0"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "command": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "SEARCH"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/SearchArguments"
+                }
+              },
+              "required": [
+                "action",
+                "arguments"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "const": "READ"
+                },
+                "arguments": {
+                  "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/ReadArguments"
+                }
+              },
+              "required": [
+                "action",
+                "arguments"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "rpc_request_id",
+        "ticket",
+        "sequence",
+        "command"
+      ]
+    },
+    "Card": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Item"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "approval": {
+          "enum": [
+            "APPROVED",
+            "PENDING"
+          ]
+        },
+        "source_kind": {
+          "enum": [
+            "PAST_EXAM",
+            "GENERATED",
+            "UNCLASSIFIED"
+          ]
+        },
+        "graph_membership": {
+          "enum": [
+            "INDEXED",
+            "NOT_INDEXED",
+            "UNAVAILABLE"
+          ]
+        }
+      },
+      "required": [
+        "item",
+        "display_name",
+        "approval",
+        "source_kind",
+        "graph_membership"
+      ]
+    },
+    "Outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "EMPTY",
+            "FAILED"
+          ]
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Card"
+          },
+          "maxItems": 6
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Snapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "CHAT_KNOWLEDGE_FORBIDDEN",
+                "CHAT_KNOWLEDGE_UNAVAILABLE",
+                "CHAT_KNOWLEDGE_POINTER_INVALID",
+                "CHAT_KNOWLEDGE_QUERY_INVALID",
+                "CHAT_KNOWLEDGE_READ_LIMIT",
+                "CHAT_KNOWLEDGE_NOT_OFFERED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "cards",
+        "snapshot",
+        "truncated",
+        "context",
+        "error_code"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-record/1.0"
+        },
+        "request": {
+          "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Request"
+        },
+        "outcome": {
+          "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Outcome"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request",
+        "outcome"
+      ]
+    },
+    "Reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-tool-reply/1.0"
+        },
+        "record": {
+          "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Record"
+        },
+        "pointer": {
+          "$ref": "eom://schemas/artifact-member/1.0"
+        }
+      },
+      "required": [
+        "schema_version",
+        "record",
+        "pointer"
+      ]
+    },
+    "CatalogRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-search-request/1.0"
+        },
+        "operation": {
+          "const": "SEARCH_CHAT_KNOWLEDGE"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "arguments": {
+          "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/SearchArguments"
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Snapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "arguments",
+        "snapshot"
+      ]
+    },
+    "CatalogReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-search-reply/1.0"
+        },
+        "operation": {
+          "const": "SEARCH_CHAT_KNOWLEDGE"
+        },
+        "outcome": {
+          "$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/Outcome"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "outcome"
+      ]
+    }
+  }
+}

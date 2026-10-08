@@ -80,7 +80,12 @@ def main() -> int:
             signal.signal(number, request_stop)
         coordinator = Thread(
             target=run_chat_coordinator,
-            args=(execution, lambda: ChatWorkerClient(endpoint=endpoint, policy=policy)),
+            args=(
+                execution,
+                lambda: ChatWorkerClient(
+                    endpoint=endpoint, policy=policy, tools=execution.tool_broker
+                ),
+            ),
             kwargs={"stop": stop, "report_state": lambda code: sys.stderr.write(code + "\n")},
             name="general-chat-coordinator",
         )

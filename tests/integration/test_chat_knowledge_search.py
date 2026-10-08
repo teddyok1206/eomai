@@ -196,7 +196,7 @@ def search_db():
         reader = ChatKnowledgeQueryAdapter(
             engine, QueryAdapter(engine, b"fixture-key").item_revision_views
         )
-        reader.sessions = sessionmaker(bind=con, expire_on_commit=False)
+        reader.reader.sessions = sessionmaker(bind=con, expire_on_commit=False)
         yield reader, con
     finally:
         con.close()
@@ -382,7 +382,7 @@ def test_exact_exam_keeps_ambiguous_occurrences_and_rechecks_pinned_snapshot(sea
 
 def test_actual_reader_transaction_is_repeatable_read_and_read_only(search_db):
     reader, _ = search_db
-    original = reader.project_revisions
+    original = reader.reader.project_revisions
     settings = []
 
     def project(session, revisions):
@@ -396,7 +396,7 @@ def test_actual_reader_transaction_is_repeatable_read_and_read_only(search_db):
         )
         return original(session, revisions)
 
-    reader.project_revisions = project
+    reader.reader.project_revisions = project
     reader.search(request({"kind": "RECENT"}))
     assert settings == [("on", "repeatable read")]
 

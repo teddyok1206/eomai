@@ -6,9 +6,11 @@ import re
 from threading import Lock
 from typing import Protocol
 
+from eom_protocol.general_chat_grounding import AgentChatTurnInput
 from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
 from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
 from eom_protocol.general_chat_grounding import read_chat_result as read_chat_turn_result
+from eom_protocol.general_chat_tools import ChatToolPort
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerError,
@@ -36,7 +38,9 @@ class ChatHandoffPort(Protocol):
 
 class ChatAdmittedNativePort(Protocol):
     def require_admission(self, policy: ChatWorkerPolicy) -> None: ...
-    def answer(self, request: ChatTurnInput) -> ChatTurnResult: ...
+    def answer(
+        self, request: ChatTurnInput, *, tools: ChatToolPort | None = None
+    ) -> ChatTurnResult: ...
 
 
 class ChatWorkerApplication:
@@ -56,15 +60,19 @@ class ChatWorkerApplication:
         self.handoff = handoff
         self._execution_lock = Lock()
 
-    def handle(self, request: ChatWorkerRequest) -> ChatWorkerReply:
+    def handle(
+        self, request: ChatWorkerRequest, *, tools: ChatToolPort | None = None
+    ) -> ChatWorkerReply:
         request = read_chat_worker_request(request.model_dump(mode="json"))
         try:
             historical_lookup = isinstance(request.command, ChatWorkerLookup)
             if not historical_lookup and request.policy_sha256 != self.policy.sha256:
                 raise ChatWorkerFault(ChatWorkerError.NOT_READY)
-            value = self._handle(request)
+            value = self._handle(request, tools=tools)
             reply = ChatWorkerReply(
-                schema_version="general-chat-worker-reply/2.0"
+                schema_version="general-chat-worker-reply/3.0"
+                if request.schema_version.endswith("/3.0")
+                else "general-chat-worker-reply/2.0"
                 if request.schema_version.endswith("/2.0")
                 else "general-chat-worker-reply/1.0",
                 request_id=request.request_id,
@@ -84,7 +92,9 @@ class ChatWorkerApplication:
 
     def failure(self, request: ChatWorkerRequest, code: ChatWorkerError) -> ChatWorkerReply:
         return ChatWorkerReply(
-            schema_version="general-chat-worker-reply/2.0"
+            schema_version="general-chat-worker-reply/3.0"
+            if request.schema_version.endswith("/3.0")
+            else "general-chat-worker-reply/2.0"
             if request.schema_version.endswith("/2.0")
             else "general-chat-worker-reply/1.0",
             request_id=request.request_id,
@@ -96,7 +106,9 @@ class ChatWorkerApplication:
             error_code=code,
         )
 
-    def _handle(self, request: ChatWorkerRequest) -> ChatWorkerAdmission | ChatWorkerOutput:
+    def _handle(
+        self, request: ChatWorkerRequest, *, tools: ChatToolPort | None
+    ) -> ChatWorkerAdmission | ChatWorkerOutput:
         command = request.command
         if isinstance(command, ChatWorkerProbe):
             try:
@@ -127,7 +139,12 @@ class ChatWorkerApplication:
                     return existing
                 raise ChatWorkerFault(ChatWorkerError.RECOVERY)
             result = read_chat_turn_result(
-                self.native.answer(command.turn).model_dump(mode="json"), request=command.turn
+                (
+                    self.native.answer(command.turn, tools=tools)
+                    if isinstance(command.turn, AgentChatTurnInput)
+                    else self.native.answer(command.turn)
+                ).model_dump(mode="json"),
+                request=command.turn,
             )
             self.handoff.publish(ticket, result)
             return ChatWorkerOutput(state="KNOWN", result=result)

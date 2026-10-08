@@ -85,9 +85,11 @@ class ChatSocketEndpoint:
             raise ChatTransportError("INVALID") from None
 
 
-def receive_chat_frame(connection: socket.socket, *, limit: int, deadline: float) -> bytes:
-    chunks: list[bytes] = []
-    size = 0
+def receive_chat_frame(
+    connection: socket.socket, *, limit: int, deadline: float, prefix: bytes = b""
+) -> bytes:
+    chunks: list[bytes] = [prefix] if prefix else []
+    size = len(prefix)
     while True:
         remaining = deadline - monotonic()
         if remaining <= 0:
@@ -204,3 +206,63 @@ def bind_chat_listener(endpoint: ChatSocketEndpoint, *, backlog: int) -> socket.
     except BaseException:
         listener.close()
         raise
+
+
+STREAM_MAGIC = b"EOM3"
+
+
+def _receive_exact(connection: socket.socket, size: int, deadline: float) -> bytes:
+    chunks: list[bytes] = []
+    while size:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise ChatTransportError("UNAVAILABLE")
+        connection.settimeout(remaining)
+        try:
+            chunk = connection.recv(min(size, 65536))
+        except OSError:
+            raise ChatTransportError("UNAVAILABLE") from None
+        if not chunk:
+            raise ChatTransportError("UNAVAILABLE")
+        chunks.append(chunk)
+        size -= len(chunk)
+    return b"".join(chunks)
+
+
+def receive_chat_stream(
+    connection: socket.socket, *, deadline: float, magic: bytes | None = None
+) -> dict[str, object]:
+    if (magic if magic is not None else _receive_exact(connection, 4, deadline)) != STREAM_MAGIC:
+        raise ChatTransportError("INVALID")
+    size = struct.unpack("!I", _receive_exact(connection, 4, deadline))[0]
+    if not 0 < size <= WORKER_FRAME_LIMIT:
+        raise ChatTransportError("INVALID")
+    return decode_chat_frame(_receive_exact(connection, size, deadline))
+
+
+def send_chat_stream(
+    connection: socket.socket, document: dict[str, object], *, deadline: float
+) -> None:
+    payload = canonical_json_bytes(document)
+    if not 0 < len(payload) <= WORKER_FRAME_LIMIT:
+        raise ChatTransportError("INVALID")
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise ChatTransportError("UNAVAILABLE")
+    connection.settimeout(remaining)
+    try:
+        connection.sendall(STREAM_MAGIC + struct.pack("!I", len(payload)) + payload)
+    except OSError:
+        raise ChatTransportError("UNAVAILABLE") from None
+
+
+def receive_chat_worker_request(
+    connection: socket.socket, *, deadline: float
+) -> tuple[dict[str, object], bool]:
+    prefix = _receive_exact(connection, 4, deadline)
+    if prefix == STREAM_MAGIC:
+        return receive_chat_stream(connection, deadline=deadline, magic=prefix), True
+    payload = receive_chat_frame(
+        connection, limit=WORKER_FRAME_LIMIT, deadline=deadline, prefix=prefix
+    )
+    return decode_chat_frame(payload), False

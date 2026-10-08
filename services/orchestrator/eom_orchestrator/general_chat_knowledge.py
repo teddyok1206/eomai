@@ -12,7 +12,15 @@ from eom_protocol.general_chat_grounding import (
     ChatKnowledgeCatalogReply,
     ChatKnowledgeCatalogRequest,
     ChatKnowledgeSelection,
+    ChatKnowledgeSnapshot,
+    read_agent,
     read_grounding,
+)
+from eom_protocol.general_chat_tools import (
+    ChatSearchArguments,
+    ChatSearchCatalogReply,
+    ChatSearchCatalogRequest,
+    ChatToolOutcome,
 )
 
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, exchange_chat_frame
@@ -20,12 +28,47 @@ from eom_orchestrator.general_chat_state import ChatError
 
 
 class ChatKnowledgePort(Protocol):
+    def search(
+        self,
+        *,
+        actor_id: str,
+        arguments: ChatSearchArguments,
+        snapshot: ChatKnowledgeSnapshot | None,
+    ) -> ChatToolOutcome: ...
     def resolve(
         self, *, actor_id: str, selection: ChatKnowledgeSelection | None, purpose: str
     ) -> ChatKnowledgeCatalogReply: ...
 
 
 class CatalogChatKnowledgeClient:
+    def search(
+        self,
+        *,
+        actor_id: str,
+        arguments: ChatSearchArguments,
+        snapshot: ChatKnowledgeSnapshot | None,
+    ) -> ChatToolOutcome:
+        request = ChatSearchCatalogRequest(
+            actor_id=actor_id, arguments=arguments, snapshot=snapshot
+        )
+        document = request.model_dump(mode="json")
+        read_agent("CatalogRequest", document, ChatSearchCatalogRequest)
+        try:
+            value = exchange_chat_frame(
+                ChatSocketEndpoint(
+                    Path(CATALOG_APPLICATION_SOCKET_PATH),
+                    pwd.getpwnam("eom-catalog-manager").pw_uid,
+                    grp.getgrnam("eom-api").gr_gid,
+                ),
+                document,
+                request_limit=32000,
+                reply_limit=64000,
+                timeout=20,
+            )
+            return read_agent("CatalogReply", value, ChatSearchCatalogReply).outcome
+        except Exception:
+            raise ChatError("GENERAL_CHAT_APPLICATION_UNAVAILABLE") from None
+
     def resolve(
         self, *, actor_id: str, selection: ChatKnowledgeSelection | None, purpose: str
     ) -> ChatKnowledgeCatalogReply:

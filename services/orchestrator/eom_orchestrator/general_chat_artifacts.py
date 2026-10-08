@@ -15,6 +15,8 @@ from eom_protocol.general_chat import (
 )
 from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA
 from eom_protocol.general_chat_grounding import (
+    AGENT_INPUT_SCHEMA,
+    AGENT_RESULT_SCHEMA,
     GROUNDED_INPUT_SCHEMA,
     GROUNDED_MESSAGE_SCHEMA,
     GROUNDED_RESULT_SCHEMA,
@@ -85,6 +87,10 @@ class GeneralChatArtifactStore:
             GROUNDED_INPUT_SCHEMA,
             GROUNDED_RESULT_SCHEMA,
             "eom://schemas/general-chat/dispatch/2.0",
+            AGENT_INPUT_SCHEMA,
+            AGENT_RESULT_SCHEMA,
+            "eom://schemas/general-chat/dispatch/3.0",
+            "eom://schemas/general-chat/tool-record/1.0",
         }:
             raise ValueError("unsupported chat evidence schema")
         if not 0 < len(payload) <= 256000:
@@ -135,9 +141,13 @@ class GeneralChatArtifactStore:
             raise ValueError("chat pointer budget exceeded")
         families = {
             CHAT_MESSAGE_SCHEMA: {CHAT_MESSAGE_SCHEMA, GROUNDED_MESSAGE_SCHEMA},
-            CHAT_INPUT_SCHEMA: {CHAT_INPUT_SCHEMA, GROUNDED_INPUT_SCHEMA},
-            CHAT_RESULT_SCHEMA: {CHAT_RESULT_SCHEMA, GROUNDED_RESULT_SCHEMA},
-            CHAT_DISPATCH_SCHEMA: {CHAT_DISPATCH_SCHEMA, "eom://schemas/general-chat/dispatch/2.0"},
+            CHAT_INPUT_SCHEMA: {CHAT_INPUT_SCHEMA, GROUNDED_INPUT_SCHEMA, AGENT_INPUT_SCHEMA},
+            CHAT_RESULT_SCHEMA: {CHAT_RESULT_SCHEMA, GROUNDED_RESULT_SCHEMA, AGENT_RESULT_SCHEMA},
+            CHAT_DISPATCH_SCHEMA: {
+                CHAT_DISPATCH_SCHEMA,
+                "eom://schemas/general-chat/dispatch/2.0",
+                "eom://schemas/general-chat/dispatch/3.0",
+            },
         }
         keys = {(p.artifact_id, p.artifact_revision_id) for p in pointers}
         with self.engine.connect() as connection:

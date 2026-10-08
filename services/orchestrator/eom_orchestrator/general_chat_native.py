@@ -21,13 +21,22 @@ from eom_protocol.general_chat import (
     read_chat_turn_result,
 )
 from eom_protocol.general_chat_grounding import (
+    AgentChatTurnInput,
+    AgentChatTurnResult,
     ChatInputContract,
     ChatResultContract,
     GroundedChatTurnInput,
     GroundedChatTurnResult,
+    read_chat_input,
     read_grounded_chat_input,
 )
+from eom_protocol.general_chat_tools import ChatToolPort
 
+from eom_orchestrator.general_chat_agent_native import (
+    AGENT_CHAT_INSTRUCTIONS,
+    NativeChatTools,
+    native_chat_tools,
+)
 from eom_orchestrator.general_chat_grounded_prompt import (
     GROUNDED_CHAT_INSTRUCTIONS,
     grounded_chat_output_schema,
@@ -198,6 +207,10 @@ class CodexChatSession:
         self._events = 0
         self._deadline = 0.0
         self._retired_threads: set[str] = set()
+        self._tools: NativeChatTools | None = None
+        self._tool_items: dict[str, tuple[str, object]] = {}
+        self._answered_tools: set[str] = set()
+        self._server_request_ids: set[str | int] = set()
 
     def _reset_budget(self, *, seconds: int) -> None:
         if self._pending:
@@ -219,7 +232,11 @@ class CodexChatSession:
         self._events += 1
         if size > MAX_EVENT_BYTES or self._bytes > MAX_TURN_BYTES or self._events > MAX_TURN_EVENTS:
             raise NativeChatError()
-        if "id" in document and "method" in document:
+        if (
+            "id" in document
+            and "method" in document
+            and not (self._tools is not None and document.get("method") == "item/tool/call")
+        ):
             # A server request is an unexpected permission/tool/user-input boundary.
             # Refuse it explicitly before poisoning the native process.
             self.channel.send(
@@ -235,6 +252,11 @@ class CodexChatSession:
         self.channel.send({"id": request_id, "method": method, "params": dict(params)})
         while True:
             document = self._receive()
+            if "id" in document and "method" in document:
+                if len(self._pending) >= 256:
+                    raise NativeChatError()
+                self._pending.append(document)
+                continue
             if "id" in document:
                 if type(document["id"]) is not int or document["id"] != request_id:
                     raise NativeChatError()
@@ -304,11 +326,15 @@ class CodexChatSession:
                 "sandbox": "read-only",
                 "ephemeral": True,
                 "environments": [],
-                "dynamicTools": [],
+                "dynamicTools": native_chat_tools()
+                if isinstance(request, AgentChatTurnInput)
+                else [],
                 "runtimeWorkspaceRoots": [],
                 "selectedCapabilityRoots": [],
                 "allowProviderModelFallback": False,
-                "baseInstructions": GROUNDED_CHAT_INSTRUCTIONS
+                "baseInstructions": AGENT_CHAT_INSTRUCTIONS
+                if isinstance(request, AgentChatTurnInput)
+                else GROUNDED_CHAT_INSTRUCTIONS
                 if isinstance(request, GroundedChatTurnInput)
                 else CHAT_INSTRUCTIONS,
             },
@@ -352,8 +378,24 @@ class CodexChatSession:
     @overload
     def answer(self, request: GroundedChatTurnInput) -> GroundedChatTurnResult: ...
 
-    def answer(self, request: ChatInputContract) -> ChatResultContract:
-        if isinstance(request, GroundedChatTurnInput):
+    @overload
+    def answer(
+        self, request: AgentChatTurnInput, *, tools: ChatToolPort
+    ) -> AgentChatTurnResult: ...
+
+    def answer(
+        self, request: ChatInputContract, *, tools: ChatToolPort | None = None
+    ) -> ChatResultContract:
+        self._tools = None
+        self._tool_items.clear()
+        self._answered_tools.clear()
+        self._server_request_ids.clear()
+        if isinstance(request, AgentChatTurnInput):
+            read_chat_input(request.model_dump(mode="json"))
+            if tools is None:
+                raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+            self._tools = NativeChatTools(request, tools)
+        elif isinstance(request, GroundedChatTurnInput):
             read_grounded_chat_input(request.model_dump(mode="json"))
         else:
             read_chat_turn_input(request.model_dump(mode="json"))
@@ -368,7 +410,7 @@ class CodexChatSession:
                     {
                         "type": "text",
                         "text": grounded_chat_text(request)
-                        if isinstance(request, GroundedChatTurnInput)
+                        if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput))
                         else request.messages[-1].text,
                         "textElements": [],
                     }
@@ -377,7 +419,7 @@ class CodexChatSession:
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
                 "environments": [],
             }
-            if isinstance(request, GroundedChatTurnInput):
+            if isinstance(request, (GroundedChatTurnInput, AgentChatTurnInput)):
                 turn_parameters["outputSchema"] = grounded_chat_output_schema(request)
             response = self._rpc(
                 "turn/start",
@@ -392,6 +434,8 @@ class CodexChatSession:
                 raise NativeChatError()
             reply = self._finish(thread_id=thread_id, turn_id=turn_id, initial_items=initial_items)
             result = self._result(request, reply=reply, failure=None)
+            if self._answered_tools != set(self._tool_items):
+                raise NativeChatError()
             # Dispose of the process-local thread before admitting another owner.
             self._rpc("thread/unsubscribe", {"threadId": thread_id})
             self._drain_finished_thread(thread_id)
@@ -405,8 +449,8 @@ class CodexChatSession:
             failure = "CODEX_TIMEOUT"
         except OSError:
             failure = "CODEX_UNAVAILABLE"
-        except NativeChatError as exc:
-            failure = exc.code
+        except (ValueError, NativeChatError) as exc:
+            failure = exc.code if isinstance(exc, NativeChatError) else "CODEX_PROTOCOL_INVALID"
         # Protocol method names are bounded metadata, not frame contents. Never
         # export model text, tool arguments, account data or raw error bodies.
         LOGGER.warning(
@@ -436,7 +480,7 @@ class CodexChatSession:
         answers: dict[str, str] = {}
         delta_lengths: dict[str, int] = {}
         for item in initial_items:
-            self._item(_object(item), answers)
+            self._item(_object(item), answers, completed=False)
         while True:
             event = self._pending.popleft() if self._pending else self._receive()
             method = event.get("method")
@@ -486,6 +530,43 @@ class CodexChatSession:
                 return reply
             if params.get("turnId") != turn_id:
                 raise NativeChatError()
+            if method == "item/tool/call":
+                if self._tools is None or params.get("namespace") is not None:
+                    raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+                call_id = _handle(params.get("callId"))
+                tool = _handle(params.get("tool"))
+                request_id = event.get("id")
+                if type(request_id) not in {int, str} or request_id in self._server_request_ids:
+                    raise NativeChatError()
+                if isinstance(request_id, str):
+                    _handle(request_id)
+                if call_id in self._answered_tools or self._tool_items.get(call_id) != (
+                    tool,
+                    params.get("arguments"),
+                ):
+                    raise NativeChatError()
+                self._server_request_ids.add(cast(str | int, request_id))
+                try:
+                    returned = self._tools.call(tool, params.get("arguments"))
+                except Exception:
+                    self.channel.send(
+                        {
+                            "id": request_id,
+                            "error": {"code": -32602, "message": "Invalid internal tool request"},
+                        }
+                    )
+                    raise NativeChatError("CODEX_PROTOCOL_INVALID") from None
+                self.channel.send(
+                    {
+                        "id": request_id,
+                        "result": {
+                            "contentItems": [{"type": "inputText", "text": returned}],
+                            "success": self._tools.records[-1].record.outcome.status != "FAILED",
+                        },
+                    }
+                )
+                self._answered_tools.add(call_id)
+                continue
             if method in {"item/started", "item/completed"}:
                 self._item(
                     _object(params.get("item")), answers, completed=method == "item/completed"
@@ -508,11 +589,30 @@ class CodexChatSession:
             else:
                 raise NativeChatError()
 
-    @staticmethod
-    def _item(item: dict[str, object], answers: dict[str, str], *, completed: bool = True) -> None:
+    def _item(
+        self, item: dict[str, object], answers: dict[str, str], *, completed: bool = True
+    ) -> None:
         kind = _handle(item.get("type"))
         item_id = _handle(item.get("id"))
         if kind in {"userMessage", "reasoning"}:
+            return
+        if kind == "dynamicToolCall" and self._tools is not None:
+            tool = _handle(item.get("tool"))
+            if tool not in {"search_eom_items", "read_eom_items"}:
+                raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+            value = (tool, item.get("arguments"))
+            if item_id in self._tool_items and self._tool_items[item_id] != value:
+                raise NativeChatError()
+            if completed and (
+                item_id not in self._answered_tools
+                or item.get("status") not in {"completed", "failed"}
+            ):
+                raise NativeChatError()
+            if not completed and item.get("status") != "inProgress":
+                raise NativeChatError()
+            self._tool_items[item_id] = value
+            if len(self._tool_items) > 5:
+                raise NativeChatError()
             return
         if kind != "agentMessage":
             # Reject command/file/MCP/browser/image/collaboration/tool items even
@@ -535,10 +635,13 @@ class CodexChatSession:
         if len(answers) > 32 or sum(map(len, answers.values())) > 32000:
             raise NativeChatError()
 
-    @staticmethod
     def _result(
-        request: ChatInputContract, *, reply: str, failure: str | None
+        self, request: ChatInputContract, *, reply: str, failure: str | None
     ) -> ChatResultContract:
+        if isinstance(request, AgentChatTurnInput):
+            if self._tools is None:
+                raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+            return self._tools.result(reply=reply, failure=failure)
         if isinstance(request, GroundedChatTurnInput):
             try:
                 return grounded_chat_result(request, reply=reply, failure=failure)

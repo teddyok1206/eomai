@@ -43,14 +43,17 @@ class ChatWorkerFault(RuntimeError):
 
 
 class ChatWorkerPolicy(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-policy/1.0", "general-chat-worker-policy/2.0"] = (
-        "general-chat-worker-policy/1.0"
-    )
+    schema_version: Literal[
+        "general-chat-worker-policy/1.0",
+        "general-chat-worker-policy/2.0",
+        "general-chat-worker-policy/3.0",
+    ] = "general-chat-worker-policy/1.0"
     model: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9._-]+$")
     native_profile: Literal["codex-app-server/0.160.0/environment-free/1.0"]
     prompt_revision: Literal["general-chat/1.0.0"] = "general-chat/1.0.0"
     prompt_sha256: WorkerHash
     grounded_prompt_sha256: WorkerHash | None = None
+    agent_prompt_sha256: WorkerHash | None = None
 
     @model_serializer(mode="wrap")
     def serialize_policy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
@@ -59,6 +62,8 @@ class ChatWorkerPolicy(ChatBoundaryValue):
             raise ValueError("policy serializer must return an object")
         if self.schema_version == "general-chat-worker-policy/1.0":
             value.pop("grounded_prompt_sha256", None)
+        if self.schema_version != "general-chat-worker-policy/3.0":
+            value.pop("agent_prompt_sha256", None)
         return value
 
     @property
@@ -108,7 +113,9 @@ ChatWorkerCommand = Annotated[
 
 class ChatWorkerRequest(ChatBoundaryValue):
     schema_version: Literal[
-        "general-chat-worker-request/1.0", "general-chat-worker-request/2.0"
+        "general-chat-worker-request/1.0",
+        "general-chat-worker-request/2.0",
+        "general-chat-worker-request/3.0",
     ] = "general-chat-worker-request/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     policy_sha256: WorkerHash
@@ -140,9 +147,11 @@ class ChatWorkerOutput(ChatBoundaryValue):
 
 
 class ChatWorkerReply(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-reply/1.0", "general-chat-worker-reply/2.0"] = (
-        "general-chat-worker-reply/1.0"
-    )
+    schema_version: Literal[
+        "general-chat-worker-reply/1.0",
+        "general-chat-worker-reply/2.0",
+        "general-chat-worker-reply/3.0",
+    ] = "general-chat-worker-reply/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     boot_id: WorkerBootId
     policy_sha256: WorkerHash

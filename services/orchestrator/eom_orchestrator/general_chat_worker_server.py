@@ -10,9 +10,13 @@ from time import monotonic
 from typing import Self
 
 from eom_identifiers import canonical_json_bytes
+from eom_protocol.general_chat_grounding import read_agent
+from eom_protocol.general_chat_tools import ChatToolReply, ChatToolRequest
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerError,
     ChatWorkerExecute,
+    ChatWorkerRequest,
+    chat_worker_ticket,
     read_chat_worker_reply,
     read_chat_worker_request,
 )
@@ -26,11 +30,43 @@ from eom_orchestrator.general_chat_socket import (
     ChatTransportError,
     bind_chat_listener,
     chat_peer_uid,
-    decode_chat_frame,
-    receive_chat_frame,
+    receive_chat_stream,
+    receive_chat_worker_request,
     send_chat_frame,
+    send_chat_stream,
 )
 from eom_orchestrator.general_chat_worker import ChatWorkerApplication
+
+
+class WorkerToolConnection:
+    """Tool intents return over this owner-initiated connection, never a new socket."""
+
+    def __init__(self, connection: socket.socket, request: ChatWorkerRequest, deadline: float):
+        if not isinstance(request.command, ChatWorkerExecute):
+            raise ValueError("tools require an executing turn")
+        self.connection, self.request, self.deadline = connection, request, deadline
+        self.ticket = chat_worker_ticket(request.command.turn, policy_sha256=request.policy_sha256)
+        self.sequence = 0
+
+    def call(self, command: object) -> ChatToolReply:
+        self.sequence += 1
+        request = read_agent(
+            "Request",
+            {
+                "schema_version": "general-chat-tool-request/1.0",
+                "rpc_request_id": self.request.request_id,
+                "ticket": self.ticket.model_dump(mode="json"),
+                "sequence": self.sequence,
+                "command": command,
+            },
+            ChatToolRequest,
+        )
+        send_chat_stream(self.connection, request.model_dump(mode="json"), deadline=self.deadline)
+        value = receive_chat_stream(self.connection, deadline=self.deadline)
+        reply = read_agent("Reply", value, ChatToolReply)
+        if reply.record.request != request:
+            raise ChatTransportError("INVALID")
+        return reply
 
 
 class ChatWorkerRpcServer:
@@ -55,22 +91,31 @@ class ChatWorkerRpcServer:
             try:
                 if chat_peer_uid(connection) != self.owner_uid:
                     return
-                payload = receive_chat_frame(
-                    connection,
-                    limit=WORKER_FRAME_LIMIT,
-                    deadline=monotonic() + WORKER_PROBE_TIMEOUT,
+                document, stream = receive_chat_worker_request(
+                    connection, deadline=monotonic() + WORKER_PROBE_TIMEOUT
                 )
-                request = read_chat_worker_request(decode_chat_frame(payload))
+                request = read_chat_worker_request(document)
+                if stream != request.schema_version.endswith("/3.0"):
+                    raise ChatTransportError("INVALID")
                 deadline = monotonic() + (
                     WORKER_EXECUTE_TIMEOUT
                     if isinstance(request.command, ChatWorkerExecute)
                     else WORKER_PROBE_TIMEOUT
                 )
                 try:
-                    reply = self.worker.handle(request)
+                    reply = (
+                        self.worker.handle(
+                            request, tools=WorkerToolConnection(connection, request, deadline)
+                        )
+                        if stream and isinstance(request.command, ChatWorkerExecute)
+                        else self.worker.handle(request)
+                    )
                 except Exception:
                     reply = self.worker.failure(request, ChatWorkerError.RECOVERY)
                 read_chat_worker_reply(reply.model_dump(mode="json"), request=request)
+                if stream:
+                    send_chat_stream(connection, reply.model_dump(mode="json"), deadline=deadline)
+                    return
                 send_chat_frame(
                     connection,
                     canonical_json_bytes(reply.model_dump(mode="json")),

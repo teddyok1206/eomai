@@ -10,8 +10,10 @@ from contextlib import suppress
 from threading import Event
 
 from eom_identifiers import sha256_bytes
+from eom_protocol.general_chat_grounding import AgentChatTurnInput
 from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
 from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
+from eom_protocol.general_chat_tools import ChatToolPort
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerError,
     ChatWorkerFault,
@@ -19,6 +21,7 @@ from eom_protocol.general_chat_worker_messages import (
     read_chat_worker_policy,
 )
 
+from eom_orchestrator.general_chat_agent_native import AGENT_CHAT_INSTRUCTIONS
 from eom_orchestrator.general_chat_grounded_prompt import GROUNDED_CHAT_INSTRUCTIONS
 from eom_orchestrator.general_chat_native import (
     CHAT_INSTRUCTIONS,
@@ -35,7 +38,8 @@ from eom_orchestrator.general_chat_stdio import (
 def source_chat_worker_policy(*, model: str) -> ChatWorkerPolicy:
     return read_chat_worker_policy(
         {
-            "schema_version": "general-chat-worker-policy/2.0",
+            "schema_version": "general-chat-worker-policy/3.0",
+            "agent_prompt_sha256": sha256_bytes(AGENT_CHAT_INSTRUCTIONS.encode("utf-8")),
             "grounded_prompt_sha256": sha256_bytes(GROUNDED_CHAT_INSTRUCTIONS.encode("utf-8")),
             "model": model,
             "native_profile": NATIVE_PROFILE,
@@ -81,9 +85,15 @@ class IsolatedCodexChatWorker:
         except Exception:
             raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
 
-    def answer(self, request: ChatTurnInput) -> ChatTurnResult:
+    def answer(
+        self, request: ChatTurnInput, *, tools: ChatToolPort | None = None
+    ) -> ChatTurnResult:
         self.require_admission(self.policy)
         try:
+            if isinstance(request, AgentChatTurnInput):
+                if tools is None:
+                    raise ChatWorkerFault(ChatWorkerError.INVALID)
+                return self.session.answer(request, tools=tools)
             return self.session.answer(request)
         except Exception:
             # Poisoned/unknown native state cannot be reused. The worker server

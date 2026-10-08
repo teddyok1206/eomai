@@ -27,6 +27,8 @@ GROUNDED_MESSAGE_SCHEMA = "eom://schemas/general-chat/message/2.0"
 GROUNDED_INPUT_SCHEMA = "eom://schemas/general-chat/turn-input/2.0"
 GROUNDED_RESULT_SCHEMA = "eom://schemas/general-chat/turn-result/2.0"
 GROUNDED_RECEIPT_SCHEMA = "eom://schemas/general-chat/citation-receipt/1.0"
+AGENT_INPUT_SCHEMA = "eom://schemas/general-chat/turn-input/3.0"
+AGENT_RESULT_SCHEMA = "eom://schemas/general-chat/turn-result/3.0"
 GroundingHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 GroundingFailure = Literal[
     "CODEX_UNAVAILABLE",
@@ -300,6 +302,92 @@ class GroundedChatTurnResult(ChatBoundaryValue):
         return "" if self.answer is None else self.answer.reply
 
 
+class AgentChatTurnInput(ChatBoundaryValue):
+    protocol_version: Literal["general-chat-turn/3.0"] = "general-chat-turn/3.0"
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+    turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
+    claim_id: str = Field(pattern=r"^chatclaim_[0-9a-f]{32}$")
+    prompt_revision: Literal["general-chat-agent/1.0.0"] = "general-chat-agent/1.0.0"
+    context_sha256: GroundingHash
+    messages: tuple[ChatContextMessage, ...] = Field(min_length=1, max_length=40)
+    knowledge: ChatKnowledgeContext | None
+    agent_state: ChatAgentState | None = None
+
+    @model_validator(mode="after")
+    def exact_messages(self) -> AgentChatTurnInput:
+        project_agent_input(self, self.knowledge)
+        return self
+
+
+class AgentChatTurnResult(ChatBoundaryValue):
+    protocol_version: Literal["general-chat-turn/3.0"] = "general-chat-turn/3.0"
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+    turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
+    claim_id: str = Field(pattern=r"^chatclaim_[0-9a-f]{32}$")
+    prompt_revision: Literal["general-chat-agent/1.0.0"] = "general-chat-agent/1.0.0"
+    request_sha256: GroundingHash
+    knowledge_sha256: GroundingHash
+    agent_state_sha256: GroundingHash
+    status: Literal["SUCCEEDED", "FAILED"]
+    answer: ChatGroundedAnswer | None
+    failure_code: GroundingFailure | None
+    tool_records: tuple[ArtifactMemberPointer, ...] = Field(max_length=5)
+
+    @model_validator(mode="after")
+    def truthful_result(self) -> AgentChatTurnResult:
+        if (self.status == "SUCCEEDED") != (self.answer is not None):
+            raise ValueError("agent result state and answer differ")
+        if (self.status == "FAILED") != (self.failure_code is not None):
+            raise ValueError("agent result state and failure differ")
+        if len(set(self.tool_records)) != len(self.tool_records) or any(
+            p.schema_ref != "eom://schemas/general-chat/tool-record/1.0"
+            or p.media_type != "application/json"
+            or p.member_path != "chat/evidence.json"
+            for p in self.tool_records
+        ):
+            raise ValueError("invalid agent tool evidence pointer")
+        return self
+
+    @property
+    def reply(self) -> str:
+        return "" if self.answer is None else self.answer.reply
+
+
+def project_agent_input(
+    request: AgentChatTurnInput, knowledge: ChatKnowledgeContext | None
+) -> GroundedChatTurnInput:
+    """Reuse V2 citation semantics without rewriting V3 canonical input bytes."""
+    value = request.model_dump(mode="json")
+    value.update(
+        protocol_version="general-chat-turn/2.0",
+        prompt_revision="general-chat-grounded/1.0.0",
+        knowledge=None if knowledge is None else knowledge.model_dump(mode="json"),
+    )
+    return GroundedChatTurnInput.model_validate(value)
+
+
+def validate_agent_citations(
+    request: AgentChatTurnInput,
+    result: AgentChatTurnResult,
+    knowledge: ChatKnowledgeContext | None,
+) -> ChatCitationReceipt:
+    read_chat_result(result.model_dump(mode="json"), request=request)
+    projected = project_agent_input(request, knowledge)
+    value = result.model_dump(mode="json", exclude={"tool_records"})
+    value.update(
+        protocol_version="general-chat-turn/2.0",
+        prompt_revision="general-chat-grounded/1.0.0",
+        request_sha256=sha256_bytes(canonical_json_bytes(projected.model_dump(mode="json"))),
+    )
+    receipt = validate_chat_citations(projected, GroundedChatTurnResult.model_validate(value))
+    return receipt.model_copy(
+        update={
+            "request_sha256": result.request_sha256,
+            "result_sha256": sha256_bytes(canonical_json_bytes(result.model_dump(mode="json"))),
+        }
+    )
+
+
 class ChatCitationReceipt(ChatBoundaryValue):
     schema_version: Literal["chat-knowledge-citation-receipt/1.0"] = (
         "chat-knowledge-citation-receipt/1.0"
@@ -425,6 +513,8 @@ def knowledge_hash(request: GroundedChatTurnInput) -> str:
 
 
 def read_chat_input(document: object) -> ChatInputContract:
+    if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/3.0":
+        return read_agent("Input", document, AgentChatTurnInput)
     if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/2.0":
         return read_grounded_chat_input(document)
     from eom_protocol.general_chat import read_chat_turn_input
@@ -433,6 +523,27 @@ def read_chat_input(document: object) -> ChatInputContract:
 
 
 def read_chat_result(document: object, *, request: ChatInputContract) -> ChatResultContract:
+    if isinstance(request, AgentChatTurnInput):
+        result = read_agent("Result", document, AgentChatTurnResult)
+        if any(
+            getattr(request, f) != getattr(result, f)
+            for f in ("conversation_id", "turn_id", "claim_id", "prompt_revision")
+        ) or result.request_sha256 != sha256_bytes(
+            canonical_json_bytes(request.model_dump(mode="json"))
+        ):
+            raise ValueError("agent result identity/hash differs")
+        state_hash = sha256_bytes(
+            canonical_json_bytes(
+                None if request.agent_state is None else request.agent_state.model_dump(mode="json")
+            )
+        )
+        if result.agent_state_sha256 != state_hash:
+            raise ValueError("agent result state hash differs")
+        if not result.tool_records and result.knowledge_sha256 != knowledge_hash(
+            project_agent_input(request, request.knowledge)
+        ):
+            raise ValueError("unresolved agent knowledge hash differs")
+        return result
     if isinstance(request, GroundedChatTurnInput):
         return read_grounded_chat_result(document, request=request)
     from eom_protocol.general_chat import read_chat_turn_result
@@ -441,6 +552,8 @@ def read_chat_result(document: object, *, request: ChatInputContract) -> ChatRes
 
 
 def read_chat_result_document(document: object) -> ChatResultContract:
+    if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/3.0":
+        return read_agent("Result", document, AgentChatTurnResult)
     if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/2.0":
         return read_grounding("Result", document, GroundedChatTurnResult)
     from eom_protocol.general_chat import read_chat_turn_result_document
@@ -460,8 +573,8 @@ def read_grounded_chat_result(
     return result
 
 
-ChatInputContract = ChatTurnInput | GroundedChatTurnInput
-ChatResultContract = ChatTurnResult | GroundedChatTurnResult
+ChatInputContract = ChatTurnInput | GroundedChatTurnInput | AgentChatTurnInput
+ChatResultContract = ChatTurnResult | GroundedChatTurnResult | AgentChatTurnResult
 GroundingError = Literal[
     "CHAT_KNOWLEDGE_FORBIDDEN",
     "CHAT_KNOWLEDGE_NOT_FOUND",
@@ -522,4 +635,28 @@ def grounding_validator(definition: str) -> Draft202012Validator:
 
 def read_grounding[T: ChatBoundaryValue](definition: str, value: object, model: type[T]) -> T:
     grounding_validator(definition).validate(value)
+    return model.model_validate(value)
+
+
+@lru_cache(maxsize=16)
+def agent_validator(definition: str) -> Draft202012Validator:
+    root = files("eom_protocol").joinpath("schemas")
+    registry: Registry = Registry()
+    for name in (
+        "general-chat-agent-search",
+        "general-chat-grounding",
+        "artifact-member-v1",
+        "general-chat-worker-ticket",
+    ):
+        document = json.loads(root.joinpath(name + ".schema.json").read_bytes())
+        Draft202012Validator.check_schema(document)
+        registry = registry.with_resource(document["$id"], Resource.from_contents(document))
+    return Draft202012Validator(
+        {"$ref": "eom://schemas/general-chat/agent-search/1.0#/$defs/" + definition},
+        registry=registry,
+    )
+
+
+def read_agent[T: ChatBoundaryValue](definition: str, value: object, model: type[T]) -> T:
+    agent_validator(definition).validate(value)
     return model.model_validate(value)

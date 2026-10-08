@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.general_chat import CHAT_INPUT_SCHEMA, CHAT_MEMBER, ChatBoundaryValue
-from eom_protocol.general_chat_grounding import GROUNDED_INPUT_SCHEMA
+from eom_protocol.general_chat_grounding import AGENT_INPUT_SCHEMA, GROUNDED_INPUT_SCHEMA
 from eom_protocol.general_chat_schema_family import validate_chat_envelope
 from eom_protocol.general_chat_worker_messages import ChatWorkerPolicy, ChatWorkerTicket
 
@@ -21,9 +21,9 @@ class ChatExecutionIdentity(ChatBoundaryValue):
 
 
 class ChatDispatchReceipt(ChatBoundaryValue):
-    schema_version: Literal["general-chat-dispatch/1.0", "general-chat-dispatch/2.0"] = (
-        "general-chat-dispatch/1.0"
-    )
+    schema_version: Literal[
+        "general-chat-dispatch/1.0", "general-chat-dispatch/2.0", "general-chat-dispatch/3.0"
+    ] = "general-chat-dispatch/1.0"
     runtime_id: str = Field(pattern=r"^chatrt_[0-9a-f]{32}$")
     identity: ChatExecutionIdentity
     ticket: ChatWorkerTicket
@@ -34,10 +34,15 @@ class ChatDispatchReceipt(ChatBoundaryValue):
         if self.identity.policy.sha256 != self.ticket.policy_sha256:
             raise ValueError("dispatch policy differs from exact ticket")
         expected_schema = (
-            GROUNDED_INPUT_SCHEMA
-            if self.input.schema_ref == GROUNDED_INPUT_SCHEMA
-            and self.schema_version == "general-chat-dispatch/2.0"
-            else CHAT_INPUT_SCHEMA
+            AGENT_INPUT_SCHEMA
+            if self.schema_version == "general-chat-dispatch/3.0"
+            and self.input.schema_ref == AGENT_INPUT_SCHEMA
+            else (
+                GROUNDED_INPUT_SCHEMA
+                if self.input.schema_ref == GROUNDED_INPUT_SCHEMA
+                and self.schema_version == "general-chat-dispatch/2.0"
+                else CHAT_INPUT_SCHEMA
+            )
         )
         if (
             self.input.schema_ref,
