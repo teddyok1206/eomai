@@ -1,0 +1,716 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/grounding/1.0",
+  "title": "Pinned general-chat knowledge inputs and citation integrity",
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "Item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/Hash"
+        }
+      }
+    },
+    "Snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_snapshot_revision_id",
+        "sha256"
+      ],
+      "properties": {
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Hash"
+        }
+      }
+    },
+    "Selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "references",
+        "snapshot"
+      ],
+      "properties": {
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        },
+        "snapshot": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/Snapshot"
+            }
+          ]
+        }
+      }
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "item",
+        "display_name",
+        "kind",
+        "approval",
+        "pointer",
+        "location",
+        "text",
+        "graph_node_ids"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^S[1-9]$"
+        },
+        "item": {
+          "$ref": "#/$defs/Item"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "kind": {
+          "enum": [
+            "REGISTRY_DIRECT",
+            "GRAPH_ANALYSIS",
+            "SOLUTION_REPORT"
+          ]
+        },
+        "approval": {
+          "enum": [
+            "APPROVED",
+            "PENDING"
+          ]
+        },
+        "pointer": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/artifact-member/1.0"
+            },
+            {
+              "properties": {
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000,
+          "pattern": "\\S"
+        },
+        "graph_node_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "GRAPH_ANALYSIS",
+                  "SOLUTION_REPORT"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "approval": {
+                "const": "APPROVED"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "selection",
+        "sources",
+        "limitations",
+        "context_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-context/1.0"
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "context_sha256": {
+          "$ref": "#/$defs/Hash"
+        }
+      }
+    },
+    "Submission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "text",
+        "expected_version",
+        "selection"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-grounded-submission/1.0"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S"
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        }
+      }
+    },
+    "Message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "conversation_id",
+        "turn_id",
+        "role",
+        "text",
+        "selection"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "general-chat-message/2.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "role": {
+          "const": "user"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16000,
+          "pattern": "\\S"
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        }
+      }
+    },
+    "Input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "context_sha256",
+        "messages",
+        "knowledge"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/2.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-grounded/1.0.0"
+        },
+        "context_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "text"
+            ],
+            "properties": {
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32000,
+                "pattern": "\\S"
+              }
+            }
+          }
+        },
+        "knowledge": {
+          "$ref": "#/$defs/Context"
+        }
+      }
+    },
+    "Section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "markdown",
+        "support_kind",
+        "citation_keys"
+      ],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[1-9][0-9]?$"
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "pattern": "\\S"
+        },
+        "support_kind": {
+          "enum": [
+            "SOURCE_SUPPORTED",
+            "MODEL_INFERENCE",
+            "GENERAL_KNOWLEDGE",
+            "INSUFFICIENT_EVIDENCE"
+          ]
+        },
+        "citation_keys": {
+          "type": "array",
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^S[1-9]$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "support_kind": {
+                "const": "SOURCE_SUPPORTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "citation_keys": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "support_kind": {
+                "enum": [
+                  "GENERAL_KNOWLEDGE",
+                  "INSUFFICIENT_EVIDENCE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "citation_keys": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "answer_sections",
+        "limitations"
+      ],
+      "properties": {
+        "answer_sections": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/Section"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "conversation_id",
+        "turn_id",
+        "claim_id",
+        "prompt_revision",
+        "request_sha256",
+        "knowledge_sha256",
+        "status",
+        "answer",
+        "failure_code"
+      ],
+      "properties": {
+        "protocol_version": {
+          "const": "general-chat-turn/2.0"
+        },
+        "conversation_id": {
+          "type": "string",
+          "pattern": "^chat_[0-9a-f]{32}$"
+        },
+        "turn_id": {
+          "type": "string",
+          "pattern": "^chatturn_[0-9a-f]{32}$"
+        },
+        "claim_id": {
+          "type": "string",
+          "pattern": "^chatclaim_[0-9a-f]{32}$"
+        },
+        "prompt_revision": {
+          "const": "general-chat-grounded/1.0.0"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "knowledge_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "answer": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/Answer"
+            }
+          ]
+        },
+        "failure_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "CODEX_UNAVAILABLE",
+            "CODEX_AUTH_REQUIRED",
+            "CODEX_TIMEOUT",
+            "CODEX_PROTOCOL_INVALID",
+            "CODEX_TURN_FAILED",
+            "CHAT_ISOLATION_NOT_READY"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "answer": {
+                "$ref": "#/$defs/Answer"
+              },
+              "failure_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "answer": {
+                "type": "null"
+              },
+              "failure_code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_sha256",
+        "result_sha256",
+        "context_sha256",
+        "used_source_keys",
+        "verified_references",
+        "meaning"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-citation-receipt/1.0"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "context_sha256": {
+          "$ref": "#/$defs/Hash"
+        },
+        "used_source_keys": {
+          "type": "array",
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^S[1-9]$"
+          }
+        },
+        "verified_references": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        },
+        "meaning": {
+          "const": "CITATION_LINK_INTEGRITY_NOT_SCIENTIFIC_APPROVAL"
+        }
+      }
+    },
+    "CatalogRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "selection",
+        "purpose"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-catalog-request/1.0"
+        },
+        "operation": {
+          "const": "RESOLVE_CHAT_KNOWLEDGE"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        },
+        "purpose": {
+          "enum": [
+            "MATERIALIZE",
+            "AUTHORIZE"
+          ]
+        }
+      }
+    },
+    "CatalogReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "context",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "chat-knowledge-catalog-reply/1.0"
+        },
+        "operation": {
+          "const": "RESOLVE_CHAT_KNOWLEDGE"
+        },
+        "status": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED"
+          ]
+        },
+        "context": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/Context"
+            }
+          ]
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "CHAT_KNOWLEDGE_FORBIDDEN",
+            "CHAT_KNOWLEDGE_NOT_FOUND",
+            "CHAT_KNOWLEDGE_STALE",
+            "CHAT_KNOWLEDGE_HASH_MISMATCH",
+            "CHAT_KNOWLEDGE_SOURCE_UNSUPPORTED",
+            "CHAT_KNOWLEDGE_CONTEXT_TOO_LARGE",
+            "CHAT_KNOWLEDGE_UNAVAILABLE"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

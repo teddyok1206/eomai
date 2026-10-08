@@ -236,3 +236,65 @@ API rollback drill follows from the successful Web withdrawal.
 
 `FIRST_SLICE_SEARCH_LIVE=PASS`. C04 grounded input/cited answers, C05 protected
 grounded history/revocation and subsequent integration milestones remain pending.
+
+# Grounded answer successor — implementation boundary, 2026-10-08
+
+Implementation checkpoint: additive JSON Schema/frozen contracts and the native
+structured-answer adapter are source-only candidates. No grounded public route,
+Catalog socket admission, turn persistence, citation-history projection, or UI
+activation has been released. C04/C05 remain IN_PROGRESS. The existing V1 worker
+envelope rejects V2 turns, so this adapter cannot accidentally activate grounded
+answers under a V1 policy. Do not equate pure contract/native-channel tests with
+real authorized Catalog materialization, inference, or production acceptance.
+
+The official App Server documentation supports turn-local `outputSchema`:
+[Codex App Server](https://learn.chatgpt.com/docs/app-server#turns). The installed
+0.160.0 generated `TurnStartParams` schema also exposes that field. The adapter
+projects only the answer object shape into the native schema; canonical JSON
+Schema 2020-12 plus frozen models and the owner's request/context/citation checks
+remain authoritative. It does not repair JSON, invent citations or retry a failed
+inference. V1 prompt bytes and old schema files remain unchanged.
+
+Checkpoint verification: 534 focused protocol/native/owner/worker/API/Web tests
+PASS, including 55 new grounding/native cases. Ruff, formatter and strict focused
+mypy PASS. This run contains no DB concurrency test, live model inference or
+grounded browser acceptance. The Starlette test-client dependency emits its
+existing deprecation warning; no dependency was added or changed in this slice.
+
+The user now authorizes connecting discovery to actual Codex answers (C04/C05),
+not just metadata cards. The first answer slice uses up to three explicitly
+selected Item Revisions, with a pinned optional Graph snapshot. It preserves
+plain-chat V1 and does not imply automatic corpus-wide search or image inspection.
+
+1. Responsibility: Catalog resolves authorized sources; the existing Chat Owner
+   prepares, dispatches, validates and commits a grounded turn; workers only answer.
+2. Canonical source: Registry Item/component Artifacts, published Graph pointers,
+   and accepted additive solution reports. A search card is not source content.
+3. Identity: existing conversation/turn and immutable Item/Artifact revisions;
+   no separate source-card registry or new persistent queue.
+4. Resolution: independently verify the active operator and current ITEM_READ /
+   GENERAL_CHAT permissions, Item lifecycle and official approval, exact manifest,
+   component schema/media/member/hash, published Graph and accepted report linkage.
+5. Access patterns: bounded indexed Item/Graph lookups, batch pointer resolution,
+   source-key membership, append-only history and existing atomic claim/replay.
+6. Structures: ordered frozen source tuples and keyed pointer maps; existing
+   Registry/Graph/analysis indexes. No embeddings, vector DB or mutable global cache.
+7. Scale: at most three Items and bounded associated Graph/report text per turn;
+   linear rendering in bounded source bytes; no corpus scan or N+1 history queries.
+8. Transactions: no DB transaction across model generation. Recheck authorization
+   before materialization, execution and history exposure; pin immutable inputs.
+9. Dependency: public contracts -> existing application ports -> Catalog/socket
+   adapters. Only the trusted owner peer receives the new Catalog read operation;
+   it cannot call Catalog mutations. No worker socket/DB/NAS access is added.
+10. Failure/replay: unsupported/missing/stale/hash/denied sources fail explicitly.
+    Same intent keeps the same input pins. Unknown model outcomes are never retried
+    blindly; existing exact known-result recovery remains authoritative.
+11. Alternative: adding source text to a V1 user string would erase its provenance
+    and break honest version/recovery semantics. Add successor message/input/result,
+    worker/owner envelope and citation contracts; keep released V1 schema bytes.
+
+Answer sections distinguish source-supported explanation, model inference, general
+knowledge and insufficient evidence. Keys must belong to the exact prepared
+context. The owner issues a result/context-bound citation integrity receipt, not a
+scientific correctness approval. UI navigation comes from verified references,
+never model-written paths or URLs. Graph absence is reported, not fabricated.

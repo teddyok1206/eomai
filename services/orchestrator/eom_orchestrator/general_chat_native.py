@@ -11,7 +11,7 @@ import re
 from collections import deque
 from collections.abc import Mapping
 from time import monotonic
-from typing import Protocol, cast
+from typing import Protocol, cast, overload
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.general_chat import (
@@ -19,6 +19,20 @@ from eom_protocol.general_chat import (
     ChatTurnResult,
     read_chat_turn_input,
     read_chat_turn_result,
+)
+from eom_protocol.general_chat_grounding import (
+    ChatInputContract,
+    ChatResultContract,
+    GroundedChatTurnInput,
+    GroundedChatTurnResult,
+    read_grounded_chat_input,
+)
+
+from eom_orchestrator.general_chat_grounded_prompt import (
+    GROUNDED_CHAT_INSTRUCTIONS,
+    grounded_chat_output_schema,
+    grounded_chat_result,
+    grounded_chat_text,
 )
 
 NATIVE_PROFILE = "codex-app-server/0.160.0/environment-free/1.0"
@@ -259,7 +273,7 @@ class CodexChatSession:
                 raise NativeChatError()
         self._pending.clear()
 
-    def _start_thread(self, request: ChatTurnInput) -> str:
+    def _start_thread(self, request: ChatInputContract) -> str:
         response = self._rpc(
             "thread/start",
             {
@@ -274,7 +288,9 @@ class CodexChatSession:
                 "runtimeWorkspaceRoots": [],
                 "selectedCapabilityRoots": [],
                 "allowProviderModelFallback": False,
-                "baseInstructions": CHAT_INSTRUCTIONS,
+                "baseInstructions": GROUNDED_CHAT_INSTRUCTIONS
+                if isinstance(request, GroundedChatTurnInput)
+                else CHAT_INSTRUCTIONS,
             },
         )
         if (
@@ -310,24 +326,42 @@ class CodexChatSession:
             self._rpc("thread/inject_items", {"threadId": thread_id, "items": items})
         return thread_id
 
-    def answer(self, request: ChatTurnInput) -> ChatTurnResult:
-        read_chat_turn_input(request.model_dump(mode="json"))
+    @overload
+    def answer(self, request: ChatTurnInput) -> ChatTurnResult: ...
+
+    @overload
+    def answer(self, request: GroundedChatTurnInput) -> GroundedChatTurnResult: ...
+
+    def answer(self, request: ChatInputContract) -> ChatResultContract:
+        if isinstance(request, GroundedChatTurnInput):
+            read_grounded_chat_input(request.model_dump(mode="json"))
+        else:
+            read_chat_turn_input(request.model_dump(mode="json"))
         if not self.ready:
             raise NativeChatError("CODEX_UNAVAILABLE")
         self._reset_budget(seconds=TURN_TIMEOUT_SECONDS)
         try:
             thread_id = self._start_thread(request)
+            turn_parameters: dict[str, object] = {
+                "threadId": thread_id,
+                "input": [
+                    {
+                        "type": "text",
+                        "text": grounded_chat_text(request)
+                        if isinstance(request, GroundedChatTurnInput)
+                        else request.messages[-1].text,
+                        "textElements": [],
+                    }
+                ],
+                "approvalPolicy": "never",
+                "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
+                "environments": [],
+            }
+            if isinstance(request, GroundedChatTurnInput):
+                turn_parameters["outputSchema"] = grounded_chat_output_schema(request)
             response = self._rpc(
                 "turn/start",
-                {
-                    "threadId": thread_id,
-                    "input": [
-                        {"type": "text", "text": request.messages[-1].text, "textElements": []}
-                    ],
-                    "approvalPolicy": "never",
-                    "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
-                    "environments": [],
-                },
+                turn_parameters,
             )
             turn = _object(response.get("turn"))
             turn_id = _handle(turn.get("id"))
@@ -482,7 +516,14 @@ class CodexChatSession:
             raise NativeChatError()
 
     @staticmethod
-    def _result(request: ChatTurnInput, *, reply: str, failure: str | None) -> ChatTurnResult:
+    def _result(
+        request: ChatInputContract, *, reply: str, failure: str | None
+    ) -> ChatResultContract:
+        if isinstance(request, GroundedChatTurnInput):
+            try:
+                return grounded_chat_result(request, reply=reply, failure=failure)
+            except ValueError as exc:
+                raise NativeChatError("CODEX_PROTOCOL_INVALID") from exc
         document = {
             **{
                 key: getattr(request, key)
