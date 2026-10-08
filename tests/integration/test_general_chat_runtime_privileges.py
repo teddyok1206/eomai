@@ -76,6 +76,7 @@ def test_actual_limited_role_completes_two_private_owner_histories_and_publicati
     with engine.connect() as connection:
         assert chat_privileges_ready(connection, role=manifest.runtime_role)
         assert chat_role_boundary_ready(connection, role=manifest.runtime_role)
+    conversations = {}
     for actor in chat.actors:
         conversation = owner.create(
             actor_id=actor,
@@ -105,7 +106,17 @@ def test_actual_limited_role_completes_two_private_owner_histories_and_publicati
             request=request,
             idempotency_key=key,
         )
-        assert replay.turn_id == queued.turn_id and replay.state == "COMPLETED"
+        assert replay.conversation_id == queued.conversation_id
+        assert replay.messages[0].turn_id == queued.messages[0].turn_id
+        assert replay.messages[-1].state == "COMPLETED"
+        assert replay.messages == view.messages
+        conversations[actor] = conversation.conversation_id
+    for actor, other in (chat.actors, tuple(reversed(chat.actors))):
+        own_list = owner.conversations(actor_id=actor, cursor=None)
+        assert conversations[actor] in {value.conversation_id for value in own_list.values}
+        assert conversations[other] not in {value.conversation_id for value in own_list.values}
+        with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+            owner.conversation(actor_id=actor, conversation_id=conversations[other], cursor=None)
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_DEDICATED_PRIVILEGES_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `DISPOSABLE_DEDICATED_PRIVILEGES_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -561,8 +561,10 @@ results; no production state was involved. Ruff check/format (48 files), strict
 mypy (six preparation/runtime modules), shell syntax and diff checks passed. One
 pre-existing Starlette TestClient deprecation warning remains.
 
-Both chat services are still not-found/inactive; sudo authentication is currently
-expired. No owner identity, production role, migration or runtime activation was
+Both chat services are still not-found/inactive; the automation-terminal sudo
+preflight required authentication. That did not establish the separate tmux
+terminal's credential state (see the correction below). No owner identity,
+production role, migration or runtime activation was
 performed, and native/GPU calls remain zero for this checkpoint. The next bounded
 privileged action is only the manifest-guarded disposable role plus private
 credential preparation, followed by `chat-role-tests`; it is not production
@@ -584,10 +586,46 @@ contract/release suite: **492 PASS,12 SKIP**. The new24 cases are simulated
 preparation boundary tests, not production or actual limited-role SQL acceptance.
 Ruff check/format, strict mypy for the new script and diff checks: **PASS**.
 The45-case disposable persistence baseline and the12 pending real role cases
-remain distinct. Sudo is still expired; neither root preparer has been run.
+remain distinct. The automation-terminal sudo preflight still required a
+password; neither root preparer had been run at this checkpoint.
 
 The earlier clean `bea6ce34dd217257d2a4ce4f3378feeaba2c07a1` runtime candidate's
 three-wheel RECORD/canonical inventory and wheel-only imports/config negatives
 passed at02:44 UTC. The production preparer is deployment code, not an activated
 runtime. These results do not close supported auth, OS isolation, coordinated
 installation or real answer/follow-up/two-user browser gates.
+
+## Actual dedicated privilege acceptance — 2026-10-08 02:59 UTC
+
+Correction: the earlier automation-terminal `sudo -n true` checks did not prove
+that the operator's tmux credential had expired. An in-pane, exit-status-only
+probe confirmed `EOM:4` / `general-chat` still had valid sudo authentication.
+No pane history, password or auth-file contents were captured, and no new login
+or credential enrollment was needed. Privileged work uses that verified terminal,
+not a claim that a different terminal's failure invalidates its authorization.
+
+Pinned clean-source preparation at
+`092c4d95ed480dfbc26ea60953f07783ebc1b01d` completed successfully for the existing
+guarded disposable manifest only. Its dedicated `chat.env` is eom:eom600; no
+production role, migration, service, native inference or GPU was changed.
+
+The new actual limited-role suite: **12 PASS**. It verifies positive startup
+admission, canonical publication and replay for two private owners, cross-owner
+read/list exclusion, and actual PostgreSQL denial of credential/identity/legacy
+slot access, job-payload or Artifact-approval mutation, history deletion and DDL.
+Independent extra/missing column grants are detected and restored through the
+guarded fixture. The existing persistence/concurrency suite reran: **45 PASS**.
+
+The first limited-role run had11 PASS/1 FAIL because the new test incorrectly
+treated the returned conversation projection as a turn receipt. A second run
+had11 PASS/1 FAIL because the added ownership-denial assertion used the wrong
+stable error name. Both test assertions were corrected to the existing canonical
+contracts; runtime code, schema bytes and role grants were unchanged. All12 cases
+then passed. These failures are retained as test evidence, not reinterpreted as
+an operational state-machine or permission defect.
+
+Source baseline remains492 PASS/12 opt-in SKIP; those same12 opt-in cases have now
+separately passed against actual disposable PostgreSQL. Runtime OS isolation,
+supported authentication direction, coordinated production release and real
+answer/follow-up/two-user browser acceptance remain pending. Feature is not live
+or complete, and the original all-authenticated-user scope is unchanged.
