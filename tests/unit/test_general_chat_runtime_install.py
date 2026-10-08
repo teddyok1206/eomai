@@ -38,13 +38,20 @@ def test_changed_checkout_is_rejected(monkeypatch, head, dirty):
         installation.require_source(COMMIT, MODEL)
 
 
-@pytest.mark.parametrize("state", ["active", "activating", "failed"])
-def test_both_services_must_be_stopped_before_staging(monkeypatch, state):
+@pytest.mark.parametrize("state,pid", [("active", "1"), ("activating", "0"), ("failed", "1")])
+def test_both_services_must_be_stopped_before_staging(monkeypatch, state, pid):
     monkeypatch.setattr(installation.os, "geteuid", lambda: 0)
-    replies = iter([COMMIT, "", "inactive", state])
+    replies = iter([COMMIT, "", "inactive", "0", state, pid])
     monkeypatch.setattr(installation, "output", lambda *_: next(replies))
     with pytest.raises(ChatError, match="MUST_BE_STOPPED"):
         installation.require_source(COMMIT, MODEL)
+
+
+def test_quiescent_failed_startup_can_be_replaced_without_erasing_failure_history(monkeypatch):
+    monkeypatch.setattr(installation.os, "geteuid", lambda: 0)
+    replies = iter([COMMIT, "", "inactive", "0", "failed", "0"])
+    monkeypatch.setattr(installation, "output", lambda *_: next(replies))
+    installation.require_source(COMMIT, MODEL)
 
 
 @pytest.mark.parametrize(
@@ -82,6 +89,55 @@ def test_configuration_is_fixed_small_nonsecret_values():
     assert all(path.parent == installation.CONFIG_ROOT for path in values)
     assert b"EOM_GENERAL_CHAT_MODEL=synthetic-model\n" in values.values()
     assert all(b"API_KEY" not in value and b"TOKEN" not in value for value in values.values())
+
+
+@pytest.mark.parametrize("previous", ["main", COMMIT])
+def test_release_update_never_resolves_an_unpinned_or_same_predecessor(monkeypatch, previous):
+    monkeypatch.setattr(installation, "require_replay", lambda *a, **k: pytest.fail("no lookup"))
+    with pytest.raises(ChatError, match="SOURCE_MISMATCH"):
+        installation.require_release_update(
+            installation.CONFIG_ROOT / "general-chat-release.env",
+            previous=previous,
+            selected=COMMIT,
+        )
+
+
+def test_atomic_nonsecret_release_update_requires_exact_existing_predecessor(monkeypatch, tmp_path):
+    target = tmp_path / "general-chat-release.env"
+    previous = "b" * 40
+    old = f"EOM_RUNTIME_SOURCE_COMMIT={previous}\n".encode()
+    new = f"EOM_RUNTIME_SOURCE_COMMIT={COMMIT}\n".encode()
+    target.write_bytes(old)
+    target.chmod(0o600)
+    original_read = installation.read_chat_preparation_file
+    original_install = installation.install_chat_environment
+    monkeypatch.setattr(
+        installation,
+        "read_chat_preparation_file",
+        lambda path, **kw: original_read(
+            path, uid=target.stat().st_uid, gid=target.stat().st_gid, mode=0o600
+        ),
+    )
+    monkeypatch.setattr(
+        installation,
+        "install_chat_environment",
+        lambda path, payload, **kw: original_install(
+            path, payload, uid=target.stat().st_uid, gid=target.stat().st_gid
+        ),
+    )
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.update_release_pin(target, new, previous="c" * 40, selected=COMMIT)
+    assert target.read_bytes() == old and list(tmp_path.iterdir()) == [target]
+    installation.update_release_pin(target, new, previous=previous, selected=COMMIT)
+    assert target.read_bytes() == new and stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert list(tmp_path.iterdir()) == [target]
+
+
+def test_explicit_release_update_is_not_a_missing_file_install(monkeypatch, tmp_path):
+    with pytest.raises(ChatError, match="TARGET_CONFLICT"):
+        installation.require_release_update(
+            tmp_path / "missing.env", previous="b" * 40, selected=COMMIT
+        )
 
 
 def test_activation_reads_admission_then_enables_only_the_two_chat_services(monkeypatch):

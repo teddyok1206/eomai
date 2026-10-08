@@ -1,7 +1,8 @@
 # ADR0212: General chat with dedicated, resident capacity
 
-Status: implementation in progress, 2026-10-07 UTC. No runtime activation yet.
-Activation gate: `DEDICATED_CODEX_ENROLLMENT_PENDING` (2026-10-08 UTC).
+Status: implementation in progress; production API/migrations installed.
+Activation gate: `NATIVE_STARTUP_REVALIDATION_PENDING` (2026-10-08 UTC).
+Dedicated device enrollment completed; first activation failed before inference.
 External LLM APIs remain prohibited by the latest explicit user decision.
 Current user-authorized access scope: **all authenticated EOM users**. The later
 instruction `그렇게 하지말고 그냥 다 쓸 수 있게 해` supersedes the interim
@@ -54,6 +55,20 @@ Pin the compatible runtime commit explicitly; do not force identical components
 to reinstall because only a helper/test changed. Runtime modules retain the
 existing release installer's eom:eom0644 ownership, not a newly invented root
 ownership requirement. Dedicated service identities cannot write those modules.
+
+Release advancement changes only the root-owned nonsecret source pin from an
+explicit, exact predecessor after both dedicated units are quiescent and the
+new installed wheel is verified. Stage the replacement durably and atomically;
+reject missing/foreign predecessor bytes. Model, auth, secrets and unit bytes
+remain first-install/exact-replay. A terminal failed startup with MainPID=0 may
+be redeployed without clearing its journal or changing persisted turn history.
+
+The installed v0.160 startup emitted recoverable `configWarning` and disabled
+`remoteControl/status/changed` metadata. Recognize a closed set of administrative
+notifications consistently before/between/after turns; never interpret them as
+answers. Keep effective configuration, tool requests, thread/turn identity and
+unknown executable events fail-closed. This fixes native integration, not a new
+public contract or an exception to the external-API rule.
 
 The API owns authenticated commands and queries; an Orchestrator application
 port owns execution, validation and canonical transcript Artifacts. Workers see

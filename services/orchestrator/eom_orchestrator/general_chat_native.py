@@ -26,6 +26,19 @@ MAX_TURN_EVENTS = 50000
 TURN_TIMEOUT_SECONDS = 900
 RPC_TIMEOUT_SECONDS = 45
 
+# Installed v0.160 emits these administrative notifications during initialization
+# and between turns. They are never answers, tool grants or conversation history.
+# Effective configuration/capability admission remains separate and fail-closed.
+NON_CONTENT_NOTIFICATIONS = frozenset(
+    {
+        "account/updated",
+        "account/rateLimits/updated",
+        "configWarning",
+        "remoteControl/status/changed",
+        "serverRequest/resolved",
+    }
+)
+
 # This is an assistant surface, not a coding-agent workspace. Tool suppression is
 # enforced by the installed configuration and OS boundary, not this instruction.
 CHAT_INSTRUCTIONS = (
@@ -65,6 +78,7 @@ DISABLED_CHAT_FEATURES = frozenset(
         "plugins",
         "realtime_conversation",
         "remote_plugin",
+        "remote_control",
         "request_permissions_tool",
         "send_message_to_user_async",
         "shell_snapshot",
@@ -227,11 +241,7 @@ class CodexChatSession:
         # users, and reject any native execution event before generation starts.
         for event in self._pending:
             method = event.get("method")
-            if method not in {
-                "account/updated",
-                "account/rateLimits/updated",
-                "serverRequest/resolved",
-            }:
+            if method not in NON_CONTENT_NOTIFICATIONS:
                 raise NativeChatError()
         self._pending.clear()
 
@@ -335,7 +345,7 @@ class CodexChatSession:
     def _drain_finished_thread(self, thread_id: str) -> None:
         for event in self._pending:
             method = event.get("method")
-            if method in {"account/updated", "account/rateLimits/updated"}:
+            if method in NON_CONTENT_NOTIFICATIONS:
                 continue
             params = _object(event.get("params"))
             native_thread = _handle(params.get("threadId"))
@@ -357,7 +367,7 @@ class CodexChatSession:
         while True:
             event = self._pending.popleft() if self._pending else self._receive()
             method = event.get("method")
-            if method in {"account/updated", "account/rateLimits/updated"}:
+            if method in NON_CONTENT_NOTIFICATIONS:
                 continue
             params = _object(event.get("params"))
             if method == "thread/started":

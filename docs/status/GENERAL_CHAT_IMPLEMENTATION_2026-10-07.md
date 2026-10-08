@@ -1,14 +1,44 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `PREACTIVATION_OS_BOUNDARIES_VERIFIED`; overall feature `IN_PROGRESS`.
-Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
-Current activation gate: `DEDICATED_CODEX_ENROLLMENT_PENDING` (2026-10-08 UTC).
+Status: `NATIVE_STARTUP_REPAIR_VERIFIED`; overall feature `IN_PROGRESS`.
+Production API and chat migrations are installed; dedicated activation has not
+yet passed native readiness. Web chat release and real answers remain pending.
+Current activation gate: `NATIVE_STARTUP_REVALIDATION_PENDING` (2026-10-08 UTC).
 Latest user decision: `EXTERNAL_LLM_API_PROHIBITION=RETAINED`; the proposed
 dedicated-chat SIWC/Responses exception is `NOT_AUTHORIZED`.
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
 instruction supersedes the interim personal-only reply. Per-user history remains
 private, and one dedicated FIFO slot remains separate from slots01..06.
 This is not a completion or live acceptance report.
+
+## Latest operational checkpoint — 2026-10-08 UTC
+
+Dedicated interactive enrollment completed with exit0 after the user's `완료`.
+Production migration upgraded to `20261008_0049`; API installed from
+`3927898c1996f0959572a56c11f6178a9a8d3836` and readiness passed. The chat owner
+role, two fixed units and nonsecret model/source configuration were staged.
+Web remains the predecessor release until coordinated completion.
+
+First activation failed before any question/model generation. Only the two new
+chat services were stopped. Existing platform services remained healthy. An
+initial installer ownership assumption was corrected to the release tool's
+existing eom:eom0644 package ownership, not by changing runtime ownership.
+
+An isolated metadata-only native probe passed identity, CLI capability, effective
+configuration and account admission. It identified startup `configWarning` and
+`remoteControl/status/changed` events being mistaken for executable conversation
+events. The adapter now recognizes an explicit, bounded administrative event set
+in all event phases; unknown events and tool requests still fail closed.
+
+The stopped-runtime installer can atomically advance only its nonsecret release
+pin from an explicit, byte-verified predecessor. No implicit latest, auth/model
+replacement, DB-row rewrite or failure-history clearing is introduced.
+
+Source chat/API/all-Web/migration suites: **725 PASS**. Ruff format/check, strict
+mypy for the two changed production modules, and diff checks: **PASS**. Earlier
+actual disposable role/persistence runs remain **12 PASS /45 PASS**; these source
+changes do not alter the DB schema. Native readiness, real answer/follow-up and
+browser usage are not claimed by these results.
 
 ## Verified first slice
 

@@ -2,7 +2,8 @@
 """Stage/activate the fixed dedicated Codex slot after the existing release install.
 
 No migrations, wheel installation, authentication transfer or six-slot mutation.
-Root-owned targets are first-install-or-exact-replay, not an implicit upgrade.
+Root-owned targets are first-install-or-exact-replay. Only the nonsecret release
+pin can advance from an explicitly named, verified predecessor while stopped.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from eom_orchestrator.general_chat_owner_runtime import (
@@ -67,7 +69,11 @@ def require_source(commit: str, model: str) -> None:
     ):
         raise ChatError("GENERAL_CHAT_INSTALL_SOURCE_MISMATCH")
     for unit in UNITS:
-        if output(["systemctl", "show", unit, "--property=ActiveState", "--value"]) != "inactive":
+        state = output(["systemctl", "show", unit, "--property=ActiveState", "--value"])
+        pid = output(["systemctl", "show", unit, "--property=MainPID", "--value"])
+        # A terminal failed startup is quiescent, not permission to erase its
+        # journal or operation history. Never stage over a live process.
+        if state not in {"inactive", "failed"} or pid != "0":
             raise ChatError("GENERAL_CHAT_INSTALL_MUST_BE_STOPPED")
 
 
@@ -136,7 +142,35 @@ def require_compatible_runtime(commit: str, runtime_commit: str) -> None:
     require_installed_release(runtime_commit)
 
 
-def stage(commit: str, model: str, *, runtime_commit: str | None = None) -> None:
+def require_release_update(path: Path, *, previous: str, selected: str) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", previous) is None or previous == selected:
+        raise ChatError("GENERAL_CHAT_INSTALL_SOURCE_MISMATCH")
+    expected = f"EOM_RUNTIME_SOURCE_COMMIT={previous}\n".encode()
+    if not require_replay(path, expected, mode=0o600):
+        raise ChatError("GENERAL_CHAT_INSTALL_TARGET_CONFLICT")
+
+
+def update_release_pin(path: Path, payload: bytes, *, previous: str, selected: str) -> None:
+    """Atomic nonsecret pin advance; auth/model/unit bytes are never overwritten."""
+    with tempfile.TemporaryDirectory(prefix=".general-chat-release-", dir=path.parent) as staging:
+        temporary = Path(staging) / path.name
+        install_chat_environment(temporary, payload, uid=0, gid=0)
+        require_release_update(path, previous=previous, selected=selected)
+        os.replace(temporary, path)
+        parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parent)
+        finally:
+            os.close(parent)
+
+
+def stage(
+    commit: str,
+    model: str,
+    *,
+    runtime_commit: str | None = None,
+    previous_runtime_commit: str | None = None,
+) -> None:
     require_source(commit, model)
     selected = runtime_commit or commit
     require_compatible_runtime(commit, selected)
@@ -175,9 +209,14 @@ def stage(commit: str, model: str, *, runtime_commit: str | None = None) -> None
         for target in unit_sources
     }
     # Complete all conflict checks before the first filesystem mutation.
-    existing_configs = {
-        target: require_replay(target, payload, mode=0o600) for target, payload in configs.items()
-    }
+    release_target = CONFIG_ROOT / "general-chat-release.env"
+    existing_configs = {}
+    for target, payload in configs.items():
+        if target == release_target and previous_runtime_commit is not None:
+            require_release_update(target, previous=previous_runtime_commit, selected=selected)
+            existing_configs[target] = True
+        else:
+            existing_configs[target] = require_replay(target, payload, mode=0o600)
     existing_units = {
         target: require_replay(target, payload, mode=0o644)
         for target, payload in unit_payloads.items()
@@ -194,6 +233,13 @@ def stage(commit: str, model: str, *, runtime_commit: str | None = None) -> None
                 check=True,
             )
         require_replay(target, unit_payloads[target], mode=0o644)
+    if previous_runtime_commit is not None:
+        update_release_pin(
+            release_target,
+            configs[release_target],
+            previous=previous_runtime_commit,
+            selected=selected,
+        )
     subprocess.run(["systemctl", "daemon-reload"], timeout=20, check=True)
 
 
@@ -235,9 +281,18 @@ def main() -> int:
     parser.add_argument(
         "--runtime-commit", help="Installed compatible release pin; no latest fallback"
     )
+    parser.add_argument(
+        "--previous-runtime-commit",
+        help="Exact stopped-runtime predecessor for nonsecret pin update",
+    )
     args = parser.parse_args()
     try:
-        stage(args.commit, args.model, runtime_commit=args.runtime_commit)
+        stage(
+            args.commit,
+            args.model,
+            runtime_commit=args.runtime_commit,
+            previous_runtime_commit=args.previous_runtime_commit,
+        )
         if args.action == "activate":
             activate()
         print("general_chat_runtime=" + ("READY" if args.action == "activate" else "STAGED"))

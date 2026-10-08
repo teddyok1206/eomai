@@ -183,6 +183,43 @@ def test_followup_preserves_roles_and_injects_only_preceding_history():
     assert start["environments"] == []
 
 
+def test_actual_startup_metadata_is_not_mistaken_for_conversation_execution():
+    channel = Channel()
+    channel.queue.extend(
+        [
+            {"method": "configWarning", "params": {"summary": "recoverable startup warning"}},
+            {"method": "remoteControl/status/changed", "params": {"status": "disabled"}},
+            {"method": "account/updated", "params": {"authMode": "chatgpt"}},
+        ]
+    )
+    native, _ = session(channel)
+    assert native.ready and not native._pending
+    result = native.answer(request())
+    assert result.status == "SUCCEEDED" and result.reply == "안녕하세요!"
+
+
+def test_metadata_between_turn_events_is_not_exported_or_used_as_an_answer():
+    events = [
+        {"method": "configWarning", "params": {"summary": "private diagnostic"}},
+        {"method": "remoteControl/status/changed", "params": {"status": "disabled"}},
+        event("item/completed", item=answer_item(text="실제 답변")),
+        final_event(),
+    ]
+    native, _ = session(Channel(events))
+    result = native.answer(request())
+    assert result.status == "SUCCEEDED" and result.reply == "실제 답변"
+    assert "private diagnostic" not in result.model_dump_json()
+
+
+@pytest.mark.parametrize("method", ["item/completed", "turn/started", "unknown/admin/event"])
+def test_other_startup_events_are_still_rejected(method):
+    channel = Channel()
+    channel.queue.append({"method": method, "params": {}})
+    with pytest.raises(NativeChatError, match="CODEX_PROTOCOL_INVALID"):
+        session(channel)
+    assert channel.closed
+
+
 def test_two_owners_use_distinct_ephemeral_threads_without_native_history_resume():
     native, channel = session()
     assert native.answer(request()).status == "SUCCEEDED"
