@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from eom_catalog_contracts import (
+    ApprovedItemKnowledgeSourceV2,
+    KnowledgeAnalysisAcceptedResultArtifactMember,
     KnowledgeAnalysisProposalReceiptV9,
     KnowledgeAnalysisRequestV10,
     KnowledgeAnalysisResultV10,
@@ -38,6 +40,8 @@ class SolutionEvidenceResolutionError(ValueError):
 class ResolvedSolutionEvidence:
     pointer: KnowledgeSolutionEvidencePointer
     report: KnowledgeAnalysisSolutionReport
+    source: ApprovedItemKnowledgeSourceV2
+    base_accepted_result: KnowledgeAnalysisAcceptedResultArtifactMember
 
 
 def _manifest_member(
@@ -209,6 +213,13 @@ def _resolve_row(
         return ResolvedSolutionEvidence(
             pointer=KnowledgeSolutionEvidencePointer.model_validate(pointer_value),
             report=proposal.solution_report,
+            source=ApprovedItemKnowledgeSourceV2(
+                source_class=request.source.source_class,
+                item_id=request.source.item_id,
+                item_revision_id=request.source.item_revision_id,
+                artifact_member=request.source.artifact_member,
+            ),
+            base_accepted_result=request.base_analysis.accepted_result_artifact,
         )
     except (KnowledgeProposalResolutionError, ValidationError, ValueError) as exc:
         if isinstance(exc, SolutionEvidenceResolutionError):

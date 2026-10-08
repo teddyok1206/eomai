@@ -300,12 +300,13 @@ class ChatKnowledgeResolutionService:
                 direct_sources = {source.item.item_revision_id: source for source in sources}
                 for base_id, evidence in solutions.items():
                     base = indexed[base_id]
-                    successor = indexed.get(evidence.pointer.solution_analysis_run_id)
-                    if successor is None:
-                        # A report outside the pinned snapshot is not silently adopted.
-                        continue
                     ref = references[base.source_revision_id]
                     component = by_id[ref.item_revision_id][2]
+                    direct = direct_sources[ref.item_revision_id]
+                    source_member = evidence.source.artifact_member
+                    base_result = evidence.base_accepted_result
+                    # V10 is an accepted additive report of the snapshot's exact V9
+                    # base, not a replacement Graph member. Pin its validated member.
                     if (
                         (
                             base.source_artifact_id,
@@ -313,18 +314,37 @@ class ChatKnowledgeResolutionService:
                             base.source_sha256,
                         )
                         != (component.artifact_id, component.artifact_revision_id, component.sha256)
-                        or successor.source_revision_id != ref.item_revision_id
-                        or successor.accepted_result_artifact_id
-                        != evidence.pointer.accepted_result_artifact.artifact_id
-                        or successor.accepted_result_artifact_revision_id
-                        != evidence.pointer.accepted_result_artifact.artifact_revision_id
-                        or successor.accepted_result_sha256
-                        != evidence.pointer.accepted_result_artifact.sha256
+                        or evidence.pointer.base_analysis_run_id != base_id
+                        or evidence.source.item_id != ref.item_id
+                        or evidence.source.item_revision_id != ref.item_revision_id
+                        or (
+                            source_member.artifact_id,
+                            source_member.artifact_revision_id,
+                            source_member.sha256,
+                            source_member.schema_ref,
+                            source_member.member_path,
+                        )
+                        != (
+                            direct.pointer.artifact_id,
+                            direct.pointer.artifact_revision_id,
+                            direct.pointer.sha256,
+                            direct.pointer.schema_ref,
+                            direct.pointer.member_path,
+                        )
+                        or (
+                            base.accepted_result_artifact_id,
+                            base.accepted_result_artifact_revision_id,
+                            base.accepted_result_sha256,
+                        )
+                        != (
+                            base_result.artifact_id,
+                            base_result.artifact_revision_id,
+                            base_result.sha256,
+                        )
                     ):
                         raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_HASH_MISMATCH")
                     if ref.item_revision_id in reported:
                         raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_STALE")
-                    direct = direct_sources[ref.item_revision_id]
                     if direct.approval != "APPROVED":
                         continue
                     report = evidence.report
@@ -348,7 +368,7 @@ class ChatKnowledgeResolutionService:
                             kind="SOLUTION_REPORT",
                             approval="APPROVED",
                             pointer=ArtifactMemberPointer.model_validate(pointer_value),
-                            location="Graph에 고정된 승인 풀이보고서 요약",
+                            location="고정 Graph 기초분석에 연결된 승인 풀이보고서 요약",
                             text=report_text,
                             graph_node_ids=(),
                         )

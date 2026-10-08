@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     EvidenceBundleMaterialsV2,
     EvidenceBundlePublicationResultV2,
     EvidenceEntryV5,
+    KnowledgeAnalysisAcceptedResultArtifactMember,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisSolutionReport,
     KnowledgeAnalysisSourceArtifactMemberV2,
@@ -377,6 +378,21 @@ def _solution_evidence() -> ResolvedSolutionEvidence:
     return ResolvedSolutionEvidence(
         pointer=KnowledgeSolutionEvidencePointer.model_validate(pointer_value),
         report=report,
+        source=ApprovedItemKnowledgeSourceV2(
+            source_class="PAST_EXAM",
+            item_id="item_" + "b" * 32,
+            item_revision_id="itemrev_" + "c" * 32,
+            artifact_member=_member(
+                "c", media_type="application/json", schema_ref="eom.assessment.item-content/1.0"
+            ),
+        ),
+        base_accepted_result=KnowledgeAnalysisAcceptedResultArtifactMember(
+            artifact_id="artifact_" + "4" * 32,
+            artifact_revision_id="rev_" + "4" * 32,
+            sha256="sha256:" + "4" * 64,
+            logical_name="accepted-result.json",
+            bytes=1,
+        ),
     )
 
 

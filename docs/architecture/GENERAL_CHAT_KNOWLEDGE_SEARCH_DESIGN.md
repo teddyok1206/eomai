@@ -362,3 +362,21 @@ existing administrator permission checks still apply. A Node test executes the
 actual boot function with delayed reads and covers initial restoration, newer
 chat navigation, and unauthorized administrator fallback. This guards the shared
 presentation boundary without introducing chat-specific routing state.
+
+### Additive solution-report resolution correction
+
+Live metadata showed that the selected Graph pins 520 accepted V9 bases, while
+their accepted V10 solution successors are additive reports, not new Graph
+members. Requiring both runs in that snapshot excluded valid reports. Match the
+existing retrieval semantics instead: Catalog resolves the unique accepted V10
+successor of the exact snapshot-local base, validates its source Item/component
+and base accepted-result pointer against that association, and pins the resolved
+report Artifact member in the immutable chat input. No Graph republish, latest
+snapshot fallback or report-history mutation is needed.
+
+The existing solution resolver returns small frozen source/base provenance beside
+its validated pointer/report. This avoids another query or duplicate Artifact
+read. At most three indexed predecessor lookups, a request-local map, and the
+existing unique-successor check remain authoritative. Missing reports remain
+explicit limitations; wrong source/base hashes fail closed. Existing source,
+Graph and worker schemas, DB/queue and dependency direction are unchanged.
