@@ -70,6 +70,13 @@ answers. Keep effective configuration, tool requests, thread/turn identity and
 unknown executable events fail-closed. This fixes native integration, not a new
 public contract or an exception to the external-API rule.
 
+The actual v0.160 generated native schema declares agent-message phase optional
+and nullable (legacy providers may omit it). Honor that native contract: public
+agent text without phase is eligible only after item completion and a successful
+terminal turn; explicit commentary, reasoning, tools and failed/partial output
+remain excluded. Bounded protocol-method-only failure logging supports diagnosis
+without exporting frame bodies, assistant text, account data or tool arguments.
+
 The API owns authenticated commands and queries; an Orchestrator application
 port owns execution, validation and canonical transcript Artifacts. Workers see
 staged bounded context, never DB/NAS, other users' conversations or credentials.

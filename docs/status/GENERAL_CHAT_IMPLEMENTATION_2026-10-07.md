@@ -40,6 +40,19 @@ actual disposable role/persistence runs remain **12 PASS /45 PASS**; these sourc
 changes do not alter the DB schema. Native readiness, real answer/follow-up and
 browser usage are not claimed by these results.
 
+Follow-up live checkpoint: native initialization and thread-start configuration
+passed under the actual isolated worker identity. Both dedicated units became
+active/READY and enabled; compatible Web wheel3927898 installed (34 RECORD files
+verified), with API0f30f6db. Git verified unchanged Web/API/protocol bytes between
+their pins. Web health/assets and anonymous401 protection passed.
+
+The first two bounded application questions and the user's browser question
+failed; this is not real-answer acceptance. Known failed result receipts remain
+immutable and no generation was automatically replayed. Review of the installed
+native schema also found an overly strict phase requirement: phase is documented
+nullable/optional. Correct that shape and add secret-safe protocol metadata logs;
+revalidate actual answers before declaring the feature usable.
+
 ## Verified first slice
 
 - `일반 → ChatGPT` navigation and a separately styled conversation workspace.

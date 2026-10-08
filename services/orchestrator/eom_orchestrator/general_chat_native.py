@@ -6,6 +6,8 @@ Native thread IDs are process-local handles, never public conversation identitie
 
 from __future__ import annotations
 
+import logging
+import re
 from collections import deque
 from collections.abc import Mapping
 from time import monotonic
@@ -25,6 +27,7 @@ MAX_TURN_BYTES = 32 * 1048576
 MAX_TURN_EVENTS = 50000
 TURN_TIMEOUT_SECONDS = 900
 RPC_TIMEOUT_SECONDS = 45
+LOGGER = logging.getLogger(__name__)
 
 # Installed v0.160 emits these administrative notifications during initialization
 # and between turns. They are never answers, tool grants or conversation history.
@@ -147,6 +150,7 @@ class CodexChatSession:
         self.model = model
         self.cwd = cwd
         self.ready = False
+        self._diagnostic_method = "none"
         self._next_id = 0
         self._pending: deque[dict[str, object]] = deque()
         self._bytes = 0
@@ -162,6 +166,11 @@ class CodexChatSession:
 
     def _receive(self) -> dict[str, object]:
         document = _object(self.channel.receive(deadline=self._deadline))
+        method = document.get("method")
+        if isinstance(method, str) and re.fullmatch(r"[A-Za-z0-9_/-]{1,80}", method):
+            self._diagnostic_method = method
+        elif "id" not in document:
+            self._diagnostic_method = "invalid_notification"
         if document.get("jsonrpc", "2.0") != "2.0":
             raise NativeChatError()
         if "id" not in document:
@@ -182,6 +191,7 @@ class CodexChatSession:
         return document
 
     def _rpc(self, method: str, params: Mapping[str, object]) -> dict[str, object]:
+        self._diagnostic_method = method + "/response"
         request_id = self._next_id
         self._next_id += 1
         self.channel.send({"id": request_id, "method": method, "params": dict(params)})
@@ -339,6 +349,11 @@ class CodexChatSession:
             failure = "CODEX_UNAVAILABLE"
         except NativeChatError as exc:
             failure = exc.code
+        # Protocol method names are bounded metadata, not frame contents. Never
+        # export model text, tool arguments, account data or raw error bodies.
+        LOGGER.warning(
+            "GENERAL_CHAT_NATIVE_FAILURE method=%s code=%s", self._diagnostic_method, failure
+        )
         self.close()
         return self._result(request, reply="", failure=failure)
 
@@ -445,9 +460,14 @@ class CodexChatSession:
             raise NativeChatError("CHAT_ISOLATION_NOT_READY")
         text = _text(item.get("text"))
         phase = item.get("phase")
-        if not isinstance(phase, str) or phase not in {"commentary", "final_answer"}:
+        if phase is not None and (
+            not isinstance(phase, str) or phase not in {"commentary", "final_answer"}
+        ):
             raise NativeChatError()
-        if not completed or phase != "final_answer":
+        # The pinned native schema makes phase nullable/optional. Legacy public
+        # agent text is accepted only on item completion and a successful turn;
+        # explicit commentary, reasoning and partial deltas remain excluded.
+        if not completed or phase == "commentary":
             return
         if item_id in answers and answers[item_id] != text:
             raise NativeChatError()

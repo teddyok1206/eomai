@@ -305,7 +305,6 @@ def test_terminal_failure_never_promotes_partial_answer_or_retries(status):
         event("item/completed", thread_id="other-thread", item=answer_item()),
         event("item/completed", thread_id={}, item=answer_item()),
         event("item/completed", turn_id="other-turn", item=answer_item()),
-        event("item/completed", item=answer_item(phase=None)),
         event("item/completed", item=answer_item(phase={})),
         event("item/completed", item=answer_item(kind={})),
         event("item/completed", item=answer_item(text="x" * 32001)),
@@ -323,6 +322,36 @@ def test_bad_identity_unknown_shape_empty_answer_and_errors_fail_closed(bad_even
     result = native.answer(request())
     assert result.status == "FAILED" and result.reply == "" and channel.closed
     assert "do not leak" not in result.model_dump_json()
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_native_optional_phase_preserves_legacy_public_answer_only_after_completed_turn(missing):
+    item = answer_item(phase=None, text="완료된 공개 답변")
+    if missing:
+        del item["phase"]
+    native, _ = session(Channel([event("item/completed", item=item), final_event()]))
+    assert native.answer(request()).reply == "완료된 공개 답변"
+    native, channel = session(
+        Channel([event("item/completed", item=item), final_event(status="failed")])
+    )
+    result = native.answer(request())
+    assert result.status == "FAILED" and not result.reply and channel.closed
+
+
+def test_native_failure_logs_only_bounded_protocol_metadata_not_model_contents(caplog):
+    native, _ = session(
+        Channel(
+            [
+                event(
+                    "item/completed",
+                    item=answer_item(phase="invalid", text="private answer should not leak"),
+                )
+            ]
+        )
+    )
+    assert native.answer(request()).status == "FAILED"
+    assert "method=item/completed code=CODEX_PROTOCOL_INVALID" in caplog.text
+    assert "private answer" not in caplog.text
 
 
 @pytest.mark.parametrize(
