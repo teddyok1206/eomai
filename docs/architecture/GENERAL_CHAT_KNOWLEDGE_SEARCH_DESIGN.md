@@ -133,3 +133,47 @@ of the new search UI remain pending. This checkpoint used zero model calls,
 no DB migration or grants, and made no changes to the six production slots.
 The next slice is C04/C05: trusted Catalog access, bounded source input, cited
 answer contracts, and protected history/revocation before coordinated activation.
+
+## Runtime privilege correction
+
+The first authenticated HTTPS search failed with an API runtime privilege denial
+on `item_origin_profiles`. The disposable query-plan tests used owner-created
+temporary tables and did not prove the limited production role's access. The new
+search UI was withdrawn to the prior verified Web release while plain chat and
+the additive API release remained available. This supersedes the initial
+assumption that the existing DB grants covered every discovery dependency.
+
+The canonical origin profile and lexical index remain Catalog-owned. The API
+read adapter needs only `item_id`, `item_revision_id`, `item_manifest_sha256`,
+and `source_domain` from `item_origin_profiles`, and `graph_snapshot_revision_id`,
+`node_id`, and `term` from `knowledge_node_terms`. Origin projection must select
+those columns explicitly, not materialize the complete ORM entity. No rights
+records, provenance author fields, full-table SELECT or writes are authorized on
+either table. Application permissions remain GENERAL_CHAT_READ intersected with
+ITEM_READ; owner/worker grants and all six slots remain unchanged.
+
+The existing API privilege matrix is the authority for these additive column
+grants. Extend its supported bootstrap and startup readiness checks, sharing the
+existing column-profile mechanism with narrowly scoped UPDATE grants rather than
+adding another reconciler. Bootstrap revokes column-level drift before granting
+the exact matrix; readiness checks missing/extra columns and rejects table-wide
+grants. Catalog metadata and Item/Graph revisions are unchanged: no new logical
+entity, pointer, schema, migration, cache or queue is needed.
+
+Access remains batched indexed lookup and one read-only repeatable-read search
+transaction. Privilege checks are one bounded matrix query over the scoped tables
+and their columns. Reconciliation is an operator deployment boundary, not a
+worker or per-search side effect. Failure blocks readiness; retries use the same
+supported bootstrap and retained credential, never direct row changes. The
+simpler full-table grant is insufficient because it exposes unused metadata and
+does not enforce least privilege. Validate actual queries and denial of excluded
+columns/writes with the guarded disposable API runtime role before redeployment.
+
+Correction validation: API/Web regressions 935 PASS / 18 environment-specific
+SKIP, and guarded discovery SQL/plan plus actual limited-role tests 23 PASS.
+The role suite also caught an origin-filter `EXISTS (SELECT *)`: PostgreSQL
+requires access to its unneeded columns, so the filter now explicitly selects the
+permitted revision key. The temporary-table metadata suite alone could not catch
+that boundary. Exact readiness rejects missing grants, an extra author-column
+grant, and full-table SELECT; excluded metadata and writes are denied by the real
+limited role. Bootstrap replay/drift reconciliation passed in the disposable DB.

@@ -35,10 +35,11 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "UPDATE app.alembic_version" in source
     assert "CREATE ROLE eom_api_privilege_probe" in source
     assert "TABLE_PRIVILEGES" in source
-    assert "UPDATE_COLUMN_PRIVILEGES" in source
-    assert "GRANT UPDATE ({}) ON TABLE" in source
+    assert "COLUMN_PRIVILEGES" in source
+    assert "GRANT {} ({}) ON TABLE" in source
+    assert "REVOKE SELECT ({0}), INSERT ({0}), UPDATE ({0}), REFERENCES ({0})" in source
     assert "has_column_privilege" in source
-    assert "column-scoped UPDATE table also has table-wide UPDATE" in source
+    assert "column-scoped {privilege} table also has table-wide {privilege}" in source
     assert "workflow_instances" in READ_TABLES
     assert "workflow_instances" in UPDATE_TABLES
     assert "workflow_commands" in INSERT_TABLES
@@ -296,16 +297,18 @@ def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliatio
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
     hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
-    runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
-    assert hwpx_branch < runtime_environment
-    assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in source
+    branch = source[hwpx_branch : source.index("\nfi", hwpx_branch)]
+    assert "runtime.env" not in branch
+    assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in branch
 
 
 def test_disposable_database_runs_pdf_review_persistence_after_runtime_reconciliation() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
     pdf_branch = source.index('if [[ "${action}" == "pdf-review-tests" ]]')
-    runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
+    runtime_environment = source.index(
+        'runtime_environment="${state_directory}/runtime.env"', pdf_branch
+    )
     assert pdf_branch < runtime_environment
     assert "tests/api/test_runtime_role_live.py" in source
     assert "test_pdf_review_upload_claim_is_serialized_by_postgresql" in source

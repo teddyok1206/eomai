@@ -157,9 +157,16 @@ PY
 fi
 
 if [[ "${action}" == "chat-knowledge-tests" ]]; then
+  runtime_environment="${state_directory}/runtime.env"
+  [[ ! -L "${runtime_environment}" && -f "${runtime_environment}" ]] || \
+    fail "reconciled runtime environment is unavailable"
+  [[ "$(stat -Lc '%U:%G:%a' "${runtime_environment}")" == "eom:eom:600" ]] || \
+    fail "runtime environment metadata mismatch"
   export EOM_RUN_API_INTEGRATION=1
   export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_chat_knowledge_search.py
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_chat_knowledge_search.py \
+    tests/integration/test_chat_knowledge_runtime_privileges.py
   printf 'Disposable model-free chat knowledge query/plan tests passed.\n'
   exit 0
 fi

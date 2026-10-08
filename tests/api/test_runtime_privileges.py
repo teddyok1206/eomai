@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from eom_api.runtime_privileges import (
     INSERT_TABLES,
     READ_TABLES,
+    SELECT_COLUMN_PRIVILEGES,
     TABLE_PRIVILEGES,
     UPDATE_COLUMN_PRIVILEGES,
     UPDATE_TABLES,
@@ -174,13 +175,15 @@ def test_runtime_privilege_readiness_uses_one_read_only_matrix_query() -> None:
     sql = str(statement)
     assert "has_table_privilege" in sql
     assert "has_column_privilege" in sql
-    assert "information_schema.columns" in sql
+    assert "pg_catalog.pg_attribute" in sql
     assert "= EXISTS" in sql
     assert "current_user" in sql
     assert "workflow_instances" in parameters["requirements"]
     assert "UPDATE" in parameters["requirements"]
-    assert "worker_leases" in parameters["update_columns"]
-    assert "release_reason" in parameters["update_columns"]
+    assert "worker_leases" in parameters["columns"]
+    assert "release_reason" in parameters["columns"]
+    assert "item_origin_profiles" in parameters["columns"]
+    assert "knowledge_node_terms" in parameters["columns"]
     assert "NOT COALESCE" in sql
 
 
@@ -189,3 +192,19 @@ def test_runtime_privilege_readiness_rejects_a_missing_grant() -> None:
     connection.scalar.return_value = False
 
     assert not runtime_table_privileges_ready(cast(Connection, connection))
+
+
+def test_discovery_columns_exclude_origin_authors_rights_and_writes() -> None:
+    assert dict(SELECT_COLUMN_PRIVILEGES) == {
+        "item_origin_profiles": (
+            "item_id",
+            "item_revision_id",
+            "item_manifest_sha256",
+            "source_domain",
+        ),
+        "knowledge_node_terms": ("graph_snapshot_revision_id", "node_id", "term"),
+    }
+    for table, _ in SELECT_COLUMN_PRIVILEGES:
+        assert table not in READ_TABLES
+        assert table not in INSERT_TABLES
+        assert table not in UPDATE_TABLES

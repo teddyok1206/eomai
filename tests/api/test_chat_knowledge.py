@@ -254,4 +254,18 @@ def test_generated_filter_uses_canonical_internal_origin_before_top_k(kind):
         ).compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     )
     assert "item_origin_profiles.source_domain = 'INTERNAL_EOM'" in sql
+    assert "SELECT item_origin_profiles.item_revision_id" in sql
+    assert "SELECT *" not in sql
     assert sql.index("item_origin_profiles.source_domain") < sql.index("LIMIT")
+
+
+def test_discovery_origin_query_projects_only_reviewed_metadata_columns():
+    from eom_api.services.chat_knowledge_query_adapter import discovery_origin_statement
+
+    statement = discovery_origin_statement((REFERENCE["item_revision_id"],))
+    assert tuple(column.name for column in statement.selected_columns) == (
+        "item_revision_id",
+        "item_id",
+        "item_manifest_sha256",
+        "source_domain",
+    )

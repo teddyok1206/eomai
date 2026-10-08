@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal
 
 from eom_api_contracts.chat_knowledge import (
@@ -37,6 +38,23 @@ from sqlalchemy.orm import Session
 from eom_api.errors import ApiError
 
 RevisionProjector = Callable[[Session, tuple[ItemRevisionRecord, ...]], dict[str, ItemRevisionView]]
+
+
+@dataclass(frozen=True, slots=True)
+class DiscoveryOrigin:
+    item_revision_id: str
+    item_id: str
+    item_manifest_sha256: str
+    source_domain: str
+
+
+def discovery_origin_statement(ids: tuple[str, ...]) -> Select[tuple[str, str, str, str]]:
+    return select(
+        ItemOriginProfileRecord.item_revision_id,
+        ItemOriginProfileRecord.item_id,
+        ItemOriginProfileRecord.item_manifest_sha256,
+        ItemOriginProfileRecord.source_domain,
+    ).where(ItemOriginProfileRecord.item_revision_id.in_(ids))
 
 
 def topic_source_statement(query: ChatTopicQuery, snapshot_id: str | None) -> Select[tuple[int]]:
@@ -113,10 +131,12 @@ def candidate_statement(
         statement = statement.where(matches.exists())
     if isinstance(query, (ChatRecentQuery, ChatTopicQuery)) and query.source == "GENERATED":
         statement = statement.where(
-            exists().where(
+            select(ItemOriginProfileRecord.item_revision_id)
+            .where(
                 ItemOriginProfileRecord.item_revision_id == ItemRevisionRecord.item_revision_id,
                 ItemOriginProfileRecord.source_domain == "INTERNAL_EOM",
             )
+            .exists()
         )
     return statement.order_by(ItemRecord.created_at.desc(), ItemRecord.item_id.desc()).limit(
         request.limit + 1
@@ -193,12 +213,10 @@ class ChatKnowledgeQueryAdapter:
             ids = tuple(indexed_id.item_revision_id for indexed_id in revisions)
             origins = (
                 {
-                    origin.item_revision_id: origin
-                    for origin in session.scalars(
-                        select(ItemOriginProfileRecord).where(
-                            ItemOriginProfileRecord.item_revision_id.in_(ids)
-                        )
-                    )
+                    revision_id: DiscoveryOrigin(revision_id, item_id, manifest_sha256, domain)
+                    for revision_id, item_id, manifest_sha256, domain in session.execute(
+                        discovery_origin_statement(ids)
+                    ).tuples()
                 }
                 if ids
                 else {}

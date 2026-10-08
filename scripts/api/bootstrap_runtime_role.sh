@@ -89,10 +89,9 @@ from psycopg import sql
 repository_root = Path(os.environ["EOM_REPOSITORY_ROOT"])
 sys.path.insert(0, str(repository_root / "apps/application_api"))
 from eom_api.runtime_privileges import (
+    COLUMN_PRIVILEGES,
     INSERT_TABLES,
     TABLE_PRIVILEGES,
-    UPDATE_COLUMN_PRIVILEGES,
-    UPDATE_TABLES,
 )
 
 ROLE = os.environ["EOM_API_RUNTIME_ROLE"]
@@ -241,6 +240,20 @@ with connection.cursor() as cursor:
             sql.Identifier(ROLE)
         )
     )
+    # Table-level revocation does not replace an exact column-level profile.
+    # Remove stale column grants too, before restoring the reviewed matrix.
+    cursor.execute(
+        "SELECT table_name, array_agg(column_name::text ORDER BY ordinal_position) "
+        "FROM information_schema.columns WHERE table_schema = 'app' GROUP BY table_name"
+    )
+    for table, columns in cursor.fetchall():
+        column_list = sql.SQL(", ").join(sql.Identifier(column) for column in columns)
+        cursor.execute(
+            sql.SQL(
+                "REVOKE SELECT ({0}), INSERT ({0}), UPDATE ({0}), REFERENCES ({0}) "
+                "ON TABLE app.{1} FROM {2}"
+            ).format(column_list, sql.Identifier(table), sql.Identifier(ROLE))
+        )
     cursor.execute(
         sql.SQL("REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA app FROM {}").format(
             sql.Identifier(ROLE)
@@ -265,14 +278,16 @@ with connection.cursor() as cursor:
                 sql.Identifier(ROLE),
             )
         )
-    for table, columns in UPDATE_COLUMN_PRIVILEGES:
-        cursor.execute(
-            sql.SQL("GRANT UPDATE ({}) ON TABLE app.{} TO {}").format(
-                sql.SQL(", ").join(sql.Identifier(column) for column in columns),
-                sql.Identifier(table),
-                sql.Identifier(ROLE),
+    for privilege, tables in COLUMN_PRIVILEGES:
+        for table, columns in tables:
+            cursor.execute(
+                sql.SQL("GRANT {} ({}) ON TABLE app.{} TO {}").format(
+                    sql.SQL(privilege),
+                    sql.SQL(", ").join(sql.Identifier(column) for column in columns),
+                    sql.Identifier(table),
+                    sql.Identifier(ROLE),
+                )
             )
-        )
     cursor.execute(
         "SELECT sequence_namespace.nspname, sequence.relname "
         "FROM pg_class sequence "
@@ -352,34 +367,31 @@ with connection.cursor() as cursor:
             )
             if cursor.fetchone() != (privilege in expected,):
                 raise SystemExit("runtime table privilege set differs from the reviewed plan")
-    expected_update_columns = {
-        table_name: frozenset(column_names)
-        for table_name, column_names in UPDATE_COLUMN_PRIVILEGES
-    }
-    if set(expected_update_columns).intersection(UPDATE_TABLES):
-        raise SystemExit("column-scoped UPDATE table also has table-wide UPDATE")
     cursor.execute(
         "SELECT table_name, column_name FROM information_schema.columns "
         "WHERE table_schema = 'app'"
     )
-    observed_update_columns: dict[str, set[str]] = {}
-    for table_name, column_name in cursor.fetchall():
-        cursor.execute(
-            "SELECT has_column_privilege(%s, %s, %s, 'UPDATE')",
-            (ROLE, f"app.{table_name}", column_name),
-        )
-        expected = table_name in UPDATE_TABLES or column_name in expected_update_columns.get(
-            table_name, ()
-        )
-        if cursor.fetchone() != (expected,):
-            raise SystemExit("runtime column privilege set differs from the reviewed plan")
-        if expected and table_name in expected_update_columns:
-            observed_update_columns.setdefault(table_name, set()).add(column_name)
-    if observed_update_columns != {
-        table_name: set(column_names)
-        for table_name, column_names in expected_update_columns.items()
-    }:
-        raise SystemExit("runtime column-scoped UPDATE target is missing")
+    all_columns = cursor.fetchall()
+    table_profiles = dict(TABLE_PRIVILEGES)
+    for privilege, tables in COLUMN_PRIVILEGES:
+        expected_columns = {table: frozenset(columns) for table, columns in tables}
+        if set(expected_columns).intersection(table_profiles[privilege]):
+            raise SystemExit(f"column-scoped {privilege} table also has table-wide {privilege}")
+        observed_columns: dict[str, set[str]] = {}
+        for table_name, column_name in all_columns:
+            cursor.execute(
+                "SELECT has_column_privilege(%s, %s, %s, %s)",
+                (ROLE, f"app.{table_name}", column_name, privilege),
+            )
+            expected = table_name in table_profiles[privilege] or column_name in expected_columns.get(
+                table_name, ()
+            )
+            if cursor.fetchone() != (expected,):
+                raise SystemExit("runtime column privilege set differs from the reviewed plan")
+            if expected and table_name in expected_columns:
+                observed_columns.setdefault(table_name, set()).add(column_name)
+        if observed_columns != {table: set(columns) for table, columns in expected_columns.items()}:
+            raise SystemExit(f"runtime column-scoped {privilege} target is missing")
     expected_sequence_names = {f"{schema}.{name}" for schema, name in required_sequences}
     cursor.execute(
         "SELECT sequence_schema, sequence_name FROM information_schema.sequences "
