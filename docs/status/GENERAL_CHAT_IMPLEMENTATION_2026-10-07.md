@@ -629,3 +629,21 @@ separately passed against actual disposable PostgreSQL. Runtime OS isolation,
 supported authentication direction, coordinated production release and real
 answer/follow-up/two-user browser acceptance remain pending. Feature is not live
 or complete, and the original all-authenticated-user scope is unchanged.
+
+### Owner OS preparation and real role replay — 2026-10-08 03:03 UTC
+
+Clean source `3964f5700a24d063ffe033aa6bee1feb6a9ab379` prepared the dedicated
+locked/nologin owner account (UID980, private primary GID977) and its
+eom-general-chat:eom-api700 state directory. The account has no permanent
+supplementary groups; source service-only groups remain scoped to that future
+service. Worker UID981/GID978 and all six existing workers retain only their
+own primary groups. No service unit was installed/enabled/started, and production
+DB, native authentication, model inference and GPU were unchanged. This proves
+identity preparation, not sandbox admission or residency.
+
+Replaying the same guarded disposable role preparation succeeded. Its protected
+credential file identity/metadata was unchanged, and actual limited-role login,
+publication and denials passed again (**12 PASS**). Existing role credential was
+retained, not copied or rotated. The earlier45-case persistence suite also passed
+after first preparation. Actual isolation, supported-auth decision and production
+release/browser/model acceptance remain required before completion.
