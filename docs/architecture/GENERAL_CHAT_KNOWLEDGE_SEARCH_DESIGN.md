@@ -349,3 +349,16 @@ array uniqueItems (in addition to conditional semantics), while the complete
 canonical JSON Schema and Pydantic uniqueness checks remain mandatory at admission.
 Native rejection diagnostics expose only closed categories, never upstream error
 bodies. A successful source/unit gate is not substituted for the next live canary.
+
+The dedicated, freshly prepared disposable chat-role database passed all 12
+limited-role tests; the prior rotated test credential was not repaired by widening
+production permissions. The first adapter-corrected native turn completed with a
+valid input/result/observation receipt. Grounded browser acceptance remains a
+separate gate, not inferred from that ungrounded turn.
+
+Studio startup now records a navigation generation before asynchronous reads.
+Late initial-route restoration applies only if no newer navigation occurred;
+existing administrator permission checks still apply. A Node test executes the
+actual boot function with delayed reads and covers initial restoration, newer
+chat navigation, and unauthorized administrator fallback. This guards the shared
+presentation boundary without introducing chat-specific routing state.

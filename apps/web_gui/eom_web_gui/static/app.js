@@ -38,6 +38,7 @@ const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
 const WEB_REQUEST_ID_PATTERN = /^webreq_[a-f0-9]{24}$/;
 const ADMIN_VIEW_NAMES = new Set(["control", "admin-settings", "learning", "knowledge", "explorer"]);
 const state = {
+  navigationVersion: 0,
   csrf: "",
   operator: null,
   draft: null,
@@ -349,6 +350,7 @@ function closeMobileNavigation({restoreFocus = false} = {}) {
 }
 
 function showView(name, {history = true, replace = false, route = null} = {}) {
+  state.navigationVersion += 1;
   if (!UI_MODE_BY_VIEW[name]) name = "dashboard";
   if (state.operator?.password_change_required && name !== "account") name = "account";
   if (ADMIN_VIEW_NAMES.has(name) && state.operator && !hasAdminRole()) name = "dashboard";
@@ -5710,6 +5712,7 @@ async function logout() {
 }
 
 async function boot() {
+  const initialNavigationVersion = state.navigationVersion;
   const initialRoute = studioRouteFromLocation(window.location);
   await loadPresentationVocabulary();
   syncUiMode("dashboard");
@@ -5741,7 +5744,12 @@ async function boot() {
   }
   await loadCurriculumOutline();
   await Promise.all([loadHealth(), loadHwpx(), loadRecentHwpxBuilds(), loadRecentItems()]);
-  await restoreStudioRoute(initialRoute);
+  // Initial background reads must not replace a route the user already chose.
+  if (state.navigationVersion === initialNavigationVersion) {
+    await restoreStudioRoute(initialRoute);
+  } else if (ADMIN_VIEW_NAMES.has(state.currentView) && !hasAdminRole()) {
+    showView("dashboard", {replace: true});
+  }
 }
 
 boot().catch(() => window.location.replace("/studio/login"));
