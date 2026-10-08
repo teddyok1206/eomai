@@ -647,3 +647,23 @@ publication and denials passed again (**12 PASS**). Existing role credential was
 retained, not copied or rotated. The earlier45-case persistence suite also passed
 after first preparation. Actual isolation, supported-auth decision and production
 release/browser/model acceptance remain required before completion.
+
+## Source-derived OS verifier — 2026-10-08 03:22 UTC
+
+The root-only fixed-source verifier creates bounded transient probes from each
+committed Service section. It preserves actual security/property values and
+combines repeated path directives, rejects unknown directives/unsafe environment
+and conflicting existing state, and refuses active chat hosts. It does not load
+secret environment files or run native/pre-execution commands. The inline child
+uses only standard-library code, opens/closes denied file descriptors without
+reading secret bytes, checks UID/groups/capabilities/private local storage and
+worker read-only mounts, and tests Docker connection denial if that host socket
+exists. Owner NAS permission is checked without creating any NAS file.
+
+Executed source/API/Web/contracts/release regressions: **513 PASS,12 SKIP**;
+the12 limited-role cases separately retain their actual PostgreSQL PASS evidence.
+Ruff check/format, strict mypy for the verifier and diff checks: **PASS**. Initial
+format/type-check feedback was resolved before these results; native/production
+code and dependencies were unchanged. No real namespace outcome is inferred
+from mocked/source tests. In-pane sudo probe is valid; actual privileged namespace
+execution follows the clean source commit. Services remain not-found/inactive.

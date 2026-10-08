@@ -443,6 +443,31 @@ configuration: it neither activates services, migrates data, enrolls credentials
 nor proves that shared authentication is supported. Existing root/admin database
 credentials are used only for preparation and never installed in the owner file.
 
+### Pre-activation OS isolation probe
+
+Use bounded transient systemd probes derived from the pinned source Service
+section, not hand-copied sandbox flags. Preserve identity, groups, mounts, network,
+resource and capability restrictions. Reject unknown directives and active chat
+services. Explicit diagnostic differences are omission of native execution/pre-
+execution and environment files, no restart, and capture of sanitized probe output
+instead of production journal routing; dependencies/enablement are not activated.
+The child runs inline standard-library code, with no repository imports, model,
+credentials, DB connection or NAS writes. Read probes only open/close descriptors;
+they never read secret bytes, even if unexpected access succeeds. Check exact
+identity/groups, NoNewPrivs/empty capabilities, writable private local state and
+the worker's actual read-only config/workspace mounts. Check owner NAS write
+permission without creating an unregistered NAS member.
+
+Source RuntimeDirectory/StateDirectory names remain pinned so namespace-managed
+write exceptions match production. Existing metadata must match first, and runtime
+directories must be empty; never repair/delete a stale socket or handoff. Temporary
+local probe files are exclusively created and removed by their own context manager.
+Systemd may prepare the missing private state directory, which is retained for the
+future host; no canonical result/dispatch is modified. Host-absent optional targets
+are explicitly skipped, not claimed denied. An actual namespace PASS proves these
+OS boundaries only, not native enrollment/residency, publication or live UI/model
+acceptance. The simpler user-switch-only probe would omit service mount protection.
+
 The API's existing GeneralChatOwner port is implemented by a private Unix-socket
 client; only authenticated API calls may supply an actor ID. The resident
 Orchestrator owns the existing conversation/turn/capacity tables and Artifact
