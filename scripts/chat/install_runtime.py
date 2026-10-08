@@ -74,17 +74,19 @@ def require_source(commit: str, model: str) -> None:
 def require_installed_release(commit: str) -> None:
     # Isolated interpreter import: never certify a source checkout as installed.
     program = """
-import os, stat, sys
+import pwd, stat, sys
 from pathlib import Path
 from eom_api.build_info import get_build_info
 from eom_orchestrator import general_chat_owner_main, general_chat_worker_main
 if get_build_info().source_commit != sys.argv[1]:
     raise SystemExit(1)
+installer = pwd.getpwnam('eom')
 for module in (general_chat_owner_main, general_chat_worker_main):
     path = Path(module.__file__)
     value = path.lstat()
     if (not str(path).startswith('/srv/eom/conda/envs/eom-api/lib/python3.12/site-packages/')
-        or not stat.S_ISREG(value.st_mode) or value.st_uid != 0 or value.st_gid != 0
+        or not stat.S_ISREG(value.st_mode)
+        or (value.st_uid, value.st_gid) != (installer.pw_uid, installer.pw_gid)
         or stat.S_IMODE(value.st_mode) != 0o644 or value.st_nlink != 1):
         raise SystemExit(1)
 """
@@ -105,9 +107,39 @@ def configuration_payloads(commit: str, model: str) -> dict[Path, bytes]:
     }
 
 
-def stage(commit: str, model: str) -> None:
+def require_compatible_runtime(commit: str, runtime_commit: str) -> None:
+    if re.fullmatch(r"[0-9a-f]{40}", runtime_commit) is None:
+        raise ChatError("GENERAL_CHAT_INSTALL_SOURCE_MISMATCH")
+    # A helper-only follow-up need not reinstall an identical application release.
+    # Exact runtime pins remain distinct from the deployment-helper source pin.
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPOSITORY),
+            "diff",
+            "--quiet",
+            runtime_commit,
+            commit,
+            "--",
+            "apps/application_api",
+            "packages/protocol",
+            "packages/identifiers",
+            "packages/api_contracts",
+            "services/orchestrator",
+            "infra/chat",
+            "infra/systemd",
+        ],
+        timeout=20,
+        check=True,
+    )
+    require_installed_release(runtime_commit)
+
+
+def stage(commit: str, model: str, *, runtime_commit: str | None = None) -> None:
     require_source(commit, model)
-    require_installed_release(commit)
+    selected = runtime_commit or commit
+    require_compatible_runtime(commit, selected)
     for parent in (UNIT_ROOT, CONFIG_ROOT):
         require_root_directory(parent)
     # Enrolled worker auth is inspected only for metadata; never read/copy tokens.
@@ -125,7 +157,7 @@ def stage(commit: str, model: str) -> None:
     if set(secret) != {"EOM_GENERAL_CHAT_DATABASE_URL"}:
         raise ChatError("GENERAL_CHAT_OWNER_CONFIGURATION_INVALID")
     config = ChatOwnerConfiguration.from_environment(
-        secret | {"EOM_RUNTIME_SOURCE_COMMIT": commit, "EOM_GENERAL_CHAT_MODEL": model}
+        secret | {"EOM_RUNTIME_SOURCE_COMMIT": selected, "EOM_GENERAL_CHAT_MODEL": model}
     )
     engine = chat_owner_engine(config, pool_size=1)
     try:
@@ -133,7 +165,7 @@ def stage(commit: str, model: str) -> None:
     finally:
         engine.dispose()
 
-    configs = configuration_payloads(commit, model)
+    configs = configuration_payloads(selected, model)
     unit_sources = {UNIT_ROOT / unit: REPOSITORY / "infra/systemd" / unit for unit in UNITS}
     unit_payloads = {
         target: subprocess.check_output(
@@ -200,9 +232,12 @@ def main() -> int:
     parser.add_argument("action", choices=("stage", "activate"))
     parser.add_argument("commit")
     parser.add_argument("model")
+    parser.add_argument(
+        "--runtime-commit", help="Installed compatible release pin; no latest fallback"
+    )
     args = parser.parse_args()
     try:
-        stage(args.commit, args.model)
+        stage(args.commit, args.model, runtime_commit=args.runtime_commit)
         if args.action == "activate":
             activate()
         print("general_chat_runtime=" + ("READY" if args.action == "activate" else "STAGED"))

@@ -48,6 +48,12 @@ DB role and enrolled worker readiness. It does not migrate, install wheels,
 copy auth or borrow slots. Stop the two new services to withdraw chat execution;
 retain accepted transcripts and the additive schema. Existing application
 runtime releases use their existing rollback records, not ad-hoc source imports.
+Deployment helpers may have a later source pin than the installed runtime when
+Git proves the entire chat application/protocol/unit boundary byte-identical.
+Pin the compatible runtime commit explicitly; do not force identical components
+to reinstall because only a helper/test changed. Runtime modules retain the
+existing release installer's eom:eom0644 ownership, not a newly invented root
+ownership requirement. Dedicated service identities cannot write those modules.
 
 The API owns authenticated commands and queries; an Orchestrator application
 port owns execution, validation and canonical transcript Artifacts. Workers see

@@ -122,3 +122,44 @@ def test_installed_verification_uses_isolated_interpreter_without_user_environme
     assert command[:3] == [installation.PYTHON, "-I", "-c"] and command[-1] == COMMIT
     assert options["env"] == {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}
     assert "get_build_info().source_commit" in command[3]
+    assert "installer = pwd.getpwnam('eom')" in command[3]
+    assert "(installer.pw_uid, installer.pw_gid)" in command[3]
+
+
+def test_helper_only_revision_retains_explicit_runtime_pin_after_full_boundary_diff(monkeypatch):
+    calls = []
+    deployed = "b" * 40
+    monkeypatch.setattr(
+        installation.subprocess, "run", lambda command, **kw: calls.append((command, kw))
+    )
+    monkeypatch.setattr(installation, "require_installed_release", lambda pin: calls.append(pin))
+    installation.require_compatible_runtime(COMMIT, deployed)
+    command, options = calls[0]
+    assert command[3:7] == ["diff", "--quiet", deployed, COMMIT]
+    assert {
+        "apps/application_api",
+        "packages/protocol",
+        "services/orchestrator",
+        "infra/systemd",
+    } <= set(command)
+    assert options["check"] is True and calls[-1] == deployed
+
+
+def test_runtime_boundary_change_rejects_release_without_certifying_installed_bytes(monkeypatch):
+    def changed(*args, **kwargs):
+        raise installation.subprocess.CalledProcessError(1, "git diff")
+
+    monkeypatch.setattr(installation.subprocess, "run", changed)
+    monkeypatch.setattr(
+        installation, "require_installed_release", lambda pin: pytest.fail("not compatible")
+    )
+    with pytest.raises(installation.subprocess.CalledProcessError):
+        installation.require_compatible_runtime(COMMIT, "b" * 40)
+
+
+def test_unpinned_runtime_is_not_resolved_to_latest(monkeypatch):
+    monkeypatch.setattr(
+        installation.subprocess, "run", lambda *args, **kw: pytest.fail("no unpinned lookup")
+    )
+    with pytest.raises(ChatError, match="SOURCE_MISMATCH"):
+        installation.require_compatible_runtime(COMMIT, "main")
