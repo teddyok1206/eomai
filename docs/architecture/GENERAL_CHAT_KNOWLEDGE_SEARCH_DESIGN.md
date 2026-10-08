@@ -380,3 +380,10 @@ read. At most three indexed predecessor lookups, a request-local map, and the
 existing unique-successor check remain authoritative. Missing reports remain
 explicit limitations; wrong source/base hashes fail closed. Existing source,
 Graph and worker schemas, DB/queue and dependency direction are unchanged.
+
+Actual operational closure: canonical Item + accepted additive report answers,
+follow-up, exact idempotency replay, verified Preview navigation, old history
+preservation, stopped-host isolation and final PC/mobile read-only presentation
+passed. The compatible installed API/Catalog/chat and Web pins, actual immutable
+outputs, failure classification and retained boundaries are in the
+[2026-10-08 acceptance record](../status/GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md).

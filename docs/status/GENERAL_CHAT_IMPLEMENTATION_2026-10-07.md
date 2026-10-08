@@ -12,6 +12,12 @@ instruction supersedes the interim personal-only reply. Per-user history remains
 private, and one dedicated FIFO slot remains separate from slots01..06.
 Earlier checkpoints below retain their original scope and historical limitations.
 
+The 2026-10-08 representative successor adds authorized pinned Item/report
+grounding, citation receipts and timestamped EOM observations. It is deployed and
+has actual grounded/follow-up/browser acceptance; see
+[representative acceptance](GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md).
+The release pins in the older checkpoints below remain historical, not current.
+
 ## Latest operational checkpoint — 2026-10-08 UTC
 
 Current compatible release set: API/owner/worker

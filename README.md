@@ -39,14 +39,18 @@ logical Item
 격리·동시성 계약은 [ADR0212](docs/adr/0212-general-chat-dedicated-capacity.md)를 참고하세요.
 
 내부 자료 연결은 [상세 기획](docs/architecture/GENERAL_CHAT_INTERNAL_KNOWLEDGE_INTEGRATION_PLAN.md)에
-따라 단계적으로 구현합니다. 첫 검색 기능은 운영 반영됐으며, 모델 호출 없이 최근 문항·공식 시험·개념으로
-문항 카드를 찾고 정확한 Revision의 Preview를 여는 경로입니다. 승인과 Graph 반영 여부를
-분리하고, Graph 미반영 문항도 Registry에서 조회합니다. 검색 scope는 기존 Item 읽기 권한과
-채팅 권한의 교집합이며, 교과서·보고서·원문 발췌를 일반 사용자에게 새로 열지 않습니다.
-이 검색만으로 채팅이 자료를 읽거나 GraphRAG로 답변한다고 주장하지 않습니다.
-근거 입력·구조화 답변·인용 영수증(C04), 권한 변경 후 기록 보호(C05)는 후속 구현입니다.
+따라 C04/C05까지 운영 연결했습니다. 모델 호출 없이 최근 문항·공식 시험·개념으로 문항을 찾고,
+최대 3개를 대화에 첨부하면 정확한 Item Revision, 고정 Graph의 기초분석에 연결된 승인
+풀이보고서 요약을 Codex가 실제 답변에 참고합니다. 정본 근거·모델 제안·일반 지식·자료 부족·
+시각이 있는 시스템 관측을 구분하고, 검증된 출처 버튼으로 원문 Preview를 열 수 있습니다.
+검색 scope는 Item 읽기와 채팅 권한의 교집합이며, 이어 묻기와 기록 조회에서도 권한을 재확인합니다.
+EOM 어시스턴트는 제작·검토·HWPX 업무를 안내하지만 채팅으로 제작·승인·계정 변경을 실행하지
+않습니다. 자동 전체-corpus 검색, 그림 픽셀 확인이나 교과서 접근 권한 확대는 포함하지 않습니다.
+실제 HTTPS 첨부 답변·후속 대화·출처 이동·동일 요청 replay·기록 보존과 PC/모바일 화면이
+통과했습니다. 상세 검증과 설치 pins는
+[대표 에이전트 운영 연결 기록](docs/status/GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md)에 있습니다.
 검색 책임·성능·실제 inventory는 [검색 설계](docs/architecture/GENERAL_CHAT_KNOWLEDGE_SEARCH_DESIGN.md)에
-기록합니다. 실제 HTTPS 로그인·검색·고정 버전 Preview 연결을 검증했습니다.
+기록합니다. 승인 여부와 Graph 반영 여부는 서로 다른 상태로 표시합니다.
 제작 문항 필터는 정식 `INTERNAL_EOM` 출처 프로필이 있는 문항만 포함합니다. 현재 출처
 프로필이 없는 기존 106개 문항은 ‘최근 문항’에서 조회되며 임의로 출처를 재분류하지 않습니다.
 

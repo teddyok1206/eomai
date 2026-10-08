@@ -2,6 +2,18 @@
 
 Status date: 2026-09-27 (UTC)
 
+## General chat representative operational connection — 2026-10-08 UTC
+
+`일반 → ChatGPT` now uses the dedicated Codex slot as a read-only EOM assistant.
+Explicitly attached immutable Items and accepted additive solution reports are
+actually passed to the model, with verified citations, follow-up context and
+timestamped authorized system observations. API/Catalog/chat release `276f31ea`
+and Web `6c765820` are compatible installed pins; migration remains `0049`.
+Authenticated grounding/replay/history/source navigation passed. PC/mobile final
+read-only presentation passed; no production content approval is implied.
+See [acceptance record](GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md).
+Other sections retain their stated historical scope and observation dates.
+
 ## SDXL image-quality goal checkpoint — 2026-10-03 (UTC)
 
 User approval separately extends the immutable SSD-1B data authorization to internal SDXL
