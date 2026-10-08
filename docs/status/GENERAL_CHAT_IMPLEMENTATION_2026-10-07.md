@@ -567,3 +567,27 @@ performed, and native/GPU calls remain zero for this checkpoint. The next bounde
 privileged action is only the manifest-guarded disposable role plus private
 credential preparation, followed by `chat-role-tests`; it is not production
 deployment or a claim that the supported authentication gate is resolved.
+
+### Fixed production preparation entrypoint — 2026-10-08 02:51 UTC
+
+`scripts/chat/prepare_owner_role.py COMMIT` stages only the fixed dedicated owner
+role and root:root600 environment, reusing the same closed profile and durable
+credential adapter. There is no test/production override flag, shared admin URL,
+password rotation, migration, service activation or auth enrollment. Before any
+write it checks root, clean pinned source, stopped owner, protected parent,
+authoritative loopback database/head0049, zero active target-role sessions and
+matching role/secret ownership. An uncertain preparation must be inspected and
+replayed with the same identity, not treated as an activation receipt.
+
+New preparation guards/replay/redaction tests plus the existing source/API/Web/
+contract/release suite: **492 PASS,12 SKIP**. The new24 cases are simulated
+preparation boundary tests, not production or actual limited-role SQL acceptance.
+Ruff check/format, strict mypy for the new script and diff checks: **PASS**.
+The45-case disposable persistence baseline and the12 pending real role cases
+remain distinct. Sudo is still expired; neither root preparer has been run.
+
+The earlier clean `bea6ce34dd217257d2a4ce4f3378feeaba2c07a1` runtime candidate's
+three-wheel RECORD/canonical inventory and wheel-only imports/config negatives
+passed at02:44 UTC. The production preparer is deployment code, not an activated
+runtime. These results do not close supported auth, OS isolation, coordinated
+installation or real answer/follow-up/two-user browser gates.

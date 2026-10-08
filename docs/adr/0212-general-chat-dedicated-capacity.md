@@ -432,6 +432,17 @@ least privilege; a new generic permission framework/RLS domain is unnecessary fo
 this trusted Orchestrator adapter. Product ownership still stays in its application,
 and immutable history is not reinterpreted by permission reconciliation.
 
+Production preparation is a separate fixed-target entrypoint, not a test-mode
+switch. It reads the authoritative local database identity from the protected
+PostgreSQL configuration and only stages `eom_general_chat_runtime` plus
+`/etc/eom/secrets/general-chat.env` (root:root600, consumed by the system manager).
+Require clean pinned source, a stopped owner, migration0049 and no active sessions
+of the target role before mutation. Bind the role to an explicit ownership marker
+and retain its exact protected credential on replay. This only stages deployment
+configuration: it neither activates services, migrates data, enrolls credentials
+nor proves that shared authentication is supported. Existing root/admin database
+credentials are used only for preparation and never installed in the owner file.
+
 The API's existing GeneralChatOwner port is implemented by a private Unix-socket
 client; only authenticated API calls may supply an actor ID. The resident
 Orchestrator owns the existing conversation/turn/capacity tables and Artifact
