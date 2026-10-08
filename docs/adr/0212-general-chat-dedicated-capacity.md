@@ -1,7 +1,8 @@
 # ADR0212: General chat with dedicated, resident capacity
 
 Status: implementation in progress, 2026-10-07 UTC. No runtime activation yet.
-Activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
+Activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (reconfirmed 2026-10-08 UTC).
+External LLM APIs remain prohibited by the latest explicit user decision.
 Current user-authorized access scope: **all authenticated EOM users**. The later
 instruction `그렇게 하지말고 그냥 다 쓸 수 있게 해` supersedes the interim
 personal-only answer. No selected-login binding is required or implemented.
@@ -545,6 +546,25 @@ Preserve existing source tests, transcripts/contracts and independent capacity
 design. A supported successor authentication adapter, if authorized, must pin its
 own runtime profile and owner/renewal boundary; never relabel managed-auth test
 evidence as SIWC/live eligibility. GPU work and production slots01–06 stay untouched.
+
+### User decision: retain the external-API prohibition — 2026-10-08 UTC
+
+The user answered `외부 API 금지 유지` to the proposed dedicated-chat SIWC
+exception. This rejects that exception: do not implement or enroll the
+OAuth/Responses route, introduce API-key billing, or ask for the same exception
+again. All-authenticated-user access, private histories and independent capacity
+remain the requested end state; this answer does not authorize a personal-only
+allowlist or substitution of a different model.
+
+The [non-interactive guide](https://learn.chatgpt.com/docs/non-interactive-mode)
+supports saved Codex authentication for trusted local automation. The
+[SDK guide](https://learn.chatgpt.com/docs/codex-sdk) describes internal tools,
+but its Python SDK uses the local App Server. Neither establishes that changing
+the transport authorizes EOM's shared hosted chatbot with one personal plan.
+Preserve the implemented adapter and tests; do not create a CLI/SDK wrapper merely
+to relabel the unresolved deployment eligibility. Operational activation remains
+pending a supported route compatible with the retained constraints. No production
+service, credential, inference or existing slot changed for this decision.
 
 ### Alternative credentials reviewed, not adopted
 

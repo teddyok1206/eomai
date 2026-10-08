@@ -2,7 +2,9 @@
 
 Status: `PREACTIVATION_OS_BOUNDARIES_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
-Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
+Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (reconfirmed 2026-10-08 UTC).
+Latest user decision: `EXTERNAL_LLM_API_PROHIBITION=RETAINED`; the proposed
+dedicated-chat SIWC/Responses exception is `NOT_AUTHORIZED`.
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
 instruction supersedes the interim personal-only reply. Per-user history remains
 private, and one dedicated FIFO slot remains separate from slots01..06.
@@ -699,3 +701,21 @@ activated. All-authenticated-user GUI/private-history/dedicated-capacity scope i
 preserved; no personal-only or administrator-only allowlist was added. Goal is
 not complete: supported auth, compatible release and actual first-answer/follow-up/
 two-user browser gates are still outstanding.
+
+### External-API decision recorded — 2026-10-08 UTC
+
+The user explicitly retained the external-LLM-API prohibition. SIWC/Responses
+implementation and enrollment are excluded; no API-key fallback or repeated
+request for the rejected exception. Every authenticated user's GUI access,
+private history and one independent slot remain in scope. No personal-only
+guard, model replacement or vendor-eligibility claim follows from this answer.
+
+OpenAI Docs' non-interactive/SDK/authentication guides were rechecked. Local
+Codex automation is documented; permission to expose one personal plan through
+this shared hosted chatbot is not established by those guides. The SDK is not
+an independent authentication authorization (Python uses App Server). Preserve
+source/PG/OS evidence without labeling it live acceptance. This checkpoint is a
+documentation-only scope decision: no source behavior, service, DB, enrollment,
+model/GPU call or slots01..06 change; no test rerun or live PASS is claimed.
+Supported constrained runtime activation remains unresolved. See ADR0212's
+user-decision section for the official sources and retained boundaries.
