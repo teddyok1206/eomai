@@ -79,6 +79,9 @@ def native_chat_command(*, model: str) -> list[str]:
         "analytics.enabled=false",
         "tools.experimental_request_user_input.enabled=false",
         "tools.update_plan.enabled=false",
+        # The admitted model defaults to code_mode_only. Expose our flat native
+        # tools directly without enabling a JS host, shell or other capability.
+        'code_mode.direct_only_tool_namespaces=["functions"]',
     ):
         command.extend(["-c", override])
     command.extend(["app-server", "--strict-config", "--stdio"])

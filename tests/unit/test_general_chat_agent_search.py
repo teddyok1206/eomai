@@ -176,6 +176,8 @@ def read_command():
 
 
 def test_additive_schema_mirrors_and_v3_envelope_roundtrip():
+    from eom_orchestrator.general_chat_stdio import native_chat_command
+
     root = Path(__file__).resolve().parents[2]
     for path in (root / "schemas/general-chat").glob("*-v3.schema.json"):
         assert (
@@ -199,6 +201,11 @@ def test_additive_schema_mirrors_and_v3_envelope_roundtrip():
         read_chat_worker_request(old)
     for spec in native_chat_tools():
         Draft202012Validator.check_schema(spec["inputSchema"])
+    command = native_chat_command(model="test-model")
+    assert 'code_mode.direct_only_tool_namespaces=["functions"]' in command
+    assert "features.code_mode_host=false" in command
+    assert "features.code_mode=false" in command
+    assert "features.shell_tool=false" in command
 
 
 def test_model_search_read_answer_is_bound_to_canonical_tool_pointers():
