@@ -266,6 +266,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
       drafts.delete(id);
       drafts.delete("new");
       $("chat-input").value = "";
+      $("chat-knowledge-panel").open = false;
       accept(value);
       schedule(token);
     } catch (error) { if (current(token)) fail(error); }

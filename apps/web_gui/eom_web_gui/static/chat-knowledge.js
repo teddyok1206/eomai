@@ -18,11 +18,7 @@ export function createChatKnowledge({document, api, errorMessage, openItem}) {
   }
 
   function renderAttached() {
-    let list = $("chat-knowledge-selected");
-    if (!list) {
-      list = document.createElement("div"); list.id = "chat-knowledge-selected";
-      $("chat-knowledge-results").parentNode.insertBefore(list, $("chat-knowledge-results"));
-    }
+    const list = $("chat-knowledge-selected");
     list.replaceChildren();
     for (const card of attached.values()) {
       const button = document.createElement("button"); button.type = "button"; button.className = "button quiet";

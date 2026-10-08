@@ -61,12 +61,15 @@ const createDocument = () => {
   const controller = createGeneralChat({document, api, errorMessage: (error) => error.message});
   controller.install(); controller.setOwner("owner-one"); await controller.open();
   const input = document.getElementById("chat-input");
+  document.getElementById("chat-knowledge-panel").open = true;
   input.value = "같은 질문";
   await document.getElementById("chat-form").fire("submit");
   assert.equal(input.value, "같은 질문");
+  assert.equal(document.getElementById("chat-knowledge-panel").open, true);
   await document.getElementById("chat-form").fire("submit");
   assert.deepEqual(submissions[0], submissions[1]);
   assert.equal(input.value, "");
+  assert.equal(document.getElementById("chat-knowledge-panel").open, false);
   controller.close();
 }
 

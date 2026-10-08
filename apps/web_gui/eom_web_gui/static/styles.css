@@ -773,7 +773,10 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .chat-composer textarea:focus { outline: 0; box-shadow: none; }
 .chat-pending, .chat-error { color: #6b5267; }
 .chat-error { margin: 8px 10px; }
-.chat-knowledge { border-bottom: 1px solid #e1e4eb; padding: 12px 0; }
+.chat-knowledge { flex-shrink: 0; max-height: min(320px, 35dvh); overflow-y: auto; border-bottom: 1px solid #e1e4eb; padding: 12px 0; }
+.chat-knowledge-selected { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.chat-knowledge-selected:empty { display: none; }
+.chat-knowledge-selected .button { text-align: left; white-space: normal; }
 .chat-knowledge summary { cursor: pointer; font-weight: 600; }
 .chat-knowledge-search { display: flex; gap: 8px; margin-top: 12px; }
 .chat-knowledge-search input { flex: 1; min-width: 0; }
