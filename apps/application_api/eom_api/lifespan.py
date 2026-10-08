@@ -22,6 +22,8 @@ from sqlalchemy import Engine
 from eom_api.rate_limit import BoundedRateLimiter
 from eom_api.services.audit_service import AuditService
 from eom_api.services.catalog_application_client import CatalogApplicationClient
+from eom_api.services.chat_knowledge_query_adapter import ChatKnowledgeQueryAdapter
+from eom_api.services.chat_knowledge_service import ChatKnowledgeApplicationService
 from eom_api.services.command_adapter import CommandAdapter
 from eom_api.services.control_plane_adapter import ControlPlaneAdapter
 from eom_api.services.document_review_annotation_service import (
@@ -115,6 +117,9 @@ class AppServices:
         self.idempotency = IdempotencyService(engine, token_key)
         self.audit = AuditService(engine)
         self.general_chat = GeneralChatApplicationService(GeneralChatOwnerClient())
+        self.chat_knowledge = ChatKnowledgeApplicationService(
+            ChatKnowledgeQueryAdapter(engine, self.queries.item_revision_views)
+        )
         self.hwpx_item_revisions = CatalogBackedHwpxItemRevisionResolver(
             self.registry,
             self.catalog_application,

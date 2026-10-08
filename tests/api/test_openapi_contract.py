@@ -25,6 +25,7 @@ AUTH_MUTATIONS = {
     # lost response must not be reconstructed by an idempotency replay.
     "codex_auth_challenge_reveal",
 }
+READ_ONLY_POSTS = {"general_chat_knowledge_search"}
 
 
 def _operations(schema: dict[str, object]):
@@ -53,7 +54,9 @@ def test_openapi_31_security_errors_idempotency_and_stable_ids() -> None:
     assert len(operation_ids) == len(set(operation_ids))
     for _, method, operation in _operations(schema):
         operation_id = operation["operationId"]
-        if method in {"post", "put", "patch", "delete"} and operation_id not in AUTH_MUTATIONS:
+        if operation_id in READ_ONLY_POSTS:
+            assert method == "post" and operation["x-eom-read-only"] is True
+        elif method in {"post", "put", "patch", "delete"} and operation_id not in AUTH_MUTATIONS:
             parameters = operation.get("parameters", [])
             assert any(
                 parameter.get("in") == "header" and parameter.get("name") == "Idempotency-Key"

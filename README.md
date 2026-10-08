@@ -32,14 +32,21 @@ logical Item
 
 ## 현재 저장소 릴리스 선
 
-일반 대화(`일반 → ChatGPT`)는 현재 구현 중입니다. 별도 `chat` 전용 슬롯을
-기존 작업 슬롯01–06과 분리하고, 계정별 대화 기록과 이어 묻기를 제공하는 방향입니다.
-현재 소스에는 화면·인증 API·입출력 계약과 사용자별 불변 대화 기록·동시 요청 관리,
-별도 상주 서비스 구성 및 재시작 시 기존 답변 복구가 있습니다. 임시 PostgreSQL에서
-중복 제출·완료 경합·연결 풀 포화·두 사용자 대기열 테스트를 통과했습니다. 실제 답변 생성과 상주 슬롯은
-아직 활성화되지 않았습니다. 준비 전에는 `UNAVAILABLE`로 표시하며 외부 LLM API나
-기존 작업 슬롯으로 우회하지 않습니다. 단계별 조건은
-[ADR0212](docs/adr/0212-general-chat-dedicated-capacity.md)를 참고하세요.
+일반 대화(`일반 → ChatGPT`)는 별도 상주 `chat` 슬롯으로 운영되고 있습니다.
+기존 작업 슬롯01–06과 분리한 로컬 Codex에서 계정별 기록·이어 묻기·안전한 Markdown 표시를
+제공합니다. 실제 답변·사용자 격리·재시작 기록 보존을 검증했으며 사용자도 동작을 확인했습니다.
+운영 증거는 [채팅 구현 기록](docs/status/GENERAL_CHAT_IMPLEMENTATION_2026-10-07.md),
+격리·동시성 계약은 [ADR0212](docs/adr/0212-general-chat-dedicated-capacity.md)를 참고하세요.
+
+내부 자료 연결은 [상세 기획](docs/architecture/GENERAL_CHAT_INTERNAL_KNOWLEDGE_INTEGRATION_PLAN.md)에
+따라 단계적으로 구현합니다. 첫 저장소 후보는 모델 호출 없이 최근 문항·공식 시험·개념으로
+문항 카드를 찾고 정확한 Revision의 Preview를 여는 경로입니다. 승인과 Graph 반영 여부를
+분리하고, Graph 미반영 문항도 Registry에서 조회합니다. 검색 scope는 기존 Item 읽기 권한과
+채팅 권한의 교집합이며, 교과서·보고서·원문 발췌를 일반 사용자에게 새로 열지 않습니다.
+이 검색만으로 채팅이 자료를 읽거나 GraphRAG로 답변한다고 주장하지 않습니다.
+근거 입력·구조화 답변·인용 영수증(C04), 권한 변경 후 기록 보호(C05)는 후속 구현입니다.
+검색 책임·성능·실제 inventory는 [검색 설계](docs/architecture/GENERAL_CHAT_KNOWLEDGE_SEARCH_DESIGN.md)에
+기록합니다. 새 검색의 운영 활성화는 설치 release 검증과 별도로 표시합니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

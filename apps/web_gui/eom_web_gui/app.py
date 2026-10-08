@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
@@ -338,6 +339,15 @@ def create_app(
     ) -> dict[str, Any]:
         draft = actual.create_draft(session, value)
         return draft.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/general-chat/knowledge/search")
+    async def general_chat_knowledge_search(
+        value: ChatKnowledgeRequest,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (await actual.gateway.general_chat_knowledge_search(session, value)).model_dump(
+            mode="json"
+        )
 
     @app.get(f"{API_PREFIX}/general-chat/slot")
     async def general_chat_slot(

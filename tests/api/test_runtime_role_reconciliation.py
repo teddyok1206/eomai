@@ -346,6 +346,7 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
         "quality-review-tests",
         "chat-tests",
         "chat-role-tests",
+        "chat-knowledge-tests",
         "tests",
     }
     begin = source.index('if [[ "${action}" == "chat-role-tests" ]]')

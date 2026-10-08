@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
@@ -342,6 +343,10 @@ class ItemBankPage:
 
 
 class ApplicationGateway(Protocol):
+    async def general_chat_knowledge_search(
+        self, session: WebSession, value: ChatKnowledgeRequest
+    ) -> ChatKnowledgeSelection: ...
+
     async def general_chat_slot(self, session: WebSession) -> ChatSlot: ...
 
     async def general_chat_list(self, session: WebSession, cursor: str | None) -> ChatList: ...
@@ -834,6 +839,20 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def general_chat_knowledge_search(
+        self, session: WebSession, value: ChatKnowledgeRequest
+    ) -> ChatKnowledgeSelection:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/general-chat/knowledge/search",
+            json=value.model_dump(mode="json"),
+        )
+        try:
+            return ChatKnowledgeSelection.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="CHAT_KNOWLEDGE_RESPONSE_INVALID") from exc
+
     async def general_chat_slot(self, session: WebSession) -> ChatSlot:
         response = await self._authorized(session, "GET", "/api/v1/general-chat/slot")
         try:

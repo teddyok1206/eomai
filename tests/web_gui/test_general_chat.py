@@ -27,7 +27,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def chat_module(tmp_path: Path) -> Path:
     static = ROOT / "apps/web_gui/eom_web_gui/static"
-    for name in ("general-chat.js", "chat-markdown.js", "vendor-marked-18.1.0.js"):
+    for name in (
+        "general-chat.js",
+        "chat-knowledge.js",
+        "chat-markdown.js",
+        "vendor-marked-18.1.0.js",
+    ):
         (tmp_path / name).write_bytes((static / name).read_bytes())
     (tmp_path / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
     return tmp_path / "general-chat.js"

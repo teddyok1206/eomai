@@ -16,7 +16,8 @@ export function chatIsActive(conversation) {
   return conversation?.messages?.some((value) => ACTIVE.has(value.state)) || false;
 }
 
-export function createGeneralChat({document, api, errorMessage}) {
+export function createGeneralChat({document, api, errorMessage, openItem}) {
+  const knowledge = createChatKnowledge({document, api, errorMessage, openItem});
   const $ = (id) => document.getElementById(id);
   let owner = null;
   let visible = false;
@@ -236,6 +237,7 @@ export function createGeneralChat({document, api, errorMessage}) {
   }
 
   async function open() {
+    knowledge.open();
     visible = true;
     loading = false;
     const token = ++epoch;
@@ -251,12 +253,13 @@ export function createGeneralChat({document, api, errorMessage}) {
     } catch (error) { if (current(token)) fail(error); }
   }
 
-  function close() { visible = false; epoch += 1; stopTimer(); }
+  function close() { visible = false; epoch += 1; stopTimer(); knowledge.close(); }
 
   function setOwner(value) {
     if (owner === value) return;
     close();
     owner = value;
+    knowledge.setOwner(value);
     sendSerial += 1;
     sending = false;
     selected = null;
@@ -271,6 +274,7 @@ export function createGeneralChat({document, api, errorMessage}) {
   }
 
   function install() {
+    knowledge.install();
     $("chat-form").addEventListener("submit", send);
     $("chat-input").addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -305,3 +309,4 @@ export function createGeneralChat({document, api, errorMessage}) {
   return Object.freeze({install, open, close, setOwner});
 }
 import {renderChatMarkdown} from "./chat-markdown.js";
+import {createChatKnowledge} from "./chat-knowledge.js";

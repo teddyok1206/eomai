@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+from eom_api_contracts.chat_knowledge import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_api_contracts.general_chat import (
     GeneralChatConversation,
     GeneralChatCreate,
@@ -17,6 +18,22 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from eom_api.dependencies import Auth, IdempotencyKey, get_services, require_permission
 
 router = APIRouter(prefix="/general-chat", tags=["general-chat"])
+
+
+@router.post(
+    "/knowledge/search",
+    operation_id="general_chat_knowledge_search",
+    response_model=ChatKnowledgeSelection,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
+    openapi_extra={
+        "x-eom-additional-permissions": [PermissionKey.ITEM_READ.value],
+        "x-eom-read-only": True,
+    },
+)
+def knowledge_search(
+    request: Request, body: ChatKnowledgeRequest, authentication: Auth
+) -> ChatKnowledgeSelection:
+    return get_services(request).chat_knowledge.search(body, authentication.permissions)
 
 
 @router.get(

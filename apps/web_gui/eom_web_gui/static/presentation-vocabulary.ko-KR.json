@@ -132,6 +132,12 @@
     "hwpx": {"label": "HWPX 제작", "audience": "USER", "description": "승인된 문항을 HWPX 파일로 제작합니다."}
   },
   "errors": {
+    "CHAT_KNOWLEDGE_GRAPH_UNAVAILABLE": {"label": "개념·시험 검색을 아직 사용할 수 없습니다.", "audience": "USER", "action": "최근 문항 조회는 이용할 수 있습니다. 잠시 후 다시 검색하세요."},
+    "CHAT_KNOWLEDGE_ITEM_UNAVAILABLE": {"label": "선택한 문항 버전을 더 이상 조회할 수 없습니다.", "audience": "USER", "action": "자료를 다시 검색해 문항을 선택하세요."},
+    "CHAT_KNOWLEDGE_HASH_MISMATCH": {"label": "자료 버전 확인값이 일치하지 않습니다.", "audience": "USER", "action": "다시 검색한 뒤에도 같으면 문의 번호를 관리자에게 알려주세요."},
+    "CHAT_KNOWLEDGE_SNAPSHOT_UNAVAILABLE": {"label": "선택한 검색 자료 버전을 사용할 수 없습니다.", "audience": "USER", "action": "자료를 다시 검색하세요."},
+    "CHAT_KNOWLEDGE_POINTER_INVALID": {"label": "자료 연결을 확인하지 못했습니다.", "audience": "USER", "action": "문의 번호를 관리자에게 알려주세요. 다른 버전으로 자동 대체하지 않습니다."},
+    "CHAT_KNOWLEDGE_RESPONSE_INVALID": {"label": "검색 결과를 안전하게 표시하지 못했습니다.", "audience": "USER", "action": "잠시 후 다시 검색하세요."},
     "HWPX_APPLICATION_REVISION_INELIGIBLE": {"label": "이 문항 버전은 아직 HWPX로 만들 수 없습니다.", "audience": "USER", "action": "완성 문항에서 현재 승인된 문항 버전을 다시 선택하세요."},
     "HWPX_RENDERER_NOT_READY": {"label": "HWPX 제작기가 아직 준비되지 않았습니다.", "audience": "USER", "action": "잠시 후 상태를 다시 확인하거나 관리자에게 문의하세요."},
     "AUTH_REAUTHENTICATION_REQUIRED": {"label": "보안 확인을 위해 다시 로그인이 필요합니다.", "audience": "USER", "action": "로그아웃 후 다시 로그인하세요. 진행 중인 서버 작업은 계속됩니다."},

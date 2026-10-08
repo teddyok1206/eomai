@@ -4089,6 +4089,16 @@ class QueryAdapter:
             events = self._approval_events(session, (item_id,))
             return tuple(self._revision(row, events.get(row.item_revision_id)) for row in rows)
 
+    def item_revision_views(
+        self, session: Session, rows: tuple[ItemRevisionRecord, ...]
+    ) -> dict[str, ItemRevisionView]:
+        """Public batch projection; all consumers share the official approval receipt rule."""
+        events = self._approval_events(session, tuple(sorted({row.item_id for row in rows})))
+        return {
+            row.item_revision_id: self._revision(row, events.get(row.item_revision_id))
+            for row in rows
+        }
+
     def revision(self, revision_id: str) -> ItemRevisionView:
         with self.sessions() as session:
             row = self._require(session, ItemRevisionRecord, revision_id, "ITEM_REVISION_NOT_FOUND")

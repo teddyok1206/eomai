@@ -11,6 +11,7 @@ const REQUIRED_PERMISSION_BY_ELEMENT_ID = Object.freeze({
   "pdf-review-submit": "workflow:start",
   "support-submit": "customer_support:create",
   "chat-send": "general_chat:write",
+  "chat-knowledge-panel": "item:read",
 });
 
 export function effectivePermissions(operator) {

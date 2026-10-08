@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/chat-knowledge-v1",
+  "title": "Bounded model-free chat Item discovery",
+  "oneOf": [{"$ref": "#/$defs/Request"}, {"$ref": "#/$defs/Selection"}],
+  "$defs": {
+    "Hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ItemId": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+    "RevisionId": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+    "Snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["graph_snapshot_revision_id", "snapshot_sha256"],
+      "properties": {
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "snapshot_sha256": {"$ref": "#/$defs/Hash"}
+      }
+    },
+    "Reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "item_revision_id", "manifest_sha256"],
+      "properties": {
+        "item_id": {"$ref": "#/$defs/ItemId"},
+        "item_revision_id": {"$ref": "#/$defs/RevisionId"},
+        "manifest_sha256": {"$ref": "#/$defs/Hash"}
+      }
+    },
+    "Recent": {
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "properties": {
+        "kind": {"const": "RECENT"},
+        "source": {"enum": ["ALL", "GENERATED"]}
+      }
+    },
+    "Exact": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "references"],
+      "properties": {
+        "kind": {"const": "EXACT"},
+        "references": {"type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true, "items": {"$ref": "#/$defs/Reference"}}
+      }
+    },
+    "Exam": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "administration_year", "administration_month", "target_school_level", "target_grade", "subject_key"],
+      "properties": {
+        "kind": {"const": "EXAM"},
+        "administration_year": {"type": "integer", "minimum": 1900, "maximum": 2200},
+        "administration_month": {"type": "integer", "minimum": 1, "maximum": 12},
+        "target_school_level": {"enum": ["ELEMENTARY", "MIDDLE_SCHOOL", "HIGH_SCHOOL"]},
+        "target_grade": {"type": "integer", "minimum": 1, "maximum": 6},
+        "subject_key": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[a-z0-9][a-z0-9._:-]*$"},
+        "item_number": {"anyOf": [{"type": "integer", "minimum": 1, "maximum": 200}, {"type": "null"}]}
+      },
+      "allOf": [{"if": {"properties": {"target_school_level": {"enum": ["MIDDLE_SCHOOL", "HIGH_SCHOOL"]}}}, "then": {"properties": {"target_grade": {"maximum": 3}}}}]
+    },
+    "Topic": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "terms"],
+      "properties": {
+        "kind": {"const": "TOPIC"},
+        "terms": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 2, "maxLength": 128, "pattern": "^[a-z0-9가-힣_]+$"}},
+        "source": {"enum": ["ALL", "PAST_EXAM", "GENERATED"]}
+      }
+    },
+    "Request": {
+      "type": "object", "additionalProperties": false, "required": ["query"],
+      "properties": {
+        "schema_version": {"const": "chat-knowledge-query/1.0"},
+        "query": {"oneOf": [{"$ref": "#/$defs/Recent"}, {"$ref": "#/$defs/Exact"}, {"$ref": "#/$defs/Exam"}, {"$ref": "#/$defs/Topic"}]},
+        "snapshot": {"anyOf": [{"$ref": "#/$defs/Snapshot"}, {"type": "null"}]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20}
+      }
+    },
+    "Approval": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "status", "human_review_required"],
+      "properties": {
+        "schema_version": {"const": "item-approval-view/1.0"},
+        "status": {"enum": ["PENDING", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"]},
+        "human_review_required": {"type": "boolean"},
+        "approved_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+        "approved_by": {"anyOf": [{"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"}, {"type": "null"}]},
+        "approval_receipt_sha256": {"anyOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},
+        "hwpx_build_id": {"anyOf": [{"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "PENDING"}}}, "then": {"properties": {"approved_at": {"type": "null"}, "approved_by": {"type": "null"}, "approval_receipt_sha256": {"type": "null"}, "hwpx_build_id": {"type": "null"}}}},
+        {"if": {"properties": {"human_review_required": {"const": true}, "status": {"enum": ["APPROVED", "SUPERSEDED", "RETIRED"]}}}, "then": {"required": ["approved_at", "approved_by", "approval_receipt_sha256", "hwpx_build_id"], "properties": {"approved_at": {"type": "string"}, "approved_by": {"type": "string"}, "approval_receipt_sha256": {"type": "string"}, "hwpx_build_id": {"type": "string"}}}}
+      ]
+    },
+    "Placement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assessment_occurrence_revision_id", "display_label", "item_number"],
+      "properties": {
+        "assessment_occurrence_revision_id": {"type": "string", "pattern": "^occurrev_[0-9a-f]{32}$"},
+        "display_label": {"type": "string", "minLength": 1, "maxLength": 512},
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 200}
+      }
+    },
+    "Card": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_id", "item_revision_id", "manifest_sha256", "revision_number", "display_name", "created_at", "approval", "source_kind", "graph_membership", "exam"],
+      "properties": {
+        "item_id": {"$ref": "#/$defs/ItemId"},
+        "item_revision_id": {"$ref": "#/$defs/RevisionId"},
+        "manifest_sha256": {"$ref": "#/$defs/Hash"},
+        "revision_number": {"type": "integer", "minimum": 1},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 512},
+        "created_at": {"type": "string", "format": "date-time"},
+        "approval": {"$ref": "#/$defs/Approval"},
+        "source_kind": {"enum": ["PAST_EXAM", "GENERATED", "UNCLASSIFIED"]},
+        "graph_membership": {"enum": ["INDEXED", "NOT_INDEXED", "UNAVAILABLE"]},
+        "exam": {"anyOf": [{"$ref": "#/$defs/Placement"}, {"type": "null"}]}
+      }
+    },
+    "Selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "values", "snapshot", "truncated", "model_calls"],
+      "properties": {
+        "schema_version": {"const": "chat-knowledge-selection/1.0"},
+        "values": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/Card"}},
+        "snapshot": {"anyOf": [{"$ref": "#/$defs/Snapshot"}, {"type": "null"}]},
+        "truncated": {"type": "boolean"},
+        "model_calls": {"const": 0}
+      }
+    }
+  }
+}

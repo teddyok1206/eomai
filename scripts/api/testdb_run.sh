@@ -13,9 +13,9 @@ fail() {
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
-    "$1" != "chat-role-tests" && "$1" != "tests" ]]; then
+    "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -153,6 +153,14 @@ PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"
+  exit 0
+fi
+
+if [[ "${action}" == "chat-knowledge-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_chat_knowledge_search.py
+  printf 'Disposable model-free chat knowledge query/plan tests passed.\n'
   exit 0
 fi
 

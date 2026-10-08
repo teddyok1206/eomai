@@ -773,6 +773,18 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .chat-composer textarea:focus { outline: 0; box-shadow: none; }
 .chat-pending, .chat-error { color: #6b5267; }
 .chat-error { margin: 8px 10px; }
+.chat-knowledge { border-bottom: 1px solid #e1e4eb; padding: 12px 0; }
+.chat-knowledge summary { cursor: pointer; font-weight: 600; }
+.chat-knowledge-search { display: flex; gap: 8px; margin-top: 12px; }
+.chat-knowledge-search input { flex: 1; min-width: 0; }
+.chat-knowledge-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.chat-knowledge-exam { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chat-knowledge-exam label { display: grid; gap: 4px; }
+.chat-knowledge-exam input { max-width: 150px; }
+.chat-knowledge-results { max-height: 240px; overflow-y: auto; }
+.chat-source-card { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid #eef0f4; }
+.chat-source-card button { text-align: left; white-space: normal; }
+.chat-source-card span { color: #687280; font-size: .9em; }
 @media (max-width: 900px) {
   .chat-workspace { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }
   .chat-history { max-height: 180px; }

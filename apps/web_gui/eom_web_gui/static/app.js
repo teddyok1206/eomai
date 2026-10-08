@@ -131,6 +131,12 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const generalChat = createGeneralChat({
   document, api,
+  openItem: async (card) => {
+    $("#item-id").value = card.item_id;
+    $("#revision-id").value = card.item_revision_id;
+    showView("item", {route: {view: "item", item_id: card.item_id, item_revision_id: card.item_revision_id}});
+    await loadItemPreview();
+  },
   errorMessage: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });

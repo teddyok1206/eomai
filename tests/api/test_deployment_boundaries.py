@@ -794,63 +794,24 @@ def test_release_verifies_mock_exam_production_protocol_resources() -> None:
 
 def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     deployment = _source("scripts/api/deploy_release.sh")
-
+    # The release gate now derives its inventory from canonical schemas. A
+    # hard-coded count/literal list was stale before this feature and cannot
+    # protect additive resources or missing packaged predecessors.
     assert "schemas != expected_api_schemas" in deployment
-    assert "expected exactly 59 packaged API schemas" in deployment
-    assert '"eom_api_contracts/schemas/api-release-build-info-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/item-bank-entry-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/workflow-start-v4.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/workflow-start-v5.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/production-item-candidate-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/production-item-candidate-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-assembly-plan-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-assembly-policy-view-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/execution-preset-draft-request-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-explicit-rating-set-v1.schema.json"' in deployment
-    assert (
-        '"eom_api_contracts/schemas/educational-quality-review-command-v1.schema.json"'
-        in deployment
-    )
-    assert (
-        '"eom_api_contracts/schemas/educational-quality-review-workbench-v1.schema.json"'
-        in deployment
-    )
-    assert (
-        '"eom_api_contracts/schemas/mock-exam-graph-publication-input-v1.schema.json"' in deployment
-    )
-    assert '"eom_api_contracts/schemas/curriculum-graph-capability-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/document-review-upload-v2.schema.json"' in deployment
-    assert (
-        '"eom_api_contracts/schemas/document-review-hwpx-correction-v1.schema.json"' in deployment
-    )
-    assert '"eom_api_contracts/schemas/assessment-item-occurrence-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-item-occurrence-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-batch-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-corpus-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-corpus-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-exam-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-exam-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-page-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/assessment-learning-page-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v3.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v4.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-production-execution-v5.schema.json"' in deployment
-    assert (
-        '"eom_api_contracts/schemas/mock-exam-production-retirement-v1.schema.json"' in deployment
-    )
-    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/mock-exam-review-eligibility-v3.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/hwpx-v2.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/pdf-document-review-v1.schema.json"' in deployment
-    assert (
-        '"eom_api_contracts/schemas/pdf-document-review-result-view-v1.schema.json"' in deployment
-    )
-    assert '"eom_api_contracts/schemas/workflow-start-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/workflow-start-v3.schema.json"' in deployment
+    assert 'canonical_api_root.glob("*.schema.json")' in deployment
+    canonical = REPOSITORY_ROOT / "schemas/api/v1"
+    packaged = REPOSITORY_ROOT / "packages/api_contracts/eom_api_contracts/schemas"
+    expected = {path.name for path in canonical.glob("*.schema.json")}
+    observed = {path.name for path in packaged.glob("*.schema.json")}
+    # Release staging overlays all canonical files, including legacy resources
+    # that are intentionally not mirrored in the source package directory.
+    assert observed <= expected and observed
+    assert 'cp "${SOURCE_ROOT}"/schemas/api/v1/*.schema.json' in deployment
+    for name in observed:
+        assert (canonical / name).read_bytes() == (packaged / name).read_bytes()
+    assert "chat-knowledge-v1.schema.json" in expected
+    assert '"eom_api/services/chat_knowledge_service.py"' in deployment
+    assert '"eom_api/services/chat_knowledge_query_adapter.py"' in deployment
     assert '"eom_api_contracts/mock_exam_execution.py"' in deployment
     assert '"eom_api_contracts/item_bank.py"' in deployment
     assert '"eom_api_contracts/mock_exam_retirement.py"' in deployment
@@ -874,8 +835,8 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "EducationalQualityReviewWorkbenchView.__module__" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
     assert f'CURRENT_MIGRATION_REVISION != "{CURRENT_MIGRATION_REVISION}"' in deployment
-    assert '"eom_api_contracts/schemas/document-review-annotation-v1.schema.json"' in deployment
-    assert '"eom_api_contracts/schemas/document-review-annotation-v2.schema.json"' in deployment
+    assert "document-review-annotation-v1.schema.json" in expected
+    assert "document-review-annotation-v2.schema.json" in expected
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation_service.py"' in deployment
     assert '"document-review/document-review-pdf-annotation-manifest-v1.schema.json"' in deployment

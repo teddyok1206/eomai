@@ -67,6 +67,29 @@
               </aside>
               <div class="chat-main panel">
                 <div class="chat-toolbar"><strong id="chat-conversation-title">새 대화</strong><button id="chat-refresh" class="button quiet" type="button">새로고침</button></div>
+                <details id="chat-knowledge-panel" class="chat-knowledge">
+                  <summary>내부 자료 찾기</summary>
+                  <form id="chat-knowledge-form" class="chat-knowledge-search">
+                    <label class="sr-only" for="chat-knowledge-query">검색할 개념</label>
+                    <input id="chat-knowledge-query" maxlength="1024" placeholder="개념 검색 · 예: 전자기 유도" autocomplete="off">
+                    <button id="chat-knowledge-submit" class="button primary" type="submit">찾기</button>
+                  </form>
+                  <div class="chat-knowledge-shortcuts">
+                    <button id="chat-knowledge-recent" class="button quiet" type="button">최근 문항</button>
+                    <button id="chat-knowledge-generated" class="button quiet" type="button">제작 문항</button>
+                    <details><summary>시험으로 찾기</summary>
+                      <form id="chat-knowledge-exam-form" class="chat-knowledge-exam">
+                        <label>연도<input id="chat-knowledge-exam-year" type="number" min="1900" max="2200" value="2025" required></label>
+                        <label>월<input id="chat-knowledge-exam-month" type="number" min="1" max="12" value="6" required></label>
+                        <label>학년<input id="chat-knowledge-exam-grade" type="number" min="1" max="3" value="1" required></label>
+                        <label>통합과학 문항 번호<input id="chat-knowledge-exam-number" type="number" min="1" max="200" placeholder="전체"></label>
+                        <button class="button quiet" type="submit">시험 문항 찾기</button>
+                      </form>
+                    </details>
+                  </div>
+                  <p id="chat-knowledge-status" role="status"></p>
+                  <div id="chat-knowledge-results" class="chat-knowledge-results"></div>
+                </details>
                 <button id="chat-more-messages" class="button quiet" type="button" hidden>이전 메시지 더 보기</button>
                 <div id="chat-messages" class="chat-messages" role="log" aria-label="대화 메시지" aria-live="polite"></div>
                 <p id="chat-error" class="chat-error" role="alert" hidden></p>
