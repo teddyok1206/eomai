@@ -113,3 +113,23 @@ RAG/report/policy inventory remain pending. Keep the existing live chat release
 unchanged until the compatible release-set decision: the supported API installer
 also replaces a shared platform wheel consumed by pinned owner/worker runtimes.
 Do not bypass that ownership or use an ad-hoc pip install to publish this UI.
+
+### Build checkpoint
+
+Implementation commit: `617e132eff71612abe0d99dfde50b5f56b2d95c0`.
+Both package builds passed from this exact commit; subsequent documentation
+commits do not change the source identity embedded in those wheels.
+
+| Component | Build evidence | State |
+| --- | --- | --- |
+| API and shared contracts/platform | `scripts/api/deploy_release.sh --build-only`; wheel RECORD verification PASS; directory `/tmp/eom-api-build/617e132eff71612abe0d99dfde50b5f56b2d95c0.e87puf/dist` | Built, not installed |
+| Web | `scripts/web_gui/build_release.sh`; non-editable runtime simulation PASS, 39 verified files; wheel `/tmp/eom-web-gui-build/617e132eff71612abe0d99dfde50b5f56b2d95c0.3PLFOA/dist/eom_web_gui-0.1.0-py3-none-any.whl` | Built, not installed |
+
+Web wheel SHA-256:
+`6b9296c5b5798285ed8a600963b9b4cb8a86e2953cef51454c7a6b4191aac310`.
+Temporary build paths are staging locations, not durable Artifact identities.
+The source tests and package inspection pass; live activation and manual review
+of the new search UI remain pending. This checkpoint used zero model calls,
+no DB migration or grants, and made no changes to the six production slots.
+The next slice is C04/C05: trusted Catalog access, bounded source input, cited
+answer contracts, and protected history/revocation before coordinated activation.
