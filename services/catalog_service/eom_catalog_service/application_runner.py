@@ -240,12 +240,15 @@ def serve() -> int:
             automatic_acceptance=automatic_acceptance,
         )
         knowledge_retrieval = KnowledgeRetrievalApplicationService(engine)
+        from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
+
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
             knowledge_analysis,
             knowledge_analysis_batches,
             knowledge_retrieval,
+            chat_knowledge=ChatKnowledgeResolutionService(engine),
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),

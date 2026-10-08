@@ -24,8 +24,6 @@ from eom_catalog_contracts import (
     ApproveItemRevisionCommandV1,
     AssessmentItemContent,
     AssessmentItemContentContract,
-    AssessmentItemContentV2,
-    AssessmentItemContentV3,
     AssessmentLayoutObservation,
     AssessmentPageImagePointer,
     ImageBlock,
@@ -66,6 +64,7 @@ from sqlalchemy import Engine, and_, or_, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS, read_item_content
 from eom_catalog_service.item_repository import append_item_event
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
@@ -1493,30 +1492,11 @@ class RegistryService:
         pointer: ComponentPointer,
         revision: ArtifactRevisionRecord,
     ) -> AssessmentItemContentContract:
-        schema_name: str
-        model: (
-            type[AssessmentItemContent]
-            | type[AssessmentItemContentV2]
-            | type[AssessmentItemContentV3]
-        )
-        if pointer.schema_ref in {
-            "eom.assessment.item-content/1.0",
-            "eom://schemas/item-registry/assessment-item-content-v1",
-        }:
-            schema_name, model = "assessment-item-content", AssessmentItemContent
-        elif pointer.schema_ref in {
-            "eom.assessment.item-content/2.0",
-            "eom://schemas/item-registry/assessment-item-content-v2",
-        }:
-            schema_name, model = "assessment-item-content-v2", AssessmentItemContentV2
-        elif pointer.schema_ref in {
-            "eom.assessment.item-content/3.0",
-            "eom://schemas/item-registry/assessment-item-content-v3",
-        }:
-            schema_name, model = "assessment-item-content-v3", AssessmentItemContentV3
-        else:
-            schema_name, model = "", AssessmentItemContent
-        if pointer.ordinal != 0 or not schema_name or pointer.media_type != "application/json":
+        if (
+            pointer.ordinal != 0
+            or pointer.schema_ref not in ITEM_CONTENT_SCHEMAS
+            or pointer.media_type != "application/json"
+        ):
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,
                 "canonical item content component identity is invalid",
@@ -1526,8 +1506,7 @@ class RegistryService:
             raw: object = json.loads(primary.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("item content is not an object")
-            validate_contract(schema_name, raw)
-            content = model.model_validate(raw)
+            content = read_item_content(pointer.schema_ref, raw)
         except (OSError, UnicodeError, ValueError) as exc:
             raise RegistryError(
                 RegistryErrorCode.ITEM_COMPONENT_INVALID,

@@ -50,7 +50,7 @@ const createDocument = () => {
   const submissions = [];
   const api = async (path, options) => {
     if (path.endsWith("/slot")) return {state: "READY"};
-    if (path.endsWith("/turns")) {
+    if (path.endsWith("/grounded-turns")) {
       submissions.push({...options.body});
       if (submissions.length === 1) throw new Error("HTTP_TIMEOUT");
       return conversation(first, "첫 번째");

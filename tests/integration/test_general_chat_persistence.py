@@ -45,6 +45,128 @@ from tests.unit.test_general_chat_worker_handoff import BOOT, SyntheticNative, p
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+class SyntheticKnowledge:
+    """Typed source port only; these are not Catalog/Graph provenance acceptance tests."""
+
+    denied = False
+
+    def resolve(self, *, actor_id, selection, purpose):
+        from eom_protocol.general_chat_grounding import ChatKnowledgeCatalogReply
+
+        from tests.unit.test_general_chat_grounding_contract import context
+
+        if self.denied:
+            raise ChatError("GENERAL_CHAT_FORBIDDEN")
+        return ChatKnowledgeCatalogReply(
+            status="SUCCEEDED",
+            context=context() if selection is not None and purpose == "MATERIALIZE" else None,
+            agent_state=None,
+            error_code=None,
+        )
+
+
+def grounded_identity():
+    from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
+
+    return ChatExecutionIdentity(
+        boot_id=BOOT, policy=source_chat_worker_policy(model="synthetic-model")
+    )
+
+
+def finish_grounded(chat, claim, request):
+    import json
+
+    from eom_orchestrator.general_chat_grounded_prompt import grounded_chat_result
+
+    answer = {
+        "answer_sections": [
+            {
+                "section_id": "section_1",
+                "markdown": "합성 검증 답변",
+                "support_kind": "SOURCE_SUPPORTED" if request.knowledge else "GENERAL_KNOWLEDGE",
+                "citation_keys": ["S1"] if request.knowledge else [],
+            }
+        ],
+        "limitations": [],
+    }
+    result = grounded_chat_result(request, reply=json.dumps(answer), failure=None)
+    chat.execution.complete(claim, result)
+    return result
+
+
+@pytest.mark.parametrize("grounded", [False, True])
+def test_successor_artifacts_dispatch_history_and_source_views_are_exact(chat, grounded):
+    from eom_protocol.general_chat_grounding import GroundedChatSubmission
+
+    from tests.unit.test_general_chat_grounding_contract import context
+
+    knowledge = SyntheticKnowledge()
+    chat.owner.knowledge = chat.execution.knowledge = knowledge
+    conversation = chat.create()
+    sent = chat.owner.submit(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        request=GroundedChatSubmission(
+            text="합성 질문",
+            expected_version=conversation.resource_version,
+            selection=context().selection if grounded else None,
+        ),
+        idempotency_key="grounded-" + uuid4().hex,
+    )
+    claim = chat.claim()
+    request = chat.execution.prepare(claim, identity=grounded_identity())
+    assert request.protocol_version == "general-chat-turn/2.0"
+    assert (request.knowledge is not None) == grounded
+    result = finish_grounded(chat, claim, request)
+    assert chat.execution.execution_receipt(claim).schema_version == "general-chat-dispatch/2.0"
+    assert chat.execution.active_claim() is None
+    chat.execution.complete(claim, result)
+    view = chat.owner.grounding(
+        actor_id=chat.actors[0], conversation_id=sent.conversation_id, turn_ids=(claim.turn_id,)
+    )
+    assert view.values[0].receipt.request_sha256 == result.request_sha256
+    assert len(view.values[0].sources) == int(grounded)
+    assert (
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=sent.conversation_id, cursor=None
+        )
+        .messages[-1]
+        .text
+        == result.reply
+    )
+    if grounded:
+        knowledge.denied = True
+        with pytest.raises(ChatError, match="GENERAL_CHAT_FORBIDDEN"):
+            chat.owner.conversation(
+                actor_id=chat.actors[0], conversation_id=sent.conversation_id, cursor=None
+            )
+        with pytest.raises(ChatError, match="GENERAL_CHAT_FORBIDDEN"):
+            chat.owner.grounding(
+                actor_id=chat.actors[0],
+                conversation_id=sent.conversation_id,
+                turn_ids=(claim.turn_id,),
+            )
+
+
+def test_denied_preparation_terminates_exact_claim_without_model_or_dispatch(chat):
+    from eom_orchestrator.general_chat_execution import ChatPreparationRejected
+
+    chat.execution.knowledge = SyntheticKnowledge()
+    conversation = chat.create()
+    chat.submit(conversation)
+    claim = chat.claim()
+    chat.execution.knowledge.denied = True
+    with pytest.raises(ChatPreparationRejected, match="GENERAL_CHAT_FORBIDDEN"):
+        chat.execution.prepare(claim, identity=grounded_identity())
+    assert chat.execution.active_claim() is None
+    with chat.repository.read_snapshot() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "FAILED" and turn.failure_code == "GENERAL_CHAT_FORBIDDEN"
+        assert (
+            turn.request_artifact_id is turn.dispatch_artifact_id is turn.output_artifact_id is None
+        )
+
+
 def test_chat_migration_matches_authoritative_metadata(chat: ChatFixture) -> None:
     inspector = inspect(chat.engine)
     for model in (GeneralChatConversationRecord, GeneralChatTurnRecord, GeneralChatCapacityRecord):

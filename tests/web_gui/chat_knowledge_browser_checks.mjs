@@ -29,7 +29,9 @@ replies[1].resolve({values: [card], truncated: false}); await tick();
 const list = $("chat-knowledge-results");
 assert.equal(list.children.length, 1);
 assert.equal(list.children[0].children[0].textContent, card.display_name);
-assert.match(list.children[0].children[1].textContent, /승인 대기.*Graph 미반영/);
+assert.match(list.children[0].children[2].textContent, /승인 대기.*Graph 미반영/);
+list.children[0].children[1].fire("click");
+assert.deepEqual(controller.selection(), {references: [{item_id: card.item_id, item_revision_id: card.item_revision_id, manifest_sha256: card.manifest_sha256}], snapshot: null});
 list.children[0].children[0].fire("click");
 assert.deepEqual(opened, [card]);
 replies[0].resolve({values: [{...card, display_name: "STALE"}], truncated: true}); await tick();
@@ -38,6 +40,7 @@ assert.equal(list.children[0].children[0].textContent, card.display_name);
 // Logout or an owner change cannot expose delayed source metadata.
 $("chat-knowledge-recent").fire("click");
 controller.setOwner("owner-two");
+assert.equal(controller.selection(), null);
 assert.equal(list.children.length, 0);
 replies[2].resolve({values: [card], truncated: false}); await tick();
 assert.equal(list.children.length, 0);

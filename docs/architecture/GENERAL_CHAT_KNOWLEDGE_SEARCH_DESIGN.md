@@ -298,3 +298,46 @@ knowledge and insufficient evidence. Keys must belong to the exact prepared
 context. The owner issues a result/context-bound citation integrity receipt, not a
 scientific correctness approval. UI navigation comes from verified references,
 never model-written paths or URLs. Graph absence is reported, not fabricated.
+
+## EOM representative agent operating connection (2026-10-08)
+
+The representative is a read-only conversation role, not a second Orchestrator.
+It explains EOM workflows, answers from explicitly selected immutable Items and
+accepted solution reports, and distinguishes timestamped authorized observations
+from inference. Account changes, approval, production and deployment remain in
+their existing application use cases; chat never claims to have performed them.
+
+Normal chat also uses the successor input with nullable knowledge. Catalog owns
+the bounded actor-scoped observation and source resolution. The Chat Owner stages
+that typed snapshot and retains exact input/output pointers. Existing indexed
+conversation history, atomic capacity claim and idempotency are reused. No new
+queue, DB schema, external API, worker tools or dependency is introduced.
+
+Released V1 envelopes remain accepted for historical reads and recovery. New worker,
+dispatch and owner successors carry V2 turns. Evidence family resolution reads
+the registered immutable member descriptor, never guesses its schema from payload
+or substitutes a current revision. History and follow-up context recheck current
+source access; immutable receipts are preserved if authorization is later revoked.
+
+Canonical citation evidence is the immutable request and result pair: the receipt
+is a deterministic validated projection, not a duplicated database JSON blob.
+UI source navigation is built from verified Item identities. At most three Items,
+nine source members and bounded history are materialized per turn, using indexed
+lookup, request-local maps and batch artifact resolution. Errors before inference
+release the exact claim through a supported terminal transition; unknown execution
+never triggers automatic model replay.
+
+Source candidate verification: 597 focused protocol/API/Web/Catalog tests, 48
+guarded disposable PostgreSQL persistence tests and 23 search/query-plan/runtime
+permission tests passed. Ruff and mypy (33 changed source files) passed. The
+limited chat-role suite needs its own guarded role preparation: an older test
+database's API reconciliation rotated that shared disposable role's credential,
+so its 12 setup failures are not runtime acceptance or a production incident.
+Production connection and native/browser canary acceptance are recorded separately.
+
+Boundaries: selection is explicit (up to three immutable Items attached from
+search); no corpus-wide autonomous model tools, live image inspection or chat
+mutations are claimed. Actor observations contain authorized counts and own
+workflow states, not other users' conversation/operation details. Corpus counts
+and grouped own-workflow counts are aggregate queries over the existing tables;
+this candidate does not invent a new cache or index without query evidence.

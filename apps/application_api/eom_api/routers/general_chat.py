@@ -13,11 +13,69 @@ from eom_api_contracts.general_chat import (
     GeneralChatSubmission,
 )
 from eom_operator_identity import PermissionKey
+from eom_protocol.general_chat_grounding import (
+    ChatGroundingSubmission,
+    ChatGroundingViews,
+    GroundedChatSubmission,
+    read_grounding,
+)
 from fastapi import APIRouter, Depends, Path, Query, Request
 
 from eom_api.dependencies import Auth, IdempotencyKey, get_services, require_permission
 
 router = APIRouter(prefix="/general-chat", tags=["general-chat"])
+
+
+@router.post(
+    "/conversations/{conversation_id}/grounded-turns",
+    operation_id="general_chat_grounded_submit",
+    status_code=202,
+    response_model=GeneralChatConversation,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_WRITE))],
+)
+def grounded_submit(
+    request: Request,
+    conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+    body: GroundedChatSubmission,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> GeneralChatConversation:
+    read_grounding("Submission", body.model_dump(mode="json"), GroundedChatSubmission)
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .submit(
+            actor_id=authentication.operator.operator_id,
+            conversation_id=conversation_id,
+            request=body,
+            idempotency_key=idempotency_key,
+        )
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/grounding",
+    operation_id="general_chat_grounding_read",
+    response_model=ChatGroundingViews,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_READ))],
+    openapi_extra={"x-eom-read-only": True},
+)
+def grounding_read(
+    request: Request,
+    conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+    body: ChatGroundingSubmission,
+    authentication: Auth,
+) -> ChatGroundingViews:
+    read_grounding("ViewSubmission", body.model_dump(mode="json"), ChatGroundingSubmission)
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .grounding(
+            actor_id=authentication.operator.operator_id,
+            conversation_id=conversation_id,
+            turn_ids=body.turn_ids,
+        )
+    )
 
 
 @router.post(

@@ -13,6 +13,11 @@ from typing import Any, Protocol
 
 import httpx
 
+from eom_web_gui.chat_grounding_contracts import (
+    ChatGroundedTurnSubmission,
+    ChatGroundingSubmission,
+    ChatGroundingViews,
+)
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_web_gui.contracts import (
     AssessmentLearningBatchStatus,
@@ -362,6 +367,14 @@ class ApplicationGateway(Protocol):
     async def general_chat_submit(
         self, session: WebSession, conversation_id: str, value: ChatTurnSubmission
     ) -> ChatConversation: ...
+
+    async def general_chat_grounded_submit(
+        self, session: WebSession, conversation_id: str, value: ChatGroundedTurnSubmission
+    ) -> ChatConversation: ...
+
+    async def general_chat_grounding(
+        self, session: WebSession, conversation_id: str, value: ChatGroundingSubmission
+    ) -> ChatGroundingViews: ...
     async def health(self) -> dict[str, str]: ...
 
     async def login(self, username: str, password: str) -> LoginResult: ...
@@ -910,6 +923,40 @@ class HttpApplicationGateway:
         )
         try:
             return ChatConversation.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_grounded_submit(
+        self, session: WebSession, conversation_id: str, value: ChatGroundedTurnSubmission
+    ) -> ChatConversation:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/general-chat/conversations/{conversation_id}/grounded-turns",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+        )
+        try:
+            return ChatConversation.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_grounding(
+        self, session: WebSession, conversation_id: str, value: ChatGroundingSubmission
+    ) -> ChatGroundingViews:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/general-chat/conversations/{conversation_id}/grounding",
+            json=value.model_dump(mode="json"),
+        )
+        try:
+            result = ChatGroundingViews.model_validate(response.json())
+            if result.conversation_id != conversation_id or {
+                v.turn_id for v in result.values
+            } != set(value.turn_ids):
+                raise ValueError("grounding view identity differs")
+            return result
         except ValueError as exc:
             raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
 

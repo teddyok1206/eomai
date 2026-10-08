@@ -19,6 +19,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSubmission,
 )
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
+from eom_protocol.general_chat_grounding import ChatGroundingViews, GroundedChatSubmission
 from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
@@ -85,6 +86,14 @@ class Owner:
         assert conversation_id == CHAT_ID
         return conversation()
 
+    def grounding(
+        self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
+    ) -> ChatGroundingViews:
+        self.actors.append(actor_id)
+        assert conversation_id == CHAT_ID
+        assert turn_ids == ("chatturn_" + "1" * 32,)
+        return ChatGroundingViews(conversation_id=conversation_id, values=())
+
 
 def client(*, enabled: bool = False, allowed: bool = True):
     services = disconnected_services()
@@ -122,6 +131,59 @@ def test_not_activated_never_reports_ready_or_accepts_inference():
             )
             assert response.status_code == 503
             assert response.json()["error_code"] == "GENERAL_CHAT_NOT_READY"
+    finally:
+        services.engine.dispose()
+
+
+def test_grounded_submission_and_read_only_sources_use_authenticated_owner():
+    value, services, owner = client(enabled=True)
+    try:
+        with value:
+            submitted = value.post(
+                f"/api/v1/general-chat/conversations/{CHAT_ID}/grounded-turns",
+                json=GroundedChatSubmission(
+                    text="시스템을 설명해주세요", expected_version=1, selection=None
+                ).model_dump(mode="json"),
+                headers={"Idempotency-Key": "chat-create-test-0001"},
+            )
+            assert submitted.status_code == 202
+            viewed = value.post(
+                f"/api/v1/general-chat/conversations/{CHAT_ID}/grounding",
+                json={"turn_ids": ["chatturn_" + "1" * 32]},
+            )
+            assert viewed.status_code == 200
+            assert viewed.json() == {"conversation_id": CHAT_ID, "values": []}
+            assert len(owner.actors) == 2
+            assert (
+                value.post(
+                    f"/api/v1/general-chat/conversations/{CHAT_ID}/grounding",
+                    json={"turn_ids": ["bad"], "actor_id": "foreign"},
+                ).status_code
+                == 422
+            )
+    finally:
+        services.engine.dispose()
+
+
+def test_grounded_routes_reject_missing_permissions():
+    value, services, _ = client(enabled=True, allowed=False)
+    try:
+        with value:
+            assert (
+                value.post(
+                    f"/api/v1/general-chat/conversations/{CHAT_ID}/grounded-turns",
+                    json={"text": "질문", "expected_version": 1, "selection": None},
+                    headers={"Idempotency-Key": "chat-create-test-0001"},
+                ).status_code
+                == 403
+            )
+            assert (
+                value.post(
+                    f"/api/v1/general-chat/conversations/{CHAT_ID}/grounding",
+                    json={"turn_ids": ["chatturn_" + "1" * 32]},
+                ).status_code
+                == 403
+            )
     finally:
         services.engine.dispose()
 

@@ -877,6 +877,12 @@ class KnowledgeRetrievalApplicationService:
                 )
             return self._result(session, record, revision)
 
+    def resolve_snapshot_pointer(
+        self, session: Session, graph_snapshot_revision_id: str
+    ) -> KnowledgeGraphSnapshotPointer:
+        """Public read-only resolution shared by trusted Catalog consumers."""
+        return self._snapshot_pointer(session, graph_snapshot_revision_id)
+
     def _snapshot_pointer(
         self, session: Session, graph_snapshot_revision_id: str
     ) -> KnowledgeGraphSnapshotPointer:

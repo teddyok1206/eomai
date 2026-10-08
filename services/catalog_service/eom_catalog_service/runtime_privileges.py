@@ -114,6 +114,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "resolved_execution_plan_steps",
     "resolved_execution_plans",
     "role_permissions",
+    "roles",
     "worker_capacity_policies",
     "worker_capacity_policy_revisions",
     "worker_capacity_pool_roles",

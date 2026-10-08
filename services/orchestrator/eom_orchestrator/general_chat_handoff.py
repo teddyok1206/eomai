@@ -14,7 +14,10 @@ from typing import Self
 from uuid import uuid4
 
 from eom_identifiers import canonical_json_bytes
-from eom_protocol.general_chat import ChatTurnResult, read_chat_turn_result_document
+from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
+from eom_protocol.general_chat_grounding import (
+    read_chat_result_document as read_chat_turn_result_document,
+)
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerError,
     ChatWorkerFault,

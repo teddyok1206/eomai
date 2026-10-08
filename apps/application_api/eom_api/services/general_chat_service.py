@@ -13,6 +13,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSlot,
     GeneralChatSubmission,
 )
+from eom_protocol.general_chat_grounding import ChatGroundingViews, GroundedChatSubmission
 from eom_protocol.general_chat_owner_messages import (
     ChatOwnerErrorCode,
     ChatOwnerFault,
@@ -108,7 +109,7 @@ class GeneralChatApplicationService:
         *,
         actor_id: str,
         conversation_id: str,
-        request: GeneralChatSubmission,
+        request: GeneralChatSubmission | GroundedChatSubmission,
         idempotency_key: str,
     ) -> GeneralChatConversation:
         return self._call(
@@ -117,5 +118,14 @@ class GeneralChatApplicationService:
                 conversation_id=conversation_id,
                 request=request,
                 idempotency_key=idempotency_key,
+            )
+        )
+
+    def grounding(
+        self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
+    ) -> ChatGroundingViews:
+        return self._call(
+            lambda owner: owner.grounding(
+                actor_id=actor_id, conversation_id=conversation_id, turn_ids=turn_ids
             )
         )

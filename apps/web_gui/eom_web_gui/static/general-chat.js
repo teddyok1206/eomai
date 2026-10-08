@@ -36,11 +36,16 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
   // Owner-scoped bounded DOM memo: polling must not parse unchanged immutable
   // replies again. A changed source invalidates the entry; logout clears it.
   const replyBodies = new Map();
+  const grounding = new Map();
+  const groundingPending = new Set();
   const stopTimer = () => { clearTimeout(timer); timer = null; };
   const key = () => `studio:chat:${crypto.randomUUID()}`;
   const current = (token) => visible && owner !== null && token === epoch;
 
   function fail(error) {
+    if (["GENERAL_CHAT_FORBIDDEN", "AUTH_REAUTHENTICATION_REQUIRED"].includes(error?.code)) {
+      selected = null; replyBodies.clear(); grounding.clear(); knowledge.resetSelection(); render();
+    }
     $("chat-error").textContent = error?.code === "GENERAL_CHAT_NOT_READY"
       ? "전용 대화 서비스를 준비 중입니다. 입력한 메시지는 그대로 유지됩니다."
       : errorMessage(error);
@@ -63,7 +68,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     if (!selected?.messages?.length) {
       const welcome = document.createElement("div");
       welcome.className = "chat-welcome";
-      welcome.textContent = "무엇을 도와드릴까요?";
+      welcome.textContent = "EOM에서 어떤 작업을 도와드릴까요? 문항을 함께 살펴보거나, 검토·출력·사용 방법을 물어보세요.";
       log.append(welcome);
     }
     for (const message of selected?.messages || []) {
@@ -71,7 +76,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
       bubble.className = `chat-message chat-message-${message.role}`;
       const name = document.createElement("strong");
       name.className = "chat-speaker";
-      name.textContent = message.role === "user" ? "나" : "ChatGPT";
+      name.textContent = message.role === "user" ? "나" : "EOM 어시스턴트";
       bubble.append(name);
       if (message.text && message.role === "assistant") {
         const key = `${selected.conversation_id}:${message.turn_id}`;
@@ -95,6 +100,21 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
         status.textContent = {QUEUED: "차례를 기다리고 있습니다…", RUNNING: "답변을 작성하고 있습니다…",
           FAILED: "답변 생성에 실패했습니다.", CANCELLED: "답변 생성이 취소되었습니다."}[message.state] || "";
         bubble.append(status);
+      }
+      if (message.role === "assistant") {
+        const view = grounding.get(`${selected.conversation_id}:${message.turn_id}`);
+        const renderedEpoch = epoch;
+        for (const source of view?.sources || []) {
+          const button = document.createElement("button"); button.type = "button"; button.className = "button quiet chat-source-link";
+          button.textContent = `[${source.key}] ${source.display_name} · ${source.kind === "SOLUTION_REPORT" ? "승인 풀이보고서" : "정본 문항"}${source.approval === "PENDING" ? " · 승인 대기" : ""}`;
+          button.addEventListener("click", () => { if (current(renderedEpoch) && openItem) openItem(source.item); });
+          bubble.append(button);
+        }
+        if (view?.observed_at) {
+          const stamp = document.createElement("span"); stamp.className = "chat-observation-time";
+          stamp.textContent = `시스템 정보 확인: ${new Date(view.observed_at).toLocaleString("ko-KR", {timeZone: "Asia/Seoul"})}`;
+          bubble.append(stamp);
+        }
       }
       log.append(bubble);
     }
@@ -144,6 +164,22 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     });
     renderHistory();
     render();
+    loadGrounding(epoch, value);
+  }
+
+  async function loadGrounding(token, value) {
+    const ids = value.messages.filter(m => m.role === "assistant" && m.state === "COMPLETED" && !grounding.has(`${value.conversation_id}:${m.turn_id}`)).map(m => m.turn_id).slice(-50);
+    const requestKey = `${value.conversation_id}:${ids.join(":")}`;
+    if (!ids.length || groundingPending.has(requestKey)) return;
+    groundingPending.add(requestKey);
+    try {
+      const result = await api(`/general-chat/conversations/${value.conversation_id}/grounding`, {method: "POST", mutation: true, body: {turn_ids: ids}});
+      if (!current(token) || selected?.conversation_id !== value.conversation_id) return;
+      for (const view of result.values) grounding.set(`${value.conversation_id}:${view.turn_id}`, view);
+      while (grounding.size > 100) grounding.delete(grounding.keys().next().value);
+      render();
+    } catch (error) { if (current(token) && selected?.conversation_id === value.conversation_id) fail(error); }
+    finally { groundingPending.delete(requestKey); }
   }
 
   function schedule(token) {
@@ -175,6 +211,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     drafts.set(selected?.conversation_id || "new", $("chat-input").value);
     stopTimer();
     const token = ++epoch;
+    knowledge.resetSelection();
     selected = null;
     loading = true;
     $("chat-input").value = drafts.get(id) || "";
@@ -211,16 +248,17 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
       }
       const id = selected.conversation_id;
       let intent = intents.get(id);
-      if (intent && intent.text !== text) {
+      const selectedSources = knowledge.selection();
+      if (intent && (intent.text !== text || JSON.stringify(intent.selection) !== JSON.stringify(selectedSources))) {
         $("chat-error").textContent = "이전 전송의 처리 여부를 확인하려면 새로고침하세요. 메시지를 바꿔 중복 전송하지 않습니다.";
         $("chat-error").hidden = false;
         return;
       }
       if (!intent) {
-        intent = {text, expected_version: selected.resource_version, idempotency_key: key()};
+        intent = {schema_version: "general-chat-grounded-submission/1.0", text, selection: structuredClone(selectedSources), expected_version: selected.resource_version, idempotency_key: key()};
         intents.set(id, intent);
       }
-      const value = await api(`/general-chat/conversations/${id}/turns`, {
+      const value = await api(`/general-chat/conversations/${id}/grounded-turns`, {
         method: "POST", mutation: true, body: intent,
       });
       if (!current(token)) return;
@@ -266,7 +304,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     slot = null;
     loading = false;
     createIntent = null;
-    intents.clear(); drafts.clear(); summaries.clear(); replyBodies.clear();
+    intents.clear(); drafts.clear(); summaries.clear(); replyBodies.clear(); grounding.clear(); groundingPending.clear();
     conversationCursor = null;
     $("chat-input").value = "";
     $("chat-error").hidden = true;
@@ -285,6 +323,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
       if (sending) return;
       drafts.set(selected?.conversation_id || "new", $("chat-input").value);
       stopTimer(); epoch += 1; selected = null;
+      knowledge.resetSelection();
       loading = false;
       $("chat-input").value = drafts.get("new") || "";
       $("chat-error").hidden = true;

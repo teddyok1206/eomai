@@ -11,14 +11,18 @@ from eom_protocol.general_chat import (
     CHAT_MEMBER,
     CHAT_MESSAGE_SCHEMA,
     CHAT_RESULT_SCHEMA,
-    ChatTurnInput,
-    ChatTurnResult,
     StoredChatMessage,
-    read_chat_turn_input,
-    read_chat_turn_result_document,
     read_stored_chat_message,
 )
 from eom_protocol.general_chat_dispatch import ChatDispatchReceipt, read_chat_dispatch
+from eom_protocol.general_chat_grounding import (
+    ChatInputContract,
+    ChatResultContract,
+    StoredGroundedChatMessage,
+    read_chat_input,
+    read_chat_result_document,
+    read_grounding,
+)
 from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 
 from eom_orchestrator.general_chat_state import ChatError
@@ -52,8 +56,15 @@ def require_evidence(pointer: ArtifactMemberPointer, payload: bytes, *, schema_r
         raise ChatError("GENERAL_CHAT_POINTER_INVALID")
 
 
-def user_evidence(payload: bytes, *, conversation_id: str, turn_id: str) -> StoredChatMessage:
-    message = read_stored_chat_message(payload)
+def user_evidence(
+    payload: bytes, *, conversation_id: str, turn_id: str
+) -> StoredChatMessage | StoredGroundedChatMessage:
+    document = json.loads(payload)
+    message = (
+        read_grounding("Message", document, StoredGroundedChatMessage)
+        if document.get("schema_version") == "general-chat-message/2.0"
+        else read_stored_chat_message(payload)
+    )
     if (message.conversation_id, message.turn_id, message.role) != (
         conversation_id,
         turn_id,
@@ -65,8 +76,8 @@ def user_evidence(payload: bytes, *, conversation_id: str, turn_id: str) -> Stor
 
 def request_evidence(
     payload: bytes, *, conversation_id: str, turn_id: str, claim_id: str
-) -> ChatTurnInput:
-    request = read_chat_turn_input(json.loads(payload))
+) -> ChatInputContract:
+    request = read_chat_input(json.loads(payload))
     if (request.conversation_id, request.turn_id, request.claim_id) != (
         conversation_id,
         turn_id,
@@ -84,10 +95,10 @@ def result_evidence(
     claim_id: str,
     request_sha256: str,
     expected_status: str,
-) -> ChatTurnResult:
+) -> ChatResultContract:
     # Final worker admission uses the JSON Schema reader with its pinned request.
     # This projection reads already-admitted immutable evidence and still binds all identities.
-    result = read_chat_turn_result_document(json.loads(payload))
+    result = read_chat_result_document(json.loads(payload))
     if (
         result.conversation_id,
         result.turn_id,
@@ -106,7 +117,7 @@ def result_evidence(
 
 
 def dispatch_evidence(
-    payload: bytes, *, request: ChatTurnInput, input_pointer: ArtifactMemberPointer
+    payload: bytes, *, request: ChatInputContract, input_pointer: ArtifactMemberPointer
 ) -> ChatDispatchReceipt:
     try:
         receipt = read_chat_dispatch(json.loads(payload))

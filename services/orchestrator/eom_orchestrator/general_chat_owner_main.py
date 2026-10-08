@@ -14,6 +14,7 @@ from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.general_chat_artifacts import GeneralChatArtifactStore
 from eom_orchestrator.general_chat_coordinator import run_chat_coordinator
 from eom_orchestrator.general_chat_execution import GeneralChatExecutionService
+from eom_orchestrator.general_chat_knowledge import CatalogChatKnowledgeClient
 from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
 from eom_orchestrator.general_chat_owner_runtime import (
@@ -56,7 +57,8 @@ def main() -> int:
             source_commit=config.source_commit,
         )
         repository = GeneralChatRepository(metadata)
-        execution = GeneralChatExecutionService(repository, evidence)
+        knowledge = CatalogChatKnowledgeClient()
+        execution = GeneralChatExecutionService(repository, evidence, knowledge=knowledge)
         policy = source_chat_worker_policy(model=config.model)
         endpoint = ChatSocketEndpoint(
             Path("/run/eom-general-chat-worker/worker.sock"),
@@ -64,7 +66,7 @@ def main() -> int:
             worker.pw_gid,
         )
         server = GeneralChatOwnerRpcServer(
-            GeneralChatConversationOwner(repository, evidence),
+            GeneralChatConversationOwner(repository, evidence, knowledge=knowledge),
             endpoint=ChatSocketEndpoint(OWNER_SOCKET, owner.pw_uid, api_group.gr_gid),
             allowed_uids=frozenset({api.pw_uid}),
         )

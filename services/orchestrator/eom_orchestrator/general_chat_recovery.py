@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from eom_protocol.general_chat import ChatTurnResult
 from eom_protocol.general_chat_dispatch import ChatDispatchReceipt
+from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerOutput,
     ChatWorkerTicket,

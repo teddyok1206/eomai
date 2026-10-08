@@ -20,12 +20,13 @@ from eom_protocol.general_chat import (
     ChatTurnInput,
     ChatTurnResult,
 )
+from eom_protocol.models import UtcDatetime
 
 GROUNDING_SCHEMA = "eom://schemas/general-chat/grounding/1.0"
-GROUNDED_MESSAGE_SCHEMA = GROUNDING_SCHEMA + "#/$defs/Message"
-GROUNDED_INPUT_SCHEMA = GROUNDING_SCHEMA + "#/$defs/Input"
-GROUNDED_RESULT_SCHEMA = GROUNDING_SCHEMA + "#/$defs/Result"
-GROUNDED_RECEIPT_SCHEMA = GROUNDING_SCHEMA + "#/$defs/Receipt"
+GROUNDED_MESSAGE_SCHEMA = "eom://schemas/general-chat/message/2.0"
+GROUNDED_INPUT_SCHEMA = "eom://schemas/general-chat/turn-input/2.0"
+GROUNDED_RESULT_SCHEMA = "eom://schemas/general-chat/turn-result/2.0"
+GROUNDED_RECEIPT_SCHEMA = "eom://schemas/general-chat/citation-receipt/1.0"
 GroundingHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 GroundingFailure = Literal[
     "CODEX_UNAVAILABLE",
@@ -144,7 +145,7 @@ class GroundedChatSubmission(ChatBoundaryValue):
     )
     text: str = Field(min_length=1, max_length=16000, pattern=r"\S")
     expected_version: int = Field(ge=1)
-    selection: ChatKnowledgeSelection
+    selection: ChatKnowledgeSelection | None
 
     @model_validator(mode="after")
     def no_nul(self) -> GroundedChatSubmission:
@@ -159,13 +160,36 @@ class StoredGroundedChatMessage(ChatBoundaryValue):
     turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
     role: Literal["user"] = "user"
     text: str = Field(min_length=1, max_length=16000, pattern=r"\S")
-    selection: ChatKnowledgeSelection
+    selection: ChatKnowledgeSelection | None
 
     @model_validator(mode="after")
     def no_nul(self) -> StoredGroundedChatMessage:
         if "\x00" in self.text:
             raise ValueError("invalid chat text")
         return self
+
+
+class ChatWorkflowCount(ChatBoundaryValue):
+    state: Literal[
+        "REQUESTED",
+        "RUNNING",
+        "AWAITING_HUMAN_APPROVAL",
+        "REWORK_REQUESTED",
+        "APPROVED",
+        "REGISTERING",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+    ]
+    count: int = Field(ge=0)
+
+
+class ChatAgentState(ChatBoundaryValue):
+    observed_at: UtcDatetime
+    permissions: tuple[str, ...] = Field(max_length=32)
+    item_count: int | None = Field(ge=0)
+    graph_node_count: int | None = Field(ge=0)
+    workflow_counts: tuple[ChatWorkflowCount, ...] = Field(max_length=9)
 
 
 class GroundedChatTurnInput(ChatBoundaryValue):
@@ -176,7 +200,8 @@ class GroundedChatTurnInput(ChatBoundaryValue):
     prompt_revision: Literal["general-chat-grounded/1.0.0"] = "general-chat-grounded/1.0.0"
     context_sha256: GroundingHash
     messages: tuple[ChatContextMessage, ...] = Field(min_length=1, max_length=40)
-    knowledge: ChatKnowledgeContext
+    knowledge: ChatKnowledgeContext | None
+    agent_state: ChatAgentState | None = None
 
     @model_validator(mode="after")
     def exact_messages(self) -> GroundedChatTurnInput:
@@ -194,7 +219,11 @@ class ChatAnswerSection(ChatBoundaryValue):
     section_id: str = Field(pattern=r"^section_[1-9][0-9]?$")
     markdown: str = Field(min_length=1, max_length=8000, pattern=r"\S")
     support_kind: Literal[
-        "SOURCE_SUPPORTED", "MODEL_INFERENCE", "GENERAL_KNOWLEDGE", "INSUFFICIENT_EVIDENCE"
+        "SOURCE_SUPPORTED",
+        "MODEL_INFERENCE",
+        "GENERAL_KNOWLEDGE",
+        "INSUFFICIENT_EVIDENCE",
+        "SYSTEM_OBSERVATION",
     ]
     citation_keys: tuple[str, ...] = Field(max_length=9)
 
@@ -209,7 +238,8 @@ class ChatAnswerSection(ChatBoundaryValue):
         ):
             raise ValueError("invalid citation keys")
         if (self.support_kind == "SOURCE_SUPPORTED" and not self.citation_keys) or (
-            self.support_kind in {"GENERAL_KNOWLEDGE", "INSUFFICIENT_EVIDENCE"}
+            self.support_kind
+            in {"GENERAL_KNOWLEDGE", "INSUFFICIENT_EVIDENCE", "SYSTEM_OBSERVATION"}
             and self.citation_keys
         ):
             raise ValueError("section support and citations differ")
@@ -251,6 +281,7 @@ class GroundedChatTurnResult(ChatBoundaryValue):
     prompt_revision: Literal["general-chat-grounded/1.0.0"] = "general-chat-grounded/1.0.0"
     request_sha256: GroundingHash
     knowledge_sha256: GroundingHash
+    agent_state_sha256: GroundingHash
     status: Literal["SUCCEEDED", "FAILED"]
     answer: ChatGroundedAnswer | None
     failure_code: GroundingFailure | None
@@ -277,7 +308,7 @@ class ChatCitationReceipt(ChatBoundaryValue):
     result_sha256: GroundingHash
     context_sha256: GroundingHash
     used_source_keys: tuple[str, ...] = Field(max_length=9)
-    verified_references: tuple[ChatKnowledgeItem, ...] = Field(min_length=1, max_length=3)
+    verified_references: tuple[ChatKnowledgeItem, ...] = Field(max_length=3)
     meaning: Literal["CITATION_LINK_INTEGRITY_NOT_SCIENTIFIC_APPROVAL"] = (
         "CITATION_LINK_INTEGRITY_NOT_SCIENTIFIC_APPROVAL"
     )
@@ -295,6 +326,45 @@ class ChatCitationReceipt(ChatBoundaryValue):
         return self
 
 
+class ChatKnowledgeSourceCard(ChatBoundaryValue):
+    key: str = Field(pattern=r"^S[1-9]$")
+    item: ChatKnowledgeItem
+    display_name: str = Field(min_length=1, max_length=256)
+    kind: Literal["REGISTRY_DIRECT", "GRAPH_ANALYSIS", "SOLUTION_REPORT"]
+    approval: Literal["APPROVED", "PENDING"]
+    location: str = Field(min_length=1, max_length=256)
+
+
+class ChatTurnGroundingView(ChatBoundaryValue):
+    turn_id: str = Field(pattern=r"^chatturn_[0-9a-f]{32}$")
+    sources: tuple[ChatKnowledgeSourceCard, ...] = Field(max_length=9)
+    receipt: ChatCitationReceipt | None
+    observed_at: UtcDatetime | None
+
+
+class ChatGroundingViews(ChatBoundaryValue):
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+    values: tuple[ChatTurnGroundingView, ...] = Field(max_length=50)
+
+
+class ChatGroundingSubmission(ChatBoundaryValue):
+    turn_ids: tuple[Annotated[str, Field(pattern=r"^chatturn_[0-9a-f]{32}$")], ...] = Field(
+        min_length=1, max_length=50
+    )
+
+    @model_validator(mode="after")
+    def unique_turns(self) -> ChatGroundingSubmission:
+        if len(set(self.turn_ids)) != len(self.turn_ids):
+            raise ValueError("duplicate chat turn")
+        return self
+
+
+class ChatGroundingQuery(ChatGroundingSubmission):
+    action: Literal["READ_GROUNDING"] = "READ_GROUNDING"
+    actor_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+
+
 def validate_chat_citations(
     request: GroundedChatTurnInput,
     result: GroundedChatTurnResult,
@@ -305,24 +375,77 @@ def validate_chat_citations(
     expected = sha256_bytes(canonical_json_bytes(request.model_dump(mode="json")))
     if result.request_sha256 != expected:
         raise ValueError("grounded result request hash mismatch")
-    if result.knowledge_sha256 != request.knowledge.context_sha256:
+    context_hash = knowledge_hash(request)
+    if result.knowledge_sha256 != context_hash:
         raise ValueError("grounded result context hash mismatch")
-    available = {source.key: source for source in request.knowledge.sources}
+    if result.agent_state_sha256 != sha256_bytes(
+        canonical_json_bytes(
+            None if request.agent_state is None else request.agent_state.model_dump(mode="json")
+        )
+    ):
+        raise ValueError("grounded result observation hash mismatch")
+    available = {
+        source.key: source
+        for source in (() if request.knowledge is None else request.knowledge.sources)
+    }
     used = {
         key
         for section in (() if result.answer is None else result.answer.answer_sections)
         for key in section.citation_keys
     }
+    if (
+        request.agent_state is None
+        and result.answer is not None
+        and any(
+            section.support_kind == "SYSTEM_OBSERVATION"
+            for section in result.answer.answer_sections
+        )
+    ):
+        raise ValueError("system observation requires prepared state")
     if not used.issubset(available):
         raise ValueError("result cites a source outside exact prepared context")
     receipt = ChatCitationReceipt(
         request_sha256=sha256_bytes(canonical_json_bytes(request.model_dump(mode="json"))),
         result_sha256=sha256_bytes(canonical_json_bytes(result.model_dump(mode="json"))),
-        context_sha256=request.knowledge.context_sha256,
+        context_sha256=context_hash,
         used_source_keys=tuple(key for key in available if key in used),
-        verified_references=request.knowledge.selection.references,
+        verified_references=()
+        if request.knowledge is None
+        else request.knowledge.selection.references,
     )
     return read_grounding("Receipt", receipt.model_dump(mode="json"), ChatCitationReceipt)
+
+
+def knowledge_hash(request: GroundedChatTurnInput) -> str:
+    return (
+        sha256_bytes(canonical_json_bytes(None))
+        if request.knowledge is None
+        else request.knowledge.context_sha256
+    )
+
+
+def read_chat_input(document: object) -> ChatInputContract:
+    if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/2.0":
+        return read_grounded_chat_input(document)
+    from eom_protocol.general_chat import read_chat_turn_input
+
+    return read_chat_turn_input(document)
+
+
+def read_chat_result(document: object, *, request: ChatInputContract) -> ChatResultContract:
+    if isinstance(request, GroundedChatTurnInput):
+        return read_grounded_chat_result(document, request=request)
+    from eom_protocol.general_chat import read_chat_turn_result
+
+    return read_chat_turn_result(document, request=request)
+
+
+def read_chat_result_document(document: object) -> ChatResultContract:
+    if isinstance(document, dict) and document.get("protocol_version") == "general-chat-turn/2.0":
+        return read_grounding("Result", document, GroundedChatTurnResult)
+    from eom_protocol.general_chat import read_chat_turn_result_document
+
+    return read_chat_turn_result_document(document)
 
 
 def read_grounded_chat_input(document: object) -> GroundedChatTurnInput:
@@ -356,7 +479,7 @@ class ChatKnowledgeCatalogRequest(ChatBoundaryValue):
     )
     operation: Literal["RESOLVE_CHAT_KNOWLEDGE"] = "RESOLVE_CHAT_KNOWLEDGE"
     actor_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
-    selection: ChatKnowledgeSelection
+    selection: ChatKnowledgeSelection | None
     purpose: Literal["MATERIALIZE", "AUTHORIZE"]
 
 
@@ -365,6 +488,7 @@ class ChatKnowledgeCatalogReply(ChatBoundaryValue):
     operation: Literal["RESOLVE_CHAT_KNOWLEDGE"] = "RESOLVE_CHAT_KNOWLEDGE"
     status: Literal["SUCCEEDED", "FAILED"]
     context: ChatKnowledgeContext | None
+    agent_state: ChatAgentState | None
     error_code: GroundingError | None
 
     @model_validator(mode="after")

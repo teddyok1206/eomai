@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import grp
 import hashlib
 import json
@@ -80,12 +81,21 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_item_registry import RegistryError
+from eom_protocol.general_chat_grounding import (
+    ChatKnowledgeCatalogReply,
+    ChatKnowledgeCatalogRequest,
+    read_grounding,
+)
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 from eom_catalog_service.approved_item_graph_publication_service import (
     ApprovedItemGraphPublicationError,
     ApprovedItemGraphPublicationService,
+)
+from eom_catalog_service.chat_knowledge_resolution import (
+    ChatKnowledgeResolutionError,
+    ChatKnowledgeResolutionService,
 )
 from eom_catalog_service.document_review_evidence_service import (
     DocumentReviewEvidenceService,
@@ -163,6 +173,34 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if not isinstance(value, dict):
                 raise ValueError
             raw_operation = value.get("operation")
+            if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "RESOLVE_CHAT_KNOWLEDGE":
+                try:
+                    chat_request = read_grounding(
+                        "CatalogRequest", value, ChatKnowledgeCatalogRequest
+                    )
+                    if self.server.chat_knowledge is None:
+                        raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_UNAVAILABLE")
+                    chat_reply = self.server.chat_knowledge.resolve(chat_request)
+                except ChatKnowledgeResolutionError as error:
+                    chat_reply = ChatKnowledgeCatalogReply(
+                        status="FAILED", context=None, agent_state=None, error_code=error.code
+                    )
+                except Exception:
+                    chat_reply = ChatKnowledgeCatalogReply(
+                        status="FAILED",
+                        context=None,
+                        agent_state=None,
+                        error_code="CHAT_KNOWLEDGE_UNAVAILABLE",
+                    )
+                document = chat_reply.model_dump(mode="json")
+                read_grounding("CatalogReply", document, ChatKnowledgeCatalogReply)
+                self.wfile.write(
+                    json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+                )
+                self.wfile.flush()
+                return
             if raw_operation == "INGEST_DOCUMENT_REVIEW_SOURCE":
                 try:
                     office_intake_request: (
@@ -1138,6 +1176,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
+        chat_knowledge: ChatKnowledgeResolutionService | None = None,
+        chat_owner_uid: int | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
         expected_uid: int | None = None,
@@ -1156,6 +1196,11 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence
+        self.chat_knowledge = chat_knowledge
+        if chat_owner_uid is None:
+            with contextlib.suppress(KeyError):
+                chat_owner_uid = pwd.getpwnam("eom-general-chat").pw_uid
+        self.chat_owner_uid = chat_owner_uid
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
         self.expected_uid = os.geteuid() if expected_uid is None else expected_uid
@@ -1199,7 +1244,19 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             _pid, uid, _gid = cast(tuple[int, int, int], struct.unpack("3i", raw))
         except (OSError, struct.error):
             return False
-        return uid == self.allowed_uid
+        return uid == self.allowed_uid or uid == self.chat_owner_uid
+
+    def peer_can_operate(self, connection: socket.socket, operation: object) -> bool:
+        try:
+            raw = connection.getsockopt(
+                socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")
+            )
+            _pid, uid, _gid = struct.unpack("3i", raw)
+        except (OSError, struct.error):
+            return False
+        return uid == self.allowed_uid or (
+            uid == self.chat_owner_uid and operation == "RESOLVE_CHAT_KNOWLEDGE"
+        )
 
     def handle_error(self, _request: object, _client_address: object) -> None:
         return

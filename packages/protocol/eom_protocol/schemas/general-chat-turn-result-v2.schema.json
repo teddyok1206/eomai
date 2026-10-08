@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/turn-result/2.0",
+  "$ref": "eom://schemas/general-chat/grounding/1.0#/$defs/Result"
+}

@@ -10,6 +10,7 @@ from time import monotonic
 from typing import Self
 
 from eom_identifiers import canonical_json_bytes
+from eom_protocol.general_chat_grounding import ChatGroundingQuery
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
     ChatListQuery,
@@ -68,6 +69,9 @@ class GeneralChatOwnerRpcServer:
         try:
             value = self._execute(request)
             reply = ChatOwnerReply(
+                schema_version="general-chat-owner-reply/2.0"
+                if request.schema_version.endswith("/2.0")
+                else "general-chat-owner-reply/1.0",
                 request_id=request.request_id,
                 action=request.command.action,
                 status="SUCCEEDED",
@@ -80,6 +84,9 @@ class GeneralChatOwnerRpcServer:
             except ValueError:
                 code = ChatOwnerErrorCode.UNAVAILABLE
             reply = ChatOwnerReply(
+                schema_version="general-chat-owner-reply/2.0"
+                if request.schema_version.endswith("/2.0")
+                else "general-chat-owner-reply/1.0",
                 request_id=request.request_id,
                 action=request.command.action,
                 status="FAILED",
@@ -91,6 +98,12 @@ class GeneralChatOwnerRpcServer:
 
     def _execute(self, request: ChatOwnerRequest) -> ChatOwnerValue:
         command = request.command
+        if isinstance(command, ChatGroundingQuery):
+            return self.owner.grounding(
+                actor_id=command.actor_id,
+                conversation_id=command.conversation_id,
+                turn_ids=command.turn_ids,
+            )
         if isinstance(command, ChatSlotQuery):
             return self.owner.slot()
         if isinstance(command, ChatListQuery):
@@ -131,6 +144,9 @@ class GeneralChatOwnerRpcServer:
                     # No raw SQL, filesystem, native output or user content in the
                     # wire error. The unknown outcome may already be committed.
                     reply = ChatOwnerReply(
+                        schema_version="general-chat-owner-reply/2.0"
+                        if request.schema_version.endswith("/2.0")
+                        else "general-chat-owner-reply/1.0",
                         request_id=request.request_id,
                         action=request.command.action,
                         status="FAILED",

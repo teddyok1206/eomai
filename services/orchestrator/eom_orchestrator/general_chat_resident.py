@@ -13,15 +13,21 @@ from queue import Empty, SimpleQueue
 from threading import Event, Lock, Thread
 from typing import Protocol
 
-from eom_protocol.general_chat import (
-    ChatTurnInput,
-    ChatTurnResult,
-    read_chat_turn_input,
-    read_chat_turn_result,
-)
 from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
+from eom_protocol.general_chat_grounding import (
+    ChatInputContract as ChatTurnInput,
+)
+from eom_protocol.general_chat_grounding import (
+    ChatResultContract as ChatTurnResult,
+)
+from eom_protocol.general_chat_grounding import (
+    read_chat_input as read_chat_turn_input,
+)
+from eom_protocol.general_chat_grounding import (
+    read_chat_result as read_chat_turn_result,
+)
 
-from eom_orchestrator.general_chat_execution import ChatClaim
+from eom_orchestrator.general_chat_execution import ChatClaim, ChatPreparationRejected
 from eom_orchestrator.general_chat_state import CHAT_HEARTBEAT_TTL, ChatError, safe_chat_error_code
 
 
@@ -131,9 +137,14 @@ class GeneralChatResident:
                 if claim is None:
                     stop.wait(self.idle_seconds)
                     continue
-                request = read_chat_turn_input(
-                    self.execution.prepare(claim, identity=identity).model_dump(mode="json")
-                )
+                try:
+                    request = read_chat_turn_input(
+                        self.execution.prepare(claim, identity=identity).model_dump(mode="json")
+                    )
+                except ChatPreparationRejected:
+                    # No worker call occurred; the supported owner transition released
+                    # this exact claim. Other queued conversations may proceed normally.
+                    continue
                 if claim.runtime_id != self.runtime_id or (
                     request.conversation_id,
                     request.turn_id,

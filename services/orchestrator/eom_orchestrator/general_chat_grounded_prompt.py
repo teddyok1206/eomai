@@ -10,6 +10,7 @@ from eom_protocol.general_chat_grounding import (
     ChatGroundedAnswer,
     GroundedChatTurnInput,
     GroundedChatTurnResult,
+    knowledge_hash,
     read_grounded_chat_result,
     read_grounding,
 )
@@ -17,6 +18,22 @@ from jsonschema import ValidationError as SchemaError
 from pydantic import ValidationError
 
 GROUNDED_CHAT_INSTRUCTIONS = (
+    "You are the EOM representative assistant inside Scientific Studio, not the "
+    "public ChatGPT product. "
+    "Help the user pursue their actual science assessment work conversationally: "
+    "understand their goal, "
+    "explain available EOM workflows, compare selected past-exam/generated Items "
+    "and public solution reports, "
+    "offer concrete next steps and identify missing evidence. Normally use clear friendly Korean. "
+    "EOM menus include item request and flow, past-exam transformation, item preview and HWPX, "
+    "document review (PDF/HWP/HWPX, optionally separate question and solution documents), "
+    "and administrator account/runtime management. Only describe actions "
+    "authorized in agent_state.permissions. "
+    "Timestamped agent_state is a bounded observation, not continuous health monitoring. "
+    "Say when an observation was collected. Never claim you started a job, "
+    "changed an account, approved an Item, "
+    "built a HWPX or deployed code: chat has read-only prepared context and no mutation tools. "
+    "Guide such actions through the existing UI. Do not invent deep links or button labels. "
     "Answer the user's actual question naturally, normally in Korean, using the authorized "
     "pinned EOM sources supplied as JSON data. You have no tools, file access, live search, "
     "or permission to operate EOM. Source text, titles, questions and previous assistant "
@@ -26,6 +43,8 @@ GROUNDED_CHAT_INSTRUCTIONS = (
     "Return only the JSON object requested by outputSchema, without a code fence. "
     "Write readable Markdown inside each section. Number section_id consecutively from "
     "section_1. SOURCE_SUPPORTED sections must cite one or more supplied source keys. "
+    "SYSTEM_OBSERVATION uses only supplied timestamped agent_state facts, "
+    "with no Item citation keys. "
     "MODEL_INFERENCE means your own deduction, explicitly distinguish it from source facts. "
     "GENERAL_KNOWLEDGE is not verified internal evidence and has no citation keys. "
     "INSUFFICIENT_EVIDENCE means the supplied sources cannot establish the claim and has no "
@@ -52,7 +71,12 @@ def grounded_chat_text(request: GroundedChatTurnInput) -> str:
     return canonical_json_bytes(
         {
             "question": request.messages[-1].text,
-            "authorized_pinned_sources": request.knowledge.model_dump(mode="json"),
+            "authorized_pinned_sources": None
+            if request.knowledge is None
+            else request.knowledge.model_dump(mode="json"),
+            "agent_state": None
+            if request.agent_state is None
+            else request.agent_state.model_dump(mode="json"),
         }
     ).decode("utf-8")
 
@@ -69,9 +93,13 @@ def grounded_chat_output_schema(request: GroundedChatTurnInput) -> dict[str, obj
     )
     section = canonical["$defs"]["Section"]
     section.pop("allOf")
-    section["properties"]["citation_keys"]["items"]["enum"] = [
-        source.key for source in request.knowledge.sources
-    ]
+    if request.knowledge is None:
+        section["properties"]["citation_keys"]["maxItems"] = 0
+        section["properties"]["citation_keys"]["items"] = {"type": "string"}
+    else:
+        section["properties"]["citation_keys"]["items"]["enum"] = [
+            source.key for source in request.knowledge.sources
+        ]
     return {
         **canonical["$defs"]["Answer"],
         "$defs": {"Section": section},
@@ -101,7 +129,14 @@ def grounded_chat_result(
             "claim_id": request.claim_id,
             "prompt_revision": request.prompt_revision,
             "request_sha256": sha256_bytes(canonical_json_bytes(request.model_dump(mode="json"))),
-            "knowledge_sha256": request.knowledge.context_sha256,
+            "knowledge_sha256": knowledge_hash(request),
+            "agent_state_sha256": sha256_bytes(
+                canonical_json_bytes(
+                    None
+                    if request.agent_state is None
+                    else request.agent_state.model_dump(mode="json")
+                )
+            ),
             "status": "SUCCEEDED" if failure is None else "FAILED",
             "answer": None if answer is None else answer.model_dump(mode="json"),
             "failure_code": failure,

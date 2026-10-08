@@ -14,15 +14,22 @@ from eom_protocol.general_chat import (
     CHAT_RESULT_SCHEMA,
     ChatContextMessage,
     ChatTurnInput,
-    ChatTurnResult,
-    read_chat_turn_input,
-    read_chat_turn_result,
 )
 from eom_protocol.general_chat_dispatch import (
     CHAT_DISPATCH_SCHEMA,
     ChatDispatchReceipt,
     ChatExecutionIdentity,
     read_chat_dispatch,
+)
+from eom_protocol.general_chat_grounding import (
+    GROUNDED_INPUT_SCHEMA,
+    GROUNDED_RESULT_SCHEMA,
+    ChatInputContract,
+    ChatResultContract,
+    GroundedChatTurnInput,
+    StoredGroundedChatMessage,
+    read_chat_input,
+    read_chat_result,
 )
 from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 from sqlalchemy.orm import Session
@@ -33,7 +40,9 @@ from eom_orchestrator.general_chat_evidence import (
     dispatch_evidence,
     request_evidence,
     require_evidence,
+    user_evidence,
 )
+from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort
 from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord, GeneralChatTurnRecord
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner, chat_now
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
@@ -53,6 +62,10 @@ class ChatClaim:
     claim_id: str
 
 
+class ChatPreparationRejected(ChatError):
+    """Exact claim was terminated before any worker dispatch became admissible."""
+
+
 class GeneralChatExecutionService:
     def __init__(
         self,
@@ -60,10 +73,12 @@ class GeneralChatExecutionService:
         evidence: ChatEvidencePort,
         *,
         clock: Callable[[], datetime] = chat_now,
+        knowledge: ChatKnowledgePort | None = None,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
         self.clock = clock
+        self.knowledge = knowledge
 
     def heartbeat(self, *, runtime_id: str) -> None:
         """Only the resident owner, after its isolated-worker admission, calls this."""
@@ -190,7 +205,7 @@ class GeneralChatExecutionService:
 
     def _execution(
         self, turn: GeneralChatTurnRecord, claim: ChatClaim
-    ) -> tuple[ChatTurnInput, ChatDispatchReceipt]:
+    ) -> tuple[ChatInputContract, ChatDispatchReceipt]:
         if (turn.conversation_id, turn.turn_id, turn.claim_id) != (
             claim.conversation_id,
             claim.turn_id,
@@ -209,11 +224,14 @@ class GeneralChatExecutionService:
             turn.dispatch_sha256,
             CHAT_DISPATCH_SCHEMA,
         )
+        request_pointer, dispatch_pointer = self.evidence.resolve_family(
+            (request_pointer, dispatch_pointer)
+        )
         payloads = self.evidence.read((request_pointer, dispatch_pointer))
         if len(payloads) != 2:
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
-        require_evidence(request_pointer, payloads[0], schema_ref=CHAT_INPUT_SCHEMA)
-        require_evidence(dispatch_pointer, payloads[1], schema_ref=CHAT_DISPATCH_SCHEMA)
+        require_evidence(request_pointer, payloads[0], schema_ref=request_pointer.schema_ref)
+        require_evidence(dispatch_pointer, payloads[1], schema_ref=dispatch_pointer.schema_ref)
         request = request_evidence(
             payloads[0],
             conversation_id=claim.conversation_id,
@@ -232,7 +250,36 @@ class GeneralChatExecutionService:
         _, receipt = self._execution(turn, claim)
         return receipt
 
-    def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput:
+    def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatInputContract:
+        try:
+            return self._prepare(claim, identity=identity)
+        except ChatError as error:
+            if error.code not in {
+                "GENERAL_CHAT_FORBIDDEN",
+                "GENERAL_CHAT_POINTER_INVALID",
+                "GENERAL_CHAT_APPLICATION_UNAVAILABLE",
+                "GENERAL_CHAT_NOT_READY",
+            }:
+                raise
+            with self.repository.sessions.begin() as session:
+                capacity, turn = self._live_claim(session, claim)
+                if (
+                    turn.state != "CLAIMED"
+                    or turn.request_artifact_id is not None
+                    or turn.dispatch_artifact_id is not None
+                ):
+                    raise
+                require_chat_transition(turn.state, ChatTurnState.FAILED)
+                turn.state = "FAILED"
+                turn.failure_code = error.code
+                turn.completed_at = self.clock()
+                capacity.active_turn_id = None
+                capacity.claim_id = None
+                capacity.expires_at = None
+                self._touch(session, turn)
+            raise ChatPreparationRejected(error.code) from None
+
+    def _prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatInputContract:
         identity = ChatExecutionIdentity.model_validate(identity.model_dump(mode="json"))
         with self.repository.sessions.begin() as session:
             _, turn = self._live_claim(session, claim)
@@ -250,14 +297,18 @@ class GeneralChatExecutionService:
                     completed_only=True,
                 )
                 context = (*reversed(history), turn)
+            conversation = self.repository.conversation_record(session, turn.conversation_id)
+            actor_id = conversation.owner_id
         if replay is not None:
             request, receipt = self._execution(replay, claim)
             if receipt.identity != identity:
                 raise ChatError("GENERAL_CHAT_EXECUTION_POLICY_MISMATCH")
             return request
         assert context is not None
-        owner = GeneralChatConversationOwner(self.repository, self.evidence, clock=self.clock)
-        projected = owner.project_messages(claim.conversation_id, context)
+        owner = GeneralChatConversationOwner(
+            self.repository, self.evidence, clock=self.clock, knowledge=self.knowledge
+        )
+        projected = owner.project_messages(claim.conversation_id, context, actor_id=actor_id)
         messages = tuple(
             ChatContextMessage(role=value.role, text=value.text)
             for value in projected
@@ -268,26 +319,87 @@ class GeneralChatExecutionService:
             if len(messages) <= 1:
                 raise ChatError("GENERAL_CHAT_CONTEXT_INVALID")
             messages = messages[2:]
-        request = ChatTurnInput(
-            conversation_id=claim.conversation_id,
-            turn_id=claim.turn_id,
-            claim_id=claim.claim_id,
-            messages=messages,
-            context_sha256=sha256_bytes(
-                canonical_json_bytes([value.model_dump() for value in messages])
-            ),
+        context_hash = sha256_bytes(
+            canonical_json_bytes([value.model_dump() for value in messages])
         )
-        read_chat_turn_input(request.model_dump(mode="json"))
+        input_schema = CHAT_INPUT_SCHEMA
+        dispatch_schema = CHAT_DISPATCH_SCHEMA
+        if identity.policy.schema_version == "general-chat-worker-policy/2.0":
+            if self.knowledge is None:
+                raise ChatError("GENERAL_CHAT_NOT_READY")
+            user_pointer = self.evidence.resolve_family(
+                (
+                    chat_pointer(
+                        turn.input_artifact_id,
+                        turn.input_revision_id,
+                        turn.input_sha256,
+                        "eom://schemas/general-chat/message/1.0",
+                    ),
+                )
+            )[0]
+            user = user_evidence(
+                self.evidence.read((user_pointer,))[0],
+                conversation_id=claim.conversation_id,
+                turn_id=claim.turn_id,
+            )
+            selection = user.selection if isinstance(user, StoredGroundedChatMessage) else None
+            # Follow-up questions reuse the last explicit pinned selection, never latest.
+            if selection is None and not isinstance(user, StoredGroundedChatMessage):
+                hints = self.evidence.resolve_family(
+                    tuple(
+                        chat_pointer(
+                            t.input_artifact_id,
+                            t.input_revision_id,
+                            t.input_sha256,
+                            "eom://schemas/general-chat/message/1.0",
+                        )
+                        for t in context[:-1]
+                    )
+                )
+                prior = self.evidence.read(hints)
+                for t, payload in reversed(tuple(zip(context[:-1], prior, strict=True))):
+                    message = user_evidence(
+                        payload, conversation_id=claim.conversation_id, turn_id=t.turn_id
+                    )
+                    if isinstance(message, StoredGroundedChatMessage):
+                        selection = message.selection
+                        break
+            resolved_knowledge = self.knowledge.resolve(
+                actor_id=actor_id, selection=selection, purpose="MATERIALIZE"
+            )
+            request = GroundedChatTurnInput(
+                conversation_id=claim.conversation_id,
+                turn_id=claim.turn_id,
+                claim_id=claim.claim_id,
+                messages=messages,
+                context_sha256=context_hash,
+                knowledge=resolved_knowledge.context,
+                agent_state=resolved_knowledge.agent_state,
+            )
+            input_schema = GROUNDED_INPUT_SCHEMA
+            dispatch_schema = "eom://schemas/general-chat/dispatch/2.0"
+        else:
+            request = ChatTurnInput(
+                conversation_id=claim.conversation_id,
+                turn_id=claim.turn_id,
+                claim_id=claim.claim_id,
+                messages=messages,
+                context_sha256=context_hash,
+            )
+        read_chat_input(request.model_dump(mode="json"))
         payload = canonical_json_bytes(request.model_dump(mode="json"))
         pointer = self.evidence.publish(
             payload=payload,
-            schema_ref=CHAT_INPUT_SCHEMA,
+            schema_ref=input_schema,
             intent="chat-request:" + claim.claim_id,
             created_at=self.clock(),
         )
-        require_evidence(pointer, payload, schema_ref=CHAT_INPUT_SCHEMA)
+        require_evidence(pointer, payload, schema_ref=input_schema)
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
+                schema_version="general-chat-dispatch/2.0"
+                if isinstance(request, GroundedChatTurnInput)
+                else "general-chat-dispatch/1.0",
                 runtime_id=claim.runtime_id,
                 identity=identity,
                 ticket=chat_worker_ticket(request, policy_sha256=identity.policy.sha256),
@@ -297,11 +409,11 @@ class GeneralChatExecutionService:
         dispatch_payload = canonical_json_bytes(dispatch.model_dump(mode="json"))
         dispatch_pointer = self.evidence.publish(
             payload=dispatch_payload,
-            schema_ref=CHAT_DISPATCH_SCHEMA,
+            schema_ref=dispatch_schema,
             intent="chat-dispatch:" + claim.claim_id,
             created_at=self.clock(),
         )
-        require_evidence(dispatch_pointer, dispatch_payload, schema_ref=CHAT_DISPATCH_SCHEMA)
+        require_evidence(dispatch_pointer, dispatch_payload, schema_ref=dispatch_schema)
         with self.repository.sessions.begin() as session:
             _, turn = self._live_claim(session, claim)
             if turn.state == "RUNNING":
@@ -322,17 +434,17 @@ class GeneralChatExecutionService:
                 self._touch(session, turn)
         return request
 
-    def complete(self, claim: ChatClaim, result: ChatTurnResult) -> None:
+    def complete(self, claim: ChatClaim, result: ChatResultContract) -> None:
         self._complete(claim, result, guard=self._live_claim)
 
-    def reconcile_known_result(self, claim: ChatClaim, result: ChatTurnResult) -> None:
+    def reconcile_known_result(self, claim: ChatClaim, result: ChatResultContract) -> None:
         """Finish only an exact quiescent known claim; never renew/re-execute it."""
         self._complete(claim, result, guard=self._recovery_claim)
 
     def _complete(
         self,
         claim: ChatClaim,
-        result: ChatTurnResult,
+        result: ChatResultContract,
         *,
         guard: Callable[
             [Session, ChatClaim], tuple[GeneralChatCapacityRecord, GeneralChatTurnRecord]
@@ -343,7 +455,12 @@ class GeneralChatExecutionService:
             if (turn.conversation_id, turn.claim_id) != (claim.conversation_id, claim.claim_id):
                 raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
         request, _ = self._execution(turn, claim)
-        read_chat_turn_result(result.model_dump(mode="json"), request=request)
+        read_chat_result(result.model_dump(mode="json"), request=request)
+        result_schema = (
+            GROUNDED_RESULT_SCHEMA
+            if isinstance(request, GroundedChatTurnInput)
+            else CHAT_RESULT_SCHEMA
+        )
         payload = canonical_json_bytes(result.model_dump(mode="json"))
         digest = sha256_bytes(payload)
         with self.repository.sessions.begin() as session:
@@ -368,11 +485,11 @@ class GeneralChatExecutionService:
                 self._touch(session, turn)
         pointer = self.evidence.publish(
             payload=payload,
-            schema_ref=CHAT_RESULT_SCHEMA,
+            schema_ref=result_schema,
             intent="chat-result:" + claim.claim_id,
             created_at=self.clock(),
         )
-        require_evidence(pointer, payload, schema_ref=CHAT_RESULT_SCHEMA)
+        require_evidence(pointer, payload, schema_ref=result_schema)
         with self.repository.sessions.begin() as session:
             # Serialize final admission with claims; a duplicate completion may arrive
             # after another valid completion has already released the capacity.

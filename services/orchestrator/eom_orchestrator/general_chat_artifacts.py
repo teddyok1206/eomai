@@ -14,13 +14,19 @@ from eom_protocol.general_chat import (
     CHAT_RESULT_SCHEMA,
 )
 from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA
-from sqlalchemy import Engine
+from eom_protocol.general_chat_grounding import (
+    GROUNDED_INPUT_SCHEMA,
+    GROUNDED_MESSAGE_SCHEMA,
+    GROUNDED_RESULT_SCHEMA,
+)
+from sqlalchemy import Engine, select, tuple_
 
 from eom_orchestrator.control_artifact_resolution import (
     BoundedControlArtifactRead,
     resolve_control_artifact_members,
 )
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
+from eom_orchestrator.models import ArtifactRevisionRecord
 
 
 class ChatEvidencePort(Protocol):
@@ -34,6 +40,10 @@ class ChatEvidencePort(Protocol):
     ) -> ArtifactMemberPointer: ...
 
     def read(self, pointers: tuple[ArtifactMemberPointer, ...]) -> tuple[bytes, ...]: ...
+
+    def resolve_family(
+        self, pointers: tuple[ArtifactMemberPointer, ...]
+    ) -> tuple[ArtifactMemberPointer, ...]: ...
 
 
 class GeneralChatArtifactStore:
@@ -71,6 +81,10 @@ class GeneralChatArtifactStore:
             CHAT_INPUT_SCHEMA,
             CHAT_RESULT_SCHEMA,
             CHAT_DISPATCH_SCHEMA,
+            GROUNDED_MESSAGE_SCHEMA,
+            GROUNDED_INPUT_SCHEMA,
+            GROUNDED_RESULT_SCHEMA,
+            "eom://schemas/general-chat/dispatch/2.0",
         }:
             raise ValueError("unsupported chat evidence schema")
         if not 0 < len(payload) <= 256000:
@@ -99,7 +113,62 @@ class GeneralChatArtifactStore:
     def read(self, pointers: tuple[ArtifactMemberPointer, ...]) -> tuple[bytes, ...]:
         if not pointers:
             return ()
-        return resolve_control_artifact_members(
-            self.engine,
-            tuple(BoundedControlArtifactRead(pointer=p, maximum_bytes=256000) for p in pointers),
+        return tuple(
+            payload
+            for offset in range(0, len(pointers), 128)
+            for payload in resolve_control_artifact_members(
+                self.engine,
+                tuple(
+                    BoundedControlArtifactRead(pointer=p, maximum_bytes=256000)
+                    for p in pointers[offset : offset + 128]
+                ),
+            )
         )
+
+    def resolve_family(
+        self, pointers: tuple[ArtifactMemberPointer, ...]
+    ) -> tuple[ArtifactMemberPointer, ...]:
+        """Resolve only registered schemas in a closed family, never infer from JSON."""
+        if not pointers:
+            return ()
+        if len(pointers) > 150:
+            raise ValueError("chat pointer budget exceeded")
+        families = {
+            CHAT_MESSAGE_SCHEMA: {CHAT_MESSAGE_SCHEMA, GROUNDED_MESSAGE_SCHEMA},
+            CHAT_INPUT_SCHEMA: {CHAT_INPUT_SCHEMA, GROUNDED_INPUT_SCHEMA},
+            CHAT_RESULT_SCHEMA: {CHAT_RESULT_SCHEMA, GROUNDED_RESULT_SCHEMA},
+            CHAT_DISPATCH_SCHEMA: {CHAT_DISPATCH_SCHEMA, "eom://schemas/general-chat/dispatch/2.0"},
+        }
+        keys = {(p.artifact_id, p.artifact_revision_id) for p in pointers}
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(
+                    ArtifactRevisionRecord.logical_artifact_id,
+                    ArtifactRevisionRecord.revision_id,
+                    ArtifactRevisionRecord.manifest,
+                ).where(
+                    tuple_(
+                        ArtifactRevisionRecord.logical_artifact_id,
+                        ArtifactRevisionRecord.revision_id,
+                    ).in_(keys)
+                )
+            ).all()
+        manifests = {(a, r): m for a, r, m in rows}
+        result = []
+        for pointer in pointers:
+            manifest = manifests.get((pointer.artifact_id, pointer.artifact_revision_id))
+            files = manifest.get("files") if isinstance(manifest, dict) else None
+            matching = (
+                [m for m in files if isinstance(m, dict) and m.get("file_name") == CHAT_MEMBER]
+                if isinstance(files, list)
+                else []
+            )
+            if (
+                len(matching) != 1
+                or matching[0].get("schema_ref") not in families.get(pointer.schema_ref, set())
+                or matching[0].get("sha256") != pointer.sha256
+                or matching[0].get("media_type") != "application/json"
+            ):
+                raise ValueError("registered chat evidence family differs")
+            result.append(pointer.model_copy(update={"schema_ref": matching[0]["schema_ref"]}))
+        return tuple(result)

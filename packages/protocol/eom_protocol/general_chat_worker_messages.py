@@ -6,20 +6,23 @@ import json
 from enum import StrEnum
 from functools import lru_cache
 from importlib.resources import files
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema import Draft202012Validator
-from pydantic import Field, model_validator
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 from referencing import Registry, Resource
 
 from eom_protocol.general_chat import (
     ChatBoundaryValue,
-    ChatTurnInput,
-    ChatTurnResult,
-    read_chat_turn_input,
-    read_chat_turn_result,
 )
+from eom_protocol.general_chat_grounding import (
+    ChatInputContract,
+    ChatResultContract,
+    read_chat_input,
+    read_chat_result,
+)
+from eom_protocol.general_chat_schema_family import validate_chat_envelope
 
 WorkerBootId = Annotated[str, Field(pattern=r"^chatboot_[0-9a-f]{32}$")]
 WorkerHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -40,11 +43,23 @@ class ChatWorkerFault(RuntimeError):
 
 
 class ChatWorkerPolicy(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-policy/1.0"] = "general-chat-worker-policy/1.0"
+    schema_version: Literal["general-chat-worker-policy/1.0", "general-chat-worker-policy/2.0"] = (
+        "general-chat-worker-policy/1.0"
+    )
     model: str = Field(min_length=1, max_length=128, pattern=r"^[a-zA-Z0-9._-]+$")
     native_profile: Literal["codex-app-server/0.160.0/environment-free/1.0"]
     prompt_revision: Literal["general-chat/1.0.0"] = "general-chat/1.0.0"
     prompt_sha256: WorkerHash
+    grounded_prompt_sha256: WorkerHash | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_policy(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        value = handler(self)
+        if not isinstance(value, dict):
+            raise ValueError("policy serializer must return an object")
+        if self.schema_version == "general-chat-worker-policy/1.0":
+            value.pop("grounded_prompt_sha256", None)
+        return value
 
     @property
     def sha256(self) -> str:
@@ -60,8 +75,8 @@ class ChatWorkerTicket(ChatBoundaryValue):
     policy_sha256: WorkerHash
 
 
-def chat_worker_ticket(turn: ChatTurnInput, *, policy_sha256: str) -> ChatWorkerTicket:
-    read_chat_turn_input(turn.model_dump(mode="json"))
+def chat_worker_ticket(turn: ChatInputContract, *, policy_sha256: str) -> ChatWorkerTicket:
+    read_chat_input(turn.model_dump(mode="json"))
     return ChatWorkerTicket(
         conversation_id=turn.conversation_id,
         turn_id=turn.turn_id,
@@ -78,7 +93,7 @@ class ChatWorkerProbe(ChatBoundaryValue):
 class ChatWorkerExecute(ChatBoundaryValue):
     action: Literal["EXECUTE"] = "EXECUTE"
     boot_id: WorkerBootId
-    turn: ChatTurnInput
+    turn: ChatInputContract
 
 
 class ChatWorkerLookup(ChatBoundaryValue):
@@ -92,7 +107,9 @@ ChatWorkerCommand = Annotated[
 
 
 class ChatWorkerRequest(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-request/1.0"] = "general-chat-worker-request/1.0"
+    schema_version: Literal[
+        "general-chat-worker-request/1.0", "general-chat-worker-request/2.0"
+    ] = "general-chat-worker-request/1.0"
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     policy_sha256: WorkerHash
     command: ChatWorkerCommand
@@ -113,7 +130,7 @@ class ChatWorkerAdmission(ChatBoundaryValue):
 
 class ChatWorkerOutput(ChatBoundaryValue):
     state: Literal["KNOWN", "UNKNOWN", "ABSENT"]
-    result: ChatTurnResult | None
+    result: ChatResultContract | None
 
     @model_validator(mode="after")
     def known_result_only(self) -> ChatWorkerOutput:
@@ -123,7 +140,9 @@ class ChatWorkerOutput(ChatBoundaryValue):
 
 
 class ChatWorkerReply(ChatBoundaryValue):
-    schema_version: Literal["general-chat-worker-reply/1.0"] = "general-chat-worker-reply/1.0"
+    schema_version: Literal["general-chat-worker-reply/1.0", "general-chat-worker-reply/2.0"] = (
+        "general-chat-worker-reply/1.0"
+    )
     request_id: str = Field(pattern=r"^chatwrpc_[0-9a-f]{32}$")
     boot_id: WorkerBootId
     policy_sha256: WorkerHash
@@ -169,7 +188,7 @@ def _worker_validator(
 
 
 def read_chat_worker_policy(document: object) -> ChatWorkerPolicy:
-    _worker_validator("policy").validate(document)
+    validate_chat_envelope("worker-policy", document)
     return ChatWorkerPolicy.model_validate(document)
 
 
@@ -179,14 +198,14 @@ def read_chat_worker_ticket(document: object) -> ChatWorkerTicket:
 
 
 def read_chat_worker_request(document: object) -> ChatWorkerRequest:
-    _worker_validator("request").validate(document)
+    validate_chat_envelope("worker-request", document)
     request = ChatWorkerRequest.model_validate(document)
     if isinstance(request.command, ChatWorkerExecute):
-        read_chat_turn_input(request.command.turn.model_dump(mode="json"))
+        read_chat_input(request.command.turn.model_dump(mode="json"))
     return request
 
 
-def require_chat_ticket_result(ticket: ChatWorkerTicket, result: ChatTurnResult) -> None:
+def require_chat_ticket_result(ticket: ChatWorkerTicket, result: ChatResultContract) -> None:
     if (result.conversation_id, result.turn_id, result.claim_id, result.request_sha256) != (
         ticket.conversation_id,
         ticket.turn_id,
@@ -197,7 +216,7 @@ def require_chat_ticket_result(ticket: ChatWorkerTicket, result: ChatTurnResult)
 
 
 def read_chat_worker_reply(document: object, *, request: ChatWorkerRequest) -> ChatWorkerReply:
-    _worker_validator("reply").validate(document)
+    validate_chat_envelope("worker-reply", document)
     reply = ChatWorkerReply.model_validate(document)
     if (reply.request_id, reply.action) != (request.request_id, request.command.action):
         raise ValueError("worker reply identity/action mismatch")
@@ -209,9 +228,7 @@ def read_chat_worker_reply(document: object, *, request: ChatWorkerRequest) -> C
             raise ValueError("worker boot changed during execution")
         if isinstance(reply.value, ChatWorkerOutput) and reply.value.result is not None:
             if isinstance(command, ChatWorkerExecute):
-                read_chat_turn_result(
-                    reply.value.result.model_dump(mode="json"), request=command.turn
-                )
+                read_chat_result(reply.value.result.model_dump(mode="json"), request=command.turn)
             elif isinstance(command, ChatWorkerLookup):
                 require_chat_ticket_result(command.ticket, reply.value.result)
     return reply

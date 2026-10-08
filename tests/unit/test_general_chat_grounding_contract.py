@@ -100,6 +100,7 @@ def result() -> GroundedChatTurnResult:
         claim_id=prepared.claim_id,
         request_sha256=sha256_bytes(canonical_json_bytes(prepared.model_dump(mode="json"))),
         knowledge_sha256=prepared.knowledge.context_sha256,
+        agent_state_sha256=sha256_bytes(canonical_json_bytes(None)),
         status="SUCCEEDED",
         answer=ChatGroundedAnswer(
             answer_sections=(

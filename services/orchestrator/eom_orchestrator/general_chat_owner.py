@@ -15,7 +15,24 @@ from eom_protocol.general_chat import (
     CHAT_RESULT_SCHEMA,
     ChatBoundaryValue,
     StoredChatMessage,
-    read_stored_chat_message,
+)
+from eom_protocol.general_chat_grounding import (
+    GROUNDED_MESSAGE_SCHEMA,
+    ChatGroundingViews,
+    ChatInputContract,
+    ChatKnowledgeItem,
+    ChatKnowledgeSelection,
+    ChatKnowledgeSnapshot,
+    ChatKnowledgeSourceCard,
+    ChatResultContract,
+    ChatTurnGroundingView,
+    GroundedChatSubmission,
+    GroundedChatTurnInput,
+    GroundedChatTurnResult,
+    StoredGroundedChatMessage,
+    read_chat_result,
+    read_grounding,
+    validate_chat_citations,
 )
 from eom_protocol.general_chat_views import (
     GeneralChatConversation,
@@ -32,10 +49,12 @@ from pydantic import Field
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_evidence import (
     chat_pointer,
+    request_evidence,
     require_evidence,
     result_evidence,
     user_evidence,
 )
+from eom_orchestrator.general_chat_knowledge import ChatKnowledgePort
 from eom_orchestrator.general_chat_models import (
     GeneralChatConversationRecord,
     GeneralChatTurnRecord,
@@ -112,10 +131,12 @@ class GeneralChatConversationOwner:
         evidence: ChatEvidencePort,
         *,
         clock: Callable[[], datetime] = chat_now,
+        knowledge: ChatKnowledgePort | None = None,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
         self.clock = clock
+        self.knowledge = knowledge
 
     def slot(self) -> GeneralChatSlot:
         now = self.clock()
@@ -204,11 +225,17 @@ class GeneralChatConversationOwner:
         *,
         actor_id: str,
         conversation_id: str,
-        request: GeneralChatSubmission,
+        request: GeneralChatSubmission | GroundedChatSubmission,
         idempotency_key: str,
     ) -> GeneralChatConversation:
         require_chat_key(idempotency_key)
         key = chat_intent("chat-submit", actor_id, conversation_id, idempotency_key)
+        if isinstance(request, GroundedChatSubmission) and request.selection is not None:
+            if self.knowledge is None:
+                raise ChatError("GENERAL_CHAT_NOT_READY")
+            self.knowledge.resolve(
+                actor_id=actor_id, selection=request.selection, purpose="AUTHORIZE"
+            )
         request_hash = sha256_bytes(canonical_json_bytes(request.model_dump()))
         now = self.clock()
         with self.repository.sessions.begin() as session:
@@ -233,21 +260,35 @@ class GeneralChatConversationOwner:
                 ):
                     raise ChatError("GENERAL_CHAT_NOT_READY")
                 turn_id = "chatturn_" + sha256(key.encode()).hexdigest()[:32]
-                message = StoredChatMessage(
-                    conversation_id=conversation_id,
-                    turn_id=turn_id,
-                    role="user",
-                    text=request.text,
-                )
+                message: StoredChatMessage | StoredGroundedChatMessage
+                if isinstance(request, GroundedChatSubmission):
+                    message = StoredGroundedChatMessage(
+                        conversation_id=conversation_id,
+                        turn_id=turn_id,
+                        text=request.text,
+                        selection=request.selection,
+                    )
+                else:
+                    message = StoredChatMessage(
+                        conversation_id=conversation_id,
+                        turn_id=turn_id,
+                        role="user",
+                        text=request.text,
+                    )
                 payload = canonical_json_bytes(message.model_dump())
-                read_stored_chat_message(payload)
+                message_schema = (
+                    GROUNDED_MESSAGE_SCHEMA
+                    if isinstance(message, StoredGroundedChatMessage)
+                    else CHAT_MESSAGE_SCHEMA
+                )
+                user_evidence(payload, conversation_id=conversation_id, turn_id=turn_id)
                 pointer = self.evidence.publish(
                     payload=payload,
-                    schema_ref=CHAT_MESSAGE_SCHEMA,
+                    schema_ref=message_schema,
                     intent="chat-user:" + key,
                     created_at=now,
                 )
-                require_evidence(pointer, payload, schema_ref=CHAT_MESSAGE_SCHEMA)
+                require_evidence(pointer, payload, schema_ref=message_schema)
                 session.add(
                     GeneralChatTurnRecord(
                         turn_id=turn_id,
@@ -293,7 +334,7 @@ class GeneralChatConversationOwner:
                 conversation.updated_at,
             )
         # No DB transaction remains open while materializing large canonical bytes.
-        messages = self.project_messages(conversation_id, selected)
+        messages = self.project_messages(conversation_id, selected, actor_id=actor_id)
         next_cursor = None
         if more:
             next_cursor = ChatCursor(
@@ -311,14 +352,23 @@ class GeneralChatConversationOwner:
             next_cursor=next_cursor,
         )
 
-    def project_messages(
+    def resolved_turns(
         self,
         conversation_id: str,
         turns: tuple[GeneralChatTurnRecord, ...],
-    ) -> tuple[GeneralChatMessage, ...]:
-        pointers = []
+        *,
+        actor_id: str | None,
+    ) -> dict[
+        str,
+        tuple[
+            StoredChatMessage | StoredGroundedChatMessage,
+            ChatInputContract | None,
+            ChatResultContract | None,
+        ],
+    ]:
+        hints = []
         for turn in turns:
-            pointers.append(
+            hints.append(
                 chat_pointer(
                     turn.input_artifact_id,
                     turn.input_revision_id,
@@ -327,7 +377,15 @@ class GeneralChatConversationOwner:
                 )
             )
             if turn.state == "COMPLETED":
-                pointers.append(
+                hints.append(
+                    chat_pointer(
+                        turn.request_artifact_id,
+                        turn.request_revision_id,
+                        turn.request_sha256,
+                        "eom://schemas/general-chat/turn-input/1.0",
+                    )
+                )
+                hints.append(
                     chat_pointer(
                         turn.output_artifact_id,
                         turn.output_revision_id,
@@ -335,24 +393,81 @@ class GeneralChatConversationOwner:
                         CHAT_RESULT_SCHEMA,
                     )
                 )
-        materialized = self.evidence.read(tuple(pointers))
+        pointers = self.evidence.resolve_family(tuple(hints))
+        materialized = self.evidence.read(pointers)
         if len(materialized) != len(pointers):
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
-        payloads = iter(materialized)
+        payloads = iter(zip(pointers, materialized, strict=True))
+        result = {}
+        groups: dict[ChatKnowledgeSnapshot | None, dict[str, ChatKnowledgeItem]] = {}
+        for turn in turns:
+            pointer, payload = next(payloads)
+            require_evidence(pointer, payload, schema_ref=pointer.schema_ref)
+            user = user_evidence(payload, conversation_id=conversation_id, turn_id=turn.turn_id)
+            request = None
+            answer = None
+            selections = []
+            if isinstance(user, StoredGroundedChatMessage) and user.selection is not None:
+                selections.append(user.selection)
+            if turn.state == "COMPLETED":
+                if turn.claim_id is None or turn.request_sha256 is None:
+                    raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                pointer, payload = next(payloads)
+                require_evidence(pointer, payload, schema_ref=pointer.schema_ref)
+                request = request_evidence(
+                    payload,
+                    conversation_id=conversation_id,
+                    turn_id=turn.turn_id,
+                    claim_id=turn.claim_id,
+                )
+                pointer, payload = next(payloads)
+                require_evidence(pointer, payload, schema_ref=pointer.schema_ref)
+                answer = result_evidence(
+                    payload,
+                    conversation_id=conversation_id,
+                    turn_id=turn.turn_id,
+                    claim_id=turn.claim_id,
+                    request_sha256=turn.request_sha256,
+                    expected_status="SUCCEEDED",
+                )
+                read_chat_result(answer.model_dump(mode="json"), request=request)
+                if isinstance(request, GroundedChatTurnInput) and request.knowledge is not None:
+                    selections.append(request.knowledge.selection)
+            for selection in selections:
+                group = groups.setdefault(selection.snapshot, {})
+                for ref in selection.references:
+                    existing = group.get(ref.item_revision_id)
+                    if existing is not None and existing != ref:
+                        raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+                    group[ref.item_revision_id] = ref
+            result[turn.turn_id] = (user, request, answer)
+        if next(payloads, None) is not None:
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+        for snapshot, group in groups.items():
+            if self.knowledge is None or actor_id is None:
+                raise ChatError("GENERAL_CHAT_FORBIDDEN")
+            refs = tuple(group.values())
+            for index in range(0, len(refs), 3):
+                self.knowledge.resolve(
+                    actor_id=actor_id,
+                    selection=ChatKnowledgeSelection(
+                        references=refs[index : index + 3], snapshot=snapshot
+                    ),
+                    purpose="AUTHORIZE",
+                )
+        return result
+
+    def project_messages(
+        self,
+        conversation_id: str,
+        turns: tuple[GeneralChatTurnRecord, ...],
+        *,
+        actor_id: str | None = None,
+    ) -> tuple[GeneralChatMessage, ...]:
+        resolved = self.resolved_turns(conversation_id, turns, actor_id=actor_id)
         messages = []
         for turn in turns:
-            payload = next(payloads)
-            require_evidence(
-                chat_pointer(
-                    turn.input_artifact_id,
-                    turn.input_revision_id,
-                    turn.input_sha256,
-                    CHAT_MESSAGE_SCHEMA,
-                ),
-                payload,
-                schema_ref=CHAT_MESSAGE_SCHEMA,
-            )
-            user = user_evidence(payload, conversation_id=conversation_id, turn_id=turn.turn_id)
+            user, _, answer = resolved[turn.turn_id]
             state = public_chat_state(turn.state)
             messages.append(
                 GeneralChatMessage(
@@ -364,39 +479,79 @@ class GeneralChatConversationOwner:
                     created_at=turn.created_at,
                 )
             )
-            reply = ""
-            if turn.state == "COMPLETED":
-                assert turn.claim_id is not None and turn.request_sha256 is not None
-                payload = next(payloads)
-                require_evidence(
-                    chat_pointer(
-                        turn.output_artifact_id,
-                        turn.output_revision_id,
-                        turn.output_sha256,
-                        CHAT_RESULT_SCHEMA,
-                    ),
-                    payload,
-                    schema_ref=CHAT_RESULT_SCHEMA,
-                )
-                result = result_evidence(
-                    payload,
-                    conversation_id=conversation_id,
-                    turn_id=turn.turn_id,
-                    claim_id=turn.claim_id,
-                    request_sha256=turn.request_sha256,
-                    expected_status="SUCCEEDED",
-                )
-                reply = result.reply
             messages.append(
                 GeneralChatMessage(
                     turn_id=turn.turn_id,
                     sequence=turn.user_sequence + 1,
                     role="assistant",
-                    text=reply,
+                    text="" if answer is None else answer.reply,
                     state=state,
                     created_at=turn.completed_at or turn.created_at,
                 )
             )
-        if next(payloads, None) is not None:
-            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
         return tuple(messages)
+
+    def grounding(
+        self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
+    ) -> ChatGroundingViews:
+        if not 1 <= len(turn_ids) <= 50 or len(set(turn_ids)) != len(turn_ids):
+            raise ChatError("GENERAL_CHAT_PROTOCOL_INVALID")
+        from sqlalchemy import select
+
+        with self.repository.read_snapshot() as session:
+            self.repository.require_actor(session, actor_id)
+            self.repository.owned(session, actor_id, conversation_id)
+            rows = tuple(
+                session.scalars(
+                    select(GeneralChatTurnRecord)
+                    .where(
+                        GeneralChatTurnRecord.conversation_id == conversation_id,
+                        GeneralChatTurnRecord.turn_id.in_(turn_ids),
+                    )
+                    .order_by(GeneralChatTurnRecord.user_sequence)
+                )
+            )
+        if {row.turn_id for row in rows} != set(turn_ids):
+            raise ChatError("GENERAL_CHAT_NOT_FOUND")
+        resolved = self.resolved_turns(conversation_id, rows, actor_id=actor_id)
+        values = []
+        for row in rows:
+            _, request, answer = resolved[row.turn_id]
+            sources: tuple[ChatKnowledgeSourceCard, ...] = ()
+            receipt = None
+            observed = None
+            if isinstance(request, GroundedChatTurnInput) and isinstance(
+                answer, GroundedChatTurnResult
+            ):
+                receipt = validate_chat_citations(request, answer)
+                observed = None if request.agent_state is None else request.agent_state.observed_at
+                if request.knowledge is not None:
+                    sources = tuple(
+                        ChatKnowledgeSourceCard.model_validate(
+                            source.model_dump(
+                                mode="json",
+                                include={
+                                    "key",
+                                    "item",
+                                    "display_name",
+                                    "kind",
+                                    "approval",
+                                    "location",
+                                },
+                            )
+                        )
+                        for source in request.knowledge.sources
+                        if source.key in receipt.used_source_keys
+                    )
+            values.append(
+                ChatTurnGroundingView(
+                    turn_id=row.turn_id, sources=sources, receipt=receipt, observed_at=observed
+                )
+            )
+        return read_grounding(
+            "Views",
+            ChatGroundingViews(conversation_id=conversation_id, values=tuple(values)).model_dump(
+                mode="json"
+            ),
+            ChatGroundingViews,
+        )

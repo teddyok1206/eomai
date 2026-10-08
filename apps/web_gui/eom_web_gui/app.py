@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Stre
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from eom_web_gui.chat_grounding_contracts import ChatGroundedTurnSubmission, ChatGroundingSubmission
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
@@ -387,6 +388,29 @@ def create_app(
     ) -> dict[str, Any]:
         return (
             await actual.gateway.general_chat_submit(session, conversation_id, value)
+        ).model_dump(mode="json")
+
+    @app.post(
+        f"{API_PREFIX}/general-chat/conversations/{{conversation_id}}/grounded-turns",
+        status_code=202,
+    )
+    async def general_chat_grounded_submit(
+        conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+        value: ChatGroundedTurnSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.general_chat_grounded_submit(session, conversation_id, value)
+        ).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/general-chat/conversations/{{conversation_id}}/grounding")
+    async def general_chat_grounding(
+        conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+        value: ChatGroundingSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.general_chat_grounding(session, conversation_id, value)
         ).model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/customer-support/cases")

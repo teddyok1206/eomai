@@ -5,8 +5,9 @@ from __future__ import annotations
 from threading import Lock
 from uuid import uuid4
 
-from eom_protocol.general_chat import ChatTurnInput, ChatTurnResult
 from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
+from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
+from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerCommand,
@@ -45,6 +46,9 @@ class ChatWorkerClient:
 
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
         request = ChatWorkerRequest(
+            schema_version="general-chat-worker-request/2.0"
+            if self.policy.schema_version.endswith("/2.0")
+            else "general-chat-worker-request/1.0",
             request_id="chatwrpc_" + uuid4().hex,
             policy_sha256=command.ticket.policy_sha256
             if isinstance(command, ChatWorkerLookup)

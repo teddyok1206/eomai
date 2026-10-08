@@ -813,6 +813,29 @@ def _client(server: CatalogApplicationServer) -> CatalogApplicationClient:
     )
 
 
+def test_chat_owner_peer_is_read_only_not_a_catalog_mutation_peer(tmp_path: Path) -> None:
+    import socket
+
+    server = _server(tmp_path, allowed_uid=os.getuid() + 100000)
+    server.chat_owner_uid = os.getuid()
+    left, right = socket.socketpair(socket.AF_UNIX)
+    try:
+        assert server.peer_is_allowed(left)
+        assert server.peer_can_operate(left, "RESOLVE_CHAT_KNOWLEDGE")
+        for operation in (
+            "REGISTER_ITEM",
+            "IMPORT_CONTENT",
+            "CREATE_ITEM_EVIDENCE",
+            "GET_ITEM_CONTENT",
+            None,
+        ):
+            assert not server.peer_can_operate(left, operation)
+    finally:
+        left.close()
+        right.close()
+        server.server_close()
+
+
 def test_catalog_evidence_generation_uses_its_bounded_response_window() -> None:
     assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS == 120.0
     assert EVIDENCE_RESPONSE_TIMEOUT_SECONDS + 30 < DEFAULT_IDEMPOTENCY_LEASE_SECONDS

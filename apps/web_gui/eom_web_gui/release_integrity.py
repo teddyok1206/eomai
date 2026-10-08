@@ -20,6 +20,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "build-info.json",
         "cli.py",
         "chat_knowledge_contracts.py",
+        "chat_grounding_contracts.py",
         "contracts.py",
         "draft_integrity.py",
         "gateways.py",

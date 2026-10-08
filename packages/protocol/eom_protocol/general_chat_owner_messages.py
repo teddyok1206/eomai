@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import json
 from enum import StrEnum
-from functools import lru_cache
-from importlib.resources import files
 from typing import Annotated, Literal, Protocol
 
-from jsonschema import Draft202012Validator
 from pydantic import Field, model_validator
-from referencing import Registry, Resource
 
 from eom_protocol.general_chat import ChatBoundaryValue
+from eom_protocol.general_chat_grounding import (
+    ChatGroundingQuery,
+    ChatGroundingViews,
+    GroundedChatSubmission,
+)
+from eom_protocol.general_chat_schema_family import validate_chat_envelope
 from eom_protocol.general_chat_views import (
     GeneralChatConversation,
     GeneralChatCreate,
@@ -21,7 +22,7 @@ from eom_protocol.general_chat_views import (
     GeneralChatSubmission,
 )
 
-OwnerAction = Literal["SLOT", "LIST", "CREATE", "READ", "SUBMIT"]
+OwnerAction = Literal["SLOT", "LIST", "CREATE", "READ", "SUBMIT", "READ_GROUNDING"]
 ActorId = Annotated[str, Field(pattern=r"^operator_[0-9a-f]{32}$")]
 ConversationId = Annotated[str, Field(pattern=r"^chat_[0-9a-f]{32}$")]
 IntentKey = Annotated[str, Field(pattern=r"^[!-~]{16,128}$")]
@@ -76,25 +77,34 @@ class ChatSubmitCommand(ChatBoundaryValue):
     action: Literal["SUBMIT"] = "SUBMIT"
     actor_id: ActorId
     conversation_id: ConversationId
-    request: GeneralChatSubmission
+    request: GeneralChatSubmission | GroundedChatSubmission
     idempotency_key: IntentKey
 
 
 ChatOwnerCommand = Annotated[
-    ChatSlotQuery | ChatListQuery | ChatCreateCommand | ChatReadQuery | ChatSubmitCommand,
+    ChatSlotQuery
+    | ChatListQuery
+    | ChatCreateCommand
+    | ChatReadQuery
+    | ChatSubmitCommand
+    | ChatGroundingQuery,
     Field(discriminator="action"),
 ]
-ChatOwnerValue = GeneralChatSlot | GeneralChatList | GeneralChatConversation
+ChatOwnerValue = GeneralChatSlot | GeneralChatList | GeneralChatConversation | ChatGroundingViews
 
 
 class ChatOwnerRequest(ChatBoundaryValue):
-    schema_version: Literal["general-chat-owner-request/1.0"] = "general-chat-owner-request/1.0"
+    schema_version: Literal["general-chat-owner-request/1.0", "general-chat-owner-request/2.0"] = (
+        "general-chat-owner-request/1.0"
+    )
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     command: ChatOwnerCommand
 
 
 class ChatOwnerReply(ChatBoundaryValue):
-    schema_version: Literal["general-chat-owner-reply/1.0"] = "general-chat-owner-reply/1.0"
+    schema_version: Literal["general-chat-owner-reply/1.0", "general-chat-owner-reply/2.0"] = (
+        "general-chat-owner-reply/1.0"
+    )
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     action: OwnerAction
     status: Literal["SUCCEEDED", "FAILED"]
@@ -109,33 +119,25 @@ class ChatOwnerReply(ChatBoundaryValue):
             return self
         if self.error_code is not None:
             raise ValueError("successful owner reply cannot contain an error")
-        expected = (
+        expected: type[ChatBoundaryValue] = (
             GeneralChatSlot
             if self.action == "SLOT"
             else (GeneralChatList if self.action == "LIST" else GeneralChatConversation)
         )
+        if self.action == "READ_GROUNDING":
+            expected = ChatGroundingViews
         if not isinstance(self.value, expected):
             raise ValueError("owner reply action and projection differ")
         return self
 
 
-@lru_cache(maxsize=2)
-def _owner_validator(kind: Literal["request", "reply"]) -> Draft202012Validator:
-    resources = files("eom_protocol").joinpath("schemas")
-    views = json.loads(resources.joinpath("general-chat-views.schema.json").read_bytes())
-    registry = Registry().with_resource(views["$id"], Resource.from_contents(views))
-    schema = json.loads(resources.joinpath(f"general-chat-owner-{kind}.schema.json").read_bytes())
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, registry=registry)
-
-
 def read_chat_owner_request(document: object) -> ChatOwnerRequest:
-    _owner_validator("request").validate(document)
+    validate_chat_envelope("owner-request", document)
     return ChatOwnerRequest.model_validate(document)
 
 
 def read_chat_owner_reply(document: object, *, request: ChatOwnerRequest) -> ChatOwnerReply:
-    _owner_validator("reply").validate(document)
+    validate_chat_envelope("owner-reply", document)
     reply = ChatOwnerReply.model_validate(document)
     if (reply.request_id, reply.action) != (request.request_id, request.command.action):
         raise ValueError("chat owner reply identity mismatch")
@@ -143,6 +145,9 @@ def read_chat_owner_reply(document: object, *, request: ChatOwnerRequest) -> Cha
 
 
 class ChatOwnerPort(Protocol):
+    def grounding(
+        self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
+    ) -> ChatGroundingViews: ...
     def slot(self) -> GeneralChatSlot: ...
     def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList: ...
     def create(
@@ -156,6 +161,6 @@ class ChatOwnerPort(Protocol):
         *,
         actor_id: str,
         conversation_id: str,
-        request: GeneralChatSubmission,
+        request: GeneralChatSubmission | GroundedChatSubmission,
         idempotency_key: str,
     ) -> GeneralChatConversation: ...

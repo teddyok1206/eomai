@@ -6,7 +6,9 @@ import re
 from threading import Lock
 from typing import Protocol
 
-from eom_protocol.general_chat import ChatTurnInput, ChatTurnResult, read_chat_turn_result
+from eom_protocol.general_chat_grounding import ChatInputContract as ChatTurnInput
+from eom_protocol.general_chat_grounding import ChatResultContract as ChatTurnResult
+from eom_protocol.general_chat_grounding import read_chat_result as read_chat_turn_result
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerError,
@@ -62,6 +64,9 @@ class ChatWorkerApplication:
                 raise ChatWorkerFault(ChatWorkerError.NOT_READY)
             value = self._handle(request)
             reply = ChatWorkerReply(
+                schema_version="general-chat-worker-reply/2.0"
+                if request.schema_version.endswith("/2.0")
+                else "general-chat-worker-reply/1.0",
                 request_id=request.request_id,
                 boot_id=self.boot_id,
                 policy_sha256=request.policy_sha256 if historical_lookup else self.policy.sha256,
@@ -79,6 +84,9 @@ class ChatWorkerApplication:
 
     def failure(self, request: ChatWorkerRequest, code: ChatWorkerError) -> ChatWorkerReply:
         return ChatWorkerReply(
+            schema_version="general-chat-worker-reply/2.0"
+            if request.schema_version.endswith("/2.0")
+            else "general-chat-worker-reply/1.0",
             request_id=request.request_id,
             boot_id=self.boot_id,
             policy_sha256=self.policy.sha256,

@@ -6,6 +6,11 @@ import grp
 import pwd
 from uuid import uuid4
 
+from eom_protocol.general_chat_grounding import (
+    ChatGroundingQuery,
+    ChatGroundingViews,
+    GroundedChatSubmission,
+)
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
     ChatListQuery,
@@ -59,7 +64,17 @@ class GeneralChatOwnerClient:
             raise ChatOwnerFault(ChatOwnerErrorCode.NOT_READY) from None
 
     def _request(self, command: ChatOwnerCommand) -> ChatOwnerValue:
-        request = ChatOwnerRequest(request_id="chatrpc_" + uuid4().hex, command=command)
+        request = ChatOwnerRequest(
+            schema_version="general-chat-owner-request/2.0"
+            if isinstance(command, ChatGroundingQuery)
+            or (
+                isinstance(command, ChatSubmitCommand)
+                and isinstance(command.request, GroundedChatSubmission)
+            )
+            else "general-chat-owner-request/1.0",
+            request_id="chatrpc_" + uuid4().hex,
+            command=command,
+        )
         document = request.model_dump(mode="json")
         read_chat_owner_request(document)
         try:
@@ -90,6 +105,17 @@ class GeneralChatOwnerClient:
         assert isinstance(value, GeneralChatSlot)
         return value
 
+    def grounding(
+        self, *, actor_id: str, conversation_id: str, turn_ids: tuple[str, ...]
+    ) -> ChatGroundingViews:
+        value = self._request(
+            ChatGroundingQuery(
+                actor_id=actor_id, conversation_id=conversation_id, turn_ids=turn_ids
+            )
+        )
+        assert isinstance(value, ChatGroundingViews)
+        return value
+
     def conversations(self, *, actor_id: str, cursor: str | None) -> GeneralChatList:
         value = self._request(ChatListQuery(actor_id=actor_id, cursor=cursor))
         assert isinstance(value, GeneralChatList)
@@ -118,7 +144,7 @@ class GeneralChatOwnerClient:
         *,
         actor_id: str,
         conversation_id: str,
-        request: GeneralChatSubmission,
+        request: GeneralChatSubmission | GroundedChatSubmission,
         idempotency_key: str,
     ) -> GeneralChatConversation:
         value = self._request(
