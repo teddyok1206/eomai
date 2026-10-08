@@ -506,8 +506,9 @@ def test_native_launch_has_no_inherited_environment_credentials_shell_or_six_slo
     command = native_chat_command(model=MODEL)
     environment = native_chat_environment()
     assert command[-3:] == ["app-server", "--strict-config", "--stdio"]
-    for feature in DISABLED_CHAT_FEATURES:
+    for feature in DISABLED_CHAT_FEATURES - {"code_mode"}:
         assert f"features.{feature}=false" in command
+    assert 'features.code_mode={enabled=false,direct_only_tool_namespaces=["functions"]}' in command
     assert set(environment) == {
         "HOME",
         "CODEX_HOME",

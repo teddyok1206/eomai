@@ -202,10 +202,34 @@ def test_additive_schema_mirrors_and_v3_envelope_roundtrip():
     for spec in native_chat_tools():
         Draft202012Validator.check_schema(spec["inputSchema"])
     command = native_chat_command(model="test-model")
-    assert 'code_mode.direct_only_tool_namespaces=["functions"]' in command
+    assert 'features.code_mode={enabled=false,direct_only_tool_namespaces=["functions"]}' in command
     assert "features.code_mode_host=false" in command
-    assert "features.code_mode=false" in command
     assert "features.shell_tool=false" in command
+
+
+@pytest.mark.skipif(not Path("/usr/local/bin/codex").exists(), reason="pinned CLI unavailable")
+def test_exact_launcher_parses_in_installed_strict_cli_without_auth_or_inference(tmp_path):
+    import subprocess
+
+    from eom_orchestrator.general_chat_stdio import native_chat_command
+
+    command = native_chat_command(model="synthetic-model")
+    probe = subprocess.run(
+        command,
+        input=b"",
+        capture_output=True,
+        cwd=tmp_path,
+        env={
+            "HOME": str(tmp_path),
+            "CODEX_HOME": str(tmp_path),
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "LANG": "C.UTF-8",
+            "RUST_LOG": "off",
+        },
+        timeout=15,
+        check=False,
+    )
+    assert probe.returncode == 0, "strict native launcher configuration was rejected"
 
 
 def test_model_search_read_answer_is_bound_to_canonical_tool_pointers():

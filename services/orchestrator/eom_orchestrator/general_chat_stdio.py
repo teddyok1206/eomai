@@ -62,7 +62,7 @@ def native_chat_command(*, model: str) -> list[str]:
     ):
         raise ValueError("invalid pinned chat model")
     command = [str(CODEX_BINARY)]
-    for feature in sorted(DISABLED_CHAT_FEATURES):
+    for feature in sorted(DISABLED_CHAT_FEATURES - {"code_mode"}):
         command.extend(["-c", f"features.{feature}=false"])
     for key, value in (
         ("forced_login_method", "chatgpt"),
@@ -81,7 +81,7 @@ def native_chat_command(*, model: str) -> list[str]:
         "tools.update_plan.enabled=false",
         # The admitted model defaults to code_mode_only. Expose our flat native
         # tools directly without enabling a JS host, shell or other capability.
-        'code_mode.direct_only_tool_namespaces=["functions"]',
+        'features.code_mode={enabled=false,direct_only_tool_namespaces=["functions"]}',
     ):
         command.extend(["-c", override])
     command.extend(["app-server", "--strict-config", "--stdio"])

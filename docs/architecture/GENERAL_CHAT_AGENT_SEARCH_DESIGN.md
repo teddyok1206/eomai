@@ -50,12 +50,16 @@ are allowed. All other native capabilities remain disabled. Tool arguments and
 source text are untrusted. No private reasoning is exposed or logged.
 
 The installed model metadata defaults to `code_mode_only`, independently of the
-CLI feature switches. Pin `code_mode.direct_only_tool_namespaces=["functions"]`
+CLI feature switches. Pin the supported structured feature setting
+`features.code_mode={enabled=false,direct_only_tool_namespaces=["functions"]}`
 so the two flat tools remain visible directly. Do not enable the Code Mode host,
 shell, an MCP provider or another interpreter to route these reads. This uses the
 pinned CLI's supported exposure override, not model-catalog/auth modification.
 The initial live candidate completed without calling tools and is preserved as
 non-acceptance evidence. Native mock events cannot prove actual model visibility.
+Run the complete launcher in the installed strict-config parser with an empty
+temporary home and closed stdin: no authentication, native initialization or
+inference. A raw internal `code_mode.*` key is not a supported TOML override.
 See [pinned native tool routing](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/core/src/tools/spec_plan.rs).
 
 Search uses topic terms, recent Items or exact exam placement. A read selects
