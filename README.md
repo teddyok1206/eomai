@@ -39,14 +39,16 @@ logical Item
 격리·동시성 계약은 [ADR0212](docs/adr/0212-general-chat-dedicated-capacity.md)를 참고하세요.
 
 내부 자료 연결은 [상세 기획](docs/architecture/GENERAL_CHAT_INTERNAL_KNOWLEDGE_INTEGRATION_PLAN.md)에
-따라 단계적으로 구현합니다. 첫 저장소 후보는 모델 호출 없이 최근 문항·공식 시험·개념으로
+따라 단계적으로 구현합니다. 첫 검색 기능은 운영 반영됐으며, 모델 호출 없이 최근 문항·공식 시험·개념으로
 문항 카드를 찾고 정확한 Revision의 Preview를 여는 경로입니다. 승인과 Graph 반영 여부를
 분리하고, Graph 미반영 문항도 Registry에서 조회합니다. 검색 scope는 기존 Item 읽기 권한과
 채팅 권한의 교집합이며, 교과서·보고서·원문 발췌를 일반 사용자에게 새로 열지 않습니다.
 이 검색만으로 채팅이 자료를 읽거나 GraphRAG로 답변한다고 주장하지 않습니다.
 근거 입력·구조화 답변·인용 영수증(C04), 권한 변경 후 기록 보호(C05)는 후속 구현입니다.
 검색 책임·성능·실제 inventory는 [검색 설계](docs/architecture/GENERAL_CHAT_KNOWLEDGE_SEARCH_DESIGN.md)에
-기록합니다. 새 검색의 운영 활성화는 설치 release 검증과 별도로 표시합니다.
+기록합니다. 실제 HTTPS 로그인·검색·고정 버전 Preview 연결을 검증했습니다.
+제작 문항 필터는 정식 `INTERNAL_EOM` 출처 프로필이 있는 문항만 포함합니다. 현재 출처
+프로필이 없는 기존 106개 문항은 ‘최근 문항’에서 조회되며 임의로 출처를 재분류하지 않습니다.
 
 아래 값은 기존 실행의 의미를 바꾸지 않고 추가된 최신 계약입니다. 저장소에 존재한다는 사실과
 운영 환경에서 현재 활성화되었다는 사실은 구분합니다. 정확한 활성 상태는 Studio와 서비스

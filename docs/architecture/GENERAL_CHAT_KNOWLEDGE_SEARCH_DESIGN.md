@@ -1,7 +1,8 @@
 # Chat knowledge search — first implementation boundary
 
-Status: implementation in progress, 2026-10-08 UTC. The user approved proceeding
-with the integration plan. This note records C01/C02/C03, not C04/C05 acceptance.
+Status: first search slice live, 2026-10-08 UTC. The user approved proceeding
+with the integration plan and runtime activation. This note records C01/C02/C03,
+not C04/C05 acceptance. Earlier candidate checkpoints remain historical evidence.
 
 ## Inventory
 
@@ -177,3 +178,61 @@ permitted revision key. The temporary-table metadata suite alone could not catch
 that boundary. Exact readiness rejects missing grants, an extra author-column
 grant, and full-table SELECT; excluded metadata and writes are denied by the real
 limited role. Bootstrap replay/drift reconciliation passed in the disposable DB.
+
+## Operational acceptance
+
+The corrected API/platform/contracts release is
+`dafe7db999353dac6b57bebe1a183d42d3aa1610`, tree
+`9dad14b87c60cc94eb835fd40bf7be068ecec5a3`, built at 2026-10-08 11:16:57 UTC.
+The dedicated owner/worker pin advanced through the supported stopped-runtime
+installer to the same release. Web is `40876a61dc82996262cfd4e70335c5704d4cc720`;
+its 39-file installed integrity check passed. Web and chat runtime/protocol/unit
+bytes are unchanged between those commits, so this is a verified compatible
+release set, not an unexplained mixed deployment.
+
+API wheel RECORD, runtime isolation, installed metadata and authenticated
+login/refresh/logout smoke passed. The actual HTTPS Studio session verified secure
+cookies, authentication/CSRF rejection, forbidden authority fields, search UI
+assets, recent results (3), exact pinned lookup (1), official exam results (3),
+topic results (3), empty search (0), wrong hash rejection, and the exact selected
+revision's Preview. Chat slot and history remained readable and READY. These are
+HTTP/session/asset checks, not a new manual visual review or model-answer test.
+
+Production origin inventory is 520 EXTERNAL_INSTITUTION profiles and 106 current
+eligible Items without an origin profile; there are no current INTERNAL_EOM
+profiles. Consequently the GENERATED filter correctly returns zero. Its positive
+SQL/metadata path passed in isolated fixtures, but positive live GENERATED
+coverage is NOT_AVAILABLE_IN_CURRENT_DATA. Those 106 Items remain accessible in
+RECENT/EXACT reads and are not silently reclassified. Origin-profile completion
+is a separate inventory/backfill decision, not a deployment row update.
+
+All 13 pre-existing terminal chat receipts retain the same pointer/state digest
+`c58208f939a5aa080194bbdd38e011b0e51fb9a10668f903f50f030bcaa5d1bb`.
+Migration remains `20261008_0049`; six slot configurations are unchanged. No chat
+turn, question production, GPU call, HWPX build or model retry was submitted.
+The two old non-terminal job rows have no held leases, no active transient
+execution or executing Workflow command, and remain unmodified historical state.
+Source regression gates: 935 PASS/18 environment SKIP, guarded PostgreSQL 23 PASS,
+post-fix focused 65 PASS; Ruff/format/mypy/shell/diff checks PASS. Test counts
+overlap and must not be summed as unique coverage.
+
+API rollback record:
+`/var/lib/eom-api/deployments/dafe7db999353dac6b57bebe1a183d42d3aa1610.json`.
+API staging wheels:
+`/tmp/eom-api-build/dafe7db999353dac6b57bebe1a183d42d3aa1610.ILfnac/dist`.
+Their SHA-256 values are:
+
+- Application API: `10cc364daa7cca73c38825c1ef34cb3db58ea5729e125a09605d2ac7da34bc61`.
+- API contracts: `dcc24ca6af00c6aa76df2313f321c85f1128a31c5e5a28cbba59f0b366ee658f`.
+- Platform: `2a57fa4399eaebb8f406e7391531bf3d51a3b4abdd7e00c2c4f07ffced756e36`.
+
+Web staging wheel SHA-256:
+`6a2fd4d4c9391944f67dab23374da5e926d5274d088dfe8a00ca94944a98b552`.
+The initial failed live request remains failed evidence. The prior Web package
+was actually restored during diagnosis; compatible API/chat services stayed
+available, and search was activated again only after the limited-role correction.
+Prior API/Web wheels were verified and retained, not deleted. No claim of a full
+API rollback drill follows from the successful Web withdrawal.
+
+`FIRST_SLICE_SEARCH_LIVE=PASS`. C04 grounded input/cited answers, C05 protected
+grounded history/revocation and subsequent integration milestones remain pending.
