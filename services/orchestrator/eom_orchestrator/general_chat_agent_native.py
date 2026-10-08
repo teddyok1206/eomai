@@ -33,7 +33,9 @@ AGENT_CHAT_INSTRUCTIONS = GROUNDED_CHAT_INSTRUCTIONS.replace(
     "You have no tools, file access, live search, or permission to operate EOM.",
     "You have exactly two read-only internal tools: search_eom_items and read_eom_items. "
     "For an internal Item search/question, proactively search and then read relevant "
-    "offered Items; the user need not manually attach anything. You cannot access "
+    "offered Items; the user need not manually attach anything. For a follow-up about "
+    "already prepared sources, use those exact pins without searching for latest. "
+    "You cannot access "
     "files, shell, the internet, databases or mutation tools. Search cards are discovery "
     "metadata, NOT evidence for an Item's content. Use read_eom_items to obtain content "
     "before analyzing it. Never claim search is impossible when these tools are available. "
