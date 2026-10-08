@@ -59,12 +59,10 @@ class GeneralChatExecutionService:
         repository: GeneralChatRepository,
         evidence: ChatEvidencePort,
         *,
-        identity: ChatExecutionIdentity,
         clock: Callable[[], datetime] = chat_now,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
-        self.identity = ChatExecutionIdentity.model_validate(identity.model_dump(mode="json"))
         self.clock = clock
 
     def heartbeat(self, *, runtime_id: str) -> None:
@@ -234,7 +232,8 @@ class GeneralChatExecutionService:
         _, receipt = self._execution(turn, claim)
         return receipt
 
-    def prepare(self, claim: ChatClaim) -> ChatTurnInput:
+    def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput:
+        identity = ChatExecutionIdentity.model_validate(identity.model_dump(mode="json"))
         with self.repository.sessions.begin() as session:
             _, turn = self._live_claim(session, claim)
             if turn.state == "RUNNING":
@@ -253,7 +252,7 @@ class GeneralChatExecutionService:
                 context = (*reversed(history), turn)
         if replay is not None:
             request, receipt = self._execution(replay, claim)
-            if receipt.identity != self.identity:
+            if receipt.identity != identity:
                 raise ChatError("GENERAL_CHAT_EXECUTION_POLICY_MISMATCH")
             return request
         assert context is not None
@@ -290,8 +289,8 @@ class GeneralChatExecutionService:
         dispatch = read_chat_dispatch(
             ChatDispatchReceipt(
                 runtime_id=claim.runtime_id,
-                identity=self.identity,
-                ticket=chat_worker_ticket(request, policy_sha256=self.identity.policy.sha256),
+                identity=identity,
+                ticket=chat_worker_ticket(request, policy_sha256=identity.policy.sha256),
                 input=pointer,
             ).model_dump(mode="json")
         )

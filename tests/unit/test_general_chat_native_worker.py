@@ -135,3 +135,39 @@ def test_session_construction_failure_also_closes_the_started_process(
     with pytest.raises(ChatWorkerFault, match="GENERAL_CHAT_WORKER_NOT_READY"):
         IsolatedCodexChatWorker(policy=source_chat_worker_policy(model="synthetic-model"))
     assert channel.closed
+
+
+def test_known_answer_is_returned_when_native_requests_bounded_retirement(
+    synthetic_native, monkeypatch
+):
+    events, channel = synthetic_native
+    worker = IsolatedCodexChatWorker(policy=source_chat_worker_policy(model="synthetic-model"))
+
+    def retire(request):
+        worker.close()
+        return answer(request)
+
+    monkeypatch.setattr(worker.session, "answer", retire)
+    assert worker.answer(staged(1)) == answer(staged(1))
+    assert channel.closed and worker.retirement_requested.is_set()
+    assert len([event for event in events if event[0] == "initialize"]) == 1
+
+
+def test_unknown_native_exception_poison_requests_retirement_without_retry(
+    synthetic_native, monkeypatch
+):
+    _, channel = synthetic_native
+    worker = IsolatedCodexChatWorker(policy=source_chat_worker_policy(model="synthetic-model"))
+    calls = []
+
+    def unknown(request):
+        calls.append(request)
+        raise RuntimeError("unknown native outcome")
+
+    monkeypatch.setattr(worker.session, "answer", unknown)
+    with pytest.raises(RuntimeError):
+        worker.answer(staged(1))
+    assert calls == [staged(1)] and channel.closed and worker.retirement_requested.is_set()
+    with pytest.raises(ChatWorkerFault):
+        worker.answer(staged(1))
+    assert calls == [staged(1)]

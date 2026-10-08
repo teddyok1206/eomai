@@ -6,9 +6,11 @@ from threading import Event, Lock, Thread
 import pytest
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.general_chat_execution import ChatClaim
+from eom_orchestrator.general_chat_native_worker import source_chat_worker_policy
 from eom_orchestrator.general_chat_resident import GeneralChatResident
 from eom_orchestrator.general_chat_state import ChatError
 from eom_protocol.general_chat import ChatTurnInput, ChatTurnResult, read_chat_turn_input
+from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
 
 RUNTIME = "chatrt_" + "a" * 32
 
@@ -76,7 +78,8 @@ class Execution:
         )
         return self.active
 
-    def prepare(self, claim: ChatClaim) -> ChatTurnInput:
+    def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput:
+        assert identity.boot_id == "chatboot_" + "b" * 32
         return self.requests[claim.turn_id]
 
     def complete(self, claim: ChatClaim, result: ChatTurnResult) -> None:
@@ -91,6 +94,10 @@ class Worker:
     def __init__(self) -> None:
         self.calls: list[ChatTurnInput] = []
         self.checks = 0
+        self.execution_identity = ChatExecutionIdentity(
+            boot_id="chatboot_" + "b" * 32,
+            policy=source_chat_worker_policy(model="synthetic-model"),
+        )
 
     def check_admission(self) -> None:
         self.checks += 1
@@ -230,7 +237,7 @@ def test_wrong_prepared_claim_never_reaches_worker() -> None:
     stop = Event()
 
     class WrongExecution(Execution):
-        def prepare(self, claim: ChatClaim) -> ChatTurnInput:
+        def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput:
             return staged(99)
 
     execution, worker = WrongExecution(stop, (staged(1),)), Worker()
@@ -307,7 +314,7 @@ def test_prepare_failure_preserves_claim_without_worker_call() -> None:
     stop = Event()
 
     class MissingEvidence(Execution):
-        def prepare(self, claim: ChatClaim) -> ChatTurnInput:
+        def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput:
             raise ChatError("GENERAL_CHAT_POINTER_INVALID")
 
     execution, worker = MissingEvidence(stop, (staged(1),)), Worker()

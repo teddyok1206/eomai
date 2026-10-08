@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -15,6 +16,13 @@ class ChatError(RuntimeError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def safe_chat_error_code(error: Exception) -> str:
+    """Expose only bounded stable codes, never adapter exception contents."""
+    if isinstance(error, ChatError) and re.fullmatch(r"GENERAL_CHAT_[A-Z0-9_]{1,47}", error.code):
+        return error.code
+    return "GENERAL_CHAT_RUNTIME_STOPPED"
 
 
 CHAT_HEARTBEAT_TTL = timedelta(seconds=30)

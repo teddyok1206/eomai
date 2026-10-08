@@ -19,6 +19,7 @@ from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.database import build_engine
 from eom_orchestrator.general_chat_artifacts import GeneralChatArtifactStore
 from eom_orchestrator.general_chat_client import GeneralChatOwnerClient
+from eom_orchestrator.general_chat_coordinator import run_chat_coordinator
 from eom_orchestrator.general_chat_execution import ChatClaim, GeneralChatExecutionService
 from eom_orchestrator.general_chat_handoff import ChatLocalHandoff
 from eom_orchestrator.general_chat_models import (
@@ -27,6 +28,7 @@ from eom_orchestrator.general_chat_models import (
     GeneralChatTurnRecord,
 )
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
+from eom_orchestrator.general_chat_owner_runtime import require_chat_owner_database
 from eom_orchestrator.general_chat_owner_server import GeneralChatOwnerRpcServer
 from eom_orchestrator.general_chat_recovery import recover_known_chat_turn
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
@@ -53,6 +55,7 @@ from tests.unit.test_general_chat_worker_handoff import BOOT, SyntheticNative, p
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 NOW = datetime(2026, 10, 7, 12, tzinfo=UTC)
 RUNTIME = "chatrt_" + "a" * 32
+IDENTITY = ChatExecutionIdentity(boot_id=BOOT, policy=policy())
 
 
 @dataclass
@@ -157,9 +160,7 @@ def chat(tmp_path: Path):
         repository,
         evidence,
         GeneralChatConversationOwner(repository, evidence),
-        GeneralChatExecutionService(
-            repository, evidence, identity=ChatExecutionIdentity(boot_id=BOOT, policy=policy())
-        ),
+        GeneralChatExecutionService(repository, evidence),
         actors,
     )
     value.owner.clock = lambda: value.now
@@ -178,10 +179,10 @@ def chat(tmp_path: Path):
     if active is not None:
         assert active.claim_id is not None
         claim = ChatClaim(RUNTIME, active.conversation_id, active.turn_id, active.claim_id)
-        request = value.execution.prepare(claim)
+        request = value.execution.prepare(claim, identity=IDENTITY)
         value.answer(claim, request, failed=True)
     while (claim := value.execution.claim_next(runtime_id=RUNTIME)) is not None:
-        value.answer(claim, value.execution.prepare(claim), failed=True)
+        value.answer(claim, value.execution.prepare(claim, identity=IDENTITY), failed=True)
     engine.dispose()
     publication_engine.dispose()
 
@@ -257,7 +258,7 @@ def test_private_rpc_concurrent_replay_preserves_one_database_intent_and_claim(
     assert len({message.turn_id for value in responses for message in value.messages}) == 1
     claim = chat.claim()
     assert chat.execution.claim_next(runtime_id=RUNTIME) is None
-    prepared = chat.execution.prepare(claim)
+    prepared = chat.execution.prepare(claim, identity=IDENTITY)
     chat.answer(claim, prepared)
     replay = submit(None)
     assert tuple(value.role for value in replay.messages) == ("user", "assistant")
@@ -297,6 +298,8 @@ def test_resident_processes_two_authenticated_owners_without_shared_history(
     stop = Event()
 
     class SyntheticWorker:
+        execution_identity = IDENTITY
+
         def __init__(self) -> None:
             self.requests: list[ChatTurnInput] = []
 
@@ -400,6 +403,85 @@ def test_resident_database_private_worker_and_artifact_commit_are_owner_separate
         assert chat.repository.capacity(session).active_turn_id is None
 
 
+def test_coordinator_runs_two_owners_through_existing_fifo_and_exact_boot(chat, chat_worker_rpc):
+    worker, native, _ = chat_worker_rpc
+    a, b = chat.create(), chat.create(actor=1)
+    chat.submit(a, message="private-coordinator-a")
+    chat.now += timedelta(microseconds=1)
+    chat.submit(b, actor=1, message="private-coordinator-b")
+    chat.execution.withdraw(runtime_id=RUNTIME)
+    stop = Event()
+    original = native.answer
+
+    def synthetic_answer(request):
+        result = original(request)
+        if len(native.calls) == 2:
+            stop.set()
+        return result
+
+    native.answer = synthetic_answer
+    reports = []
+    run_chat_coordinator(chat.execution, lambda: worker, stop=stop, report_state=reports.append)
+    assert not reports and len(native.calls) == 2
+    assert tuple(value.messages[0].text for value in native.calls) == (
+        "private-coordinator-a",
+        "private-coordinator-b",
+    )
+    with chat.repository.read_snapshot() as session:
+        cap = chat.repository.capacity(session)
+        assert cap.runtime_id != RUNTIME and cap.active_turn_id is None
+        for request in native.calls:
+            turn = chat.repository.turn(session, request.turn_id)
+            assert turn.state == "COMPLETED"
+            receipt = chat.execution.execution_receipt(
+                ChatClaim(
+                    cap.runtime_id,
+                    request.conversation_id,
+                    request.turn_id,
+                    request.claim_id,
+                )
+            )
+            assert receipt.identity == IDENTITY
+    assert chat.owner.slot().state == "UNAVAILABLE"
+
+
+def test_coordinator_recovers_known_private_result_before_admitting_new_boot(chat, chat_worker_rpc):
+    worker, native, _ = chat_worker_rpc
+    chat.submit(chat.create())
+    claim = chat.claim()
+    request = chat.execution.prepare(claim, identity=IDENTITY)
+    worker.check_admission()
+    expected = worker.answer(request)
+    chat.execution.withdraw(runtime_id=RUNTIME)
+    stop = Event()
+
+    class LookupOnly:
+        def lookup(self, ticket):
+            value = worker.lookup(ticket)
+            stop.set()
+            return value
+
+        def check_admission(self):
+            pytest.fail("recovery must not readmit or invoke native")
+
+    run_chat_coordinator(chat.execution, LookupOnly, stop=stop, report_state=lambda _: None)
+    assert len(native.calls) == 1
+    with chat.repository.read_snapshot() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "COMPLETED"
+        assert turn.output_sha256 == sha256_bytes(
+            canonical_json_bytes(expected.model_dump(mode="json"))
+        )
+        assert chat.repository.capacity(session).active_turn_id is None
+
+
+def test_actual_postgres_owner_admission_rejects_broad_disposable_owner_role(chat):
+    # Exercises the actual SQL privilege functions/schema head without granting
+    # rights, creating a runtime role or touching production credentials.
+    with pytest.raises(ChatError, match="GENERAL_CHAT_OWNER_DATABASE_NOT_READY"):
+        require_chat_owner_database(chat.engine)
+
+
 def test_lost_worker_reply_recovers_exact_known_result_without_another_model_call(
     chat: ChatFixture, chat_worker_rpc, monkeypatch
 ) -> None:
@@ -425,7 +507,7 @@ def test_lost_worker_reply_recovers_exact_known_result_without_another_model_cal
         turn = chat.repository.turn(session, capacity.active_turn_id)
         assert turn.state == "RUNNING" and turn.output_artifact_id is None
         claim = ChatClaim(RUNTIME, turn.conversation_id, turn.turn_id, turn.claim_id)
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     ticket = chat_worker_ticket(request, policy_sha256=policy().sha256)
     output = worker.lookup(ticket)
     assert output == local.lookup(ticket) and output.result is not None
@@ -444,7 +526,7 @@ def test_withdrawal_preserves_unknown_active_claim_and_request_evidence(chat: Ch
     conversation = chat.create()
     chat.submit(conversation)
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     with chat.repository.sessions.begin() as session:
         capacity = chat.repository.capacity(session)
         expected = (
@@ -502,10 +584,12 @@ def test_new_resident_does_not_reclaim_or_regenerate_existing_unknown_turn(
     conversation = chat.create()
     chat.submit(conversation)
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     assert chat.execution.withdraw(runtime_id=RUNTIME)
 
     class NeverDispatch:
+        execution_identity = IDENTITY
+
         def check_admission(self) -> None:
             pass
 
@@ -634,7 +718,7 @@ def test_concurrent_identical_submission_replays_after_revision_changes(chat: Ch
         values = tuple(executor.map(lambda _: invoke(), range(8)))
     assert len({value.messages[0].turn_id for value in values}) == 1
     claim = chat.claim()
-    chat.answer(claim, chat.execution.prepare(claim))
+    chat.answer(claim, chat.execution.prepare(claim, identity=IDENTITY))
     replay = invoke_without_barrier(chat, conversation.conversation_id, request, key)
     assert replay.messages[0].turn_id == values[0].messages[0].turn_id
     assert replay.messages[1].state == "COMPLETED"
@@ -735,12 +819,12 @@ def test_atomic_dedicated_claims_do_not_touch_existing_six_slots(chat: ChatFixtu
     claims = tuple(value for value in values if value is not None)
     assert len(claims) == 1
     claim = claims[0]
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     assert request.messages[-1].text == "첫 사용자 전용 질문"
     assert chat.owner.slot().state == "BUSY"
     chat.answer(claim, request)
     other = chat.claim()
-    other_request = chat.execution.prepare(other)
+    other_request = chat.execution.prepare(other, identity=IDENTITY)
     assert [m.text for m in other_request.messages] == ["둘째 사용자 전용 질문"]
     chat.answer(other, other_request)
     assert chat.owner.slot().state == "READY"
@@ -761,8 +845,8 @@ def test_concurrent_completion_is_idempotent_and_context_pins_previous_answer(
 ) -> None:
     conversation = chat.submit(chat.create(), message="첫 질문")
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
-    assert chat.execution.prepare(claim) == request
+    request = chat.execution.prepare(claim, identity=IDENTITY)
+    assert chat.execution.prepare(claim, identity=IDENTITY) == request
     result = ChatTurnResult(
         conversation_id=claim.conversation_id,
         turn_id=claim.turn_id,
@@ -786,7 +870,7 @@ def test_concurrent_completion_is_idempotent_and_context_pins_previous_answer(
     assert [m.text for m in latest.messages] == ["첫 질문", "확인한 답변"]
     chat.submit(latest, message="그 답변 이어서 설명해줘")
     second = chat.claim()
-    second_request = chat.execution.prepare(second)
+    second_request = chat.execution.prepare(second, identity=IDENTITY)
     assert [m.text for m in second_request.messages] == [
         "첫 질문",
         "확인한 답변",
@@ -807,10 +891,10 @@ def test_concurrent_completion_is_idempotent_and_context_pins_previous_answer(
 def test_stale_claim_invalid_result_and_terminal_mutation_are_rejected(chat: ChatFixture) -> None:
     conversation = chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     forged = ChatClaim(RUNTIME, claim.conversation_id, claim.turn_id, "chatclaim_" + "b" * 32)
     with pytest.raises(ChatError, match="CLAIM_MISMATCH"):
-        chat.execution.prepare(forged)
+        chat.execution.prepare(forged, identity=IDENTITY)
     result = chat.answer(claim, request)
     with pytest.raises(ChatError, match="RESULT_CONFLICT"):
         chat.execution.complete(claim, result.model_copy(update={"reply": "다른 답변"}))
@@ -834,7 +918,7 @@ def test_commit_failure_resumes_same_evidence_without_reinvoking_worker(
 ) -> None:
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     original = chat.evidence.publish
 
     def interrupted(**kwargs: Any):
@@ -855,7 +939,7 @@ def test_commit_failure_resumes_same_evidence_without_reinvoking_worker(
 def test_failed_worker_history_is_retained_without_partial_answer(chat: ChatFixture) -> None:
     conversation = chat.submit(chat.create())
     claim = chat.claim()
-    result = chat.answer(claim, chat.execution.prepare(claim), failed=True)
+    result = chat.answer(claim, chat.execution.prepare(claim, identity=IDENTITY), failed=True)
     chat.execution.complete(claim, result)
     latest = chat.owner.conversation(
         actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
@@ -869,7 +953,7 @@ def test_failed_worker_history_is_retained_without_partial_answer(chat: ChatFixt
 def test_competing_success_and_failure_pin_one_result_before_publication(chat: ChatFixture) -> None:
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     success = ChatTurnResult(
         conversation_id=claim.conversation_id,
         turn_id=claim.turn_id,
@@ -910,7 +994,7 @@ def test_expiry_is_unavailable_and_never_automatically_reclaims_unknown_executio
 ) -> None:
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     chat.now = NOW + timedelta(minutes=31)
     assert chat.owner.slot().state == "UNAVAILABLE"
     with pytest.raises(ChatError, match="RECONCILIATION_REQUIRED"):
@@ -927,7 +1011,7 @@ def test_chat_body_never_enters_database_metadata(chat: ChatFixture) -> None:
     secret_text = "DB에 복제하지 않는 대화-" + uuid4().hex
     conversation = chat.submit(chat.create(), message=secret_text)
     claim = chat.claim()
-    chat.answer(claim, chat.execution.prepare(claim))
+    chat.answer(claim, chat.execution.prepare(claim, identity=IDENTITY))
     with chat.engine.connect() as connection:
         for table in (
             "general_chat_conversations",
@@ -971,7 +1055,7 @@ def test_context_budget_drops_only_complete_old_exchanges(chat: ChatFixture) -> 
     for index in range(4):
         chat.submit(conversation, message=f"{index}:" + "한" * 15900)
         claim = chat.claim()
-        request = chat.execution.prepare(claim)
+        request = chat.execution.prepare(claim, identity=IDENTITY)
         result = ChatTurnResult(
             conversation_id=claim.conversation_id,
             turn_id=claim.turn_id,
@@ -1062,10 +1146,12 @@ def test_dispatch_is_canonical_pointer_only_and_concurrent_prepare_is_exact_repl
     with chat.engine.connect() as connection:
         before = connection.scalar(text("SELECT count(*) FROM artifact_revisions"))
     with ThreadPoolExecutor(max_workers=4) as pool:
-        requests = tuple(pool.map(lambda _: chat.execution.prepare(claim), range(8)))
+        requests = tuple(
+            pool.map(lambda _: chat.execution.prepare(claim, identity=IDENTITY), range(8))
+        )
     assert all(value == requests[0] for value in requests)
     receipt = chat.execution.execution_receipt(claim)
-    assert receipt.identity == chat.execution.identity
+    assert receipt.identity == IDENTITY
     assert receipt.runtime_id == RUNTIME
     assert receipt.ticket == chat_worker_ticket(requests[0], policy_sha256=policy().sha256)
     with chat.repository.sessions.begin() as session:
@@ -1089,8 +1175,8 @@ def test_prepared_dispatch_cannot_be_reinterpreted_with_current_execution_policy
 ) -> None:
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
-    document = chat.execution.identity.model_dump(mode="json")
+    request = chat.execution.prepare(claim, identity=IDENTITY)
+    document = IDENTITY.model_dump(mode="json")
     if change == "boot":
         document["boot_id"] = "chatboot_" + "f" * 32
     elif change == "model":
@@ -1100,13 +1186,12 @@ def test_prepared_dispatch_cannot_be_reinterpreted_with_current_execution_policy
     different = GeneralChatExecutionService(
         chat.repository,
         chat.evidence,
-        identity=ChatExecutionIdentity.model_validate(document),
         clock=lambda: chat.now,
     )
     with pytest.raises(ChatError, match="EXECUTION_POLICY_MISMATCH"):
-        different.prepare(claim)
+        different.prepare(claim, identity=ChatExecutionIdentity.model_validate(document))
     # Read-only audit/recovery follows historical pointers, not the new policy.
-    assert different.execution_receipt(claim).identity == chat.execution.identity
+    assert different.execution_receipt(claim).identity == IDENTITY
     chat.answer(claim, request)
 
 
@@ -1130,14 +1215,14 @@ def test_dispatch_publication_interruption_never_grants_unrecorded_execution(
 
     monkeypatch.setattr(chat.evidence, "publish", interrupted)
     with pytest.raises(OSError, match="synthetic interruption"):
-        chat.execution.prepare(claim)
+        chat.execution.prepare(claim, identity=IDENTITY)
     with chat.repository.sessions.begin() as session:
         turn = chat.repository.turn(session, claim.turn_id)
         assert turn.state == "CLAIMED"
         assert turn.request_artifact_id is None and turn.dispatch_artifact_id is None
     with chat.engine.connect() as connection:
         before_replay = connection.scalar(text("SELECT count(*) FROM artifact_revisions"))
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     receipt = chat.execution.execution_receipt(claim)
     assert receipt.ticket.request_sha256 == sha256_bytes(
         canonical_json_bytes(request.model_dump(mode="json"))
@@ -1152,7 +1237,7 @@ def test_dispatch_pointer_is_db_immutable_and_dangling_revisions_fail(
 ) -> None:
     chat.submit(chat.create())
     claim = chat.claim()
-    chat.execution.prepare(claim)
+    chat.execution.prepare(claim, identity=IDENTITY)
     with (
         pytest.raises(IntegrityError, match="dispatch identity is immutable"),
         chat.engine.begin() as connection,
@@ -1197,7 +1282,7 @@ def test_new_running_transition_requires_dispatch_even_without_application(
 ) -> None:
     first = chat.submit(chat.create())
     claim = chat.claim()
-    chat.execution.prepare(claim)
+    chat.execution.prepare(claim, identity=IDENTITY)
     with chat.repository.sessions.begin() as session:
         original = chat.repository.turn(session, claim.turn_id)
     second = chat.submit(chat.create(actor=1), actor=1)
@@ -1247,7 +1332,7 @@ def test_migration_downgrade_refuses_to_delete_pinned_execution_evidence(
 
     chat.submit(chat.create())
     claim = chat.claim()
-    chat.execution.prepare(claim)
+    chat.execution.prepare(claim, identity=IDENTITY)
     receipt = chat.execution.execution_receipt(claim)
     migration = import_module("migrations.versions.20261008_0049_general_chat_dispatch")
     with (
@@ -1272,7 +1357,7 @@ def test_exact_known_recovery_never_extends_lease_or_repeats_generation(
     client, native, _ = chat_worker_rpc
     conversation = chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     client.check_admission()
     result = client.answer(request)
     assert chat.execution.active_claim() == claim
@@ -1302,7 +1387,7 @@ def test_recovery_denies_live_owner_without_changing_claim_or_result_state(
     client, native, _ = chat_worker_rpc
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     client.check_admission()
     client.answer(request)
     chat.now += timedelta(minutes=31)
@@ -1325,7 +1410,7 @@ def test_unknown_or_absent_local_result_remains_fenced_after_claim_expiry(
     client, native, local = chat_worker_rpc
     chat.submit(chat.create())
     claim = chat.claim()
-    chat.execution.prepare(claim)
+    chat.execution.prepare(claim, identity=IDENTITY)
     receipt = chat.execution.execution_receipt(claim)
     if state == "UNKNOWN":
         assert local.reserve(receipt.ticket)
@@ -1336,7 +1421,7 @@ def test_unknown_or_absent_local_result_remains_fenced_after_claim_expiry(
     assert client.lookup(receipt.ticket).state == state
     assert chat.execution.active_claim() == claim and not native.calls
     with pytest.raises(ChatError, match="RECONCILIATION_REQUIRED"):
-        chat.execution.prepare(claim)
+        chat.execution.prepare(claim, identity=IDENTITY)
 
 
 def test_expired_committing_recovery_reuses_pinned_hash_and_registered_output(
@@ -1347,7 +1432,7 @@ def test_expired_committing_recovery_reuses_pinned_hash_and_registered_output(
     client, native, _ = chat_worker_rpc
     chat.submit(chat.create())
     claim = chat.claim()
-    request = chat.execution.prepare(claim)
+    request = chat.execution.prepare(claim, identity=IDENTITY)
     client.check_admission()
     result = client.answer(request)
     publish = chat.evidence.publish

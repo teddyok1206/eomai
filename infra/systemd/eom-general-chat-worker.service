@@ -1,0 +1,69 @@
+[Unit]
+Description=EOM dedicated resident native chat worker (separate from slots 01-06)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=eom-cdx-chat
+Group=eom-cdx-chat
+WorkingDirectory=/srv/eom/workspaces/general-chat/native
+Environment=HOME=/srv/eom/worker-homes/eom-cdx-chat
+Environment=CODEX_HOME=/srv/eom/worker-homes/eom-cdx-chat/.codex
+Environment=LANG=C.UTF-8
+# Non-secret explicit model pin; never an API key or auth copy.
+EnvironmentFile=/etc/eom/general-chat-model.env
+RuntimeDirectory=eom-general-chat-worker
+RuntimeDirectoryMode=0750
+# Durable pending/results must survive RuntimeDirectory cleanup and restart.
+StateDirectory=eom-general-chat-worker
+StateDirectoryMode=0700
+ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/eom-general-chat-worker/handoff /run/eom-general-chat-worker/native-logs
+ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -m eom_orchestrator.general_chat_worker_main --model ${EOM_GENERAL_CHAT_MODEL}
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom/secrets
+InaccessiblePaths=-/var/run/docker.sock
+InaccessiblePaths=/srv/eom/staging
+InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-01 /srv/eom/worker-homes/eom-cdx-02 /srv/eom/worker-homes/eom-cdx-03
+InaccessiblePaths=/srv/eom/worker-homes/eom-cdx-04 /srv/eom/worker-homes/eom-cdx-05 /srv/eom/worker-homes/eom-cdx-06
+InaccessiblePaths=/srv/eom/workspaces/eom-cdx-01 /srv/eom/workspaces/eom-cdx-02 /srv/eom/workspaces/eom-cdx-03
+InaccessiblePaths=/srv/eom/workspaces/eom-cdx-04 /srv/eom/workspaces/eom-cdx-05 /srv/eom/workspaces/eom-cdx-06
+InaccessiblePaths=-/srv/eom/models
+ReadWritePaths=/srv/eom/worker-homes/eom-cdx-chat
+ReadOnlyPaths=/srv/eom/worker-homes/eom-cdx-chat/.codex/config.toml
+ReadOnlyPaths=/srv/eom/workspaces/general-chat/native
+
+UMask=0077
+MemoryMax=2G
+TasksMax=128
+Restart=on-failure
+RestartSec=3
+# SIGTERM reaches only the host; its handler drains known results before native
+# close. The whole group is killed only if the bounded drain deadline expires.
+KillMode=mixed
+TimeoutStopSec=1300
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

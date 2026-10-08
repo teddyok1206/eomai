@@ -19,20 +19,24 @@ from eom_protocol.general_chat import (
     read_chat_turn_input,
     read_chat_turn_result,
 )
+from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
 
 from eom_orchestrator.general_chat_execution import ChatClaim
-from eom_orchestrator.general_chat_state import CHAT_HEARTBEAT_TTL, ChatError
+from eom_orchestrator.general_chat_state import CHAT_HEARTBEAT_TTL, ChatError, safe_chat_error_code
 
 
 class ChatExecutionPort(Protocol):
     def heartbeat(self, *, runtime_id: str) -> None: ...
     def withdraw(self, *, runtime_id: str) -> bool: ...
     def claim_next(self, *, runtime_id: str) -> ChatClaim | None: ...
-    def prepare(self, claim: ChatClaim) -> ChatTurnInput: ...
+    def prepare(self, claim: ChatClaim, *, identity: ChatExecutionIdentity) -> ChatTurnInput: ...
     def complete(self, claim: ChatClaim, result: ChatTurnResult) -> None: ...
 
 
 class ChatWorkerPort(Protocol):
+    @property
+    def execution_identity(self) -> ChatExecutionIdentity: ...
+
     def check_admission(self) -> None:
         """Bounded, thread-safe readiness check; no inference/auth enrollment.
 
@@ -44,13 +48,6 @@ class ChatWorkerPort(Protocol):
     def answer(self, request: ChatTurnInput) -> ChatTurnResult:
         """Execute once; unknown outcome raises, never silently retries."""
         ...
-
-
-def _failure_code(error: Exception) -> str:
-    if isinstance(error, ChatError) and re.fullmatch(r"GENERAL_CHAT_[A-Z0-9_]{1,47}", error.code):
-        return error.code
-    # Neither native/SQL exception bodies nor partial answers enter runtime errors.
-    return "GENERAL_CHAT_RUNTIME_STOPPED"
 
 
 class GeneralChatResident:
@@ -84,7 +81,7 @@ class GeneralChatResident:
                 self.worker.check_admission()
                 self.execution.heartbeat(runtime_id=self.runtime_id)
             except Exception as error:
-                errors.put(_failure_code(error))
+                errors.put(safe_chat_error_code(error))
                 # A long answer may still drain; revoke known-lost availability
                 # immediately instead of waiting for that answer to return.
                 with suppress(Exception):
@@ -112,6 +109,7 @@ class GeneralChatResident:
             if stop.is_set():
                 return
             self.worker.check_admission()
+            identity = self.worker.execution_identity
             if stop.is_set():
                 return
             # A timed-out DB call may already have committed; exact-runtime
@@ -134,7 +132,7 @@ class GeneralChatResident:
                     stop.wait(self.idle_seconds)
                     continue
                 request = read_chat_turn_input(
-                    self.execution.prepare(claim).model_dump(mode="json")
+                    self.execution.prepare(claim, identity=identity).model_dump(mode="json")
                 )
                 if claim.runtime_id != self.runtime_id or (
                     request.conversation_id,
@@ -147,7 +145,7 @@ class GeneralChatResident:
                 )
                 self.execution.complete(claim, result)
         except Exception as error:
-            failure = _failure_code(error)
+            failure = safe_chat_error_code(error)
         finally:
             done.set()
             if monitor is not None and monitor_started:
@@ -162,7 +160,7 @@ class GeneralChatResident:
                     self.execution.withdraw(runtime_id=self.runtime_id)
                 except Exception as error:
                     if failure is None:
-                        failure = _failure_code(error)
+                        failure = safe_chat_error_code(error)
             self._run_lock.release()
         if failure is not None:
             raise ChatError(failure) from None

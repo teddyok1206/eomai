@@ -351,6 +351,50 @@ provisioning helper or adapter source tests.
 
 ## Private owner RPC and resident composition
 
+### Installed composition and bounded native retirement
+
+Keep two explicit entrypoints: the unprivileged worker owns native stdio/local
+handoff; the Orchestrator owner owns DB/Artifact publication, private API RPC and
+the admitted resident loop. No API→worker or worker→DB/NAS binding. Reuse existing
+Conda/package installs, fixed private sockets and source-verified applications;
+no new dependency, scheduler, registry, cache, wire bytes or migration here.
+
+Dominant operations are indexed FIFO/claim and exact member lookup, with O(1)
+process-local lifecycle state. Per phase, pin the real admitted worker identity
+and pass it explicitly to prepare; DB/history/recovery do not require fabricating
+a boot identity while a worker is unavailable. A single owner coordinator reuses
+the existing resident and known-result recovery, creates one fresh client/runtime
+per admitted epoch, and waits on a bounded stop event after errors. Keep owner RPC
+read/history available while execution is fenced/unavailable. Recovery precedes
+fresh admission, never allocates a replacement unknown turn, and preserves the
+original input/dispatch/result hashes. No implicit model/provider fallback.
+
+Native threads are ephemeral but unsubscribe alone can retain loaded memory.
+The existing256-thread cap closes native state after a known result. Request a
+worker service retirement on closed/poisoned native state, stop accepting new
+connections, and drain bounded handlers before exit75. systemd may restart the
+worker with a new boot only after drain. Persist local handoff in a private700
+StateDirectory, not an ephemeral RuntimeDirectory; unknown markers and known
+outputs survive restart. Admission probes never initialize/restart native code.
+An interrupted final send does not erase staged output or retry generation.
+Stopping the service drains an active turn under its original claim; a forced
+termination preserves its pending marker and fences uncertain output.
+
+Owner identity is separate from API/worker identities. Owner may use API's socket
+group and worker's socket group, but worker remains in its private primary group,
+without NAS/DB/root/other-slot credentials. Owner's namespace hides every worker
+home; worker700 homes are unreadable even to the owner socket-group member. Use
+dedicated protected owner DB credentials, a non-secret explicitly selected model
+and a pinned release commit. Owner cannot fall back to global PostgreSQL secrets;
+check actual DB role/migration before constructing transcript applications.
+No runtime Git/source imports. Installed isolation/permissions and auth eligibility
+are still required live gates, not proved by source units or synthetic tests.
+
+The simpler permanently closed native adapter would strand the dedicated slot;
+blind service replay would duplicate unknown generation. One generic supervisor
+framework or credential-copying launcher adds unnecessary authority/lifecycles.
+The existing private applications plus bounded systemd restart/drain are sufficient.
+
 The API's existing GeneralChatOwner port is implemented by a private Unix-socket
 client; only authenticated API calls may supply an actor ID. The resident
 Orchestrator owns the existing conversation/turn/capacity tables and Artifact

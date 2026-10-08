@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_CANONICAL_DISPATCH_AND_RECOVERY_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_RESIDENT_COMPOSITION_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -461,3 +461,53 @@ does not. The tmux4 pane is still `general-chat`; no enrollment was restarted an
 credential contents were not read. Thus the next work remains service composition
 and protected installation, not declaring chat live or requesting another goal
 card resumption. Goal tool status is ACTIVE.
+
+## Resident service composition checkpoint — 2026-10-08 02:14 UTC
+
+Two installed-module entrypoints compose the existing applications rather than
+introducing a new scheduler, queue, registry or service framework. The isolated
+worker hosts native stdio, exact local handoff and the private owner-only socket.
+The Orchestrator owner hosts private API/history RPC, dedicated DB/Artifact
+publication and a single recovery-first coordinator. All authenticated active
+users retain separate histories; slots01–06 are unchanged.
+
+Each admitted epoch passes its actual boot/policy explicitly to prepare. History
+and known-result recovery no longer require constructing an invented worker boot
+while the native process is unavailable. Recovery checks the original active
+claim, canonical dispatch and local result before a fresh epoch is admitted.
+UNKNOWN/ABSENT stays fenced; known completion reuses the original claim, lease
+and immutable output. Execution unavailability does not stop owner-scoped reads.
+Optional reporting failures do not stop execution or expose raw exception text.
+
+Native retirement stops new connections, drains active handlers and preserves
+durable local results before exit75/systemd restart. Local pending/results reside
+in a private700 StateDirectory, not the transient socket RuntimeDirectory.
+Manual stop drains without restarting; unknown pending markers survive restart.
+Systemd KillMode=mixed gives the host a1300-second bounded drain window instead
+of sending SIGTERM to the native process while it is answering. Native probes do
+not initialize or restart the process; there is no generation retry/fallback.
+
+Owner configuration requires a dedicated local database role, explicit model and
+installed source commit. No global/admin database credential fallback. Read-only
+startup admission checks exact role, migration head0049, elevated flags and denied
+credential/identity/legacy-slot access. Metadata/publication pools remain separate
+and bounded. Source units mount the worker config read-only, hide DB/NAS/other
+worker homes from the worker, and hide worker homes from the Orchestrator owner.
+Source unit verification is not a claim of live permissions/isolation.
+
+Executed source/API/Web/contracts/private-RPC/release tests: **411 PASS**;
+guarded disposable PostgreSQL: **45 PASS**. The actual SQL admission negative
+rejects the broad disposable owner role; it does not certify an uncreated runtime
+role. Systemd-analyze verify, Ruff check/format, strict mypy (nine changed core
+modules) and diff checks: **PASS**. One existing Starlette TestClient deprecation
+warning remains; no dependency changed. An initial persistence run found two
+synthetic workers missing the new explicit identity property (40 PASS,2 FAIL);
+the fixtures were corrected and the full45-case suite rerun successfully. Failed
+test history is not hidden or represented as an operational failure.
+
+No new schema/migration, production DB/service change, native inference or GPU
+invocation in this checkpoint. Actual owner identity/least-privilege role,
+protected environment installation, OS negatives, coordinated deployment and
+first-answer/follow-up/two-user browser acceptance remain uncompleted live gates.
+The existing auth/deployment eligibility gate has not been waived. Build-only
+verification follows the clean source commit; this status is not live acceptance.

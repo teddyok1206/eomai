@@ -1,0 +1,62 @@
+[Unit]
+Description=EOM dedicated chat Orchestrator owner and private history RPC
+After=network.target postgresql.service eom-general-chat-worker.service
+Wants=eom-general-chat-worker.service
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=eom-general-chat
+Group=eom-api
+# Only the Orchestrator owner commits NAS and calls the private worker socket.
+# The isolated worker is not granted these supplementary groups.
+SupplementaryGroups=eom eom-cdx-chat
+WorkingDirectory=/var/lib/eom-general-chat
+Environment=LANG=C.UTF-8
+EnvironmentFile=/etc/eom/secrets/general-chat.env
+EnvironmentFile=/etc/eom/general-chat-model.env
+EnvironmentFile=/etc/eom/general-chat-release.env
+RuntimeDirectory=eom-general-chat
+RuntimeDirectoryMode=0750
+StateDirectory=eom-general-chat
+StateDirectoryMode=0700
+ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -m eom_orchestrator.general_chat_owner_main
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /srv/eom/worker-homes
+InaccessiblePaths=/etc/eom/secrets /srv/eom/workspaces
+InaccessiblePaths=-/var/run/docker.sock -/srv/eom/models -/var/lib/eom-api
+ReadWritePaths=/mnt/nas/eom/artifacts
+
+UMask=0007
+MemoryMax=2G
+TasksMax=128
+Restart=on-failure
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=1300
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -7,6 +7,7 @@ No credential enrollment/copy, provider/model fallback, DB or NAS access exists.
 from __future__ import annotations
 
 from contextlib import suppress
+from threading import Event
 
 from eom_identifiers import sha256_bytes
 from eom_protocol.general_chat import ChatTurnInput, ChatTurnResult
@@ -60,6 +61,7 @@ class IsolatedCodexChatWorker:
             raise ChatWorkerFault(ChatWorkerError.NOT_READY) from None
         self.channel = channel
         self.session = session
+        self.retirement_requested = Event()
 
     def require_admission(self, policy: ChatWorkerPolicy) -> None:
         if (
@@ -78,7 +80,19 @@ class IsolatedCodexChatWorker:
 
     def answer(self, request: ChatTurnInput) -> ChatTurnResult:
         self.require_admission(self.policy)
-        return self.session.answer(request)
+        try:
+            return self.session.answer(request)
+        except Exception:
+            # Poisoned/unknown native state cannot be reused. The worker server
+            # drains this handler and preserves its local pending/result evidence
+            # before the service exits; this never retries the question.
+            self.retirement_requested.set()
+            with suppress(Exception):
+                self.close()
+            raise
+        finally:
+            if not self.session.ready or self.channel.closed:
+                self.retirement_requested.set()
 
     def close(self) -> None:
         self.session.close()
