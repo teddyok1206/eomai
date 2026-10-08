@@ -1,7 +1,9 @@
 # ADR0212: General chat with dedicated, resident capacity
 
-Status: production chat/browser acceptance PASS; Markdown presentation extension in progress.
-Remaining gate: `MARKDOWN_WEB_RELEASE_PENDING` (2026-10-08 UTC).
+Status: production chat/browser acceptance PASS; Markdown presentation extension deployed.
+Feature implementation and required live gates: `COMPLETED` (2026-10-08 UTC).
+The user's browser chat acceptance predates the Markdown extension; a separate
+manual assessment of Markdown styling is not recorded or claimed.
 Historical activation failures are retained, not relabeled as successful runs.
 External LLM APIs remain prohibited by the latest explicit user decision.
 Current user-authorized access scope: **all authenticated EOM users**. The later

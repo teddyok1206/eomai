@@ -1,22 +1,24 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `CHAT_CORE_LIVE_PASS_MARKDOWN_IN_PROGRESS`; overall feature `IN_PROGRESS`.
+Status: `CHAT_CORE_LIVE_PASS_MARKDOWN_DEPLOYED`; overall feature `COMPLETED`.
 Production API/Web, chat migrations and dedicated resident capacity are active.
 Three actual model answers and user browser confirmation passed.
-Current gate: `MARKDOWN_WEB_RELEASE_PENDING` (2026-10-08 UTC).
+Required execution and deployment gates: `PASS` (2026-10-08 UTC).
+Separate manual assessment of the new Markdown styling: `NOT_RECORDED`.
 Latest user decision: `EXTERNAL_LLM_API_PROHIBITION=RETAINED`; the proposed
 dedicated-chat SIWC/Responses exception is `NOT_AUTHORIZED`.
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
 instruction supersedes the interim personal-only reply. Per-user history remains
 private, and one dedicated FIFO slot remains separate from slots01..06.
-This is not a completion or live acceptance report.
+Earlier checkpoints below retain their original scope and historical limitations.
 
 ## Latest operational checkpoint — 2026-10-08 UTC
 
 Current compatible release set: API/owner/worker
 `aead8a5840c2b5aa61a1a0bd281c0ff32746429e`; Web
-`3927898c1996f0959572a56c11f6178a9a8d3836`; migration `20261008_0049`.
-Web/API-contract/protocol/schema bytes are identical between these source pins.
+`d5c113ed32e6ab0dc3227d860e7de117b7a850fe`; migration `20261008_0049`.
+API/protocol/Orchestrator/systemd bytes are identical between these source pins;
+the newer Web contains only the tested presentation extension.
 Both dedicated units are active/enabled; worker NRestarts=0 after the final
 canary. No external API client, root-auth copying or old-slot auth mutation.
 
@@ -34,8 +36,12 @@ The user additionally requested Markdown display. Its Web-only renderer is now
 implemented with safe DOM nodes, a pinned locally packaged parser, code copy,
 plain user messages and owner-cleared bounded reply memoization. Release tests
 cover semantic markup, scripts/unsafe links/tracking-image rejection, task lists,
-Korean/astral Unicode, code copying and bounded fallback. Web rollout remains
-pending at this checkpoint; API/owner/worker do not need another reinstall.
+Korean/astral Unicode, code copying and bounded fallback. The Web wheel was
+installed through the supported release tool: installed RECORD inventory
+**37 files PASS**. Served Markdown/parser/chat/CSS asset hashes match the
+candidate; Web login/live smoke and API readiness passed, anonymous chat access
+returns401, and API/Web/workflow/chat owner/chat worker remain active with
+NRestarts=0. API/owner/worker were not reinstalled for this Web-only change.
 
 Markdown-inclusive source suite: **731 PASS** (chat units/API/all Web/migration
 identifiers), including Node semantic/security/cache/Unicode checks. Ruff and
