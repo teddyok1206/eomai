@@ -7,6 +7,9 @@ import argparse
 import copy
 import json
 from pathlib import Path
+from typing import Any
+
+Schema = dict[str, Any]
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "schemas/general-chat"
@@ -15,7 +18,7 @@ PREFIX = "eom://schemas/general-chat/"
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
 
 
-def obj(properties, required=None):
+def obj(properties: dict[str, Schema], required: list[str] | None = None) -> Schema:
     return {
         "type": "object",
         "additionalProperties": False,
@@ -24,38 +27,38 @@ def obj(properties, required=None):
     }
 
 
-def generate():
+def generate() -> dict[str, Schema]:
     grounding = json.loads((BASE / "general-chat-grounding.schema.json").read_bytes())
 
-    def ref(name):
+    def ref(name: str) -> Schema:
         return {"$ref": PREFIX + "grounding/1.0#/$defs/" + name}
 
-    def own(name):
+    def own(name: str) -> Schema:
         return {"$ref": PREFIX + "agent-search/1.0#/$defs/" + name}
 
-    def nullable(value):
+    def nullable(value: Schema) -> Schema:
         return {"anyOf": [value, {"type": "null"}]}
 
-    def string(pattern):
+    def string(pattern: str) -> Schema:
         return {"type": "string", "pattern": pattern}
 
-    def integer(low, high):
+    def integer(low: int, high: int) -> Schema:
         return {"type": "integer", "minimum": low, "maximum": high}
 
-    def array(value, high):
+    def array(value: Schema, high: int) -> Schema:
         return {"type": "array", "items": value, "maxItems": high}
 
-    def enum(values):
+    def enum(values: list[str]) -> Schema:
         return {"enum": values}
 
-    defs = {}
+    defs: dict[str, Schema] = {}
     for name in ("Input", "Result"):
         value = copy.deepcopy(grounding["$defs"][name])
         value["properties"]["protocol_version"] = {"const": "general-chat-turn/3.0"}
         value["properties"]["prompt_revision"] = {"const": "general-chat-agent/1.0.0"}
 
         # The answer/knowledge structures retain their released canonical meaning.
-        def externalize(node):
+        def externalize(node: Any) -> None:
             if isinstance(node, dict):
                 if isinstance(node.get("$ref"), str) and node["$ref"].startswith("#/$defs/"):
                     node["$ref"] = PREFIX + "grounding/1.0" + node["$ref"]
@@ -177,7 +180,7 @@ def generate():
             "outcome": own("Outcome"),
         }
     )
-    output = {
+    output: dict[str, Schema] = {
         "general-chat-agent-search.schema.json": {
             "$schema": DRAFT,
             "$id": PREFIX + "agent-search/1.0",
@@ -195,7 +198,7 @@ def generate():
         value["$id"] = PREFIX + leaf + "/3.0"
         value["properties"]["schema_version"] = {"const": "general-chat-" + leaf + "/3.0"}
 
-        def successor(node):
+        def successor(node: Any) -> None:
             if isinstance(node, dict):
                 if node.get("$ref") == PREFIX + "worker-policy/2.0":
                     node["$ref"] = PREFIX + "worker-policy/3.0"
@@ -215,7 +218,7 @@ def generate():
             value["required"].append("agent_prompt_sha256")
 
         # V3 receivers retain historical V2 input/result recovery support.
-        def add_v2(node):
+        def add_v2(node: Any) -> None:
             if isinstance(node, dict):
                 options = node.get("oneOf")
                 if isinstance(options, list):
@@ -236,7 +239,7 @@ def generate():
     return output
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
