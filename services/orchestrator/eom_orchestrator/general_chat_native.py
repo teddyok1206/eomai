@@ -39,6 +39,7 @@ NON_CONTENT_NOTIFICATIONS = frozenset(
         "configWarning",
         "remoteControl/status/changed",
         "serverRequest/resolved",
+        "warning",
     }
 )
 
@@ -135,6 +136,12 @@ def _text(value: object) -> str:
     return value
 
 
+def _diagnostic_method(value: object) -> str:
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_/-]{1,80}", value):
+        return value
+    return "invalid_notification"
+
+
 class CodexChatSession:
     """One resident native process, one ephemeral thread per canonical input.
 
@@ -166,11 +173,8 @@ class CodexChatSession:
 
     def _receive(self) -> dict[str, object]:
         document = _object(self.channel.receive(deadline=self._deadline))
-        method = document.get("method")
-        if isinstance(method, str) and re.fullmatch(r"[A-Za-z0-9_/-]{1,80}", method):
-            self._diagnostic_method = method
-        elif "id" not in document:
-            self._diagnostic_method = "invalid_notification"
+        if "id" not in document:
+            self._diagnostic_method = _diagnostic_method(document.get("method"))
         if document.get("jsonrpc", "2.0") != "2.0":
             raise NativeChatError()
         if "id" not in document:
@@ -382,6 +386,8 @@ class CodexChatSession:
         while True:
             event = self._pending.popleft() if self._pending else self._receive()
             method = event.get("method")
+            # A queued pre-response event may differ from the last received one.
+            self._diagnostic_method = _diagnostic_method(method)
             if method in NON_CONTENT_NOTIFICATIONS:
                 continue
             params = _object(event.get("params"))

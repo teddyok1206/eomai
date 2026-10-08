@@ -201,6 +201,7 @@ def test_actual_startup_metadata_is_not_mistaken_for_conversation_execution():
 def test_metadata_between_turn_events_is_not_exported_or_used_as_an_answer():
     events = [
         {"method": "configWarning", "params": {"summary": "private diagnostic"}},
+        {"method": "warning", "params": {"threadId": "thread-1", "message": "private warning"}},
         {"method": "remoteControl/status/changed", "params": {"status": "disabled"}},
         event("item/completed", item=answer_item(text="실제 답변")),
         final_event(),
@@ -209,6 +210,21 @@ def test_metadata_between_turn_events_is_not_exported_or_used_as_an_answer():
     result = native.answer(request())
     assert result.status == "SUCCEEDED" and result.reply == "실제 답변"
     assert "private diagnostic" not in result.model_dump_json()
+    assert "private warning" not in result.model_dump_json()
+
+
+def test_actual_warning_queued_before_turn_start_response_is_metadata_not_a_failed_turn():
+    channel = Channel(
+        [
+            {"method": "warning", "params": {"threadId": "thread-1", "message": "recoverable"}},
+            event("item/completed", item=answer_item()),
+            final_event(),
+        ]
+    )
+    channel.early_events = True
+    native, _ = session(channel)
+    result = native.answer(request())
+    assert result.status == "SUCCEEDED" and result.reply == "안녕하세요!"
 
 
 @pytest.mark.parametrize("method", ["item/completed", "turn/started", "unknown/admin/event"])

@@ -53,6 +53,14 @@ native schema also found an overly strict phase requirement: phase is documented
 nullable/optional. Correct that shape and add secret-safe protocol metadata logs;
 revalidate actual answers before declaring the feature usable.
 
+The next bounded live run still failed. Secret-safe method diagnostics identified
+the documented recoverable runtime `warning` notification, including when queued
+before the turn-start response. Add it to the same closed metadata set and test
+that actual ordering; do not ignore arbitrary notifications. Correct diagnostics
+to identify the processed FIFO event, not a later event received during RPC.
+The worker's startup rate limit was acknowledged once for that exact new unit
+after a verified release change; no journal or failed turn receipt was cleared.
+
 ## Verified first slice
 
 - `일반 → ChatGPT` navigation and a separately styled conversation workspace.
