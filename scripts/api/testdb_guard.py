@@ -43,8 +43,16 @@ class TestDatabaseManifest:
     @classmethod
     def load(cls, path: Path) -> TestDatabaseManifest:
         try:
-            payload = json.loads(path.read_text(encoding="ascii"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            return cls.from_json(path.read_text(encoding="ascii"))
+        except (OSError, UnicodeError) as exc:
+            raise TestDatabaseGuardError("invalid disposable database manifest") from exc
+
+    @classmethod
+    def from_json(cls, raw: str) -> TestDatabaseManifest:
+        """Reuse canonical parsing after an adapter has safely admitted file bytes."""
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
             raise TestDatabaseGuardError("invalid disposable database manifest") from exc
         if not isinstance(payload, dict) or set(payload) != {
             "database",

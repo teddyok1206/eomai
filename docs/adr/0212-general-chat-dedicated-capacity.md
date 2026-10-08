@@ -395,6 +395,43 @@ blind service replay would duplicate unknown generation. One generic supervisor
 framework or credential-copying launcher adds unnecessary authority/lifecycles.
 The existing private applications plus bounded systemd restart/drain are sufficient.
 
+### Dedicated owner privileges and protected preparation
+
+The owner role is an Orchestrator publication adapter, not the API administrator
+or an isolated worker. Its authoritative privilege profile is one immutable local
+table/column map reused by provisioning and read-only admission. Give it chat
+metadata DML, append-only Artifact/publication inserts and only the three mutable
+publication-job state columns. Read only operator_id/status/deleted_at for active
+actor checks; deny credentials, identity writes, legacy slots, leases and unrelated
+product tables. Artifact/job records remain the existing canonical entities and
+revision pointers; this does not introduce a second publication store or queue.
+
+Dominant operations remain indexed FIFO/identity lookup. Privilege inspection is
+startup-only bounded catalog iteration and O(1) map/set membership, not an N+1
+request-path check. Schema-wide negative checks detect extra table/column grants,
+PUBLIC/inherited privileges, memberships, owner/DDL/unrelated sequence rights. Expected scale
+is the existing app schema; two batched catalog queries suffice for table/column
+ACLs. The mutable role grant state is deployment configuration, not content schema.
+No migration or worker wire change is required.
+
+Provisioning uses a protected explicit credential and fixed role identity, checks
+source/schema and stopped service state, and reconciles only that role. Credentials
+are not copied from another runtime or printed. Preserve an existing exact secret
+on replay; never rotate silently. A mismatched role/secret fails before mutation.
+Grant changes are transactional; after uncertain output, inspect/replay the same
+preparation rather than creating another role. Owner OS identity is a locked
+system account; only its service receives NAS/private-socket groups. Worker and
+slots01–06 groups remain unchanged. Preparation never enables/starts a service,
+performs inference, or claims that auth/deployment eligibility has been resolved.
+
+Test the real grant profile on an existing guarded disposable manifest/runtime
+role, with a dedicated environment receipt and separate opt-in suite. Never use
+production as a pytest target. Temporary credentials remain outside Git and
+existing testdb cleanup owns their lifecycle. The simpler shared admin URL violates
+least privilege; a new generic permission framework/RLS domain is unnecessary for
+this trusted Orchestrator adapter. Product ownership still stays in its application,
+and immutable history is not reinterpreted by permission reconciliation.
+
 The API's existing GeneralChatOwner port is implemented by a private Unix-socket
 client; only authenticated API calls may supply an actor ID. The resident
 Orchestrator owns the existing conversation/turn/capacity tables and Artifact

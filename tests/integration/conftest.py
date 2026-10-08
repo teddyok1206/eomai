@@ -8,6 +8,8 @@ from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from tests.integration.general_chat_fixtures import chat  # noqa: F401
+
 
 @pytest.fixture(scope="session")
 def integration_engine() -> Iterator[Engine]:

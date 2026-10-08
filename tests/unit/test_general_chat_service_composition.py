@@ -90,12 +90,13 @@ def test_worker_rejects_identity_before_private_handoff_or_native_start(monkeypa
 
 
 @pytest.mark.parametrize("change", ["role", "superuser", "migration", "forbidden", "none"])
-def test_read_only_owner_database_admission_checks_exact_role_and_privilege_boundary(change):
+def test_read_only_owner_database_admission_checks_exact_role_and_privilege_boundary(
+    change, monkeypatch
+):
     statements = []
     rows = [
         [runtime.OWNER_DATABASE_ROLE, False, False, False, False, False],
         runtime.CURRENT_MIGRATION_REVISION,
-        [False] * 6,
     ]
     if change == "role":
         rows[0][0] = "postgres"
@@ -103,8 +104,10 @@ def test_read_only_owner_database_admission_checks_exact_role_and_privilege_boun
         rows[0][1] = True
     elif change == "migration":
         rows[1] = "20261007_0048"
-    elif change == "forbidden":
-        rows[2][0] = True
+    monkeypatch.setattr(runtime, "chat_role_boundary_ready", lambda *_args, **_kw: True)
+    monkeypatch.setattr(
+        runtime, "chat_privileges_ready", lambda *_args, **_kw: change != "forbidden"
+    )
 
     class Connection:
         def __enter__(self):
@@ -125,7 +128,7 @@ def test_read_only_owner_database_admission_checks_exact_role_and_privilege_boun
         with pytest.raises(ChatError, match="GENERAL_CHAT_OWNER_DATABASE_NOT_READY"):
             runtime.require_chat_owner_database(engine)
     assert all(value.startswith("SELECT ") for value in statements)
-    assert "has_any_column_privilege" in statements[-1] and "worker_slots" in statements[-1]
+    assert "alembic_version" in statements[-1]
 
 
 def test_worker_entrypoint_never_imports_owner_storage_or_database_adapters():

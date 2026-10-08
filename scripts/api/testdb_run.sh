@@ -13,9 +13,9 @@ fail() {
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
-    "$1" != "tests" ]]; then
+    "$1" != "chat-role-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -161,6 +161,14 @@ if [[ "${action}" == "chat-tests" ]]; then
   export EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_general_chat_persistence.py
   printf 'Disposable general-chat persistence integration tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "chat-role-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_general_chat_runtime_privileges.py
+  printf 'Disposable dedicated chat runtime privilege tests passed.\n'
   exit 0
 fi
 

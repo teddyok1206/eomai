@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_RESIDENT_COMPOSITION_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_DEDICATED_PRIVILEGES_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -530,3 +530,40 @@ This candidate is not installed or activated. Next required work remains the
 protected owner/least-privilege role, actual service isolation negatives, supported
 authentication-route decision, coordinated deployment and live acceptance. Goal
 remains ACTIVE/unfinished; this checkpoint made concrete implementation progress.
+
+## Dedicated owner privilege checkpoint — 2026-10-08 02:43 UTC
+
+One closed immutable table/column privilege profile now drives both guarded
+preparation and read-only owner startup admission. The Orchestrator owner can
+publish canonical Artifacts and update chat metadata, but cannot read credentials,
+change identities, use slots01–06, delete history, change Artifact approval, or
+update job payloads. Admission also checks independent column ACLs, inherited or
+PUBLIC access, memberships, DDL/ownership, definer functions and unrelated
+sequence privileges. Inspection uses bounded batched catalog queries rather
+than per-table/per-request lookups. No schema, migration, worker protocol,
+dependency, queue or transcript store was added.
+
+Protected preparation reads use bounded no-follow file descriptors and reject
+symlinks, FIFOs, hard links, unsafe metadata and inconsistent reads. Credential
+installation is durable and no-replace; a failed role transaction retains the
+same protected credential for replay. Existing role/secret identity conflicts
+stop before mutation; existing passwords are not silently rotated. A separate
+source script prepares the locked owner OS identity without enabling services or
+changing worker group membership. Neither preparation has been executed yet.
+
+Re-executed source/API/Web/contracts/release regression: **468 PASS,12 SKIP**;
+guarded disposable PostgreSQL baseline: **45 PASS**. The twelve skipped tests are
+the new real limited-role positive/publication and negative-privilege cases;
+they require guarded root preparation of that disposable database's runtime role
+and its private `chat.env`. They are **PENDING**, not implied PASS. Initial fixture
+registration and a mypy namespace invocation issue were corrected before these
+results; no production state was involved. Ruff check/format (48 files), strict
+mypy (six preparation/runtime modules), shell syntax and diff checks passed. One
+pre-existing Starlette TestClient deprecation warning remains.
+
+Both chat services are still not-found/inactive; sudo authentication is currently
+expired. No owner identity, production role, migration or runtime activation was
+performed, and native/GPU calls remain zero for this checkpoint. The next bounded
+privileged action is only the manifest-guarded disposable role plus private
+credential preparation, followed by `chat-role-tests`; it is not production
+deployment or a claim that the supported authentication gate is resolved.

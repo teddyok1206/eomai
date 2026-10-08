@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL, make_url
 
+from eom_orchestrator.general_chat_privileges import chat_privileges_ready, chat_role_boundary_ready
 from eom_orchestrator.general_chat_state import ChatError
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 
@@ -83,24 +84,11 @@ def require_chat_owner_database(engine: Engine) -> None:
         revision = connection.execute(
             text("SELECT version_num FROM app.alembic_version")
         ).scalar_one()
-        forbidden = connection.execute(
-            text(
-                "SELECT has_any_column_privilege(current_user, 'app.operator_credentials', "
-                "'SELECT,INSERT,UPDATE'), "
-                "has_table_privilege(current_user, 'app.operator_credentials', "
-                "'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER'), "
-                "has_any_column_privilege(current_user, 'app.operators', 'INSERT,UPDATE'), "
-                "has_table_privilege(current_user, 'app.operators', "
-                "'INSERT,DELETE,TRUNCATE,TRIGGER'), "
-                "has_any_column_privilege(current_user, 'app.worker_slots', 'INSERT,UPDATE'), "
-                "has_table_privilege(current_user, 'app.worker_slots', "
-                "'INSERT,DELETE,TRUNCATE,TRIGGER')"
-            )
-        ).one()
         if (
             identity[0] != OWNER_DATABASE_ROLE
             or any(identity[1:])
             or revision != CURRENT_MIGRATION_REVISION
-            or any(forbidden)
+            or not chat_role_boundary_ready(connection, role=OWNER_DATABASE_ROLE)
+            or not chat_privileges_ready(connection, role=OWNER_DATABASE_ROLE)
         ):
             raise ChatError("GENERAL_CHAT_OWNER_DATABASE_NOT_READY")

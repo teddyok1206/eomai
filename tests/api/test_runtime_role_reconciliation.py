@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -294,10 +295,6 @@ def test_disposable_database_runs_workflow_preclaim_integration() -> None:
 def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliation() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert (
-        "{verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|tests}"
-        in source
-    )
     hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
     runtime_environment = source.index('runtime_environment="${state_directory}/runtime.env"')
     assert hwpx_branch < runtime_environment
@@ -328,10 +325,6 @@ def test_disposable_database_runs_educational_quality_persistence() -> None:
 def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
-    assert (
-        "{verify|migrate|hwpx-tests|pdf-review-tests|quality-review-tests|chat-tests|tests}"
-        in source
-    )
     assert "validate_application_schema_metadata" in source
     assert "SELECT version_num FROM app.alembic_version" in source
     assert "app.reject_identity_key_change()" in source
@@ -339,6 +332,28 @@ def test_disposable_migration_verifies_head_and_migration_0006_objects() -> None
     assert "app.reject_control_plane_immutable_mutation()" in source
     assert "app.protect_worker_lease_identity()" in source
     assert "api_audit_events_append_only" in source
+
+
+def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
+    source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
+    usage = re.search(r"usage: \$0 \{([^}]+)\}", source)
+    assert usage is not None
+    assert set(usage.group(1).split("|")) == {
+        "verify",
+        "migrate",
+        "hwpx-tests",
+        "pdf-review-tests",
+        "quality-review-tests",
+        "chat-tests",
+        "chat-role-tests",
+        "tests",
+    }
+    begin = source.index('if [[ "${action}" == "chat-role-tests" ]]')
+    end = source.index('if [[ "${action}" == "hwpx-tests" ]]', begin)
+    branch = source[begin:end]
+    assert "tests/integration/test_general_chat_runtime_privileges.py" in branch
+    assert 'EOM_GENERAL_CHAT_TEST_STATE="${state_directory}"' in branch
+    assert "runtime.env" not in branch
 
 
 def test_cleanup_accepts_marked_database_after_failed_migration_without_runtime_role() -> None:
