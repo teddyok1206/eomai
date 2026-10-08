@@ -122,11 +122,15 @@ read-only plan/schema preflight는 PASS이나, 이번 release의 신규 모델 �
 | HWPX correction | single V4 request·plan `2.0` / `catalog/1.24` | 기존 correction output 재사용; predecessor 의미 보존 |
 | Human quality workbench | command/workbench `1.0` | released Assembly와 immutable Item Revision pointer만 평가; runtime migration/activation 별도 |
 | Recovery evidence | Artifact snapshot/receipt `1.0` | full metadata inventory는 항상 비교; sampled/full byte verification 구분 |
-| 일반 채팅 근거 | turn input/result `2.0`, grounding/citation `1.0`, owner/worker/dispatch successor `2.0` | released `1.0` history 보존; 대화에 첨부한 Item/Graph/report와 observation hash를 정확히 고정 |
+| 일반 채팅 근거 | turn input/result·owner/worker/dispatch `3.0`, agent-search `1.0`, grounding/citation `1.0` | released `1.0`/`2.0` history 보존; 대화형 검색·조회와 첨부 Item/Graph/report를 revision/hash로 고정 |
 
-일반 채팅의 2026-10-08 운영 후속은 API/Catalog/chat `276f31ea`와 Web `6c765820`의 호환 조합이다.
+일반 채팅의 2026-10-08 19:02 UTC 운영 후속은 API/Catalog/chat `7fb311fb`와 Web `6c765820`의
+호환 조합이다. `CHAT-READTOOLS-1`은 native SEARCH/READ를 기존 Orchestrator/Catalog 경계에서 실행하며
+새 DB schema/migration·queue·worker privilege·외부 LLM API를 추가하지 않는다.
 Workflow/Pack selector와 별도 수명주기를 가지며 기존 6개 작업 슬롯을 변경하지 않는다.
-[실제 운영 검증](../status/GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md)에 별도로 기록했다.
+[대화형 검색 실제 검증](../status/GENERAL_CHAT_AGENT_SEARCH_ACCEPTANCE_2026-10-08.md)에 기록했다.
+같은 날짜의 이전 API/Catalog/chat `276f31ea` 수동 첨부 acceptance는
+[역사적 검증](../status/GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md)으로 보존한다.
 
 ## Catalog application route 숫자
 

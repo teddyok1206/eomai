@@ -1,5 +1,9 @@
 # Conversational internal search (C06)
 
+Operational task: `CHAT-READTOOLS-1`. The implementation tag C06 is not the
+original integration plan's C06 image/multimodal milestone; that remains outside
+this read-tool acceptance.
+
 The previous C04/C05 release answers from explicitly attached sources. It does
 not implement model-initiated search. C06 closes that gap; it does not enable
 production, review, approval, deployment, account mutation, external APIs, shell,

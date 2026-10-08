@@ -1,6 +1,31 @@
 # Current System Status
 
-Status date: 2026-09-27 (UTC)
+Latest recorded update: 2026-10-08 (UTC). Older sections retain their observation dates.
+
+## Conversational internal search CHAT-READTOOLS-1 — 2026-10-08 19:02 UTC
+
+`일반 → ChatGPT` can now search and read internal Items conversationally without
+manual attachment. The dedicated Codex worker requests two bounded native read
+tools; the Orchestrator executes them through the actor-authorized Catalog
+application boundary and commits validated tool receipts before returning results.
+No worker DB/NAS/Catalog access or chat mutations were introduced.
+
+Installed API/Catalog/chat source: `7fb311fbfab683f9b3cf4cea123812e1f4e62591`;
+compatible Web remains `6c765820d21f91dd1ef277219a894f25ddabac57`; DB remains
+`20261008_0049`. Source gate: 623 PASS; disposable PostgreSQL gates: 49 + 23 + 12
+PASS. Actual HTTPS canary: three completed turns, verified native SEARCH/READ,
+accepted solution-report citations, exact-pin follow-up, source Preview navigation,
+one idempotent HTTP replay and history reload PASS. Original 21 terminal receipts
+remain unchanged. Both chat units and the API/Web/Catalog/workflow services are
+active. Two task-owned disposable databases were removed through guarded cleanup.
+
+The first C06 candidate completed without tools and is retained as non-acceptance.
+The installed model's direct-tool exposure was corrected with a supported strict
+CLI setting, without enabling shell/code execution or changing auth/model metadata.
+See [read-tool acceptance](GENERAL_CHAT_AGENT_SEARCH_ACCEPTANCE_2026-10-08.md) and
+[design](../architecture/GENERAL_CHAT_AGENT_SEARCH_DESIGN.md).
+Implementation tag C06 does not close the original plan's C06 image/multimodal work.
+The following C04/C05 section is its dated predecessor, not the current release pin.
 
 ## General chat representative operational connection — 2026-10-08 UTC
 

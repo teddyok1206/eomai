@@ -39,15 +39,19 @@ logical Item
 격리·동시성 계약은 [ADR0212](docs/adr/0212-general-chat-dedicated-capacity.md)를 참고하세요.
 
 내부 자료 연결은 [상세 기획](docs/architecture/GENERAL_CHAT_INTERNAL_KNOWLEDGE_INTEGRATION_PLAN.md)에
-따라 C04/C05까지 운영 연결했습니다. 모델 호출 없이 최근 문항·공식 시험·개념으로 문항을 찾고,
-최대 3개를 대화에 첨부하면 정확한 Item Revision, 고정 Graph의 기초분석에 연결된 승인
-풀이보고서 요약을 Codex가 실제 답변에 참고합니다. 정본 근거·모델 제안·일반 지식·자료 부족·
+따라 C04/C05에 이어 대화형 검색·조회까지 운영 연결했습니다. 이제 첨부 없이 요청해도 Codex가 내부 문항을
+검색하고 실제 내용을 읽어 답합니다. 검색은 개념·최근 문항·공식 시험의 기존 indexed 경로를
+사용하며, 턴당 검색 최대 4회·조회 1회·문항 3개로 제한합니다. 수동 검색·첨부도 유지합니다.
+정확한 Item Revision, 고정 Graph의 기초분석에 연결된 승인 풀이보고서 요약을 실제 답변에
+참고합니다. 정본 근거·모델 제안·일반 지식·자료 부족·
 시각이 있는 시스템 관측을 구분하고, 검증된 출처 버튼으로 원문 Preview를 열 수 있습니다.
 검색 scope는 Item 읽기와 채팅 권한의 교집합이며, 이어 묻기와 기록 조회에서도 권한을 재확인합니다.
 EOM 어시스턴트는 제작·검토·HWPX 업무를 안내하지만 채팅으로 제작·승인·계정 변경을 실행하지
-않습니다. 자동 전체-corpus 검색, 그림 픽셀 확인이나 교과서 접근 권한 확대는 포함하지 않습니다.
-실제 HTTPS 첨부 답변·후속 대화·출처 이동·동일 요청 replay·기록 보존과 PC/모바일 화면이
-통과했습니다. 상세 검증과 설치 pins는
+않습니다. 무제한 전체-corpus 스캔, 그림 픽셀 확인이나 교과서 접근 권한 확대는 포함하지 않습니다.
+실제 HTTPS에서 첨부 없는 검색→조회→출처 답변, 풀이보고서 활용, 같은 revision의 후속 대화,
+출처 이동·동일 요청 replay·기록 보존을 검증했습니다. C06의 설치 pins와 실제 실행 증거는
+[대화형 내부 검색 운영 검증](docs/status/GENERAL_CHAT_AGENT_SEARCH_ACCEPTANCE_2026-10-08.md)에,
+이전 수동 첨부·PC/모바일 화면 검증은
 [대표 에이전트 운영 연결 기록](docs/status/GENERAL_CHAT_REPRESENTATIVE_ACCEPTANCE_2026-10-08.md)에 있습니다.
 검색 책임·성능·실제 inventory는 [검색 설계](docs/architecture/GENERAL_CHAT_KNOWLEDGE_SEARCH_DESIGN.md)에
 기록합니다. 승인 여부와 Graph 반영 여부는 서로 다른 상태로 표시합니다.
