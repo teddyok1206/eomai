@@ -13,6 +13,7 @@ from eom_protocol.general_chat import (
     CHAT_MESSAGE_SCHEMA,
     CHAT_RESULT_SCHEMA,
 )
+from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA
 from sqlalchemy import Engine
 
 from eom_orchestrator.control_artifact_resolution import (
@@ -65,7 +66,12 @@ class GeneralChatArtifactStore:
         intent: str,
         created_at: datetime,
     ) -> ArtifactMemberPointer:
-        if schema_ref not in {CHAT_MESSAGE_SCHEMA, CHAT_INPUT_SCHEMA, CHAT_RESULT_SCHEMA}:
+        if schema_ref not in {
+            CHAT_MESSAGE_SCHEMA,
+            CHAT_INPUT_SCHEMA,
+            CHAT_RESULT_SCHEMA,
+            CHAT_DISPATCH_SCHEMA,
+        }:
             raise ValueError("unsupported chat evidence schema")
         if not 0 < len(payload) <= 256000:
             raise ValueError("chat evidence exceeds materialization budget")

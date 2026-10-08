@@ -30,6 +30,7 @@ MIGRATION_MODULES = (
     "migrations.versions.20261003_0046_operator_account_deletion",
     "migrations.versions.20261007_0047_general_chat_rbac",
     "migrations.versions.20261007_0048_general_chat_history",
+    "migrations.versions.20261008_0049_general_chat_dispatch",
 )
 
 

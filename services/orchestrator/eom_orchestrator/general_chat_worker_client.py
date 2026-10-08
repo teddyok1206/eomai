@@ -6,6 +6,7 @@ from threading import Lock
 from uuid import uuid4
 
 from eom_protocol.general_chat import ChatTurnInput, ChatTurnResult
+from eom_protocol.general_chat_dispatch import ChatExecutionIdentity
 from eom_protocol.general_chat_worker_messages import (
     ChatWorkerAdmission,
     ChatWorkerCommand,
@@ -44,7 +45,11 @@ class ChatWorkerClient:
 
     def _call(self, command: ChatWorkerCommand) -> ChatWorkerReply:
         request = ChatWorkerRequest(
-            request_id="chatwrpc_" + uuid4().hex, policy_sha256=self.policy.sha256, command=command
+            request_id="chatwrpc_" + uuid4().hex,
+            policy_sha256=command.ticket.policy_sha256
+            if isinstance(command, ChatWorkerLookup)
+            else self.policy.sha256,
+            command=command,
         )
         document = request.model_dump(mode="json")
         read_chat_worker_request(document)
@@ -81,6 +86,14 @@ class ChatWorkerClient:
             if self._boot_id is not None and self._boot_id != reply.boot_id:
                 raise ChatError(ChatWorkerError.NOT_READY.value)
             self._boot_id = reply.boot_id
+
+    @property
+    def execution_identity(self) -> ChatExecutionIdentity:
+        """Already-admitted immutable identity; no probe or implicit reboot adoption."""
+        with self._admission_lock:
+            if self._boot_id is None:
+                raise ChatError(ChatWorkerError.NOT_READY.value)
+            return ChatExecutionIdentity(boot_id=self._boot_id, policy=self.policy)
 
     def answer(self, request: ChatTurnInput) -> ChatTurnResult:
         with self._admission_lock:

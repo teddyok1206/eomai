@@ -1,6 +1,6 @@
 # General chat implementation checkpoint — 2026-10-07 UTC
 
-Status: `SOURCE_PRIVATE_WORKER_HANDOFF_VERIFIED`; overall feature `IN_PROGRESS`.
+Status: `SOURCE_CANONICAL_DISPATCH_AND_RECOVERY_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
 Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (2026-10-07 13:45 UTC).
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -382,3 +382,61 @@ calls. Its bounded temporary handoff directory was automatically removed after
 the test; no canonical Artifact/history or production data was deleted.
 Final Ruff checks passed for all11 changed Python files; working tree was clean
 at the source build. This is package/offline evidence, not live model acceptance.
+
+## Canonical dispatch and recovery checkpoint — 2026-10-08 01:46 UTC
+
+The goal tool now reports ACTIVE; the preceding handoff turn made concrete source,
+commit and actual-wheel progress. This resumed audit is not a continuation of the
+old BLOCKED-card status. No personal-login restriction or administrator-only chat
+guard was introduced; all authenticated active users retain private histories.
+
+New dispatch1.0 was defined in JSON Schema2020-12 before implementation. A small
+canonical Artifact pins the admitted worker boot/model/native profile/prompt
+revision/SHA, owner runtime, exact claim ticket and existing input member pointer.
+No transcript copy, independent policy registry, new queue/cache or dependency.
+The existing turn table stores only three additional Artifact/revision/SHA fields.
+Successor migration `20261008_0049` adds a composite RESTRICT FK, all-or-none/state
+check and immutable-dispatch trigger. New RUNNING transitions require provenance;
+predecessor history is not backfilled with invented model identity. Downgrade
+refuses to discard already-pinned dispatch evidence.
+
+Input and dispatch are idempotently published by the sole Artifact commit owner
+before their pointers and RUNNING state are atomically admitted. Interrupted
+publication reuses the exact registered evidence/claim. Replay compares full
+boot/policy; changed model, prompt or boot cannot reinterpret the request.
+Completion and read-only audit resolve original pointers in a bounded batch,
+not an implicit latest policy. Public/owner/worker/input/result1.0 bytes remain
+unchanged; native policy is a frozen inline value, not another logical aggregate.
+
+Supported known-result reconciliation uses exact original runtime/turn/claim,
+canonical input/dispatch and immutable local worker lookup. A withdrawn/expired
+owner is required; a live owner is rejected. Valid known output can finish before
+or after lease expiry without extending the lease, claiming a new identity or
+another inference. Unknown/absent output stays fenced, including after expiry.
+The normal COMMITTING hash journal/publication/final transition is reused; a
+publication disconnect recovers the same output Artifact. Historical failure
+and terminal-conflict guards remain unchanged. RESULT lookup follows its exact
+historical ticket policy after worker reconfiguration; PROBE/EXECUTE continue
+to require current policy and admitted boot. No raw native data is exported.
+
+Focused source/API/Web/contracts/native/private-RPC/dependency/release tests:
+**381 PASS**, one existing Starlette TestClient deprecation warning. Guarded
+disposable PostgreSQL suite: **42 PASS**. Migration upgrade/downgrade/re-upgrade
+to0049 (before new dispatches), actual refusal to downgrade provenance-bearing
+history, concurrent prepare replay, interruption, dangling revision, policy-change
+denial and expiry/quiescence recovery: **PASS**. All model answers synthetic;
+native model/GPU invocations: **0**. Strict mypy (nine core modules), Ruff,
+shell syntax and diff checks: **PASS**.
+
+The first UNKNOWN-case persistence fixture referenced a server instead of its
+returned local handoff; correct that test invocation, not runtime transitions.
+Its failure is followed by the full42-case PASS. Production migration, installed
+services and authentication were not changed. Build-only inspection of this
+source checkpoint follows its clean commit, not a live deployment claim.
+
+Remaining: protected owner/worker composition, bounded native renewal, identity/
+least-privilege installation and OS negatives, coordinated API/Web/Orchestrator
+deployment and migration, and actual first answer/follow-up/two-user acceptance.
+The official shared-deployment authentication question remains unresolved rather
+than waived; it does not prevent the source/disposable work above. The goal is
+not complete, and source acceptance does not imply an always-ready live slot.

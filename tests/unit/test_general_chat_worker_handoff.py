@@ -413,12 +413,40 @@ def test_real_private_socket_probe_execute_and_lookup(rpc) -> None:
     client, _, native, _ = rpc
     with pytest.raises(ChatError, match="GENERAL_CHAT_WORKER_NOT_READY"):
         client.answer(staged(1))
+    with pytest.raises(ChatError, match="GENERAL_CHAT_WORKER_NOT_READY"):
+        _ = client.execution_identity
     client.check_admission()
+    assert client.execution_identity.boot_id == BOOT
+    assert client.execution_identity.policy == policy()
     assert client.answer(staged(1)) == answer(staged(1))
     assert client.answer(staged(1)) == answer(staged(1))
     ticket = chat_worker_ticket(staged(1), policy_sha256=policy().sha256)
     assert client.lookup(ticket).result == answer(staged(1))
     assert len(native.calls) == 1
+
+
+def test_historical_result_lookup_survives_worker_policy_change_without_native_calls(rpc) -> None:
+    client, server, native, _ = rpc
+    client.check_admission()
+    original = client.answer(staged(1))
+    ticket = chat_worker_ticket(staged(1), policy_sha256=policy().sha256)
+    selected = policy().model_copy(update={"model": "different-synthetic-model"})
+    next_native = SyntheticNative()
+    # A new native policy/boot may read immutable older handoff evidence; only
+    # EXECUTE/PROBE use the current policy. Never re-label the older result.
+    next_native.ready = False
+    server.worker = ChatWorkerApplication(
+        next_native, server.worker.handoff, policy=selected, boot_id="chatboot_" + "c" * 32
+    )
+    updated = ChatWorkerClient(endpoint=client.endpoint, policy=selected)
+    assert updated.lookup(ticket).result == original
+    assert client.lookup(ticket).result == original
+    assert len(native.calls) == 1 and not next_native.calls
+    with pytest.raises(ChatError, match="GENERAL_CHAT_WORKER_NOT_READY"):
+        client.check_admission()
+    wrong = ticket.model_copy(update={"policy_sha256": selected.sha256})
+    with pytest.raises(ChatError, match="GENERAL_CHAT_WORKER_PROTOCOL_INVALID"):
+        updated.lookup(wrong)
 
 
 def test_real_socket_result_recovery_after_disconnect_does_not_repeat_generation(rpc) -> None:

@@ -28,6 +28,7 @@ from eom_orchestrator.general_chat_models import (
 )
 from eom_orchestrator.general_chat_owner import GeneralChatConversationOwner
 from eom_orchestrator.general_chat_owner_server import GeneralChatOwnerRpcServer
+from eom_orchestrator.general_chat_recovery import recover_known_chat_turn
 from eom_orchestrator.general_chat_repository import GeneralChatRepository
 from eom_orchestrator.general_chat_resident import GeneralChatResident
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, ChatTransportError
@@ -38,11 +39,12 @@ from eom_orchestrator.general_chat_worker_server import ChatWorkerRpcServer
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_orchestrator.settings import Settings
 from eom_protocol.general_chat import CHAT_RESULT_SCHEMA, ChatTurnInput, ChatTurnResult
+from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA, ChatExecutionIdentity
 from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_protocol.general_chat_views import GeneralChatCreate, GeneralChatSubmission
 from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 from sqlalchemy import Engine, create_engine, func, inspect, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableDatabaseManifest
 from scripts.api.testdb_guard import validate_state_directory
@@ -155,7 +157,9 @@ def chat(tmp_path: Path):
         repository,
         evidence,
         GeneralChatConversationOwner(repository, evidence),
-        GeneralChatExecutionService(repository, evidence),
+        GeneralChatExecutionService(
+            repository, evidence, identity=ChatExecutionIdentity(boot_id=BOOT, policy=policy())
+        ),
         actors,
     )
     value.owner.clock = lambda: value.now
@@ -200,7 +204,7 @@ def test_chat_migration_matches_authoritative_metadata(chat: ChatFixture) -> Non
     with chat.engine.connect() as connection:
         assert (
             connection.scalar(text("SELECT version_num FROM app.alembic_version"))
-            == "20261007_0048"
+            == "20261008_0049"
         )
 
 
@@ -1048,3 +1052,328 @@ def test_saturated_metadata_pool_does_not_block_canonical_publication(chat: Chat
         futures = tuple(executor.submit(submit, index) for index in range(20))
         values = tuple(future.result(timeout=15) for future in futures)
     assert len({value.messages[0].turn_id for value in values}) == 20
+
+
+def test_dispatch_is_canonical_pointer_only_and_concurrent_prepare_is_exact_replay(
+    chat: ChatFixture,
+) -> None:
+    chat.submit(chat.create())
+    claim = chat.claim()
+    with chat.engine.connect() as connection:
+        before = connection.scalar(text("SELECT count(*) FROM artifact_revisions"))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        requests = tuple(pool.map(lambda _: chat.execution.prepare(claim), range(8)))
+    assert all(value == requests[0] for value in requests)
+    receipt = chat.execution.execution_receipt(claim)
+    assert receipt.identity == chat.execution.identity
+    assert receipt.runtime_id == RUNTIME
+    assert receipt.ticket == chat_worker_ticket(requests[0], policy_sha256=policy().sha256)
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "RUNNING"
+        assert (turn.request_artifact_id, turn.request_revision_id, turn.request_sha256) == (
+            receipt.input.artifact_id,
+            receipt.input.artifact_revision_id,
+            receipt.input.sha256,
+        )
+        assert turn.dispatch_artifact_id is not None
+        assert turn.dispatch_revision_id is not None and turn.dispatch_sha256 is not None
+    with chat.engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM artifact_revisions")) == before + 2
+
+
+@pytest.mark.parametrize("change", ["boot", "model", "prompt"])
+def test_prepared_dispatch_cannot_be_reinterpreted_with_current_execution_policy(
+    chat: ChatFixture,
+    change: str,
+) -> None:
+    chat.submit(chat.create())
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    document = chat.execution.identity.model_dump(mode="json")
+    if change == "boot":
+        document["boot_id"] = "chatboot_" + "f" * 32
+    elif change == "model":
+        document["policy"]["model"] = "different-synthetic-model"
+    else:
+        document["policy"]["prompt_sha256"] = "sha256:" + "f" * 64
+    different = GeneralChatExecutionService(
+        chat.repository,
+        chat.evidence,
+        identity=ChatExecutionIdentity.model_validate(document),
+        clock=lambda: chat.now,
+    )
+    with pytest.raises(ChatError, match="EXECUTION_POLICY_MISMATCH"):
+        different.prepare(claim)
+    # Read-only audit/recovery follows historical pointers, not the new policy.
+    assert different.execution_receipt(claim).identity == chat.execution.identity
+    chat.answer(claim, request)
+
+
+def test_dispatch_publication_interruption_never_grants_unrecorded_execution(
+    chat: ChatFixture,
+    monkeypatch,
+) -> None:
+    chat.submit(chat.create())
+    claim = chat.claim()
+    publish = chat.evidence.publish
+    attempts = 0
+
+    def interrupted(**kwargs):
+        nonlocal attempts
+        pointer = publish(**kwargs)
+        if kwargs["schema_ref"] == CHAT_DISPATCH_SCHEMA:
+            attempts += 1
+            if attempts == 1:
+                raise OSError("synthetic interruption after canonical dispatch publication")
+        return pointer
+
+    monkeypatch.setattr(chat.evidence, "publish", interrupted)
+    with pytest.raises(OSError, match="synthetic interruption"):
+        chat.execution.prepare(claim)
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "CLAIMED"
+        assert turn.request_artifact_id is None and turn.dispatch_artifact_id is None
+    with chat.engine.connect() as connection:
+        before_replay = connection.scalar(text("SELECT count(*) FROM artifact_revisions"))
+    request = chat.execution.prepare(claim)
+    receipt = chat.execution.execution_receipt(claim)
+    assert receipt.ticket.request_sha256 == sha256_bytes(
+        canonical_json_bytes(request.model_dump(mode="json"))
+    )
+    with chat.engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM artifact_revisions")) == before_replay
+    assert attempts == 2
+
+
+def test_dispatch_pointer_is_db_immutable_and_dangling_revisions_fail(
+    chat: ChatFixture,
+) -> None:
+    chat.submit(chat.create())
+    claim = chat.claim()
+    chat.execution.prepare(claim)
+    with (
+        pytest.raises(IntegrityError, match="dispatch identity is immutable"),
+        chat.engine.begin() as connection,
+    ):
+        connection.execute(
+            text("UPDATE general_chat_turns SET dispatch_sha256 = :digest WHERE turn_id = :turn"),
+            {"digest": "sha256:" + "f" * 64, "turn": claim.turn_id},
+        )
+    with (
+        pytest.raises(IntegrityError, match="fk_chat_dispatch_revision"),
+        chat.repository.sessions.begin() as session,
+    ):
+        original = chat.repository.turn(session, claim.turn_id)
+        session.add(
+            GeneralChatTurnRecord(
+                turn_id="chatturn_" + uuid4().hex,
+                conversation_id=original.conversation_id,
+                user_sequence=original.user_sequence + 2,
+                expected_version=original.expected_version,
+                submission_key_sha256="sha256:" + "e" * 64,
+                submission_request_sha256=original.submission_request_sha256,
+                state="FAILED",
+                claim_id="chatclaim_" + uuid4().hex,
+                input_artifact_id=original.input_artifact_id,
+                input_revision_id=original.input_revision_id,
+                input_sha256=original.input_sha256,
+                request_artifact_id=original.request_artifact_id,
+                request_revision_id=original.request_revision_id,
+                request_sha256=original.request_sha256,
+                dispatch_artifact_id=original.dispatch_artifact_id,
+                dispatch_revision_id="rev_" + "f" * 32,
+                dispatch_sha256=original.dispatch_sha256,
+                failure_code="SYNTHETIC_FAILURE",
+                created_at=NOW,
+                completed_at=NOW,
+            )
+        )
+
+
+def test_new_running_transition_requires_dispatch_even_without_application(
+    chat: ChatFixture,
+) -> None:
+    first = chat.submit(chat.create())
+    claim = chat.claim()
+    chat.execution.prepare(claim)
+    with chat.repository.sessions.begin() as session:
+        original = chat.repository.turn(session, claim.turn_id)
+    second = chat.submit(chat.create(actor=1), actor=1)
+    # Isolated negative fixture: try the old source's transition without dispatch.
+    # This is not an operational repair or bypass used by the application.
+    with (
+        pytest.raises(IntegrityError, match="new chat execution requires pinned dispatch"),
+        chat.engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                "UPDATE general_chat_turns SET state = 'CLAIMED', claim_id = :claim "
+                "WHERE conversation_id = :conversation"
+            ),
+            {"claim": "chatclaim_" + "e" * 32, "conversation": second.conversation_id},
+        )
+        connection.execute(
+            text(
+                "UPDATE general_chat_turns SET state = 'RUNNING', "
+                "request_artifact_id = :artifact, request_revision_id = :revision, "
+                "request_sha256 = :digest WHERE conversation_id = :conversation"
+            ),
+            {
+                "artifact": original.request_artifact_id,
+                "revision": original.request_revision_id,
+                "digest": original.request_sha256,
+                "conversation": second.conversation_id,
+            },
+        )
+    assert (
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=first.conversation_id, cursor=None
+        )
+        .messages[0]
+        .state
+        == "RUNNING"
+    )
+
+
+def test_migration_downgrade_refuses_to_delete_pinned_execution_evidence(
+    chat: ChatFixture,
+) -> None:
+    from importlib import import_module
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    chat.submit(chat.create())
+    claim = chat.claim()
+    chat.execution.prepare(claim)
+    receipt = chat.execution.execution_receipt(claim)
+    migration = import_module("migrations.versions.20261008_0049_general_chat_dispatch")
+    with (
+        pytest.raises(DBAPIError, match="cannot discard pinned chat dispatch provenance"),
+        chat.engine.begin() as connection,
+        Operations.context(MigrationContext.configure(connection)),
+    ):
+        migration.downgrade()
+    assert chat.execution.execution_receipt(claim) == receipt
+    assert {"dispatch_artifact_id", "dispatch_revision_id", "dispatch_sha256"} <= {
+        column["name"]
+        for column in inspect(chat.engine).get_columns("general_chat_turns", schema="app")
+    }
+
+
+@pytest.mark.parametrize("elapsed_minutes", [1, 31])
+def test_exact_known_recovery_never_extends_lease_or_repeats_generation(
+    chat: ChatFixture,
+    chat_worker_rpc,
+    elapsed_minutes: int,
+) -> None:
+    client, native, _ = chat_worker_rpc
+    conversation = chat.submit(chat.create())
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    client.check_admission()
+    result = client.answer(request)
+    assert chat.execution.active_claim() == claim
+    receipt = chat.execution.execution_receipt(claim)
+    chat.now += timedelta(minutes=elapsed_minutes)
+    with chat.repository.sessions.begin() as session:
+        expires = chat.repository.capacity(session).expires_at
+    chat.execution.withdraw(runtime_id=RUNTIME)
+    assert recover_known_chat_turn(chat.execution, client) == claim
+    assert chat.execution.active_claim() is None
+    chat.execution.reconcile_known_result(claim, result)  # terminal exact replay
+    assert chat.execution.execution_receipt(claim) == receipt
+    view = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    assert view.messages[-1].state == "COMPLETED" and view.messages[-1].text == result.reply
+    assert len(native.calls) == 1 and expires == NOW + timedelta(minutes=30)
+    with pytest.raises(ChatError, match="NOT_READY"):
+        chat.execution.claim_next(runtime_id=RUNTIME)
+    assert recover_known_chat_turn(chat.execution, client) is None
+
+
+def test_recovery_denies_live_owner_without_changing_claim_or_result_state(
+    chat: ChatFixture,
+    chat_worker_rpc,
+) -> None:
+    client, native, _ = chat_worker_rpc
+    chat.submit(chat.create())
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    client.check_admission()
+    client.answer(request)
+    chat.now += timedelta(minutes=31)
+    chat.execution.heartbeat(runtime_id=RUNTIME)
+    with pytest.raises(ChatError, match="RECOVERY_NOT_QUIESCENT"):
+        recover_known_chat_turn(chat.execution, client)
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "RUNNING" and turn.result_sha256 is None
+        assert chat.repository.capacity(session).expires_at == NOW + timedelta(minutes=30)
+    assert len(native.calls) == 1
+
+
+@pytest.mark.parametrize("state", ["UNKNOWN", "ABSENT"])
+def test_unknown_or_absent_local_result_remains_fenced_after_claim_expiry(
+    chat: ChatFixture,
+    chat_worker_rpc,
+    state: str,
+) -> None:
+    client, native, local = chat_worker_rpc
+    chat.submit(chat.create())
+    claim = chat.claim()
+    chat.execution.prepare(claim)
+    receipt = chat.execution.execution_receipt(claim)
+    if state == "UNKNOWN":
+        assert local.reserve(receipt.ticket)
+    chat.now += timedelta(minutes=31)
+    chat.execution.withdraw(runtime_id=RUNTIME)
+    with pytest.raises(ChatError, match="RECONCILIATION_REQUIRED"):
+        recover_known_chat_turn(chat.execution, client)
+    assert client.lookup(receipt.ticket).state == state
+    assert chat.execution.active_claim() == claim and not native.calls
+    with pytest.raises(ChatError, match="RECONCILIATION_REQUIRED"):
+        chat.execution.prepare(claim)
+
+
+def test_expired_committing_recovery_reuses_pinned_hash_and_registered_output(
+    chat: ChatFixture,
+    chat_worker_rpc,
+    monkeypatch,
+) -> None:
+    client, native, _ = chat_worker_rpc
+    chat.submit(chat.create())
+    claim = chat.claim()
+    request = chat.execution.prepare(claim)
+    client.check_admission()
+    result = client.answer(request)
+    publish = chat.evidence.publish
+
+    def disconnected(**kwargs):
+        pointer = publish(**kwargs)
+        if kwargs["schema_ref"] == CHAT_RESULT_SCHEMA:
+            raise OSError("synthetic final canonical publication disconnect")
+        return pointer
+
+    monkeypatch.setattr(chat.evidence, "publish", disconnected)
+    with pytest.raises(OSError, match="synthetic final"):
+        chat.execution.complete(claim, result)
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "COMMITTING" and turn.result_sha256 is not None
+        digest = turn.result_sha256
+    monkeypatch.setattr(chat.evidence, "publish", publish)
+    with chat.engine.connect() as connection:
+        before_recovery = connection.scalar(text("SELECT count(*) FROM artifact_revisions"))
+    chat.now += timedelta(minutes=31)
+    chat.execution.withdraw(runtime_id=RUNTIME)
+    assert recover_known_chat_turn(chat.execution, client) == claim
+    with chat.repository.sessions.begin() as session:
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert turn.state == "COMPLETED" and turn.output_sha256 == digest
+    with chat.engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM artifact_revisions")) == before_recovery
+    assert len(native.calls) == 1

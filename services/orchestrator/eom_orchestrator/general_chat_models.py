@@ -152,6 +152,20 @@ class GeneralChatTurnRecord(Base):
             name="fk_chat_output_revision",
             ondelete="RESTRICT",
         ),
+        CheckConstraint(
+            "(dispatch_artifact_id IS NULL AND dispatch_revision_id IS NULL AND "
+            "dispatch_sha256 IS NULL) OR (dispatch_artifact_id IS NOT NULL AND "
+            "dispatch_revision_id IS NOT NULL AND dispatch_sha256 IS NOT NULL AND "
+            "dispatch_sha256 ~ '^sha256:[0-9a-f]{64}$' AND request_artifact_id IS NOT NULL AND "
+            "state IN ('RUNNING','COMMITTING','COMPLETED','FAILED'))",
+            name="ck_chat_dispatch_pointer",
+        ),
+        ForeignKeyConstraint(
+            ("dispatch_artifact_id", "dispatch_revision_id"),
+            ("artifact_revisions.logical_artifact_id", "artifact_revisions.revision_id"),
+            name="fk_chat_dispatch_revision",
+            ondelete="RESTRICT",
+        ),
         Index(
             "uq_chat_one_active",
             "conversation_id",
@@ -187,6 +201,9 @@ class GeneralChatTurnRecord(Base):
     failure_code: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dispatch_artifact_id: Mapped[str | None] = mapped_column(String(41))
+    dispatch_revision_id: Mapped[str | None] = mapped_column(String(36))
+    dispatch_sha256: Mapped[str | None] = mapped_column(String(71))
 
 
 class GeneralChatCapacityRecord(Base):

@@ -161,6 +161,61 @@ only one model turn. An unverified reboot/policy change stops new dispatch.
 The simpler blind synchronous socket retry can generate twice after timeout;
 another persistent scheduler duplicates the existing indexed claim owner.
 
+### Canonical dispatch provenance (after private worker integration)
+
+Orchestrator pins one small dispatch manifest per claimed turn before RUNNING or
+worker invocation. Its canonical Artifact binds the existing input member pointer,
+conversation/turn/claim and request SHA to the owner runtime, admitted worker boot
+and frozen model/native-profile/prompt revision/SHA. Policy is an inline immutable
+value, not a new independently versioned entity/registry. No input transcript is
+copied into this manifest. Existing turn input/result and public/RPC schemas stay
+unchanged; define a new dispatch1.0 JSON Schema before its implementation.
+
+Add only the manifest Artifact/revision/SHA pointer to the existing turn metadata
+using successor migration0049. Composite RESTRICT FK and all-or-none checks guard
+pointer integrity. A separate DB trigger forbids replacing a pinned dispatch and
+requires it for new RUNNING transitions/inserts. Predecessor terminal history may
+retain no dispatch; do not invent historical model evidence or rewrite it. Legacy
+non-terminal work without provenance cannot silently use a current policy.
+
+Dominant access: exact turn/claim PK lookup and bounded two-member resolution, not
+queue iteration. Existing B-tree PK/FK identities suffice; no new index, cache or
+table. Cost is O(log N) metadata plus O(input bytes) at the already-defined prepare
+boundary; dispatch bytes are constant-sized. Expected scale remains thousands of
+turns and one global dedicated active claim. No binary/transcript/model response
+is placed in a DB row, and canonical policy hashes are not cached separately.
+
+Reuse the existing idempotent Artifact commit owner and independent publication
+pool. Publish immutable input/dispatch before the exact capacity→turn transaction
+pins both pointers and changes CLAIMED→RUNNING. Interrupted publication can leave
+registered evidence, not permission to execute; replay uses the same claim/intent.
+Replay resolves stored pointers and compares the full pinned execution identity;
+no implicit latest, changed boot/model/prompt, or new identity can replace it.
+Completion/recovery resolve the original manifest and input, not current policy.
+
+Neutral protocol values and evidence validation remain below the application;
+DB/Artifact/native/Unix-socket operations stay in existing adapters. A socket policy
+SHA alone is simpler but disappears after process restart and does not establish
+historical provenance. A second runtime-policy registry or repeated transcript
+copy would add independent lifecycles without a required access pattern. No new
+dependency, queue, existing-slot change or production migration is implied by
+source/disposable acceptance of this design.
+
+Expired recovery is a separate Orchestrator use case, not a new claim or lease
+extension. Lock the capacity/turn, require the exact original runtime/turn/claim,
+an unchanged lease and withdrawn/expired owner heartbeat, and resolve original dispatch
+and input before admitting an exact known terminal worker result. Reuse the normal
+COMMITTING journal/Artifact publication/final transition with this explicit guard.
+Absent/unknown output, live owner, different claim/hash or historical terminal
+conflict never grants recovery or fresh inference. Read-only worker RESULT lookup
+uses the historical ticket policy SHA, even after a configured policy change;
+PROBE/EXECUTE still require the actual current policy and admitted boot. Completing
+the old claim releases capacity only after canonical publication. A known result
+need not wait for lease expiry, but recovery never extends it or grants another
+model invocation; unknown results stay fenced, including after expiry. New runtime
+admission remains a later, separately verified action. No automatic unknown-turn
+retry, failed-history rewrite, direct repair UPDATE or fresh identity is provided.
+
 0. Establish a supported authentication route for the actual deployment and user
    scope before inference or runtime activation. UI/persistence/private owner RPC
    verification is independent of this vendor eligibility gate; enrollment alone

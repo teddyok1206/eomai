@@ -57,13 +57,14 @@ class ChatWorkerApplication:
     def handle(self, request: ChatWorkerRequest) -> ChatWorkerReply:
         request = read_chat_worker_request(request.model_dump(mode="json"))
         try:
-            if request.policy_sha256 != self.policy.sha256:
+            historical_lookup = isinstance(request.command, ChatWorkerLookup)
+            if not historical_lookup and request.policy_sha256 != self.policy.sha256:
                 raise ChatWorkerFault(ChatWorkerError.NOT_READY)
             value = self._handle(request)
             reply = ChatWorkerReply(
                 request_id=request.request_id,
                 boot_id=self.boot_id,
-                policy_sha256=self.policy.sha256,
+                policy_sha256=request.policy_sha256 if historical_lookup else self.policy.sha256,
                 action=request.command.action,
                 status="SUCCEEDED",
                 value=value,

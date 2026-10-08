@@ -18,6 +18,8 @@ from eom_protocol.general_chat import (
     read_chat_turn_result_document,
     read_stored_chat_message,
 )
+from eom_protocol.general_chat_dispatch import ChatDispatchReceipt, read_chat_dispatch
+from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 
 from eom_orchestrator.general_chat_state import ChatError
 
@@ -103,11 +105,26 @@ def result_evidence(
     return result
 
 
+def dispatch_evidence(
+    payload: bytes, *, request: ChatTurnInput, input_pointer: ArtifactMemberPointer
+) -> ChatDispatchReceipt:
+    try:
+        receipt = read_chat_dispatch(json.loads(payload))
+        if receipt.input != input_pointer or receipt.ticket != chat_worker_ticket(
+            request, policy_sha256=receipt.identity.policy.sha256
+        ):
+            raise ValueError("dispatch does not bind exact canonical request")
+        return receipt
+    except Exception:
+        raise ChatError("GENERAL_CHAT_POINTER_INVALID") from None
+
+
 __all__ = [
     "CHAT_INPUT_SCHEMA",
     "CHAT_MESSAGE_SCHEMA",
     "CHAT_RESULT_SCHEMA",
     "chat_pointer",
+    "dispatch_evidence",
     "request_evidence",
     "require_evidence",
     "result_evidence",

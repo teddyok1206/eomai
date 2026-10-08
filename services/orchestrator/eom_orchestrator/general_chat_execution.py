@@ -18,11 +18,19 @@ from eom_protocol.general_chat import (
     read_chat_turn_input,
     read_chat_turn_result,
 )
+from eom_protocol.general_chat_dispatch import (
+    CHAT_DISPATCH_SCHEMA,
+    ChatDispatchReceipt,
+    ChatExecutionIdentity,
+    read_chat_dispatch,
+)
+from eom_protocol.general_chat_worker_messages import chat_worker_ticket
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.general_chat_artifacts import ChatEvidencePort
 from eom_orchestrator.general_chat_evidence import (
     chat_pointer,
+    dispatch_evidence,
     request_evidence,
     require_evidence,
 )
@@ -51,10 +59,12 @@ class GeneralChatExecutionService:
         repository: GeneralChatRepository,
         evidence: ChatEvidencePort,
         *,
+        identity: ChatExecutionIdentity,
         clock: Callable[[], datetime] = chat_now,
     ) -> None:
         self.repository = repository
         self.evidence = evidence
+        self.identity = ChatExecutionIdentity.model_validate(identity.model_dump(mode="json"))
         self.clock = clock
 
     def heartbeat(self, *, runtime_id: str) -> None:
@@ -138,35 +148,95 @@ class GeneralChatExecutionService:
             or turn.conversation_id != claim.conversation_id
         ):
             raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+        return capacity, turn
+
+    def _live_claim(
+        self, session: Session, claim: ChatClaim
+    ) -> tuple[GeneralChatCapacityRecord, GeneralChatTurnRecord]:
+        capacity, turn = self._locked_claim(session, claim)
         if capacity.expires_at is None or capacity.expires_at <= self.clock():
             raise ChatError("GENERAL_CHAT_RECONCILIATION_REQUIRED")
         return capacity, turn
+
+    def _recovery_claim(
+        self, session: Session, claim: ChatClaim
+    ) -> tuple[GeneralChatCapacityRecord, GeneralChatTurnRecord]:
+        capacity, turn = self._locked_claim(session, claim)
+        now = self.clock()
+        if capacity.expires_at is None:
+            raise ChatError("GENERAL_CHAT_RECONCILIATION_REQUIRED")
+        if capacity.heartbeat_at is None or now - capacity.heartbeat_at <= CHAT_HEARTBEAT_TTL:
+            raise ChatError("GENERAL_CHAT_RECOVERY_NOT_QUIESCENT")
+        return capacity, turn
+
+    def active_claim(self) -> ChatClaim | None:
+        """Exact pending identity snapshot; neither takeover nor inference permission."""
+        with self.repository.sessions.begin() as session:
+            capacity = self.repository.capacity(session, lock=True)
+            if capacity.active_turn_id is None:
+                return None
+            if capacity.runtime_id is None or capacity.claim_id is None:
+                raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+            turn = self.repository.turn(session, capacity.active_turn_id)
+            if turn.claim_id != capacity.claim_id or turn.state not in {
+                "CLAIMED",
+                "RUNNING",
+                "COMMITTING",
+            }:
+                raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+            return ChatClaim(capacity.runtime_id, turn.conversation_id, turn.turn_id, turn.claim_id)
 
     def _touch(self, session: Session, turn: GeneralChatTurnRecord) -> None:
         conversation = self.repository.conversation_record(session, turn.conversation_id, lock=True)
         self.repository.touch(conversation, now=self.clock())
 
-    def _request(self, turn: GeneralChatTurnRecord) -> ChatTurnInput:
-        pointer = chat_pointer(
+    def _execution(
+        self, turn: GeneralChatTurnRecord, claim: ChatClaim
+    ) -> tuple[ChatTurnInput, ChatDispatchReceipt]:
+        if (turn.conversation_id, turn.turn_id, turn.claim_id) != (
+            claim.conversation_id,
+            claim.turn_id,
+            claim.claim_id,
+        ):
+            raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+        request_pointer = chat_pointer(
             turn.request_artifact_id,
             turn.request_revision_id,
             turn.request_sha256,
             CHAT_INPUT_SCHEMA,
         )
-        payloads = self.evidence.read((pointer,))
-        if len(payloads) != 1 or turn.claim_id is None:
-            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
-        require_evidence(pointer, payloads[0], schema_ref=CHAT_INPUT_SCHEMA)
-        return request_evidence(
-            payloads[0],
-            conversation_id=turn.conversation_id,
-            turn_id=turn.turn_id,
-            claim_id=turn.claim_id,
+        dispatch_pointer = chat_pointer(
+            turn.dispatch_artifact_id,
+            turn.dispatch_revision_id,
+            turn.dispatch_sha256,
+            CHAT_DISPATCH_SCHEMA,
         )
+        payloads = self.evidence.read((request_pointer, dispatch_pointer))
+        if len(payloads) != 2:
+            raise ChatError("GENERAL_CHAT_POINTER_INVALID")
+        require_evidence(request_pointer, payloads[0], schema_ref=CHAT_INPUT_SCHEMA)
+        require_evidence(dispatch_pointer, payloads[1], schema_ref=CHAT_DISPATCH_SCHEMA)
+        request = request_evidence(
+            payloads[0],
+            conversation_id=claim.conversation_id,
+            turn_id=claim.turn_id,
+            claim_id=claim.claim_id,
+        )
+        receipt = dispatch_evidence(payloads[1], request=request, input_pointer=request_pointer)
+        if receipt.runtime_id != claim.runtime_id:
+            raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
+        return request, receipt
+
+    def execution_receipt(self, claim: ChatClaim) -> ChatDispatchReceipt:
+        """Read exact canonical provenance even after expiry; never grants dispatch."""
+        with self.repository.sessions.begin() as session:
+            turn = self.repository.turn(session, claim.turn_id)
+        _, receipt = self._execution(turn, claim)
+        return receipt
 
     def prepare(self, claim: ChatClaim) -> ChatTurnInput:
         with self.repository.sessions.begin() as session:
-            _, turn = self._locked_claim(session, claim)
+            _, turn = self._live_claim(session, claim)
             if turn.state == "RUNNING":
                 replay = turn
                 context = None
@@ -182,7 +252,10 @@ class GeneralChatExecutionService:
                 )
                 context = (*reversed(history), turn)
         if replay is not None:
-            return self._request(replay)
+            request, receipt = self._execution(replay, claim)
+            if receipt.identity != self.identity:
+                raise ChatError("GENERAL_CHAT_EXECUTION_POLICY_MISMATCH")
+            return request
         assert context is not None
         owner = GeneralChatConversationOwner(self.repository, self.evidence, clock=self.clock)
         projected = owner.project_messages(claim.conversation_id, context)
@@ -214,26 +287,63 @@ class GeneralChatExecutionService:
             created_at=self.clock(),
         )
         require_evidence(pointer, payload, schema_ref=CHAT_INPUT_SCHEMA)
+        dispatch = read_chat_dispatch(
+            ChatDispatchReceipt(
+                runtime_id=claim.runtime_id,
+                identity=self.identity,
+                ticket=chat_worker_ticket(request, policy_sha256=self.identity.policy.sha256),
+                input=pointer,
+            ).model_dump(mode="json")
+        )
+        dispatch_payload = canonical_json_bytes(dispatch.model_dump(mode="json"))
+        dispatch_pointer = self.evidence.publish(
+            payload=dispatch_payload,
+            schema_ref=CHAT_DISPATCH_SCHEMA,
+            intent="chat-dispatch:" + claim.claim_id,
+            created_at=self.clock(),
+        )
+        require_evidence(dispatch_pointer, dispatch_payload, schema_ref=CHAT_DISPATCH_SCHEMA)
         with self.repository.sessions.begin() as session:
-            _, turn = self._locked_claim(session, claim)
+            _, turn = self._live_claim(session, claim)
             if turn.state == "RUNNING":
-                if turn.request_sha256 != pointer.sha256:
+                if (turn.request_sha256, turn.dispatch_sha256) != (
+                    pointer.sha256,
+                    dispatch_pointer.sha256,
+                ):
                     raise ChatError("GENERAL_CHAT_REQUEST_CONFLICT")
             else:
                 require_chat_transition(turn.state, ChatTurnState.RUNNING)
                 turn.request_artifact_id = pointer.artifact_id
                 turn.request_revision_id = pointer.artifact_revision_id
                 turn.request_sha256 = pointer.sha256
+                turn.dispatch_artifact_id = dispatch_pointer.artifact_id
+                turn.dispatch_revision_id = dispatch_pointer.artifact_revision_id
+                turn.dispatch_sha256 = dispatch_pointer.sha256
                 turn.state = ChatTurnState.RUNNING.value
                 self._touch(session, turn)
         return request
 
     def complete(self, claim: ChatClaim, result: ChatTurnResult) -> None:
+        self._complete(claim, result, guard=self._live_claim)
+
+    def reconcile_known_result(self, claim: ChatClaim, result: ChatTurnResult) -> None:
+        """Finish only an exact quiescent known claim; never renew/re-execute it."""
+        self._complete(claim, result, guard=self._recovery_claim)
+
+    def _complete(
+        self,
+        claim: ChatClaim,
+        result: ChatTurnResult,
+        *,
+        guard: Callable[
+            [Session, ChatClaim], tuple[GeneralChatCapacityRecord, GeneralChatTurnRecord]
+        ],
+    ) -> None:
         with self.repository.sessions.begin() as session:
             turn = self.repository.turn(session, claim.turn_id)
             if (turn.conversation_id, turn.claim_id) != (claim.conversation_id, claim.claim_id):
                 raise ChatError("GENERAL_CHAT_CLAIM_MISMATCH")
-        request = self._request(turn)
+        request, _ = self._execution(turn, claim)
         read_chat_turn_result(result.model_dump(mode="json"), request=request)
         payload = canonical_json_bytes(result.model_dump(mode="json"))
         digest = sha256_bytes(payload)
@@ -244,7 +354,7 @@ class GeneralChatExecutionService:
                 if turn.result_sha256 != digest:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
                 return
-            _, turn = self._locked_claim(session, claim)
+            _, turn = guard(session, claim)
             if turn.state == "COMMITTING":
                 if turn.result_sha256 != digest:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
@@ -273,7 +383,7 @@ class GeneralChatExecutionService:
                 if turn.result_sha256 != digest or turn.claim_id != claim.claim_id:
                     raise ChatError("GENERAL_CHAT_RESULT_CONFLICT")
                 return
-            capacity, turn = self._locked_claim(session, claim)
+            capacity, turn = guard(session, claim)
             target = (
                 ChatTurnState.COMPLETED if result.status == "SUCCEEDED" else ChatTurnState.FAILED
             )
