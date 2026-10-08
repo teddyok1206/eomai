@@ -341,3 +341,11 @@ mutations are claimed. Actor observations contain authorized counts and own
 workflow states, not other users' conversation/operation details. Corpus counts
 and grouped own-workflow counts are aggregate queries over the existing tables;
 this candidate does not invent a new cache or index without query evidence.
+
+The first installed native canary prepared and committed its immutable V2 input,
+but returned terminal CODEX_TURN_FAILED. Its failed receipt remains unchanged;
+there was no automatic generation retry. Native outputSchema projection now omits
+array uniqueItems (in addition to conditional semantics), while the complete
+canonical JSON Schema and Pydantic uniqueness checks remain mandatory at admission.
+Native rejection diagnostics expose only closed categories, never upstream error
+bodies. A successful source/unit gate is not substituted for the next live canary.

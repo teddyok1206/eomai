@@ -12,6 +12,7 @@ from eom_orchestrator.general_chat_native import (
     DISABLED_CHAT_FEATURES,
     CodexChatSession,
     NativeChatError,
+    _native_turn_failure,
 )
 from eom_orchestrator.general_chat_stdio import (
     CHAT_WORKSPACE,
@@ -26,6 +27,17 @@ from eom_protocol.general_chat import read_chat_turn_input, read_chat_turn_resul
 PYTHON = "/srv/eom/conda/envs/eom-api/bin/python"
 MODEL = "approved-test-model"
 CWD = "/fixed/native/workspace"
+
+
+def test_native_rejection_category_never_logs_free_form_details(caplog):
+    error = _native_turn_failure(
+        {"codexErrorInfo": "badRequest", "message": "private token and prompt"}
+    )
+    assert error.code == "CODEX_TURN_FAILED"
+    assert "category=badRequest" in caplog.text
+    _native_turn_failure({"codexErrorInfo": "private_token", "message": "private token and prompt"})
+    assert "category=unclassified" in caplog.text
+    assert "private" not in caplog.text
 
 
 def request(*, suffix="1", follow_up=False):

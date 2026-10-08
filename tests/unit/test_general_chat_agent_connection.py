@@ -70,6 +70,7 @@ def test_plain_representative_snapshot_cannot_claim_internal_citations():
     assert receipt.verified_references == receipt.used_source_keys == ()
     schema = grounded_chat_output_schema(prepared)
     Draft202012Validator.check_schema(schema)
+    assert "uniqueItems" not in str(schema)
     assert Draft202012Validator(schema).is_valid(result.answer.model_dump(mode="json"))
     with pytest.raises(ValueError, match="observation hash"):
         validate_chat_citations(

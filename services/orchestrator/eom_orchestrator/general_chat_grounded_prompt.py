@@ -93,6 +93,9 @@ def grounded_chat_output_schema(request: GroundedChatTurnInput) -> dict[str, obj
     )
     section = canonical["$defs"]["Section"]
     section.pop("allOf")
+    section["properties"]["citation_keys"].pop("uniqueItems")
+    answer = canonical["$defs"]["Answer"]
+    answer["properties"]["limitations"].pop("uniqueItems")
     if request.knowledge is None:
         section["properties"]["citation_keys"]["maxItems"] = 0
         section["properties"]["citation_keys"]["items"] = {"type": "string"}
@@ -101,7 +104,7 @@ def grounded_chat_output_schema(request: GroundedChatTurnInput) -> dict[str, obj
             source.key for source in request.knowledge.sources
         ]
     return {
-        **canonical["$defs"]["Answer"],
+        **answer,
         "$defs": {"Section": section},
     }
 

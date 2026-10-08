@@ -156,6 +156,26 @@ def _diagnostic_method(value: object) -> str:
     return "invalid_notification"
 
 
+def _native_turn_failure(error: object) -> NativeChatError:
+    """Log closed native categories only; never retain free-form error bodies."""
+    known = frozenset(
+        {
+            "badRequest",
+            "unauthorized",
+            "usageLimitExceeded",
+            "rateLimitExceeded",
+            "contextWindowExceeded",
+            "sessionBudgetExceeded",
+            "serverOverloaded",
+            "internalServerError",
+        }
+    )
+    info = error.get("codexErrorInfo") if isinstance(error, dict) else None
+    reason = info if isinstance(info, str) and info in known else "unclassified"
+    LOGGER.warning("GENERAL_CHAT_NATIVE_TURN_REJECTED category=%s", reason)
+    return NativeChatError("CODEX_TURN_FAILED")
+
+
 class CodexChatSession:
     """One resident native process, one ephemeral thread per canonical input.
 
@@ -454,7 +474,7 @@ class CodexChatSession:
                         self._item(_object(item), answers, completed=False)
                     continue
                 if turn.get("status") != "completed" or turn.get("error") is not None:
-                    raise NativeChatError("CODEX_TURN_FAILED")
+                    raise _native_turn_failure(turn.get("error"))
                 items = turn.get("items")
                 if not isinstance(items, list):
                     raise NativeChatError()
@@ -484,7 +504,7 @@ class CodexChatSession:
                 # Never expose private reasoning or treat it as an assistant answer.
                 continue
             elif method == "error":
-                raise NativeChatError("CODEX_TURN_FAILED")
+                raise _native_turn_failure(params.get("error"))
             else:
                 raise NativeChatError()
 
