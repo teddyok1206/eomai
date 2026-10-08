@@ -227,8 +227,10 @@ def test_browser_assets_are_offline_and_xss_safe() -> None:
     assert "state.draft.draft_spec_sha256}`" in javascript
     assert "draft_spec_sha256.slice" not in javascript
     assert "draftSubmissionPending: false" in javascript
-    assert "if (!state.draft || state.draftSubmissionPending) return;" in javascript
-    assert 'submitButton.textContent = "제작 요청 중"' in javascript
+    assert "function syncDraftControls()" in javascript
+    assert "if (state.draftAnalysisPending || state.draftSubmissionPending" in javascript
+    assert 'state.draftSubmissionPending ? "제작 요청 중…"' in javascript
+    assert "먼저 요청 내용을 적고" in javascript
     assert 'failure.code === "API_IDEMPOTENCY_IN_PROGRESS"' in javascript
     assert "analysisBatchEta" in javascript
     assert 'id="hwpx-delivery-guide"' in html

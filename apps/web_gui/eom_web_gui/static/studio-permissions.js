@@ -31,7 +31,9 @@ export function applyPermissionVisibility(root, operator) {
   root.querySelectorAll("[data-required-permission]").forEach((element) => {
     const allowed = permissions.has(String(element.dataset.requiredPermission).toLowerCase());
     element.hidden = !allowed;
-    if ("disabled" in element) element.disabled = !allowed;
+    // Permission is not workflow readiness: granting access must not enable
+    // controls that are waiting for a draft, selected revision or response.
+    if (!allowed && "disabled" in element) element.disabled = true;
     element.setAttribute("aria-disabled", String(!allowed));
   });
 }

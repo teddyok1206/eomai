@@ -41,6 +41,7 @@ const state = {
   csrf: "",
   operator: null,
   draft: null,
+  draftAnalysisPending: false,
   draftSubmissionPending: false,
   variationSourceEntry: null,
   workflow: null,
@@ -457,6 +458,7 @@ async function initializeSession() {
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
   $$(".admin-only").forEach((element) => { element.hidden = !roles.includes("ADMIN"); });
   applyPermissionVisibility(document, state.operator);
+  syncDraftControls();
   renderOwnAccount();
 }
 
@@ -675,6 +677,10 @@ function installRequestDraft() {
   $("#draft-analyze").addEventListener("click", analyzeDraft);
   $("#draft-save").addEventListener("click", saveDraft);
   $("#draft-submit").addEventListener("click", submitDraft);
+  $("#draft-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitDraft();
+  });
   $("#past-exam-variation-clear").addEventListener("click", () => {
     state.variationSourceEntry = null;
     if (state.draft) state.draft = {...state.draft, past_exam_variation: null};
@@ -692,6 +698,16 @@ function installRequestDraft() {
   form.elements.curriculum_small_unit_key.addEventListener("change", (event) => {
     changeCurriculumSelection("SMALL", event.target.value);
   });
+}
+
+function syncDraftControls() {
+  const allowed = hasPermission(state.operator, "workflow:start");
+  const busy = state.draftAnalysisPending || state.draftSubmissionPending;
+  $("#draft-analyze").disabled = !allowed || busy;
+  $("#draft-analyze").textContent = state.draftAnalysisPending ? "요청 분석 중…" : "요청 분석";
+  $("#draft-save").disabled = !allowed || busy || !state.draft;
+  $("#draft-submit").disabled = !allowed || busy || !state.draft;
+  $("#draft-submit").textContent = state.draftSubmissionPending ? "제작 요청 중…" : "문항 제작 시작";
 }
 
 function syncMaterialPanelCount() {
@@ -712,24 +728,35 @@ function syncMaterialPanelCount() {
 }
 
 async function analyzeDraft() {
+  if (state.draftAnalysisPending || state.draftSubmissionPending
+    || !hasPermission(state.operator, "workflow:start")) return;
   const message = $("#draft-message");
+  const text = normalizeAuthoringGuidance($("#request-text").value);
+  if (text.length < 10 || text.length > 2000) {
+    showMessage(message, "만들고 싶은 문항의 내용을 10~2,000자로 적어주세요.", "error");
+    $("#request-text").focus();
+    return;
+  }
   const pendingCurriculumSelection = {...state.curriculumSelection};
+  state.draftAnalysisPending = true;
+  syncDraftControls();
   showMessage(message, "요청을 구조화하고 있습니다.");
   try {
     state.variationSourceEntry = null;
     const draft = await api("/request-drafts", {
       method: "POST",
       mutation: true,
-      body: {original_request_text: $("#request-text").value},
+      body: {original_request_text: text},
     });
     state.draft = draft;
     fillDraft(draft, pendingCurriculumSelection);
     setStatus($("#draft-state"), "success", "✓", "검토 가능");
     showMessage(message, "문항 요청 초안을 검토하세요. 참고 자료 묶음 없이 일반 지식 모드로 바로 제출할 수 있습니다.", "success");
-    $("#draft-save").disabled = false;
-    $("#draft-submit").disabled = false;
   } catch (failure) {
     showMessage(message, `요청 분석 실패: ${failure.message}`, "error");
+  } finally {
+    state.draftAnalysisPending = false;
+    syncDraftControls();
   }
 }
 
@@ -872,7 +899,7 @@ async function saveDraft() {
     });
     fillDraft(state.draft);
     showMessage($("#draft-message"), "문항 요청 초안이 저장되었습니다.", "success");
-    $("#draft-submit").disabled = state.draftSubmissionPending;
+    syncDraftControls();
     return true;
   } catch (failure) {
     showMessage($("#draft-message"), `초안 저장 실패: ${failure.message}`, "error");
@@ -881,13 +908,15 @@ async function saveDraft() {
 }
 
 async function submitDraft() {
-  if (!state.draft || state.draftSubmissionPending) return;
+  if (!state.draft) {
+    showMessage($("#draft-message"), "먼저 요청 내용을 적고 ‘요청 분석’을 눌러 초안을 준비하세요.");
+    $("#request-text").focus();
+    return;
+  }
+  if (state.draftAnalysisPending || state.draftSubmissionPending
+    || !hasPermission(state.operator, "workflow:start")) return;
   state.draftSubmissionPending = true;
-  const submitButton = $("#draft-submit");
-  const saveButton = $("#draft-save");
-  submitButton.disabled = true;
-  saveButton.disabled = true;
-  submitButton.textContent = "제작 요청 중";
+  syncDraftControls();
   try {
     if (!(await saveDraft())) return;
     const key = `studio:${state.draft.request_draft_id}:${state.draft.draft_spec_sha256}`;
@@ -910,9 +939,7 @@ async function submitDraft() {
     }
   } finally {
     state.draftSubmissionPending = false;
-    submitButton.textContent = "문항 제작 시작";
-    submitButton.disabled = !state.draft;
-    saveButton.disabled = !state.draft;
+    syncDraftControls();
   }
 }
 
