@@ -440,3 +440,24 @@ deployment and migration, and actual first answer/follow-up/two-user acceptance.
 The official shared-deployment authentication question remains unresolved rather
 than waived; it does not prevent the source/disposable work above. The goal is
 not complete, and source acceptance does not imply an always-ready live slot.
+
+### Pinned dispatch/recovery package and runtime distinction
+
+Commit `8e8f70efb4910d6c2a1cceefcecae2b9b1ab7e9b` was built from a clean tree.
+Actual three-wheel RECORD/canonical resource inspection: **PASS**. Candidate:
+`/tmp/eom-api-build/8e8f70efb4910d6c2a1cceefcecae2b9b1ab7e9b.J2mcwf/dist`.
+Isolated `python -I`, importing only those wheels (no repository path), verified
+offline dispatch schema references, real local worker RPC and historical-ticket
+known-result recovery after synthetic policy/boot change: **PASS**. The owner was
+synthetic for this package-only probe; actual PostgreSQL invariants are covered
+by the separate42-case suite, not claimed from this probe. Native/GPU calls: **0**.
+The probe's own bounded temporary handoff was automatically removed; canonical
+production Artifacts/history were untouched.
+
+Fresh read-only systemd inspection found both `eom-general-chat.service` and
+`eom-general-chat-worker.service` **not-found/inactive**, confirming no resident
+deployment. Dedicated worker UID981/GID978 exists; owner account `eom-general-chat`
+does not. The tmux4 pane is still `general-chat`; no enrollment was restarted and
+credential contents were not read. Thus the next work remains service composition
+and protected installation, not declaring chat live or requesting another goal
+card resumption. Goal tool status is ACTIVE.
