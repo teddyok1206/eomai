@@ -2,7 +2,7 @@
 
 Status: `PREACTIVATION_OS_BOUNDARIES_VERIFIED`; overall feature `IN_PROGRESS`.
 Runtime deployment, dedicated resident capacity and model answers: `NOT_ACTIVATED`.
-Current activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (reconfirmed 2026-10-08 UTC).
+Current activation gate: `DEDICATED_CODEX_ENROLLMENT_PENDING` (2026-10-08 UTC).
 Latest user decision: `EXTERNAL_LLM_API_PROHIBITION=RETAINED`; the proposed
 dedicated-chat SIWC/Responses exception is `NOT_AUTHORIZED`.
 Current user-authorized GUI scope: `ALL_AUTHENTICATED_USERS`; the latest explicit
@@ -719,3 +719,13 @@ documentation-only scope decision: no source behavior, service, DB, enrollment,
 model/GPU call or slots01..06 change; no test rerun or live PASS is claimed.
 Supported constrained runtime activation remains unresolved. See ADR0212's
 user-decision section for the official sources and retained boundaries.
+
+### Latest scope clarification — local Codex chat interface
+
+The user explicitly clarified that the feature is a Codex slot with a chat-like
+interface, not a separate ChatGPT service. Continue the local isolated worker
+route; no SIWC/Responses/API-key integration or local-model substitution.
+All-authenticated-user access, per-user history and independent capacity remain.
+The earlier hosted-product interpretation is superseded for implementation scope;
+it is not an operational or vendor-eligibility acceptance. Actual enrollment,
+installed release and live answer/browser gates remain outstanding.

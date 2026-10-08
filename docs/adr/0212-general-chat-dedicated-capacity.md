@@ -1,7 +1,7 @@
 # ADR0212: General chat with dedicated, resident capacity
 
 Status: implementation in progress, 2026-10-07 UTC. No runtime activation yet.
-Activation gate: `AUTH_ROUTE_REVIEW_REQUIRED` (reconfirmed 2026-10-08 UTC).
+Activation gate: `DEDICATED_CODEX_ENROLLMENT_PENDING` (2026-10-08 UTC).
 External LLM APIs remain prohibited by the latest explicit user decision.
 Current user-authorized access scope: **all authenticated EOM users**. The later
 instruction `그렇게 하지말고 그냥 다 쓸 수 있게 해` supersedes the interim
@@ -24,6 +24,30 @@ increase their concurrency ceiling or silently fall back to their accounts.
 An idle resident service makes no inference calls. READY means actual admitted
 runtime availability, not an unconditional green UI badge. Runtime failure must
 remain visible. A resident slot is not a perpetual generation/goal loop.
+
+### Latest clarification: a Codex slot with a chat interface
+
+The user clarified `그냥 codex slot ... 채팅 느낌만 나게` on 2026-10-08.
+Implement an internal front end to the local, isolated Codex worker, like the
+existing execution slots, not a separate hosted ChatGPT inference product.
+Keep the `일반 → ChatGPT` navigation, all authenticated operators and private
+histories. The earlier auth-route discussion does not require an external API
+exception for this clarified implementation. No SIWC registration, Responses
+client, API-key provider, alternative model or credential copying is authorized.
+This records product scope, not a new claim about vendor account eligibility.
+
+Use the existing owner/worker composition and CLI-managed login. Enrollment is
+interactive in EOM:4 general-chat under eom-cdx-chat, never from an auth cache
+belonging to root or slots01..06. Activation must still verify real worker
+capability, dedicated role, installed wheel provenance and actual conversations.
+
+Deployment uses the existing API/Web release tooling and three already tested
+additive chat migrations. A fixed-target chat installer only stages the two
+source-pinned units plus non-secret model/source config after installed imports,
+DB role and enrolled worker readiness. It does not migrate, install wheels,
+copy auth or borrow slots. Stop the two new services to withdraw chat execution;
+retain accepted transcripts and the additive schema. Existing application
+runtime releases use their existing rollback records, not ad-hoc source imports.
 
 The API owns authenticated commands and queries; an Orchestrator application
 port owns execution, validation and canonical transcript Artifacts. Workers see
