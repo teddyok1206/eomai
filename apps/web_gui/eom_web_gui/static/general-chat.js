@@ -328,7 +328,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
         event.preventDefault(); $("chat-form").requestSubmit();
       }
     });
-    $("chat-new").addEventListener("click", () => {
+    $("chat-new").addEventListener("click", async () => {
       if (sending) return;
       drafts.set(selected?.conversation_id || "new", $("chat-input").value);
       stopTimer(); epoch += 1; selected = null;
@@ -337,6 +337,9 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
       $("chat-input").value = drafts.get("new") || "";
       $("chat-error").hidden = true;
       renderHistory(); render(); $("chat-input").focus();
+      // The new selection epoch rejects an in-flight initial slot/history read.
+      // Reuse the normal read-only refresh to restore admission for this epoch.
+      await open();
     });
     $("chat-refresh").addEventListener("click", open);
     $("chat-more-conversations").addEventListener("click", async () => {

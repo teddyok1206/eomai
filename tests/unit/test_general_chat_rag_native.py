@@ -332,7 +332,7 @@ def test_native_forged_answer_source_fails_without_inference_replay():
     assert channel.closed
 
 
-def test_invalid_native_tool_arguments_become_a_known_failure_without_dispatch_or_retry():
+def test_invalid_native_tool_arguments_become_a_known_failure_without_dispatch_or_retry(caplog):
     forged = {**RAG_ARGUMENTS, "actor_id": "operator_" + "f" * 32}
     native, channel = session(Channel(tool_events("retrieve_eom_knowledge", forged, "rag1")))
     port = Port()
@@ -340,6 +340,8 @@ def test_invalid_native_tool_arguments_become_a_known_failure_without_dispatch_o
     assert completed.status == "FAILED" and completed.failure_code == "CODEX_PROTOCOL_INVALID"
     assert not completed.reply and not completed.tool_records and not port.catalog.rag_calls
     assert channel.closed
+    assert "stage=ARGUMENTS category=schema validator=additionalProperties" in caplog.text
+    assert "operator_" + "f" * 32 not in caplog.text
 
 
 def test_v4_worker_envelope_and_policy_do_not_reinterpret_v3_bytes():

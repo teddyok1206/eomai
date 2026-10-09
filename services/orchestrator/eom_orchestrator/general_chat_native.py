@@ -217,6 +217,7 @@ class CodexChatSession:
         self.cwd = cwd
         self.ready = False
         self._diagnostic_method = "none"
+        self._diagnostic_stage = "NONE"
         self._next_id = 0
         self._pending: deque[dict[str, object]] = deque()
         self._bytes = 0
@@ -410,6 +411,7 @@ class CodexChatSession:
         self, request: NativeChatInput, *, tools: ChatToolPort | ChatRagToolPort | None = None
     ) -> NativeChatResult:
         self._tools = None
+        self._diagnostic_stage = "NONE"
         self._tool_items.clear()
         self._answered_tools.clear()
         self._server_request_ids.clear()
@@ -486,7 +488,10 @@ class CodexChatSession:
         # Protocol method names are bounded metadata, not frame contents. Never
         # export model text, tool arguments, account data or raw error bodies.
         LOGGER.warning(
-            "GENERAL_CHAT_NATIVE_FAILURE method=%s code=%s", self._diagnostic_method, failure
+            "GENERAL_CHAT_NATIVE_FAILURE method=%s code=%s stage=%s",
+            self._diagnostic_method,
+            failure,
+            self._diagnostic_stage,
         )
         self.close()
         return self._result(request, reply="", failure=failure)
@@ -563,24 +568,61 @@ class CodexChatSession:
             if params.get("turnId") != turn_id:
                 raise NativeChatError()
             if method == "item/tool/call":
+                self._diagnostic_stage = "TOOL_NAMESPACE"
                 if self._tools is None or params.get("namespace") is not None:
                     raise NativeChatError("CHAT_ISOLATION_NOT_READY")
+                self._diagnostic_stage = "TOOL_IDENTITY"
                 call_id = _handle(params.get("callId"))
                 tool = _handle(params.get("tool"))
+                self._diagnostic_stage = "TOOL_REQUEST"
                 request_id = event.get("id")
                 if type(request_id) not in {int, str} or request_id in self._server_request_ids:
                     raise NativeChatError()
                 if isinstance(request_id, str):
                     _handle(request_id)
+                self._diagnostic_stage = "TOOL_MATCH"
                 if call_id in self._answered_tools or self._tool_items.get(call_id) != (
                     tool,
                     params.get("arguments"),
                 ):
                     raise NativeChatError()
                 self._server_request_ids.add(cast(str | int, request_id))
+                self._diagnostic_stage = "TOOL_DISPATCH"
                 try:
                     returned = self._tools.call(tool, params.get("arguments"))
-                except Exception:
+                except Exception as error:
+                    # Closed metadata locates a failed boundary without retaining
+                    # arguments, source text, native frames or exception bodies.
+                    stage = getattr(self._tools, "diagnostic_stage", "NONE")
+                    if not isinstance(stage, str) or stage not in {
+                        "NONE",
+                        "ARGUMENTS",
+                        "BROKER",
+                        "REPLY",
+                        "TRANSCRIPT",
+                        "DONE",
+                    }:
+                        stage = "NONE"
+                    validator = getattr(error, "validator", "none")
+                    if not isinstance(validator, str) or validator not in {
+                        "type",
+                        "required",
+                        "additionalProperties",
+                        "pattern",
+                        "enum",
+                        "uniqueItems",
+                        "minItems",
+                        "maxItems",
+                        "minLength",
+                        "maxLength",
+                    }:
+                        validator = "other"
+                    LOGGER.warning(
+                        "GENERAL_CHAT_NATIVE_TOOL_FAILURE stage=%s category=%s validator=%s",
+                        stage,
+                        "schema" if isinstance(error, SchemaError) else "invalid",
+                        validator,
+                    )
                     self.channel.send(
                         {
                             "id": request_id,
@@ -588,6 +630,7 @@ class CodexChatSession:
                         }
                     )
                     raise NativeChatError("CODEX_PROTOCOL_INVALID") from None
+                self._diagnostic_stage = "TOOL_REPLY"
                 self.channel.send(
                     {
                         "id": request_id,
@@ -598,6 +641,7 @@ class CodexChatSession:
                     }
                 )
                 self._answered_tools.add(call_id)
+                self._diagnostic_stage = "TOOL_DONE"
                 continue
             if method in {"item/started", "item/completed"}:
                 self._item(

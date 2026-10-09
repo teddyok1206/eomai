@@ -130,8 +130,10 @@ class NativeRagChatTools:
             rag_context=request.rag_knowledge,
         )
         self.records: list[ChatToolReplyV2] = []
+        self.diagnostic_stage = "NONE"
 
     def call(self, tool: str, arguments: object) -> str:
+        self.diagnostic_stage = "ARGUMENTS"
         if len(self.records) >= self.max_calls:
             raise ValueError("native tool budget exceeded")
         command: ChatSearchCommand | ChatReadCommand | ChatRagCommand
@@ -147,7 +149,9 @@ class NativeRagChatTools:
             command = ChatRagCommand(arguments=read_rag("Arguments", arguments, ChatRagArguments))
         else:
             raise ValueError("unknown native read tool")
+        self.diagnostic_stage = "BROKER"
         returned = self.port.call(command.model_dump(mode="json"))
+        self.diagnostic_stage = "REPLY"
         reply = read_rag("Reply", returned.model_dump(mode="json"), ChatToolReplyV2)
         ticket = reply.record.request.ticket
         if (ticket.conversation_id, ticket.turn_id, ticket.claim_id, ticket.request_sha256) != (
@@ -157,8 +161,10 @@ class NativeRagChatTools:
             sha256_bytes(canonical_json_bytes(self.request.model_dump(mode="json"))),
         ) or reply.record.request.command != command:
             raise ValueError("native reply belongs to another request")
+        self.diagnostic_stage = "TRANSCRIPT"
         self.transcript.observe(reply.record)
         self.records.append(reply)
+        self.diagnostic_stage = "DONE"
         return canonical_json_bytes(reply.record.outcome.model_dump(mode="json")).decode("utf-8")
 
     def result(self, *, reply: str, failure: str | None) -> RagChatTurnResult:

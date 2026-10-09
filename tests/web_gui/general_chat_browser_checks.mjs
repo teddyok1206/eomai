@@ -44,6 +44,34 @@ const createDocument = () => {
   };
 };
 
+// New conversation invalidates selection responses, not runtime readiness.
+// Refetch under the new epoch so an initial late slot reply cannot strand Send.
+{
+  const document = createDocument();
+  const slotReplies = [];
+  const calls = [];
+  const api = async path => {
+    calls.push(path);
+    if (path.endsWith("/slot")) return await new Promise(resolve => slotReplies.push(resolve));
+    return {values: summaries, next_cursor: null};
+  };
+  const controller = createGeneralChat({document, api, errorMessage: error => error.message});
+  controller.install(); controller.setOwner("owner-one");
+  const opening = controller.open();
+  document.getElementById("chat-input").value = "새 대화 초안";
+  const creating = document.getElementById("chat-new").fire("click");
+  assert.equal(slotReplies.length, 2);
+  slotReplies[1]({state: "READY"}); await creating; await tick();
+  assert.equal(document.getElementById("chat-send").disabled, false);
+  assert.equal(document.getElementById("chat-input").value, "새 대화 초안");
+  assert.equal(document.getElementById("chat-conversations").children.length, 2);
+  slotReplies[0]({state: "UNAVAILABLE", unavailable_reason: "obsolete"});
+  await opening; await tick();
+  assert.equal(document.getElementById("chat-send").disabled, false);
+  assert.equal(calls.some(path => /\/grounded-turns$|\/turns$/.test(path)), false);
+  controller.close();
+}
+
 // An uncertain HTTP result replays the same intent, never another model call key.
 {
   const document = createDocument();
