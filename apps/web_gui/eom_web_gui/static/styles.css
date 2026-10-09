@@ -85,6 +85,8 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .global-search input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--eom-text); }
 .global-search:focus-within { border-color: var(--eom-blue-300); background: white; box-shadow: 0 0 0 3px rgba(79, 70, 229, .11); }
 .global-search input:focus { border: 0 !important; box-shadow: none; }
+.topbar .command-bar, .topbar .global-search, .topbar .global-search input { min-width: 0; }
+.topbar-status, .topbar button { flex-shrink: 0; white-space: nowrap; }
 .guide-mode-toggle { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; white-space: nowrap; }
 .guide-mode-switch { width: 26px; height: 16px; padding: 2px; border-radius: 8px; background: #d2d2d7; transition: background-color .16s ease; }
 .guide-mode-switch::after { content: ""; display: block; width: 12px; height: 12px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); transition: transform .16s ease; }

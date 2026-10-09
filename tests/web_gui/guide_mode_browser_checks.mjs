@@ -41,6 +41,9 @@ try {
   const before = await box();
   const controlMarkup = await page.locator("#draft-analyze").evaluate(node => node.outerHTML);
   assert.equal(await toggle.getAttribute("aria-checked"), "false");
+  for (const id of ["global-load", "logout"]){
+    assert.equal(await page.locator('#'+id).evaluate(node=>getComputedStyle(node).whiteSpace),"nowrap");
+  }
   await page.locator("#draft-analyze").hover();
   await page.locator("#request-text").focus();
   assert.equal(await popup.isVisible(), false);
