@@ -4,6 +4,10 @@ As of 2026-10-09 06:59 UTC. **TECHNICAL_ACCEPTANCE=PASS**.
 This is bounded actual HTTPS/native/canonical evidence, not educational-quality
 approval or proof of complete textbook/corpus coverage.
 
+Later 2026-10-09 incident/repair:
+[V4 native argument rejection and actual follow-up acceptance](GENERAL_CHAT_ARGUMENT_REJECTION_ACCEPTANCE_2026-10-09.md).
+The release set below remains the original 06:59 UTC historical acceptance.
+
 ## Installed compatible release set
 
 | Component | Installed source | Verification |
