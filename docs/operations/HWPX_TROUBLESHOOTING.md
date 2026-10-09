@@ -52,7 +52,7 @@ writers now use the full original shape-coordinate extent, and independent Manag
 rejects zero-area or inconsistent clipping/display geometry. PNG bytes, original dimensions,
 display size, scaling, Item content, tables and panel labels are unchanged.
 
-This is a **source candidate, not a verified live deployment**. The repository non-live HWPX gate
+The initial verification below was **source-only, before the live release**. The repository non-live HWPX gate
 passed **217 tests**; **1 privileged ownership test** was skipped because its opt-in was not set.
 A local diagnostic re-render of the exact authenticated Item content and PNG, using the reviewed
 handoff archive/profile with explicitly synthetic fixture identities, passed Manager acceptance.
@@ -65,3 +65,31 @@ Do not rewrite an existing accepted file, change its recorded hash/status, regen
 or alter image approval to repair delivery geometry. After the compatible Builder/Manager release
 is deployed, submit a new supported delivery build for the same immutable Item Revision, with a
 new delivery identity. Preserve the previous build and its evidence as historical bytes.
+
+### Live Release And Fresh Delivery — 2026-10-09 18:12 UTC
+
+The compatible Builder/Contracts and platform-owned Manager/Contracts release is installed from
+`fe54e5aa1c0cc9f3a473c1f9cd91d50139728231`. The release used a clean, pinned worktree;
+no unrelated model-selection source, API code, Pack activation or migration was deployed. API build
+identity remains `2bf5dd75b1356384f5748d4c396c0af4926816ee`, with migration `20261008_0049`.
+Component provenance is recorded separately under
+`/var/lib/eom-hwpx/deployments/fe54e5aa1c0cc9f3a473c1f9cd91d50139728231.component-set.json`.
+Installed wheel RECORD/source verification passed, the eight prior runtime consumers restarted
+successfully, and HWPX capability is `READY`. The final focused source gate passed **252 tests**;
+**1 privileged ownership test** remained explicitly opt-in and skipped.
+
+A normal authenticated application command created
+`hwpxbuild_253ff021c7fa4e9f8cb67b0a4021b4ae` for the unchanged
+`itemrev_08794726c0bf4c62b1226e4c96b8be84`. Build and independent Manager validation passed.
+Its committed output is `artifact_134f6a70a2aa40e58eee20a47d522148` /
+`rev_642837bb1b9048169bfb5ad182c4e66f`, with SHA-256
+`99b1e27c5eb745251d6b2ce3385cde7273c7661a36df8852a8c445d814fea2c8`.
+The API latest-build resolver and the actual HTTPS Studio BFF both return this new build;
+authenticated downloads match the committed SHA. The package contains the original PNG, an
+internal embedded image relationship, full clipping rectangle `(0, 0, 22400, 14000)`, unchanged
+display size `12600 × 7875`, and 12 native equations. No external image filesystem path is used.
+
+The Item, source Artifact Revision/hash, PNG, pending human approval and historical build are
+unchanged. This delivery neither regenerates nor approves the Item. No model/GPU generation ran.
+`MANUAL_HANCOM_RENDER_REVIEW=NOT_RECORDED` remains: download the new build and open it in Hancom
+for the visual check; the previous downloaded file is intentionally not rewritten.
