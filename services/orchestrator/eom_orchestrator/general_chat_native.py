@@ -50,7 +50,9 @@ from eom_orchestrator.general_chat_grounded_prompt import (
     grounded_chat_text,
 )
 from eom_orchestrator.general_chat_rag_native import (
+    NATIVE_RAG_ARGUMENT_REJECTION,
     RAG_CHAT_INSTRUCTIONS,
+    NativeRagArgumentsRejected,
     NativeRagChatTools,
     native_rag_tools,
     rag_chat_output_schema,
@@ -590,6 +592,12 @@ class CodexChatSession:
                 self._diagnostic_stage = "TOOL_DISPATCH"
                 try:
                     returned = self._tools.call(tool, params.get("arguments"))
+                except NativeRagArgumentsRejected:
+                    # The matched V4 call had invalid input, not a corrupted
+                    # native session. Count the attempt and continue this turn.
+                    returned = NATIVE_RAG_ARGUMENT_REJECTION
+                    success = False
+                    LOGGER.warning("GENERAL_CHAT_NATIVE_TOOL_ARGUMENTS_REJECTED")
                 except Exception as error:
                     # Closed metadata locates a failed boundary without retaining
                     # arguments, source text, native frames or exception bodies.
@@ -630,13 +638,15 @@ class CodexChatSession:
                         }
                     )
                     raise NativeChatError("CODEX_PROTOCOL_INVALID") from None
+                else:
+                    success = self._tools.records[-1].record.outcome.status != "FAILED"
                 self._diagnostic_stage = "TOOL_REPLY"
                 self.channel.send(
                     {
                         "id": request_id,
                         "result": {
                             "contentItems": [{"type": "inputText", "text": returned}],
-                            "success": self._tools.records[-1].record.outcome.status != "FAILED",
+                            "success": success,
                         },
                     }
                 )

@@ -30,6 +30,7 @@ from eom_protocol.general_chat_tools import (
     ChatSearchCommand,
 )
 from jsonschema import ValidationError as SchemaError
+from pydantic import ValidationError as ModelError
 
 from eom_orchestrator.general_chat_agent_native import native_chat_tools
 from eom_orchestrator.general_chat_grounded_prompt import (
@@ -58,7 +59,10 @@ RAG_CHAT_INSTRUCTIONS = GROUNDED_CHAT_INSTRUCTIONS.replace(
     "Read only exact Item references offered in this turn. Item TOPIC searches "
     "use short terms; RECENT accepts ALL or GENERATED; EXAM needs exact year, "
     "month, school level, grade and subject_key. Do not invent dates. Set unused "
-    "exam fields to null and unused terms to []. Successful Item reads define "
+    "exam fields to null and unused terms to []. If a tool rejects invalid arguments, "
+    "no read occurred. Correct them within the same seven-call budget or answer "
+    "from the already prepared evidence; do not claim the rejected read succeeded. "
+    "Successful Item reads define "
     "the available S keys; successful knowledge retrievals define R1-R3. R keys "
     "are append-only within the same pinned scope. A successful retrieval already "
     "provides the analysis to answer from: do not search again merely to reread "
@@ -74,6 +78,19 @@ RAG_CHAT_INSTRUCTIONS = GROUNDED_CHAT_INSTRUCTIONS.replace(
     "quote an original page when only analysis text was read. If rag_scope is "
     "null, explain retrieval is unavailable rather than bypassing it.",
 )
+
+NATIVE_RAG_ARGUMENT_REJECTION = (
+    "The arguments did not satisfy this tool's input schema or field constraints. "
+    "No EOM read occurred and no new evidence was added. Recheck the tool definition: "
+    "use unique short concept terms, exact enum names and only allowed fields; "
+    "keep unused search fields null and use the fields required by the selected search kind. "
+    "Correct the arguments within the existing call budget, or answer using prepared evidence "
+    "and state any remaining limitation. Do not claim this read succeeded."
+)
+
+
+class NativeRagArgumentsRejected(ValueError):
+    """Local input rejection only; not a broker, identity or transcript failure."""
 
 
 def native_rag_tools() -> list[dict[str, object]]:
@@ -150,18 +167,25 @@ class NativeRagChatTools:
         if len(self.records) >= self.max_calls:
             raise ValueError("native tool budget exceeded")
         command: ChatSearchCommand | ChatReadCommand | ChatRagCommand
-        if tool == "search_eom_items":
-            command = ChatSearchCommand(
-                arguments=read_agent("SearchArguments", arguments, ChatSearchArguments)
-            )
-        elif tool == "read_eom_items":
-            command = ChatReadCommand(
-                arguments=read_agent("ReadArguments", arguments, ChatReadArguments)
-            )
-        elif tool == "retrieve_eom_knowledge":
-            command = ChatRagCommand(arguments=read_rag("Arguments", arguments, ChatRagArguments))
-        else:
-            raise ValueError("unknown native read tool")
+        try:
+            if tool == "search_eom_items":
+                command = ChatSearchCommand(
+                    arguments=read_agent("SearchArguments", arguments, ChatSearchArguments)
+                )
+            elif tool == "read_eom_items":
+                command = ChatReadCommand(
+                    arguments=read_agent("ReadArguments", arguments, ChatReadArguments)
+                )
+            elif tool == "retrieve_eom_knowledge":
+                command = ChatRagCommand(
+                    arguments=read_rag("Arguments", arguments, ChatRagArguments)
+                )
+            else:
+                raise ValueError("unknown native read tool")
+        except (SchemaError, ModelError):
+            # Do not carry rejected inputs or validator exception bodies into
+            # transport feedback. Anything after parsing remains fail-closed.
+            raise NativeRagArgumentsRejected("native RAG arguments rejected") from None
         self.diagnostic_stage = "BROKER"
         returned = self.port.call(command.model_dump(mode="json"))
         self.diagnostic_stage = "REPLY"

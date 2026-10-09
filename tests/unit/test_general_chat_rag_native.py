@@ -13,6 +13,7 @@ from eom_orchestrator.general_chat_native_worker import source_chat_worker_polic
 from eom_orchestrator.general_chat_rag_broker import ChatRagToolBroker, rag_tool_knowledge
 from eom_orchestrator.general_chat_rag_native import (
     RAG_CHAT_INSTRUCTIONS,
+    NativeRagArgumentsRejected,
     NativeRagChatTools,
     native_rag_tools,
     rag_chat_output_schema,
@@ -71,7 +72,7 @@ def test_native_prompt_makes_canonical_query_format_and_evidence_reuse_explicit(
 def test_invalid_query_terms_still_fail_before_catalog_dispatch(term):
     port = Port()
     native = NativeRagChatTools(port.prepared, port)
-    with pytest.raises(SchemaError):
+    with pytest.raises(NativeRagArgumentsRejected):
         native.call("retrieve_eom_knowledge", {"terms": [term], "source_classes": ["TEXTBOOK"]})
     assert not port.catalog.rag_calls and not native.records
 
@@ -220,6 +221,140 @@ def test_prepared_followup_reuses_exact_sources_without_new_tool_calls():
     assert not port.catalog.rag_calls and not port.evidence.payloads
 
 
+def rejected_tool_events(tool, values, call_id):
+    events = tool_events(tool, values, call_id)
+    events[-1]["params"]["item"]["status"] = "failed"
+    events[-1]["params"]["item"]["success"] = False
+    return events
+
+
+@pytest.mark.parametrize(
+    "tool,values",
+    [
+        (
+            "search_eom_items",
+            {
+                **arguments(kind="TOPIC", terms=["에너지"]).model_dump(mode="json"),
+                "administration_year": 2025,
+            },
+        ),
+        ("retrieve_eom_knowledge", {"terms": ["전자기 에너지"], "source_classes": ["TEXTBOOK"]}),
+        ("retrieve_eom_knowledge", {"terms": ["에너지", "에너지"], "source_classes": ["TEXTBOOK"]}),
+        (
+            "read_eom_items",
+            {
+                "references": [
+                    read_command().arguments.references[0].model_dump(mode="json"),
+                    {
+                        **read_command().arguments.references[0].model_dump(mode="json"),
+                        "manifest_sha256": "sha256:" + "9" * 64,
+                    },
+                ]
+            },
+        ),
+    ],
+)
+def test_rejected_arguments_reuse_prepared_sources_in_same_native_turn(tool, values, caplog):
+    prepared = request(knowledge=context())
+    port = Port(prepared)
+    events = [
+        *rejected_tool_events(tool, values, "rejected-1"),
+        event("item/completed", item=answer_item(text=answer())),
+        final_event(),
+    ]
+    native, channel = session(Channel(events))
+    completed = native.answer(prepared, tools=port)
+    assert completed.status == "SUCCEEDED" and not completed.tool_records
+    assert not port.catalog.calls and not port.catalog.rag_calls and not port.evidence.payloads
+    responses = [value for value in channel.sent if "result" in value]
+    assert len(responses) == 1 and responses[0]["result"]["success"] is False
+    assert responses[0]["result"]["contentItems"][0]["type"] == "inputText"
+    assert "No EOM read occurred" in responses[0]["result"]["contentItems"][0]["text"]
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    assert channel.sent[-1]["method"] == "thread/unsubscribe" and not channel.closed
+    assert "GENERAL_CHAT_NATIVE_TOOL_ARGUMENTS_REJECTED" in caplog.text
+    assert "전자기 에너지" not in caplog.text and "2025" not in caplog.text
+
+
+def test_corrected_arguments_make_only_one_canonical_broker_record():
+    port = Port()
+    events = [
+        *rejected_tool_events(
+            "retrieve_eom_knowledge", {**RAG_ARGUMENTS, "path": "private"}, "bad-1"
+        ),
+        *tool_events("retrieve_eom_knowledge", RAG_ARGUMENTS, "good-1"),
+        event("item/completed", item=answer_item(text=answer())),
+        final_event(),
+    ]
+    native, channel = session(Channel(events))
+    completed = native.answer(port.prepared, tools=port)
+    assert completed.status == "SUCCEEDED" and len(completed.tool_records) == 1
+    assert len(port.catalog.rag_calls) == 1 and port.broker.transcript.sequence == 1
+    assert [value["result"]["success"] for value in channel.sent if "result" in value] == [
+        False,
+        True,
+    ]
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+    resolved = rag_tool_knowledge(port.prepared, completed, port.evidence)
+    assert resolved.rag == context()
+
+
+@pytest.mark.parametrize("count", [7, 8])
+def test_rejected_arguments_count_against_existing_native_attempt_limit(count):
+    prepared = request(knowledge=context())
+    port = Port(prepared)
+    events = []
+    for number in range(count):
+        events.extend(rejected_tool_events("retrieve_eom_knowledge", {}, f"rejected-{number}"))
+    events += [event("item/completed", item=answer_item(text=answer())), final_event()]
+    native, channel = session(Channel(events))
+    if count == 7:
+        assert native.answer(prepared, tools=port).status == "SUCCEEDED"
+    else:
+        assert native.answer(prepared, tools=port).failure_code == "CODEX_PROTOCOL_INVALID"
+        assert channel.closed
+    assert len([value for value in channel.sent if "result" in value]) == 7
+    assert not port.catalog.rag_calls and not port.evidence.payloads
+
+
+def test_schema_failure_after_argument_parsing_still_poisons_native_session():
+    port = Port(request(knowledge=context()))
+
+    def bad_broker(command):
+        raise SchemaError("private broker failure")
+
+    port.call = bad_broker
+    native, channel = session(
+        Channel(tool_events("retrieve_eom_knowledge", RAG_ARGUMENTS, "bad-1"))
+    )
+    assert native.answer(port.prepared, tools=port).failure_code == "CODEX_PROTOCOL_INVALID"
+    assert channel.closed and not any("result" in value for value in channel.sent)
+    assert channel.sent[-1]["error"]["code"] == -32602
+
+
+@pytest.mark.parametrize("patch", ["thread", "turn", "namespace", "call", "arguments", "request"])
+def test_argument_rejection_does_not_hide_forged_native_request_identity(patch):
+    values = {**RAG_ARGUMENTS, "terms": ["invalid term"]}
+    events = rejected_tool_events("retrieve_eom_knowledge", values, "bad-1")
+    target = events[1]
+    if patch in {"thread", "turn"}:
+        target["params"][patch + "Id"] = "other"
+    elif patch == "namespace":
+        target["params"]["namespace"] = "shell"
+    elif patch == "call":
+        target["params"]["callId"] = "other"
+    elif patch == "arguments":
+        target["params"]["arguments"] = RAG_ARGUMENTS
+    else:
+        target["id"] = None
+    native, channel = session(Channel(events))
+    port = Port(request(knowledge=context()))
+    completed = native.answer(port.prepared, tools=port)
+    assert completed.status == "FAILED" and channel.closed
+    assert not port.catalog.rag_calls and not port.evidence.payloads
+    assert not any("result" in value for value in channel.sent)
+
+
 def test_empty_second_query_does_not_erase_first_evidence_and_read_limit_shortcuts():
     port = Port()
     native = NativeRagChatTools(port.prepared, port)
@@ -350,15 +485,24 @@ def test_native_forged_answer_source_fails_without_inference_replay():
     assert channel.closed
 
 
-def test_invalid_native_tool_arguments_become_a_known_failure_without_dispatch_or_retry(caplog):
+def test_rejected_authority_arguments_do_not_dispatch_or_grant_access(caplog):
     forged = {**RAG_ARGUMENTS, "actor_id": "operator_" + "f" * 32}
-    native, channel = session(Channel(tool_events("retrieve_eom_knowledge", forged, "rag1")))
-    port = Port()
+    prepared = request(knowledge=context())
+    events = [
+        *rejected_tool_events("retrieve_eom_knowledge", forged, "rag1"),
+        event("item/completed", item=answer_item(text=answer())),
+        final_event(),
+    ]
+    native, channel = session(Channel(events))
+    port = Port(prepared)
     completed = native.answer(port.prepared, tools=port)
-    assert completed.status == "FAILED" and completed.failure_code == "CODEX_PROTOCOL_INVALID"
-    assert not completed.reply and not completed.tool_records and not port.catalog.rag_calls
-    assert channel.closed
-    assert "stage=ARGUMENTS category=schema validator=additionalProperties" in caplog.text
+    assert (
+        completed.status == "SUCCEEDED"
+        and not completed.tool_records
+        and not port.catalog.rag_calls
+    )
+    assert not channel.closed and native.ready
+    assert "GENERAL_CHAT_NATIVE_TOOL_ARGUMENTS_REJECTED" in caplog.text
     assert "operator_" + "f" * 32 not in caplog.text
 
 
@@ -384,7 +528,8 @@ def test_v4_worker_envelope_and_policy_do_not_reinterpret_v3_bytes():
     )
 
 
-def test_real_v4_duplex_handoff_lookup_replays_output_without_generation(tmp_path):
+@pytest.mark.parametrize("with_rejection", [False, True])
+def test_real_v4_duplex_handoff_lookup_replays_output_without_generation(tmp_path, with_rejection):
     selected = source_chat_worker_policy(model="synthetic-model", protocol=4)
     catalog, evidence = Catalog(), Evidence()
 
@@ -396,6 +541,29 @@ def test_real_v4_duplex_handoff_lookup_replays_output_without_generation(tmp_pat
 
         def answer(self, prepared, *, tools):
             self.calls += 1
+            if with_rejection:
+                events = [
+                    *rejected_tool_events("retrieve_eom_knowledge", {}, "bad-1"),
+                    *tool_events(
+                        "search_eom_items", arguments().model_dump(mode="json"), "search-1"
+                    ),
+                    *tool_events("retrieve_eom_knowledge", RAG_ARGUMENTS, "rag-1"),
+                    *tool_events(
+                        "read_eom_items", read_command().arguments.model_dump(mode="json"), "read-1"
+                    ),
+                    event("item/completed", item=answer_item(text=answer("S1", "R1"))),
+                    final_event(),
+                ]
+                adapter, channel = session(Channel(events))
+                completed = adapter.answer(prepared, tools=tools)
+                assert adapter.ready and not channel.closed
+                assert [v["result"]["success"] for v in channel.sent if "result" in v] == [
+                    False,
+                    True,
+                    True,
+                    True,
+                ]
+                return completed
             exchange = NativeRagChatTools(prepared, tools)
             exchange.call("search_eom_items", arguments().model_dump(mode="json"))
             exchange.call("retrieve_eom_knowledge", RAG_ARGUMENTS)
