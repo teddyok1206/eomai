@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +9,27 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_hidden_state_overrides_component_layout() -> None:
+    css = (ROOT / "apps/web_gui/eom_web_gui/static/styles.css").read_text(encoding="utf-8")
+    assert "[hidden] { display: none !important; }" in css
+
+
+def test_item_preview_visibility_in_real_browser() -> None:
+    if not os.environ.get("EOM_WEB_PLAYWRIGHT_MODULE"):
+        pytest.skip("Opt-in browser check requires an existing Playwright test environment")
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is not available for the browser visibility regression")
+    completed = subprocess.run(
+        [node, str(ROOT / "tests/web_gui/item_preview_visibility_browser_checks.mjs")],
+        check=False,
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_item_preview_renderer_preserves_order_and_formats_equations(tmp_path: Path) -> None:

@@ -49,6 +49,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Component grid/flex rules must not override the application visibility state. */
+[hidden] { display: none !important; }
 html, body { min-height: 100%; }
 body { margin: 0; min-width: 320px; background: var(--eom-background); font-size: var(--eom-type-body); line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input, select, textarea { font: inherit; }
