@@ -154,3 +154,23 @@ New-output acceptance requires exact native `hc:img` / `binaryItemIDRef` and `op
 `id`, `href`, `media-type`, `isEmbeded` names. Independent review verified these guards without
 changing the generic import resolver or the registered historical-download read path. Formatter,
 linter and the changed production/new-test type-check gates passed.
+
+### Literal Image Release And Official Rebuild — 2026-10-09 18:48 UTC
+
+The bounded compatible HWPX release from `c25372f42b8d2fa1991fc16686eac7e9be10f836`
+is installed. The platform wheel differs from the preceding HWPX companion release only in
+Manager acceptance and its RECORD. Installed Builder/Contracts/Manager RECORD/source verification
+passed; all eight prior runtime consumers are active. API code/build identity remains `2bf5dd7…`,
+the DB remains at `20261008_0049`, and unrelated model-selection work is not deployed.
+
+The new supported build is `hwpxbuild_e4bba0346ab241018ab02f2e1b71d5db` (`SUCCEEDED`,
+validation `PASS`), with output `artifact_77ff2c83ae1747a3b2b0fdf5ad4cdc39` /
+`rev_23c41d22e2964748a0ad30c7cb816145`. Its committed and authenticated API/HTTPS Studio
+download SHA-256 is `b229ba6d0c7941d036686adcfab285543f9b013a5124184288c5dd6e1f32fe57`.
+The API and Studio latest-build resolvers select this new build. This is also byte-for-byte equal
+to the independently rendered href-only positive control, not merely the same PNG. The source
+Item Revision/hash, original PNG, clipping/display geometry, pending human approval and previous
+builds are preserved. The user's staged failed download remains intact.
+
+`HWPX_VISIBILITY_AUTOMATED=PASS`; user confirmation in the actual Hancom client is still pending.
+Do not mark this six-hour repair goal complete until that final display check is recorded.
