@@ -7,6 +7,9 @@ const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
 const css = await readFile(new URL("styles.css", staticRoot), "utf8");
 const app = await readFile(new URL("app.js", staticRoot), "utf8");
+const mathFiles = new Map(await Promise.all([
+  "preview-math.js", "vendor-katex-0.19.0.js",
+].map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 const handlers = app.slice(
   app.indexOf("async function loadItemPreview()"),
   app.indexOf("function renderPreviewBlock("),
@@ -14,6 +17,11 @@ const handlers = app.slice(
 const browser = await chromium.launch({headless: true});
 try {
   const page = await browser.newPage();
+  await page.route("https://preview.invalid/assets/*", route => {
+    const body = mathFiles.get(new URL(route.request().url()).pathname.split("/").pop());
+    return route.fulfill({status: body ? 200 : 404, body: body || "", contentType: "text/javascript",
+      headers: {"Access-Control-Allow-Origin": "*"}});
+  });
   await page.setContent(`
     <input id="item-id"><input id="revision-id">
     <input id="structured-base-revision"><input id="structured-revision-etag">
@@ -28,6 +36,9 @@ try {
       <ol id="preview-choices"></ol><div id="preview-statement-explanations"></div>
     </div>`);
   await page.addStyleTag({content: css});
+  await page.evaluate(async () => {
+    window.renderPreviewText = (await import("https://preview.invalid/assets/preview-math.js")).renderPreviewText;
+  });
   await page.evaluate(source => {
     window.$ = selector => document.querySelector(selector);
     window.state = {itemPreviewRequestSequence: 0, currentView: ""};

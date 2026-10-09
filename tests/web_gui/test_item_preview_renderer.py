@@ -87,7 +87,8 @@ def test_item_preview_dom_uses_safe_text_and_same_origin_media() -> None:
     source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
     assert "orderedItemPreviewBlocks(preview)" in source
     assert "image.src = block.media_url" in source
-    assert "textContent = block.text" in source
+    assert "renderPreviewText(paragraph, block.text)" in source
+    assert "renderPreviewText(text, block.text)" in source
     assert "미리보기 준비 중" not in source
     assert "지원하지 않는 문항 형식" in source
     assert "block.label" in source

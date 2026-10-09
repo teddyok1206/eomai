@@ -44,6 +44,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/hwpx-delivery-target.js",
         "static/index.html",
         "static/item-preview.js",
+        "static/preview-math.js",
         "static/login.html",
         "static/login.js",
         "static/presentation-vocabulary.ko-KR.json",
@@ -53,6 +54,8 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/styles.css",
         "static/vendor-marked-18.1.0.js",
         "static/vendor-marked-LICENSE.txt",
+        "static/vendor-katex-0.19.0.js",
+        "static/vendor-katex-LICENSE.txt",
         "timeline.py",
     }
 )

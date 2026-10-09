@@ -18,6 +18,7 @@ import {
   hwpxTargetFromWorkflow,
 } from "./hwpx-delivery-target.js";
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
+import {renderPreviewText} from "./preview-math.js";
 import {
   applyPermissionVisibility,
   hasPermission,
@@ -1715,12 +1716,12 @@ function renderItemPreview(preview) {
   $("#preview-empty").hidden = true;
   $("#preview-content").hidden = false;
   $("#preview-item-number").textContent = Number.isInteger(preview.item_number) ? `${preview.item_number}.` : "";
-  $("#preview-title").textContent = preview.title || "";
+  renderPreviewText($("#preview-title"), preview.title);
   $("#preview-score").textContent = preview.score_display ? `${preview.score_display}점` : "";
-  $("#preview-answer").textContent = preview.answer || "";
-  $("#preview-explanation").textContent = preview.explanation || "";
-  $("#preview-authoring-intent").textContent = preview.authoring_intent || "";
-  $("#preview-concept-source").textContent = preview.concept_source || "";
+  renderPreviewText($("#preview-answer"), preview.answer);
+  renderPreviewText($("#preview-explanation"), preview.explanation);
+  renderPreviewText($("#preview-authoring-intent"), preview.authoring_intent);
+  renderPreviewText($("#preview-concept-source"), preview.concept_source);
   const blocks = $("#preview-blocks");
   blocks.replaceChildren();
   const orderedBlocks = orderedItemPreviewBlocks(preview);
@@ -1737,7 +1738,7 @@ function renderItemPreview(preview) {
   choices.replaceChildren();
   for (const choice of preview.choices || []) {
     const item = document.createElement("li");
-    item.textContent = `${choice.label} ${choice.text}`;
+    renderPreviewText(item, `${choice.label} ${choice.text}`);
     choices.append(item);
   }
   const statementExplanations = $("#preview-statement-explanations");
@@ -1749,7 +1750,7 @@ function renderItemPreview(preview) {
     label.textContent = statementLabels.get(value.statement_id) || "판단";
     label.title = `기술 ID: ${value.statement_id}`;
     const text = document.createElement("span");
-    text.textContent = value.text;
+    renderPreviewText(text, value.text);
     row.append(label, text);
     statementExplanations.append(row);
   }
@@ -1759,7 +1760,7 @@ function renderPreviewBlock(block) {
   if (block.type === "paragraph") {
     const paragraph = document.createElement("p");
     paragraph.className = `preview-paragraph preview-${block.purpose}`;
-    paragraph.textContent = block.text;
+    renderPreviewText(paragraph, block.text);
     return paragraph;
   }
   if (block.type === "labeled_text") {
@@ -1768,7 +1769,7 @@ function renderPreviewBlock(block) {
     const heading = document.createElement("h3");
     heading.textContent = block.label;
     const text = document.createElement("p");
-    text.textContent = block.text;
+    renderPreviewText(text, block.text);
     section.append(heading, text);
     return section;
   }
@@ -1780,7 +1781,7 @@ function renderPreviewBlock(block) {
       const heading = document.createElement("h3");
       heading.textContent = `[${block.kind} ${label}]`;
       const text = document.createElement("p");
-      text.textContent = value;
+      renderPreviewText(text, value);
       section.append(heading, text);
     };
     addPart("목표", block.goal);
@@ -1808,9 +1809,12 @@ function renderPreviewBlock(block) {
     if (block.label) {
       const label = document.createElement("strong");
       label.textContent = block.label;
-      caption.append(label, document.createTextNode(` ${block.alt_text}`));
+      caption.append(label);
+      const description = document.createElement("span");
+      renderPreviewText(description, ` ${block.alt_text}`);
+      caption.append(description);
     } else {
-      caption.textContent = block.alt_text;
+      renderPreviewText(caption, block.alt_text);
     }
     figure.append(image, caption);
     return figure;
@@ -1822,7 +1826,11 @@ function renderPreviewBlock(block) {
     equation.className = "equation-display";
     equation.setAttribute("role", "math");
     equation.setAttribute("aria-label", block.source);
-    equation.textContent = formatEquationSource(block.source);
+    if (/^\s*(?:\$|\\[([])/.test(block.source)) {
+      renderPreviewText(equation, block.source);
+    } else {
+      equation.textContent = formatEquationSource(block.source);
+    }
     section.append(equation);
     return section;
   }
@@ -1835,7 +1843,7 @@ function renderPreviewBlock(block) {
       const label = document.createElement("strong");
       label.textContent = statement.label;
       const text = document.createElement("span");
-      text.textContent = statement.text;
+      renderPreviewText(text, statement.text);
       row.append(label, text);
       section.append(row);
     }
@@ -1924,13 +1932,13 @@ async function importStructuredItem() {
 function buildDocumentTable(value) {
   const table = document.createElement("table");
   table.className = "document-table";
-  if (value.caption) { const caption = document.createElement("caption"); caption.textContent = value.caption; table.append(caption); }
+  if (value.caption) { const caption = document.createElement("caption"); renderPreviewText(caption, value.caption); table.append(caption); }
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const text of value.headers || []) { const th = document.createElement("th"); th.textContent = text; headRow.append(th); }
+  for (const text of value.headers || []) { const th = document.createElement("th"); renderPreviewText(th, text); headRow.append(th); }
   head.append(headRow);
   const body = document.createElement("tbody");
-  for (const row of value.rows || []) { const tr = document.createElement("tr"); for (const text of row) { const td = document.createElement("td"); td.textContent = text; tr.append(td); } body.append(tr); }
+  for (const row of value.rows || []) { const tr = document.createElement("tr"); for (const text of row) { const td = document.createElement("td"); renderPreviewText(td, text); tr.append(td); } body.append(tr); }
   table.append(head, body);
   return table;
 }
