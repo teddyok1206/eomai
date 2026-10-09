@@ -87,6 +87,11 @@ from eom_protocol.general_chat_grounding import (
     read_agent,
     read_grounding,
 )
+from eom_protocol.general_chat_rag_knowledge import (
+    ChatRagCatalogReply,
+    ChatRagCatalogRequest,
+    read_rag,
+)
 from eom_protocol.general_chat_tools import (
     ChatSearchCatalogReply,
     ChatSearchCatalogRequest,
@@ -104,6 +109,7 @@ from eom_catalog_service.chat_knowledge_resolution import (
     ChatKnowledgeResolutionService,
 )
 from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
+from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 from eom_catalog_service.document_review_evidence_service import (
     DocumentReviewEvidenceService,
     DocumentReviewEvidenceServiceError,
@@ -181,6 +187,26 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "CHAT_RAG":
+                try:
+                    rag_request = read_rag("CatalogRequest", value, ChatRagCatalogRequest)
+                    if self.server.chat_rag is None:
+                        raise ValueError("RAG read not configured")
+                    rag_reply = self.server.chat_rag.resolve(rag_request)
+                except Exception:
+                    rag_reply = ChatRagCatalogReply(
+                        status="FAILED",
+                        scope=None,
+                        context=None,
+                        error_code="CHAT_KNOWLEDGE_UNAVAILABLE",
+                    )
+                document = rag_reply.model_dump(mode="json")
+                read_rag("CatalogReply", document, ChatRagCatalogReply)
+                self.wfile.write(
+                    json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "SEARCH_CHAT_KNOWLEDGE":
                 try:
@@ -1201,6 +1227,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
+        chat_rag: ChatRagResolutionService | None = None,
         chat_owner_uid: int | None = None,
         socket_path: Path = CATALOG_APPLICATION_SOCKET,
         allowed_uid: int | None = None,
@@ -1221,6 +1248,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence
         self.chat_knowledge = chat_knowledge
+        self.chat_rag = chat_rag
         self.chat_search = (
             None if chat_knowledge is None else ChatKnowledgeSearchService(chat_knowledge.engine)
         )
@@ -1283,7 +1311,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             return False
         return uid == self.allowed_uid or (
             uid == self.chat_owner_uid
-            and operation in {"RESOLVE_CHAT_KNOWLEDGE", "SEARCH_CHAT_KNOWLEDGE"}
+            and operation in {"RESOLVE_CHAT_KNOWLEDGE", "SEARCH_CHAT_KNOWLEDGE", "CHAT_RAG"}
         )
 
     def handle_error(self, _request: object, _client_address: object) -> None:

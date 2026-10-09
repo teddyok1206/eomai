@@ -241,6 +241,7 @@ def serve() -> int:
         )
         knowledge_retrieval = KnowledgeRetrievalApplicationService(engine)
         from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
+        from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
@@ -249,6 +250,7 @@ def serve() -> int:
             knowledge_analysis_batches,
             knowledge_retrieval,
             chat_knowledge=ChatKnowledgeResolutionService(engine),
+            chat_rag=ChatRagResolutionService(engine),
             approved_item_graph_publication=ApprovedItemGraphPublicationService(engine),
             mock_exam_item_reviews=MockExamItemReviewPublicationService(engine),
             mock_exam_assemblies=MockExamAssemblyService(engine),

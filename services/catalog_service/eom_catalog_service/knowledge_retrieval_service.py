@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
@@ -233,7 +234,7 @@ def _bounded_seed_scores(seed_scores: dict[str, int], *, limit: int) -> dict[str
 
 
 @dataclass(frozen=True)
-class _Candidate:
+class KnowledgeRetrievalCandidate:
     analysis_run_id: str
     source: (
         KnowledgeAnalysisSourceV3
@@ -247,6 +248,16 @@ class _Candidate:
     relevance_milli: int
     answer_bearing: bool
     solution: ResolvedSolutionEvidence | None = None
+
+
+# Keep the existing internal/test name; consumers use the supported public type.
+_Candidate = KnowledgeRetrievalCandidate
+
+
+@dataclass(frozen=True, slots=True)
+class ReadOnlyKnowledgeSelection:
+    request: EducationRetrievalRequestV2
+    candidates: tuple[KnowledgeRetrievalCandidate, ...]
 
 
 type _ResolvedKnowledgeSource = (
@@ -882,6 +893,89 @@ class KnowledgeRetrievalApplicationService:
     ) -> KnowledgeGraphSnapshotPointer:
         """Public read-only resolution shared by trusted Catalog consumers."""
         return self._snapshot_pointer(session, graph_snapshot_revision_id)
+
+    def resolve_access_policy(
+        self, session: Session, revision_id: str, *, sha256: str
+    ) -> EducationRetrievalAccessPolicy:
+        """Resolve an explicitly pinned released policy, never a latest policy."""
+        policy = self._policy(session, revision_id)
+        if policy.content_sha256 != sha256:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_STALE", "pinned policy hash differs"
+            )
+        return policy
+
+    @staticmethod
+    def topic_keys_for_terms(
+        session: Session,
+        *,
+        snapshot_id: str,
+        terms: tuple[str, ...],
+        source_classes: tuple[str, ...],
+        allow_answer_bearing: bool,
+    ) -> tuple[str, ...]:
+        """Adapt indexed human terms to real authoring topic keys, without invented seeds.
+
+        The caller authorizes the actor/policy before metadata discovery. The existing
+        immutable lexical index and source-class membership constrain the SQL top-K.
+        """
+        node = KnowledgeNodeRecord
+        term = KnowledgeNodeTermRecord
+        pointer = KnowledgeNodeSourcePointerRecord
+        membership = select(pointer.pointer_id).where(
+            pointer.graph_snapshot_revision_id == snapshot_id,
+            pointer.node_id == node.node_id,
+            pointer.source_class.in_(source_classes),
+        )
+        statement = (
+            select(node.stable_key)
+            .join(
+                term,
+                (term.graph_snapshot_revision_id == node.graph_snapshot_revision_id)
+                & (term.node_id == node.node_id),
+            )
+            .where(
+                node.graph_snapshot_revision_id == snapshot_id,
+                term.term.in_(terms),
+                membership.exists(),
+                func.length(node.stable_key) <= 128,
+            )
+            .group_by(node.stable_key)
+            .order_by(func.count(distinct(term.term)).desc(), node.stable_key)
+            .limit(20)
+        )
+        if not allow_answer_bearing:
+            statement = statement.where(node.answer_bearing.is_(False))
+        return tuple(
+            sorted(
+                key
+                for key in session.scalars(statement)
+                if re.fullmatch(r"[a-z0-9][a-z0-9._:-]{0,127}", key)
+            )
+        )
+
+    def retrieve_read_only(
+        self, session: Session, command: CreateEvidenceBundleCommand
+    ) -> ReadOnlyKnowledgeSelection:
+        """Reuse authoring authorization/ranking/source checks without publishing anything.
+
+        The caller owns its read-only transaction and subsequent bounded analysis
+        materialization. No retrieval row, evidence bundle or Artifact is created.
+        """
+        snapshot = self._snapshot_pointer(session, command.graph_snapshot_revision_id)
+        policy = self._policy(session, command.access_policy_revision_id)
+        self._authorize(session, command, policy)
+        request = self._request(
+            command,
+            snapshot_pointer=snapshot,
+            policy=policy,
+            retrieval_request_id=_typed_id("retrieval_", {"read_only": command.submission_sha256}),
+            created_at=datetime.now(UTC),
+        )
+        candidates = self._candidates(session, command, policy, include_solution_evidence=False)
+        # Candidate order and source resolution are the exact existing authoring
+        # algorithm. The conversational projection applies its smaller text budget.
+        return ReadOnlyKnowledgeSelection(request=request, candidates=candidates)
 
     def _snapshot_pointer(
         self, session: Session, graph_snapshot_revision_id: str

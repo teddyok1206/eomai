@@ -1,6 +1,6 @@
 # CHAT-RAG-2: textbook evidence in conversational answers
 
-Status: contract foundation implemented, 2026-10-09 UTC. User authorized implementation
+Status: contracts and Catalog read path implemented, 2026-10-09 UTC. User authorized implementation
 and requested a goal including operational connection. Catalog/native/UI activation
 and actual textbook conversation evidence remain pending. This is not live acceptance.
 
@@ -94,6 +94,32 @@ follow-up and honest source classification. It does not grant access or turn on 
 planned native tool. Actual Catalog actor/source authorization, read-only retrieval,
 native duplex integration, source-card rendering, disposable persistence tests,
 compatible installation and live textbook answers are **not yet accepted**.
+
+## Catalog read-path checkpoint
+
+The next source checkpoint adds `ChatRagResolutionService` and the private
+`CHAT_RAG` Catalog operation. Actual actor/role/permissions are resolved before
+discovery, under a read-only repeatable-read transaction. Korean terms use the
+existing immutable lexical index to select real authoring topic keys. Public
+read-only methods reuse authoring candidate/source resolution and the existing
+Graph publisher's accepted-analysis/receipt/member validator; they do not create
+an Evidence Bundle, registry row or Artifact. Run/Artifact/job metadata and
+source-card titles are batched; three Graph reference checks use two queries.
+
+Chat pins use the existing **snapshot SHA**, not the separate manifest-file SHA.
+Both are checked against the exact immutable manifest. At most three distinct
+source/range references are materialized, with the policy's smaller node/source/
+claim/context budgets respected conservatively. Deterministic UTF-8 prefixes are
+explicitly approved analysis, never page quotations or pixel inspection. Follow-up
+reauthorizes the exact text, source, accepted result, normalized member, Graph
+anchors, titles and locations. Source keys and prior limitations remain stable.
+
+Source-side read-only production diagnostics retrieved three textbook analyses
+and reauthorized identical context; the indexed term query used the existing
+term/source/node indexes. This is **not installed Catalog/native/UI acceptance**.
+No model/GPU/HWPX execution, DB mutation, Artifact publication, migration, policy
+grant or service restart occurred. Detailed evidence and remaining gates:
+`docs/status/GENERAL_CHAT_RAG_CATALOG_CHECKPOINT_2026-10-09.md`.
 
 ## Verification/rollout
 

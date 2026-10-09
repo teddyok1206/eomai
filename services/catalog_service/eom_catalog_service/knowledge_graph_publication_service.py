@@ -86,6 +86,7 @@ from eom_item_registry import RegistryError
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy import Engine, select, text
@@ -311,6 +312,12 @@ type KnowledgeGraphStructureContract = (
     | KnowledgeGraphStructureManifestV5
     | KnowledgeGraphStructureManifestV6
 )
+
+
+@dataclass(frozen=True, slots=True)
+class MaterializedAcceptedAnalysis:
+    analysis: AcceptedAnalysisProposal
+    markdown_member: ArtifactMemberPointer
 
 
 class KnowledgeGraphPublicationError(RuntimeError):
@@ -1027,6 +1034,101 @@ class KnowledgeGraphPublicationService:
                     "graph publication idempotency key has different input",
                 )
             return self._result(session, publication)
+
+    def resolve_accepted_analyses(
+        self, session: Session, run_ids: tuple[str, ...]
+    ) -> dict[str, MaterializedAcceptedAnalysis]:
+        """Read up to three exact accepted analyses through the publication validator.
+
+        No publication/activation occurs. Retain the batched ORM rows so existing
+        session.get resolution reuses their identity map rather than making N+1
+        run/Artifact/job queries. Source and immutable member checks remain owned
+        by the existing accepted-analysis boundary.
+        """
+        if len(run_ids) > 3 or len(set(run_ids)) != len(run_ids):
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ANALYSIS_INELIGIBLE", "invalid bounded analysis selection"
+            )
+        if not run_ids:
+            return {}
+        runs = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisRunRecord).where(
+                    KnowledgeAnalysisRunRecord.analysis_run_id.in_(run_ids)
+                )
+            )
+        )
+        if {run.analysis_run_id for run in runs} != set(run_ids):
+            raise KnowledgeGraphPublicationError(
+                "KNOWLEDGE_GRAPH_ANALYSIS_INELIGIBLE", "accepted analysis is missing"
+            )
+        revision_ids = {
+            identity
+            for run in runs
+            for identity in (
+                run.accepted_result_artifact_revision_id,
+                run.proposal_artifact_revision_id,
+            )
+            if identity is not None
+        }
+        revisions = tuple(
+            session.scalars(
+                select(ArtifactRevisionRecord).where(
+                    ArtifactRevisionRecord.revision_id.in_(revision_ids)
+                )
+            )
+        )
+        # These references must live until all exact-pointer resolutions finish.
+        logicals = tuple(
+            session.scalars(
+                select(ArtifactRecord).where(
+                    ArtifactRecord.logical_artifact_id.in_(
+                        {revision.logical_artifact_id for revision in revisions}
+                    )
+                )
+            )
+        )
+        jobs = tuple(
+            session.scalars(
+                select(JobRecord).where(JobRecord.job_id.in_({r.job_id for r in revisions}))
+            )
+        )
+        revisions_by_id = {revision.revision_id: revision for revision in revisions}
+        runs_by_id = {run.analysis_run_id: run for run in runs}
+        cache = EducationalDocumentSourceResolutionCache()
+        resolved = {}
+        for run_id in run_ids:
+            analysis = self._load_accepted_analysis(session, run_id, document_source_cache=cache)
+            run = runs_by_id[run_id]
+            revision = revisions_by_id.get(str(run.proposal_artifact_revision_id))
+            if revision is None:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID", "proposal revision is missing"
+                )
+            # _load_accepted_analysis checked the entire receipt against bytes and
+            # resolved every member; project that already validated exact pointer.
+            value = revision.result.get("members", {}).get("normalized_markdown")
+            if not isinstance(value, dict):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID", "Markdown pointer is missing"
+                )
+            member = ArtifactMemberPointer.model_validate(
+                {name: value.get(name) for name in ArtifactMemberPointer.model_fields}
+            )
+            if (
+                member.artifact_id != run.proposal_artifact_id
+                or member.artifact_revision_id != run.proposal_artifact_revision_id
+                or member.member_path != "normalized/document.md"
+                or member.media_type != "text/markdown"
+                or member.schema_ref != "eom://schemas/knowledge/normalized-markdown/1.0"
+            ):
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_PROPOSAL_POINTER_INVALID", "Markdown identity differs"
+                )
+            resolved[run_id] = MaterializedAcceptedAnalysis(analysis, member)
+        # Explicitly retain preloaded identity-map objects through the loop.
+        del logicals, jobs
+        return resolved
 
     def _load_accepted_analysis(
         self,
