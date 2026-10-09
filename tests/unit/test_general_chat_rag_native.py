@@ -58,6 +58,24 @@ ACTOR = "operator_" + "1" * 32
 RAG_ARGUMENTS = {"terms": ["에너지"], "source_classes": ["TEXTBOOK"]}
 
 
+def test_native_prompt_makes_canonical_query_format_and_evidence_reuse_explicit():
+    assert "^[a-z0-9가-힣_]+$" in RAG_CHAT_INSTRUCTIONS
+    assert "Keep separate concepts in separate entries" in RAG_CHAT_INSTRUCTIONS
+    assert "Once R1-R3 are all occupied" in RAG_CHAT_INSTRUCTIONS
+    description = native_rag_tools()[2]["description"]
+    assert "No spaces, hyphens or punctuation" in description
+    assert "Reuse existing R1-R3 analysis" in description
+
+
+@pytest.mark.parametrize("term", ["전자기 에너지", "전자기-에너지", "Force"])
+def test_invalid_query_terms_still_fail_before_catalog_dispatch(term):
+    port = Port()
+    native = NativeRagChatTools(port.prepared, port)
+    with pytest.raises(SchemaError):
+        native.call("retrieve_eom_knowledge", {"terms": [term], "source_classes": ["TEXTBOOK"]})
+    assert not port.catalog.rag_calls and not native.records
+
+
 class Catalog(Knowledge):
     def __init__(self):
         super().__init__()

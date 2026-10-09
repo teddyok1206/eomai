@@ -53,3 +53,26 @@ use a separately counted bounded canary to locate the failed boundary. Do not
 publish prompts, raw native frames, arguments, error bodies or model reasoning
 in logs/Git/Slack. Follow-up/pinned-evidence/historical-receipt live gates remain
 pending until actual success.
+
+## Diagnostic successor
+
+Installed successor `e473878e1b2ada1b8963ece798ca3df9430e619c` retained the
+same contracts, access policy and model; it added closed diagnostics and the
+read-only UI refresh. Source/deployment regression **1,067 PASS**, mypy 2 PASS.
+The next, separately counted native canary failed without automatic retry:
+`chatturn_0da921b5dc4960b71eb222787e0a2225`.
+
+Its first canonical RAG retrieval succeeded. Safe diagnostics identify the later
+failure at `stage=ARGUMENTS category=schema validator=pattern`, not Catalog
+availability, privilege escalation or publication. Existing completed receipts
+18/18 are unchanged. The native prompt now explicitly mirrors the unchanged
+canonical token pattern and forbids spaces/hyphens/punctuation/uppercase Latin
+letters; separate concepts must be separate entries. It also instructs reuse of
+already-returned analysis and the occupied R1-R3 budget. Invalid terms still fail
+before Catalog dispatch; no permissive normalizer or schema rewrite is added.
+
+Next acceptance budget: one answer and one exact-evidence follow-up with the
+tested prompt successor. Total native submissions so far: **2 failed canaries**;
+browser admission checks, reads and service restarts are counted separately.
+If that minimal successor canary fails, inspect its known receipt before any
+further generation. No educational correctness approval is implied.

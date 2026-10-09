@@ -45,7 +45,12 @@ RAG_CHAT_INSTRUCTIONS = GROUNDED_CHAT_INSTRUCTIONS.replace(
     "internet, database or mutation tools. For a textbook question, use "
     "retrieve_eom_knowledge with TEXTBOOK; for past-exam concepts use PAST_EXAM; "
     "for registered Item knowledge use APPROVED_ITEM. Use a few short Korean or "
-    "lowercase ASCII concept terms, never a whole sentence. These source classes "
+    "lowercase ASCII concept terms, never a whole sentence. Each terms entry "
+    "must be 2-128 characters matching ^[a-z0-9가-힣_]+$: no whitespace, "
+    "punctuation, hyphens, mathematical symbols or uppercase Latin letters. "
+    'Keep separate concepts in separate entries, e.g. ["전자기","에너지"], '
+    "not a joined phrase. source_classes is an array of the exact uppercase "
+    "enum names. These source classes "
     "are requests, NOT permission grants. The Orchestrator applies the actual "
     "operator's permissions and the pinned Graph/access policy. At most two "
     "knowledge retrievals, four Item searches and one Item read are allowed, "
@@ -55,7 +60,12 @@ RAG_CHAT_INSTRUCTIONS = GROUNDED_CHAT_INSTRUCTIONS.replace(
     "month, school level, grade and subject_key. Do not invent dates. Set unused "
     "exam fields to null and unused terms to []. Successful Item reads define "
     "the available S keys; successful knowledge retrievals define R1-R3. R keys "
-    "are append-only within the same pinned scope. Follow-ups use prepared exact "
+    "are append-only within the same pinned scope. A successful retrieval already "
+    "provides the analysis to answer from: do not search again merely to reread "
+    "it, recover an original page or obtain a differently worded excerpt. "
+    "Once R1-R3 are all occupied, no further RAG retrieval can add a source. "
+    "Use the available evidence and state any remaining limitation. "
+    "Follow-ups use prepared exact "
     "references, not latest or sources merely mentioned in old answers. Empty, "
     "forbidden and unavailable outcomes are distinct; none licenses invented "
     "internal facts. R evidence is APPROVED ANALYSIS TEXT, not a verbatim source "
@@ -77,7 +87,10 @@ def native_rag_tools() -> list[dict[str, object]]:
             "name": "retrieve_eom_knowledge",
             "description": "Read approved textbook/past-exam/Item analysis through EOM GraphRAG. "
             "Returns exact R source pins and bounded analysis text, not original page quotes. "
-            "Two calls per turn. Short Korean/lowercase concept terms only.",
+            "Two calls per turn. Each terms entry is 2-128 characters: Korean syllables, "
+            "lowercase a-z, digits or underscore only. No spaces, hyphens or punctuation. "
+            "Separate concepts into separate entries. Reuse existing R1-R3 analysis; "
+            "do not reread it via another retrieval.",
             "inputSchema": schema["$defs"]["Arguments"],
         },
     ]
