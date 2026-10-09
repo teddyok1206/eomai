@@ -2,6 +2,39 @@
 
 Latest recorded update: 2026-10-09 (UTC). Older sections retain their observation dates.
 
+## Single-editor request flow — installed, 2026-10-09 16:06 UTC
+
+The new-item request surface now uses one authoring-instruction input and curriculum selection.
+Visible language/subject, five-choice count, equation-required checkbox, and the separate deterministic
+Analyze action were removed. Users can Save or Start directly; the existing create/update/submission
+contracts, Korean/five-choice/fixed draft defaults, provenance hashes, permission checks, Graph/source
+pins, and idempotency remain unchanged. Optional topic falls back to the selected unit or instructions.
+An explicit New Request clears only the editor, not historical production. Conceptual is the default
+task type; calculation and data interpretation remain selectable.
+
+One pending-action guard serializes save/start/source selection. Captured editor snapshots and revision
+checks prevent late responses from overwriting edits or starting stale requests. Existing draft IDs
+survive save/submission failure. Clearing a variation cannot be reversed by an older saved response.
+
+Web source `7d78eb355ccf7c13569cb782e8b1f5cc0c968d53` is installed; only the Web service restarted.
+Wheel SHA-256: `44e26c5f9865faaaea1469cedaafd57f4ac7f7df06b84c37bf0676bd7f4346d6`.
+Artifact inventory, target-runtime import, installed simulation, service-identity verification and
+installed RECORD: PASS, 46 files. The complete Web suite with existing opt-in Chromium is 308 PASS;
+Ruff/format/mypy/JavaScript syntax and frontend/backend/DOM alignment PASS. An initial new browser
+fixture timed out because its mock gate matched unset GET methods; the fixture was corrected and the
+same full suite passed. No production defect was inferred from that test-fixture failure.
+
+Isolated real-browser form tests cover direct Save/Start, exact unit/material/difficulty snapshots,
+fresh request identity, duplicate clicks, mid-save edits and variation clear. Post-install authenticated
+HTTPS browser smoke confirms the one-input UI, removed fields, enabled actions, local reset and layout
+at 1440/390/320px without writes to request-draft endpoints. No live new Item/Workflow/model/GPU/HWPX
+canary is claimed. API/Catalog/Workflow services remain active on their preceding release; no DB,
+Workflow, Pack, activation, proxy or chat change was performed. Previous verified Web wheel source
+`67fafe99fec99e1f9bcd2293fe970c9ed18d8449` remains available for rollback under its fixed build directory,
+SHA-256 `693a0ed034d02a78e063c03d3cde391c16bf441c2a40bd848e3b3a3183d0deac`.
+
+Design boundary: [Request editor](../product/EOM_SCIENTIFIC_WORKBENCH_DESIGN_SYSTEM.md#request-editor).
+
 ## Bounded review-result correction — installed, 2026-10-09 15:29 UTC
 
 The preceding failed single-item request had committed authoring and review Artifacts; post-result
