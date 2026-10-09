@@ -44,6 +44,31 @@ def _sha256(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
+def _assert_image_manifest_targets_are_literal_zip_members(
+    archive: zipfile.ZipFile, images: tuple[bytes, ...]
+) -> None:
+    content = parse_xml(archive.read("Contents/content.hpf"), "Contents/content.hpf").root
+    image_items = [
+        element
+        for element in content.iter()
+        if local_name(element.tag) == "item"
+        and (element.get("id") or "").startswith("eomContentTeamVisual")
+    ]
+    assert len(image_items) == len(images)
+    by_id = {element.get("id"): element for element in image_items}
+    assert len(by_id) == len(image_items)
+    members = set(archive.namelist())
+    for ordinal, image in enumerate(images):
+        item = by_id[f"eomContentTeamVisual{ordinal}"]
+        href = item.get("href")
+        # Hancom looks up this literal ZIP name; OPF-relative resolution masks ../ failures.
+        assert href == f"BinData/content-team-visual-{ordinal}.png"
+        assert href in members
+        assert item.get("media-type") == "image/png"
+        assert item.get("isEmbeded") == "1"
+        assert archive.read(href) == image
+
+
 def _direct_cells_by_address(table: Any) -> dict[tuple[str, str], Any]:
     cells: dict[tuple[str, str], Any] = {}
     for row in table:
@@ -496,19 +521,11 @@ def test_v2_renderer_replaces_image_slots_with_exact_pinned_pngs(
         f"BinData/content-team-visual-{ordinal}.png" for ordinal in range(image_count)
     )
     with zipfile.ZipFile(output) as archive:
-        for ordinal, image in enumerate(images):
-            assert archive.read(f"BinData/content-team-visual-{ordinal}.png") == image
+        _assert_image_manifest_targets_are_literal_zip_members(archive, images)
         section = archive.read("Contents/section0.xml")
-        content = parse_xml(archive.read("Contents/content.hpf"), "Contents/content.hpf").root
-    manifest_items = {
-        element.get("id"): element
-        for element in content.iter()
-        if local_name(element.tag) == "item"
-    }
     for ordinal in range(image_count):
         binary_id = f"eomContentTeamVisual{ordinal}"
         assert binary_id.encode() in section
-        assert manifest_items[binary_id].get("isEmbeded") == "1"
     assert "그림 삽입" not in section.decode("utf-8")
     _assert_separate_png_cells_and_text_label_row(section, image_count, draft.visual_layout)
 
@@ -600,9 +617,9 @@ def test_v3_renderer_combines_labeled_blocks_with_exact_pinned_images(
         f"BinData/content-team-visual-{ordinal}.png" for ordinal in range(image_count)
     )
     with zipfile.ZipFile(output) as archive:
+        _assert_image_manifest_targets_are_literal_zip_members(archive, images)
         section = archive.read("Contents/section0.xml")
-        for ordinal, image in enumerate(images):
-            assert archive.read(f"BinData/content-team-visual-{ordinal}.png") == image
+        for ordinal in range(image_count):
             assert f"eomContentTeamVisual{ordinal}".encode() in section
     section_text = section.decode("utf-8")
     assert "그림 삽입" not in section_text

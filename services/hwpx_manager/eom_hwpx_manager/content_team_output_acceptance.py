@@ -51,6 +51,8 @@ MAX_FILENAME_LENGTH = 240
 MAX_XML_BYTES = 10 * 1024 * 1024
 MAX_XML_DEPTH = 128
 MIMETYPE = b"application/hwp+zip"
+OPF_ITEM_TAG = "{http://www.idpf.org/2007/opf/}item"
+HWPML_IMAGE_TAG = "{http://www.hancom.co.kr/hwpml/2011/core}img"
 CORE_MEMBERS = frozenset(
     {
         "mimetype",
@@ -305,11 +307,18 @@ def _validate_xml_and_references(
         if lower.endswith((".xml", ".hpf")):
             roots[name] = _parse_xml(data, name)
 
+    generated_image_ids: set[str] = set()
     for name, root in roots.items():
+        is_section = name.startswith("Contents/section") and name.endswith(".xml")
         stack: list[tuple[ElementTree.Element, tuple[str, ...]]] = [(root, ())]
         while stack:
             element, ancestors = stack.pop()
             local = _local_name(element.tag).casefold()
+            if is_section and local == "img":
+                identifier = element.get("binaryItemIDRef")
+                if element.tag != HWPML_IMAGE_TAG or not identifier:
+                    _fail("content-team HWPX generated image reference is not native")
+                generated_image_ids.add(identifier)
             equation_script = local == "script" and "equation" in ancestors
             if ("script" in local and not equation_script) or "macro" in local or local == "ole":
                 _fail("content-team HWPX XML contains active content")
@@ -360,6 +369,17 @@ def _validate_xml_and_references(
         target = _resolve_member("Contents/content.hpf", reference)
         if target not in names:
             _fail("content-team HWPX package manifest target is missing")
+        if identifier in generated_image_ids and (
+            element.tag != OPF_ITEM_TAG
+            or element.get("id") != identifier
+            or not target.startswith("BinData/")
+            or element.get("href") != target
+            or element.get("media-type") != "image/png"
+            or element.get("isEmbeded") != "1"
+        ):
+            # Hancom looks up the manifest href literally in the ZIP; normalization here
+            # or foreign/case-folded XML names must not validate an unreadable image.
+            _fail("content-team HWPX generated image manifest is not literally embedded")
         manifest_by_id[identifier] = target
     spine_ids = [
         next(

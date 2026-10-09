@@ -93,3 +93,64 @@ The Item, source Artifact Revision/hash, PNG, pending human approval and histori
 unchanged. This delivery neither regenerates nor approves the Item. No model/GPU generation ran.
 `MANUAL_HANCOM_RENDER_REVIEW=NOT_RECORDED` remains: download the new build and open it in Hancom
 for the visual check; the previous downloaded file is intentionally not rewritten.
+
+### User-Confirmed Visibility Failure And Repair Goal — 2026-10-09 18:29 UTC
+
+The user reported that the fresh delivery above still has no visible image. The HWPX uploaded to
+the repository's ignored `staging/` has the same SHA-256 as that committed/downloaded output;
+the result is not a stale download. The six-hour repair target ends **2026-10-10 00:29:44 UTC**.
+The previous structural PASS remains historical evidence, not proof of Hancom rendering.
+
+The remaining compatibility defect is the single-item image manifest's spelling:
+`../BinData/content-team-visual-0.png`, while the actual ZIP member is
+`BinData/content-team-visual-0.png`. EOM's import resolver accepts both root-qualified and
+OPF-relative references. However, the official Hancom model's
+[GetZipImageFilePath](https://github.com/hancom-io/hwpx-owpml-model/blob/main/OWPML/Document.cpp)
+returns the manifest href, and its [ZIP lookup](https://github.com/hancom-io/hwpx-owpml-model/blob/main/OWPML/Zip/SDZip.cpp)
+compares that string with member names without applying the OPF-relative correction. The existing
+whole-exam emitter and Kordoc image emitter already use literal package-root member names.
+
+Bounded plan and ownership:
+
+1. Reproduce the exact downloaded file in the installed independent Office renderer and compare
+   a diagnostic variant changing only that relationship. Keep these local files as diagnostics,
+   not official output or altered accepted history.
+2. Make the single-item Builder emit its existing image member name verbatim. Independent Manager
+   acceptance must reject renderer-owned binary relationships that need path normalization or
+   omit the embedded flag. Preserve historical/import-reader compatibility; do not globally
+   remove support for OPF-relative input packages.
+3. Add positive and negative regressions for single, paired, mixed and whole-exam images, retaining
+   the PNG SHA, source pins, ordinal/labels, equations and table semantics. Check additional layout
+   findings independently; do not change content/geometry based only on a hypothesis.
+4. Install a reviewed HWPX-only compatible release from a clean pinned worktree, with quiescence
+   checks and the exact prior component wheels retained for rollback. No API logic, migration,
+   worker prompt, model selection or image generation changes are in this repair.
+5. Submit one new supported build for the same Item Revision, verify committed/API/HTTPS download
+   hashes and latest-build identity, independently render the actual new downloaded bytes, and
+   request the user's Hancom visual confirmation before claiming complete visibility.
+
+The operation is an indexed build lookup plus ordered bounded ZIP-member traversal, O(n) in
+package size with a manifest map/set for lookup. No persistent schema, queue, revision or wire
+contract is added. Builder owns emission, Manager owns new-output acceptance, and the existing
+application/Orchestrator owns registration and immutable commit. Retry uses the same submitted
+idempotency key; a new render has a new build identity. Old Item/PNG/approval/build evidence is
+preserved. The simpler ZIP-membership-only check was insufficient because it normalized a
+relationship the target Hancom reader uses literally.
+
+Pre-release evidence: the original uploaded HWPX reproduced an image-lookup failure in the
+installed H2Orestart/LibreOffice toolchain (its binary lookup received no ZIP entry). A local
+diagnostic changing **only** the image manifest href produced a one-page PDF with a visibly
+rendered picture. The conversion reused the existing bounded converter inside a rootless,
+network-disabled filesystem namespace; no source upload, DB mutation or NAS registration occurred.
+The full focused HWPX suite passed **268 tests**, with **1 privileged opt-in skip**. Twelve malformed
+generated-image relationships that previously passed are now rejected. Separate mixed-cell sizing
+findings were recorded as layout risk, not silently included in this missing-image repair; the
+href-only diagnostic displays the picture without altering its shape or container geometry.
+
+The final pre-release gate passed **286 HWPX tests**, with **1 privileged opt-in skip**; focused
+acceptance passed 68 tests. The 34 new acceptance cases also cover generated picture references
+whose namespace or field spelling only appears correct after local-name/case normalization.
+New-output acceptance requires exact native `hc:img` / `binaryItemIDRef` and `opf:item` /
+`id`, `href`, `media-type`, `isEmbeded` names. Independent review verified these guards without
+changing the generic import resolver or the registered historical-download read path. Formatter,
+linter and the changed production/new-test type-check gates passed.

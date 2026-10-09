@@ -245,7 +245,8 @@ def inject_content_team_images(
             OPF + "item",
             {
                 "id": binary_id,
-                "href": f"../{part_name}",
+                # Hancom looks up HPF image hrefs as literal ZIP member names.
+                "href": part_name,
                 "media-type": "image/png",
                 "isEmbeded": "1",
             },
